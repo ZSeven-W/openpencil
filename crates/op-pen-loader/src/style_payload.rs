@@ -3,10 +3,13 @@
 use jian_ops_schema::node::base::PenNodeBase;
 use jian_ops_schema::node::container::CornerRadius;
 use jian_ops_schema::node::{ImageFitMode, ImageNode};
-use jian_ops_schema::style::{ImageFillMode, PenFill, PenStroke, StrokeThickness};
+use jian_ops_schema::style::{
+    ImageFillMode, PenFill, PenStroke, ShaderUniformValue, StrokeThickness,
+};
 
 use crate::payload::{
-    GradientPayload, GradientStopPayload, ImageAdjustmentPayload, NodePayload, StrokePayload,
+    GradientPayload, GradientStopPayload, ImageAdjustmentPayload, NodePayload, ShaderPayload,
+    ShaderUniformPayload, StrokePayload,
 };
 
 pub(crate) fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
@@ -213,88 +216,95 @@ fn first_gradient(fills: Option<&[PenFill]>) -> Option<GradientPayload> {
                 stops,
             })
         }
-        PenFill::MeshGradient(body) => mesh_gradient_payload(body),
+        PenFill::MeshGradient(body) => {
+            let colors = mesh_colors(body)?;
+            Some(GradientPayload::Mesh {
+                rows: body.rows.max(2),
+                cols: body.cols.max(2),
+                colors,
+                opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
+            })
+        }
         _ => None,
     }
 }
 
-/// `MeshGradientBody` → row-major colour lattice. Mirrors `jian-core`'s
-/// `try_mesh_gradient`: needs a `>= 2×2` grid and at least one valid
-/// vertex; unspecified vertices stay transparent so a sparse mesh
-/// still triangulates.
-fn mesh_gradient_payload(
-    body: &jian_ops_schema::style::MeshGradientBody,
-) -> Option<GradientPayload> {
-    let rows = body.rows;
-    let cols = body.cols;
-    if rows < 2 || cols < 2 {
-        return None;
-    }
-    let mut colors = vec![[0.0, 0.0, 0.0, 0.0]; (rows * cols) as usize];
-    let mut any = false;
-    for stop in &body.stops {
-        if stop.row >= rows || stop.col >= cols {
-            continue;
-        }
-        let Some(rgba) = parse_hex(&stop.color) else {
-            continue;
-        };
-        colors[(stop.row * cols + stop.col) as usize] = rgba;
-        any = true;
-    }
-    if !any {
-        return None;
-    }
-    Some(GradientPayload::Mesh {
-        rows,
-        cols,
-        colors,
-        opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
-    })
-}
-
-/// `ShaderFillBody` → resolved shader payload. Mirrors `jian-core`'s
-/// `try_shader`: uniforms resolve here (a `color` hex expands to a
-/// premultiplied-RGBA vec4); the fallback solid is the first `color`
-/// uniform, else mid-gray, so a compile failure still paints a
-/// visible block instead of vanishing.
-fn first_shader(fills: Option<&[PenFill]>) -> Option<crate::payload::ShaderPayload> {
-    use jian_ops_schema::style::ShaderUniformValue;
-    let fills = fills?;
-    let Some(PenFill::Shader(body)) = fills.first() else {
+/// Resolve the first fill into a [`ShaderPayload`] when it is a
+/// `Shader`. Uniforms are pre-resolved (a `color` hex → premultiplied
+/// `vec4`); the fallback colour is the first `color` uniform, else
+/// mid-gray, so a host that can't compile the program still paints a
+/// visible block. SkSL source stays untrusted — not validated here.
+fn first_shader(fills: Option<&[PenFill]>) -> Option<ShaderPayload> {
+    let PenFill::Shader(body) = fills?.first()? else {
         return None;
     };
     if body.sksl.trim().is_empty() {
         return None;
     }
-    let mut uniforms: Vec<(String, Vec<f32>)> = Vec::new();
+    let mut uniforms: Vec<ShaderUniformPayload> = Vec::new();
     let mut fallback: Option<[f32; 4]> = None;
-    if let Some(map) = body.uniforms.as_ref() {
-        for (name, value) in map {
-            match value {
-                ShaderUniformValue::Float(f) => uniforms.push((name.clone(), vec![*f])),
-                ShaderUniformValue::Vec(values) => {
-                    if !values.is_empty() {
-                        uniforms.push((name.clone(), values.clone()));
+    if let Some(map) = &body.uniforms {
+        for (name, val) in map {
+            match val {
+                ShaderUniformValue::Float(f) => uniforms.push(ShaderUniformPayload {
+                    name: name.clone(),
+                    values: vec![*f],
+                }),
+                ShaderUniformValue::Vec(v) => {
+                    if !v.is_empty() {
+                        uniforms.push(ShaderUniformPayload {
+                            name: name.clone(),
+                            values: v.clone(),
+                        });
                     }
                 }
                 ShaderUniformValue::Color(hex) => {
-                    if let Some([r, g, b, a]) = parse_hex(hex) {
-                        uniforms.push((name.clone(), vec![r * a, g * a, b * a, a]));
+                    if let Some(rgba) = parse_hex(hex) {
+                        // Premultiply for the vec4 binding (matches the
+                        // jian-core scene walker's color-uniform rule).
+                        let a = rgba[3];
+                        uniforms.push(ShaderUniformPayload {
+                            name: name.clone(),
+                            values: vec![rgba[0] * a, rgba[1] * a, rgba[2] * a, a],
+                        });
                         if fallback.is_none() {
-                            fallback = Some([r, g, b, a]);
+                            fallback = Some(rgba);
                         }
                     }
                 }
             }
         }
     }
-    Some(crate::payload::ShaderPayload {
+    Some(ShaderPayload {
         sksl: body.sksl.clone(),
         uniforms,
         opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
+        // Mid-gray when no colour uniform exists.
         fallback: fallback.unwrap_or([0.5, 0.5, 0.5, 1.0]),
     })
+}
+
+/// Resolve a mesh body's `stops[]` into a row-major `rows`×`cols`
+/// colour grid (length == `rows * cols`). Vertices missing from the
+/// sparse `stops[]` default to transparent black so the grid is always
+/// fully populated for the triangulator. Returns `None` for a
+/// degenerate (< 2×2) grid so the caller falls back to solid.
+fn mesh_colors(body: &jian_ops_schema::style::MeshGradientBody) -> Option<Vec<[f32; 4]>> {
+    let rows = body.rows.max(2);
+    let cols = body.cols.max(2);
+    if body.rows < 2 || body.cols < 2 {
+        return None;
+    }
+    let mut colors = vec![[0.0, 0.0, 0.0, 0.0]; (rows * cols) as usize];
+    for s in &body.stops {
+        if s.row >= rows || s.col >= cols {
+            continue;
+        }
+        if let Some(rgba) = parse_hex(&s.color) {
+            colors[(s.row * cols + s.col) as usize] = rgba;
+        }
+    }
+    Some(colors)
 }
 
 fn gradient_stops(
@@ -338,6 +348,9 @@ fn first_solid_color(fills: Option<&[PenFill]>) -> Option<[f32; 4]> {
                 }
             }
             PenFill::MeshGradient(body) => {
+                // First-vertex colour is the documented solid fallback
+                // baked into `node.fill` (backends without per-vertex
+                // support paint this flat).
                 if let Some(stop) = body.stops.first() {
                     if let Some(rgba) = parse_hex(&stop.color) {
                         return Some(apply_alpha(rgba, body.opacity));
@@ -345,22 +358,17 @@ fn first_solid_color(fills: Option<&[PenFill]>) -> Option<[f32; 4]> {
                 }
             }
             PenFill::Shader(body) => {
-                // Painters that can't run SkSL show the shader's
-                // fallback solid: first `color` uniform, else mid-gray
-                // (same rule as `first_shader` / jian's `try_shader`).
-                let fallback = body
-                    .uniforms
-                    .as_ref()
-                    .and_then(|map| {
-                        map.values().find_map(|v| match v {
-                            jian_ops_schema::style::ShaderUniformValue::Color(hex) => {
-                                parse_hex(hex)
-                            }
-                            _ => None,
-                        })
+                // Fallback solid baked into `node.fill`: the first colour
+                // uniform if any, else mid-gray. Backends that can't
+                // compile the program paint this flat.
+                let from_uniform = body.uniforms.as_ref().and_then(|m| {
+                    m.values().find_map(|v| match v {
+                        ShaderUniformValue::Color(hex) => parse_hex(hex),
+                        _ => None,
                     })
-                    .unwrap_or([0.5, 0.5, 0.5, 1.0]);
-                return Some(apply_alpha(fallback, body.opacity));
+                });
+                let rgba = from_uniform.unwrap_or([0.5, 0.5, 0.5, 1.0]);
+                return Some(apply_alpha(rgba, body.opacity));
             }
             PenFill::Image(_) => {
                 return Some([0.85, 0.86, 0.88, 1.0]);

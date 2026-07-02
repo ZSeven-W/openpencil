@@ -106,6 +106,13 @@ pub(crate) async fn run_subtask_with_reveal_at(
         inserted_root_ids: Vec::new(),
     };
 
+    // Snapshot the document's reusable-component registry before the prompt
+    // build so the AVAILABLE COMPONENTS manifest reflects whatever masters were
+    // merged into the doc (e.g. a loaded `.lib.op`). Cloned to release the
+    // shared `sink` borrow before the later mutable inserts. Empty registry ⇒
+    // `build_subagent_prompt` leaves the prompt unchanged.
+    let components = sink.state().components.clone();
+
     // 收集 LLM 文本输出。
     let (call_req, skill_report) = build_subagent_prompt(
         subtask,
@@ -114,6 +121,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         abort.clone(),
         reduced_complexity,
         minimal_skills,
+        &components,
     );
     // Surface the per-subtask skill-load report to the chat UI immediately
     // after the prompt is built (spec Component 4).
@@ -161,34 +169,59 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // truthy; it parses the element manifest first and falls back to the
     // bare PenNode JSONL path when the text carries no manifest lines.
     // Both routes converge on the same post-processing.
-    let mut nodes =
-        if crate::manifest::manifest_enabled_for_model(req.model.as_deref().unwrap_or("")) {
-            match crate::manifest::parse_manifest(&text) {
-                Some(outcome) => {
-                    for warning in &outcome.warnings {
-                        eprintln!("[manifest] {warning}");
-                    }
-                    if outcome.nodes.is_empty() {
-                        return fail("manifest parsed but produced no nodes".into());
-                    }
-                    outcome.nodes
-                }
-                None => match parse_nodes(&text) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        tracing::warn!(
-                            subtask = %subtask.id,
-                            text_len = text.len(),
-                            thinking_len,
-                            raw = %text,
-                            "subagent parse failed (manifest + JSONL both missed)"
-                        );
-                        return fail(e.to_string());
-                    }
-                },
+    // Program-DSL protocol (OPENPENCIL_PROGRAM_GEN): the sub-agent emitted a
+    // `batch_design` program; run it through the Rust executor and take the
+    // produced section forest. Gated to the full first attempt exactly like the
+    // prompt (`program_on`) — the reduced/minimal retry rungs teach raw JSONL, so
+    // parsing must fall back to `parse_nodes` there too.
+    let model_id = req.model.as_deref().unwrap_or("");
+    let script_on = crate::script_gen::script_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let program_on = !script_on
+        && crate::program_gen::program_gen_enabled_for_model(model_id)
+        && !reduced_complexity
+        && !minimal_skills;
+    let mut nodes = if script_on {
+        match crate::script_gen::parse_script(&text) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    text_len = text.len(),
+                    thinking_len,
+                    raw = %text,
+                    "subagent script-gen parse failed"
+                );
+                return fail(e);
             }
-        } else {
-            match parse_nodes(&text) {
+        }
+    } else if program_on {
+        match crate::program_gen::parse_program(&text) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    text_len = text.len(),
+                    thinking_len,
+                    raw = %text,
+                    "subagent program-gen parse failed"
+                );
+                return fail(e);
+            }
+        }
+    } else if crate::manifest::manifest_enabled_for_model(model_id) {
+        match crate::manifest::parse_manifest(&text) {
+            Some(outcome) => {
+                for warning in &outcome.warnings {
+                    eprintln!("[manifest] {warning}");
+                }
+                if outcome.nodes.is_empty() {
+                    return fail("manifest parsed but produced no nodes".into());
+                }
+                outcome.nodes
+            }
+            None => match parse_nodes(&text) {
                 Ok(n) => n,
                 Err(e) => {
                     tracing::warn!(
@@ -196,12 +229,27 @@ pub(crate) async fn run_subtask_with_reveal_at(
                         text_len = text.len(),
                         thinking_len,
                         raw = %text,
-                        "subagent parse failed"
+                        "subagent parse failed (manifest + JSONL both missed)"
                     );
                     return fail(e.to_string());
                 }
+            },
+        }
+    } else {
+        match parse_nodes(&text) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::warn!(
+                    subtask = %subtask.id,
+                    text_len = text.len(),
+                    thinking_len,
+                    raw = %text,
+                    "subagent parse failed"
+                );
+                return fail(e.to_string());
             }
-        };
+        }
+    };
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
     }
@@ -524,6 +572,12 @@ fn has_content_node(node: &PenNode) -> bool {
                         .as_ref()
                         .is_some_and(|fills| !fills.is_empty())
             }
+            // A childless `ref` is a component instance — it expands to the
+            // master's subtree at render (`ref_resolve`), so it is real
+            // content even though `is_container()` lumps it with the empty
+            // wrappers. Without this a design that reuses a component (the
+            // whole point of refs) would be rejected as "blank scaffolding".
+            PenNode::Ref(_) => true,
             _ => !node.is_container(),
         },
     }
@@ -589,6 +643,11 @@ fn coalesce_subtask_section(nodes: &mut Vec<PenNode>) {
     // actually holds content (≥1 child) is a genuine section → bail (never
     // collapse real sibling sections into one another).
     let kid_count = |n: &PenNode| n.children().map(|c| c.len()).unwrap_or(0);
+    // A childless `ref` is a component instance, not an empty wrapper — it
+    // expands to its master's subtree at render. Treat it as content so the
+    // drop/fold passes below never discard it.
+    let is_empty_wrapper =
+        |n: &PenNode| n.is_container() && kid_count(n) == 0 && !matches!(n, PenNode::Ref(_));
     let orphans_all_foldable = nodes
         .iter()
         .enumerate()
@@ -602,7 +661,7 @@ fn coalesce_subtask_section(nodes: &mut Vec<PenNode>) {
     let mut before: Vec<PenNode> = Vec::new();
     let mut after: Vec<PenNode> = Vec::new();
     let mut primary: Option<PenNode> = None;
-    let keep = |n: &PenNode| !n.is_container() || kid_count(n) > 0;
+    let keep = |n: &PenNode| !is_empty_wrapper(n);
     for (i, node) in taken.into_iter().enumerate() {
         match i.cmp(&primary_idx) {
             std::cmp::Ordering::Less if keep(&node) => before.push(node),
@@ -827,6 +886,58 @@ mod tests {
         let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
         coalesce_subtask_section(&mut nodes);
         assert_eq!(nodes.len(), 2, "two populated sections must be left as-is");
+    }
+
+    #[test]
+    fn ref_only_forest_is_not_rejected_as_blank() {
+        // A subtask that reuses a component is a lone childless `ref`. It has no
+        // children pre-resolution but expands to the master's subtree — so it
+        // must NOT count as a blank-scaffolding forest (which would `fail()`).
+        let json = r#"[{"type":"ref","id":"inst","ref":"comp-card","x":0,"y":0}]"#;
+        let nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        assert!(
+            has_content_node(&nodes[0]),
+            "a ref is content (it expands to the master subtree)"
+        );
+        assert!(
+            !is_blank_container_forest(&nodes),
+            "a ref-only forest must survive the blank-container guard"
+        );
+    }
+
+    #[test]
+    fn coalesce_keeps_ref_orphan_instead_of_dropping_it() {
+        // A populated section plus a sibling component instance (`ref`). The ref
+        // is childless but is real content — it must fold into the section, not
+        // be silently dropped as an "empty container" orphan.
+        let json = r#"[
+            {"type":"frame","id":"sec","name":"Section","children":[{"type":"text","id":"t","content":"Hi"}]},
+            {"type":"ref","id":"inst","ref":"comp-card"}
+        ]"#;
+        let mut nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        coalesce_subtask_section(&mut nodes);
+        // The ref folds into the section (no empty slot, orphan is foldable) —
+        // the key assertion is that it is NOT discarded.
+        let surviving: Vec<&str> = collect_ids(&nodes);
+        assert!(
+            surviving.contains(&"inst"),
+            "the ref instance must survive coalesce, got ids {surviving:?}"
+        );
+    }
+
+    /// Depth-first id collection for the ref-survival assertion.
+    fn collect_ids(nodes: &[PenNode]) -> Vec<&str> {
+        let mut out = Vec::new();
+        fn walk<'a>(nodes: &'a [PenNode], out: &mut Vec<&'a str>) {
+            for n in nodes {
+                out.push(n.id_str());
+                if let Some(kids) = n.children() {
+                    walk(kids, out);
+                }
+            }
+        }
+        walk(nodes, &mut out);
+        out
     }
 
     #[test]

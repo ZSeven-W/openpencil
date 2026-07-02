@@ -22,8 +22,11 @@ mod launch;
 pub(crate) use launch::builtin_provider_with_tools;
 pub use launch::{drain_new_chat_request, drain_stop_request, launch_if_pending};
 pub(crate) use launch::{provider_for_selected_model, selected_cli_model_id};
-// Sub-agent launcher (Task 3.1) reuses the design-toolset provider builder.
-pub(crate) use launch::launch_design::builtin_provider_with_design_tools;
+// Sub-agent launcher (Task 3.1) reuses the design-toolset provider builder
+// and the design-turn thinking policy.
+pub(crate) use launch::launch_design::{
+    builtin_provider_with_design_tools, design_turn_thinking_mode,
+};
 
 /// Pump the in-flight turn's deltas into the trailing assistant message, then
 /// execute any pending canvas tool calls against the live editor state.
@@ -84,6 +87,21 @@ fn drain_tool_requests(
     }
     let mut changed = false;
     for req in requests {
+        // Intercept the reserved loop-finalize op (Track-1 Step 4): the
+        // agentic design loop sends this at loop end so the host runs the
+        // deterministic structural-quality backstop over the assembled live
+        // document — the same whole-doc subset of the orchestrator's Class-A
+        // passes the orchestrator runs per subtask. Runs on the UI thread (the
+        // owner of the live `EditorState`), like every other tool mutation.
+        if req.name == op_ai::chat_provider::LOOP_FINALIZE_OP {
+            op_orchestrator::apply_loop_finalize(state);
+            changed = true;
+            let _ = req.ack.send(ChatToolResult {
+                content: serde_json::json!({ "success": true }).to_string(),
+                is_error: false,
+            });
+            continue;
+        }
         // Intercept `spawn_agents`: parse the specs, stash them for the
         // host to launch after this (parent) pump, and ack immediately
         // (fire-and-forget). A SUB calling `spawn_agents` is refused —

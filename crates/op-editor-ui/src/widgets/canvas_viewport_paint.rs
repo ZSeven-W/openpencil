@@ -729,8 +729,10 @@ pub(crate) fn paint_svg_path_node(
                 d, world_rect, &flat, *gx, *cy, *radius, *opacity,
             );
         }
-        // Mesh gradients have no svg-path shader yet — fall back to
-        // the node's resolved `fill` colour like the no-gradient path.
+        // Mesh gradients are a round-rect-only feature in v1 — there's
+        // no per-vertex SVG-path fill path. Degrade to the node's
+        // resolved first-vertex solid (baked by the loader) so a
+        // mesh-filled path still paints.
         Some(SceneGradient::Mesh { .. }) | None => {
             if let Some(fill) = node.fill {
                 cx.backend.fill_svg_path_in_rect(d, world_rect, fill);

@@ -113,6 +113,11 @@ pub struct BatchInsertItem {
     pub width: i32,
     pub height: i32,
     pub fill_hex: Option<String>,
+    /// Full canonical fill stack. When `Some`, it overrides `fill_hex`
+    /// so a batch item can carry a `linear_gradient` / `radial_gradient`
+    /// / `mesh_gradient` / image fill — not just a single solid colour.
+    /// `None` falls back to the `fill_hex` solid path.
+    pub fill: Option<Vec<jian_ops_schema::style::PenFill>>,
 }
 
 /// One editor mutation. The applier validates every argument BEFORE

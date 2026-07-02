@@ -10,7 +10,7 @@
 
 use std::path::PathBuf;
 
-use op_host_services::export::{export_node_raster, RasterFormat};
+use op_host_services::export::{export_node_raster_with_margin, RasterFormat};
 
 /// When `--render-shots` is present on argv, render node PNGs and return
 /// `true` so `main` exits 0; otherwise return `false` and let the normal
@@ -30,6 +30,15 @@ pub fn run_cli_if_requested() -> bool {
         .get(pos + 3)
         .and_then(|s| s.parse().ok())
         .unwrap_or(2.0);
+    // Transparent border (doc px) around each node. Defaults to the
+    // editor export frame (16 px); `OPENPENCIL_RENDER_MARGIN=0` gives a
+    // tight crop so the render-parity benchmark matches Pencil's
+    // `export_nodes`, which adds no frame (otherwise every node reads as
+    // +2*margin wider/taller than its baseline).
+    let margin: f32 = std::env::var("OPENPENCIL_RENDER_MARGIN")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(16.0);
     let out_dir = PathBuf::from(out_dir);
     if let Err(e) = std::fs::create_dir_all(&out_dir) {
         eprintln!("render-shots: mkdir {}: {e}", out_dir.display());
@@ -53,6 +62,10 @@ pub fn run_cli_if_requested() -> bool {
     for warning in &loaded.warnings {
         eprintln!("render-shots: schema warning: {warning:?}");
     }
+    // Register bundled design fonts before the layout/measure + paint
+    // pass so `fit_content` heights and glyphs match Pencil even when the
+    // family isn't installed system-wide.
+    crate::bundled_fonts::register();
     let state = op_editor_core::EditorState::from_document(loaded.value);
     let scene = op_pen_loader::editor_state_to_layout_scene(&state);
 
@@ -65,11 +78,28 @@ pub fn run_cli_if_requested() -> bool {
         std::process::exit(1);
     }
 
+    // Diagnostic: dump every node's computed rect as JSONL so we can diff our
+    // layout against Pencil's `snapshot_layout` element-for-element (pins down
+    // exactly which element heights / gaps drift, vs inferring from pixels).
+    if std::env::var("OPENPENCIL_DUMP_LAYOUT").is_ok() {
+        for node in &page.children {
+            dump_layout_node(node);
+        }
+        return true;
+    }
+
     let total = page.children.len();
     let mut ok = 0usize;
     for node in &page.children {
         let target = out_dir.join(format!("{}.png", sanitize(&node.id)));
-        match export_node_raster(&scene, &node.id, &target, RasterFormat::Png, scale) {
+        match export_node_raster_with_margin(
+            &scene,
+            &node.id,
+            &target,
+            RasterFormat::Png,
+            scale,
+            margin,
+        ) {
             Ok(()) => {
                 ok += 1;
                 eprintln!("render-shots: wrote {}", target.display());
@@ -105,6 +135,19 @@ fn sanitize(id: &str) -> String {
             }
         })
         .collect()
+}
+
+/// Recursively print a scene node's computed rect as one JSON line, for the
+/// `OPENPENCIL_DUMP_LAYOUT` diagnostic (diff vs Pencil `snapshot_layout`).
+fn dump_layout_node(node: &op_editor_ui::layout_scene::SceneNode) {
+    let b = node.bounds;
+    println!(
+        "{{\"id\":\"{}\",\"x\":{:.1},\"y\":{:.1},\"w\":{:.1},\"h\":{:.1}}}",
+        node.id, b.origin.x, b.origin.y, b.size.x, b.size.y
+    );
+    for c in &node.children {
+        dump_layout_node(c);
+    }
 }
 
 #[cfg(test)]

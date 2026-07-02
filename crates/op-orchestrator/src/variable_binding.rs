@@ -110,9 +110,18 @@ fn bind_fills(fills: &mut [PenFill], refs: &ColorRefs) {
                     bind_color_string(&mut stop.color, refs);
                 }
             }
-            // Shader colours live in untyped uniform values — leave
-            // them alone rather than guess which uniforms are colours.
-            PenFill::Shader(_) => {}
+            PenFill::Shader(body) => {
+                // `color`-typed uniforms can carry `$ref` colours — bind
+                // them like gradient stops. `float` / `vec` uniforms and
+                // the SkSL source itself are left untouched.
+                if let Some(uniforms) = &mut body.uniforms {
+                    for value in uniforms.values_mut() {
+                        if let jian_ops_schema::style::ShaderUniformValue::Color(c) = value {
+                            bind_color_string(c, refs);
+                        }
+                    }
+                }
+            }
             PenFill::Image(_) => {}
         }
     }

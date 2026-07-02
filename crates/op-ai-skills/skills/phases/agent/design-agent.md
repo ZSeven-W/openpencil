@@ -13,7 +13,7 @@ Always start with `get_editor_state` to see the active page, the current selecti
 If you need access to many tools in one turn, call `ToolSearch` with:
 
 ```
-select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,batch_design,get_screenshot,find_empty_space,spawn_agents
+select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,emit_elements,batch_design,get_screenshot,find_empty_space,spawn_agents
 ```
 
 ### Step 3 — Branch on the task type
@@ -39,9 +39,28 @@ Call `batch_get` to read the structure of any component or section you plan to r
 
 Call `snapshot_layout` to inspect the current bounding boxes, hierarchy, and free space before inserting new frames. This prevents you from placing new content on top of existing frames.
 
-### Step 7 — Build with `batch_design`
+### Step 7 — Build with `emit_elements` (preferred)
 
-Call `batch_design` to create or modify nodes using the DSL described below. Work in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
+PREFER `emit_elements` over `batch_design`. Instead of hand-building primitive frames/text, emit a high-level element manifest — a JSON array of element lines — and the host expands each into a polished, role-tagged subtree (stat-card, profile-header, nav-item, …) with correct typography, spacing, and color.
+
+- `elements` is a JSON array of objects. Each object has an `"el"` kind plus that kind's params, e.g. `{"el":"stat_card","label":"MRR","value":"$48k","trend":"up"}`.
+- `{"el":"section","role":"hero","direction":"vertical","gap":16}` is a structural container. Its **1-based line number** is its handle; nest later lines into it with `"in": <line number>`. Sections can hold sections one level deep.
+- NEVER write `id`, `parent_id`, or `pageId` — nesting is by `"in"` only, referencing an earlier line in the same array. Unknown params and out-of-range enums are auto-repaired, so emit your best guess rather than omitting content.
+- Build the screen as ONE manifest array (sections + their nested elements). One `emit_elements` call per logical screen/region.
+
+Example:
+
+```
+emit_elements(elements=[
+  {"el":"section","role":"stats","direction":"horizontal","gap":16},
+  {"el":"stat_card","in":1,"label":"MRR","value":"$48.2k","trend":"up"},
+  {"el":"stat_card","in":1,"label":"Active Users","value":"12.4k","trend":"up"}
+])
+```
+
+Fall back to `batch_design` (DSL below) only for what `emit_elements` cannot express: editing existing nodes, image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
+
+**Act on `layoutIssues` immediately.** Every `batch_design` / `emit_elements` result may carry a `layoutIssues` list — the REAL resolved layout's defects (a collapsed fill container, table columns overflowing their row, text overflowing its block). These are measured facts, not suggestions: fix them with a follow-up `batch_design` (or `U(...)` updates) BEFORE building the next section. Do not carry a known layout defect forward.
 
 ### Step 8 — Verify with a screenshot
 
@@ -81,6 +100,15 @@ Do not force a fixed section count, a fixed stack order, or a fixed number of ca
 
 If a row of items under-fills its container width, SPREAD them using space-between layout, do not bunch them at the start of the row. Do not leave a large empty tail at the bottom of a screen — size the root frame to its content rather than to an arbitrary height.
 
+### Build complete, populated content — not a skeleton
+
+Ship the content density a real product screen would. Do NOT stop after a header + a couple of cards. Concretely, before you finish:
+- A data table or client/user list MUST have at least **6 realistic rows** — never 1–2 sample rows.
+- A dashboard MUST carry its full section set: the KPI/stat row, the PRIMARY data table or list, AND at least one secondary section (recent activity, upcoming appointments, a quick-actions panel, or a chart). One table under four stat cards is an unfinished skeleton.
+- Populate every list, table, and card with realistic, VARIED data (distinct names, dates, values, statuses) — not repeated placeholders.
+
+This is a hard completeness bar you can check WITHOUT a screenshot: if the main content area is mostly empty below the fold, or a table has fewer than ~6 rows, keep building — you are not done.
+
 ### New screens open to the right
 
 A new screen or page MUST open as a new top-level frame placed to the **right** of the existing frames. Call `find_empty_space` with direction `"right"` to get the correct x/y coordinates. Never stack a new screen below an existing one.
@@ -88,6 +116,10 @@ A new screen or page MUST open as a new top-level frame placed to the **right** 
 ### Bottom navigation spans full width
 
 Bottom navigation bars span the full screen width. Tabs are evenly spread across that width. Every navigation tab MUST have BOTH an icon and a text label beneath it — never icon-only or label-only tabs.
+
+### Every image slot gets a real image fill
+
+Any avatar, profile photo, client/user thumbnail, product image, hero, or logo slot MUST receive an image fill via `G(id, "search", "<subject>")` — never leave it as an empty frame or a flat colored square. The subject is 2–3 English keywords UNIQUE per image, derived from the surrounding row/card. For an AVATAR the subject MUST include `face` or `headshot` (`G(avatarFrame, "search", "man face headshot")`) — a bare "portrait" query returns torsos and cropped bodies. A dish card is `G(imgFrame, "search", "pasta plate")`. Emit the `G(...)` op in the SAME batch that creates the frame so no placeholder is left unfilled.
 
 ### Reuse design-system components
 

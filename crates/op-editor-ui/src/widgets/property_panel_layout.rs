@@ -180,6 +180,10 @@ pub fn fill_body_height_with_stops(fill_type: FillType, stop_count: usize) -> f3
         FillType::Solid => INPUT_HEIGHT + 6.0,
         FillType::LinearGradient => INPUT_HEIGHT + 6.0 + stops_block + 6.0,
         FillType::RadialGradient => stops_block + 6.0,
+        // Mesh + Shader show head-row only (per-vertex editing / shader
+        // authoring deferred — shader is render-only in v1) — no body
+        // block, so they contribute nothing past the head row.
+        FillType::MeshGradient | FillType::Shader => 0.0,
         FillType::Image => INPUT_HEIGHT + 6.0,
     }
 }

@@ -13,6 +13,12 @@ pub enum FillType {
     Solid,
     LinearGradient,
     RadialGradient,
+    MeshGradient,
+    /// Native SkSL shader fill (v1, render-only). Not offered in the
+    /// fill-type picker — arrives via `.op` files or the batch_design
+    /// fill passthrough — but carried so a node that already has a
+    /// shader fill reports + paints correctly.
+    Shader,
     Image,
 }
 

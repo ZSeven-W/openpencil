@@ -12,11 +12,14 @@ use std::time::Duration;
 
 use super::*;
 use crate::chat_runtime::shared_runtime;
+use base64::Engine as _;
 use op_ai::chat_provider::{ChatToolDef, ChatToolExecutor, ChatToolResult};
 
-/// Executor double — records calls, replays a fixed result.
+/// Executor double — records calls + loop-finalize invocations, replays a
+/// fixed result.
 struct ScriptedExecutor {
     calls: Mutex<Vec<(String, String)>>,
+    finalize_calls: std::sync::atomic::AtomicUsize,
     result: ChatToolResult,
 }
 
@@ -24,6 +27,7 @@ impl ScriptedExecutor {
     fn ok(content: &str) -> Arc<Self> {
         Arc::new(Self {
             calls: Mutex::new(Vec::new()),
+            finalize_calls: std::sync::atomic::AtomicUsize::new(0),
             result: ChatToolResult {
                 content: content.to_string(),
                 is_error: false,
@@ -34,6 +38,12 @@ impl ScriptedExecutor {
     fn calls(&self) -> Vec<(String, String)> {
         self.calls.lock().unwrap().clone()
     }
+
+    /// How many times the loop ran the Step-4 structural backstop.
+    fn finalizes(&self) -> usize {
+        self.finalize_calls
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 impl ChatToolExecutor for ScriptedExecutor {
@@ -43,6 +53,11 @@ impl ChatToolExecutor for ScriptedExecutor {
             .unwrap()
             .push((name.to_string(), args_json.to_string()));
         self.result.clone()
+    }
+
+    fn finalize(&self) {
+        self.finalize_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -122,6 +137,20 @@ fn delete_node_tool_def() -> ChatToolDef {
     }
 }
 
+fn get_screenshot_tool_def() -> ChatToolDef {
+    ChatToolDef {
+        name: "get_screenshot".into(),
+        description: "Render a node to a base64 PNG".into(),
+        level: "read".into(),
+        input_schema_json: r#"{"type":"object","properties":{"nodeId":{"type":"string"}}}"#.into(),
+    }
+}
+
+/// A 1×1 transparent PNG, base64-encoded — stands in for a rendered design
+/// so the tests can decode it back and prove it round-trips through the wire.
+const TINY_PNG_B64: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
 fn anthropic_tool_use_turn() -> String {
     [
         r#"data: {"type":"message_start"}"#,
@@ -131,6 +160,25 @@ fn anthropic_tool_use_turn() -> String {
         r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"nodeId\":\"n1\","}}"#,
         "",
         r##"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\"fill_hex\":\"#ff0000\"}"}}"##,
+        "",
+        r#"data: {"type":"content_block_stop","index":0}"#,
+        "",
+        r#"data: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}"#,
+        "",
+        r#"data: {"type":"message_stop"}"#,
+        "",
+        "",
+    ]
+    .join("\n")
+}
+
+fn anthropic_get_screenshot_turn() -> String {
+    [
+        r#"data: {"type":"message_start"}"#,
+        "",
+        r#"data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_shot","name":"get_screenshot"}}"#,
+        "",
+        r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"nodeId\":\"root\"}"}}"#,
         "",
         r#"data: {"type":"content_block_stop","index":0}"#,
         "",
@@ -193,6 +241,8 @@ fn anthropic_loop_executes_tool_and_continues_with_tool_result() {
         tools: vec![update_node_tool_def()],
         executor: executor.clone(),
         max_turns: 5,
+        finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, deltas) = run_loop_collect(cfg, true);
     assert_eq!(outcome, Ok(true));
@@ -228,6 +278,13 @@ fn anthropic_loop_executes_tool_and_continues_with_tool_result() {
         })
     ));
 
+    // Step-4 backstop ran ONCE at the normal model-stop exit.
+    assert_eq!(
+        executor.finalizes(),
+        1,
+        "loop must run the structural backstop once at the normal model-stop exit"
+    );
+
     // First request: tools advertised + history + system prompt.
     let first = req_rx.recv().expect("first request captured");
     assert!(first.contains(r#""tools""#));
@@ -239,6 +296,38 @@ fn anthropic_loop_executes_tool_and_continues_with_tool_result() {
     assert!(second.contains(r#""tool_result""#));
     assert!(second.contains("toolu_1"));
     assert!(second.contains(r#"\"wrote\""#) || second.contains("wrote"));
+}
+
+#[test]
+fn loop_skips_finalize_when_disabled_for_plain_chat() {
+    // The agent loop is the shared execution path for BOTH the gated
+    // design loop AND ordinary builtin chat. `finalize_on_exit: false`
+    // (the regular-chat default) MUST keep the loop from running the
+    // document-mutating Step-4 backstop — otherwise every plain chat
+    // turn would silently re-finalize the user's existing design.
+    let (base, _req_rx) = serve_sse_script(vec![anthropic_tool_use_turn(), anthropic_text_turn()]);
+    let executor = ScriptedExecutor::ok(r#"{"success":true,"data":{}}"#);
+    let cfg = AgentLoopConfig {
+        url: format!("{base}/v1/messages"),
+        api_key: "sk-test".into(),
+        model: "claude-test".into(),
+        system_prompt: String::new(),
+        history: Vec::new(),
+        user_prompt: "just chatting".into(),
+        max_output_tokens: 512,
+        tools: vec![update_node_tool_def()],
+        executor: executor.clone(),
+        max_turns: 5,
+        finalize_on_exit: false,
+        disable_thinking: false,
+    };
+    let (outcome, _deltas) = run_loop_collect(cfg, true);
+    assert_eq!(outcome, Ok(true));
+    assert_eq!(
+        executor.finalizes(),
+        0,
+        "a regular chat turn (finalize_on_exit=false) must NOT run the document-mutating backstop"
+    );
 }
 
 #[test]
@@ -259,6 +348,8 @@ fn anthropic_loop_stops_at_turn_cap_with_max_tokens_reason() {
         tools: vec![update_node_tool_def()],
         executor: executor.clone(),
         max_turns: 2,
+        finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, deltas) = run_loop_collect(cfg, true);
     assert_eq!(outcome, Ok(true));
@@ -269,6 +360,12 @@ fn anthropic_loop_stops_at_turn_cap_with_max_tokens_reason() {
             stop_reason: StopReason::MaxTokens
         })
     ));
+    // Step-4 backstop ran ONCE at the turn-cap truncation exit too.
+    assert_eq!(
+        executor.finalizes(),
+        1,
+        "loop must run the structural backstop once at the turn-cap truncation exit"
+    );
 }
 
 #[test]
@@ -311,6 +408,8 @@ fn openai_loop_executes_tool_and_continues_with_role_tool_message() {
         tools: vec![delete_node_tool_def()],
         executor: executor.clone(),
         max_turns: 5,
+        finalize_on_exit: true,
+        disable_thinking: false,
     };
     let (outcome, deltas) = run_loop_collect(cfg, false);
     assert_eq!(outcome, Ok(true));
@@ -331,6 +430,12 @@ fn openai_loop_executes_tool_and_continues_with_role_tool_message() {
             stop_reason: StopReason::EndTurn
         })
     ));
+    // OpenAI-wire loop also runs the Step-4 backstop once at loop end.
+    assert_eq!(
+        executor.finalizes(),
+        1,
+        "openai-wire loop must run the structural backstop once at loop end"
+    );
 
     let first = req_rx.recv().expect("first request captured");
     assert!(first.contains(r#""tools""#));
@@ -340,6 +445,218 @@ fn openai_loop_executes_tool_and_continues_with_role_tool_message() {
     assert!(second.contains(r#""role":"tool""#));
     assert!(second.contains("call_1"));
     assert!(second.contains("deleted"));
+}
+
+// ── Step 1: get_screenshot tool_result becomes a real image content block ──
+
+#[test]
+fn screenshot_image_base64_extracts_from_png_result_only() {
+    // Successful screenshot result → Some(b64).
+    let ok = ChatToolResult {
+        content: serde_json::json!({ "image_base64": "AAAB", "format": "png" }).to_string(),
+        is_error: false,
+    };
+    assert_eq!(
+        super::screenshot_image_base64("get_screenshot", &ok),
+        Some("AAAB".to_string())
+    );
+
+    // Wrong tool name → None (a non-screenshot result must stay text).
+    assert_eq!(
+        super::screenshot_image_base64("get_editor_state", &ok),
+        None
+    );
+
+    // Error envelope → None (never replay an error as an image).
+    let err = ChatToolResult {
+        content: ok.content.clone(),
+        is_error: true,
+    };
+    assert_eq!(super::screenshot_image_base64("get_screenshot", &err), None);
+
+    // Missing/empty base64 or wrong format → None.
+    let empty = ChatToolResult {
+        content: serde_json::json!({ "image_base64": "", "format": "png" }).to_string(),
+        is_error: false,
+    };
+    assert_eq!(
+        super::screenshot_image_base64("get_screenshot", &empty),
+        None
+    );
+    let not_png = ChatToolResult {
+        content: serde_json::json!({ "image_base64": "AAAB", "format": "jpeg" }).to_string(),
+        is_error: false,
+    };
+    assert_eq!(
+        super::screenshot_image_base64("get_screenshot", &not_png),
+        None
+    );
+    // Non-JSON content (e.g. a plain CRUD string) → None.
+    let plain = ChatToolResult {
+        content: "wrote ok".to_string(),
+        is_error: false,
+    };
+    assert_eq!(
+        super::screenshot_image_base64("get_screenshot", &plain),
+        None
+    );
+}
+
+#[test]
+fn anthropic_loop_replays_screenshot_result_as_image_content_block() {
+    let (base, req_rx) =
+        serve_sse_script(vec![anthropic_get_screenshot_turn(), anthropic_text_turn()]);
+    // The executor returns exactly what the real get_screenshot MCP tool returns.
+    let screenshot_result =
+        serde_json::json!({ "image_base64": TINY_PNG_B64, "format": "png" }).to_string();
+    let executor = ScriptedExecutor::ok(&screenshot_result);
+    let cfg = AgentLoopConfig {
+        url: format!("{base}/v1/messages"),
+        api_key: "sk-test".into(),
+        model: "claude-test".into(),
+        system_prompt: "You are a design editor.".into(),
+        history: Vec::new(),
+        user_prompt: "render and check the design".into(),
+        max_output_tokens: 512,
+        tools: vec![get_screenshot_tool_def()],
+        executor: executor.clone(),
+        max_turns: 5,
+        finalize_on_exit: true,
+        disable_thinking: false,
+    };
+    let (outcome, _deltas) = run_loop_collect(cfg, true);
+    assert_eq!(outcome, Ok(true));
+    assert_eq!(executor.calls().len(), 1, "screenshot executed once");
+
+    // First request advertises get_screenshot.
+    let _first = req_rx.recv().expect("first request captured");
+
+    // Second request carries the tool_result. PROVE it is a real image
+    // content block, NOT an opaque base64 text string.
+    let second = req_rx.recv().expect("second request captured");
+    let body_start = second
+        .find("\r\n\r\n")
+        .map(|i| i + 4)
+        .expect("request has a body");
+    let body: Value = serde_json::from_str(&second[body_start..]).expect("request body is JSON");
+    let messages = body["messages"].as_array().expect("messages array");
+    // The tool_result lives in the last user message's content array.
+    let last_user = messages
+        .iter()
+        .rev()
+        .find(|m| m["role"] == "user")
+        .expect("a user message carries the tool_result");
+    let tr = last_user["content"]
+        .as_array()
+        .expect("tool_result content array")
+        .iter()
+        .find(|c| c["type"] == "tool_result")
+        .expect("a tool_result block");
+    assert_eq!(tr["tool_use_id"], "toolu_shot");
+    let inner = tr["content"]
+        .as_array()
+        .expect("tool_result content must be a multimodal array, not a string");
+    let image = inner
+        .iter()
+        .find(|c| c["type"] == "image")
+        .expect("a real image content block");
+    assert_eq!(image["source"]["type"], "base64");
+    assert_eq!(image["source"]["media_type"], "image/png");
+    // The base64 round-trips intact, and decodes to a valid PNG.
+    let data = image["source"]["data"].as_str().expect("base64 data");
+    assert_eq!(data, TINY_PNG_B64);
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .expect("decodable base64");
+    assert_eq!(
+        &bytes[..8],
+        &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A],
+        "model receives a decodable PNG"
+    );
+
+    // And the raw base64 must NOT appear as a bare JSON string value
+    // (i.e. the old text-string path is gone).
+    assert!(
+        !second.contains(&format!(r#""content":"{TINY_PNG_B64}"#)),
+        "screenshot base64 must not ride as an opaque text string"
+    );
+}
+
+#[test]
+fn openai_loop_replays_screenshot_result_as_image_url_part() {
+    let shot_turn = [
+        r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_shot","type":"function","function":{"name":"get_screenshot","arguments":"{\"nodeId\":\"root\"}"}}]}}]}"#,
+        "",
+        r#"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#,
+        "",
+        "data: [DONE]",
+        "",
+        "",
+    ]
+    .join("\n");
+    let text_turn = [
+        r#"data: {"choices":[{"delta":{"content":"Looks good."}}]}"#,
+        "",
+        r#"data: {"choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+        "",
+        "data: [DONE]",
+        "",
+        "",
+    ]
+    .join("\n");
+    let (base, req_rx) = serve_sse_script(vec![shot_turn, text_turn]);
+    let screenshot_result =
+        serde_json::json!({ "image_base64": TINY_PNG_B64, "format": "png" }).to_string();
+    let executor = ScriptedExecutor::ok(&screenshot_result);
+    let cfg = AgentLoopConfig {
+        url: format!("{base}/chat/completions"),
+        api_key: "sk-test".into(),
+        model: "gpt-test".into(),
+        system_prompt: "You are a design editor.".into(),
+        history: Vec::new(),
+        user_prompt: "render and check".into(),
+        max_output_tokens: 512,
+        tools: vec![get_screenshot_tool_def()],
+        executor: executor.clone(),
+        max_turns: 5,
+        finalize_on_exit: true,
+        disable_thinking: false,
+    };
+    let (outcome, _deltas) = run_loop_collect(cfg, false);
+    assert_eq!(outcome, Ok(true));
+    assert_eq!(executor.calls().len(), 1);
+
+    let _first = req_rx.recv().expect("first request captured");
+    let second = req_rx.recv().expect("second request captured");
+    let body_start = second.find("\r\n\r\n").map(|i| i + 4).expect("body");
+    let body: Value = serde_json::from_str(&second[body_start..]).expect("body JSON");
+    let messages = body["messages"].as_array().expect("messages");
+
+    // The role:"tool" message holds only a short text ack (string).
+    let tool_msg = messages
+        .iter()
+        .find(|m| m["role"] == "tool")
+        .expect("tool message");
+    assert!(
+        tool_msg["content"].is_string(),
+        "openai tool content must stay a string"
+    );
+
+    // A follow-up role:"user" message carries the image as an image_url
+    // data URL — the only OpenAI-wire way to make the model see the render.
+    let img_user = messages
+        .iter()
+        .filter(|m| m["role"] == "user")
+        .find_map(|m| m["content"].as_array())
+        .expect("a user message with multimodal content parts");
+    let part = img_user
+        .iter()
+        .find(|p| p["type"] == "image_url")
+        .expect("an image_url part");
+    let url = part["image_url"]["url"].as_str().expect("data url");
+    let expected_prefix = "data:image/png;base64,";
+    assert!(url.starts_with(expected_prefix), "got {url}");
+    assert_eq!(&url[expected_prefix.len()..], TINY_PNG_B64);
 }
 
 #[test]

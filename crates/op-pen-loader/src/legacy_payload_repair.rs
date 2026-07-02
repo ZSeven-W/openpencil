@@ -45,7 +45,13 @@ fn is_legacy_status_bar_shell(frame: &FrameNode, payload: &NodePayload) -> bool 
         return false;
     }
 
-    nearly(payload.w, 100.0) && nearly(payload.h, 22.0)
+    // Height (~22) + the `Time`/`Levels` name + a no-fill stroke over
+    // non-empty children pins this to an iPhone status-bar shell. The
+    // width is NOT constrained: the shells are authored `fill_container`,
+    // so a wider status bar (pencil-demo's 402-px bar) computes a much
+    // larger width than the ~100 an earlier fixed-width sample had, and a
+    // hard width match silently left those shells painting a black frame.
+    nearly(payload.h, 22.0)
 }
 
 fn is_legacy_battery_wrapper(frame: &FrameNode, payload: &NodePayload) -> bool {
