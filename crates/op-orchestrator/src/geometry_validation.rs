@@ -316,6 +316,7 @@ fn collect_text_overflow_fixes(
 ///   `fill_container` gives it `min:0` shrink; the text inside then overflows
 ///   ITS block and the text-overflow fixer wraps it on the NEXT loop round —
 ///   the detectors converge as a chain.
+///
 /// Text children are handled by [`collect_text_overflow_fixes`]; `clipContent`
 /// parents crop on purpose — skipped.
 fn collect_frame_overflow_fixes(
