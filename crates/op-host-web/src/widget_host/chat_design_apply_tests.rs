@@ -43,12 +43,7 @@ fn clicking_apply_design_block_inserts_nodes_once_like_ts() {
         .active_children()
         .iter()
         .any(|node| node.base().name.as_deref() == Some("Apply Root")));
-    // The design block is a single root Frame and the fresh document opens with
-    // one empty starter Frame, so `InsertSubtree`'s root-frame replacement
-    // (op-editor-core `command_root_replace`) swaps the empty starter for the
-    // design instead of appending — the top-level child count stays
-    // `before_count`, not `before_count + 1`.
-    assert_eq!(host.editor_state.active_children().len(), before_count);
+    assert_eq!(host.editor_state.active_children().len(), before_count + 1);
     assert_eq!(
         host.editor_state.chat.messages[0]
             .content
@@ -59,8 +54,7 @@ fn clicking_apply_design_block_inserts_nodes_once_like_ts() {
 
     let _ = host.apply_click(x, y, viewport_w, viewport_h);
 
-    // Second click is idempotent — still exactly one design node, applied once.
-    assert_eq!(host.editor_state.active_children().len(), before_count);
+    assert_eq!(host.editor_state.active_children().len(), before_count + 1);
     assert_eq!(
         host.editor_state.chat.messages[0]
             .content

@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: OpenPencil version (check Help > About or `Cargo.toml`)
+      description: OpenPencil version (check Help > About or `package.json`)
       placeholder: e.g. 0.3.2
     validations:
       required: true

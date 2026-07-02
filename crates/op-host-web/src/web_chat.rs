@@ -139,8 +139,9 @@ fn close_chat_tab(state: &mut EditorState, idx: usize) {
     match running_tab() {
         Some(running) if running == idx => abort_active_turn(),
         Some(running) => {
-            RUNNING_TAB
-                .with(|t| t.set(op_editor_core::adjust_running_tab_after_close(running, idx)));
+            RUNNING_TAB.with(|t| {
+                t.set(op_editor_core::adjust_running_tab_after_close(running, idx))
+            });
         }
         None => {}
     }
@@ -475,11 +476,7 @@ mod tests {
         state
     }
 
-    // Returns the whole `ChatSessions` (the `.chat` field is the multi-tab
-    // container since the multi-chat-tabs change); callers drive it through its
-    // `DerefMut<Target = ChatState>` so `&mut chat` still coerces to the
-    // `&mut ChatState` that `apply_event_to_chat` expects.
-    fn chat_with_queued_send(text: &str) -> op_editor_core::ChatSessions {
+    fn chat_with_queued_send(text: &str) -> ChatState {
         state_with_queued_send(text).chat
     }
 

@@ -47,14 +47,8 @@ WASM_OPT="${PKG_DIR}/op_web_sdk_bg.opt.wasm"
 # cargo places the raw cdylib here before wasm-bindgen post-processes it.
 TARGET_WASM="${WORKSPACE_ROOT}/target/wasm32-unknown-unknown/release/op_web_sdk.wasm"
 
-# rustc-emitted WebAssembly feature flags (matches op-host-web gate). Kept as
-# CANDIDATES because binaryen versions disagree on their spelling: newer
-# binaryen (v117+) split bulk-memory into `bulk-memory` + `bulk-memory-opt`,
-# while older binaryen (e.g. Ubuntu's apt `binaryen`) predates the split and its
-# single `--enable-bulk-memory` already covers memory.copy/fill. Passing an
-# unknown flag hard-fails wasm-opt, so the invocation below filters this list
-# down to only the flags the installed wasm-opt advertises in --help.
-WASM_OPT_CANDIDATE_FEATURES=(
+# rustc-emitted WebAssembly feature flags (matches op-host-web gate).
+WASM_OPT_FEATURES=(
   --enable-bulk-memory
   --enable-bulk-memory-opt
   --enable-nontrapping-float-to-int
@@ -106,17 +100,6 @@ fi
 printf '  ✓ 0 env.* imports\n'
 
 step 5 5 "wasm-opt -Oz + gzip size <= ${LIMIT} bytes"
-# Keep only the candidate feature flags this wasm-opt understands (see the
-# WASM_OPT_CANDIDATE_FEATURES note) so an older binaryen doesn't hard-fail on
-# `--enable-bulk-memory-opt`. `--enable-bulk-memory` alone still covers
-# memory.copy/fill on those versions.
-wasm_opt_help="$(wasm-opt --help 2>&1 || true)"
-WASM_OPT_FEATURES=()
-for flag in "${WASM_OPT_CANDIDATE_FEATURES[@]}"; do
-  if printf '%s\n' "${wasm_opt_help}" | grep -qF -- "${flag}"; then
-    WASM_OPT_FEATURES+=("${flag}")
-  fi
-done
 wasm-opt "${WASM_OPT_FEATURES[@]}" -Oz "${WASM_RAW}" -o "${WASM_OPT}"
 # Replace the raw wasm with the optimised version in-place so pkg/ is
 # ready to deploy / upload as-is (mirrors check-wasm-bundle.sh behaviour).

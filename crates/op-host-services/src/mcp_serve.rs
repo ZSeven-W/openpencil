@@ -27,11 +27,12 @@ use op_mcp::{
     duplicate_page_snapshot, duplicate_selected_snapshot, export_design_md_snapshot,
     find_empty_space_snapshot, find_node_by_name_snapshot, get_active_theme_snapshot,
     get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
-    get_design_prompt_snapshot, get_editor_state_snapshot, get_guidelines_snapshot,
-    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
-    get_node_snapshot, get_selection_set_snapshot, get_style_guide_snapshot,
-    get_style_guide_tags_snapshot, get_variables_snapshot, get_viewport_snapshot,
-    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    get_design_prompt_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
+    get_editor_state_snapshot, get_guidelines_snapshot, spawn_agents_snapshot,
+    get_style_guide_snapshot,
+    get_style_guide_tags_snapshot, get_variables_snapshot, tool_search_snapshot,
+    get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
     instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
     list_pages_snapshot, list_theme_presets_snapshot, list_variables_snapshot,
     load_theme_preset_snapshot, move_node_snapshot, nudge_selected_snapshot,
@@ -49,9 +50,9 @@ use op_mcp::{
     set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
     set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
     set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
-    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot, spawn_agents_snapshot,
-    toggle_node_selection_snapshot, tool_search_snapshot, undo_snapshot, ungroup_selected_snapshot,
-    update_node_snapshot, McpTool, ToolRegistry,
+    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot,
+    toggle_node_selection_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
+    McpTool, ToolRegistry,
 };
 #[cfg(feature = "mcp-debug-tools")]
 use op_mcp::{
@@ -447,7 +448,10 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     // Phase 0: always register spawn_agents (validates + returns request result).
     // Actual parallel execution is deferred to Phase 3 (Task 3.1).
     register_tool!("spawn_agents", spawn_agents_snapshot());
-    register_tool!("ToolSearch", tool_search_snapshot(schemas::TOOL_SCHEMAS));
+    register_tool!(
+        "ToolSearch",
+        tool_search_snapshot(schemas::TOOL_SCHEMAS)
+    );
     register_tool!("get_screenshot", get_screenshot_snapshot(doc));
     register_tool!("export_nodes", export_nodes_snapshot(doc));
     register_tool!("get_active_theme", get_active_theme_snapshot(doc));

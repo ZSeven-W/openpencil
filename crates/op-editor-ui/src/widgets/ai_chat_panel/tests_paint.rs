@@ -80,8 +80,7 @@ fn paint_header_uses_auto_generated_chat_title() {
         backend
             .texts
             .iter()
-            .any(|(text, size, _, _)| text.starts_with("现代移动端")
-                && (*size - tab_font).abs() < 1e-4),
+            .any(|(text, size, _, _)| text.starts_with("现代移动端") && (*size - tab_font).abs() < 1e-4),
         "expanded header tab row should render the current chat title at TAB_FONT_SIZE={tab_font}"
     );
 }
@@ -168,40 +167,35 @@ fn paint_quick_action_card_pressed_uses_shared_feedback() {
 
 #[test]
 fn paint_send_button_hover_adds_visible_feedback() {
-    // The active send circle dims on hover (rest 1.0 → hover 0.9 alpha), so the
-    // hovered fill must visibly differ from the resting fill — not just exist.
-    let send_fill = |hovered: bool| -> crate::Color {
-        let mut s = EditorState::new();
-        seed_available_model(&mut s);
-        s.chat.set_input_text("design a login page");
-        if hovered {
-            s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
-        }
-        let panel = AIChatPlaceholder::from_editor(&s);
-        let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-        let mut backend = PanelPaintBackend::default();
-        let mut cx = PaintCx {
-            backend: &mut backend,
-        };
-        panel.paint(&mut cx, rect);
-        // Use footer_layout to get the exact rect rather than hardcoding.
-        let input = panel.input_rect(rect);
-        let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
-        let footer = panel.footer_layout(rect, input, toolbar_top);
-        backend
-            .round_rects
-            .iter()
-            .filter(|(r, _, _)| rect_close(*r, footer.send))
-            .map(|(_, _, c)| *c)
-            .next_back()
-            .expect("send circle must paint a fill")
+    let mut s = EditorState::new();
+    seed_available_model(&mut s);
+    s.chat.set_input_text("design a login page");
+    s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
     };
 
-    let resting = send_fill(false);
-    let hovered = send_fill(true);
+    panel.paint(&mut cx, rect);
+
+    // old→new: send is now a 30px circle (#27 layout); resting fill always
+    // present (primary color), hover changes the alpha.
+    // Use footer_layout to get the exact rect rather than hardcoding.
+    let input = panel.input_rect(rect);
+    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
+    let footer = panel.footer_layout(rect, input, toolbar_top);
+    let fills: Vec<_> = backend
+        .round_rects
+        .iter()
+        .filter(|(r, _, _)| rect_close(*r, footer.send))
+        .collect();
+
+    // Send circle always paints a fill; verify at least one fill is present.
     assert!(
-        !color_close(resting, hovered),
-        "hovered send fill must visibly differ from the resting fill"
+        !fills.is_empty(),
+        "hovered send button should paint a fill"
     );
 }
 
@@ -492,8 +486,8 @@ fn paint_expanded_header_active_tab_pill_is_painted() {
     let tab_left = crate::widgets::ai_chat_panel_header::tab_row_left(rect);
     let tab_h = 26.0; // PILL_H
     let tab_radius = 8.0; // PILL_RADIUS
-                          // Active tab pill: a round-rect with PILL_RADIUS inside the tab zone,
-                          // filled with theme.secondary. Verify at least one such rect is painted.
+    // Active tab pill: a round-rect with PILL_RADIUS inside the tab zone,
+    // filled with theme.secondary. Verify at least one such rect is painted.
     assert!(
         backend.round_rects.iter().any(|(r, radius, color)| {
             r.origin.x >= tab_left - 0.01

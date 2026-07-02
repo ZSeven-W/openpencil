@@ -129,9 +129,7 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
         "get_screenshot" => r.register(Box::new(get_screenshot_snapshot(state))),
         "export_nodes" => r.register(Box::new(export_nodes_snapshot(state))),
         "spawn_agents" => r.register(Box::new(op_mcp::spawn_agents_snapshot())),
-        "ToolSearch" => r.register(Box::new(op_mcp::tool_search_snapshot(
-            schemas::TOOL_SCHEMAS,
-        ))),
+        "ToolSearch" => r.register(Box::new(op_mcp::tool_search_snapshot(schemas::TOOL_SCHEMAS))),
         _ => {}
     }
     r
@@ -193,8 +191,8 @@ mod tests {
             });
 
             // Parse the def's input_schema_json and compare as Value.
-            let def_schema: serde_json::Value = serde_json::from_str(&def.input_schema_json)
-                .unwrap_or_else(|e| {
+            let def_schema: serde_json::Value =
+                serde_json::from_str(&def.input_schema_json).unwrap_or_else(|e| {
                     panic!("def.input_schema_json for {} unparseable: {e}", def.name)
                 });
 
@@ -264,11 +262,7 @@ mod tests {
             "batch_design",
             r#"{"operations":"root=I(null,{type:'frame',width:80,height:60})"}"#,
         );
-        assert!(
-            !result.is_error,
-            "batch_design via agent router failed: {}",
-            result.content
-        );
+        assert!(!result.is_error, "batch_design via agent router failed: {}", result.content);
         assert!(mutated, "batch_design must mutate via the design surface");
         assert!(
             !state.active_children().is_empty(),
@@ -283,8 +277,7 @@ mod tests {
         // which proves the CRUD path was taken rather than the design path that
         // would have returned "not available in design agent".
         let mut state = EditorState::new();
-        let (result, mutated) =
-            execute_agent_tool(&mut state, "delete_node", r#"{"nodeId":"nope"}"#);
+        let (result, mutated) = execute_agent_tool(&mut state, "delete_node", r#"{"nodeId":"nope"}"#);
         // The CRUD surface returns an error for an unknown node — NOT "not available in design agent".
         assert!(result.is_error, "unknown node delete must error");
         assert!(!mutated);

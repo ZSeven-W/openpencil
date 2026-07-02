@@ -8,11 +8,9 @@
 //! 3. Each pump, registers any *new* top-level Frame nodes (not present when
 //!    the turn started) with `agent_indicators::add_frame` so the canvas
 //!    painter draws a colour glow + name badge around them.
-//! 4. When the chat session ends (turn done), calls
-//!    `agent_indicators::finish_if_epoch` — queued reveals drain
-//!    gracefully, then the overlay clears itself — and clears
-//!    `state.chat.agents_running`. (A user stop elsewhere calls
-//!    `end_if_epoch` for an immediate teardown.)
+//! 4. When the chat session ends (turn done / stopped), calls
+//!    `agent_indicators::end_if_epoch` to retire the epoch and clears
+//!    `state.chat.agents_running`.
 //!
 //! Additive only — CRUD chat and orchestrator paths never set
 //! `agents_running > 0`, so this module is a no-op for them.
@@ -60,7 +58,12 @@ pub(crate) fn register_new_frames(indicator: &DesignLoopIndicator, state: &Edito
         if let PenNode::Frame(_) = node {
             let id = node.id_str();
             if !indicator.initial_frame_ids.contains(id) {
-                agent_indicators::add_frame(indicator.epoch, id, &indicator.color, &indicator.name);
+                agent_indicators::add_frame(
+                    indicator.epoch,
+                    id,
+                    &indicator.color,
+                    &indicator.name,
+                );
             }
         }
     }
@@ -85,10 +88,7 @@ pub(super) fn pump_indicator(
     if state.chat.agents_running.0 > 0 && indicator.is_none() {
         let epoch = agent_indicators::begin();
         let identities = assign_agent_identities(1);
-        let id = identities
-            .into_iter()
-            .next()
-            .expect("assign_agent_identities(1) always yields one");
+        let id = identities.into_iter().next().expect("assign_agent_identities(1) always yields one");
         let initial = collect_top_level_frame_ids(state);
         *indicator = Some(DesignLoopIndicator {
             epoch,
@@ -103,10 +103,9 @@ pub(super) fn pump_indicator(
             // Turn still in flight — tag any frames that appeared.
             register_new_frames(ind, state);
         } else {
-            // Turn ended (session dropped) — finish gracefully so the
-            // queued reveals play out before the overlay clears itself.
+            // Turn ended (session dropped) — tear down the epoch.
             let epoch = ind.epoch;
-            agent_indicators::finish_if_epoch(epoch);
+            agent_indicators::end_if_epoch(epoch);
             state.chat.agents_running = (0, 0);
             *indicator = None;
         }

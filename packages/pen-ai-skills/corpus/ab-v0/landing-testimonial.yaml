@@ -1,0 +1,16 @@
+id: landing-testimonial
+category: landing
+difficulty: obvious
+prompt: |
+  Design ONLY a pull-quote block. Quote text: "OpenPencil replaced
+  two tools in our stack and shipped design-to-code that we can
+  actually read." Attribution: "Alex Chen, Principal Engineer at
+  Acme". Rounded light-fill container with quote above attribution.
+  Do NOT include surrounding section, headline, avatars, or any
+  other content — just the quote block.
+expected:
+  must_contain_roles:
+    - quote-block
+    - quote-text
+    - quote-author
+expected_tool_if_any: add_quote_block_v0

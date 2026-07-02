@@ -45,11 +45,6 @@ ignore = [
   # Transitive through backoff 0.4.x; see the async-openai/backoff note
   # above.
   "RUSTSEC-2024-0384",
-  # `ttf-parser` flagged unmaintained (2026-06). It is a transitive dep of the
-  # font/text stack (skia-safe / parley / cosmic-text) with no drop-in
-  # maintained replacement, and the advisory is informational (no
-  # vulnerability). Revisit when the upstream font crates migrate off it.
-  "RUSTSEC-2026-0192",
 ]
 
 [bans]

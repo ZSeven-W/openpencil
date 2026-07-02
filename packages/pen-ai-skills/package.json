@@ -1,0 +1,48 @@
+{
+  "name": "@zseven-w/pen-ai-skills",
+  "version": "0.8.0",
+  "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-ai-skills",
+  "bugs": {
+    "url": "https://github.com/ZSeven-W/openpencil/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "ZSeven-W",
+    "email": "xkayshen@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/pen-ai-skills"
+  },
+  "files": [
+    "src",
+    "skills",
+    "vite-plugin-skills.ts"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./vite-plugin": {
+      "types": "./vite-plugin-skills.ts",
+      "import": "./vite-plugin-skills.ts"
+    },
+    "./style-guide": {
+      "types": "./src/style-guide/index.ts",
+      "import": "./src/style-guide/index.ts"
+    },
+    "./_generated/style-guide-registry": {
+      "types": "./src/_generated/style-guide-registry.ts",
+      "import": "./src/_generated/style-guide-registry.ts"
+    }
+  },
+  "dependencies": {
+    "@zseven-w/pen-core": "workspace:*",
+    "@zseven-w/pen-types": "workspace:*",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1"
+  }
+}

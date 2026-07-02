@@ -63,11 +63,15 @@ pub fn render_nodes_pdf_bytes(
     {
         let mut pdf = skia_safe::pdf::new_document(&mut buf, None);
         for (node, bounds) in &pairs {
-            let mut on_page = pdf.begin_page(skia_safe::Size::new(page_w, page_h), None);
+            let mut on_page =
+                pdf.begin_page(skia_safe::Size::new(page_w, page_h), None);
             let canvas = on_page.canvas();
             // Position the node's content with PDF_MARGIN inset from the page
             // edges, the same translation strategy as the multi-page exporter.
-            canvas.translate((PDF_MARGIN - bounds.origin.x, PDF_MARGIN - bounds.origin.y));
+            canvas.translate((
+                PDF_MARGIN - bounds.origin.x,
+                PDF_MARGIN - bounds.origin.y,
+            ));
             crate::export::paint_node(canvas, node);
             pdf = on_page.end_page();
         }

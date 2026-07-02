@@ -89,24 +89,16 @@ jobs:
           echo "Installing wasm-bindgen-cli $version"
           cargo install wasm-bindgen-cli --version "$version" --locked
 
-      - name: Install binaryen (pinned modern release) + headless server runtime deps
+      - name: Install binaryen + headless server runtime deps
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            binaryen \
             pkg-config \
             libfreetype-dev \
             libfontconfig1-dev \
             fonts-noto-cjk
-          # Ubuntu's apt `binaryen` is v108 (2022) — far too old for rustc
-          # 1.94's wasm feature set (memory.copy/fill from bulk-memory-opt),
-          # so `wasm-opt` rejects the bundle with "all used features should be
-          # allowed". Pin a modern release matching the local dev toolchain.
-          BINARYEN_VERSION=version_123
-          curl -fsSL \
-            "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
-            | tar -xz
-          echo "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
-          "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin/wasm-opt" --version
+          wasm-opt --version
 
       - name: Verify node + gzip + Chrome are present (script prerequisites)
         run: |

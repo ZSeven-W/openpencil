@@ -1,0 +1,12 @@
+id: mobile-onboarding
+category: mobile
+difficulty: optional
+prompt: |
+  Design a first-run onboarding screen (375×812) with a hero
+  illustration at the top (placeholder box), a headline "Welcome to
+  Flow", a one-sentence body describing the app, and two bottom buttons
+  "Get started" (primary) and "Sign in" (secondary).
+expected:
+  must_contain_roles:
+    - heading
+    - button

@@ -1,0 +1,40 @@
+{
+  "name": "@zseven-w/pen-core",
+  "version": "0.8.0",
+  "description": "Core document operations, tree utils, variables, layout engine for OpenPencil",
+  "homepage": "https://github.com/ZSeven-W/openpencil/tree/main/packages/pen-core",
+  "bugs": {
+    "url": "https://github.com/ZSeven-W/openpencil/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "ZSeven-W",
+    "email": "xkayshen@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/pen-core"
+  },
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@zseven-w/pen-types": "workspace:*",
+    "nanoid": "^5.1.6",
+    "paper": "^0.12.18"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

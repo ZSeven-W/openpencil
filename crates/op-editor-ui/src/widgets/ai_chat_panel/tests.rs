@@ -94,11 +94,8 @@ fn no_model_disables_send_hit() {
 }
 
 #[test]
-fn no_model_still_allows_quick_action_cards() {
-    // #43: example pills are clickable/hoverable regardless of model
-    // connection — clicking one fills the input (sending separately requires a
-    // model). So with no model the first pill still hits `Example`, not the
-    // panel drag handle. (#33: pills are full-width stacked; use first center.)
+fn no_model_disables_quick_action_cards() {
+    // old→new (#33): pills are now full-width stacked; use center of first pill.
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -108,11 +105,8 @@ fn no_model_still_allows_quick_action_cards() {
         pills[0].origin.y + pills[0].size.y / 2.0,
     );
 
-    assert!(matches!(
-        panel.hit_test(rect, p),
-        Some(AIChatHit::Example { index: 0, .. })
-    ));
-    assert_eq!(panel.example_hover_at(rect, p), Some(0));
+    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
+    assert_eq!(panel.example_hover_at(rect, p), None);
 }
 
 #[test]
@@ -146,11 +140,11 @@ fn hit_test_resolves_stop_at_right_while_streaming() {
         .push(op_editor_core::ChatMessage::assistant_streaming());
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    // #42: stop shares the send slot — the circle toggles send↑ ↔ stop◻ in
-    // place (center at right_edge - 15, same as `hit_test_resolves_send_at_right`).
-    // While streaming, a click on the single circle resolves to Stop because the
-    // hit-test checks `streaming && stop` before `send`.
-    let stop_x = AI_CHAT_WIDTH - PAD - 15.0;
+    // old→new: stop circle is a separate button at right_edge-30-6-30 = right_edge-66;
+    // center is at right_edge - 66 + 15 = right_edge - 51.
+    // old code put stop at the same position as send and used streaming to disambiguate;
+    // new code has dedicated stop and send buttons.
+    let stop_x = AI_CHAT_WIDTH - PAD - 51.0;
     let p = Point2D::new(stop_x, toolbar_center_y());
 
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::Stop));
@@ -211,7 +205,10 @@ fn hit_test_resolves_bottom_toolbar_actions() {
         Some(AIChatHit::ToggleModelPicker)
     );
     // attach: use the footer rect center (now right-aligned, #38)
-    let attach_center = Point2D::new(footer.attach.origin.x + footer.attach.size.x / 2.0, y);
+    let attach_center = Point2D::new(
+        footer.attach.origin.x + footer.attach.size.x / 2.0,
+        y,
+    );
     assert_eq!(
         panel.hit_test(rect, attach_center),
         Some(AIChatHit::AddAttachment)
@@ -242,7 +239,10 @@ fn footer_hover_maps_bottom_toolbar_actions() {
         Some(op_editor_core::ChatFooterButton::ModelPicker)
     );
     // attach: use footer rect center (now right-aligned, #38)
-    let attach_center = Point2D::new(footer.attach.origin.x + footer.attach.size.x / 2.0, y);
+    let attach_center = Point2D::new(
+        footer.attach.origin.x + footer.attach.size.x / 2.0,
+        y,
+    );
     assert_eq!(
         panel.footer_hover_at(rect, attach_center),
         Some(op_editor_core::ChatFooterButton::AddAttachment)
@@ -576,7 +576,7 @@ pub(in super::super) fn has_fill_rect(fills: &[(Rect, crate::Color)], expected: 
 
 #[test]
 fn bottom_toolbar_layout_send_is_rightmost_circle() {
-    // The send button is the rightmost element; stop shares its slot (#42).
+    // The send button is the rightmost element; stop is to its left.
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -589,11 +589,9 @@ fn bottom_toolbar_layout_send_is_rightmost_circle() {
         (footer.send.size.x - footer.send.size.y).abs() < 0.01,
         "send button must be circular"
     );
-    // #42: stop is no longer a separate button left of send — it shares the
-    // send slot (the circle toggles send↑ ↔ stop◻ in place).
     assert!(
-        (footer.stop.origin.x - footer.send.origin.x).abs() < 0.01,
-        "stop must share the send slot"
+        footer.send.origin.x > footer.stop.origin.x,
+        "send must be to the right of stop"
     );
     // Send right edge should match panel right minus PAD.
     let right_edge = rect.origin.x + rect.size.x - PAD;
@@ -636,10 +634,9 @@ fn bottom_toolbar_layout_model_pill_is_leftmost() {
 }
 
 #[test]
-fn bottom_toolbar_layout_order_is_model_speed_attach_palette_send() {
-    // #38: ⚡/📎/🎨 moved right; #42: stop shares the send slot. Full
-    // left-to-right order is:
-    //   model (LEFT) | [gap] | speed | attach | palette | send (RIGHT)
+fn bottom_toolbar_layout_order_is_model_speed_attach_palette_stop_send() {
+    // #38: ⚡/📎/🎨 moved right — full left-to-right order is:
+    //   model (LEFT) | [gap] | speed | attach | palette | stop | send (RIGHT)
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -647,34 +644,21 @@ fn bottom_toolbar_layout_order_is_model_speed_attach_palette_send() {
     let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
     let footer = panel.footer_layout(rect, input, toolbar_top);
 
-    // Left-to-right order: model < speed < attach < palette < send
-    assert!(
-        footer.model.origin.x < footer.speed.origin.x,
-        "model left of speed"
-    );
-    assert!(
-        footer.speed.origin.x < footer.attach.origin.x,
-        "speed left of attach"
-    );
-    assert!(
-        footer.attach.origin.x < footer.palette.origin.x,
-        "attach left of palette"
-    );
-    assert!(
-        footer.palette.origin.x < footer.send.origin.x,
-        "palette left of send"
-    );
-    // #42: stop shares the send slot (toggle in place), not a separate button.
-    assert!(
-        (footer.stop.origin.x - footer.send.origin.x).abs() < 0.01,
-        "stop shares the send slot"
-    );
+    // Left-to-right order: model < speed < attach < palette < stop < send
+    assert!(footer.model.origin.x < footer.speed.origin.x,
+        "model left of speed");
+    assert!(footer.speed.origin.x < footer.attach.origin.x,
+        "speed left of attach");
+    assert!(footer.attach.origin.x < footer.palette.origin.x,
+        "attach left of palette");
+    assert!(footer.palette.origin.x < footer.stop.origin.x,
+        "palette left of stop");
+    assert!(footer.stop.origin.x < footer.send.origin.x,
+        "stop left of send");
     // #38 specific: speed/attach/palette must all be RIGHT of the model pill.
     let model_right = footer.model.origin.x + footer.model.size.x;
-    assert!(
-        footer.speed.origin.x > model_right + 4.0,
-        "speed chip must be right of model pill with a visible gap (#38)"
-    );
+    assert!(footer.speed.origin.x > model_right + 4.0,
+        "speed chip must be right of model pill with a visible gap (#38)");
 }
 
 #[test]
@@ -701,8 +685,7 @@ fn hit_test_stop_circle_only_active_while_streaming() {
     seed_available_model(&mut s2);
     s2.chat.set_input_text("design");
     let panel2 = AIChatPlaceholder::from_editor(&s2);
-    // #42: the stop slot is the Send button while idle (stop shares it), so the
-    // same point resolves to Send — never Stop.
+    // When idle, stop rect position hits nothing (gap area), falling through to FocusInput.
     assert_ne!(
         panel2.hit_test(rect, stop_center),
         Some(AIChatHit::Stop),

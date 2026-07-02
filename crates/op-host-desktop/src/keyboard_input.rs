@@ -542,7 +542,10 @@ impl DesktopApp {
             // (its teardown is gated on `current_chat.is_none()`).
             self.current_chat = None;
             self.current_design = None;
-            crate::sub_agent_session::abort_all(&mut self.sub_agents, &mut self.active_sub_agent);
+            crate::sub_agent_session::abort_all(
+                &mut self.sub_agents,
+                &mut self.active_sub_agent,
+            );
             self.chat_running_tab = None;
         } else if let Some(running) = self.chat_running_tab {
             self.chat_running_tab = op_editor_core::adjust_running_tab_after_close(running, idx);

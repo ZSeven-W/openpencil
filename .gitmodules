@@ -1,3 +1,6 @@
+[submodule "packages/agent-native"]
+	path = packages/agent-native
+	url = https://github.com/ZSeven-W/agent.git
 [submodule "vendor/agent"]
 	path = vendor/agent
 	url = https://github.com/ZSeven-W/agent-rs.git

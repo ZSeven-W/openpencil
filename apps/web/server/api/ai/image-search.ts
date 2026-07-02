@@ -1,0 +1,433 @@
+import { defineEventHandler, readBody, setResponseHeaders } from 'h3';
+import type { ImageSearchResult, ImageSearchResponse } from '../../../src/types/image-service';
+import { configureProxyDispatcher } from '../../utils/proxy-dispatcher';
+
+// Route external fetches through HTTPS_PROXY / HTTP_PROXY when set. Node's
+// native fetch ignores those env vars by default, so on machines that
+// require a local proxy (clash / mihomo / corporate gateway) every
+// Openverse + Wikimedia call would silently ECONNREFUSED and the endpoint
+// would return empty results — surfacing as blank image placeholders in
+// the canvas.
+configureProxyDispatcher();
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface OpenverseImageResult {
+  id: string;
+  url: string;
+  thumbnail: string;
+  width: number;
+  height: number;
+  license: string;
+  license_version: string;
+  attribution: string;
+}
+
+interface OpenverseSearchResponse {
+  results: OpenverseImageResult[];
+}
+
+interface WikimediaImageInfo {
+  url: string;
+  thumburl: string;
+  width: number;
+  height: number;
+  mime: string;
+  extmetadata?: {
+    LicenseShortName?: { value: string };
+  };
+}
+
+interface WikimediaPage {
+  pageid: number;
+  title: string;
+  imageinfo?: WikimediaImageInfo[];
+}
+
+interface WikimediaQueryResponse {
+  query?: {
+    pages?: Record<string, WikimediaPage>;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OAuth token cache
+// ---------------------------------------------------------------------------
+
+let cachedToken: string | null = null;
+let tokenExpiresAt = 0;
+
+async function getOpenverseToken(clientId: string, clientSecret: string): Promise<string | null> {
+  const now = Date.now();
+  if (cachedToken && now < tokenExpiresAt) {
+    return cachedToken;
+  }
+
+  try {
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    const res = await fetch('https://api.openverse.org/v1/auth_tokens/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { access_token: string; expires_in: number };
+    cachedToken = data.access_token;
+    // Refresh 60 seconds before expiry
+    tokenExpiresAt = now + (data.expires_in - 60) * 1000;
+    return cachedToken;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Query simplification — convert verbose AI prompts to search keywords
+// ---------------------------------------------------------------------------
+
+const STOP_WORDS = new Set([
+  'a',
+  'an',
+  'the',
+  'and',
+  'or',
+  'but',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'with',
+  'by',
+  'from',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'could',
+  'should',
+  'may',
+  'might',
+  'shall',
+  'can',
+  'that',
+  'this',
+  'these',
+  'those',
+  'it',
+  'its',
+  'very',
+  'really',
+  'just',
+  'also',
+  'about',
+  'above',
+  'after',
+  'before',
+  'between',
+  'into',
+  'through',
+  'during',
+  'each',
+  'some',
+  'such',
+  'no',
+  'not',
+  'only',
+  'same',
+  'so',
+  'than',
+  'too',
+  'up',
+  'out',
+  'if',
+  'then',
+  'once',
+  'here',
+  'there',
+  'when',
+  'where',
+  'how',
+  'all',
+  'both',
+  'few',
+  'more',
+  'most',
+  'other',
+  'any',
+  'as',
+  'while',
+  'using',
+  'showing',
+  'featuring',
+  'looking',
+  'style',
+  'styled',
+  'inspired',
+  'based',
+]);
+
+/**
+ * Simplify a verbose image generation prompt into 2-4 search keywords.
+ * "delicious burger with fries and fresh vegetables" → "burger fries vegetables"
+ * "modern office workspace with natural lighting" → "modern office workspace"
+ */
+export function simplifySearchQuery(prompt: string): string {
+  const words = prompt
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+
+  // Take up to 4 keywords
+  const keywords = words.slice(0, 4);
+  return keywords.join(' ') || prompt.slice(0, 30);
+}
+
+// ---------------------------------------------------------------------------
+// Mapping helpers (exported for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Wrap an external image URL with the local image-proxy endpoint so
+ * the browser-side canvas fetch goes through the dev server (where
+ * `EnvHttpProxyAgent` routes outbound HTTPS through the system
+ * proxy). Without this wrap the browser tries to reach openverse /
+ * wikimedia directly and ECONNREFUSEDs on machines behind a local
+ * proxy (clash / mihomo / corporate gateway), so the canvas paints
+ * the placeholder visual even though the search-pipeline already
+ * found a valid image URL via its server-side fetch.
+ */
+function viaImageProxy(externalUrl: string): string {
+  return `/api/ai/image-proxy?url=${encodeURIComponent(externalUrl)}`;
+}
+
+export function mapOpenverseResult(r: OpenverseImageResult): ImageSearchResult {
+  return {
+    id: r.id,
+    url: r.url,
+    thumbUrl: viaImageProxy(r.thumbnail),
+    width: r.width,
+    height: r.height,
+    source: 'openverse',
+    license: `${r.license} ${r.license_version}`.trim(),
+    attribution: r.attribution,
+  };
+}
+
+export function mapWikimediaPages(pages: Record<string, WikimediaPage>): ImageSearchResult[] {
+  const results: ImageSearchResult[] = [];
+  for (const page of Object.values(pages)) {
+    const info = page.imageinfo?.[0];
+    if (!info) continue;
+    results.push({
+      id: String(page.pageid),
+      url: info.url,
+      thumbUrl: viaImageProxy(info.thumburl ?? info.url),
+      width: info.width,
+      height: info.height,
+      source: 'wikimedia',
+      license: info.extmetadata?.LicenseShortName?.value ?? '',
+    });
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Source fetchers
+// ---------------------------------------------------------------------------
+
+async function fetchFromOpenverse(
+  query: string,
+  count: number,
+  aspectRatio: string | undefined,
+  clientId: string | undefined,
+  clientSecret: string | undefined,
+): Promise<ImageSearchResult[] | null> {
+  const url = new URL('https://api.openverse.org/v1/images/');
+  url.searchParams.set('q', query);
+  url.searchParams.set('page_size', String(count));
+  if (aspectRatio) {
+    url.searchParams.set('aspect_ratio', aspectRatio);
+  }
+
+  const headers: Record<string, string> = {};
+  if (clientId && clientSecret) {
+    const token = await getOpenverseToken(clientId, clientSecret);
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  // Network failures (ConnectTimeoutError on restricted networks, DNS
+  // failures, etc.) need to behave like a 429: return null so the caller
+  // falls back to Wikimedia. Without this, fetch() throws, the throw
+  // bubbles up to nitro's default handler, and the user sees a 500
+  // instead of placeholder images.
+  try {
+    const res = await fetch(url.toString(), {
+      headers,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.status === 429) {
+      // Rate limited — signal fallback
+      return null;
+    }
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = (await res.json()) as OpenverseSearchResponse;
+    return (data.results ?? []).map(mapOpenverseResult);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchFromWikimedia(query: string, count: number): Promise<ImageSearchResult[]> {
+  const url = new URL('https://commons.wikimedia.org/w/api.php');
+  url.searchParams.set('action', 'query');
+  url.searchParams.set('generator', 'search');
+  url.searchParams.set('gsrsearch', query);
+  url.searchParams.set('gsrnamespace', '6');
+  url.searchParams.set('gsrlimit', String(count));
+  url.searchParams.set('prop', 'imageinfo');
+  url.searchParams.set('iiprop', 'url|size|mime|extmetadata');
+  url.searchParams.set('iiurlwidth', '800');
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('origin', '*');
+
+  // Same network-failure shielding as Openverse: an empty result is the
+  // documented fallback signal, returning [] keeps the endpoint at 200
+  // with placeholder-friendly results instead of bubbling the throw.
+  try {
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as WikimediaQueryResponse;
+    const pages = data.query?.pages;
+    if (!pages) return [];
+
+    return mapWikimediaPages(pages);
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/ai/image-search
+ *
+ * Searches for freely-licensed images.
+ * Primary source: Openverse. Falls back to Wikimedia Commons on 429.
+ *
+ * Body: { query, count?, aspectRatio?, openverseClientId?, openverseClientSecret? }
+ */
+export default defineEventHandler(async (event) => {
+  setResponseHeaders(event, { 'Content-Type': 'application/json' });
+
+  const body = (await readBody(event)) as {
+    query?: string;
+    count?: number;
+    aspectRatio?: string;
+    openverseClientId?: string;
+    openverseClientSecret?: string;
+  };
+
+  const rawQuery = body?.query?.trim() ?? '';
+  if (!rawQuery) {
+    return { error: 'Missing required field: query' };
+  }
+
+  // Simplify verbose AI prompts into search-friendly keywords
+  const query = simplifySearchQuery(rawQuery);
+
+  const count = Math.min(Math.max(Number(body?.count ?? 10), 1), 50);
+  const aspectRatio = body?.aspectRatio;
+  const clientId = body?.openverseClientId;
+  const clientSecret = body?.openverseClientSecret;
+
+  // Try Openverse first
+  let openverseResults = await fetchFromOpenverse(
+    query,
+    count,
+    aspectRatio,
+    clientId,
+    clientSecret,
+  );
+
+  // Openverse `[]` (zero results) is its own failure mode, distinct from
+  // null (429 / network). LLMs often emit 3-keyword queries that match
+  // real photos but return zero on Openverse's strict AND-search —
+  // "burger combo fries" gets 0 matches even though "burger fries"
+  // returns 240. Retry with the first two keywords before giving up.
+  // This trades a tiny amount of relevance (the 3rd keyword) for a much
+  // better hit rate on AI-emitted queries; if even the 2-keyword form
+  // returns nothing, fall through to the Wikimedia fallback.
+  if (openverseResults !== null && openverseResults.length === 0) {
+    const words = query.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length > 2) {
+      const truncated = words.slice(0, 2).join(' ');
+      const retryResults = await fetchFromOpenverse(
+        truncated,
+        count,
+        aspectRatio,
+        clientId,
+        clientSecret,
+      );
+      if (retryResults !== null && retryResults.length > 0) {
+        openverseResults = retryResults;
+      }
+    }
+  }
+
+  if (openverseResults !== null && openverseResults.length > 0) {
+    return {
+      results: openverseResults,
+      source: 'openverse',
+    } satisfies ImageSearchResponse;
+  }
+
+  // Openverse 429-failed OR returned no usable results even after the
+  // 2-keyword retry — fall back to Wikimedia, which has different
+  // coverage and a less strict matching algorithm.
+  const wikimediaResults = await fetchFromWikimedia(query, count);
+  if (wikimediaResults.length === 0) {
+    const words = query.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length > 2) {
+      const truncated = words.slice(0, 2).join(' ');
+      const retryResults = await fetchFromWikimedia(truncated, count);
+      if (retryResults.length > 0) {
+        return {
+          results: retryResults,
+          source: 'wikimedia',
+        } satisfies ImageSearchResponse;
+      }
+    }
+  }
+  return {
+    results: wikimediaResults,
+    source: 'wikimedia',
+  } satisfies ImageSearchResponse;
+});

@@ -56,7 +56,7 @@ fn f2_subtask() -> Subtask {
 }
 
 #[test]
-fn reveal_schedule_streams_large_subtrees_at_a_uniform_beat() {
+fn reveal_schedule_streams_large_subtrees_without_long_tail() {
     let _guard = crate::agent_indicator_test_support::lock();
     let epoch = op_editor_core::agent_indicators::begin();
     let ids_before = HashSet::from(["root".to_string()]);
@@ -97,10 +97,13 @@ fn reveal_schedule_streams_large_subtrees_at_a_uniform_beat() {
         last_label - section >= 800,
         "large nested subtrees should stay visibly streamed instead of arriving in one burst"
     );
-    assert_eq!(
-        last_label - section,
-        20 * op_editor_core::agent_indicators::REVEAL_STAGGER_MS,
-        "the queue keeps one uniform, readable beat per element — no tail compression"
+    assert!(
+        last_label - section <= 1_100,
+        "large nested subtrees should avoid a slow reveal queue"
+    );
+    assert!(
+        snapshot.reveals.values().all(|start| *start < 2_100),
+        "new content should finish entering within a responsive window"
     );
     op_editor_core::agent_indicators::end_if_epoch(epoch);
 }
@@ -154,8 +157,10 @@ fn reveal_schedule_keeps_nested_stream_order_across_sibling_groups() {
     assert!(
         [label_0 - row_0, row_1 - label_0, label_1 - row_1]
             .into_iter()
-            .all(|gap| gap == op_editor_core::agent_indicators::REVEAL_STAGGER_MS),
-        "nested stream items keep the uniform queue beat (which already covers the container runway)"
+            .all(|gap| {
+                (40..=op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS).contains(&gap)
+            }),
+        "nested stream items should keep readable cadence while giving new containers a runway"
     );
     op_editor_core::agent_indicators::end_if_epoch(epoch);
 }

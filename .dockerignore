@@ -1,0 +1,13 @@
+.git
+.github
+.vscode
+out
+node_modules
+dist
+dist-electron
+electron-dist
+build
+screenshot
+*.md
+!package.json
+.openpencil-tmp

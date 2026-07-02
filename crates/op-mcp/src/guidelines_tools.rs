@@ -47,7 +47,9 @@ impl McpTool for GetGuidelines {
                 let mut out = BTreeMap::new();
                 out.insert(
                     "error".into(),
-                    format!("Unknown topic: \"{topic}\". Supported topics: web-app, mobile."),
+                    format!(
+                        "Unknown topic: \"{topic}\". Supported topics: web-app, mobile."
+                    ),
                 );
                 ToolOutcome::Ok(out)
             }

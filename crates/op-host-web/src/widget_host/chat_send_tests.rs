@@ -34,11 +34,8 @@ fn attachment_button_queues_web_file_picker_like_native() {
     let chat_rect = host
         .ai_chat_rect(viewport_w, viewport_h)
         .expect("chat panel visible");
-    // Footer right cluster (#38/#42): ⚡ speed | 📎 attach | 🎨 palette | ↑ send.
-    // The 📎 attach icon centres at `size.x - 88` (the old `-68` now lands on the
-    // 🎨 palette icon that was inserted between attach and send).
     let attach = Point2D::new(
-        chat_rect.origin.x + chat_rect.size.x - 88.0,
+        chat_rect.origin.x + chat_rect.size.x - 68.0,
         chat_rect.origin.y + chat_rect.size.y - 19.0,
     );
 

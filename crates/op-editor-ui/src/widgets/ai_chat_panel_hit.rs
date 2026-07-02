@@ -65,10 +65,7 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         // Maximize / minimize icon (just left of new-chat).
         let maximize_rect = Rect {
-            origin: Point2D::new(
-                right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W,
-                header_icon_y,
-            ),
+            origin: Point2D::new(right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W, header_icon_y),
             size: Point2D::new(MAXIMIZE_W, MAXIMIZE_W),
         };
         if (maximize_rect).contains(point) {
@@ -78,7 +75,8 @@ impl<'a> AIChatPlaceholder<'a> {
         // Returns SwitchTab(i) for a tab body click; CloseTab(i) for the × glyph.
         let tab_count = self.tabs_snapshot.len();
         if tab_count > 0 {
-            if let Some((tab_idx, over_close)) = tab_hit_at(rect, tab_count, point, self.tab_hover)
+            if let Some((tab_idx, over_close)) =
+                tab_hit_at(rect, tab_count, point, self.tab_hover)
             {
                 return Some(if over_close {
                     AIChatHit::CloseTab(tab_idx)
@@ -135,9 +133,8 @@ impl<'a> AIChatPlaceholder<'a> {
                     // Hit inside picker — check which row.
                     let rows_top = picker.origin.y + 32.0;
                     for i in 1..=crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_COUNT {
-                        let row_y = rows_top
-                            + (i - 1) as f32
-                                * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+                        let row_y = rows_top + (i - 1) as f32
+                            * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
                         if point.y >= row_y
                             && point.y < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
                         {
@@ -229,17 +226,15 @@ impl<'a> AIChatPlaceholder<'a> {
                     return Some(AIChatHit::Stop);
                 }
                 if (footer.send).contains(point) {
-                    return Some(
-                        if can_use_model
-                            && !streaming
-                            && (!self.state.input.text().trim().is_empty()
-                                || !self.state.pending_attachments.is_empty())
-                        {
-                            AIChatHit::Send
-                        } else {
-                            AIChatHit::FocusInput
-                        },
-                    );
+                    return Some(if can_use_model
+                        && !streaming
+                        && (!self.state.input.text().trim().is_empty()
+                            || !self.state.pending_attachments.is_empty())
+                    {
+                        AIChatHit::Send
+                    } else {
+                        AIChatHit::FocusInput
+                    });
                 }
             }
             return Some(if self.is_streaming() {
@@ -322,10 +317,8 @@ impl<'a> AIChatPlaceholder<'a> {
                 return Some(hit.into());
             }
         }
-        if self.state.messages.is_empty() && !self.is_streaming() {
+        if self.state.messages.is_empty() && can_use_model && !self.is_streaming() {
             // Examples grid hit-test (only rendered when no messages).
-            // Clickable regardless of model connection — clicking an example
-            // fills the input (sending separately requires a model) (#43).
             for (index, (card, ex)) in example_card_rects(rect)
                 .iter()
                 .zip(self.examples.iter())
@@ -458,21 +451,23 @@ impl<'a> AIChatPlaceholder<'a> {
             return Some(op_editor_core::ChatFooterButton::Stop);
         }
         if (footer.send).contains(point) {
-            // #42: stop shares this slot and is matched above while streaming, so
-            // reaching here means we're idle — the circle is the Send button.
-            return if !self.state.available_models.is_empty() {
-                Some(op_editor_core::ChatFooterButton::Send)
+            return Some(if streaming {
+                return None; // send is dimmed but hoverable — no wash needed
+            } else if !self.state.available_models.is_empty() {
+                op_editor_core::ChatFooterButton::Send
             } else {
-                None
-            };
+                return None;
+            });
         }
         None
     }
 
     pub fn example_hover_at(&self, rect: Rect, point: Point2D) -> Option<usize> {
-        // Examples are hoverable/clickable regardless of model connection (#43);
-        // gate only on messages-empty / not-streaming / not-collapsed.
-        if !self.state.messages.is_empty() || self.is_streaming() || self.state.collapsed {
+        if !self.state.messages.is_empty()
+            || self.state.available_models.is_empty()
+            || self.is_streaming()
+            || self.state.collapsed
+        {
             return None;
         }
         example_card_rects(rect)
@@ -516,9 +511,11 @@ impl<'a> AIChatPlaceholder<'a> {
         let rows_top = picker.origin.y + 32.0;
         for i in 1..=crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_COUNT {
             let row_y = rows_top
-                + (i - 1) as f32 * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
+                + (i - 1) as f32
+                    * crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB;
             if point.y >= row_y
-                && point.y < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
+                && point.y
+                    < row_y + crate::widgets::ai_chat_panel_footer::PARALLEL_AGENTS_ROW_H_PUB
             {
                 return Some(i);
             }

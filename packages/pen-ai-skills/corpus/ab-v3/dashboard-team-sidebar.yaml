@@ -1,0 +1,28 @@
+id: dashboard-team-sidebar
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a desktop dashboard left sidebar nav rail. The sidebar
+  is a 240px-wide white panel that fills the height of its parent.
+  Top-to-bottom contents:
+    - small brand title row "Acme Inc" in bold slate (16/700)
+    - five vertical nav items, each a 40px-tall row with a lucide
+      icon on the left and a label to its right with 12px gap:
+        1. Dashboard (icon "layout-dashboard", marked as the
+           CURRENTLY ACTIVE page — slate-100 pill background, bolder
+           darker label)
+        2. Customers (icon "users")
+        3. Orders (icon "shopping-cart")
+        4. Reports (icon "bar-chart-3")
+        5. Settings (icon "settings")
+  Inactive items have no background fill and a muted slate label.
+  Do NOT render the dashboard content on the right, just the sidebar.
+expected:
+  must_contain_roles:
+    - sidebar-nav
+    - sidebar-nav-title
+    - sidebar-nav-item-active
+    - sidebar-nav-item
+    - sidebar-nav-icon
+    - sidebar-nav-label
+expected_tool_if_any: add_sidebar_nav_v0

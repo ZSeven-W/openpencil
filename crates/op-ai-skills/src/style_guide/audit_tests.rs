@@ -11,7 +11,7 @@
 //! not the assertion.
 
 #[cfg(test)]
-mod tests {
+mod audit_tests {
     use super::super::{
         loader::{select_style_guide, style_guide_registry, SelectOptions},
         types::STYLE_GUIDE_TAGS,
@@ -57,8 +57,7 @@ mod tests {
 
             // Only lowercase letters, digits, hyphens, and underscores.
             assert!(
-                tag.chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+                tag.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
                 "STYLE_GUIDE_TAGS entry contains characters outside [a-z0-9-_]: {tag:?}"
             );
         }

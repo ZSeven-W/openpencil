@@ -38,12 +38,6 @@ fn cursor_redraw_still_paints_when_layer_hover_changes() {
 
 #[test]
 fn variable_row_input_keeps_resume_time_redraws_active() {
-    // Serialize against reveal-streaming design-turn tests and start from
-    // a quiescent registry so only the caret blink drives the deadline.
-    let _guard = crate::agent_indicator_test_lock::LOCK
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    op_editor_core::agent_indicators::clear();
     let mut app = DesktopApp::new(None);
     app.host.set_now_ms(240);
     app.host.editor_state_mut().editor_ui.variable_row_focus =
