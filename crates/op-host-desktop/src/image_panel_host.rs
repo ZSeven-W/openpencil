@@ -222,7 +222,9 @@ fn selected_image_dimensions(host: &WidgetHostNative) -> (Option<f64>, Option<f6
     }
 }
 
-fn active_image_gen_profile(state: &op_editor_core::EditorState) -> Option<&ImageGenProfile> {
+pub(crate) fn active_image_gen_profile(
+    state: &op_editor_core::EditorState,
+) -> Option<&ImageGenProfile> {
     let settings = &state.editor_ui.agent_settings;
     settings
         .image_gen_profiles
