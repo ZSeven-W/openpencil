@@ -255,6 +255,18 @@ fn first_solid_color(fills: Option<&[PenFill]>) -> Option<[f32; 4]> {
                     }
                 }
             }
+            PenFill::MeshGradient(body) => {
+                if let Some(stop) = body.stops.first() {
+                    if let Some(rgba) = parse_hex(&stop.color) {
+                        return Some(apply_alpha(rgba, body.opacity));
+                    }
+                }
+            }
+            PenFill::Shader(body) => {
+                // Payload painters can't run SkSL — mid-gray fallback
+                // (mirrors SceneShader::fallback's default).
+                return Some(apply_alpha([0.5, 0.5, 0.5, 1.0], body.opacity));
+            }
             PenFill::Image(_) => {
                 return Some([0.85, 0.86, 0.88, 1.0]);
             }

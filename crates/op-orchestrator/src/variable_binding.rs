@@ -105,6 +105,14 @@ fn bind_fills(fills: &mut [PenFill], refs: &ColorRefs) {
                     bind_color_string(&mut stop.color, refs);
                 }
             }
+            PenFill::MeshGradient(body) => {
+                for stop in &mut body.stops {
+                    bind_color_string(&mut stop.color, refs);
+                }
+            }
+            // Shader colours live in untyped uniform values — leave
+            // them alone rather than guess which uniforms are colours.
+            PenFill::Shader(_) => {}
             PenFill::Image(_) => {}
         }
     }

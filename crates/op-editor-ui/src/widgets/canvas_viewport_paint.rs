@@ -729,7 +729,9 @@ pub(crate) fn paint_svg_path_node(
                 d, world_rect, &flat, *gx, *cy, *radius, *opacity,
             );
         }
-        None => {
+        // Mesh gradients have no svg-path shader yet — fall back to
+        // the node's resolved `fill` colour like the no-gradient path.
+        Some(SceneGradient::Mesh { .. }) | None => {
             if let Some(fill) = node.fill {
                 cx.backend.fill_svg_path_in_rect(d, world_rect, fill);
             }
