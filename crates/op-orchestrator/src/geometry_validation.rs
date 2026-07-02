@@ -260,11 +260,11 @@ fn collect_text_overflow_fixes(
     // absolutely positioned, so "wider than the parent" is not an overflow to
     // repair (and `width: fill_container` means nothing there).
     let flex_parent = matches!(layout_str(v), Some("vertical" | "horizontal"));
-    if let Some(parent_w) = v
+    if let Some((parent_x, parent_w)) = v
         .get("id")
         .and_then(Value::as_str)
         .and_then(|id| rects.get(id))
-        .map(|r| r.w)
+        .map(|r| (r.x, r.w))
         .filter(|_| flex_parent)
     {
         for c in children(v) {
@@ -286,7 +286,11 @@ fn collect_text_overflow_fixes(
             if fill && wrap {
                 continue;
             }
-            if cr.w > parent_w + TEXT_OVERFLOW_EPS {
+            // Wider than the block, OR its right edge past the block's right
+            // edge (a sibling pushed it out — combined overflow the width-only
+            // check misses: a 36px avatar + a fit name inside a 116px row).
+            let past_right = cr.x + cr.w > parent_x + parent_w + TEXT_OVERFLOW_EPS;
+            if cr.w > parent_w + TEXT_OVERFLOW_EPS || past_right {
                 cmds.push(EditorCommand::SetNodeLayoutProp {
                     node_id: NodeId::new(cid.to_string()),
                     property: "width".to_string(),
@@ -385,7 +389,16 @@ fn collect_row_gap_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut Ve
                 )
             })
             .collect();
-        if frame_kids.len() >= 3 {
+        let distributes = matches!(
+            v.get("justifyContent").and_then(Value::as_str),
+            Some("space_between" | "space_around" | "space_evenly")
+        );
+        // TWO text-bearing frame columns jammed at 0px (a date column against
+        // a details stack) are the two-column form of the same defect — but
+        // only when the row top-packs (a space_between pair separates itself,
+        // so a jammed pair there is the ancestor chain's problem, not gap's).
+        let enough_cells = frame_kids.len() >= 3 || (frame_kids.len() == 2 && !distributes);
+        if enough_cells {
             let rects_of: Vec<Option<&Rect>> = frame_kids
                 .iter()
                 .map(|c| {
@@ -563,6 +576,17 @@ fn bears_text(v: &Value) -> bool {
     children(v).iter().any(bears_text)
 }
 
+/// A JAM participant must be a text-bearing CONTAINER cell. Two bare `text`
+/// siblings set tight on purpose ("$29"+"/mo", value+unit pairs) are
+/// typography, not a data-column jam — measured false positive on a pricing
+/// card's price row.
+fn is_cell_like(v: &Value) -> bool {
+    matches!(
+        v.get("type").and_then(Value::as_str),
+        Some("frame" | "group")
+    ) && bears_text(v)
+}
+
 /// Report adjacent siblings of a horizontal FLEX row that resolved jammed
 /// (text columns touching) or overlapping. Report-only: flush layouts are
 /// sometimes intentional (joined button groups), so the model — not a fixer —
@@ -595,7 +619,16 @@ fn collect_sibling_jam_diagnostics(
             continue;
         }
         let breathing = rb.x - (ra.x + ra.w);
-        if breathing < -SIBLING_OVERLAP_EPS {
+        // Intentional OVERLAY, not an accident: one sibling's center inside
+        // the other's box — a number set on a ring (ellipse + short text), a
+        // corner badge on an avatar. Layout can't express children for an
+        // ellipse, so models stack a sibling on purpose; don't report it.
+        let center_inside = |inner: &Rect, outer: &Rect| {
+            let (cx, cy) = (inner.x + inner.w / 2.0, inner.y + inner.h / 2.0);
+            cx > outer.x && cx < outer.x + outer.w && cy > outer.y && cy < outer.y + outer.h
+        };
+        let overlay = center_inside(ra, rb) || center_inside(rb, ra);
+        if breathing < -SIBLING_OVERLAP_EPS && !overlay {
             out.push(format!(
                 "{} and {}: siblings OVERLAP by {}px — their combined width exceeds the row; shrink widths or wrap text so they fit side by side",
                 diag_label(a),
@@ -604,8 +637,8 @@ fn collect_sibling_jam_diagnostics(
             ));
         } else if breathing < SIBLING_JAM_GAP
             && ra.h.min(rb.h) <= ROW_CELL_MAX_H
-            && bears_text(a)
-            && bears_text(b)
+            && is_cell_like(a)
+            && is_cell_like(b)
         {
             out.push(format!(
                 "{} and {}: text columns touch (only {}px apart) — their contents read as one word; add a gap on the row (e.g. gap: 16)",

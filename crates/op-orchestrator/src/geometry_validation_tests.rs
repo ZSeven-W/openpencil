@@ -796,7 +796,10 @@ fn resolved_rect_probe() {
         let v = serde_json::to_value(root).unwrap();
         fn walk(v: &serde_json::Value, rects: &HashMap<String, Rect>, pat: &str, depth: usize) {
             let name = v.get("name").and_then(|x| x.as_str()).unwrap_or("");
-            if !pat.is_empty() && name.to_lowercase().contains(pat) {
+            let nid = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
+            if !pat.is_empty()
+                && (name.to_lowercase().contains(pat) || nid.eq_ignore_ascii_case(pat))
+            {
                 if let Some(r) = v
                     .get("id")
                     .and_then(|x| x.as_str())
@@ -987,4 +990,95 @@ fn real_layout_shrinks_rigid_fit_child_overflowing_a_narrow_card() {
         "rigid fit pair retargeted to fill, got {:?}",
         pair.get("width")
     );
+}
+
+#[test]
+fn real_layout_wraps_text_pushed_past_the_row_edge_by_a_sibling() {
+    use crate::test_support::VecDocSink;
+    use crate::types::DocSink;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    // p44's verbatim shape: a 116px centered row holding [36px ellipse, fit
+    // text] — the text alone fits the row, but the PAIR overflows and the
+    // text's right edge lands past the row edge. The width-only check missed
+    // this; the right-edge check must wrap the text.
+    let root: PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"root","name":"Step Card","width":400,"height":"fit_content","layout":"vertical","children":[
+            {"type":"frame","id":"row","name":"Avatar Row","layout":"horizontal","width":116,"height":"fit_content","justifyContent":"center","alignItems":"center","children":[
+                {"type":"ellipse","id":"av","width":36,"height":36},
+                {"type":"text","id":"nm","name":"Name","content":"Personalize your workspace","fontSize":14}
+            ]}
+        ]
+    }))
+    .expect("valid root");
+    let mut sink = VecDocSink::new();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state().active_children()[0].id_str().to_string();
+    geometry_validate_and_fix(&mut sink, &root_id);
+    let v = serde_json::to_value(sink.state().active_children()[0].clone()).unwrap();
+    fn find<'a>(v: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
+        if v.get("name").and_then(|x| x.as_str()) == Some(name) {
+            return Some(v);
+        }
+        v.get("children")
+            .and_then(|c| c.as_array())
+            .into_iter()
+            .flatten()
+            .find_map(|c| find(c, name))
+    }
+    let nm = find(&v, "Name").expect("text survives");
+    assert_eq!(
+        nm.get("width").and_then(|w| w.as_str()),
+        Some("fill_container"),
+        "pair-overflowed text wrapped, got {:?}",
+        nm.get("width")
+    );
+}
+
+#[test]
+fn ring_badge_overlay_is_not_reported_as_an_overlap() {
+    // A step-ring: ellipse + a short number stacked ON it (center inside) —
+    // an intentional overlay, not an overflow accident.
+    let row = json!({
+        "type":"frame","id":"row","name":"Ring","layout":"horizontal","children":[
+            {"type":"ellipse","id":"e","width":36,"height":36},
+            {"type":"text","id":"t","content":"2","fontSize":15}
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "row".into(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 116.0,
+            h: 36.0,
+        },
+    );
+    rects.insert(
+        "e".into(),
+        Rect {
+            x: 40.0,
+            y: 0.0,
+            w: 36.0,
+            h: 36.0,
+        },
+    );
+    rects.insert(
+        "t".into(),
+        Rect {
+            x: 53.0,
+            y: 9.0,
+            w: 10.0,
+            h: 18.0,
+        },
+    ); // centered on the ring
+    let mut out = Vec::new();
+    collect_sibling_jam_diagnostics(&row, &rects, &mut out);
+    assert!(out.is_empty(), "overlay must not be reported: {out:?}");
 }
