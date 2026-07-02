@@ -607,39 +607,52 @@ async fn planning_loop(
     llm: &dyn LlmClient,
     abort: &AbortFlag,
 ) -> Result<(OrchestratorPlan, NormInfo), OrchestratorError> {
-    let pp = build_orchestrator_prompt(request, PlanningMode::Rich, abort.clone());
-    let forced_style_guide_name = pp.forced_style_guide_name.clone();
+    // TWO attempts before the heuristic fallback: a truncated stream or a
+    // transient provider blip fails the parse once and usually succeeds
+    // immediately after (measured on the desktop: a rich plan cut mid-JSON →
+    // "planning parse failure" → a skeleton fallback design, while the very
+    // same prompt parsed fine on retry). The fallback plan stays as the
+    // final safety net, not the first response to a hiccup.
+    for attempt in 1..=2u8 {
+        let pp = build_orchestrator_prompt(request, PlanningMode::Rich, abort.clone());
+        let forced_style_guide_name = pp.forced_style_guide_name.clone();
 
-    match collect_text(llm.call(pp.call_request)).await {
-        Ok(raw) => {
-            // abort 在流结束后被置位(两次检查对齐 TS)
-            if abort.is_set() {
+        match collect_text(llm.call(pp.call_request)).await {
+            Ok(raw) => {
+                // abort 在流结束后被置位(两次检查对齐 TS)
+                if abort.is_set() {
+                    return Err(OrchestratorError::Aborted);
+                }
+                if let Some((mut plan, _repaired)) = parse_orchestrator_response(&raw, request) {
+                    // 回填 forced_style_guide_name(若 plan 未携带)
+                    if plan.style_guide_name.is_none() {
+                        if let Some(forced) = forced_style_guide_name {
+                            plan.style_guide_name = Some(forced);
+                        }
+                    }
+                    let norm = normalize(&mut plan, request);
+                    return Ok((plan, norm));
+                }
+                let preview = raw.trim().chars().take(150).collect::<String>();
+                tracing::warn!(
+                    attempt,
+                    preview = %preview,
+                    "planning parse failure"
+                );
+            }
+            Err(true) => {
+                // abort 在流中发生 → 立即返回
                 return Err(OrchestratorError::Aborted);
             }
-            if let Some((mut plan, _repaired)) = parse_orchestrator_response(&raw, request) {
-                // 回填 forced_style_guide_name(若 plan 未携带)
-                if plan.style_guide_name.is_none() {
-                    if let Some(forced) = forced_style_guide_name {
-                        plan.style_guide_name = Some(forced);
-                    }
-                }
-                let norm = normalize(&mut plan, request);
-                return Ok((plan, norm));
+            Err(false) => {
+                tracing::warn!(attempt, "planning stream error");
             }
-            let preview = raw.trim().chars().take(150).collect::<String>();
-            tracing::warn!(
-                preview = %preview,
-                "planning parse failure; using fallback plan"
-            );
         }
-        Err(true) => {
-            // abort 在流中发生 → 立即返回
+        if abort.is_set() {
             return Err(OrchestratorError::Aborted);
         }
-        Err(false) => {
-            tracing::warn!("planning stream error; using fallback plan");
-        }
     }
+    tracing::warn!("planning failed twice; using fallback plan");
 
     // 规划失败 → fallback plan(规划不可出错)
     let mut fallback = build_fallback_plan(request);
