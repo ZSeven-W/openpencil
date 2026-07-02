@@ -229,6 +229,14 @@ mod tests {
             "must reference batch_design"
         );
         assert!(
+            prompt.contains("emit_elements"),
+            "must reference emit_elements (the preferred element-builder path)"
+        );
+        assert!(
+            prompt.contains("stat_card") || prompt.contains("stat-card"),
+            "must teach high-level element kinds via emit_elements"
+        );
+        assert!(
             prompt.contains("get_screenshot"),
             "must reference get_screenshot"
         );
