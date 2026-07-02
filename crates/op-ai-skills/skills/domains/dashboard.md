@@ -43,4 +43,6 @@ DATA TABLES (use only when no predefined Table component exists):
 
 SPACING: cards cornerRadius 8-12 consistently; card padding 20 (16 for dense metric cards); section gap 24-28; align everything to an 8px rhythm.
 
+COMPLETENESS (hard bar): a data table / client list carries at least **6 realistic rows** with VARIED data (distinct names, dates, values, statuses) — 2-3 sample rows read as an unfinished skeleton. A dashboard ships its full section set: KPI row + the primary table/list + at least one secondary section (activity feed, upcoming items, or quick actions).
+
 Apply silently through node structure; never emit these as visible text.
