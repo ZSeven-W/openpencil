@@ -539,7 +539,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                 paint_hits.merge_missing(child_hits);
             }
             if let Some(indicators) = indicators.as_ref() {
-                super::canvas_agent_overlay::paint_agent_frame_indicators_with_snapshot(
+                super::canvas_agent_cursor::paint_agent_cursors(
                     cx,
                     &page.children,
                     viewport_origin,

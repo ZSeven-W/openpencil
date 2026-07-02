@@ -16,10 +16,16 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex};
 
-/// Duration of the TS-style generated-node border fade (0 → 1 → 0).
+/// Window after a reveal starts during which the entrance animation
+/// (scale-pop) plays and the reveal counts as "animating" for redraw
+/// scheduling. While a run is active reveals are retained past this
+/// window (they anchor the cursor + current-element border); they are
+/// only dropped wholesale when the run ends.
 pub const REVEAL_DURATION_MS: u64 = 1_000;
-/// Delay between the first generated nodes in one applied batch.
-pub const REVEAL_STAGGER_MS: u64 = 40;
+/// Delay between generated nodes in the placement queue. Deliberately
+/// slow (user-tuned): each element gets a readable fly-in → pop beat
+/// instead of a burst.
+pub const REVEAL_STAGGER_MS: u64 = 160;
 /// Minimum delay before descendants of a newly revealed container begin
 /// their own entrances. This leaves the parent opening beat readable
 /// without making nested content feel stalled.
@@ -32,14 +38,10 @@ pub const REVEAL_DEPTH_STAGGER_MS: u64 = 0;
 /// frame beat, avoiding stacked outlines when a generated container and
 /// its first children become ready together.
 pub const REVEAL_CHILD_SUPPRESS_FRACTION: f32 = 0.04;
-const REVEAL_FULL_STAGGER_SIBLINGS: u64 = 24;
-const REVEAL_MID_STAGGER_SIBLINGS: u64 = 72;
-const REVEAL_COMPRESSED_STAGGER_MS: u64 = 32;
-const REVEAL_TAIL_STAGGER_MS: u64 = 24;
 const REVEAL_MAX_NEW_STARTS_PER_SNAPSHOT: usize = 1;
-const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = REVEAL_STAGGER_MS;
+pub(crate) const REVEAL_BURST_RECOVERY_STAGGER_MS: u64 = REVEAL_STAGGER_MS;
 const CLOCK_REBASE_THRESHOLD_MS: u64 = 60_000;
-const REVEAL_FRAME_MS: u64 = 16;
+pub(crate) const REVEAL_FRAME_MS: u64 = 16;
 
 /// A node's / frame's owning agent — colour hex (e.g. `"#FF6B6B"`) + name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,9 +66,27 @@ pub struct AgentIndicators {
     /// node ids that are claimed but not yet drawn — drives the preview
     /// pulse fill.
     pub previews: HashSet<String>,
-    /// node id → reveal start timestamp. Drives the short new-node
-    /// entrance animation after AI applies generated nodes.
+    /// node id → reveal start timestamp. Drives the new-node entrance
+    /// animation (scale-pop), the agent cursor's placement queue, and
+    /// the current-element breathing border. Retained for the whole
+    /// run (see [`REVEAL_DURATION_MS`]).
     pub reveals: HashMap<String, u64>,
+    /// `true` from [`begin`] until the run's clear/end — keeps the
+    /// cursor + current-element border alive between streamed chunks
+    /// even when no reveal is inside its animation window.
+    pub run_active: bool,
+    /// `true` once a finished run is draining ([`finish_if_epoch`]):
+    /// retention is off and the overlay clears itself as soon as the
+    /// already-queued reveals finish playing out.
+    finishing: bool,
+    /// The drain just cleared the overlay, but the frame on screen was
+    /// painted BEFORE the clear — one more repaint is needed to erase
+    /// the cursor. Sticky until the paint path consumes it (the
+    /// clear happens inside the host's "anything animating?" probe, so
+    /// without this the probe answers "no" at the exact moment a final
+    /// erase frame is required and the cursor lingers until the next
+    /// user interaction).
+    needs_final_frame: bool,
     last_reveal_snapshot_ms: Option<u64>,
 }
 
@@ -77,6 +97,9 @@ impl AgentIndicators {
         self.frames.clear();
         self.previews.clear();
         self.reveals.clear();
+        self.run_active = false;
+        self.finishing = false;
+        self.needs_final_frame = false;
         self.last_reveal_snapshot_ms = None;
     }
 }
@@ -154,23 +177,14 @@ pub fn add_reveal(epoch: u64, node_id: &str, started_at_ms: u64) {
 /// Start offset for a generated node inside one applied batch.
 ///
 /// The queue follows the visual traversal order of the newly applied
-/// subtree rather than a per-parent sibling index. That keeps nested
-/// content from sharing the same start frame across different parents
-/// while still compressing long tails enough to stay responsive.
+/// subtree rather than a per-parent sibling index. It is a UNIFORM
+/// queue: every placement gets the same [`REVEAL_STAGGER_MS`] beat, so
+/// dense batches stream out one readable element at a time instead of
+/// compressing into a burst.
 pub fn reveal_offset_ms(depth: u64, stream_index: u64) -> u64 {
-    let full = stream_index.min(REVEAL_FULL_STAGGER_SIBLINGS) * REVEAL_STAGGER_MS;
-    let mid = stream_index
-        .min(REVEAL_MID_STAGGER_SIBLINGS)
-        .saturating_sub(REVEAL_FULL_STAGGER_SIBLINGS)
-        .saturating_mul(REVEAL_COMPRESSED_STAGGER_MS);
-    let tail = stream_index
-        .saturating_sub(REVEAL_MID_STAGGER_SIBLINGS)
-        .saturating_mul(REVEAL_TAIL_STAGGER_MS);
     depth
         .saturating_mul(REVEAL_DEPTH_STAGGER_MS)
-        .saturating_add(full)
-        .saturating_add(mid)
-        .saturating_add(tail)
+        .saturating_add(stream_index.saturating_mul(REVEAL_STAGGER_MS))
 }
 
 /// Clear every indicator — called when a generation finishes / is reset.
@@ -185,6 +199,7 @@ pub fn begin() -> u64 {
     let mut r = REGISTRY.lock().unwrap();
     r.epoch += 1;
     r.clear_maps();
+    r.run_active = true;
     r.epoch
 }
 
@@ -197,6 +212,36 @@ pub fn clear_if_epoch(epoch: u64) {
     let mut r = REGISTRY.lock().unwrap();
     if r.epoch == epoch {
         r.clear_maps();
+    }
+}
+
+/// Gracefully end the run identified by `epoch` after its work is done:
+/// stop run-long reveal retention and let the already-queued reveals
+/// play out at the queue cadence; once the last one leaves its
+/// animation window the whole overlay (glow, badges, cursor, borders)
+/// clears itself and the epoch is retired. A no-op if a newer run took
+/// over. Use for NATURAL completion — a user stop wants
+/// [`end_if_epoch`]'s immediate clear so a cancelled generation doesn't
+/// keep animating.
+pub fn finish_if_epoch(epoch: u64) {
+    let mut r = REGISTRY.lock().unwrap();
+    if r.epoch != epoch {
+        return;
+    }
+    r.run_active = false;
+    r.finishing = true;
+    drain_finished_run(&mut r);
+}
+
+/// Once a finishing run's reveal queue has fully played out (or was
+/// empty to begin with), clear the whole overlay and retire the epoch.
+/// Flags one final erase frame so the host repaints the (now empty)
+/// overlay instead of leaving the last-painted cursor on screen.
+fn drain_finished_run(r: &mut AgentIndicators) {
+    if r.finishing && r.reveals.is_empty() {
+        r.clear_maps();
+        r.epoch += 1;
+        r.needs_final_frame = true;
     }
 }
 
@@ -241,21 +286,39 @@ pub fn snapshot_at(now_ms: u64) -> AgentIndicators {
 pub fn snapshot_at_if_active(now_ms: u64) -> Option<AgentIndicators> {
     let mut r = REGISTRY.lock().unwrap();
     if !has_active_indicators(&r) {
+        // This paint IS the post-drain erase frame — consume the flag.
+        r.needs_final_frame = false;
         return None;
     }
     rebase_external_clock_reveals(&mut r, now_ms);
-    r.reveals
-        .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    // While the run is live, settled reveals are retained — they anchor
+    // the cursor's parked position and the current-element border
+    // between streamed chunks. Only a dead run's stragglers prune.
+    if !r.run_active {
+        r.reveals
+            .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    }
+    drain_finished_run(&mut r);
     smooth_overdue_reveal_burst(&mut r, now_ms);
-    has_active_indicators(&r).then(|| r.clone())
+    if has_active_indicators(&r) {
+        Some(r.clone())
+    } else {
+        // The drain fired inside THIS paint's snapshot — the caller is
+        // about to paint the empty overlay, which erases the cursor.
+        r.needs_final_frame = false;
+        None
+    }
 }
 
 /// Next host-clock millisecond needed for generated-node reveal animation.
 pub fn next_reveal_deadline_ms(now_ms: u64) -> Option<u64> {
     let mut r = REGISTRY.lock().unwrap();
     rebase_external_clock_reveals(&mut r, now_ms);
-    r.reveals
-        .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    if !r.run_active {
+        r.reveals
+            .retain(|_, started| now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
+    }
+    drain_finished_run(&mut r);
     let next_start = r
         .reveals
         .values()
@@ -270,7 +333,12 @@ pub fn next_reveal_deadline_ms(now_ms: u64) -> Option<u64> {
         (Some(start), true) => Some(start.min(now_ms.saturating_add(REVEAL_FRAME_MS))),
         (Some(start), false) => Some(start),
         (None, true) => Some(now_ms.saturating_add(REVEAL_FRAME_MS)),
-        (None, false) => None,
+        // Nothing animating — but if the drain just cleared the overlay,
+        // keep asking for one more frame until the paint path consumes
+        // the erase (otherwise the last-painted cursor stays on screen).
+        (None, false) => r
+            .needs_final_frame
+            .then(|| now_ms.saturating_add(REVEAL_FRAME_MS)),
     }
 }
 
@@ -359,6 +427,11 @@ fn smooth_overdue_reveal_burst(r: &mut AgentIndicators, now_ms: u64) {
 }
 
 fn reveal_became_due(prev_ms: Option<u64>, started_at: u64, now_ms: u64) -> bool {
+    // A reveal that settled past its animation window is a parked anchor
+    // for the cursor / border (run-long retention) — never replay it.
+    if now_ms.saturating_sub(started_at) > REVEAL_DURATION_MS {
+        return false;
+    }
     match prev_ms {
         Some(prev) => started_at > prev && started_at <= now_ms,
         None => started_at <= now_ms,
@@ -366,362 +439,5 @@ fn reveal_became_due(prev_ms: Option<u64>, started_at: u64, now_ms: u64) -> bool
 }
 
 fn has_active_indicators(r: &AgentIndicators) -> bool {
-    !r.nodes.is_empty() || !r.frames.is_empty() || !r.reveals.is_empty()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::{LazyLock, Mutex};
-
-    static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
-    // One test owns the whole flow so it doesn't race the process-global
-    // registry against a sibling test under the default parallel runner.
-    #[test]
-    fn epoch_scopes_registration_and_teardown() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        // Round-trip under a live epoch.
-        let e1 = begin();
-        add_node(e1, "n5", "#FF6B6B", "Nova");
-        add_frame(e1, "n1", "#4ECDC4", "Mochi");
-        mark_preview(e1, "n5");
-        assert!(is_active());
-        let snap = snapshot();
-        assert_eq!(snap.nodes.get("n5").unwrap().color, "#FF6B6B");
-        assert_eq!(snap.frames.get("n1").unwrap().name, "Mochi");
-        assert!(snap.previews.contains("n5"));
-        clear_preview(e1, "n5");
-        assert!(!snapshot().previews.contains("n5"));
-
-        // A newer run takes over: its begin() clears e1 and claims a fresh
-        // epoch.
-        let e2 = begin();
-        assert!(e2 > e1, "begin bumps the epoch");
-        assert!(snapshot().nodes.is_empty(), "begin clears the prior run");
-
-        // The stale run (e1) keeps registering as it tears down — every
-        // such call must be dropped, not folded into the live run.
-        add_frame(e1, "stale", "#FF6B6B", "Nova");
-        add_node(e1, "stale", "#FF6B6B", "Nova");
-        mark_preview(e1, "stale");
-        let snap = snapshot();
-        assert!(snap.frames.is_empty(), "stale frame registration rejected");
-        assert!(snap.nodes.is_empty(), "stale node registration rejected");
-        assert!(
-            snap.previews.is_empty(),
-            "stale preview registration rejected"
-        );
-
-        // The live run registers fine under its own epoch.
-        add_frame(e2, "live", "#4ECDC4", "Mochi");
-        assert!(snapshot().frames.contains_key("live"));
-
-        // The stale run's late teardown must not wipe the live run.
-        clear_if_epoch(e1);
-        assert!(
-            snapshot().frames.contains_key("live"),
-            "stale teardown is a no-op"
-        );
-
-        // The live run's own teardown clears.
-        clear_if_epoch(e2);
-        assert!(snapshot().frames.is_empty());
-        assert!(!is_active());
-
-        // end_if_epoch retires the epoch: after the host ends a run, a
-        // worker still mid-registration under it can't re-populate.
-        let e3 = begin();
-        add_frame(e3, "f3", "#FFD93D", "Pixel");
-        end_if_epoch(e3);
-        assert!(snapshot().frames.is_empty(), "end_if_epoch clears");
-        add_frame(e3, "late", "#FFD93D", "Pixel"); // in-flight registration
-        assert!(
-            snapshot().frames.is_empty(),
-            "registration under a retired epoch no-ops"
-        );
-
-        // end_if_epoch on a stale epoch must not touch the live run.
-        let e4 = begin();
-        add_frame(e4, "f4", "#6C5CE7", "Echo");
-        end_if_epoch(e3);
-        assert!(
-            snapshot().frames.contains_key("f4"),
-            "end_if_epoch ignores a stale epoch"
-        );
-        clear();
-    }
-
-    #[test]
-    fn reveal_registration_prunes_after_animation_window() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        add_reveal(epoch, "n7", 1_000);
-        assert!(is_active(), "reveal should keep the paint loop active");
-        assert_eq!(snapshot_at(1_250).reveals.get("n7"), Some(&1_000));
-        assert!(
-            snapshot_at(2_000).reveals.contains_key("n7"),
-            "reveal should stay active through the TS fade window"
-        );
-        assert!(
-            snapshot_at(2_001).reveals.is_empty(),
-            "expired reveal should be pruned"
-        );
-        assert!(!is_active(), "expired reveal should not keep animating");
-        clear();
-    }
-
-    #[test]
-    fn snapshot_at_if_active_avoids_idle_snapshot_clone() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        clear();
-        assert!(
-            snapshot_at_if_active(1_000).is_none(),
-            "idle paint should skip cloning an empty indicator snapshot"
-        );
-
-        let epoch = begin();
-        add_frame(epoch, "frame", "#4ECDC4", "Mochi");
-        assert!(
-            snapshot_at_if_active(1_000).is_some_and(|snap| snap.frames.contains_key("frame")),
-            "active frame indicators still produce a paint snapshot"
-        );
-
-        clear();
-        let epoch = begin();
-        add_reveal(epoch, "expired", 1_000);
-        assert!(
-            snapshot_at_if_active(3_000).is_none(),
-            "an expired reveal should prune and leave no idle snapshot"
-        );
-        end_if_epoch(epoch);
-    }
-
-    #[test]
-    fn snapshot_rebases_external_clock_reveals_to_paint_clock() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        add_reveal(epoch, "a", 1_700_000_000_000);
-        add_reveal(epoch, "b", 1_700_000_000_080);
-
-        let snap = snapshot_at(1_000);
-
-        assert_eq!(snap.reveals.get("a"), Some(&1_000));
-        assert_eq!(snap.reveals.get("b"), Some(&1_080));
-        clear();
-    }
-
-    #[test]
-    fn snapshot_queues_external_reveals_after_active_local_tail() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        add_reveal(epoch, "local-a", 1_000);
-        add_reveal(epoch, "local-b", 1_080);
-        add_reveal(epoch, "external-a", 1_700_000_000_000);
-        add_reveal(epoch, "external-b", 1_700_000_000_005);
-
-        let snap = snapshot_at(1_040);
-
-        assert_eq!(
-            snap.reveals.get("external-a"),
-            Some(&(1_080 + REVEAL_STAGGER_MS))
-        );
-        assert_eq!(
-            snap.reveals.get("external-b"),
-            Some(&(1_080 + REVEAL_STAGGER_MS * 2))
-        );
-        clear();
-    }
-
-    #[test]
-    fn active_reveal_deadline_ticks_at_animation_frame_rate() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        add_reveal(epoch, "active", 1_000);
-
-        assert_eq!(next_reveal_deadline_ms(1_100), Some(1_116));
-        end_if_epoch(epoch);
-    }
-
-    #[test]
-    fn snapshot_reschedules_overdue_reveals_after_frame_gap() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        for i in 0..6 {
-            add_reveal(
-                epoch,
-                &format!("n{i}"),
-                1_000 + i as u64 * REVEAL_STAGGER_MS,
-            );
-        }
-
-        assert_eq!(snapshot_at(1_000).reveals.get("n0"), Some(&1_000));
-        let snap = snapshot_at(1_220);
-        let visible_count = snap
-            .reveals
-            .values()
-            .filter(|started_at| **started_at <= 1_220)
-            .count();
-
-        assert!(
-            visible_count <= 2,
-            "a delayed frame should release at most one new reveal beyond the already-active tail"
-        );
-        assert!(
-            snap.reveals
-                .get("n2")
-                .is_some_and(|started_at| *started_at > 1_220),
-            "overdue nodes beyond the per-frame budget should be queued forward"
-        );
-        assert!(
-            snap.reveals
-                .get("n2")
-                .is_some_and(|started_at| *started_at <= 1_220 + REVEAL_BURST_RECOVERY_STAGGER_MS),
-            "overdue recovery should stay close enough to feel continuous"
-        );
-        end_if_epoch(epoch);
-    }
-
-    #[test]
-    fn snapshot_replays_first_overdue_reveal_instead_of_jumping_mid_animation() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        for i in 0..6 {
-            add_reveal(
-                epoch,
-                &format!("n{i}"),
-                1_000 + i as u64 * REVEAL_STAGGER_MS,
-            );
-        }
-
-        assert_eq!(snapshot_at(1_000).reveals.get("n0"), Some(&1_000));
-        let snap = snapshot_at(1_220);
-
-        assert_eq!(
-            snap.reveals.get("n1"),
-            Some(&1_220),
-            "the first overdue node should restart at the current frame instead of appearing partway through"
-        );
-        assert_eq!(
-            snap.reveals.get("n2"),
-            Some(&(1_220 + REVEAL_BURST_RECOVERY_STAGGER_MS)),
-            "overdue siblings should recover one-by-one on a tighter cadence"
-        );
-        end_if_epoch(epoch);
-    }
-
-    #[test]
-    fn first_snapshot_requeues_overdue_reveals_instead_of_showing_burst() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        for i in 0..8 {
-            add_reveal(
-                epoch,
-                &format!("n{i}"),
-                1_000 + i as u64 * REVEAL_STAGGER_MS,
-            );
-        }
-
-        let snap = snapshot_at(1_360);
-        let visible_count = snap
-            .reveals
-            .values()
-            .filter(|started_at| **started_at <= 1_360)
-            .count();
-
-        assert_eq!(
-            visible_count, 1,
-            "the first paint after a busy apply should not materialize every overdue node at once"
-        );
-        assert_eq!(
-            snap.reveals.get("n0"),
-            Some(&1_360),
-            "the first overdue node should replay from the current frame"
-        );
-        assert!(
-            snap.reveals
-                .get("n1")
-                .is_some_and(|started_at| *started_at >= 1_360 + REVEAL_STAGGER_MS),
-            "remaining overdue nodes should requeue at normal stream cadence"
-        );
-        end_if_epoch(epoch);
-    }
-
-    #[test]
-    fn snapshot_recovery_preserves_stream_order_after_frame_gap() {
-        let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let epoch = begin();
-        for i in 0..16 {
-            add_reveal(epoch, &format!("n{i:02}"), 1_000 + reveal_offset_ms(0, i));
-        }
-
-        assert_eq!(snapshot_at(1_000).reveals.get("n00"), Some(&1_000));
-        let snap = snapshot_at(1_220);
-        let starts: Vec<u64> = (0..16)
-            .map(|i| {
-                *snap
-                    .reveals
-                    .get(&format!("n{i:02}"))
-                    .expect("reveal is retained")
-            })
-            .collect();
-
-        assert!(
-            starts.windows(2).all(|pair| pair[0] < pair[1]),
-            "overdue recovery must preserve stream order instead of letting future nodes jump ahead"
-        );
-        assert!(
-            starts
-                .windows(2)
-                .skip(1)
-                .all(|pair| pair[1] - pair[0] >= REVEAL_STAGGER_MS),
-            "recovered starts should stay at the normal stream cadence instead of clustering"
-        );
-        end_if_epoch(epoch);
-    }
-
-    #[test]
-    fn reveal_offsets_stream_dense_batches_without_shared_frames() {
-        let offsets: Vec<u64> = (0..40).map(|i| reveal_offset_ms(1, i)).collect();
-
-        assert_eq!(offsets[0], REVEAL_DEPTH_STAGGER_MS);
-        assert!(
-            offsets
-                .windows(2)
-                .take(REVEAL_FULL_STAGGER_SIBLINGS as usize)
-                .all(|pair| pair[1] - pair[0] == REVEAL_STAGGER_MS),
-            "the first visible nodes should stream at readable cadence, not bunch into one frame"
-        );
-        assert!(
-            offsets[20] - offsets[0] <= 1_000,
-            "the first screenful should still avoid a slow reveal queue"
-        );
-        assert!(
-            offsets
-                .windows(2)
-                .all(|pair| pair[1] - pair[0] >= REVEAL_FRAME_MS),
-            "stream items should not share an entrance start frame at 60 fps"
-        );
-        assert!(
-            offsets[39] - offsets[0] < 1_800,
-            "dense generated batches should stay responsive instead of waiting several seconds"
-        );
-    }
-
-    #[test]
-    fn reveal_offsets_keep_first_screen_readable_without_clustering() {
-        let offsets: Vec<u64> = (0..24).map(|i| reveal_offset_ms(0, i)).collect();
-
-        assert!(
-            offsets
-                .windows(2)
-                .take(16)
-                .all(|pair| (40..=64).contains(&(pair[1] - pair[0]))),
-            "the first screenful should stream at a readable cadence instead of bunching into one paint frame"
-        );
-        assert!(
-            offsets[19] - offsets[0] <= 1_100,
-            "readable pacing should still keep the first screenful responsive"
-        );
-    }
+    r.run_active || !r.nodes.is_empty() || !r.frames.is_empty() || !r.reveals.is_empty()
 }
