@@ -45,6 +45,7 @@ pub(crate) const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
 const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // subtitle/emoji are WIP fields not yet rendered in pills
 pub(crate) struct ExampleCard {
     pub(crate) title: String,
     pub(crate) subtitle: String,
@@ -506,8 +507,10 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         } else {
             self.theme.secondary
         };
-        cx.backend.fill_round_rect(new_chat_rect, NEW_CHAT_R, new_chat_fill);
-        cx.backend.stroke_round_rect(new_chat_rect, NEW_CHAT_R, self.theme.border, 1.0);
+        cx.backend
+            .fill_round_rect(new_chat_rect, NEW_CHAT_R, new_chat_fill);
+        cx.backend
+            .stroke_round_rect(new_chat_rect, NEW_CHAT_R, self.theme.border, 1.0);
         draw_icon(
             cx.backend,
             Icon::Plus,

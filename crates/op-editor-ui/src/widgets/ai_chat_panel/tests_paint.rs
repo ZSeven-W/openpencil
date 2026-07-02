@@ -80,7 +80,8 @@ fn paint_header_uses_auto_generated_chat_title() {
         backend
             .texts
             .iter()
-            .any(|(text, size, _, _)| text.starts_with("现代移动端") && (*size - tab_font).abs() < 1e-4),
+            .any(|(text, size, _, _)| text.starts_with("现代移动端")
+                && (*size - tab_font).abs() < 1e-4),
         "expanded header tab row should render the current chat title at TAB_FONT_SIZE={tab_font}"
     );
 }
@@ -192,7 +193,7 @@ fn paint_send_button_hover_adds_visible_feedback() {
             .iter()
             .filter(|(r, _, _)| rect_close(*r, footer.send))
             .map(|(_, _, c)| *c)
-            .last()
+            .next_back()
             .expect("send circle must paint a fill")
     };
 
@@ -491,8 +492,8 @@ fn paint_expanded_header_active_tab_pill_is_painted() {
     let tab_left = crate::widgets::ai_chat_panel_header::tab_row_left(rect);
     let tab_h = 26.0; // PILL_H
     let tab_radius = 8.0; // PILL_RADIUS
-    // Active tab pill: a round-rect with PILL_RADIUS inside the tab zone,
-    // filled with theme.secondary. Verify at least one such rect is painted.
+                          // Active tab pill: a round-rect with PILL_RADIUS inside the tab zone,
+                          // filled with theme.secondary. Verify at least one such rect is painted.
     assert!(
         backend.round_rects.iter().any(|(r, radius, color)| {
             r.origin.x >= tab_left - 0.01

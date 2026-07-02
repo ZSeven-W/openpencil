@@ -92,12 +92,21 @@ impl<'a> AIChatPlaceholder<'a> {
 
         // Palette icon — immediately left of the send/stop circle.
         let palette_x = send.origin.x - FOOTER_GAP - FOOTER_ICON_W;
-        let palette =
-            Rect::xywh(palette_x, cy - FOOTER_ICON_W / 2.0, FOOTER_ICON_W, FOOTER_ICON_W);
+        let palette = Rect::xywh(
+            palette_x,
+            cy - FOOTER_ICON_W / 2.0,
+            FOOTER_ICON_W,
+            FOOTER_ICON_W,
+        );
 
         // Attach icon — immediately left of palette.
         let attach_x = palette_x - FOOTER_GAP - FOOTER_ICON_W;
-        let attach = Rect::xywh(attach_x, cy - FOOTER_ICON_W / 2.0, FOOTER_ICON_W, FOOTER_ICON_W);
+        let attach = Rect::xywh(
+            attach_x,
+            cy - FOOTER_ICON_W / 2.0,
+            FOOTER_ICON_W,
+            FOOTER_ICON_W,
+        );
 
         // Parallel-agents chip (⚡ + "Nx") — immediately left of attach.
         let speed_x = attach_x - FOOTER_GAP - FOOTER_SPEED_W;
@@ -191,8 +200,7 @@ pub(crate) fn paint_parallel_agents_picker(
     let picker = parallel_agents_picker_rect(footer);
 
     // Card background + border.
-    cx.backend
-        .fill_round_rect(picker, 8.0, theme.card);
+    cx.backend.fill_round_rect(picker, 8.0, theme.card);
     cx.backend
         .stroke_round_rect(picker, 8.0, (theme.border).with_alpha(0.8), 1.0);
 
@@ -213,13 +221,19 @@ pub(crate) fn paint_parallel_agents_picker(
     let rows_top = picker.origin.y + 32.0;
     for i in 1..=PARALLEL_AGENTS_COUNT {
         let row_y = rows_top + (i - 1) as f32 * PARALLEL_AGENTS_ROW_H;
-        let row = Rect::xywh(picker.origin.x + 4.0, row_y, picker.size.x - 8.0, PARALLEL_AGENTS_ROW_H);
+        let row = Rect::xywh(
+            picker.origin.x + 4.0,
+            row_y,
+            picker.size.x - 8.0,
+            PARALLEL_AGENTS_ROW_H,
+        );
 
         // Hover / selected highlight.
         let is_selected = i == selected;
         let is_hovered = hover == Some(i);
         if is_selected {
-            cx.backend.fill_round_rect(row, 5.0, (theme.primary).with_alpha(0.18));
+            cx.backend
+                .fill_round_rect(row, 5.0, (theme.primary).with_alpha(0.18));
         } else if is_hovered {
             cx.backend
                 .fill_round_rect(row, 5.0, (theme.muted).with_alpha(0.25));
@@ -286,8 +300,12 @@ pub(crate) fn paint_bottom_toolbar(
     // --- Model picker pill (left anchor) ---
     cx.backend
         .fill_round_rect(footer.model, 8.0, (widget.theme.muted).with_alpha(0.3));
-    cx.backend
-        .stroke_round_rect(footer.model, 8.0, (widget.theme.border).with_alpha(0.75), 1.0);
+    cx.backend.stroke_round_rect(
+        footer.model,
+        8.0,
+        (widget.theme.border).with_alpha(0.75),
+        1.0,
+    );
     if widget.footer_hover == Some(ChatFooterButton::ModelPicker)
         || widget.footer_pressed == Some(ChatFooterButton::ModelPicker)
     {
@@ -338,8 +356,7 @@ pub(crate) fn paint_bottom_toolbar(
         .map(|m| m.display_name.as_str())
         .unwrap_or(widget.label_no_models.as_str());
     // Reserve space for the chevron-down on the right of the pill.
-    let label_w =
-        (footer.model.origin.x + footer.model.size.x - 18.0 - model_label_x).max(0.0);
+    let label_w = (footer.model.origin.x + footer.model.size.x - 18.0 - model_label_x).max(0.0);
     let model_name_fit = fit_footer_label(model_name, 11.0, label_w);
     let model_label = TextLayout::single_run(
         &model_name_fit,
@@ -497,7 +514,13 @@ pub(crate) fn paint_bottom_toolbar(
         let (send_bg, send_icon_color) = if send_active {
             // shadcn-style primary feedback: rest 1.0 → hover 0.9 → press 0.8
             // (the panel bg shows through the dimmed alpha as a subtle darken).
-            let alpha = if send_pressed { 0.8 } else if send_hovered { 0.9 } else { 1.0 };
+            let alpha = if send_pressed {
+                0.8
+            } else if send_hovered {
+                0.9
+            } else {
+                1.0
+            };
             (
                 (widget.theme.primary).with_alpha(alpha),
                 widget.theme.primary_foreground,
