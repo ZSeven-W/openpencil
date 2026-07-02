@@ -12,7 +12,10 @@ on:
       - 'Cargo.lock'
       - 'crates/**'
       - 'vendor/jian/**'
-      - 'vendor/skia-safe-op/**'
+      # The casement winit fork + agent runtime link into every desktop
+      # target — a change there must re-run the multiplatform matrix.
+      - 'vendor/casement/**'
+      - 'vendor/agent/**'
       - 'rust-toolchain.toml'
       - 'deny.toml'
       - '.github/workflows/rust-multiplatform.yml'
@@ -22,7 +25,8 @@ on:
       - 'Cargo.lock'
       - 'crates/**'
       - 'vendor/jian/**'
-      - 'vendor/skia-safe-op/**'
+      - 'vendor/casement/**'
+      - 'vendor/agent/**'
       - '.github/workflows/rust-multiplatform.yml'
   workflow_dispatch:
 
@@ -103,11 +107,12 @@ jobs:
         run: cargo check --workspace --target ${{ matrix.target }}
       - name: Test (host, Linux)
         if: matrix.cross == false && runner.os == 'Linux'
-        # Linux GPU smoke + gpu_chrome_stub_composition are now `#[ignore]`
-        # under LINUX_GPU_SKIA_LOADER_TBD (skia-safe Interface::new_native
-        # cannot load GL syms from EGL pbuffer + llvmpipe; needs
-        # `new_load_with(eglGetProcAddress)` loader, deferred to Step 1f or
-        # spec §3.1 mini-patch). All other tests run normally.
+        # Linux GPU smoke + gpu_chrome_stub_composition now run un-ignored:
+        # Skia loads its GL interface through the provider's
+        # `gl_proc_address` (eglGetProcAddress), closing the old
+        # LINUX_GPU_SKIA_LOADER_TBD gap. On runners without a working
+        # EGL/Mesa stack they soft-skip (INCONCLUSIVE eprintln); set
+        # STEP1A_REQUIRE_GPU=1 on a known-good GPU runner to fail hard.
         run: cargo test --workspace --target ${{ matrix.target }}
       - name: Test (host, macOS / Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
