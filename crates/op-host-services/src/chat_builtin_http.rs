@@ -294,7 +294,7 @@ async fn run_openai_chat(
             obj.insert("thinking".into(), json!({ "type": "disabled" }));
         }
     }
-    let resp = reqwest::Client::new()
+    let resp = builtin_http_client()
         .post(&url)
         .bearer_auth(&provider.api_key)
         .json(&body)
@@ -303,6 +303,22 @@ async fn run_openai_chat(
         .map_err(|e| format!("openai-compatible POST {url}: {e}"))?;
     let resp = ensure_success(resp, "openai-compatible").await?;
     pump_sse_response(resp, tx, parse_openai_sse_data).await
+}
+
+/// reqwest client with connect + overall timeouts. A bare `Client::new()` has
+/// NO timeout, so a hung LLM endpoint (connection opens but the server never
+/// streams, or stalls mid-response) makes the blocking provider iterator — and
+/// therefore the orchestrator's planning / sub-agent call — hang forever
+/// (desktop pinned on "Planning…", with Stop unable to interrupt the already
+/// in-flight request). These deadlines surface the stall as an error so the
+/// planning loop falls back instead of hanging. 300s is generous enough not to
+/// kill a slow-but-live generation.
+fn builtin_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 async fn run_anthropic_chat(
@@ -332,7 +348,7 @@ async fn run_anthropic_chat(
             .expect("anthropic request body is object")
             .insert("system".into(), json!(system_prompt));
     }
-    let resp = reqwest::Client::new()
+    let resp = builtin_http_client()
         .post(&url)
         .header("x-api-key", &provider.api_key)
         .header("anthropic-version", "2023-06-01")
