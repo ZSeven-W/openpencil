@@ -297,7 +297,10 @@ impl Orchestrator {
         let mut outcomes: Vec<SubtaskOutcome> = Vec::new();
         let mut aborted_mid = false;
         let mut zero_node_failure = false;
-        for subtask in &plan.subtasks {
+        // (subtask index, outcomes index) of every all-attempts-failed subtask,
+        // for the end-of-run salvage pass below.
+        let mut salvage: Vec<(usize, usize)> = Vec::new();
+        for (subtask_index, subtask) in plan.subtasks.iter().enumerate() {
             if abort.is_set() {
                 aborted_mid = true;
                 break;
@@ -448,12 +451,63 @@ impl Orchestrator {
                     error: err_msg.unwrap_or_default(),
                 });
                 zero_node_failure = true;
+                salvage.push((subtask_index, outcomes.len() - 1));
                 continue;
             }
             on_progress(Progress::SubtaskDone {
                 id: subtask.id.clone(),
                 node_count,
             });
+        }
+
+        // -- 阶段 4.4:失败抢救轮 --
+        // 瞬时故障(供应商网络抖动、偶发空回复)会把一个 subtask 的 3 次
+        // 紧挨着的尝试全部烧掉(measured:Ark 连续 3 次 "empty content from
+        // provider" → 侧栏子任务整段消失,设计**无侧栏出厂**且无可见信号)。
+        // 其余 subtask 跑完后隔了几十秒再给每个失败者最后一次完整尝试 ——
+        // 瞬时故障此时多已恢复;仍失败的维持 SubtaskFailed,不再重试。
+        if !salvage.is_empty() && !abort.is_set() {
+            for (subtask_index, outcome_index) in salvage {
+                if abort.is_set() {
+                    aborted_mid = true;
+                    break;
+                }
+                let subtask = &plan.subtasks[subtask_index];
+                on_progress(Progress::SubtaskRetry {
+                    id: subtask.id.clone(),
+                    attempt: 4,
+                    reason: "salvage pass after transient failures".into(),
+                });
+                let outcome = run_subtask_with_reveal_at(
+                    subtask,
+                    &plan,
+                    &request,
+                    llm,
+                    sink,
+                    abort,
+                    false,
+                    false,
+                    self.agent_indicator_epoch,
+                    reveal_now_millis(),
+                    None,
+                )
+                .await;
+                if outcome.node_count > 0 {
+                    on_progress(Progress::SubtaskDone {
+                        id: subtask.id.clone(),
+                        node_count: outcome.node_count,
+                    });
+                    outcomes[outcome_index] = outcome;
+                } else {
+                    on_progress(Progress::SubtaskFailed {
+                        id: subtask.id.clone(),
+                        error: outcome
+                            .error
+                            .unwrap_or_else(|| "salvage attempt still empty".into()),
+                    });
+                }
+            }
+            zero_node_failure = outcomes.iter().any(|o| o.node_count == 0);
         }
 
         // -- 阶段 4.5:收尾判定(spec §6.3 三路径)--
