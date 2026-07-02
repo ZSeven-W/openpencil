@@ -418,17 +418,43 @@ fn stream_new_design_route<W: Write>(
         validation_enabled: true,
         visual_ref_enabled: false,
     };
-    let llm = ChatProviderLlmClient::new(Arc::from(provider)).with_model(model);
+    // Share one provider Arc between the design LLM and (optionally) the
+    // vision validator, so the real vision loop reuses the same auth/model
+    // the user picked instead of needing a second key.
+    let provider_arc: Arc<dyn ChatProvider> = Arc::from(provider);
+    let llm = ChatProviderLlmClient::new(provider_arc.clone()).with_model(model.clone());
     let mut sink = WebDesignDocSink::new(state, hub, snapshot);
     let abort = AbortFlag::new();
     let pre_validator = LintPreValidator;
-    let screenshot = SkippedScreenshotProvider;
-    let vision = SkippedVisionLlmClient;
+
+    // ── Class-C vision-validation provider selection (Track-1 Step 3) ──────────
+    // REAL providers only when `OPENPENCIL_VISION_VALIDATION=1` (defaults OFF);
+    // otherwise the no-op stubs keep `run_post_generation_validation` a
+    // guaranteed short-circuit, so the default path is byte-for-byte unchanged.
+    let use_real_vision = crate::validation_providers::vision_validation_enabled();
+    let stub_screenshot = SkippedScreenshotProvider;
+    let stub_vision = SkippedVisionLlmClient;
+    let real_screenshot = crate::validation_providers::RealScreenshotProvider;
+    let real_vision = crate::validation_providers::ChatVisionLlmClient::new(provider_arc.clone())
+        .with_model(model.clone());
+    let (screenshot, vision, system_prompt): (
+        &dyn op_orchestrator::ScreenshotProvider,
+        &dyn op_orchestrator::VisionLlmClient,
+        String,
+    ) = if use_real_vision {
+        (
+            &real_screenshot,
+            &real_vision,
+            crate::validation_providers::validation_system_prompt(),
+        )
+    } else {
+        (&stub_screenshot, &stub_vision, String::new())
+    };
     let providers = ValidationProviders {
         pre_validator: &pre_validator,
-        screenshot: &screenshot,
-        vision: &vision,
-        system_prompt: String::new(),
+        screenshot,
+        vision,
+        system_prompt,
     };
     let epoch = op_editor_core::agent_indicators::begin();
     let summary = {

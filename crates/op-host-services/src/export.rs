@@ -33,7 +33,11 @@ use std::path::Path as StdPath;
 
 mod export_svg;
 mod scene_painter;
-#[cfg(any(feature = "mcp-debug-tools", test))]
+// `capture_scene` / `CaptureSpec` / `ScreenshotPng` here back BOTH the
+// feature-gated `debug_screenshot` MCP tool AND the always-on
+// orchestrator vision-validation provider (`validation_providers::
+// RealScreenshotProvider`), so the module is ungated. The `EditorState`
+// → scene convenience `capture()` inside it stays `mcp-debug-tools`-gated.
 pub mod screenshot;
 
 pub use export_svg::export_svg;

@@ -450,7 +450,9 @@ pub fn requests_new_whole_screen(prompt: &str) -> bool {
     if EXISTING_SCREEN_CTX_CJK.iter().any(|k| prompt.contains(k)) {
         return false;
     }
-    let cjk_page = ["页面", "页", "屏幕", "屏"].iter().any(|k| prompt.contains(k));
+    let cjk_page = ["页面", "页", "屏幕", "屏"]
+        .iter()
+        .any(|k| prompt.contains(k));
     if cjk_page && DRAW_VERB_CJK.iter().any(|v| prompt.contains(v)) {
         return true;
     }
@@ -870,8 +872,12 @@ pub fn run_cli_turn(
             // design pumps fill it.
             let _chat_hold = chat_tx;
             drop(executor);
-            let llm =
-                ChatProviderLlmClient::new(Arc::from(plan.design_provider)).with_model(plan.model);
+            // Share one provider Arc between the design LLM and the
+            // (flag-gated) vision validator so the real Class-C loop reuses
+            // the user's selected auth/model.
+            let provider_arc: Arc<dyn op_ai::chat_provider::ChatProvider> =
+                Arc::from(plan.design_provider);
+            let llm = ChatProviderLlmClient::new(provider_arc.clone()).with_model(plan.model);
             run_design_worker(
                 llm,
                 plan.design_request,
@@ -879,6 +885,7 @@ pub fn run_cli_turn(
                 delta_tx,
                 cmd_tx,
                 plan.indicator_epoch,
+                Some(provider_arc),
             );
         }
     }
