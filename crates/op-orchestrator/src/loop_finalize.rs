@@ -54,6 +54,7 @@
 use crate::role_defaults::{detect_theme_from_fill, Theme};
 use jian_ops_schema::node::PenNode;
 use op_editor_core::{first_solid_fill_hex, EditorCommand, EditorState, NodeId, PenNodeExt};
+use serde_json::{json, Value};
 
 /// Default canvas width when the document has no measurable top-level frame.
 /// Mirrors the desktop/web default design width.
@@ -128,6 +129,97 @@ fn locate_section_context(forest: &[PenNode]) -> (bool, Option<String>, f64, The
         // section, so there is no "redundant page background" to match against.
         // Theme falls back to Light (matching `detect_theme_from_fill(None)`).
         (false, None, width, Theme::Light)
+    }
+}
+
+/// Perceived luminance (0.299/0.587/0.114) of an `#RRGGBB` hex. `None` on a
+/// non-hex string. Local reimplementation to avoid a cross-module `pub`.
+fn hex_luminance(hex: &str) -> Option<f64> {
+    let h = hex.strip_prefix('#').unwrap_or(hex);
+    if !h.is_ascii() || h.len() < 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&h[0..2], 16).ok()? as f64 / 255.0;
+    let g = u8::from_str_radix(&h[2..4], 16).ok()? as f64 / 255.0;
+    let b = u8::from_str_radix(&h[4..6], 16).ok()? as f64 / 255.0;
+    Some(0.299 * r + 0.587 * g + 0.114 * b)
+}
+
+/// First solid-fill color STRING from a node's `fill` — the raw authored value
+/// (a `$ref` or `#hex`), whether the fill is a bare string or the canonical
+/// `[{type:"solid",color}]` array. Resolution to hex happens at the call site.
+fn first_solid_color_str(fill: &Value) -> Option<String> {
+    match fill {
+        Value::String(s) if !s.trim().is_empty() => Some(s.clone()),
+        Value::Array(a) => a.first().and_then(|f| {
+            f.get("color")
+                .and_then(Value::as_str)
+                .or_else(|| f.as_str())
+                .map(str::to_string)
+        }),
+        _ => None,
+    }
+}
+
+/// A text node has a visible fill when `fill` is a non-empty array or a
+/// non-blank string. glm-5.2 in the loop omits `fill` on text entirely.
+fn text_has_fill(v: &Value) -> bool {
+    match v.get("fill") {
+        Some(Value::Array(a)) => !a.is_empty(),
+        Some(Value::String(s)) => !s.trim().is_empty(),
+        _ => false,
+    }
+}
+
+/// Give every fill-less text node a fill that contrasts with its nearest
+/// resolved background. A model (glm-5.2 in the agentic loop) defines a light
+/// `primary_text` variable but omits `fill` on the text nodes themselves, so
+/// they render with the default (dark) color — invisible on the dark surfaces
+/// it also built (measured: a full 176-node dashboard rendered near-black on
+/// black). `role_post_pass` only fills BUTTON text (`fix_button_foreground_
+/// contrast`); general text (headings, KPI labels, table cells) had no
+/// fill-injection pass. This is Pencil's hard rule "text without a fill is
+/// invisible — always set one". `$ref` backgrounds resolve through the live
+/// variable table (`state.resolve_color_variable_hex`).
+fn ensure_text_fill_forest(nodes: &mut [PenNode], state: &EditorState) {
+    fn resolve_hex(color: &str, state: &EditorState) -> Option<String> {
+        match color.strip_prefix('$') {
+            Some(name) => state.resolve_color_variable_hex(name),
+            None if color.starts_with('#') => Some(color.to_string()),
+            None => None,
+        }
+    }
+    fn walk(v: &mut Value, bg: Option<String>, state: &EditorState) {
+        // This node's own solid fill (resolved) becomes the background its
+        // descendants sit on; unresolvable / absent fills inherit the ancestor.
+        let own = v
+            .get("fill")
+            .and_then(first_solid_color_str)
+            .and_then(|c| resolve_hex(&c, state));
+        let child_bg = own.or(bg.clone());
+        if v.get("type").and_then(Value::as_str) == Some("text") && !text_has_fill(v) {
+            // Default the bg to light (lum 1.0) when unknown, so an unresolved
+            // background yields dark text rather than white-on-white.
+            let lum = child_bg.as_deref().and_then(hex_luminance).unwrap_or(1.0);
+            let fg = if lum < 0.5 { "#F5F5F5" } else { "#111827" };
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert("fill".into(), json!([{ "type": "solid", "color": fg }]));
+            }
+        }
+        if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
+            for c in kids.iter_mut() {
+                walk(c, child_bg.clone(), state);
+            }
+        }
+    }
+    for node in nodes.iter_mut() {
+        let Ok(mut v) = serde_json::to_value(&*node) else {
+            continue;
+        };
+        walk(&mut v, None, state);
+        if let Ok(nn) = serde_json::from_value::<PenNode>(v) {
+            *node = nn;
+        }
     }
 }
 
@@ -210,9 +302,22 @@ pub fn apply_loop_finalize(state: &mut EditorState) {
         .map(|n| n.id_str().to_string())
         .collect();
     let plan = synthesize_plan(state.active_children(), canvas_width);
-    let mut sink = StateDocSink { state };
-    let root_id_refs: Vec<&str> = root_ids.iter().map(String::as_str).collect();
-    crate::cleanup::finalize_design(&mut sink, &plan, &root_id_refs);
+    {
+        let mut sink = StateDocSink { state: &mut *state };
+        let root_id_refs: Vec<&str> = root_ids.iter().map(String::as_str).collect();
+        crate::cleanup::finalize_design(&mut sink, &plan, &root_id_refs);
+    }
+
+    // Fill-less text → a background-contrasting fill, over the FULLY
+    // restructured tree — AFTER the app-shell reshape has moved the sidebar into
+    // place — so every text node, including a restructured sidebar's nav labels,
+    // is reached (running it earlier over the section forest missed the sidebar
+    // text: measured glm-5.2 left all 10 sidebar labels fill-less → invisible).
+    // `role_post_pass` only fills button text; a loop model leaves general text
+    // fill-less. A fresh snapshot backs the immutable `$variable` resolution
+    // while the tree is mutated.
+    let snapshot = state.clone();
+    ensure_text_fill_forest(state.active_children_mut(), &snapshot);
 }
 
 /// Build the minimal [`OrchestratorPlan`](crate::plan::OrchestratorPlan) the

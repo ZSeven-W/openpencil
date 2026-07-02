@@ -683,8 +683,55 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         let mut rid = root_id.to_string();
         // Flat-vertical / crammed-horizontal sidebar dashboard → [sidebar | content].
         rid = apply_root_transform(sink, &rid, crate::app_shell::reshape_sidebar_to_app_shell);
+        // Already-split `[sidebar | main]` root that a model left WITHOUT a
+        // horizontal layout (MiniMax-M3 in the agentic loop) — flip it to a row
+        // so the columns sit side by side instead of stacking. `reshape` above
+        // skips 2-child roots, so this catches the case it leaves behind.
+        rid = apply_root_transform(sink, &rid, crate::app_shell::ensure_split_shell_is_row);
+        // Relocate a data section stranded in the narrow sidebar column — the
+        // `nav`/`menu` substring routing (or a sidebar subtask that over-emitted
+        // a second root) can misfile a "Client Directory" table into the 260px
+        // clipContent rail — back to the content column, BEFORE the passes below
+        // repair / size it in its correct home.
+        rid = apply_root_transform(
+            sink,
+            &rid,
+            crate::app_shell::evict_content_from_sidebar_column,
+        );
         // Flat table cells → Table → Row → Cell.
         rid = apply_root_transform(sink, &rid, crate::table_repair::regroup_flat_table_rows);
+        // Gap-less table rows → column gap (weak models omit it → columns touch,
+        // "SPEND"+"STATUS" reads as "SPENDSTATUS").
+        rid = apply_root_transform(sink, &rid, crate::table_repair::ensure_table_column_gap);
+        // Footer-sink floor: a vertical column that wants to PUSH content apart
+        // (justifyContent space_*) or carries a flexible spacer, but hugs its
+        // height, gets promoted to fill_container so the footer actually sinks.
+        // Runs on the ASSEMBLED tree (the per-subtask role pass sees the section
+        // in isolation, before the sidebar column gets its definite height).
+        rid = apply_root_transform(
+            sink,
+            &rid,
+            crate::role_layout_post_pass::sink_main_axis_distribution,
+        );
+        // Sidebar footer-sink for an ALREADY-STRUCTURED [sidebar | content] shell
+        // whose nav column stacks flat (no space_between / spacer) with a
+        // user/Pro footer last — the app-shell reshape above only handles the
+        // flat-vertical-root case, so this catches the already-correct-shell case.
+        rid = apply_root_transform(
+            sink,
+            &rid,
+            crate::app_shell::sink_structured_sidebar_footers,
+        );
+        // Break a `fit_content` parent ↔ `fill_container` child height cycle (a
+        // KPI card collapses, its stacked text overlaps, and the ancestor content
+        // height undercounts so the root never stretches). Runs BEFORE
+        // `adjust_root_height_to_content` below so the corrected card heights feed
+        // the root-height computation.
+        rid = apply_root_transform(
+            sink,
+            &rid,
+            crate::role_layout_post_pass::fix_circular_fill_height,
+        );
         let rid = rid.as_str();
 
         remove_duplicate_status_bars(sink, rid);
@@ -695,6 +742,13 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, rid);
         repair_overbold_text_hierarchy(sink, rid);
         strip_decorative_filled_strokes(sink, rid);
+        // Geometry-driven validation LOOP: run the REAL jian layout, detect +
+        // fix what the resolved rects prove wrong (table columns overflowing
+        // their row, fill containers collapsed to 0 height by a hugging ancestor
+        // the tree-shape passes miss), then re-layout and repeat until clean —
+        // the deterministic analogue of Pencil's per-batch snapshot_layout
+        // feedback, catching what the tree-shape passes above cannot see.
+        crate::geometry_validation::geometry_validate_and_fix(sink, rid);
         adjust_root_height_to_content(sink, rid);
     }
 }

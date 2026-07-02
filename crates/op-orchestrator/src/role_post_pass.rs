@@ -1420,7 +1420,13 @@ fn equalize_card_row(node: &mut Value) {
         })
         .map(|(i, _)| i)
         .collect();
-    // Already an explicit fill_container card in the row → nothing to equalize.
+    // Already an explicit fill_container card in the row → widths are equal,
+    // nothing to equalize. (A flexbox `minWidth:0` shrink-fix is NOT viable in
+    // the node tree: the canonical PenNode schema has no `minWidth` field, so any
+    // stamp is silently dropped on the serialize round-trip. Preventing a wide
+    // KPI card from overflowing its share of the row is a jian flex-mapping
+    // concern — fill_container columns need flex-basis:0 to shrink — not a
+    // post-pass.)
     if candidates
         .iter()
         .any(|&i| children[i].get("width").and_then(Value::as_str) == Some("fill_container"))

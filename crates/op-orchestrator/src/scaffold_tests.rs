@@ -1,5 +1,5 @@
 use super::*;
-use crate::plan::{OrchestratorPlan, PlanFill, RootFrameSpec};
+use crate::plan::{OrchestratorPlan, PlanFill, Region, RootFrameSpec, Subtask};
 use op_editor_core::PenNodeExt;
 
 fn plan() -> OrchestratorPlan {
@@ -187,4 +187,145 @@ fn build_scaffold_single_root_uses_safe_canvas_offset() {
         }
         other => panic!("expected InsertSubtree, got {other:?}"),
     }
+}
+
+// ── two-column dashboard pre-build (sidebar app-shell from the first stroke) ──
+
+fn st(id: &str, label: &str) -> Subtask {
+    Subtask {
+        id: id.into(),
+        label: label.into(),
+        region: Region {
+            width: 1200.0,
+            height: 300.0,
+        },
+        id_prefix: id.into(),
+        parent_frame_id: None,
+        elements: None,
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    }
+}
+
+fn sidebar_dashboard_plan() -> OrchestratorPlan {
+    let mut p = plan();
+    p.root_frame.width = 1200.0;
+    p.subtasks = vec![
+        st("sidebar", "Sidebar Navigation"),
+        st("metrics", "Key Metrics"),
+        st("table", "Client Table"),
+        st("appts", "Upcoming Appointments"),
+    ];
+    p
+}
+
+#[test]
+fn plan_is_sidebar_dashboard_fires_for_desktop_sidebar_plus_content() {
+    assert!(plan_is_sidebar_dashboard(&sidebar_dashboard_plan(), false));
+}
+
+#[test]
+fn plan_is_sidebar_dashboard_false_when_mobile() {
+    assert!(!plan_is_sidebar_dashboard(&sidebar_dashboard_plan(), true));
+}
+
+#[test]
+fn plan_is_sidebar_dashboard_false_when_no_sidebar() {
+    let mut p = sidebar_dashboard_plan();
+    p.subtasks[0] = st("hero", "Hero Banner");
+    assert!(!plan_is_sidebar_dashboard(&p, false));
+}
+
+#[test]
+fn plan_is_sidebar_dashboard_false_for_landing_nav_without_data() {
+    // A landing page can have a "Navigation" subtask but no data sections —
+    // it must NOT be mistaken for a sidebar dashboard.
+    let mut p = plan();
+    p.root_frame.width = 1440.0;
+    p.subtasks = vec![
+        st("nav", "Navigation"),
+        st("hero", "Hero"),
+        st("features", "Features"),
+        st("pricing", "Pricing"),
+    ];
+    assert!(!plan_is_sidebar_dashboard(&p, false));
+}
+
+#[test]
+fn plan_is_sidebar_dashboard_false_when_narrow() {
+    let mut p = sidebar_dashboard_plan();
+    p.root_frame.width = 600.0;
+    assert!(!plan_is_sidebar_dashboard(&p, false));
+}
+
+#[test]
+fn build_scaffold_prebuilds_two_columns_for_sidebar_dashboard() {
+    let cmds = build_scaffold(&sidebar_dashboard_plan(), false).expect("scaffold");
+    match &cmds[0] {
+        EditorCommand::InsertSubtree { nodes, .. } => {
+            let rv = serde_json::to_value(&nodes[0]).expect("root json");
+            assert_eq!(rv["layout"], "horizontal", "two-column root is horizontal");
+            let kids = rv["children"].as_array().expect("children");
+            assert_eq!(kids.len(), 2, "[Sidebar | Main Content]");
+            assert_eq!(kids[0]["name"], "Sidebar");
+            assert_eq!(kids[0]["width"], 260.0);
+            assert_eq!(kids[0]["height"], "fill_container");
+            assert_eq!(kids[0]["clipContent"], true);
+            assert_eq!(kids[1]["name"], "Main Content");
+            assert_eq!(kids[1]["width"], "fill_container");
+            assert_eq!(kids[1]["layout"], "vertical");
+            assert!(kids[0]["children"].as_array().unwrap().is_empty());
+            assert!(kids[1]["children"].as_array().unwrap().is_empty());
+        }
+        other => panic!("expected InsertSubtree, got {other:?}"),
+    }
+}
+
+#[test]
+fn build_scaffold_single_root_for_non_dashboard() {
+    let mut p = plan();
+    p.subtasks = vec![st("hero", "Hero"), st("features", "Features")];
+    let cmds = build_scaffold(&p, false).expect("scaffold");
+    match &cmds[0] {
+        EditorCommand::InsertSubtree { nodes, .. } => {
+            let rv = serde_json::to_value(&nodes[0]).expect("root json");
+            assert_ne!(
+                rv["layout"], "horizontal",
+                "non-dashboard stays single root"
+            );
+            assert!(rv["children"].as_array().unwrap().is_empty());
+        }
+        other => panic!("expected InsertSubtree, got {other:?}"),
+    }
+}
+
+#[test]
+fn plan_is_sidebar_dashboard_strong_sidebar_fires_without_data_keywords() {
+    // The gap: a strong "Sidebar" subtask whose content sections lack
+    // table/metric/chart keywords (Client Directory / Schedule) used to miss the
+    // content gate → single-root → sidebar filled full-width during streaming.
+    // A strong sidebar signal must now pre-build the two columns regardless.
+    let mut p = plan();
+    p.root_frame.width = 1280.0;
+    p.subtasks = vec![
+        st("sidebar", "Sidebar Navigation"),
+        st("dir", "Client Directory"),
+        st("sched", "Schedule"),
+    ];
+    assert!(plan_is_sidebar_dashboard(&p, false));
+}
+
+#[test]
+fn plan_is_sidebar_dashboard_weak_nav_still_needs_data_sections() {
+    // A weak "Navigation" signal (no strong sidebar/rail token) without data
+    // sections stays single-root (landing-page guard intact).
+    let mut p = plan();
+    p.root_frame.width = 1440.0;
+    p.subtasks = vec![
+        st("nav", "Navigation"),
+        st("hero", "Hero"),
+        st("features", "Features"),
+    ];
+    assert!(!plan_is_sidebar_dashboard(&p, false));
 }
