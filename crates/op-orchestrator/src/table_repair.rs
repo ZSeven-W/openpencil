@@ -478,15 +478,7 @@ fn ensure_gap_in_value(v: &mut Value) -> bool {
                 // rows all lived in such a wrapper and rendered columns
                 // touching). The table NAME gate stays on the outer node; an
                 // unnamed vertical wrapper inherits it.
-                if is_unnamed_vertical_wrapper(row) {
-                    if let Some(inner) = row.get_mut("children").and_then(Value::as_array_mut) {
-                        for r in inner.iter_mut() {
-                            changed |= give_row_gap(r);
-                        }
-                    }
-                } else {
-                    changed |= give_row_gap(row);
-                }
+                changed |= give_row_gap_through_wrappers(row);
             }
         }
     }
@@ -496,6 +488,22 @@ fn ensure_gap_in_value(v: &mut Value) -> bool {
         }
     }
     changed
+}
+
+/// Apply [`give_row_gap`] to `node`, descending through any CHAIN of unnamed
+/// structural wrappers first (a model buries its rows arbitrarily deep in
+/// nameless verticals — measured: two levels below the table frame).
+fn give_row_gap_through_wrappers(node: &mut Value) -> bool {
+    if is_unnamed_vertical_wrapper(node) {
+        let mut changed = false;
+        if let Some(inner) = node.get_mut("children").and_then(Value::as_array_mut) {
+            for r in inner.iter_mut() {
+                changed |= give_row_gap_through_wrappers(r);
+            }
+        }
+        return changed;
+    }
+    give_row_gap(node)
 }
 
 /// Insert the default column gap when `row` is a gap-less ≥3-column row.
@@ -537,19 +545,24 @@ fn is_table_container(v: &Value) -> bool {
                 .map(|k| {
                     // Count rows both directly AND through one unnamed
                     // structural wrapper (same tolerance as the gap pass).
-                    if is_unnamed_vertical_wrapper(k) {
-                        k.get("children")
-                            .and_then(Value::as_array)
-                            .map(|inner| inner.iter().filter(|r| is_row_like(r)).count())
-                            .unwrap_or(0)
-                    } else {
-                        usize::from(is_row_like(k))
-                    }
+                    count_rows_through_wrappers(k)
                 })
                 .sum::<usize>()
                 >= 2
         })
         .unwrap_or(false)
+}
+
+/// Count row-like nodes, descending through chains of unnamed wrappers.
+fn count_rows_through_wrappers(node: &Value) -> usize {
+    if is_unnamed_vertical_wrapper(node) {
+        return node
+            .get("children")
+            .and_then(Value::as_array)
+            .map(|inner| inner.iter().map(count_rows_through_wrappers).sum())
+            .unwrap_or(0);
+    }
+    usize::from(is_row_like(node))
 }
 
 /// A horizontal frame with ≥2 children — the row shape the container gate
