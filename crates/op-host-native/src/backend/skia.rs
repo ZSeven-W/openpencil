@@ -70,6 +70,7 @@ pub(super) fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
 mod font_script;
 mod gradient;
 mod image;
+mod mesh_shader;
 mod path;
 mod text;
 #[cfg(test)]
@@ -132,6 +133,11 @@ pub struct NativeBackend {
     svg_raster_cache: std::collections::HashMap<path::SvgRasterKey, path::SvgRasterCacheEntry>,
     svg_raster_cache_order: std::collections::VecDeque<path::SvgRasterKey>,
     dot_point_buffer: Vec<skia_safe::Point>,
+    /// Compiled-SkSL `RuntimeEffect` cache for shader fills — compiles
+    /// each distinct source once (failures cached too), same rationale
+    /// as the typeface caches above. Shared type with jian-skia so both
+    /// render paths key sources identically.
+    shader_cache: jian_skia::shader_cache::ShaderCache,
 }
 
 /// Maximum number of decoded chat images held at once. Decoded RGBA
@@ -198,6 +204,7 @@ impl NativeBackend {
             svg_raster_cache: std::collections::HashMap::new(),
             svg_raster_cache_order: std::collections::VecDeque::new(),
             dot_point_buffer: Vec::new(),
+            shader_cache: jian_skia::shader_cache::ShaderCache::new(),
         };
         // Pre-warm the per-codepoint typeface cache with every CJK
         // glyph that appears in the chrome (top bar, layer panel,
