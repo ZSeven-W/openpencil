@@ -38,6 +38,7 @@ pub mod design_agent_tools;
 pub mod design_md_llm;
 pub mod design_session;
 pub mod doc_io;
+pub mod emit_elements;
 pub mod export;
 pub mod export_pdf;
 pub mod mcp_live;
