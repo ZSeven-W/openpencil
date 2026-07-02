@@ -132,6 +132,10 @@ pub struct NativeBackend {
     svg_raster_cache: std::collections::HashMap<path::SvgRasterKey, path::SvgRasterCacheEntry>,
     svg_raster_cache_order: std::collections::VecDeque<path::SvgRasterKey>,
     dot_point_buffer: Vec<skia_safe::Point>,
+    /// Compiled-SkSL `RuntimeEffect` cache (same spirit as the typeface
+    /// cache above): compile-once-per-unique-source so per-frame
+    /// repaints reuse the program instead of recompiling.
+    shader_cache: jian_skia::ShaderCache,
 }
 
 /// Maximum number of decoded chat images held at once. Decoded RGBA
@@ -198,6 +202,7 @@ impl NativeBackend {
             svg_raster_cache: std::collections::HashMap::new(),
             svg_raster_cache_order: std::collections::VecDeque::new(),
             dot_point_buffer: Vec::new(),
+            shader_cache: jian_skia::ShaderCache::new(),
         };
         // Pre-warm the per-codepoint typeface cache with every CJK
         // glyph that appears in the chrome (top bar, layer panel,
