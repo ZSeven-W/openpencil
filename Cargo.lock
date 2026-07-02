@@ -3433,6 +3433,7 @@ dependencies = [
  "op-ai-skills",
  "op-editor-core",
  "op-host-services",
+ "op-mcp",
  "op-orchestrator",
  "op-pen-loader",
  "reqwest 0.12.28",
