@@ -46,13 +46,12 @@ use op_mcp::{
     set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
     set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
     set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
-    set_node_stroke_side_width_snapshot, set_node_stroke_width_snapshot, set_node_text_snapshot,
-    set_selection_set_snapshot, set_selection_snapshot, set_themes_snapshot,
-    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
-    set_variable_string_snapshot, set_variables_snapshot, set_viewport_snapshot,
-    snapshot_layout_snapshot, spawn_agents_snapshot, toggle_node_selection_snapshot,
-    tool_search_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot, McpTool,
-    ToolRegistry,
+    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
+    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
+    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
+    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot, spawn_agents_snapshot,
+    toggle_node_selection_snapshot, tool_search_snapshot, undo_snapshot, ungroup_selected_snapshot,
+    update_node_snapshot, McpTool, ToolRegistry,
 };
 #[cfg(feature = "mcp-debug-tools")]
 use op_mcp::{
@@ -511,10 +510,6 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("set_node_font_weight", set_node_font_weight_snapshot());
     register_tool!("set_node_stroke_hex", set_node_stroke_hex_snapshot());
     register_tool!("set_node_stroke_width", set_node_stroke_width_snapshot());
-    register_tool!(
-        "set_node_stroke_side_width",
-        set_node_stroke_side_width_snapshot()
-    );
     register_tool!("align_selected", align_selected_snapshot());
     register_tool!("set_node_fill_hex", set_node_fill_hex_snapshot());
     register_tool!("set_node_flip", set_node_flip_snapshot());

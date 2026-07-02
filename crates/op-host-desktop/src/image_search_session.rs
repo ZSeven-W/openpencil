@@ -7,7 +7,6 @@ use std::time::Duration;
 use jian_ops_schema::node::{PenNode, TextContent};
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::{ImageFillBody, ImageFillMode, PenFill};
-use op_editor_core::agent_settings::ImageGenProfile;
 use op_editor_core::{walkers, EditorState, NodeId, PenNodeExt as _};
 use reqwest::header::CONTENT_TYPE;
 
@@ -106,18 +105,11 @@ const IMAGE_SEARCH_STOP_WORDS: &[&str] = &[
     "based",
 ];
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ImageSearchTarget {
     pub node_id: NodeId,
-    /// Stock-search keyword (`image_search_query` ?? name ?? …).
     pub query: String,
     pub aspect_ratio: Option<ImageAspectRatio>,
-    /// AI-generation prompt bound to the node (`image_prompt`), if any. Used when
-    /// an image-gen model is configured; falls back to `query`.
-    pub prompt: Option<String>,
-    /// Resolved numeric dimensions (for the gen provider's aspect mapping).
-    pub width: Option<f64>,
-    pub height: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -193,20 +185,11 @@ impl ImageSearchSession {
         if targets.is_empty() {
             return false;
         }
-        // Strategy: a configured image-GEN model wins (generate from the bound
-        // `image_prompt`); otherwise fall back to stock SEARCH (Openverse). The
-        // prompt/query stay on the node either way, so the UI can re-gen/re-search
-        // and a later config change re-resolves on the next enqueue.
-        let gen_profile = crate::image_panel_host::active_image_gen_profile(state).cloned();
         let credentials = OpenverseCredentials::from_state(state);
         for target in targets {
             let id = target.node_id.as_str().to_string();
             self.in_flight.insert(id);
-            let job = match &gen_profile {
-                Some(profile) => spawn_gen_job(target, profile.clone()),
-                None => spawn_job(target, credentials.clone()),
-            };
-            self.jobs.push(job);
+            self.jobs.push(spawn_job(target, credentials.clone()));
         }
         true
     }
@@ -258,31 +241,6 @@ fn spawn_job(
             aspect_ratio,
             credentials.as_ref(),
         ));
-    });
-    ImageSearchJob { node_id, rx }
-}
-
-/// Enrich via the configured image-GEN model instead of stock search. Prefers the
-/// node's bound `image_prompt`; falls back to the search keyword so a node that
-/// only carries `image_search_query` still generates. Same `ImageSearchJob`
-/// channel as search, so `poll_into` applies the resulting src identically.
-fn spawn_gen_job(target: ImageSearchTarget, profile: ImageGenProfile) -> ImageSearchJob {
-    let (tx, rx) = mpsc::channel();
-    let node_id = target.node_id.clone();
-    std::thread::spawn(move || {
-        let prompt = target
-            .prompt
-            .as_deref()
-            .filter(|p| !p.trim().is_empty())
-            .unwrap_or(target.query.as_str());
-        let url = crate::image_generate_host::run_generate_blocking(
-            prompt,
-            &profile,
-            target.width,
-            target.height,
-        )
-        .ok();
-        let _ = tx.send(url);
     });
     ImageSearchJob { node_id, rx }
 }
@@ -347,19 +305,10 @@ fn image_search_target_for(
         return None;
     }
 
-    // `image_prompt` is the author's AI-gen prompt (Image nodes only); placeholder
-    // frames / rectangles carry only a name-derived query.
-    let prompt = match node {
-        PenNode::Image(image) => image.image_prompt.clone(),
-        _ => None,
-    };
     Some(ImageSearchTarget {
         node_id: NodeId::new(id),
         query,
         aspect_ratio: infer_aspect_ratio(node),
-        prompt,
-        width: node.width_px(),
-        height: node.height_px(),
     })
 }
 

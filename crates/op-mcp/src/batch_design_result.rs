@@ -133,21 +133,6 @@ impl BatchDesign {
                 .collect();
             result["promoted"] = json!(notes);
         }
-        // A parent ref that is NEITHER a binding NOR a node in the snapshot
-        // (a weak model copies the `sec` example binding as its first line's
-        // parent) would fail the host's existence check and sink the WHOLE
-        // otherwise-valid program (measured: an orchestrator stats subtask
-        // retried its complete 4-card program away over a phantom `sec`).
-        // Insert at the root instead and say so — the section coalesce /
-        // finalize passes reparent stray roots anyway.
-        let mut parent_id = parent_id;
-        if parent_id.is_real() && !self.existing_ids.contains(&parent_id) {
-            result["warnings"] = json!([format!(
-                "parent '{}' does not exist — inserted at the document root instead",
-                parent_id.as_str()
-            )]);
-            parent_id = NodeId::NONE;
-        }
         ToolOutcome::OkJsonWithCommand(
             result.to_string(),
             EditorCommand::InsertAuthoredSubtree {

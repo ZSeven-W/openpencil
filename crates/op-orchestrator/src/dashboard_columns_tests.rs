@@ -1,8 +1,5 @@
-//! Tests for `dashboard_columns` — the normalizer-facing detection predicates
-//! plus section sizing. The tests for the removed bespoke-scaffold helpers
-//! `should_use_dashboard_columns`, `is_main_content_container_subtask`,
-//! `extract_sidebar_surface_color`, and the row bin-packing were removed with
-//! those functions.
+//! Tests for `dashboard_columns` — split from the main module to stay under
+//! the 800-line ceiling.  Linked via `#[path]` in `dashboard_columns.rs`.
 
 use super::*;
 use crate::plan::{OrchestratorPlan, Region, RootFrameSpec, Subtask};
@@ -81,6 +78,43 @@ fn sidebar_subtask_false_for_no_keywords() {
     assert!(!is_sidebar_subtask(&st));
 }
 
+// ---- is_main_content_container_subtask -------------------------------------
+
+#[test]
+fn main_content_container_true_for_main_content() {
+    let st = subtask("main-content", "Main Content", None);
+    assert!(is_main_content_container_subtask(&st));
+}
+
+#[test]
+fn main_content_container_true_for_content_area() {
+    let st = subtask("content-area", "Content Area", None);
+    assert!(is_main_content_container_subtask(&st));
+}
+
+#[test]
+fn main_content_container_false_for_metrics_chart() {
+    // "main content" keyword present, but "chart" disqualifies
+    let st = subtask(
+        "main-chart",
+        "Main Content",
+        Some("metrics chart, revenue data"),
+    );
+    assert!(!is_main_content_container_subtask(&st));
+}
+
+#[test]
+fn main_content_container_false_for_table() {
+    let st = subtask("data-table", "Data Table", None);
+    assert!(!is_main_content_container_subtask(&st));
+}
+
+#[test]
+fn main_content_container_false_for_sidebar_keyword() {
+    let st = subtask("main-sidebar", "Main Content Sidebar", None);
+    assert!(!is_main_content_container_subtask(&st));
+}
+
 // ---- is_dashboard_like_prompt ----------------------------------------------
 
 #[test]
@@ -114,6 +148,90 @@ fn dashboard_like_false_for_landing_page() {
     );
     assert!(!is_dashboard_like_prompt(
         "landing page for a startup",
+        &plan
+    ));
+}
+
+// ---- should_use_dashboard_columns ------------------------------------------
+
+fn dashboard_plan() -> OrchestratorPlan {
+    plan_with(
+        1200.0,
+        vec![
+            subtask("sidebar", "Sidebar Navigation", Some("nav links")),
+            subtask("metrics", "Metrics Row", Some("revenue chart, data table")),
+            subtask("transactions", "Transactions", None),
+        ],
+    )
+}
+
+#[test]
+fn should_use_dashboard_columns_true_full_conditions() {
+    assert!(should_use_dashboard_columns(
+        "admin analytics dashboard",
+        &dashboard_plan()
+    ));
+}
+
+#[test]
+fn should_use_dashboard_columns_false_width_too_narrow() {
+    let mut plan = dashboard_plan();
+    plan.root_frame.width = 375.0; // mobile width
+    assert!(!should_use_dashboard_columns(
+        "admin analytics dashboard",
+        &plan
+    ));
+}
+
+#[test]
+fn should_use_dashboard_columns_false_no_dashboard_keyword() {
+    // No dashboard-like keyword anywhere — prompt + subtasks
+    let plan = plan_with(
+        1200.0,
+        vec![
+            subtask("sidebar", "Sidebar Navigation", Some("nav links")),
+            subtask("revenue", "Revenue Chart", None),
+        ],
+    );
+    assert!(!should_use_dashboard_columns(
+        "landing page hero section",
+        &plan
+    ));
+}
+
+#[test]
+fn should_use_dashboard_columns_false_no_sidebar() {
+    // No sidebar subtask
+    let plan = plan_with(
+        1200.0,
+        vec![
+            subtask("header", "Header", None),
+            subtask("metrics", "Metrics Row", Some("revenue chart, table")),
+        ],
+    );
+    assert!(!should_use_dashboard_columns("admin dashboard", &plan));
+}
+
+#[test]
+fn should_use_dashboard_columns_false_no_data_panel() {
+    // Has sidebar but no metric/chart/table subtask
+    let plan = plan_with(
+        1200.0,
+        vec![
+            subtask("sidebar", "Sidebar Navigation", Some("nav links")),
+            subtask("hero", "Hero Section", Some("headline, CTA")),
+        ],
+    );
+    assert!(!should_use_dashboard_columns("admin dashboard", &plan));
+}
+
+#[test]
+fn should_use_dashboard_columns_false_width_exactly_480() {
+    // width must be STRICTLY > 480
+    let mut plan = dashboard_plan();
+    plan.root_frame.width = 480.0;
+    assert!(!should_use_dashboard_columns(
+        "admin analytics dashboard",
         &plan
     ));
 }
@@ -238,3 +356,104 @@ fn section_width_activity_returns_38_percent_of_main() {
     let expected = (940.0_f64 * 0.38).round();
     assert_eq!(infer_dashboard_section_width(&st, 1200.0), expected);
 }
+
+// ---- extract_sidebar_surface_color -----------------------------------------
+
+#[test]
+fn sidebar_color_catalog_table_match() {
+    let content = "| Sidebar Surface | #1E2A3B | Dark slate |\n| Background | #FFFFFF |";
+    let result = extract_sidebar_surface_color(Some(content), None);
+    assert_eq!(result.as_deref(), Some("#1E2A3B"));
+}
+
+#[test]
+fn sidebar_color_catalog_inline_match() {
+    let content = "Sidebar Surface color is #2D3748 (used for the sidebar background)";
+    let result = extract_sidebar_surface_color(Some(content), None);
+    assert_eq!(result.as_deref(), Some("#2D3748"));
+}
+
+#[test]
+fn sidebar_color_design_md_sidebar_role() {
+    let spec = jian_ops_schema::DesignMdSpec {
+        raw: String::new(),
+        project_name: None,
+        visual_theme: None,
+        color_palette: Some(vec![
+            jian_ops_schema::DesignMdColor {
+                name: "Sidebar".into(),
+                hex: "#0F172A".into(),
+                role: "sidebar background".into(),
+            },
+            jian_ops_schema::DesignMdColor {
+                name: "Primary".into(),
+                hex: "#3366FF".into(),
+                role: "buttons and links".into(),
+            },
+        ]),
+        typography: None,
+        component_styles: None,
+        layout_principles: None,
+        generation_notes: None,
+    };
+    let result = extract_sidebar_surface_color(None, Some(&spec));
+    assert_eq!(result.as_deref(), Some("#0F172A"));
+}
+
+#[test]
+fn sidebar_color_design_md_panel_role_fallback() {
+    let spec = jian_ops_schema::DesignMdSpec {
+        raw: String::new(),
+        project_name: None,
+        visual_theme: None,
+        color_palette: Some(vec![jian_ops_schema::DesignMdColor {
+            name: "Panel".into(),
+            hex: "#1A2035".into(),
+            role: "panel background".into(),
+        }]),
+        typography: None,
+        component_styles: None,
+        layout_principles: None,
+        generation_notes: None,
+    };
+    let result = extract_sidebar_surface_color(None, Some(&spec));
+    assert_eq!(result.as_deref(), Some("#1A2035"));
+}
+
+#[test]
+fn sidebar_color_design_md_surface_role_fallback() {
+    let spec = jian_ops_schema::DesignMdSpec {
+        raw: String::new(),
+        project_name: None,
+        visual_theme: None,
+        color_palette: Some(vec![jian_ops_schema::DesignMdColor {
+            name: "Surface".into(),
+            hex: "#161B22".into(),
+            role: "surface and card".into(),
+        }]),
+        typography: None,
+        component_styles: None,
+        layout_principles: None,
+        generation_notes: None,
+    };
+    let result = extract_sidebar_surface_color(None, Some(&spec));
+    assert_eq!(result.as_deref(), Some("#161B22"));
+}
+
+#[test]
+fn sidebar_color_returns_none_when_no_match() {
+    // No catalog content, no design.md → None (caller applies fallback)
+    let result = extract_sidebar_surface_color(None, None);
+    assert!(result.is_none());
+}
+
+#[test]
+fn sidebar_color_uppercase_hex_output() {
+    // Even if input is lowercase, output must be uppercase
+    let content = "Sidebar Surface | #1e2a3b";
+    let result = extract_sidebar_surface_color(Some(content), None);
+    assert_eq!(result.as_deref(), Some("#1E2A3B"));
+}
+
+// B-series tests moved to `dashboard_columns_tests_b.rs` to stay under the
+// 800-line ceiling.  Linked via `#[path]` in `dashboard_columns.rs`.

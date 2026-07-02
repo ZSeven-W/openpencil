@@ -377,7 +377,7 @@ pub(crate) fn validate_design_screenshot(
 /// `rounds_run` is the number of completed vision LLM rounds (0 when the node
 /// count gate fires or the screenshot is unavailable).
 #[derive(Debug, Clone, Default)]
-pub struct ValidationSummary {
+pub(crate) struct ValidationSummary {
     pub total_applied: usize,
     pub rounds_run: u8,
 }
@@ -417,7 +417,7 @@ pub struct ValidationSummary {
 /// `reference_screenshot` is currently always `None` from within this function;
 /// D1's host wiring will thread host-side reference images through.
 #[allow(clippy::too_many_arguments)]
-pub fn run_post_generation_validation(
+pub(crate) fn run_post_generation_validation(
     sink: &mut dyn DocSink,
     pre_validator: &dyn PreValidator,
     screenshot: &dyn ScreenshotProvider,
@@ -474,11 +474,8 @@ pub fn run_post_generation_validation(
         // 5b: emit round-started progress.
         on_progress(Progress::ValidationRoundStarted { round });
 
-        // 5c: capture screenshot of the LIVE (post-fix) document — None means bail.
-        // `sink.state()` is the current mutated state: the host's real provider
-        // renders it, the stub ignores it and returns `None` (loop short-circuits,
-        // default-path behavior unchanged).
-        let Some(image_base64) = screenshot.capture_root_frame(sink.state()) else {
+        // 5c: capture screenshot — None means bail.
+        let Some(image_base64) = screenshot.capture_root_frame() else {
             // TS: on first round → emit "done" with error; subsequent rounds → break.
             break;
         };

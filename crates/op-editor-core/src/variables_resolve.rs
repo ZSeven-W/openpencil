@@ -849,34 +849,6 @@ mod tests {
     }
 
     #[test]
-    fn nested_namespaced_ref_resolves_against_literal_keyed_var() {
-        // Pencil emits namespaced tokens like `$surface/surface` and
-        // keys its variable table with the same literal nested string.
-        // `strip_prefix('$')` + a direct `vars.get("surface/surface")`
-        // hit already resolves them — no slash special-casing needed.
-        // This is the exact fill the converted Pencil cards carry, so
-        // it guards the resolver against a future nested-token regress.
-        let vars = vars_with(
-            "surface/surface",
-            color_var(VariableValue::Scalar(VariableScalar::Str("#f5f5f5".into()))),
-        );
-        let theme = Theme::new();
-        assert_eq!(
-            resolve_color_ref("$surface/surface", Some(&vars), &theme),
-            Some("#f5f5f5".to_string())
-        );
-        // A flat token sharing no slash still resolves unchanged.
-        let flat = vars_with(
-            "accent",
-            color_var(VariableValue::Scalar(VariableScalar::Str("#2563eb".into()))),
-        );
-        assert_eq!(
-            resolve_color_ref("$accent", Some(&flat), &theme),
-            Some("#2563eb".to_string())
-        );
-    }
-
-    #[test]
     fn circular_ref_is_guarded() {
         let vars = vars_with(
             "loop",

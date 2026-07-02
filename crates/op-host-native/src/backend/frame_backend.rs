@@ -260,46 +260,6 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         );
     }
 
-    fn fill_round_rect_mesh_gradient(
-        &mut self,
-        rect: Rect,
-        radius: f32,
-        rows: u32,
-        cols: u32,
-        colors: &[Color],
-        opacity: f32,
-    ) {
-        self.inner.fill_round_rect_mesh_gradient(
-            self.canvas,
-            rect,
-            radius,
-            rows,
-            cols,
-            colors,
-            opacity,
-        );
-    }
-
-    fn fill_round_rect_shader(
-        &mut self,
-        rect: Rect,
-        radius: f32,
-        sksl: &str,
-        uniforms: &[(&str, &[f32])],
-        opacity: f32,
-        fallback: Color,
-    ) {
-        self.inner.fill_round_rect_shader(
-            self.canvas,
-            rect,
-            radius,
-            sksl,
-            uniforms,
-            opacity,
-            fallback,
-        );
-    }
-
     fn resize(&mut self, _width: u32, _height: u32) {}
 
     fn dpi_scale(&self) -> f32 {

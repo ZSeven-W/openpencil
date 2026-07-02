@@ -583,106 +583,6 @@ fn pump_executes_scripted_tool_call_against_live_state() {
     assert!(!msg.streaming);
 }
 
-/// Scripted provider for the Step-4 finalize proof: it inserts a roleless
-/// `Header` frame via a tool call, then calls `executor.finalize()` (the
-/// reserved loop-finalize op), then streams Done — exercising the host-side
-/// `LOOP_FINALIZE_OP` interception against the live document.
-struct FinalizeLoopProvider {
-    executor: std::sync::Arc<dyn op_ai::chat_provider::ChatToolExecutor>,
-}
-
-struct FinalizeLoopIter {
-    executor: std::sync::Arc<dyn op_ai::chat_provider::ChatToolExecutor>,
-    step: u8,
-}
-
-impl Iterator for FinalizeLoopIter {
-    type Item = ChatDelta;
-    fn next(&mut self) -> Option<ChatDelta> {
-        self.step += 1;
-        match self.step {
-            1 => {
-                // Insert a roleless frame named "Header" — role inference in
-                // the backstop must later assign it the navbar role.
-                let args = r#"{"kind":"frame","name":"Header","x":"0","y":"0","width":"1200","height":"64"}"#;
-                let _ = self.executor.execute("insert_node", args);
-                Some(ChatDelta::TextDelta("inserted".into()))
-            }
-            2 => {
-                // Loop-end: run the structural backstop against the live doc.
-                self.executor.finalize();
-                Some(ChatDelta::Done {
-                    stop_reason: StopReason::EndTurn,
-                })
-            }
-            _ => None,
-        }
-    }
-}
-
-impl op_ai::chat_provider::ChatProvider for FinalizeLoopProvider {
-    fn provider_label(&self) -> &str {
-        "finalize-loop"
-    }
-    fn send(&self, _request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        Box::new(FinalizeLoopIter {
-            executor: self.executor.clone(),
-            step: 0,
-        })
-    }
-}
-
-#[test]
-fn pump_runs_loop_finalize_backstop_against_live_state() {
-    // Proof for Track-1 Step 4: the loop-end `finalize()` flows worker → tool
-    // channel → `drain_tool_requests` LOOP_FINALIZE_OP interception →
-    // `op_orchestrator::apply_loop_finalize` against the live document, so a
-    // roleless "Header" frame gets the navbar role resolved.
-    use op_editor_core::PenNodeExt;
-    let mut host = WidgetHostNative::new();
-    host.editor_state_mut()
-        .chat
-        .messages
-        .push(ChatMessage::assistant_streaming());
-
-    let (executor, tool_rx) = op_host_services::chat_canvas_tools::chat_tool_channel();
-    let provider = Box::new(FinalizeLoopProvider {
-        executor: std::sync::Arc::new(executor),
-    });
-    let mut current = Some(ChatSession::start_with_tools(
-        provider,
-        ChatRequest {
-            user_message: "build a header".into(),
-            max_output_tokens: 64,
-            ..Default::default()
-        },
-        Some(tool_rx),
-    ));
-
-    for _ in 0..2000 {
-        pump(&mut host, &mut current, None);
-        if current.is_none() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
-    assert!(current.is_none(), "turn must finish");
-
-    // The backstop resolved the roleless Header frame's navbar role on the
-    // live document.
-    let header = host
-        .editor_state()
-        .active_children()
-        .iter()
-        .find(|n| n.base().name.as_deref() == Some("Header"))
-        .expect("Header frame inserted");
-    assert_eq!(
-        header.base().role.as_deref(),
-        Some("navbar"),
-        "loop-end finalize must run apply_loop_finalize against the live state"
-    );
-}
-
 #[test]
 fn pump_writes_to_bound_tab_not_the_active_tab() {
     // MT.3 session-per-tab: a run launched on tab 0 must keep streaming into
@@ -734,7 +634,6 @@ fn pump_writes_to_bound_tab_not_the_active_tab() {
     assert_eq!(tab0.content, "Hello");
     assert!(!tab0.streaming);
 }
-
 
 #[test]
 fn launch_populates_system_prompt_and_history() {

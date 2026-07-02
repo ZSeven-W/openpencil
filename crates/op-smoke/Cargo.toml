@@ -24,31 +24,6 @@ op-orchestrator = { path = "../op-orchestrator" }
 # `EditorState` + `EditorCommand` — the smoke's own `InlineDocSink` owns
 # one and applies commands on it.
 op-editor-core = { path = "../op-editor-core" }
-# `PenNode` — the minimal-seed loop mode (OPENPENCIL_SMOKE_LOOP_SEED=1) builds a
-# page-root + named section-stub subtree as canonical `PenNode`s (same JSON-build
-# → deserialize idiom op-orchestrator's `build_scaffold` uses) and applies it via
-# `EditorCommand::InsertSubtree`. op-orchestrator already pulls this same path dep.
-jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
-# `merge_library_into_state` — honors OPENPENCIL_SMOKE_LIBRARY by loading a
-# harvested component library (.lib.op) into the doc before generation so the
-# generator can instantiate its reusable masters.
-op-pen-loader = { path = "../op-pen-loader" }
-# `batch_design_snapshot` + `BatchDesign` MCP tool — the program-mode
-# (OPENPENCIL_SMOKE_PROGRAM=<file>) runs a Pencil-style batch_design DSL program
-# (binding=I(parent,{...}) tree-builder) against the doc, bypassing the
-# orchestrator, to test whether emitting a PROGRAM (parent-by-reference) instead
-# of flat JSONL cures weak-model row decomposition / missing rows.
-op-mcp = { path = "../op-mcp" }
-# Loop mode (OPENPENCIL_SMOKE_LOOP=1) — the headless agentic tool-loop reuses
-# the production builtin provider + design-tool apply path from op-host-services
-# (`ConfiguredBuiltinProvider`, `design_tool_defs`, `execute_agent_tool`) and the
-# `ChatProvider` / `ChatRequest` / `ChatToolExecutor` traits from op-ai. The
-# loop-mode dump uses the SAME `serde_json::to_string_pretty(&state.doc)` path as
-# the orchestrator mode. Both crates already build raster-only (no winit/GL).
-op-host-services = { path = "../op-host-services" }
-op-ai = { path = "../op-ai" }
-# System prompt for the design agent loop (parity with the desktop design loop).
-op-ai-skills = { path = "../op-ai-skills" }
 # `futures` for `BoxStream` + `mpsc` channels in the LlmClient impl.
 futures = "0.3"
 # `tokio` for the runtime that `Orchestrator::run` (async) runs on.

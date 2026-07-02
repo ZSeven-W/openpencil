@@ -61,74 +61,6 @@ fn batch_design_parses_minimal_two_node_array() {
 }
 
 #[test]
-fn batch_design_fill_passthrough_carries_mesh_and_radial() {
-    use jian_ops_schema::style::PenFill;
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "nodes_json".into(),
-        r##"[{"kind":"rect","name":"Mesh","x":0,"y":0,"width":100,"height":100,"fill":[{"type":"mesh_gradient","rows":2,"cols":2,"stops":[{"row":0,"col":0,"color":"#ff0000"},{"row":0,"col":1,"color":"#00ff00"},{"row":1,"col":0,"color":"#0000ff"},{"row":1,"col":1,"color":"#ffff00"}]}]},{"kind":"ellipse","name":"Radial","x":0,"y":0,"width":80,"height":80,"fill":{"type":"radial_gradient","stops":[{"offset":0,"color":"#fff"},{"offset":1,"color":"#000"}]}}]"##
-            .into(),
-    );
-    match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, EditorCommand::BatchInsert { items, .. }) => {
-            assert_eq!(items.len(), 2);
-            // Array form → full mesh fill stack.
-            let mesh = items[0].fill.as_ref().expect("mesh fill stack");
-            assert_eq!(mesh.len(), 1);
-            match &mesh[0] {
-                PenFill::MeshGradient(b) => {
-                    assert_eq!(b.rows, 2);
-                    assert_eq!(b.cols, 2);
-                    assert_eq!(b.stops.len(), 4);
-                }
-                other => panic!("expected mesh_gradient, got {other:?}"),
-            }
-            // Single-object form → wrapped into a 1-entry radial stack.
-            let radial = items[1].fill.as_ref().expect("radial fill stack");
-            assert_eq!(radial.len(), 1);
-            assert!(matches!(radial[0], PenFill::RadialGradient(_)));
-        }
-        other => panic!("expected BatchInsert, got {other:?}"),
-    }
-}
-
-#[test]
-fn batch_design_fill_passthrough_carries_shader() {
-    // The generic `fill` passthrough must carry a `{type:"shader",...}`
-    // entry straight through to `PenFill::Shader` with no new tool — same
-    // path mesh / radial already ride.
-    use jian_ops_schema::style::{PenFill, ShaderUniformValue};
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "nodes_json".into(),
-        r##"[{"kind":"rect","name":"Shader","x":0,"y":0,"width":240,"height":240,"fill":[{"type":"shader","sksl":"half4 main(float2 p){ return half4(p.x/240.0, p.y/240.0, 0.5, 1.0); }","uniforms":{"glow":0.5,"tint":"#ff00aa"}}]}]"##
-            .into(),
-    );
-    match tool.call(&args) {
-        ToolOutcome::OkWithCommand(_, EditorCommand::BatchInsert { items, .. }) => {
-            assert_eq!(items.len(), 1);
-            let stack = items[0].fill.as_ref().expect("shader fill stack");
-            assert_eq!(stack.len(), 1);
-            match &stack[0] {
-                PenFill::Shader(b) => {
-                    assert!(b.sksl.contains("half4 main(float2 p)"));
-                    let u = b.uniforms.as_ref().expect("uniforms map");
-                    assert_eq!(u.get("glow"), Some(&ShaderUniformValue::Float(0.5)));
-                    assert_eq!(
-                        u.get("tint"),
-                        Some(&ShaderUniformValue::Color("#ff00aa".into()))
-                    );
-                }
-                other => panic!("expected shader, got {other:?}"),
-            }
-        }
-        other => panic!("expected BatchInsert, got {other:?}"),
-    }
-}
-
-#[test]
 fn batch_design_nodes_json_accepts_outer_page_id() {
     let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
@@ -251,34 +183,6 @@ fn batch_design_promotes_legacy_role_input_frame_to_text_input() {
 }
 
 #[test]
-fn batch_design_ellipse_preserves_arc_fields() {
-    // A native ring/arc/donut: an ellipse authored with startAngle /
-    // sweepAngle / innerRadius (camelCase, as the DSL uses) must keep
-    // those fields on the constructed EllipseNode instead of dropping
-    // them — so an LLM can author a ring in one batch_design call.
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "operations".into(),
-        r##"ring=I(null, {"type":"ellipse","name":"Gauge","width":120,"height":120,"innerRadius":0.6,"startAngle":0,"sweepAngle":270})"##
-            .into(),
-    );
-
-    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
-        tool.call(&args)
-    else {
-        panic!("expected InsertAuthoredSubtree command");
-    };
-    assert_eq!(nodes.len(), 1);
-    let jian_ops_schema::node::PenNode::Ellipse(ell) = &nodes[0] else {
-        panic!("expected PenNode::Ellipse, got {:?}", nodes[0]);
-    };
-    assert_eq!(ell.inner_radius, Some(0.6));
-    assert_eq!(ell.start_angle, Some(0.0));
-    assert_eq!(ell.sweep_angle, Some(270.0));
-}
-
-#[test]
 fn batch_design_normalizes_ts_layout_keywords() {
     let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
@@ -300,145 +204,6 @@ fn batch_design_normalizes_ts_layout_keywords() {
     assert_eq!(value["padding"].as_f64(), Some(2.0));
     assert_eq!(value["children"][0]["alignItems"], "end");
     assert_eq!(value["children"][0]["justifyContent"], "end");
-}
-
-#[test]
-fn batch_design_normalizes_underscore_flex_keywords() {
-    // A CSS-fluent model writes the snake_case `flex_start`/`flex_end` (by
-    // analogy to our `space_between`). The schema only has `start`/`end`, so an
-    // un-normalized flex_* fails the WHOLE node's deserialize and it is silently
-    // dropped — measured: glm's right-aligned amount cells + left-aligned header
-    // labels vanished, leaving only the `center` ones. Both children below MUST
-    // survive with normalized alignment.
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "operations".into(),
-        r##"root=I(null, {"type":"frame","name":"Row","layout":"horizontal","children":[{"type":"frame","name":"Left","justifyContent":"flex_start"},{"type":"frame","name":"Amount","justifyContent":"flex_end","alignItems":"flex_start"}]})"##
-            .into(),
-    );
-
-    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
-        tool.call(&args)
-    else {
-        panic!("expected InsertSubtree command");
-    };
-    let value = serde_json::to_value(&nodes[0]).expect("node json");
-    let children = value["children"].as_array().expect("children survive");
-    assert_eq!(children.len(), 2, "BOTH flex_* children must survive");
-    assert_eq!(children[0]["justifyContent"], "start");
-    assert_eq!(children[1]["justifyContent"], "end");
-    assert_eq!(children[1]["alignItems"], "start");
-}
-
-#[test]
-fn batch_design_maps_pencil_autolayout_dialect() {
-    // MiniMax-M3 is trained on Pencil's schema: it emits `layoutMode` /
-    // `itemSpacing` / `strokeWeight` / `primaryAxisAlignItems` /
-    // `counterAxisAlignItems`. serde drops those unknown keys, so the frame
-    // loses its layout entirely and 229 nodes render as one horizontal strip
-    // (measured on the barbershop loop run). The dialect map MUST rename them
-    // onto our schema so the model's layout survives.
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "operations".into(),
-        r##"root=I(null, {"type":"frame","name":"Card","layoutMode":"VERTICAL","itemSpacing":16,"strokeWeight":2,"stroke":"#E7E5E4","primaryAxisAlignItems":"SPACE_BETWEEN","counterAxisAlignItems":"CENTER"})"##
-            .into(),
-    );
-
-    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
-        tool.call(&args)
-    else {
-        panic!("expected InsertSubtree command");
-    };
-    let value = serde_json::to_value(&nodes[0]).expect("node json");
-    assert_eq!(value["layout"], "vertical", "layoutMode → layout");
-    assert_eq!(value["gap"].as_f64(), Some(16.0), "itemSpacing → gap");
-    assert_eq!(
-        value["justifyContent"], "space_between",
-        "primaryAxisAlignItems → justifyContent"
-    );
-    assert_eq!(
-        value["alignItems"], "center",
-        "counterAxisAlignItems → alignItems"
-    );
-    // strokeWeight folds into the stroke as its thickness (schema uses per-side
-    // thickness; a scalar lands on `.thickness`).
-    assert!(
-        value["stroke"].is_object() || value["stroke"].is_array(),
-        "stroke survives as a structured value, got {:?}",
-        value["stroke"]
-    );
-}
-
-#[test]
-fn batch_design_flattens_structured_layout_object() {
-    // glm-5.2 in the agentic loop writes `layout` as a Figma/flex OBJECT —
-    // `{"type":"horizontal","gap":0,"padding":[…]}` and the externally-tagged
-    // `{"Vertical":{"gap":12}}`. serde rejects both against our string-typed
-    // `layout` field, so every `U(n1,{layout:{…}})` failed and glm's (correctly
-    // id-tracked!) tree never got its layout. Both shapes MUST flatten.
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "operations".into(),
-        r##"root=I(null, {"type":"frame","name":"Shell","layout":{"type":"horizontal","gap":24,"padding":[8,8,8,8]},"children":[{"type":"frame","name":"Col","layout":{"Vertical":{"gap":12}}}]})"##
-            .into(),
-    );
-    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
-        tool.call(&args)
-    else {
-        panic!("expected InsertSubtree command");
-    };
-    let value = serde_json::to_value(&nodes[0]).expect("node json");
-    assert_eq!(
-        value["layout"], "horizontal",
-        "type-keyed object → layout string"
-    );
-    assert_eq!(value["gap"].as_f64(), Some(24.0), "hoisted gap");
-    assert_eq!(
-        value["padding"]
-            .as_array()
-            .and_then(|a| a.first())
-            .and_then(|v| v.as_f64()),
-        Some(8.0),
-        "hoisted per-side padding"
-    );
-    assert_eq!(
-        value["children"][0]["layout"], "vertical",
-        "externally-tagged {{Vertical:{{…}}}} → layout string"
-    );
-    assert_eq!(
-        value["children"][0]["gap"].as_f64(),
-        Some(12.0),
-        "variant-keyed inner gap hoisted"
-    );
-}
-
-#[test]
-fn batch_design_maps_direction_alias_to_layout() {
-    // glm-5.2 in the loop reaches for the flex/CSS `direction` alias instead of
-    // our `layout` (measured: `{…,"direction":"horizontal",…}` on every frame),
-    // so serde drops it and 0/62 frames got a layout. Map it.
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "operations".into(),
-        r##"root=I(null, {"type":"frame","name":"Row","direction":"horizontal","children":[{"type":"frame","name":"Col","direction":"column"}]})"##
-            .into(),
-    );
-    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
-        tool.call(&args)
-    else {
-        panic!("expected InsertSubtree command");
-    };
-    let value = serde_json::to_value(&nodes[0]).expect("node json");
-    assert_eq!(value["layout"], "horizontal", "direction → layout");
-    assert_eq!(
-        value["children"][0]["layout"], "vertical",
-        "direction:column → vertical"
-    );
 }
 
 #[test]
@@ -1019,7 +784,6 @@ fn batch_insert_command_adds_all_nodes() {
                 width: 10,
                 height: 20,
                 fill_hex: None,
-                fill: None,
             },
             BatchInsertItem {
                 kind: "ellipse".into(),
@@ -1029,7 +793,6 @@ fn batch_insert_command_adds_all_nodes() {
                 width: 30,
                 height: 30,
                 fill_hex: Some("#00ff00".into()),
-                fill: None,
             },
         ],
         page_id: None,
@@ -1051,7 +814,6 @@ fn batch_insert_command_atomic_on_bad_descriptor() {
                 width: 10,
                 height: 10,
                 fill_hex: None,
-                fill: None,
             },
             BatchInsertItem {
                 kind: "blob".into(),
@@ -1061,7 +823,6 @@ fn batch_insert_command_atomic_on_bad_descriptor() {
                 width: 10,
                 height: 10,
                 fill_hex: None,
-                fill: None,
             },
         ],
         page_id: None,
@@ -1080,67 +841,4 @@ fn batch_insert_command_rejects_empty_items() {
         items: vec![],
         page_id: None,
     }));
-}
-
-#[test]
-fn batch_design_drops_ambiguous_auto_sizing_and_recovers_text_growth_words() {
-    // `width:"auto"` is ambiguous in CSS (fill for a block's width, hug for its
-    // height) — forcing either direction inverts intent half the time, so the
-    // key must be DROPPED (schema default wins) while the node itself survives.
-    // A misspelled `textGrowth` carrying clear words ("fixed_width_and_height")
-    // must recover its meaning instead of silently reverting to the default.
-    let tool = batch_design_snapshot(&sample());
-    let mut args = BTreeMap::new();
-    args.insert(
-        "operations".into(),
-        r##"root=I(null, {"type":"frame","name":"Block","width":"auto","height":"fit_content","children":[{"type":"text","name":"T","content":"hello","textGrowth":"fixed_width_and_height"}]})"##
-            .into(),
-    );
-    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
-        tool.call(&args)
-    else {
-        panic!("expected InsertSubtree command");
-    };
-    let value = serde_json::to_value(&nodes[0]).expect("node json");
-    assert!(
-        value.get("width").map(|w| !w.is_string()).unwrap_or(true),
-        "ambiguous auto width dropped, got {:?}",
-        value.get("width")
-    );
-    assert_eq!(value["height"], "fit_content", "valid keyword untouched");
-    let text = &value["children"][0];
-    assert_eq!(
-        text["textGrowth"], "fixed-width-height",
-        "word-based textGrowth spelling recovered"
-    );
-}
-
-#[test]
-fn batch_design_falls_back_to_root_for_phantom_parent_binding() {
-    // A weak model copies the `sec` example binding as its FIRST line's
-    // parent. The phantom parent used to ride into `InsertAuthoredSubtree`
-    // unvalidated and the host rejected the WHOLE otherwise-valid program
-    // (an orchestrator stats subtask retried its complete 4-card section
-    // away). The tool must fall back to a root insert and surface a warning.
-    let state = op_editor_core::EditorState::new();
-    let tool = batch_design_snapshot(&state);
-    let mut args = BTreeMap::new();
-    args.insert(
-        "operations".into(),
-        "row=I(sec, {\"type\":\"frame\",\"name\":\"Stat Row\",\"layout\":\"horizontal\",\"gap\":24})\nc1=I(row, {\"type\":\"frame\",\"name\":\"Card\",\"layout\":\"vertical\"})".to_string(),
-    );
-    let ToolOutcome::OkJsonWithCommand(json, cmd) = tool.call(&args) else {
-        panic!("expected a command outcome");
-    };
-    assert!(json.contains("warnings"), "phantom parent surfaced: {json}");
-    let mut s2 = op_editor_core::EditorState::new();
-    assert!(s2.apply(cmd), "root-fallback insert must apply cleanly");
-    assert_eq!(s2.active_children().len(), 1, "one root landed");
-    use op_editor_core::PenNodeExt;
-    let root = &s2.active_children()[0];
-    assert_eq!(
-        root.children().map(|c| c.len()),
-        Some(1),
-        "card nested in row"
-    );
 }

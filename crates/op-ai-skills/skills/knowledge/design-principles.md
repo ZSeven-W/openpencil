@@ -16,7 +16,6 @@ DESIGN CRAFT:
 - Contrast law: WCAG AA (4.5:1 body, 3:1 large text). Text: primary #0F172A for headings, muted #475569 for body.
 - 8px grid spacing: related items 8-16px, groups 24-32px, sections 48-80px. Section padding 80-120px vertical.
 - Avoid crowded output: fewer, stronger modules with visible negative space beat dense screens full of equal-weight blocks.
-- Don't box everything: use a container (card / panel / bordered frame) only when it groups related content for a real structural or functional reason. Wrapping every element — or every section — in its own card is a common AI habit that reads generic; prefer spacing and typography for separation. Structural wrappers (section / header / page background) stay transparent, never filled white cards.
 - Hero: ONE headline, ONE subtitle, ONE CTA, optional visual. Every extra element dilutes focus.
 - Cards: consistent cornerRadius/padding/shadow. Content: image - title - description - action.
 - Nav: logo + 3-5 links + CTA. space_between distribution. Keep minimal.

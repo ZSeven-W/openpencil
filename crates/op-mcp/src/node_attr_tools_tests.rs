@@ -126,56 +126,6 @@ fn set_node_stroke_width_tool_rejects_negative() {
 }
 
 #[test]
-fn set_node_stroke_side_width_returns_command() {
-    let tool = set_node_stroke_side_width_snapshot();
-    let mut args = BTreeMap::new();
-    args.insert("node_id".into(), RECT_ID.into());
-    args.insert("side".into(), "bottom".into());
-    args.insert("width".into(), "3".into());
-    match tool.call(&args) {
-        ToolOutcome::OkWithCommand(
-            _,
-            EditorCommand::SetNodeStrokeSideWidth {
-                node_id,
-                side,
-                width,
-            },
-        ) => {
-            assert_eq!(node_id.as_str(), RECT_ID);
-            assert_eq!(side, op_editor_core::StrokeSide::Bottom);
-            assert_eq!(width, 3.0);
-        }
-        other => panic!("expected SetNodeStrokeSideWidth, got {other:?}"),
-    }
-}
-
-#[test]
-fn set_node_stroke_side_width_rejects_unknown_side() {
-    let tool = set_node_stroke_side_width_snapshot();
-    let mut args = BTreeMap::new();
-    args.insert("node_id".into(), RECT_ID.into());
-    args.insert("side".into(), "diagonal".into());
-    args.insert("width".into(), "2".into());
-    match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        other => panic!("expected InvalidArgument, got {other:?}"),
-    }
-}
-
-#[test]
-fn set_node_stroke_side_width_rejects_negative() {
-    let tool = set_node_stroke_side_width_snapshot();
-    let mut args = BTreeMap::new();
-    args.insert("node_id".into(), RECT_ID.into());
-    args.insert("side".into(), "top".into());
-    args.insert("width".into(), "-1".into());
-    match tool.call(&args) {
-        ToolOutcome::Err(code, _) => assert_eq!(code, ToolErrorCode::InvalidArgument),
-        other => panic!("expected InvalidArgument, got {other:?}"),
-    }
-}
-
-#[test]
 fn set_node_fill_hex_command_applies() {
     let mut s = state_with_rect_node();
     assert!(s.apply(EditorCommand::SetNodeFillHex {

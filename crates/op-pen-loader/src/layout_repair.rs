@@ -569,18 +569,6 @@ fn height_can_expand_to_content(props: &ContainerProps) -> bool {
 }
 
 fn height_can_expand_to_content_or_root(props: &ContainerProps, is_root: bool) -> bool {
-    // A clipped, explicitly-sized frame must honour its declared height even at
-    // the root: Pencil clips a fixed-height screen whose content overflows
-    // rather than growing the frame to fit it. Without this guard the
-    // `|| is_root` override grew a `height: 900, clip: true` screen to its
-    // ~950px content height (off-by-50 vs Pencil's clipped baseline). The
-    // non-root path already refuses via `height_can_expand_to_content`; mirror
-    // it for the root instead of blanket-allowing expansion.
-    if matches!(props.height.as_ref(), Some(SizingBehavior::Number(_)))
-        && props.clip_content == Some(true)
-    {
-        return height_can_expand_to_content(props);
-    }
     height_can_expand_to_content(props) || is_root
 }
 

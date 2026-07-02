@@ -872,12 +872,8 @@ pub fn run_cli_turn(
             // design pumps fill it.
             let _chat_hold = chat_tx;
             drop(executor);
-            // Share one provider Arc between the design LLM and the
-            // (flag-gated) vision validator so the real Class-C loop reuses
-            // the user's selected auth/model.
-            let provider_arc: Arc<dyn op_ai::chat_provider::ChatProvider> =
-                Arc::from(plan.design_provider);
-            let llm = ChatProviderLlmClient::new(provider_arc.clone()).with_model(plan.model);
+            let llm =
+                ChatProviderLlmClient::new(Arc::from(plan.design_provider)).with_model(plan.model);
             run_design_worker(
                 llm,
                 plan.design_request,
@@ -885,7 +881,6 @@ pub fn run_cli_turn(
                 delta_tx,
                 cmd_tx,
                 plan.indicator_epoch,
-                Some(provider_arc),
             );
         }
     }

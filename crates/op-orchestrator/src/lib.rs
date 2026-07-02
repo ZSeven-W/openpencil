@@ -12,8 +12,6 @@ pub mod compact_prompt;
 pub mod compact_skills;
 pub mod dashboard_columns;
 pub mod design_md_policy;
-// (run_dashboard / scaffold_dashboard removed: dashboards flow through the
-//  generic sequential path; dashboard_columns keeps only normalizer predicates.)
 pub mod design_system;
 pub mod design_type;
 pub mod hoist_app_state;
@@ -27,9 +25,7 @@ pub mod parse;
 pub mod plan;
 pub mod plan_normalize;
 pub mod plan_repair;
-pub mod program_gen;
 pub mod retry;
-pub mod script_gen;
 pub mod semantic_palette;
 pub mod stub_providers;
 pub mod style_guide_context;
@@ -43,24 +39,21 @@ pub(crate) mod validation_fixes_b3;
 mod variable_binding;
 pub mod variables;
 
-pub mod app_shell;
 pub mod append;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
-pub mod geometry_validation;
-pub mod loop_finalize;
 pub mod prompt;
 pub mod role_defaults;
 pub mod role_infer;
 pub(crate) mod role_layout_post_pass;
 pub mod role_post_pass;
 pub mod run;
+pub mod run_dashboard;
 pub mod scaffold;
-pub mod spawn_concurrent;
+pub mod scaffold_dashboard;
 pub mod subagent;
-pub mod table_repair;
 pub mod tree_heuristics;
 
 #[cfg(test)]
@@ -76,17 +69,14 @@ pub use design_system::{
 };
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;
-pub use loop_finalize::apply_loop_finalize;
 pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
 pub use prompt::build_orchestrator_prompt;
 pub use run::Orchestrator;
-pub use spawn_concurrent::{run_spawned_agents_concurrent, SpawnAgentResult, SpawnAgentSpec};
 pub use stub_providers::{
     SkippedPreValidator, SkippedScreenshotProvider, SkippedVisionLlmClient,
     SkippedVisualRefProvider,
 };
 pub use types::*;
-pub use validation::{run_post_generation_validation, ValidationSummary};
 
 #[cfg(test)]
 pub(crate) mod agent_indicator_test_support {

@@ -137,6 +137,24 @@ fn finish_with_empty_queue_clears_immediately() {
 }
 
 #[test]
+fn empty_finish_does_not_arm_a_spurious_erase_frame() {
+    // A run that finishes without ever queuing a reveal never painted a
+    // cursor, so it must NOT leave the process-global erase-frame flag set
+    // — otherwise an unrelated animation-deadline query would observe a
+    // stray redraw request. Regression guard for the shared-registry race.
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let epoch = begin();
+    add_frame(epoch, "f1", "#4ECDC4", "Mochi");
+    finish_if_epoch(epoch);
+    assert_eq!(
+        next_reveal_deadline_ms(5_000),
+        None,
+        "an empty finish leaves no pending erase frame for other queries to trip on"
+    );
+    clear();
+}
+
+#[test]
 fn drain_end_requests_one_final_erase_frame() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let epoch = begin();

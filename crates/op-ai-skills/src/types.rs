@@ -129,13 +129,6 @@ pub struct ResolveOptions {
     pub budget_override: Option<u32>,
     /// Design memory carried across turns.
     pub memory: ResolveMemory,
-    /// Skill names that must be force-included (budget-exempt) when they match
-    /// the phase/intent/flags. A pinned skill is kept like a `Base` skill —
-    /// never dropped by the budget trim — because its teaching is the point of
-    /// the feature that pinned it (e.g. `component-composition` when a reusable
-    /// component library is loaded). Empty on every default path, so a
-    /// no-library generation is byte-for-byte unchanged.
-    pub pinned_skills: Vec<String>,
 }
 
 /// Design memory bundle (`ResolveOptions.memory` in the TS).

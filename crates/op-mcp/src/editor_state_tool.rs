@@ -2,10 +2,11 @@
 //! when starting a design task. Composes from the existing per-domain
 //! snapshot helpers so no field computation is duplicated:
 //!
-//! - active page + page count (`document_info_snapshot` / `list_pages_snapshot`)
-//! - selection ids + count (`get_selection_set_snapshot`)
-//! - top-level node records (walk `active_children` via `kind_label`, mirrors `list_node_kinds`)
-//! - registered components (`list_components_snapshot`)
+//!   - active page + page count   ← `document_info_snapshot` / `list_pages_snapshot`
+//!   - selection ids + count      ← `get_selection_set_snapshot`
+//!   - top-level node records     ← direct walk of `active_children` using
+//!     `kind_label` (mirrors `list_node_kinds`)
+//!   - registered components      ← `list_components_snapshot`
 
 use std::collections::BTreeMap;
 

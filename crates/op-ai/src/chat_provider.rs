@@ -335,29 +335,8 @@ pub struct ChatToolResult {
 /// `EditorState`), mirroring how the design orchestrator's
 /// `RemoteDocSink` forwards `EditorCommand`s. Called from a worker
 /// thread — implementations may block until the host replies.
-/// Reserved pseudo-tool name a [`ChatToolExecutor`] forwards over its tool
-/// channel to ask the host to run the agentic-loop structural backstop
-/// (`op_orchestrator::apply_loop_finalize`) against the live `EditorState`.
-/// Never a real model-visible tool — the loop sends it itself at loop end via
-/// [`ChatToolExecutor::finalize`].
-pub const LOOP_FINALIZE_OP: &str = "__loop_finalize";
-
 pub trait ChatToolExecutor: Send + Sync {
     fn execute(&self, name: &str, args_json: &str) -> ChatToolResult;
-
-    /// Run the deterministic structural-quality backstop ONCE at the end of an
-    /// agentic design loop (Track-1 Step 4). The agent loop calls this after it
-    /// exits — at BOTH the normal model-stop exit and the turn-cap truncation
-    /// exit — so the assembled document gets the same whole-doc subset of the
-    /// orchestrator's Class-A passes (roles / surface-color discipline / token
-    /// binding + cleanup) the orchestrator runs per subtask.
-    ///
-    /// The default is a no-op: only the host executor that owns the live
-    /// `EditorState` (desktop `UiChatToolExecutor`) forwards this over its tool
-    /// channel so the host can call `op_orchestrator::apply_loop_finalize`
-    /// against the live document. Scripted / read-only test executors and any
-    /// non-design tool executor inherit the no-op and are unaffected.
-    fn finalize(&self) {}
 }
 
 /// Test double — replays a fixed delta script. Lets the chat widget

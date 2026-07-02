@@ -371,88 +371,57 @@ fn parse_insert_operation(line: &str, index: usize) -> Result<(String, ParentRef
     Ok((binding, parent, data))
 }
 
-/// Returns `true` when a physical line begins a new DSL operation —
-/// `name=I(...)`, `I(...)`, `U(...)`, `D(...)`, `M(...)`, `C(...)`, `R(...)`,
-/// `G(...)` (with an optional `binding =` prefix). Continuation lines of a
-/// pretty-printed JSON body (`"key": value,`) never match, so they accumulate
-/// onto the current operation.
-fn line_starts_operation(line: &str) -> bool {
-    let mut s = line.trim_start();
-    if let Some(eq) = s.find('=') {
-        let head = s[..eq].trim();
-        if !head.is_empty() && head.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            s = s[eq + 1..].trim_start();
-        }
-    }
-    let mut chars = s.chars();
-    match chars.next() {
-        Some('I' | 'C' | 'R' | 'M' | 'G' | 'U' | 'D') => {
-            chars.as_str().trim_start().starts_with('(')
-        }
-        _ => false,
-    }
-}
-
-/// Split a DSL program into one string per operation. Grouping is by the
-/// physical-line operation-start grammar (`line_starts_operation`) rather than
-/// a quote/bracket state machine: a weak model that emits an unbalanced quote
-/// (e.g. `"fontWeight":"700,"fill"` — `fill` ends up unquoted, an odd number of
-/// quotes) used to leak the open-string state across the newline and SWALLOW
-/// every following operation into one malformed blob. Anchoring boundaries to
-/// the next operation-start line keeps a stray quote contained to its own line
-/// (where `parse_json_arg`'s lenient repair can still recover it), and
-/// continuation lines of a multi-line JSON body still accumulate correctly.
-/// Net bracket delta of a line — `([{` are +1, `)]}` are −1. Strings are NOT
-/// tracked on purpose: a weak model's stray quote must not be able to hide a
-/// bracket and leak the "open" state across newlines (the bug this guards).
-/// A bracket inside a string value is rare and the operation-start guard in
-/// `split_operations` recovers it.
-fn bracket_delta(line: &str) -> i32 {
-    line.chars().fold(0, |d, c| match c {
-        '(' | '[' | '{' => d + 1,
-        ')' | ']' | '}' => d - 1,
-        _ => d,
-    })
-}
-
 pub(crate) fn split_operations(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut buf = String::new();
     let mut depth = 0i32;
-    let flush = |buf: &mut String, out: &mut Vec<String>| {
-        let line = buf.trim();
-        if !line.is_empty() && !line.starts_with("//") {
-            out.push(line.to_string());
+    let mut in_string: Option<char> = None;
+    let mut escape = false;
+    for ch in raw.chars() {
+        if escape {
+            buf.push(ch);
+            escape = false;
+            continue;
         }
-        buf.clear();
-    };
-    for line in raw.split('\n') {
-        // A new operation-start line always begins a fresh operation, even if
-        // the previous buffer's bracket count looked unbalanced (a stray quote
-        // or a bracket inside a string value can throw the count off).
-        if line_starts_operation(line) && !buf.trim().is_empty() {
-            flush(&mut buf, &mut out);
-            depth = 0;
+        if in_string.is_some() && ch == '\\' {
+            buf.push(ch);
+            escape = true;
+            continue;
         }
-        if buf.is_empty() {
-            let t = line.trim();
-            if t.is_empty() || t.starts_with("//") {
-                continue;
+        if let Some(quote) = in_string {
+            if ch == quote {
+                in_string = None;
             }
+            buf.push(ch);
+            continue;
         }
-        if !buf.is_empty() {
-            buf.push('\n');
-        }
-        buf.push_str(line);
-        depth += bracket_delta(line);
-        // Brackets balanced → the operation is complete (a multi-line JSON
-        // body keeps depth > 0 until its closing `})` line).
-        if depth <= 0 {
-            flush(&mut buf, &mut out);
-            depth = 0;
+        match ch {
+            '"' | '\'' => {
+                in_string = Some(ch);
+                buf.push(ch);
+            }
+            '(' | '[' | '{' => {
+                depth += 1;
+                buf.push(ch);
+            }
+            ')' | ']' | '}' => {
+                depth -= 1;
+                buf.push(ch);
+            }
+            '\n' if depth == 0 => {
+                let line = buf.trim();
+                if !line.is_empty() && !line.starts_with("//") {
+                    out.push(line.to_string());
+                }
+                buf.clear();
+            }
+            _ => buf.push(ch),
         }
     }
-    flush(&mut buf, &mut out);
+    let tail = buf.trim();
+    if !tail.is_empty() && !tail.starts_with("//") {
+        out.push(tail.to_string());
+    }
     out
 }
 
@@ -522,33 +491,8 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     let serde_json::Value::Object(obj) = value else {
         return;
     };
-    // Map Figma/Pencil auto-layout field names onto our schema FIRST — MiniMax-M3
-    // (trained on Pencil's schema) emits `layoutMode`/`itemSpacing`/`strokeWeight`/
-    // `primaryAxisAlignItems`/`counterAxisAlignItems`, which serde would silently
-    // drop as unknown keys, leaving the frame with no layout → it renders as an
-    // unstyled horizontal strip. Rename before anything else reads them.
-    normalize_pencil_autolayout_dialect(obj);
-    // Flatten a STRUCTURED `layout` object (`{type,gap,padding}` or the
-    // externally-tagged `{Horizontal:{…}}`) down to our flat `layout` string +
-    // hoisted gap/padding. glm-5.2 in the loop emits this Figma/flex shape; serde
-    // rejects it against the string-typed `layout` field, so the WHOLE update
-    // fails and the root never gets its layout (measured: glm built n1/n2/n3
-    // correctly, then every `U(n1,{layout:{type:horizontal…}})` was rejected and
-    // the tree thrashed to empty).
-    normalize_layout_object(obj);
     if let Some(fill) = obj.get_mut("fill") {
         normalize_fill(fill);
-    }
-    // A weak model sometimes emits an empty stroke (`"stroke":[]` or `""`),
-    // which deserializes as a 0-length `PenStroke` and fails the WHOLE node
-    // (and cascades to every child that targets its binding). Treat an empty
-    // stroke as "no stroke" — drop the key so the node still lands.
-    if obj.get("stroke").is_some_and(|s| {
-        matches!(s, serde_json::Value::Array(a) if a.is_empty())
-            || matches!(s, serde_json::Value::String(t) if t.trim().is_empty())
-            || s.is_null()
-    }) {
-        obj.remove("stroke");
     }
     if let Some(stroke) = obj.get_mut("stroke") {
         normalize_stroke(stroke);
@@ -559,255 +503,9 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     super::node_shape_defaults::normalize_text_default_bounds(obj);
     normalize_layout_keyword(obj, "justifyContent");
     normalize_layout_keyword(obj, "alignItems");
-    normalize_image_src(obj);
-    normalize_text_growth(obj);
-    normalize_sizing_keyword(obj, "width");
-    normalize_sizing_keyword(obj, "height");
     if let Some(serde_json::Value::Array(children)) = obj.get_mut("children") {
         for child in children {
             normalize_node_shape(child);
-        }
-    }
-}
-
-/// Rename Figma / Pencil auto-layout keys onto OpenPencil's schema so a model
-/// trained on the Pencil dialect (MiniMax-M3) keeps its layout. Each rename is
-/// applied ONLY when the canonical key is absent, so a node that already uses
-/// our names is untouched. Axis-align values are lifted from Figma's
-/// `MIN/MAX/CENTER/SPACE_BETWEEN` enum; unknown spellings pass through for the
-/// downstream `normalize_layout_keyword` pass to handle.
-fn normalize_pencil_autolayout_dialect(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    // layoutMode / direction → layout. `direction` is the flex/CSS alias glm-5.2
-    // reaches for (measured: `{…,"direction":"horizontal",…}`), `layoutMode` the
-    // Figma one M3 uses. First alias present wins.
-    if !obj.contains_key("layout") {
-        for alias in ["layoutMode", "direction"] {
-            let Some(s) = obj
-                .remove(alias)
-                .and_then(|v| v.as_str().map(str::to_string))
-            else {
-                continue;
-            };
-            let mapped = match s.trim().to_ascii_lowercase().as_str() {
-                "horizontal" | "row" => Some("horizontal"),
-                "vertical" | "column" => Some("vertical"),
-                "none" | "" => Some("none"),
-                _ => None,
-            };
-            if let Some(m) = mapped {
-                obj.insert("layout".into(), serde_json::Value::String(m.into()));
-            }
-            break;
-        }
-    }
-    // itemSpacing → gap
-    if !obj.contains_key("gap") {
-        if let Some(v) = obj
-            .remove("itemSpacing")
-            .filter(serde_json::Value::is_number)
-        {
-            obj.insert("gap".into(), v);
-        }
-    }
-    // primaryAxisAlignItems → justifyContent ; counterAxisAlignItems → alignItems
-    for (from, to) in [
-        ("primaryAxisAlignItems", "justifyContent"),
-        ("counterAxisAlignItems", "alignItems"),
-    ] {
-        if obj.contains_key(to) {
-            continue;
-        }
-        let Some(s) = obj
-            .remove(from)
-            .and_then(|v| v.as_str().map(str::to_string))
-        else {
-            continue;
-        };
-        let mapped = match s.trim().to_ascii_uppercase().as_str() {
-            "MIN" => "start",
-            "MAX" => "end",
-            "CENTER" => "center",
-            "SPACE_BETWEEN" => "space_between",
-            _ => s.as_str(), // leave for normalize_layout_keyword
-        };
-        obj.insert(to.into(), serde_json::Value::String(mapped.to_string()));
-    }
-    // strokeWeight → stroke thickness (Figma names the width apart from the color)
-    if let Some(weight) = obj
-        .remove("strokeWeight")
-        .filter(serde_json::Value::is_number)
-    {
-        match obj.get_mut("stroke") {
-            Some(serde_json::Value::Object(s)) => {
-                s.entry("thickness").or_insert(weight);
-            }
-            Some(serde_json::Value::String(color)) => {
-                let color = color.clone();
-                obj.insert(
-                    "stroke".into(),
-                    serde_json::json!({ "thickness": weight, "fill": color }),
-                );
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Flatten a STRUCTURED `layout` object onto our flat schema. glm-5.2 in the
-/// agentic loop writes `layout` as a Figma/flex object —
-/// `{"type":"horizontal","gap":0,"padding":[…]}` or the externally-tagged
-/// `{"Horizontal":{"gap":0,…}}` — but our `layout` field is a plain string
-/// (`"horizontal"`), with `gap`/`padding`/`justifyContent`/`alignItems` as
-/// sibling keys. serde rejects the object, failing the whole insert/update, so
-/// the node's layout never lands (measured: glm built its tree with correct ids,
-/// then every `U(n1,{layout:{type:horizontal…}})` was rejected). Lift the
-/// direction to the `layout` string and hoist the object's spacing keys to the
-/// node (only where the node doesn't already set them). Unknown directions are
-/// left untouched rather than guessed.
-fn normalize_layout_object(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    let layout = match obj.get("layout") {
-        Some(serde_json::Value::Object(m)) => m.clone(),
-        _ => return,
-    };
-    // `{type:"horizontal",…}` (type-keyed) OR `{Horizontal:{…}}` (variant-keyed).
-    let (raw_dir, inner) = if let Some(t) = layout.get("type").and_then(|v| v.as_str()) {
-        (t.to_string(), None)
-    } else if let Some((k, v)) = layout.iter().next() {
-        (k.clone(), v.as_object().cloned())
-    } else {
-        return;
-    };
-    let dir = match raw_dir.trim().to_ascii_lowercase().as_str() {
-        "horizontal" | "row" => "horizontal",
-        "vertical" | "column" => "vertical",
-        "none" => "none",
-        _ => return,
-    };
-    let source = inner.as_ref().unwrap_or(&layout);
-    let gap = source.get("gap").cloned();
-    let padding = source.get("padding").cloned();
-    let justify = source.get("justifyContent").cloned();
-    let align = source.get("alignItems").cloned();
-    obj.insert("layout".into(), serde_json::Value::String(dir.into()));
-    if let Some(g) = gap {
-        obj.entry("gap").or_insert(g);
-    }
-    if let Some(p) = padding {
-        obj.entry("padding").or_insert(p);
-    }
-    if let Some(j) = justify {
-        obj.entry("justifyContent").or_insert(j);
-    }
-    if let Some(a) = align {
-        obj.entry("alignItems").or_insert(a);
-    }
-}
-
-/// `width` / `height` accept `fill_container` / `fit_content` / a number. A weak
-/// model sometimes appends a type-hint suffix (`fill_container_str` — a leaked
-/// variable name) or uses a CSS-ish spelling (`fill-container` / `hug`), which
-/// fails the `Sizing` enum and drops the whole node. Map the known content-hug /
-/// fill spellings back to the canonical keyword; DROP the ambiguous `auto`
-/// (schema default wins); leave numbers, numeric strings, and already-valid /
-/// unrecognised values untouched.
-fn normalize_sizing_keyword(obj: &mut serde_json::Map<String, serde_json::Value>, key: &str) {
-    let Some(serde_json::Value::String(raw)) = obj.get(key) else {
-        return;
-    };
-    let mut canon = raw.trim().to_ascii_lowercase().replace([' ', '-'], "_");
-    for suffix in ["_str", "_string", "_val", "_value"] {
-        if let Some(stripped) = canon.strip_suffix(suffix) {
-            canon = stripped.to_string();
-            break;
-        }
-    }
-    let normalized = match canon.as_str() {
-        "fill_container" | "fillcontainer" | "fill" | "container" | "full" | "fill_width"
-        | "fill_parent" => Some("fill_container"),
-        "fit_content" | "fitcontent" | "fit" | "hug" | "hug_content" | "content" => {
-            Some("fit_content")
-        }
-        // CSS `auto` is AMBIGUOUS: for a block's width it usually means
-        // stretch/fill, for height it means hug — forcing either direction
-        // inverts the author's intent half the time. Drop the key so the node
-        // survives deserialization with the schema default instead.
-        "auto" => {
-            obj.remove(key);
-            return;
-        }
-        _ => None,
-    };
-    if let Some(valid) = normalized {
-        obj.insert(key.into(), serde_json::Value::String(valid.to_string()));
-    }
-}
-
-/// A weak model sometimes emits an `image` node with NO `src` (or puts the URL
-/// under an alias like `url`/`source`). `ImageNode.src` is REQUIRED, so the whole
-/// node fails to deserialize and is dropped — the avatar/logo vanishes AND the
-/// column it anchored collapses. Recover the src from a common alias, else inject
-/// an empty placeholder (renders as a grey box) so the node — and the layout it
-/// holds open — survives. (Measured: glm avatar images → 7× `missing field src`.)
-fn normalize_image_src(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    if obj.get("type").and_then(serde_json::Value::as_str) != Some("image") {
-        return;
-    }
-    let has_src = obj
-        .get("src")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|t| !t.trim().is_empty());
-    if has_src {
-        return;
-    }
-    for alias in ["url", "source", "imageUrl", "image_url", "uri", "href"] {
-        if let Some(v) = obj.get(alias).cloned() {
-            if v.as_str().is_some_and(|t| !t.trim().is_empty()) {
-                obj.insert("src".into(), v);
-                return;
-            }
-        }
-    }
-    obj.insert("src".into(), serde_json::Value::String(String::new()));
-}
-
-/// `textGrowth` only accepts `auto` / `fixed-width` / `fixed-width-height`. A
-/// weak model borrows a SIZING keyword (`fit_content` / `fill_container`) for it,
-/// and the invalid variant drops the whole text node. Map the content-hugging
-/// forms to `auto` (same intent); drop anything else so the node still lands with
-/// the default growth. (Measured: glm text nodes → 3× `unknown variant fit_content`.)
-fn normalize_text_growth(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    let Some(raw) = obj.get("textGrowth").and_then(serde_json::Value::as_str) else {
-        return;
-    };
-    let canon = raw.trim().to_ascii_lowercase().replace([' ', '_'], "-");
-    let normalized = match canon.as_str() {
-        "auto" | "fit-content" | "hug" | "fill-container" | "fill" | "fit" => Some("auto"),
-        "fixed-width" => Some("fixed-width"),
-        "fixed-width-height" | "fixed-width-and-height" | "fixed" => Some("fixed-width-height"),
-        _ => None,
-    };
-    // Unrecognized spellings: recover the intent from the words before falling
-    // back to removal ("fixed_width_and_height", "fixedWidth" and friends carry
-    // a clear meaning — silently reverting them to the default undoes a
-    // deliberate wrap request).
-    let normalized = normalized.or_else(|| {
-        if canon.contains("width") && canon.contains("height") {
-            Some("fixed-width-height")
-        } else if canon.contains("width") {
-            Some("fixed-width")
-        } else {
-            None
-        }
-    });
-    match normalized {
-        Some(valid) => {
-            obj.insert(
-                "textGrowth".into(),
-                serde_json::Value::String(valid.to_string()),
-            );
-        }
-        None => {
-            obj.remove("textGrowth");
         }
     }
 }
@@ -817,18 +515,10 @@ fn normalize_layout_keyword(obj: &mut serde_json::Map<String, serde_json::Value>
         return;
     };
     let normalized = match (key, value.as_str()) {
-        // CSS flexbox value names. A model fluent in CSS (glm-5.2 etc.) writes
-        // `flex-start`/`flex-end` AND — by analogy to our snake_case `space_between`
-        // — the underscore form `flex_start`/`flex_end`. The schema only accepts
-        // `start`/`end`, so without this the WHOLE node fails to deserialize and is
-        // silently dropped (a 5-column table loses every cell whose alignment is a
-        // flex_* name — measured: glm dropped the right-aligned amount column + the
-        // left-aligned header labels, keeping only the `center` ones).
-        ("justifyContent" | "alignItems", "flex-start" | "flex_start" | "flexstart") => "start",
-        ("justifyContent" | "alignItems", "flex-end" | "flex_end" | "flexend") => "end",
+        ("justifyContent" | "alignItems", "flex-start") => "start",
+        ("justifyContent" | "alignItems", "flex-end") => "end",
         ("justifyContent", "space-between") => "space_between",
         ("justifyContent", "space-around") => "space_around",
-        ("justifyContent", "space-evenly" | "space_evenly") => "space_between",
         _ => return,
     };
     *value = normalized.to_string();
@@ -1010,7 +700,6 @@ fn parse_item(bytes: &[u8], i: &mut usize) -> Result<BatchInsertItem, String> {
     let mut width: Option<i32> = None;
     let mut height: Option<i32> = None;
     let mut fill_hex: Option<String> = None;
-    let mut fill: Option<Vec<jian_ops_schema::style::PenFill>> = None;
     loop {
         skip_ws(bytes, i);
         if *i >= bytes.len() {
@@ -1031,15 +720,6 @@ fn parse_item(bytes: &[u8], i: &mut usize) -> Result<BatchInsertItem, String> {
             "kind" => kind = Some(parse_string(bytes, i)?),
             "name" => name = Some(parse_string(bytes, i)?),
             "fill_hex" => fill_hex = Some(parse_string(bytes, i)?),
-            // Generic `fill` passthrough: a full canonical PenFill stack
-            // (array of fill objects, or a single fill object) so a batch
-            // item can carry gradient / mesh / image fills, not just a
-            // solid `fill_hex`. Captured as a balanced raw-JSON slice and
-            // deserialized straight into the canonical type.
-            "fill" => {
-                let raw = capture_raw_json_value(bytes, i)?;
-                fill = Some(parse_fill_stack(&raw)?);
-            }
             "x" => x = Some(parse_int(bytes, i)?),
             "y" => y = Some(parse_int(bytes, i)?),
             "width" => width = Some(parse_int(bytes, i)?),
@@ -1081,91 +761,7 @@ fn parse_item(bytes: &[u8], i: &mut usize) -> Result<BatchInsertItem, String> {
         width,
         height,
         fill_hex,
-        fill,
     })
-}
-
-/// Deserialize a raw JSON `fill` slice into a canonical fill stack.
-/// Accepts either an array of fill objects (`[{...}, ...]`) or a single
-/// fill object (`{...}`, wrapped into a 1-entry stack), mirroring the
-/// `normalize_fill` shape-tolerance on the JSON nodes path.
-fn parse_fill_stack(raw: &str) -> Result<Vec<jian_ops_schema::style::PenFill>, String> {
-    use jian_ops_schema::style::PenFill;
-    let trimmed = raw.trim_start();
-    if trimmed.starts_with('[') {
-        serde_json::from_str::<Vec<PenFill>>(raw).map_err(|e| format!("invalid `fill` array: {e}"))
-    } else {
-        serde_json::from_str::<PenFill>(raw)
-            .map(|f| vec![f])
-            .map_err(|e| format!("invalid `fill` object: {e}"))
-    }
-}
-
-/// Scan one balanced JSON value (object / array / string / number /
-/// `true` / `false` / `null`) starting at `*i`, advance `*i` past it,
-/// and return the raw slice. Respects nesting + string escapes so a
-/// `}`/`]` inside a string doesn't prematurely close the value.
-fn capture_raw_json_value(bytes: &[u8], i: &mut usize) -> Result<String, String> {
-    skip_ws(bytes, i);
-    if *i >= bytes.len() {
-        return Err("expected a JSON value".into());
-    }
-    let start = *i;
-    match bytes[*i] {
-        b'{' | b'[' => {
-            let mut depth = 0usize;
-            let mut in_str = false;
-            let mut escaped = false;
-            while *i < bytes.len() {
-                let c = bytes[*i];
-                if in_str {
-                    if escaped {
-                        escaped = false;
-                    } else if c == b'\\' {
-                        escaped = true;
-                    } else if c == b'"' {
-                        in_str = false;
-                    }
-                } else {
-                    match c {
-                        b'"' => in_str = true,
-                        b'{' | b'[' => depth += 1,
-                        b'}' | b']' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                *i += 1;
-                                return slice_utf8(bytes, start, *i);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                *i += 1;
-            }
-            Err("unterminated JSON value".into())
-        }
-        b'"' => {
-            // Reuse the string parser to advance past escapes correctly,
-            // then return the original quoted slice.
-            let _ = parse_string(bytes, i)?;
-            slice_utf8(bytes, start, *i)
-        }
-        _ => {
-            // Number / literal — run to the next delimiter.
-            while *i < bytes.len()
-                && !matches!(bytes[*i], b',' | b'}' | b']' | b' ' | b'\t' | b'\n' | b'\r')
-            {
-                *i += 1;
-            }
-            slice_utf8(bytes, start, *i)
-        }
-    }
-}
-
-fn slice_utf8(bytes: &[u8], start: usize, end: usize) -> Result<String, String> {
-    std::str::from_utf8(&bytes[start..end])
-        .map(|s| s.to_string())
-        .map_err(|_| "invalid UTF-8 in JSON value".to_string())
 }
 
 /// Reverse the JSON-string escaping the wire parser left intact.

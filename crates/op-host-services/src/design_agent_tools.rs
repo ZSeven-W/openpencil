@@ -1,34 +1,23 @@
 //! In-process design tool surface for the AI design agent loop.
 //!
-//! Mirrors `chat_canvas_tools.rs` for the 15-tool design toolset (vs the
-//! 7-tool CRUD set). For the 14 MCP-shared tools, schema definitions are
-//! derived from `mcp_serve::schemas::TOOL_SCHEMAS` — the same source the MCP
-//! server advertises — so the in-process and MCP surfaces stay byte-equal as
-//! JSON.
+//! Mirrors `chat_canvas_tools.rs` for the 14-tool design toolset (vs the
+//! 7-tool CRUD set). Schema definitions are derived from
+//! `mcp_serve::schemas::TOOL_SCHEMAS` — the same source the MCP server
+//! advertises — so the in-process and MCP surfaces stay byte-equal as JSON.
 //!
-//! The 15th tool, `emit_elements`, is LOOP-ONLY: it gives the loop the
-//! element-builder surface (the same builders the orchestrator's MANIFEST path
-//! uses, via `crate::emit_elements::EmitElements` →
-//! `op_orchestrator::manifest::parse_manifest`). Its schema is self-contained
-//! in [`crate::emit_elements::EMIT_ELEMENTS_SCHEMA`] rather than `TOOL_SCHEMAS`,
-//! so it never enters the MCP server's advertised catalog.
+//! This module provides the defs + registry + executor that Task 2.3 will
+//! wire into the design agent tool-loop. It does NOT touch `op-orchestrator`
+//! and does NOT wire routing (that is Task 2.3).
 
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
 use op_editor_core::EditorState;
 use op_mcp::ToolRegistry;
 
 use crate::chat_canvas_tools::{execute_chat_tool, execute_with_registry};
-use crate::emit_elements::{EmitElements, EMIT_ELEMENTS_SCHEMA, EMIT_ELEMENTS_TOOL};
 use crate::mcp_serve::schemas;
 
-/// The 15-tool design toolset with auth levels.
-/// Reads = "read"; batch_design / emit_elements / set_variables / spawn_agents
-/// / export_nodes = "create".
-///
-/// `emit_elements` is the loop's element-builder surface (the same builders the
-/// orchestrator's MANIFEST path uses). It is LOOP-ONLY — its schema comes from
-/// [`EMIT_ELEMENTS_SCHEMA`], NOT from `mcp_serve::schemas::TOOL_SCHEMAS`, so the
-/// MCP server's advertised catalog is unchanged.
+/// The 14-tool design toolset with auth levels.
+/// Reads = "read"; batch_design / set_variables / spawn_agents / export_nodes = "create".
 pub const DESIGN_TOOLS: &[(&str, &str)] = &[
     ("get_editor_state", "read"),
     ("get_guidelines", "read"),
@@ -40,7 +29,6 @@ pub const DESIGN_TOOLS: &[(&str, &str)] = &[
     ("snapshot_layout", "read"),
     ("find_empty_space", "read"),
     ("batch_design", "create"),
-    (EMIT_ELEMENTS_TOOL, "create"),
     ("get_screenshot", "read"),
     ("export_nodes", "create"),
     ("spawn_agents", "create"),
@@ -62,17 +50,8 @@ pub fn design_tool_defs() -> Vec<ChatToolDef> {
     DESIGN_TOOLS
         .iter()
         .map(|(name, _)| {
-            // `emit_elements` is loop-only: its schema lives beside the tool
-            // (EMIT_ELEMENTS_SCHEMA), NOT in TOOL_SCHEMAS, so it never enters
-            // the MCP server's advertised catalog. Every other design tool is
-            // sourced from TOOL_SCHEMAS for byte-equal MCP parity.
-            let (description, input_schema_json) = if *name == EMIT_ELEMENTS_TOOL {
-                extract_from_schema_entry(EMIT_ELEMENTS_SCHEMA)
-                    .expect("EMIT_ELEMENTS_SCHEMA must be a valid tool descriptor")
-            } else {
-                extract_from_schemas(name)
-                    .unwrap_or_else(|| panic!("design tool {name} not found in TOOL_SCHEMAS"))
-            };
+            let (description, input_schema_json) = extract_from_schemas(name)
+                .unwrap_or_else(|| panic!("design tool {name} not found in TOOL_SCHEMAS"));
             ChatToolDef {
                 name: name.to_string(),
                 description,
@@ -105,30 +84,7 @@ pub fn execute_design_tool(
         );
     };
     let registry = design_tool_registry(state, name);
-    let (mut result, mutated) = execute_with_registry(state, name, args_json, registry);
-    // Per-batch layout feedback: after every WRITE batch, attach what the real
-    // layout proves wrong (collapses / table overflow / text overflow) so the
-    // model sees each batch's geometric consequences immediately and repairs
-    // them in-process, instead of piling defects up for the loop-end finalize.
-    // Deterministic analogue of Pencil's per-batch snapshot_layout feedback.
-    if mutated && matches!(name, "batch_design" | EMIT_ELEMENTS_TOOL) && !result.is_error {
-        let issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
-        if !issues.is_empty() {
-            if let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&result.content) {
-                if let Some(obj) = envelope.as_object_mut() {
-                    obj.insert("layoutIssues".into(), serde_json::json!(issues));
-                    obj.insert(
-                        "layoutHint".into(),
-                        serde_json::json!(
-                            "The resolved layout has the issues above. Fix them with a follow-up batch_design before building the next section."
-                        ),
-                    );
-                    result.content = envelope.to_string();
-                }
-            }
-        }
-    }
-    (result, mutated)
+    execute_with_registry(state, name, args_json, registry)
 }
 
 /// Unified executor for the design agent pump: design-surface tools
@@ -173,7 +129,6 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
         "get_screenshot" => r.register(Box::new(get_screenshot_snapshot(state))),
         "export_nodes" => r.register(Box::new(export_nodes_snapshot(state))),
         "spawn_agents" => r.register(Box::new(op_mcp::spawn_agents_snapshot())),
-        EMIT_ELEMENTS_TOOL => r.register(Box::new(EmitElements)),
         "ToolSearch" => r.register(Box::new(op_mcp::tool_search_snapshot(
             schemas::TOOL_SCHEMAS,
         ))),
@@ -192,19 +147,13 @@ fn extract_from_schemas(name: &str) -> Option<(String, String)> {
     for entry in schemas::TOOL_SCHEMAS {
         let v: serde_json::Value = serde_json::from_str(entry).ok()?;
         if v.get("name").and_then(|n| n.as_str()) == Some(name) {
-            return extract_from_schema_entry(entry);
+            let description = v.get("description")?.as_str()?.to_string();
+            let input_schema = v.get("inputSchema")?.clone();
+            let input_schema_json = input_schema.to_string();
+            return Some((description, input_schema_json));
         }
     }
     None
-}
-
-/// Parse one tool descriptor JSON string into `(description, inputSchema)`.
-/// Used for `TOOL_SCHEMAS` entries and the loop-only `EMIT_ELEMENTS_SCHEMA`.
-fn extract_from_schema_entry(entry: &str) -> Option<(String, String)> {
-    let v: serde_json::Value = serde_json::from_str(entry).ok()?;
-    let description = v.get("description")?.as_str()?.to_string();
-    let input_schema = v.get("inputSchema")?.clone();
-    Some((description, input_schema.to_string()))
 }
 
 #[cfg(test)]
@@ -212,12 +161,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn design_tool_defs_cover_all_15_tools_with_schema_parity() {
+    fn design_tool_defs_cover_all_14_tools_with_schema_parity() {
         let defs = design_tool_defs();
 
-        // All 15 tools are present (14 MCP-sourced + the loop-only
-        // `emit_elements`).
-        assert_eq!(defs.len(), 15, "expected 15 design tool defs");
+        // All 14 tools are present.
+        assert_eq!(defs.len(), 14, "expected 14 design tool defs");
         for (name, _) in DESIGN_TOOLS {
             assert!(
                 defs.iter().any(|d| d.name == *name),
@@ -225,12 +173,10 @@ mod tests {
             );
         }
 
-        // PARITY: for each MCP-sourced tool, the input_schema_json in the def
-        // must equal the inputSchema value from TOOL_SCHEMAS (as parsed JSON),
-        // so in-process defs stay byte-equal to the MCP server. `emit_elements`
-        // is loop-only and intentionally NOT in TOOL_SCHEMAS — it is parity-
-        // checked separately below against EMIT_ELEMENTS_SCHEMA.
-        for def in defs.iter().filter(|d| d.name != EMIT_ELEMENTS_TOOL) {
+        // PARITY: for each tool, the input_schema_json in the def must
+        // equal the inputSchema value from TOOL_SCHEMAS (as parsed JSON).
+        // This ensures in-process defs stay byte-equal to the MCP server.
+        for def in &defs {
             // Find the matching TOOL_SCHEMAS entry.
             let schema_entry = schemas::TOOL_SCHEMAS
                 .iter()
@@ -259,38 +205,14 @@ mod tests {
             );
         }
 
-        // Every DESIGN_TOOLS entry except the loop-only `emit_elements` must
-        // exist in TOOL_SCHEMAS (no orphans). `emit_elements` is deliberately
-        // absent so it never enters the MCP server's advertised catalog.
-        for (name, _) in DESIGN_TOOLS
-            .iter()
-            .filter(|(n, _)| *n != EMIT_ELEMENTS_TOOL)
-        {
+        // Every DESIGN_TOOLS entry must exist in TOOL_SCHEMAS (no orphans).
+        for (name, _) in DESIGN_TOOLS {
             let found = schemas::TOOL_SCHEMAS.iter().any(|entry| {
                 let v: serde_json::Value = serde_json::from_str(entry).unwrap();
                 v.get("name").and_then(|n| n.as_str()) == Some(*name)
             });
             assert!(found, "design tool {name} is not in TOOL_SCHEMAS — orphan!");
         }
-
-        // `emit_elements` is loop-only: it must NOT be advertised by the MCP
-        // server, and its def must equal EMIT_ELEMENTS_SCHEMA.
-        assert!(
-            !schemas::TOOL_SCHEMAS.iter().any(|entry| {
-                let v: serde_json::Value = serde_json::from_str(entry).unwrap();
-                v.get("name").and_then(|n| n.as_str()) == Some(EMIT_ELEMENTS_TOOL)
-            }),
-            "emit_elements must stay OUT of the MCP server's TOOL_SCHEMAS catalog"
-        );
-        let emit_def = defs
-            .iter()
-            .find(|d| d.name == EMIT_ELEMENTS_TOOL)
-            .expect("emit_elements def present");
-        let canonical: serde_json::Value = serde_json::from_str(EMIT_ELEMENTS_SCHEMA).unwrap();
-        let def_schema: serde_json::Value =
-            serde_json::from_str(&emit_def.input_schema_json).unwrap();
-        assert_eq!(def_schema, canonical["inputSchema"]);
-        assert_eq!(emit_def.level, "create");
     }
 
     #[test]
@@ -327,46 +249,6 @@ mod tests {
         assert!(
             !state.active_children().is_empty(),
             "doc must have a frame after batch_design"
-        );
-    }
-
-    #[test]
-    fn execute_design_batch_design_attaches_per_batch_layout_feedback() {
-        // A batch that lands an OVERFLOWING table (5×240 fixed columns in a
-        // 600px root) must come back with `layoutIssues` — the per-batch
-        // geometry feedback the model repairs in-process.
-        let mut state = EditorState::new();
-        let ops = r#"{"operations":"root=I(null,{\"type\":\"frame\",\"name\":\"Page\",\"width\":600,\"height\":\"fit_content\",\"layout\":\"vertical\",\"children\":[{\"type\":\"frame\",\"name\":\"Client Table\",\"layout\":\"vertical\",\"width\":\"fill_container\",\"children\":[{\"type\":\"frame\",\"name\":\"Row\",\"layout\":\"horizontal\",\"gap\":16,\"width\":\"fill_container\",\"height\":24,\"children\":[{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20}]},{\"type\":\"frame\",\"name\":\"Row\",\"layout\":\"horizontal\",\"gap\":16,\"width\":\"fill_container\",\"height\":24,\"children\":[{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20},{\"type\":\"frame\",\"name\":\"C\",\"width\":240,\"height\":20}]}]}]})"}"#;
-        let (result, mutated) = execute_design_tool(&mut state, "batch_design", ops);
-        assert!(!result.is_error, "batch failed: {}", result.content);
-        assert!(mutated);
-        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
-        let issues = v["layoutIssues"].as_array().expect("layoutIssues attached");
-        assert!(
-            issues
-                .iter()
-                .any(|i| i.as_str().unwrap_or("").contains("column widths")),
-            "table overflow reported, got {issues:?}"
-        );
-        assert!(v["layoutHint"].is_string(), "actionable hint attached");
-    }
-
-    #[test]
-    fn execute_design_clean_batch_attaches_no_layout_feedback() {
-        // A geometrically clean batch must NOT carry layoutIssues noise.
-        let mut state = EditorState::new();
-        let (result, mutated) = execute_design_tool(
-            &mut state,
-            "batch_design",
-            r#"{"operations":"root=I(null,{type:'frame',width:400,height:300})"}"#,
-        );
-        assert!(!result.is_error, "batch failed: {}", result.content);
-        assert!(mutated);
-        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
-        assert!(
-            v.get("layoutIssues").is_none(),
-            "clean layout must not attach issues: {}",
-            result.content
         );
     }
 

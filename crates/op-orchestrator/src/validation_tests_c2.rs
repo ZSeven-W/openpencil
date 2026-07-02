@@ -114,7 +114,7 @@ impl OnceScreenshotProvider {
 }
 
 impl ScreenshotProvider for OnceScreenshotProvider {
-    fn capture_root_frame(&self, _state: &op_editor_core::EditorState) -> Option<String> {
+    fn capture_root_frame(&self) -> Option<String> {
         self.image.lock().unwrap().take()
     }
 }
@@ -133,7 +133,7 @@ impl AlwaysScreenshotProvider {
 }
 
 impl ScreenshotProvider for AlwaysScreenshotProvider {
-    fn capture_root_frame(&self, _state: &op_editor_core::EditorState) -> Option<String> {
+    fn capture_root_frame(&self) -> Option<String> {
         Some(self.image.clone())
     }
 }

@@ -14,8 +14,6 @@ MOBILE APP — MANDATORY THREE-SECTION ARCHITECTURE:
 Every mobile screen is composed as a vertical stack of exactly three sections.
 You MUST define all three before generating any content.
 
-Screen-height contract: the root frame is width=390-393, height="fit_content" seeded at 844. The screen resizes to fit its content — it does NOT lock to a real device height. Never pad to fill an artificial 844px column.
-
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
 The status bar (time, signal, wifi, battery) is **automatically pre-inserted** by the orchestrator as the first child of the root frame. It is a fixed 62px-tall frame with hardcoded path icons.
@@ -65,31 +63,35 @@ DO NOT:
 
 ## 3) BOTTOM TAB BAR — OPTIONAL, INTEGRATED
 
-Do not force bottom navigation into every mobile screen. Use a bottom tab bar only when the product clearly has persistent top-level destinations (Home, Search, Orders, Profile, etc.). If the screen is a single-task flow, omit bottom navigation. 3-5 tabs, top-level destinations only. Make it the LAST child in the screen's vertical stack — never absolutely positioned.
+Do not force bottom navigation into every mobile screen. Use a bottom tab bar only when the product clearly has persistent top-level destinations (Home, Search, Orders, Profile, etc.). If the screen is a single-task flow, omit bottom navigation.
 
-Pick ONE of two idioms and commit:
+Tab Bar Container:
 
-IDIOM A — INTEGRATED BAR (Android / utility / data-dense apps):
-
-- Full screen width, part of the page flow, role="bottom-tab-bar"
-- Height 62-72px; background = same page palette or a subtle tonal surface
+- Full screen width and part of the page flow, not a floating overlay
+- Height: 62-72px including safe-area breathing room
+- Background: same page palette or a subtle tonal surface
 - Separation: quiet 1px divider or tonal contrast only; no detached shadow band
-- Not a floating pill, not a nested rounded capsule, not a separate footer band; direct tab item frames stay transparent (no fill / stroke / rounded tile)
 
-IDIOM B — FLOATING CAPSULE (iOS-native / premium / consumer apps):
+Nav Surface:
 
-- A capsule that floats inset from the edges: ~16px sides, ~12px above the bottom — never flush. Give the screen stack ~12px bottom padding so the capsule clears the edge.
-- ~56px tall, cornerRadius = half the height (true capsule ends), ~6px inner padding
-- Frosted look: tonal surface fill at ~70% opacity + one soft shadow (the only shadowed element on the screen)
-- Selected item sits on a soft accent-tinted capsule highlight; inactive items are transparent
+- Use role="bottom-tab-bar"
+- Not a floating pill, not a nested rounded capsule, and not a separate footer band
+- Direct tab item frames stay transparent: no fill, no stroke, no large rounded tile
 
-Tab Items (both idioms):
+Tab Items (3-5 tabs, top-level destinations only):
 
-- Width / height fill_container; layout vertical, gap 4, centered both axes
-- Icon ~18-22px above a label (10-11px, weight 500-600, sentence case, letterSpacing 0)
-- Selected: accent icon+label, FILLED icon variant. Inactive: muted neutral, OUTLINE icon variant. The fill/outline swap is the primary state signal, not color alone.
+- Width: fill_container, height: fill_container
+- Layout: vertical, gap: 4, centered on both axes
+- Icon: 18px
+- Label: 10-11px, weight 500-600, letterSpacing: 0
 
-Rules: tab switching preserves each tab's state; app content must never be obscured by the bar.
+Active state: accent icon/label color or a tiny 2-3px indicator
+Inactive state: transparent background + muted icon/label color
+
+Rules:
+
+- Tab switching preserves each tab's navigation state
+- App content must never be obscured by the Tab Bar
 
 ## BLUEPRINT (internal planning)
 
@@ -97,7 +99,7 @@ Before generating nodes, mentally verify these three layers are accounted for:
 
 1. Status Bar: standard or edge-to-edge?
 2. App Content: what is the header, primary content, action placement, scroll behavior?
-3. Bottom Bar: None, integrated bar, or floating capsule (which idiom, which tabs)?
+3. Bottom Bar: None or integrated tab bar (which tabs)?
 
 Do NOT output this blueprint as text. Apply it silently through your node structure.
 Your output must remain valid JSON/JSONL only.

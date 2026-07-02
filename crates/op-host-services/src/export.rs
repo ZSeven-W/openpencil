@@ -33,11 +33,7 @@ use std::path::Path as StdPath;
 
 mod export_svg;
 mod scene_painter;
-// `capture_scene` / `CaptureSpec` / `ScreenshotPng` here back BOTH the
-// feature-gated `debug_screenshot` MCP tool AND the always-on
-// orchestrator vision-validation provider (`validation_providers::
-// RealScreenshotProvider`), so the module is ungated. The `EditorState`
-// → scene convenience `capture()` inside it stays `mcp-debug-tools`-gated.
+#[cfg(any(feature = "mcp-debug-tools", test))]
 pub mod screenshot;
 
 pub use export_svg::export_svg;
@@ -121,7 +117,7 @@ pub fn export_raster(
         return Err("no active page".into());
     };
     let bounds = page_bounds(page).ok_or("nothing to export")?;
-    render_raster(bounds, target, format, scale, MARGIN, |canvas| {
+    render_raster(bounds, target, format, scale, |canvas| {
         paint_nodes(canvas, &page.children);
     })
 }
@@ -138,22 +134,6 @@ pub fn export_node_raster(
     format: RasterFormat,
     scale: f32,
 ) -> Result<(), String> {
-    export_node_raster_with_margin(scene, node_id, target, format, scale, MARGIN)
-}
-
-/// Like [`export_node_raster`] but with a caller-chosen transparent
-/// border (`margin`, doc px) around the node bounds. `margin = 0.0`
-/// gives a tight crop matching other tools' node exports (e.g. Pencil
-/// `export_nodes`), which the render-parity benchmark needs so per-node
-/// bbox comparisons aren't skewed by the default 16 px export frame.
-pub fn export_node_raster_with_margin(
-    scene: &LayoutScene,
-    node_id: &str,
-    target: &StdPath,
-    format: RasterFormat,
-    scale: f32,
-    margin: f32,
-) -> Result<(), String> {
     let scale = clamp_scale(scale);
     let Some(page) = scene.active_page() else {
         return Err("no active page".into());
@@ -166,7 +146,7 @@ pub fn export_node_raster_with_margin(
     let bounds = acc
         .into_rect()
         .ok_or_else(|| format!("node {node_id} paints nothing"))?;
-    render_raster(bounds, target, format, scale, margin.max(0.0), |canvas| {
+    render_raster(bounds, target, format, scale, |canvas| {
         paint_node(canvas, node);
     })
 }
@@ -218,10 +198,9 @@ fn render_raster(
     target: &StdPath,
     format: RasterFormat,
     scale: f32,
-    margin: f32,
     paint: impl FnOnce(&Canvas),
 ) -> Result<(), String> {
-    let data = render_raster_bytes(bounds, format, scale, margin, paint)?;
+    let data = render_raster_bytes(bounds, format, scale, MARGIN, paint)?;
     std::fs::write(target, data).map_err(|e| e.to_string())?;
     Ok(())
 }

@@ -168,15 +168,6 @@ fn compact_subagent_skills<T: SkillNamed>(
             // resolve layer; a no-op when the flag is off, required when
             // on (same pattern as `elements` below).
             "element-manifest",
-            // Component-instance teaching — gated on `hasReusableComponents`
-            // at the resolve layer (only resolves in when a component library
-            // is loaded). A no-op when the flag is off (the skill was never
-            // matched), required when on: without it a Basic-tier model gets
-            // the AVAILABLE COMPONENTS manifest but no teaching on HOW to emit
-            // `{type:"ref",ref:"<id>",descendants:{...}}`, so it ignores the
-            // components and builds from scratch (0 ref instances). Same
-            // flag-gated allow-set pattern as `elements` / `element-manifest`.
-            "component-composition",
             "layout",
             "overflow",
             "text-rules",
@@ -223,14 +214,6 @@ fn compact_subagent_skills<T: SkillNamed>(
                 // under the tight retry budget. (Codex review 2026-06-06.)
                 "design-system",
                 "cjk-typography",
-                // Kept on the retry too: `build_subagent_prompt` still injects
-                // the AVAILABLE COMPONENTS manifest on a reduced-complexity
-                // retry (the manifest block is gated on the library being
-                // non-empty, NOT on `reduced_complexity`), so dropping the
-                // teaching here would leave the model the component list with
-                // no `ref` syntax — the exact mismatch this fix removes.
-                // Flag-gated at the resolve layer, so a no-op without a library.
-                "component-composition",
             ];
             next.retain(|s| RETRY_ALLOWED.contains(&s.skill_name()));
         }
@@ -451,46 +434,23 @@ mod tests {
 
     #[test]
     fn basic_tier_allow_set_drops_non_allowed_skills() {
-        // `examples` is not in the Basic allow-set; `component-composition` IS
-        // (flag-gated — only resolves in when a component library exists, then
-        // must survive so the model gets the `ref` teaching).
+        // `component-composition` / `examples` are not in the Basic allow-set.
         let input = skills(&[
             "schema",
             "layout",
             "cjk-typography",
+            "component-composition",
             "examples",
             "jsonl-format-simplified",
         ]);
         let out = filter(input, ModelTier::Basic, false, false);
         let got = names(&out);
+        assert!(!got.contains(&"component-composition"));
         assert!(!got.contains(&"examples"));
         assert!(got.contains(&"schema"));
         assert!(got.contains(&"layout"));
         assert!(got.contains(&"cjk-typography"));
         assert!(got.contains(&"jsonl-format-simplified"));
-    }
-
-    #[test]
-    fn basic_tier_allow_set_keeps_component_composition() {
-        // Regression guard: when a component library is loaded the
-        // `component-composition` skill resolves in behind the
-        // `hasReusableComponents` flag. The Basic-tier allow-set used to drop
-        // it (DropReason::TierFiltered) even with budget room, so a weak model
-        // got the AVAILABLE COMPONENTS manifest but no `ref` teaching → 0
-        // component instances. It must now survive — non-reduced AND reduced.
-        let input = skills(&["schema", "layout", "component-composition"]);
-        // Non-reduced Basic.
-        let out = filter(input.clone(), ModelTier::Basic, false, false);
-        assert!(
-            names(&out).contains(&"component-composition"),
-            "Basic tier must keep component-composition when a library is present"
-        );
-        // Reduced-complexity Basic retry (manifest is still injected on retry).
-        let out_reduced = filter(input, ModelTier::Basic, false, true);
-        assert!(
-            names(&out_reduced).contains(&"component-composition"),
-            "Basic reduced retry must keep component-composition (manifest still injected)"
-        );
     }
 
     #[test]

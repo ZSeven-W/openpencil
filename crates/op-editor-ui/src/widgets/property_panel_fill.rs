@@ -42,14 +42,6 @@ pub fn fill_type_label(
         FillType::Solid => "fill.solid",
         FillType::LinearGradient => "fill.linear",
         FillType::RadialGradient => "fill.radial",
-        // No dedicated TS-generated `fill.mesh` key yet; the translate
-        // fallback yields the key literal, which is acceptable until the
-        // deferred per-vertex mesh editor UI lands.
-        FillType::MeshGradient => "fill.mesh",
-        // No dedicated TS-generated `fill.shader` key yet; the translate
-        // fallback yields the key literal, acceptable for the render-only
-        // head-row label (v1 ships no shader authoring UI).
-        FillType::Shader => "fill.shader",
         FillType::Image => "fill.image",
     };
     op_i18n::translate(locale, key)
@@ -103,14 +95,7 @@ pub fn fill_row_body_height(
     use op_editor_core::FillType;
     match fill_type {
         FillType::Solid => INPUT_HEIGHT + 6.0,
-        // Mesh + Shader join the gradient/image group: head-row only
-        // (mesh's per-vertex editor and shader authoring are both
-        // deferred — shader is render-only in v1), so no body.
-        FillType::LinearGradient
-        | FillType::RadialGradient
-        | FillType::MeshGradient
-        | FillType::Shader
-        | FillType::Image => {
+        FillType::LinearGradient | FillType::RadialGradient | FillType::Image => {
             if is_primary {
                 fill_body_height_with_stops(fill_type, primary_stop_count)
             } else {
@@ -279,30 +264,6 @@ fn paint_one_fill(
             cx.backend
                 .stroke_round_rect(swatch_rect, 4.0, theme.border, 1.0);
         }
-        FillType::MeshGradient => {
-            // Four-quadrant preview reads as a corner mesh: the resolved
-            // first-vertex colour plus black/white/muted corners.
-            let hw = swatch_rect.size.x / 2.0;
-            let hh = swatch_rect.size.y / 2.0;
-            let quad = |ox: f32, oy: f32| Rect {
-                origin: Point2D::new(swatch_rect.origin.x + ox, swatch_rect.origin.y + oy),
-                size: Point2D::new(hw, hh),
-            };
-            cx.backend.fill_round_rect(quad(0.0, 0.0), 0.0, fill_color);
-            cx.backend.fill_round_rect(quad(hw, 0.0), 0.0, Color::WHITE);
-            cx.backend.fill_round_rect(quad(0.0, hh), 0.0, Color::BLACK);
-            cx.backend.fill_round_rect(quad(hw, hh), 0.0, theme.muted);
-            cx.backend
-                .stroke_round_rect(swatch_rect, 4.0, theme.border, 1.0);
-        }
-        FillType::Shader => {
-            // Render-only shader fill: preview as the resolved fallback
-            // colour (the shader's first colour uniform / mid-gray) so the
-            // head row still reads as a fill swatch.
-            cx.backend.fill_round_rect(swatch_rect, 4.0, fill_color);
-            cx.backend
-                .stroke_round_rect(swatch_rect, 4.0, theme.border, 1.0);
-        }
         FillType::Image => {
             cx.backend.fill_round_rect(swatch_rect, 4.0, theme.muted);
             cx.backend
@@ -456,14 +417,7 @@ fn paint_one_fill(
         FillType::Image if is_primary => {
             paint_fill_image_body(cx, theme, snapshot, locale, x, y, width);
         }
-        // Mesh + Shader have no inline body editor (per-vertex editing /
-        // shader authoring are deferred — shader is render-only in v1);
-        // both show head-row only, same as a non-primary gradient/image.
-        FillType::LinearGradient
-        | FillType::RadialGradient
-        | FillType::MeshGradient
-        | FillType::Shader
-        | FillType::Image => {}
+        FillType::LinearGradient | FillType::RadialGradient | FillType::Image => {}
     }
     y += fill_row_body_height(fill_type, is_primary, primary_stop_count);
     y

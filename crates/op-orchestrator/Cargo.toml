@@ -11,23 +11,11 @@ repository.workspace = true
 op-editor-core = { path = "../op-editor-core" }
 op-mcp = { path = "../op-mcp" }
 op-ai-skills = { path = "../op-ai-skills" }
-# Real jian flex layout (resolved absolute rects) for geometry-driven structural
-# validation — the deterministic analogue of Pencil's per-batch snapshot_layout.
-# Already in the dep tree via op-mcp; direct dep makes `editor_state_to_layout_scene`
-# callable. Default features (skia-measure) match op-mcp's snapshot_layout.
-op-pen-loader = { path = "../op-pen-loader" }
-jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 futures = "0.3"
 regex = "1"
-# Embedded QuickJS (full ES) for the script-gen path (OPENPENCIL_SCRIPT_GEN):
-# the LLM writes a real JS program (loops/arrays) calling a bound `I(parent,obj)`;
-# the engine serializes each obj to clean JSON, eliminating hand-written-JSON
-# brace/quote typos. native-only crate (op-host-web never enables the `design`
-# feature that pulls op-orchestrator), so the bundled C engine never hits wasm.
-rquickjs = "0.9"
 tracing = { workspace = true }
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 
