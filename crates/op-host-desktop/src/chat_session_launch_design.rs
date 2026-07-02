@@ -24,10 +24,7 @@ use super::clear_fresh_starter_frame_for_design;
 /// directly — testable without env-var flakiness. Accepts "1", "true",
 /// and "on" (after trimming); everything else (including `None`) → false.
 pub fn parse_loop_flag(opt: Option<&str>) -> bool {
-    matches!(
-        opt.map(str::trim),
-        Some("1") | Some("true") | Some("on")
-    )
+    matches!(opt.map(str::trim), Some("1") | Some("true") | Some("on"))
 }
 
 /// Pure predicate for the design-agent-loop gate.
@@ -74,7 +71,9 @@ pub(crate) fn builtin_provider_with_design_tools(
         .find(|agent| agent.id == id && agent.ready())?;
     let provider = ConfiguredBuiltinProvider::from_builtin_agent(config)?;
     let (executor, tool_rx) = chat_tool_channel();
-    let provider = provider.with_canvas_tools(design_tool_defs(), Arc::new(executor));
+    let provider = provider
+        .with_canvas_tools(design_tool_defs(), Arc::new(executor))
+        .with_loop_finalize();
     Some((Box::new(provider), tool_rx))
 }
 

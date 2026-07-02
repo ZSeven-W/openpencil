@@ -58,12 +58,7 @@ pub(crate) fn register_new_frames(indicator: &DesignLoopIndicator, state: &Edito
         if let PenNode::Frame(_) = node {
             let id = node.id_str();
             if !indicator.initial_frame_ids.contains(id) {
-                agent_indicators::add_frame(
-                    indicator.epoch,
-                    id,
-                    &indicator.color,
-                    &indicator.name,
-                );
+                agent_indicators::add_frame(indicator.epoch, id, &indicator.color, &indicator.name);
             }
         }
     }
@@ -88,7 +83,10 @@ pub(super) fn pump_indicator(
     if state.chat.agents_running.0 > 0 && indicator.is_none() {
         let epoch = agent_indicators::begin();
         let identities = assign_agent_identities(1);
-        let id = identities.into_iter().next().expect("assign_agent_identities(1) always yields one");
+        let id = identities
+            .into_iter()
+            .next()
+            .expect("assign_agent_identities(1) always yields one");
         let initial = collect_top_level_frame_ids(state);
         *indicator = Some(DesignLoopIndicator {
             epoch,

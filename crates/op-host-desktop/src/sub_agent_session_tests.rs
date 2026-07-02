@@ -197,19 +197,13 @@ fn stash_top_level_succeeds_nested_refused() {
 
     // Top-level stashes; the host picks it up exactly once.
     let ok = stash_pending_spawn(
-        vec![
-            spec("A", &[], "brand", &[]),
-            spec("B", &[], "brand", &[]),
-        ],
+        vec![spec("A", &[], "brand", &[]), spec("B", &[], "brand", &[])],
         false,
     );
     assert!(ok, "top-level spawn must stash");
     let taken = take_pending_spawn().expect("specs were stashed");
     assert_eq!(taken.len(), 2);
-    assert!(
-        take_pending_spawn().is_none(),
-        "the stash is consumed once"
-    );
+    assert!(take_pending_spawn().is_none(), "the stash is consumed once");
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +292,10 @@ fn lazy_epoch_keeps_each_active_subs_badges_live_in_sequence() {
     // Sub-0 finishes: end its epoch (retires badges), THEN sub-1 begins.
     agent_indicators::end_if_epoch(epoch0);
     let epoch1 = agent_indicators::begin();
-    assert!(epoch1 > epoch0, "each active sub gets a fresh, higher epoch");
+    assert!(
+        epoch1 > epoch0,
+        "each active sub gets a fresh, higher epoch"
+    );
     let initial1 = collect_top_level_frame_ids(&state); // includes frame0
     let ind1 = DesignLoopIndicator {
         epoch: epoch1,

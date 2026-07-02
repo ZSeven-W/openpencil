@@ -135,7 +135,7 @@ pub fn maybe_downscale_data_url(url: &str) -> Option<String> {
     if !meta.contains(";base64") {
         return None;
     }
-    let bytes = B64.decode(after_scheme[comma + 1..].as_bytes()).ok()?;
+    let bytes = B64.decode(&after_scheme.as_bytes()[comma + 1..]).ok()?;
     let (mime, scaled) = maybe_downscale(&bytes)?;
     Some(format!("data:{mime};base64,{}", B64.encode(&scaled)))
 }
