@@ -177,3 +177,79 @@ fn loop_finalize_on_empty_doc_is_noop() {
     apply_loop_finalize(&mut state);
     assert!(state.active_children().is_empty());
 }
+
+/// The reported glm bug shape (a single page-root wrapper whose first child is a
+/// full-width sidebar) is restructured into a horizontal `[sidebar | Main
+/// Content]` app-shell by `apply_loop_finalize`, AND the restructure survives
+/// the subsequent Class-A passes — in particular the sidebar is NOT re-widened
+/// by `fix_horizontal_overflow` (the guard added for this).
+#[test]
+fn loop_finalize_restructures_sidebar_dashboard() {
+    let mut state = state_with_forest(json!([
+        {
+            "type": "frame", "id": "root", "name": "Barbershop Client Management",
+            "width": 1200, "height": 1775, "layout": "vertical", "gap": 32,
+            "children": [
+                { "type": "frame", "id": "sb", "name": "Sidebar Navigation",
+                  "width": 1200, "height": 605, "layout": "vertical",
+                  "children": [
+                    { "type": "frame", "id": "logo", "name": "Logo",
+                      "width": 1152, "height": 27, "layout": "vertical", "children": [] }
+                  ] },
+                { "type": "frame", "id": "hd", "name": "Top Header",
+                  "width": 1200, "height": 94, "layout": "vertical", "children": [] },
+                { "type": "frame", "id": "km", "name": "Key Metrics",
+                  "width": 1200, "height": 117, "layout": "horizontal", "children": [] },
+                { "type": "frame", "id": "ct", "name": "Client Table Section",
+                  "width": 1200, "height": 488, "layout": "vertical", "children": [] },
+                { "type": "frame", "id": "ua", "name": "Upcoming Appointments",
+                  "width": 1200, "height": 391, "layout": "vertical", "children": [] }
+            ]
+        }
+    ]));
+    apply_loop_finalize(&mut state);
+
+    let root = &state.active_children()[0];
+    let rv = serde_json::to_value(root).unwrap();
+    assert_eq!(
+        rv.get("layout").and_then(|l| l.as_str()),
+        Some("horizontal"),
+        "root restructured to a horizontal app-shell"
+    );
+    assert_eq!(
+        rv["children"].as_array().unwrap().len(),
+        2,
+        "[sidebar | Main Content]"
+    );
+
+    // Sidebar stayed a narrow left column through the whole sequence (the
+    // fix_horizontal_overflow guard must NOT re-widen this vertical frame).
+    let sidebar = find_by_name(state.active_children(), "Sidebar Navigation").unwrap();
+    let sv = serde_json::to_value(sidebar).unwrap();
+    assert!(
+        sv["width"].as_f64().is_some_and(|w| w <= 300.0),
+        "sidebar must stay narrow, got {:?}",
+        sv["width"]
+    );
+
+    // The data sections moved into the new content column, in order.
+    let content =
+        find_by_name(state.active_children(), "Main Content").expect("content column created");
+    let cv = serde_json::to_value(content).unwrap();
+    let names: Vec<String> = cv["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap_or("").to_string())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Top Header",
+            "Key Metrics",
+            "Client Table Section",
+            "Upcoming Appointments"
+        ],
+        "data sections nested under Main Content in order"
+    );
+}
