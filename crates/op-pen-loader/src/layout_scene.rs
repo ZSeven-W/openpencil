@@ -216,9 +216,25 @@ fn node_payload_to_scene(
             .gradient
             .as_ref()
             .map(|g| scale_gradient_opacity(payload_gradient_to_scene(g), cum_opacity)),
-        // The payload path doesn't carry SkSL shader bodies yet — the
-        // scene painter degrades to the resolved `fill` colour.
-        shader: None,
+        shader: node.shader.as_ref().map(|s| {
+            jian_scene::layout_scene::SceneShader {
+                sksl: s.sksl.clone(),
+                uniforms: s
+                    .uniforms
+                    .iter()
+                    .map(
+                        |(name, values)| jian_scene::layout_scene::SceneShaderUniform {
+                            name: name.clone(),
+                            values: values.clone(),
+                        },
+                    )
+                    .collect(),
+                // Node opacity folds into the paint alpha, same as the
+                // gradient path above.
+                opacity: (s.opacity * cum_opacity).clamp(0.0, 1.0),
+                fallback: array_to_color(s.fallback),
+            }
+        }),
         stroke: node.stroke.as_ref().map(|s| {
             let mut st = scene_stroke(s, &node_id, var_table);
             st.color = mul_alpha(st.color, cum_opacity);
@@ -526,6 +542,17 @@ fn payload_gradient_to_scene(g: &GradientPayload) -> SceneGradient {
             opacity: *opacity,
             stops: stops.iter().map(stop_to_scene).collect(),
         },
+        GradientPayload::Mesh {
+            rows,
+            cols,
+            colors,
+            opacity,
+        } => SceneGradient::Mesh {
+            rows: *rows,
+            cols: *cols,
+            colors: colors.iter().map(|c| array_to_color(*c)).collect(),
+            opacity: *opacity,
+        },
     }
 }
 
@@ -542,6 +569,8 @@ fn str_to_scene_fill_type(s: &str) -> SceneFillType {
     match s {
         "linear" => SceneFillType::LinearGradient,
         "radial" => SceneFillType::RadialGradient,
+        "mesh" => SceneFillType::MeshGradient,
+        "shader" => SceneFillType::Shader,
         "image" => SceneFillType::Image,
         _ => SceneFillType::Solid,
     }

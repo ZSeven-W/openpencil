@@ -810,3 +810,76 @@ fn pen_document_to_layout_scene_matches_editor_state_path() {
         "bare-doc scene must equal the editor-state scene for a cache-free doc"
     );
 }
+
+#[test]
+fn mesh_gradient_fill_threads_into_scene_node() {
+    // The REAL editor path: a `.op` mesh_gradient first-fill must come
+    // out of EditorState → scene as `SceneGradient::Mesh` so the canvas
+    // dispatch reaches the backend's Gouraud painter — otherwise the
+    // node silently flattens to the first vertex colour.
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
+        "type":"rectangle","id":"r","width":100,"height":50,
+        "fill":[{"type":"mesh_gradient","rows":2,"cols":2,
+                 "stops":[{"row":0,"col":0,"color":"#FF0000"},
+                          {"row":0,"col":1,"color":"#00FF00"},
+                          {"row":1,"col":0,"color":"#0000FF"},
+                          {"row":1,"col":1,"color":"#FFFFFF"}]}]
+      }]}],"children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let n = &scene.pages[0].children[0];
+    assert_eq!(
+        n.fill_type,
+        jian_scene::layout_scene::SceneFillType::MeshGradient
+    );
+    match n.gradient.as_ref().expect("mesh gradient must populate") {
+        jian_scene::layout_scene::SceneGradient::Mesh {
+            rows,
+            cols,
+            colors,
+            opacity,
+        } => {
+            assert_eq!((*rows, *cols), (2, 2));
+            assert_eq!(colors.len(), 4);
+            assert!(colors[0].r > 0.99 && colors[0].g < 0.01, "vertex (0,0) red");
+            assert!(colors[3].b > 0.99, "vertex (1,1) white");
+            assert!((*opacity - 1.0).abs() < 1e-6);
+        }
+        other => panic!("expected mesh, got {other:?}"),
+    }
+}
+
+#[test]
+fn shader_fill_threads_into_scene_node() {
+    // Same reachability proof for SkSL shader fills: the scene must
+    // carry the program + resolved uniforms + fallback so the native
+    // painter can compile it and every other painter shows the
+    // fallback solid.
+    let src = r##"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
+        "type":"rectangle","id":"r","width":100,"height":50,
+        "fill":[{"type":"shader",
+                 "sksl":"half4 main(float2 p){ return half4(1.0,0.0,0.0,1.0); }",
+                 "uniforms":{"u_tint":"#336699","u_mix":0.25}}]
+      }]}],"children":[]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let n = &scene.pages[0].children[0];
+    assert_eq!(n.fill_type, jian_scene::layout_scene::SceneFillType::Shader);
+    let s = n.shader.as_ref().expect("scene shader must populate");
+    assert!(s.sksl.contains("half4 main"));
+    assert_eq!(s.uniforms.len(), 2, "both uniforms resolve");
+    let tint = s
+        .uniforms
+        .iter()
+        .find(|u| u.name == "u_tint")
+        .expect("colour uniform");
+    assert_eq!(tint.values.len(), 4, "colour expands to a vec4");
+    // Fallback = the first colour uniform (#336699), not mid-gray.
+    assert!((s.fallback.b - 0x99 as f32 / 255.0).abs() < 0.01);
+    // The scene's flat `fill` matches the fallback so painters without
+    // shader support (web) show the same colour.
+    let flat = n.fill.expect("fallback fill");
+    assert!((flat.b - 0x99 as f32 / 255.0).abs() < 0.01);
+}
