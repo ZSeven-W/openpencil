@@ -38,6 +38,7 @@ pub(crate) fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         collapsed: false,
         fill_type: "solid".into(),
         gradient: None,
+        shader: None,
         points: Vec::new(),
         path_anchors: Vec::new(),
         path_closed: false,
@@ -88,6 +89,7 @@ pub(crate) fn assign_first_fill(p: &mut NodePayload, fills: Option<&[PenFill]>) 
     p.fill = first_solid_color(fills);
     p.fill_type = first_fill_type(fills);
     p.gradient = first_gradient(fills);
+    p.shader = first_shader(fills);
     if let Some((url, fit, adjustments)) = first_image_fill(fills) {
         p.image_src = Some(url);
         p.image_fit = Some(fit);
@@ -211,8 +213,88 @@ fn first_gradient(fills: Option<&[PenFill]>) -> Option<GradientPayload> {
                 stops,
             })
         }
+        PenFill::MeshGradient(body) => mesh_gradient_payload(body),
         _ => None,
     }
+}
+
+/// `MeshGradientBody` → row-major colour lattice. Mirrors `jian-core`'s
+/// `try_mesh_gradient`: needs a `>= 2×2` grid and at least one valid
+/// vertex; unspecified vertices stay transparent so a sparse mesh
+/// still triangulates.
+fn mesh_gradient_payload(
+    body: &jian_ops_schema::style::MeshGradientBody,
+) -> Option<GradientPayload> {
+    let rows = body.rows;
+    let cols = body.cols;
+    if rows < 2 || cols < 2 {
+        return None;
+    }
+    let mut colors = vec![[0.0, 0.0, 0.0, 0.0]; (rows * cols) as usize];
+    let mut any = false;
+    for stop in &body.stops {
+        if stop.row >= rows || stop.col >= cols {
+            continue;
+        }
+        let Some(rgba) = parse_hex(&stop.color) else {
+            continue;
+        };
+        colors[(stop.row * cols + stop.col) as usize] = rgba;
+        any = true;
+    }
+    if !any {
+        return None;
+    }
+    Some(GradientPayload::Mesh {
+        rows,
+        cols,
+        colors,
+        opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
+    })
+}
+
+/// `ShaderFillBody` → resolved shader payload. Mirrors `jian-core`'s
+/// `try_shader`: uniforms resolve here (a `color` hex expands to a
+/// premultiplied-RGBA vec4); the fallback solid is the first `color`
+/// uniform, else mid-gray, so a compile failure still paints a
+/// visible block instead of vanishing.
+fn first_shader(fills: Option<&[PenFill]>) -> Option<crate::payload::ShaderPayload> {
+    use jian_ops_schema::style::ShaderUniformValue;
+    let fills = fills?;
+    let Some(PenFill::Shader(body)) = fills.first() else {
+        return None;
+    };
+    if body.sksl.trim().is_empty() {
+        return None;
+    }
+    let mut uniforms: Vec<(String, Vec<f32>)> = Vec::new();
+    let mut fallback: Option<[f32; 4]> = None;
+    if let Some(map) = body.uniforms.as_ref() {
+        for (name, value) in map {
+            match value {
+                ShaderUniformValue::Float(f) => uniforms.push((name.clone(), vec![*f])),
+                ShaderUniformValue::Vec(values) => {
+                    if !values.is_empty() {
+                        uniforms.push((name.clone(), values.clone()));
+                    }
+                }
+                ShaderUniformValue::Color(hex) => {
+                    if let Some([r, g, b, a]) = parse_hex(hex) {
+                        uniforms.push((name.clone(), vec![r * a, g * a, b * a, a]));
+                        if fallback.is_none() {
+                            fallback = Some([r, g, b, a]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Some(crate::payload::ShaderPayload {
+        sksl: body.sksl.clone(),
+        uniforms,
+        opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
+        fallback: fallback.unwrap_or([0.5, 0.5, 0.5, 1.0]),
+    })
 }
 
 fn gradient_stops(
@@ -263,9 +345,22 @@ fn first_solid_color(fills: Option<&[PenFill]>) -> Option<[f32; 4]> {
                 }
             }
             PenFill::Shader(body) => {
-                // Payload painters can't run SkSL — mid-gray fallback
-                // (mirrors SceneShader::fallback's default).
-                return Some(apply_alpha([0.5, 0.5, 0.5, 1.0], body.opacity));
+                // Painters that can't run SkSL show the shader's
+                // fallback solid: first `color` uniform, else mid-gray
+                // (same rule as `first_shader` / jian's `try_shader`).
+                let fallback = body
+                    .uniforms
+                    .as_ref()
+                    .and_then(|map| {
+                        map.values().find_map(|v| match v {
+                            jian_ops_schema::style::ShaderUniformValue::Color(hex) => {
+                                parse_hex(hex)
+                            }
+                            _ => None,
+                        })
+                    })
+                    .unwrap_or([0.5, 0.5, 0.5, 1.0]);
+                return Some(apply_alpha(fallback, body.opacity));
             }
             PenFill::Image(_) => {
                 return Some([0.85, 0.86, 0.88, 1.0]);
@@ -282,6 +377,8 @@ fn first_fill_type(fills: Option<&[PenFill]>) -> String {
     match fills.first() {
         Some(PenFill::LinearGradient(_)) => "linear".into(),
         Some(PenFill::RadialGradient(_)) => "radial".into(),
+        Some(PenFill::MeshGradient(_)) => "mesh".into(),
+        Some(PenFill::Shader(_)) => "shader".into(),
         Some(PenFill::Image(_)) => "image".into(),
         _ => "solid".into(),
     }
