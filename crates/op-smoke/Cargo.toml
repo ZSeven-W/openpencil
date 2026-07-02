@@ -33,6 +33,12 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # harvested component library (.lib.op) into the doc before generation so the
 # generator can instantiate its reusable masters.
 op-pen-loader = { path = "../op-pen-loader" }
+# `batch_design_snapshot` + `BatchDesign` MCP tool — the program-mode
+# (OPENPENCIL_SMOKE_PROGRAM=<file>) runs a Pencil-style batch_design DSL program
+# (binding=I(parent,{...}) tree-builder) against the doc, bypassing the
+# orchestrator, to test whether emitting a PROGRAM (parent-by-reference) instead
+# of flat JSONL cures weak-model row decomposition / missing rows.
+op-mcp = { path = "../op-mcp" }
 # Loop mode (OPENPENCIL_SMOKE_LOOP=1) — the headless agentic tool-loop reuses
 # the production builtin provider + design-tool apply path from op-host-services
 # (`ConfiguredBuiltinProvider`, `design_tool_defs`, `execute_agent_tool`) and the
