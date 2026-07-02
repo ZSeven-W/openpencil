@@ -50,6 +50,15 @@ ignore = [
   # maintained replacement, and the advisory is informational (no
   # vulnerability). Revisit when the upstream font crates migrate off it.
   "RUSTSEC-2026-0192",
+  # quick-xml < 0.41 DoS advisories (quadratic duplicate-attribute check /
+  # unbounded NsReader namespace allocation). quick-xml reaches this tree
+  # only through the Linux windowing + D-Bus stacks — wayland-scanner
+  # (parses the BUNDLED wayland protocol XML at build time) and
+  # zbus_xml/ashpd (parse local D-Bus introspection replies) — never
+  # attacker-controlled XML. No upgrade path until wayland-scanner /
+  # zbus_xml bump their quick-xml requirement to >= 0.41.
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
 ]
 
 [bans]
