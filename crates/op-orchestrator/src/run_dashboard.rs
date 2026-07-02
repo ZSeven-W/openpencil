@@ -5,7 +5,7 @@
 //! sequential (non-concurrent) request.  The concurrent path never uses
 //! the dashboard treatment (spec §2).
 
-use crate::cleanup::{descendant_count, run_cleanup_passes};
+use crate::cleanup::{descendant_count, finalize_design};
 use crate::dashboard_columns::{
     extract_sidebar_surface_color, is_sidebar_subtask, normalize_dashboard_main_subtasks,
     reorder_dashboard_main_children,
@@ -291,7 +291,7 @@ pub(crate) async fn run_dashboard_path(
     }
 
     // -- 阶段 4 (dashboard): 清理 —— height-fit on BOTH columns --
-    run_cleanup_passes(sink, &plan, &[&live_sidebar_id, &live_main_id]);
+    finalize_design(sink, &plan, &[&live_sidebar_id, &live_main_id]);
     on_progress(Progress::CleanupDone);
 
     // -- 阶段 4.5: 收尾 --

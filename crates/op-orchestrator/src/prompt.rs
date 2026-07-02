@@ -31,6 +31,7 @@ use op_ai_skills::{
     DropReason, DroppedSkill, Phase, ResolveOptions, ResolvedSkill, SkillLoadEntry,
     SkillLoadReport,
 };
+use op_editor_core::ComponentLibrary;
 use std::collections::HashMap;
 
 /// sub-agent 阶段要求模型产出的 JSON 形状说明。
@@ -526,6 +527,114 @@ fn resolve_generation_skills_after_prompt_filter(
     (trimmed, report, filter_drops)
 }
 
+/// Max component entries listed in the AVAILABLE COMPONENTS manifest. A large
+/// harvested library (shadcn, an imported design kit) can hold hundreds of
+/// masters; listing them all would blow the prompt budget, so the manifest
+/// caps at this many (grouped by category, alphabetical within a category) and
+/// notes the remainder.
+const MAX_COMPONENT_MANIFEST_ENTRIES: usize = 60;
+
+/// Best-effort category bucket for a component, derived from its name. Pencil /
+/// shadcn kits name components like "Primary Button", "Card", "Nav Item",
+/// "Input"; bucketing by a recognised keyword groups the manifest so the model
+/// scans a short, readable list instead of a flat dump.
+fn component_category(name: &str) -> &'static str {
+    let n = name.to_ascii_lowercase();
+    let has = |kw: &str| n.contains(kw);
+    if has("button") || has("btn") || has("cta") {
+        "Buttons"
+    } else if has("input") || has("field") || has("textarea") || has("select") || has("search") {
+        "Inputs"
+    } else if has("card") || has("tile") || has("panel") {
+        "Cards"
+    } else if has("nav") || has("tab") || has("menu") || has("sidebar") || has("breadcrumb") {
+        "Navigation"
+    } else if has("badge") || has("chip") || has("tag") || has("pill") || has("label") {
+        "Badges"
+    } else if has("avatar") || has("icon") || has("image") || has("logo") {
+        "Media"
+    } else if has("modal") || has("dialog") || has("popover") || has("tooltip") || has("toast") {
+        "Overlays"
+    } else if has("table") || has("row") || has("list") || has("cell") {
+        "Tables & Lists"
+    } else if has("header") || has("footer") || has("hero") || has("section") {
+        "Layout"
+    } else {
+        "Other"
+    }
+}
+
+/// Stable category order so the manifest reads consistently across runs.
+const COMPONENT_CATEGORY_ORDER: &[&str] = &[
+    "Buttons",
+    "Inputs",
+    "Cards",
+    "Navigation",
+    "Badges",
+    "Media",
+    "Overlays",
+    "Tables & Lists",
+    "Layout",
+    "Other",
+];
+
+/// Build the AVAILABLE COMPONENTS manifest block for the generation prompt.
+///
+/// Returns `None` when the library is empty — so a no-component document's
+/// prompt is byte-for-byte unchanged (the block + the `component-composition`
+/// skill flag only fire when masters exist). When present, the block lists
+/// `id (Name)` entries grouped by category, capped at
+/// [`MAX_COMPONENT_MANIFEST_ENTRIES`], plus a one-line instruction pointing the
+/// model at the `ref` + `descendants` syntax taught by the
+/// `component-composition` skill.
+fn available_components_manifest(components: &ComponentLibrary) -> Option<String> {
+    if components.is_empty() {
+        return None;
+    }
+    // Bucket components by category, preserving registry order within a bucket.
+    let mut by_category: HashMap<&'static str, Vec<(&str, &str)>> = HashMap::new();
+    for c in &components.components {
+        by_category
+            .entry(component_category(&c.name))
+            .or_default()
+            .push((c.id.as_str(), c.name.as_str()));
+    }
+
+    let total = components.len();
+    let mut lines = vec![format!(
+        "AVAILABLE COMPONENTS ({total} reusable components in this document — \
+         PREFER instantiating these with a `ref` node over building from scratch):"
+    )];
+    let mut listed = 0usize;
+    'outer: for cat in COMPONENT_CATEGORY_ORDER {
+        let Some(entries) = by_category.get(*cat) else {
+            continue;
+        };
+        if entries.is_empty() {
+            continue;
+        }
+        lines.push(format!("{cat}:"));
+        for (id, name) in entries {
+            if listed >= MAX_COMPONENT_MANIFEST_ENTRIES {
+                lines.push(format!(
+                    "  …and {} more not listed (ask only for the ids above).",
+                    total - listed
+                ));
+                break 'outer;
+            }
+            lines.push(format!("  - {id} ({name})"));
+            listed += 1;
+        }
+    }
+    lines.push(
+        "To use one, emit a node `{\"type\":\"ref\",\"ref\":\"<id from above>\"}` (override its \
+         text/fill via `descendants` — see the component-composition rules). Only build an \
+         element by hand when no component above fits."
+            .to_string(),
+    );
+    Some(lines.join("\n"))
+}
+
 /// 单个 sub-agent 的 LLM 调用输入。
 ///
 /// * `reduced_complexity` — When `true` and the model is Basic tier,
@@ -537,6 +646,10 @@ fn resolve_generation_skills_after_prompt_filter(
 ///   only `schema` + `jsonl-format` (last-ditch fallback for models
 ///   whose safety scanner times out on the full prompt).  Port of the
 ///   `minimalSkills` param in `executeSubAgent` (lines 428-431).
+/// * `components` — the document's reusable-component registry. When
+///   non-empty it injects an AVAILABLE COMPONENTS manifest + raises the
+///   `hasReusableComponents` flag (loads the `component-composition`
+///   skill). Empty (the default path) ⇒ prompt unchanged.
 pub fn build_subagent_prompt(
     subtask: &Subtask,
     plan: &OrchestratorPlan,
@@ -544,6 +657,7 @@ pub fn build_subagent_prompt(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    components: &ComponentLibrary,
 ) -> (CallRequest, SkillLoadReport) {
     // Element-manifest protocol (spec 2026-06-10-element-manifest-v2): only on
     // the full first attempt — the retry ladder (reduced/minimal) falls back
@@ -561,12 +675,14 @@ pub fn build_subagent_prompt(
         reduced_complexity,
         minimal_skills,
         manifest_on,
+        components,
     )
 }
 
 /// Env-independent core of [`build_subagent_prompt`] — `manifest_on` is a
 /// parameter so tests can exercise the manifest wiring without touching
 /// the process-global `OPENPENCIL_MANIFEST` variable.
+#[allow(clippy::too_many_arguments)]
 fn build_subagent_prompt_with_manifest(
     subtask: &Subtask,
     plan: &OrchestratorPlan,
@@ -575,10 +691,18 @@ fn build_subagent_prompt_with_manifest(
     reduced_complexity: bool,
     minimal_skills: bool,
     manifest_on: bool,
+    components: &ComponentLibrary,
 ) -> (CallRequest, SkillLoadReport) {
     // Resolve the full generation skill set, then apply tier-gated filtering.
     let model_id = req.model.as_deref().unwrap_or("");
     let tier = resolve_model_profile(model_id).tier;
+
+    // Available reusable components → AVAILABLE COMPONENTS manifest +
+    // `hasReusableComponents` flag (loads the `component-composition` skill).
+    // `None` when the registry is empty, so the default no-component path is
+    // byte-for-byte unchanged.
+    let component_manifest = available_components_manifest(components);
+    let has_reusable_components = component_manifest.is_some();
 
     // design.md payload for the `{{designMdContent}}` template. If the
     // structured policy summary is empty (a bare-minimum design.md with only
@@ -616,6 +740,7 @@ fn build_subagent_prompt_with_manifest(
     // TS production); `elements`/`elements-cookbook` therefore stay gated off.
     flags.insert("hasMcpTools".to_string(), false);
     flags.insert("hasManifest".to_string(), manifest_on);
+    flags.insert("hasReusableComponents".to_string(), has_reusable_components);
 
     let mut dynamic_content = HashMap::new();
     if has_design_md {
@@ -771,6 +896,14 @@ fn build_subagent_prompt_with_manifest(
         system_prompt.push_str(instruction);
         system_prompt
             .push_str("\nThis instruction overrides style-guide examples when they conflict.");
+    }
+    // Available-components manifest LAST — recency wins, and the model should
+    // consult the concrete id list right before producing nodes. The
+    // `component-composition` skill (loaded via `hasReusableComponents`) carries
+    // the `ref` + `descendants` syntax; this block carries the actual ids.
+    if let Some(manifest) = &component_manifest {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(manifest);
     }
 
     let section_list = plan
