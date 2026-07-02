@@ -1081,3 +1081,66 @@ fn batch_insert_command_rejects_empty_items() {
         page_id: None,
     }));
 }
+
+#[test]
+fn batch_design_drops_ambiguous_auto_sizing_and_recovers_text_growth_words() {
+    // `width:"auto"` is ambiguous in CSS (fill for a block's width, hug for its
+    // height) — forcing either direction inverts intent half the time, so the
+    // key must be DROPPED (schema default wins) while the node itself survives.
+    // A misspelled `textGrowth` carrying clear words ("fixed_width_and_height")
+    // must recover its meaning instead of silently reverting to the default.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Block","width":"auto","height":"fit_content","children":[{"type":"text","name":"T","content":"hello","textGrowth":"fixed_width_and_height"}]})"##
+            .into(),
+    );
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertSubtree command");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert!(
+        value.get("width").map(|w| !w.is_string()).unwrap_or(true),
+        "ambiguous auto width dropped, got {:?}",
+        value.get("width")
+    );
+    assert_eq!(value["height"], "fit_content", "valid keyword untouched");
+    let text = &value["children"][0];
+    assert_eq!(
+        text["textGrowth"], "fixed-width-height",
+        "word-based textGrowth spelling recovered"
+    );
+}
+
+#[test]
+fn batch_design_falls_back_to_root_for_phantom_parent_binding() {
+    // A weak model copies the `sec` example binding as its FIRST line's
+    // parent. The phantom parent used to ride into `InsertAuthoredSubtree`
+    // unvalidated and the host rejected the WHOLE otherwise-valid program
+    // (an orchestrator stats subtask retried its complete 4-card section
+    // away). The tool must fall back to a root insert and surface a warning.
+    let state = op_editor_core::EditorState::new();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        "row=I(sec, {\"type\":\"frame\",\"name\":\"Stat Row\",\"layout\":\"horizontal\",\"gap\":24})\nc1=I(row, {\"type\":\"frame\",\"name\":\"Card\",\"layout\":\"vertical\"})".to_string(),
+    );
+    let ToolOutcome::OkJsonWithCommand(json, cmd) = tool.call(&args) else {
+        panic!("expected a command outcome");
+    };
+    assert!(json.contains("warnings"), "phantom parent surfaced: {json}");
+    let mut s2 = op_editor_core::EditorState::new();
+    assert!(s2.apply(cmd), "root-fallback insert must apply cleanly");
+    assert_eq!(s2.active_children().len(), 1, "one root landed");
+    use op_editor_core::PenNodeExt;
+    let root = &s2.active_children()[0];
+    assert_eq!(
+        root.children().map(|c| c.len()),
+        Some(1),
+        "card nested in row"
+    );
+}

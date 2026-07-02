@@ -705,10 +705,11 @@ fn normalize_layout_object(obj: &mut serde_json::Map<String, serde_json::Value>)
 
 /// `width` / `height` accept `fill_container` / `fit_content` / a number. A weak
 /// model sometimes appends a type-hint suffix (`fill_container_str` — a leaked
-/// variable name) or uses a CSS-ish spelling (`fill-container` / `hug` / `auto`),
-/// which fails the `Sizing` enum and drops the whole node. Map the known
-/// content-hug / fill spellings back to the canonical keyword; leave numbers,
-/// numeric strings, and already-valid / unrecognised values untouched.
+/// variable name) or uses a CSS-ish spelling (`fill-container` / `hug`), which
+/// fails the `Sizing` enum and drops the whole node. Map the known content-hug /
+/// fill spellings back to the canonical keyword; DROP the ambiguous `auto`
+/// (schema default wins); leave numbers, numeric strings, and already-valid /
+/// unrecognised values untouched.
 fn normalize_sizing_keyword(obj: &mut serde_json::Map<String, serde_json::Value>, key: &str) {
     let Some(serde_json::Value::String(raw)) = obj.get(key) else {
         return;
@@ -723,8 +724,16 @@ fn normalize_sizing_keyword(obj: &mut serde_json::Map<String, serde_json::Value>
     let normalized = match canon.as_str() {
         "fill_container" | "fillcontainer" | "fill" | "container" | "full" | "fill_width"
         | "fill_parent" => Some("fill_container"),
-        "fit_content" | "fitcontent" | "fit" | "hug" | "hug_content" | "auto" | "content" => {
+        "fit_content" | "fitcontent" | "fit" | "hug" | "hug_content" | "content" => {
             Some("fit_content")
+        }
+        // CSS `auto` is AMBIGUOUS: for a block's width it usually means
+        // stretch/fill, for height it means hug — forcing either direction
+        // inverts the author's intent half the time. Drop the key so the node
+        // survives deserialization with the schema default instead.
+        "auto" => {
+            obj.remove(key);
+            return;
         }
         _ => None,
     };
@@ -777,6 +786,19 @@ fn normalize_text_growth(obj: &mut serde_json::Map<String, serde_json::Value>) {
         "fixed-width-height" | "fixed-width-and-height" | "fixed" => Some("fixed-width-height"),
         _ => None,
     };
+    // Unrecognized spellings: recover the intent from the words before falling
+    // back to removal ("fixed_width_and_height", "fixedWidth" and friends carry
+    // a clear meaning — silently reverting them to the default undoes a
+    // deliberate wrap request).
+    let normalized = normalized.or_else(|| {
+        if canon.contains("width") && canon.contains("height") {
+            Some("fixed-width-height")
+        } else if canon.contains("width") {
+            Some("fixed-width")
+        } else {
+            None
+        }
+    });
     match normalized {
         Some(valid) => {
             obj.insert(
