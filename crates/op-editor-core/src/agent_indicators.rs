@@ -453,3 +453,144 @@ fn reveal_became_due(prev_ms: Option<u64>, started_at: u64, now_ms: u64) -> bool
 fn has_active_indicators(r: &AgentIndicators) -> bool {
     r.run_active || !r.nodes.is_empty() || !r.frames.is_empty() || !r.reveals.is_empty()
 }
+
+// ── Relay (daemon → browser) ────────────────────────────────────────────
+//
+// The registry is process-global, so a design run executing inside the
+// serve-web daemon writes indicators the BROWSER's wasm process never
+// sees. The daemon serves its registry as JSON (`relay_json`, behind
+// `GET /api/mcp/indicators`); the web host polls it, parses with
+// `parse_relay_json`, and mirrors it into the local registry with
+// `apply_remote` so the shared canvas paint animates on web too.
+// Reveal timestamps travel on the daemon's clock — `apply_remote`
+// inserts them verbatim and the paint path's
+// `rebase_external_clock_reveals` folds them onto the local clock,
+// the same way desktop live-MCP reveals are handled.
+
+/// A parsed relay snapshot. Vec-of-pairs (not maps) keeps the wire
+/// order deterministic for tests; `apply_remote` doesn't care.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RemoteIndicators {
+    pub run_active: bool,
+    pub nodes: Vec<(String, AgentTag)>,
+    pub frames: Vec<(String, AgentTag)>,
+    pub previews: Vec<String>,
+    pub reveals: Vec<(String, u64)>,
+}
+
+/// Serialize the registry for the `/api/mcp/indicators` relay.
+pub fn relay_json() -> String {
+    let snap = snapshot();
+    let tag_entries = |m: &HashMap<String, AgentTag>| -> Vec<serde_json::Value> {
+        let mut entries: Vec<(&String, &AgentTag)> = m.iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(b.0));
+        entries
+            .into_iter()
+            .map(|(id, tag)| serde_json::json!({"id": id, "color": tag.color, "name": tag.name}))
+            .collect()
+    };
+    let mut previews: Vec<&String> = snap.previews.iter().collect();
+    previews.sort();
+    let mut reveals: Vec<(&String, &u64)> = snap.reveals.iter().collect();
+    reveals.sort_by(|a, b| a.0.cmp(b.0));
+    serde_json::json!({
+        "active": snap.run_active,
+        "nodes": tag_entries(&snap.nodes),
+        "frames": tag_entries(&snap.frames),
+        "previews": previews,
+        "reveals": reveals
+            .into_iter()
+            .map(|(id, ms)| serde_json::json!({"id": id, "ms": ms}))
+            .collect::<Vec<_>>(),
+    })
+    .to_string()
+}
+
+/// Parse a `relay_json` body. `None` on any shape mismatch.
+pub fn parse_relay_json(body: &str) -> Option<RemoteIndicators> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    let run_active = v.get("active")?.as_bool()?;
+    let tag_list = |key: &str| -> Vec<(String, AgentTag)> {
+        v.get(key)
+            .and_then(|a| a.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|e| {
+                        Some((
+                            e.get("id")?.as_str()?.to_string(),
+                            AgentTag {
+                                color: e.get("color")?.as_str()?.to_string(),
+                                name: e.get("name")?.as_str()?.to_string(),
+                            },
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let previews = v
+        .get("previews")
+        .and_then(|a| a.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|e| e.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let reveals = v
+        .get("reveals")
+        .and_then(|a| a.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|e| Some((e.get("id")?.as_str()?.to_string(), e.get("ms")?.as_u64()?)))
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(RemoteIndicators {
+        run_active,
+        nodes: tag_list("nodes"),
+        frames: tag_list("frames"),
+        previews,
+        reveals,
+    })
+}
+
+/// Mirror a daemon registry snapshot into the local (browser) registry.
+/// Returns `true` while anything is active or draining, so the caller
+/// keeps its animation pump alive.
+///
+/// - A newly active remote run mirrors [`begin`] (fresh epoch, clean
+///   maps) so a stale prior relay can't bleed through.
+/// - `nodes` / `frames` / `previews` are replaced wholesale — the
+///   daemon is the authority for ownership tags.
+/// - `reveals` are insert-only: an id already present locally keeps its
+///   timestamp, which the paint path may have rebased onto the local
+///   clock (overwriting would replay its entrance every poll).
+/// - A remote run ending mirrors [`finish_if_epoch`]'s graceful drain:
+///   queued reveals play out, then the overlay clears itself.
+pub fn apply_remote(remote: &RemoteIndicators) -> bool {
+    let mut r = REGISTRY.lock().unwrap();
+    if remote.run_active {
+        if !r.run_active {
+            r.epoch += 1;
+            r.clear_maps();
+            r.run_active = true;
+        }
+        r.nodes = remote.nodes.iter().cloned().collect();
+        r.frames = remote.frames.iter().cloned().collect();
+        r.previews = remote.previews.iter().cloned().collect();
+        for (id, ms) in &remote.reveals {
+            r.reveals.entry(id.clone()).or_insert(*ms);
+        }
+        return true;
+    }
+    if r.run_active {
+        r.run_active = false;
+        r.finishing = true;
+        if r.reveals.is_empty() {
+            r.clear_maps();
+            r.epoch += 1;
+        }
+    }
+    has_active_indicators(&r) || r.needs_final_frame
+}

@@ -182,6 +182,29 @@ impl EditorState {
         self.app_state_owner.clear();
         drop_document_after_replace(old_doc);
     }
+
+    /// Like [`Self::replace_document`], but records the pre-replace
+    /// state as an undo step instead of resetting history. Web
+    /// live-sync uses this after its first pull: an external write
+    /// landing in a live editing session (an AI turn, an MCP client)
+    /// is a change the user asked for, so Cmd+Z must be able to take
+    /// it back. Draft / document-derived transient state is still
+    /// cleared exactly like the plain replace (stale-id safety) — the
+    /// undo snapshot is captured through the same
+    /// [`snapshot_for_history`](Self::snapshot_for_history) path every
+    /// local edit uses, so it can't resurrect mid-edit drafts.
+    pub fn replace_document_with_undo(&mut self, doc: jian_ops_schema::PenDocument) {
+        let snap = self.snapshot_for_history();
+        self.components = ComponentLibrary::from_document(&doc);
+        let old_doc = std::mem::replace(&mut self.doc, doc);
+        self.selection = SelectionState::empty();
+        self.history_push_past(snap);
+        self.ui = UiDraftState::new();
+        self.editor_ui.clear_document_derived();
+        // Generation-run ownership is doc-scoped; clear on whole-doc replace.
+        self.app_state_owner.clear();
+        drop_document_after_replace(old_doc);
+    }
 }
 
 fn drop_document_after_replace(doc: jian_ops_schema::PenDocument) {
@@ -412,5 +435,45 @@ mod tests {
         assert!(s.editor_ui.variable_row_focus.is_none());
         assert!(s.editor_ui.variable_row_input.text().is_empty());
         assert!(!s.history.can_undo() && !s.history.can_redo());
+    }
+
+    #[test]
+    fn replace_document_with_undo_makes_external_apply_undoable() {
+        let mut s = EditorState::new();
+        let mut before = empty_document();
+        before.name = Some("BEFORE".to_string());
+        s.replace_document(before);
+        assert!(!s.history.can_undo());
+
+        let mut after = empty_document();
+        after.name = Some("AFTER".to_string());
+        s.replace_document_with_undo(after);
+
+        // The external apply landed and is one undo step.
+        assert_eq!(s.doc.name.as_deref(), Some("AFTER"));
+        assert!(s.history.can_undo());
+        assert!(s.undo());
+        assert_eq!(s.doc.name.as_deref(), Some("BEFORE"));
+        assert!(s.redo());
+        assert_eq!(s.doc.name.as_deref(), Some("AFTER"));
+    }
+
+    #[test]
+    fn replace_document_with_undo_still_clears_stale_draft_state() {
+        let mut s = EditorState::new();
+        s.ui.pen_in_progress = Some(crate::NodeId::new("n7"));
+        s.ui.property_input.set_text("stale");
+        s.editor_ui.hovered_layer_id = Some(crate::NodeId::new("old-1"));
+
+        let mut doc = empty_document();
+        doc.name = Some("Synced".to_string());
+        s.replace_document_with_undo(doc);
+
+        // Same stale-id safety as the plain replace — only the history
+        // reset is skipped.
+        assert!(s.ui.pen_in_progress.is_none());
+        assert!(s.ui.property_input.text().is_empty());
+        assert!(s.editor_ui.hovered_layer_id.is_none());
+        assert!(s.selection.is_empty());
     }
 }
