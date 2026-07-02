@@ -278,13 +278,13 @@ fn discover_codex() -> Vec<ModelEntry> {
 /// falls back to the on-disk cache.
 pub fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
     let exe = resolve_cli("codex")?;
-    let mut child = Command::new(exe)
-        .arg("app-server")
+    let mut cmd = Command::new(exe);
+    cmd.arg("app-server")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    crate::chat_spawn::hide_console_window(&mut cmd);
+    let mut child = cmd.spawn().ok()?;
     let mut stdin = child.stdin.take()?;
     let stdout = child.stdout.take()?;
 
@@ -440,13 +440,13 @@ fn discover_copilot() -> Vec<ModelEntry> {
 /// Rust 1.94). Returns `None` on any failure.
 fn copilot_models_from_stdio() -> Option<Vec<ModelEntry>> {
     let exe = resolve_cli("copilot")?;
-    let mut child = Command::new(exe)
-        .arg("--stdio")
+    let mut cmd = Command::new(exe);
+    cmd.arg("--stdio")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    crate::chat_spawn::hide_console_window(&mut cmd);
+    let mut child = cmd.spawn().ok()?;
     let mut stdin = child.stdin.take()?;
     let stdout = child.stdout.take()?;
 
@@ -574,7 +574,10 @@ pub fn discover_opencode() -> Vec<ModelEntry> {
     let Some(exe) = resolve_cli("opencode") else {
         return Vec::new();
     };
-    let Ok(output) = Command::new(exe).arg("models").output() else {
+    let mut cmd = Command::new(exe);
+    cmd.arg("models");
+    crate::chat_spawn::hide_console_window(&mut cmd);
+    let Ok(output) = cmd.output() else {
         return Vec::new();
     };
     if !output.status.success() {

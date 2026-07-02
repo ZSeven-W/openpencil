@@ -245,15 +245,35 @@ fn download_and_open_blocking(version: &str) -> bool {
     open_installer_path(&dest)
 }
 
+/// Args for `cmd /C start "" "<target>"` with the target double-quoted
+/// so cmd doesn't split it at `&` (OAuth / query-string URLs) or at
+/// spaces (installer paths). Inside double quotes cmd keeps its
+/// metacharacters literal; `"` itself is illegal in URLs and Windows
+/// paths but is stripped defensively. `%VAR%` expansion remains
+/// possible in pathological inputs — accepted, matches the `open`
+/// crate's behaviour.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn windows_start_args(target: &str) -> String {
+    format!("/C start \"\" \"{}\"", target.replace('"', "%22"))
+}
+
+/// Spawn `cmd /C start "" "<target>"` without flashing a console.
+#[cfg(target_os = "windows")]
+fn windows_start(target: &str) -> std::io::Result<std::process::Child> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut c = std::process::Command::new("cmd");
+    c.raw_arg(windows_start_args(target));
+    c.creation_flags(CREATE_NO_WINDOW);
+    c.spawn()
+}
+
 /// Open the downloaded installer with the platform launcher.
 fn open_installer_path(path: &std::path::Path) -> bool {
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open").arg(path).spawn();
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("cmd")
-        .args(["/C", "start", ""])
-        .arg(path)
-        .spawn();
+    let result = windows_start(&path.display().to_string());
     #[cfg(target_os = "linux")]
     let result = std::process::Command::new("xdg-open").arg(path).spawn();
     result.is_ok()
@@ -294,9 +314,7 @@ pub fn open_url(url: &str) {
     #[cfg(target_os = "linux")]
     let result = std::process::Command::new("xdg-open").arg(url).spawn();
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("cmd")
-        .args(["/C", "start", "", url])
-        .spawn();
+    let result = windows_start(url);
     if let Err(e) = result {
         eprintln!("openpencil-desktop: open_url({url}) failed: {e}");
     }
@@ -305,6 +323,16 @@ pub fn open_url(url: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_start_args_quotes_urls_with_query_params() {
+        assert_eq!(
+            windows_start_args("https://a.example/auth?b=1&c=2"),
+            "/C start \"\" \"https://a.example/auth?b=1&c=2\""
+        );
+        // Double quotes are illegal in URLs/paths — stripped defensively.
+        assert_eq!(windows_start_args("x\"y"), "/C start \"\" \"x%22y\"");
+    }
 
     #[test]
     fn is_newer_compares_dotted_numbers() {

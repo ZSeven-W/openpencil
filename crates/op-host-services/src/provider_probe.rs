@@ -183,13 +183,13 @@ fn decode_jwt_payload(token: &str) -> Option<serde_json::Value> {
 /// with `2>&1`). `None` on spawn failure, non-zero exit, or
 /// timeout — the "CLI not responding" path.
 fn cli_version(exe: &Path, timeout: Duration) -> Option<String> {
-    let mut child = Command::new(exe)
-        .arg("--version")
+    let mut cmd = Command::new(exe);
+    cmd.arg("--version")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::piped());
+    crate::chat_spawn::hide_console_window(&mut cmd);
+    let mut child = cmd.spawn().ok()?;
     let deadline = Instant::now() + timeout;
     loop {
         match child.try_wait() {
@@ -578,13 +578,13 @@ fn copilot_connection_info(auth: Option<&CopilotAuth>) -> String {
 /// when the model list never answered; auth is best-effort (TS
 /// logs and continues when `getAuthStatus` fails).
 fn copilot_probe_stdio(exe: &Path) -> Option<(Vec<ModelEntry>, Option<CopilotAuth>)> {
-    let mut child = Command::new(exe)
-        .arg("--stdio")
+    let mut cmd = Command::new(exe);
+    cmd.arg("--stdio")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    crate::chat_spawn::hide_console_window(&mut cmd);
+    let mut child = cmd.spawn().ok()?;
     let mut stdin = child.stdin.take()?;
     let stdout = child.stdout.take()?;
 
