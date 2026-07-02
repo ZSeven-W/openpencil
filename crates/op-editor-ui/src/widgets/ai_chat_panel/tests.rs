@@ -205,10 +205,7 @@ fn hit_test_resolves_bottom_toolbar_actions() {
         Some(AIChatHit::ToggleModelPicker)
     );
     // attach: use the footer rect center (now right-aligned, #38)
-    let attach_center = Point2D::new(
-        footer.attach.origin.x + footer.attach.size.x / 2.0,
-        y,
-    );
+    let attach_center = Point2D::new(footer.attach.origin.x + footer.attach.size.x / 2.0, y);
     assert_eq!(
         panel.hit_test(rect, attach_center),
         Some(AIChatHit::AddAttachment)
@@ -239,10 +236,7 @@ fn footer_hover_maps_bottom_toolbar_actions() {
         Some(op_editor_core::ChatFooterButton::ModelPicker)
     );
     // attach: use footer rect center (now right-aligned, #38)
-    let attach_center = Point2D::new(
-        footer.attach.origin.x + footer.attach.size.x / 2.0,
-        y,
-    );
+    let attach_center = Point2D::new(footer.attach.origin.x + footer.attach.size.x / 2.0, y);
     assert_eq!(
         panel.footer_hover_at(rect, attach_center),
         Some(op_editor_core::ChatFooterButton::AddAttachment)
@@ -648,21 +642,33 @@ fn bottom_toolbar_layout_order_is_model_speed_attach_palette_send() {
     let footer = panel.footer_layout(rect, input, toolbar_top);
 
     // Left-to-right order: model < speed < attach < palette < send
-    assert!(footer.model.origin.x < footer.speed.origin.x,
-        "model left of speed");
-    assert!(footer.speed.origin.x < footer.attach.origin.x,
-        "speed left of attach");
-    assert!(footer.attach.origin.x < footer.palette.origin.x,
-        "attach left of palette");
-    assert!(footer.palette.origin.x < footer.send.origin.x,
-        "palette left of send");
+    assert!(
+        footer.model.origin.x < footer.speed.origin.x,
+        "model left of speed"
+    );
+    assert!(
+        footer.speed.origin.x < footer.attach.origin.x,
+        "speed left of attach"
+    );
+    assert!(
+        footer.attach.origin.x < footer.palette.origin.x,
+        "attach left of palette"
+    );
+    assert!(
+        footer.palette.origin.x < footer.send.origin.x,
+        "palette left of send"
+    );
     // #42: stop shares the send slot (toggle in place), not a separate button.
-    assert!((footer.stop.origin.x - footer.send.origin.x).abs() < 0.01,
-        "stop shares the send slot");
+    assert!(
+        (footer.stop.origin.x - footer.send.origin.x).abs() < 0.01,
+        "stop shares the send slot"
+    );
     // #38 specific: speed/attach/palette must all be RIGHT of the model pill.
     let model_right = footer.model.origin.x + footer.model.size.x;
-    assert!(footer.speed.origin.x > model_right + 4.0,
-        "speed chip must be right of model pill with a visible gap (#38)");
+    assert!(
+        footer.speed.origin.x > model_right + 4.0,
+        "speed chip must be right of model pill with a visible gap (#38)"
+    );
 }
 
 #[test]

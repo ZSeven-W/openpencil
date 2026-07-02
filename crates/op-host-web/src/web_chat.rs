@@ -139,9 +139,8 @@ fn close_chat_tab(state: &mut EditorState, idx: usize) {
     match running_tab() {
         Some(running) if running == idx => abort_active_turn(),
         Some(running) => {
-            RUNNING_TAB.with(|t| {
-                t.set(op_editor_core::adjust_running_tab_after_close(running, idx))
-            });
+            RUNNING_TAB
+                .with(|t| t.set(op_editor_core::adjust_running_tab_after_close(running, idx)));
         }
         None => {}
     }
