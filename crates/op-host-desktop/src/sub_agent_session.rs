@@ -315,10 +315,11 @@ pub(crate) fn pump_sub_agents(
             register_new_frames(ind, host.editor_state());
         }
 
-        // Advance when the active sub finished its turn.
+        // Advance when the active sub finished its turn. Natural finish:
+        // queued reveals drain gracefully before the overlay clears.
         if subs[*active].session.is_none() {
             if let Some(ind) = subs[*active].indicator.as_ref() {
-                agent_indicators::end_if_epoch(ind.epoch);
+                agent_indicators::finish_if_epoch(ind.epoch);
             }
             *active += 1;
             // Reflect one fewer running agent in the N/M header.

@@ -77,11 +77,18 @@ jobs:
           echo "Installing wasm-bindgen-cli $version"
           cargo install wasm-bindgen-cli --version "$version" --locked
 
-      - name: Install binaryen (wasm-opt)
+      - name: Install binaryen (pinned modern release)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y binaryen
-          wasm-opt --version
+          # Ubuntu's apt `binaryen` is v108 — too old for rustc 1.94's wasm
+          # (memory.copy/fill from bulk-memory-opt), so `wasm-opt` rejects the
+          # bundle with "all used features should be allowed". Pin a modern
+          # release matching the local dev toolchain / wasm-bundle-build.yml.
+          BINARYEN_VERSION=version_123
+          curl -fsSL \
+            "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
+            | tar -xz
+          echo "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+          "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin/wasm-opt" --version
 
       - name: Verify node + gzip are present (script prerequisites)
         run: |

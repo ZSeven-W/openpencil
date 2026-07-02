@@ -475,7 +475,11 @@ mod tests {
         state
     }
 
-    fn chat_with_queued_send(text: &str) -> ChatState {
+    // Returns the whole `ChatSessions` (the `.chat` field is the multi-tab
+    // container since the multi-chat-tabs change); callers drive it through its
+    // `DerefMut<Target = ChatState>` so `&mut chat` still coerces to the
+    // `&mut ChatState` that `apply_event_to_chat` expects.
+    fn chat_with_queued_send(text: &str) -> op_editor_core::ChatSessions {
         state_with_queued_send(text).chat
     }
 

@@ -94,8 +94,11 @@ fn no_model_disables_send_hit() {
 }
 
 #[test]
-fn no_model_disables_quick_action_cards() {
-    // old→new (#33): pills are now full-width stacked; use center of first pill.
+fn no_model_still_allows_quick_action_cards() {
+    // #43: example pills are clickable/hoverable regardless of model
+    // connection — clicking one fills the input (sending separately requires a
+    // model). So with no model the first pill still hits `Example`, not the
+    // panel drag handle. (#33: pills are full-width stacked; use first center.)
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -105,8 +108,11 @@ fn no_model_disables_quick_action_cards() {
         pills[0].origin.y + pills[0].size.y / 2.0,
     );
 
-    assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::DragHandle));
-    assert_eq!(panel.example_hover_at(rect, p), None);
+    assert!(matches!(
+        panel.hit_test(rect, p),
+        Some(AIChatHit::Example { index: 0, .. })
+    ));
+    assert_eq!(panel.example_hover_at(rect, p), Some(0));
 }
 
 #[test]

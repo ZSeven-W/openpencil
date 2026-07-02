@@ -31,7 +31,8 @@ fn compact_planning_prompt_matches_ts_golden() {
     for c in cases.iter().filter(|c| c.fn_ == "compact") {
         let raw = fs::read_to_string(dir.join(format!("{}.json", c.name))).unwrap_or_else(|_| {
             panic!(
-                "golden {}.json not found — run tools/dump-planner-golden.ts",
+                "golden {}.json missing from tests/planner-golden/ (frozen parity \
+                 baseline; the TS dump-planner-golden.ts generator was retired)",
                 c.name
             )
         });

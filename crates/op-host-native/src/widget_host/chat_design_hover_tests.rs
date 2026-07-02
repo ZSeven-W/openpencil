@@ -95,8 +95,13 @@ fn cursor_move_tracks_chat_footer_buttons() {
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     let chat_rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
+    // Footer right cluster (#38/#42), laid out right-to-left from the panel
+    // edge: ⚡ speed | 📎 attach | 🎨 palette | ↑ send. With PAD=16, a 28px
+    // send circle, 4px gaps and 24px icon buttons, the attach icon centres at
+    // `size.x - 88` (send centre ≈ -30, palette centre ≈ -60, attach ≈ -88).
+    // The old `-68` now lands on the palette icon.
     let attach = Point2D::new(
-        chat_rect.origin.x + chat_rect.size.x - 68.0,
+        chat_rect.origin.x + chat_rect.size.x - 88.0,
         chat_rect.origin.y + chat_rect.size.y - 19.0,
     );
     let send = Point2D::new(
@@ -134,7 +139,11 @@ fn cursor_move_tracks_quick_action_card_hover() {
     host.last_viewport_h = viewport_h;
     let chat_rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
     let over_first = Point2D::new(chat_rect.origin.x + 100.0, chat_rect.origin.y + 104.0);
-    let off_cards = Point2D::new(chat_rect.origin.x + 24.0, chat_rect.origin.y + 260.0);
+    // The quick-action pills are now full-width and vertically stacked (#33/#43):
+    // four 40px pills with 8px gaps start ~86px below the panel top, so the
+    // stack reaches ~270px. y=260 lands on pill index 3; a point truly "off the
+    // cards" must sit below the last pill.
+    let off_cards = Point2D::new(chat_rect.origin.x + 24.0, chat_rect.origin.y + 280.0);
 
     assert!(host.apply_cursor_move(over_first.x, over_first.y));
     assert_eq!(host.editor_state().editor_ui.chat_example_hover, Some(0));

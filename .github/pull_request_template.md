@@ -26,7 +26,7 @@
 
 ## Checklist
 
-- [ ] `npx tsc --noEmit` passes
-- [ ] `bun --bun run test` passes
+- [ ] `cargo test --workspace` passes
+- [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes
 - [ ] No unrelated changes included
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)

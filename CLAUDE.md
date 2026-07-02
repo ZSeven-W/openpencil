@@ -1,190 +1,73 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-Detailed module docs are loaded automatically when working in subdirectories:
 
-- **`packages/CLAUDE.md`** — Package overview (all packages at a glance)
-- **`packages/pen-types/CLAUDE.md`** — Type definitions for PenDocument model
-- **`packages/pen-core/CLAUDE.md`** — Document tree ops, layout engine, variables, boolean ops
-- **`packages/pen-engine/CLAUDE.md`** — Headless design engine (document, selection, history, viewport)
-- **`packages/pen-react/CLAUDE.md`** — React UI SDK (provider, hooks, panels, canvas)
-- **`packages/pen-figma/CLAUDE.md`** — Figma .fig file parser and converter
-- **`packages/pen-renderer/CLAUDE.md`** — Standalone CanvasKit/Skia renderer
-- **`packages/pen-mcp/CLAUDE.md`** — MCP server (tools, routes, document manager)
-- **`packages/pen-ai-skills/CLAUDE.md`** — AI prompt skill engine (phase-driven loading)
-- **`packages/pen-sdk/CLAUDE.md`** — Umbrella SDK (re-exports all packages)
-- **`packages/agent-native/CLAUDE.md`** — Zig agent runtime (NAPI addon)
-- **`apps/web/CLAUDE.md`** — Web app (canvas engine, stores, components, AI services)
-- **`apps/desktop/CLAUDE.md`** — Electron desktop app (IPC, file association, auto-updater)
-- **`apps/cli/CLAUDE.md`** — CLI tool (`op` commands, input methods, connection)
+> **The TypeScript OpenPencil has been retired.** `apps/web`, `apps/desktop`, `apps/cli`, and the `pen-*` packages (pen-types/core/engine/renderer/figma/mcp/ai-skills/sdk/react/acp) are gone. The product is now implemented in **Rust** (`crates/`) with a thin **wasm-backed web SDK** (`packages/op-web-sdk*`). Historical `// ported from pen-*` comments in the Rust sources name the retired TS as their origin — that code no longer exists in-tree; consult git history (last TS tag `v0.7.5`) if you need it.
+
+Detailed module docs load automatically in subdirectories:
+
+- **`crates/CLAUDE.md`** — Rust shell: crate layout, editor core, widgets, hosts (native/web/desktop), MCP, AI, orchestrator, codegen. **The canonical architecture doc.**
+- **`packages/CLAUDE.md`** — Remaining packages (op-web-sdk web viewer SDK family).
 
 ## Commands
 
-- **Dev server:** `bun --bun run dev` (runs on port 3000)
-- **Build:** `bun --bun run build`
-- **Preview production build:** `bun --bun run preview`
-- **Run all tests:** `bun --bun run test` (Vitest)
-- **Run a single test:** `bun --bun vitest run path/to/test.ts`
-- **Type check:** `npx tsc --noEmit`
-- **Lint:** `bun run lint` (oxlint)
-- **Format:** `bun run format` (oxfmt)
-- **Format check:** `bun run format:check` (oxfmt `--check`, required before commit)
-- **Install dependencies:** `bun install`
-- **Bump version:** `bun run bump <version>` (syncs all package.json files)
-- **Electron dev:** `bun run electron:dev` (starts Vite + Electron together)
-- **Electron compile:** `bun run electron:compile` (esbuild electron/ to out/desktop/)
-- **Electron build:** `bun run electron:build` (full web build + compile + electron-builder package)
-- **CLI compile:** `bun run cli:compile` (esbuild CLI to apps/cli/dist/)
-- **CLI dev:** `bun run cli:dev` (run CLI from source via Bun)
-- **MCP dev:** `bun run mcp:dev` (run MCP server from source)
-- **Publish beta:** `bun run publish:beta [N]` (publish all npm packages with beta tag)
+Tooling is **Cargo** (Rust — the product). The root has **no `package.json`**; the JS/**Bun** tooling for the web SDK lives under `packages/` — run SDK/JS scripts from there.
+
+- **Web dev server (Rust):** `bash scripts/start-web-rust.sh`
+- **Build (Rust):** `cargo build --workspace --release`
+- **Run all tests (Rust):** `cargo test --workspace`; single crate: `cargo test -p <crate>`
+- **Type check:** `cargo check --workspace`; wasm: `cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web`
+- **Lint / format (Rust):** `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all`
+- **Lint / format (remaining TS SDK):** from `packages/`: `bun run lint` (oxlint) / `bun run format` (oxfmt)
+- **Desktop app:** `cargo build -p op-host-desktop` → binary `openpencil-desktop` (live MCP on `127.0.0.1:<port>/mcp`)
+- **CLI:** `cargo build -p op-cli` → binary `op`
+- **MCP server:** built into the desktop/web host (`--mcp <path>`); crate `op-mcp`
+- **Iconify catalog (Rust assets):** from `packages/`: `bun run generate-iconify-catalog`
+- **Bump SDK versions:** from `packages/`: `bun run bump <version>` (syncs the SDK `package.json`s; Rust versions live in Cargo.toml)
 
 ## Architecture
 
-OpenPencil is an open-source vector design tool (alternative to Pencil.dev) with a Design-as-Code philosophy. Organized as a **Bun monorepo** with workspaces:
+OpenPencil is an open-source, AI-native vector design tool (Design-as-Code). The editor — canvas engine, chrome, stores, MCP, AI — is Rust, built on the vendored **jian** skia/widget/render/event toolkit (`vendor/jian`) and **casement** winit fork (`vendor/casement`). See **`crates/CLAUDE.md`** for the authoritative crate map; the essentials:
 
 ```text
-openpencil/
-├── apps/
-│   ├── web/           TanStack Start full-stack React app (Vite + Nitro)
-│   ├── desktop/       Electron desktop app (macOS, Windows, Linux)
-│   └── cli/           CLI tool — control the design tool from the terminal
-├── packages/
-│   ├── pen-types/     Type definitions for PenDocument model
-│   ├── pen-core/      Document tree ops, layout engine, variables, boolean ops, clone utilities
-│   ├── pen-engine/    Headless design engine — framework-free document, selection, history, viewport
-│   ├── pen-react/     React UI SDK — DesignProvider, DesignCanvas, hooks, panels, toolbar
-│   ├── pen-codegen/   Multi-platform code generators
-│   ├── pen-figma/     Figma .fig file parser and converter
-│   ├── pen-renderer/  Standalone CanvasKit/Skia renderer
-│   ├── pen-mcp/       MCP server — tools, routes, document manager for external CLI integration
-│   ├── pen-sdk/       Umbrella SDK (re-exports all packages)
-│   ├── pen-ai-skills/ AI prompt skill engine (phase-driven prompt loading + design memory)
-│   └── agent-native/  Native AI agent runtime (Zig NAPI, multi-provider, agent teams)
-├── scripts/           Build and publish scripts
-└── .githooks/         Pre-commit version sync from branch name
+crates/
+├── op-editor-core/       Canonical `.op` (PenDocument) editor state + EditorCommand + design-variable resolution
+├── op-editor-ui/         Platform-free widgets + RenderBackend facade (wasm32-clean)
+├── op-editor-host-core/  Transport-free host state machines shared by all hosts
+├── op-host-native/       Native host lib (winit + skia-safe GL) — desktop + mobile
+├── op-host-web/          Browser bundle: wasm32 cdylib, CanvasKit renderer
+├── op-host-desktop/      Desktop binary `openpencil-desktop`; also the `--serve-web` daemon
+├── op-host-services/     Headless serve-web / MCP daemon lib (shared by desktop + web-server)
+├── op-host-web-server/   Thin GL-free web-server binary
+├── op-cli/               `op` command-line tool
+└── op-mcp / op-ai / op-ai-skills / op-codegen / op-orchestrator / op-figma /
+   op-git / op-opmerge / op-pen-loader / op-design-lint / op-i18n / op-smoke / …
+
+packages/
+├── op-web-sdk/           Read-only `.op` web viewer SDK (wraps the op-host-web wasm bundle)
+├── op-web-sdk-react/     React 19 adapter for op-web-sdk
+└── op-web-sdk-vue/       Vue 3 adapter for op-web-sdk
 ```
 
-**Key technologies:** React 19, CanvasKit/Skia WASM (canvas engine), Paper.js (boolean path operations), Zustand v5 (state management), TanStack Router (file-based routing), Tailwind CSS v4, shadcn/ui (UI primitives), Vite 7, Nitro (server), Electron 35 (desktop), Vercel AI SDK v6 (agent framework), i18next (15 locales), TypeScript (strict mode), oxlint/oxfmt (linting & formatting).
-
-### Data Flow
-
-```text
-React Components (Toolbar, LayerPanel, PropertyPanel)
-        │ Zustand hooks
-        ▼
-┌─────────────────┐    ┌───────────────────┐
-│  canvas-store   │    │  document-store   │ ← single source of truth
-│  (UI state:     │    │  (PenDocument)    │
-│   tool/selection │    │  CRUD / tree ops  │
-│   /viewport)    │    │                   │
-└────────┬────────┘    └────────┬──────────┘
-         │                      │
-         ▼                      ▼
-   CanvasKit/Skia        canvas-sync-lock
-   (GPU-accelerated      (prevents circular sync)
-    WASM renderer)
-```
-
-- **document-store** is the single source of truth. CanvasKit only renders.
-- User edits on canvas → SkiaEngine events → update document-store
-- User edits in panels → update document-store → SkiaEngine `syncFromDocument()` re-renders
-- `canvas-sync-lock.ts` prevents circular updates when canvas events write to the store
-
-### Multi-Page Architecture
-
-```text
-PenDocument
-  ├── pages?: PenPage[]   (id, name, children)
-  └── children: PenNode[] (default/single-page fallback)
-```
-
-### Design Variables Architecture
-
-- **`$variable` references are preserved** in the document store (e.g. `$color-1` in fill color)
-- `resolveNodeForCanvas()` resolves `$refs` on-the-fly before CanvasKit rendering
-- Code generators output `var(--name)` for `$ref` values
-- Multiple theme axes supported (e.g. Theme-1 with Light/Dark, Theme-2 with Compact/Comfortable)
-
-### MCP Layered Design Workflow
-
-External LLMs (Claude Code, Codex, Gemini CLI, etc.) can generate designs via MCP:
-
-- **Single-shot**: `batch_design` or `insert_node` — one call
-- **Layered**: `design_skeleton` → `design_content` × N → `design_refine` — phased generation with focused context
-- **Segmented prompts**: `get_design_prompt(section=...)` loads focused subsets (schema, layout, roles, icons, etc.)
-
-### Path Aliases
-
-`@/*` maps to `./src/*` (configured in `apps/web/tsconfig.json` and `apps/web/vite.config.ts`).
-
-### Styling
-
-Tailwind CSS v4 imported via `apps/web/src/styles.css`. UI primitives from shadcn/ui. Icons from `lucide-react`.
-
-### CLI (`apps/cli/`)
-
-The `op` command-line tool controls the desktop app or web server from the terminal. Arguments that accept JSON or DSL support three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin).
-
-- **App control:** `op start [--desktop|--web]`, `op stop`, `op status`
-- **Design:** `op design <dsl|@file|->` — batch design DSL operations
-- **Document:** `op open`, `op save`, `op get`, `op selection`
-- **Nodes:** `op insert`, `op update`, `op delete`, `op move`, `op copy`, `op replace`
-- **Cross-platform:** macOS, Windows (NSIS/portable), Linux (AppImage/deb/snap/flatpak)
-
-### CI / CD
-
-- **`.github/workflows/ci.yml`** — Push/PR on `main` and `v*` branches: type check, tests, web build
-- **`.github/workflows/build-electron.yml`** — Tag push (`v*`) or manual: builds Electron for all platforms, creates draft GitHub Release
-- **`.github/workflows/publish-cli.yml`** — Tag push (`v*`) or manual: publishes all `@zseven-w/*` npm packages in topological order
-- **`.github/workflows/docker.yml`** — Docker image build and push
-
-### Version Sync
-
-- **Pre-commit hook** (`.githooks/pre-commit`): extracts version from branch name (e.g. `v0.5.0` → `0.5.0`) and syncs to all `package.json` files
-- **Manual bump:** `bun run bump <version>` to set a specific version across all workspaces
-- Requires `git config core.hooksPath .githooks` (one-time setup per clone)
-
-## Working Principles
-
-Behavioral guidelines adapted from [Karpathy's coding principles](https://github.com/multica-ai/andrej-karpathy-skills) to OpenPencil's multi-layer, multi-app structure. These supplement (do not replace) the general system prompt.
-
-### Think before coding
-
-A single bug often spans layers. A canvas render issue may live in `pen-core/layout`, `apps/web/canvas/skia`, or `pen-react/hooks`. An LLM-generated-design issue may live in `pen-ai-skills/skills/`, the MCP tool, or the post-generation validator. Identify the owning layer before patching — don't fix the symptom at a higher layer when the cause is deeper. When the target surface is ambiguous (desktop / web / cli / MCP / docs), say so and ask rather than guessing.
-
-### Simplicity first
-
-Add abstractions when a second concrete case arrives, not in anticipation of one. No strategy classes for single-use logic, no speculative config options, no premature helper layers. The 800-line file limit is a ceiling, not a split target — a healthy 400-line file doesn't need slicing.
-
-### Surgical changes
-
-Fix only what the task names. A validation bug fix doesn't include added type hints, renamed identifiers, or reformatted siblings. Match existing style (shadcn tokens, kebab-case filenames, existing quote/brace style). When an LLM-generated design reproduces the same bug across many nodes, fix the prompt / role resolver / validator in `pen-ai-skills` — never touch up each instance via `batch_design`.
-
-### Verify before declaring done
-
-- **Any TS/JS change:** `bun run format:check && npx tsc --noEmit && bun --bun run test` must pass before commit or push. Docs-only changes in a separate `openpencil-docs` repo are exempt.
-- **UI / canvas change:** start `bun --bun run dev` and exercise the feature in a browser. Type-checking proves compilation, not feature correctness.
-- **MCP / `pen-ai-skills` change:** verify via the `op` CLI, `debug_validation_report`, or `debug_screenshot` — not by reading the diff.
-- Report what was verified, not only what was edited.
+Data flow, canvas engine, Document/EditorCommand model, MCP layered-design workflow, design variables, and the run/debug recipe are all documented in **`crates/CLAUDE.md`**.
 
 ## Code Style
 
-- Single files must not exceed 800 lines. Split into smaller modules when they grow beyond this limit.
-- One component per file, each with a single responsibility.
-- `.ts` and `.tsx` files use kebab-case naming, e.g. `canvas-store.ts`, `use-keyboard-shortcuts.ts`.
-- UI components must use shadcn/ui design tokens (`bg-card`, `text-foreground`, `border-border`, etc.). No hardcoded Tailwind colors like `gray-*`, `blue-*`.
-- Toolbar button active state uses `isActive` conditional className (`bg-primary text-primary-foreground`), not Radix Toggle's `data-[state=on]:` selector (has twMerge conflicts).
+- Single files must not exceed **800 lines** — split into smaller modules when they grow beyond this.
+- One component/widget per file, single responsibility.
+- `.rs` filenames use snake_case; `.ts`/`.tsx` (SDK) use kebab-case.
+- Source comments (`.rs`/`.ts`/`.toml`) in **English** (spec/plan markdown + test CJK fixtures may keep Chinese).
+- Rust widgets paint against jian's `Painter`; `draw_text` is **baseline-relative** (label components center via `centered_text_baseline_y`, not `(h-fs)/2`).
 
 ## Git Commit Convention
 
-Use [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>(<scope>): <subject>`
+Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`
 
 **Types:** `feat`, `fix`, `refactor`, `perf`, `style`, `docs`, `test`, `chore`
 
-**Scopes:** `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`, `figma`, `mcp`, `electron`, `renderer`, `sdk`, `cli`, `agent`, `i18n`
+**Scopes:** `editor`, `canvas`, `panels`, `history`, `ai`, `codegen`, `store`, `types`, `variables`, `figma`, `mcp`, `desktop`, `web`, `renderer`, `sdk`, `cli`, `agent`, `i18n`
 
-**Rules:** Subject in English, lowercase start, no period, imperative mood. Body is optional; explain **why** not what. One commit per change.
+**Rules:** Subject in English, lowercase start, no period, imperative mood. Body optional; explain **why** not what. One commit per change.
 
 ## License
 

@@ -473,7 +473,13 @@ fn stream_new_design_route<W: Write>(
             ),
         )
     };
-    op_editor_core::agent_indicators::end_if_epoch(epoch);
+    // Natural completion drains the queued reveals gracefully; an
+    // aborted turn tears the overlay down at once.
+    if abort.is_set() {
+        op_editor_core::agent_indicators::end_if_epoch(epoch);
+    } else {
+        op_editor_core::agent_indicators::finish_if_epoch(epoch);
+    }
     match summary {
         Ok(summary) => {
             let ok = summary

@@ -184,7 +184,6 @@ pub fn adjust_running_tab_after_close(running: usize, closed: usize) -> Option<u
 // --------------------------------------------------------------------------
 
 #[cfg(test)]
-#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
     use crate::chat_title::DEFAULT_CHAT_TITLE;
@@ -282,6 +281,9 @@ mod tests {
     }
 
     #[test]
+    // `s.title` writes through DerefMut to the active tab, not a field of the
+    // defaulted `ChatSessions`, so the field-reassign lint is a false positive.
+    #[allow(clippy::field_reassign_with_default)]
     fn close_only_tab_resets_to_fresh_default() {
         let mut s = ChatSessions::default();
         s.title = "dirty".to_string();
@@ -357,6 +359,9 @@ mod tests {
     }
 
     #[test]
+    // `s.title` writes through DerefMut to the active tab, not a field of the
+    // defaulted `ChatSessions`, so the field-reassign lint is a false positive.
+    #[allow(clippy::field_reassign_with_default)]
     fn new_tab_preserves_old_tab_messages_and_starts_blank() {
         // Mirrors the "+" / NewChat handler path: a fresh tab must NOT reset
         // the previous tab (the MT.1-review regression was that `new_chat()`

@@ -3,6 +3,10 @@
 //! Rust MCP keeps TS `add_*_v0/v1` aliases visible. Embedding the TS
 //! definition shards lets `tools/list` advertise the same business
 //! arguments instead of falling back to generic x/y placement args.
+//!
+//! The shards were vendored into `assets/element-tool-defs/` when the TS
+//! `pen-mcp` package was retired; they are now static crate-owned fixtures,
+//! parsed at compile time to seed the alias schemas.
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -10,16 +14,16 @@ use std::sync::OnceLock;
 use serde_json::{json, Map, Value};
 
 const TS_ELEMENT_DEFINITION_SOURCES: &[&str] = &[
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-base.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-2.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-3.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-4.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-5.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-6.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-7.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-8.ts"),
-    include_str!("../../../packages/pen-mcp/src/routes/element-tool-defs-ext-9.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-base.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-2.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-3.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-4.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-5.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-6.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-7.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-8.ts"),
+    include_str!("../assets/element-tool-defs/element-tool-defs-ext-9.ts"),
 ];
 
 pub(crate) fn ts_alias_schema(tool: &str) -> Option<String> {

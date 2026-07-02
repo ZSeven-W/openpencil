@@ -8,6 +8,7 @@
 //! UI drafts).
 
 pub mod agent_indicators;
+mod agent_indicators_tests;
 pub mod agent_settings;
 pub mod agent_settings_acp_connection;
 pub mod agent_settings_builtin_presets;

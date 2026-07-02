@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./apps/desktop/build/icon.png" alt="OpenPencil" width="120" />
+  <img src="./crates/op-host-desktop/assets/icon.png" alt="OpenPencil" width="120" />
 </p>
 
 <h1 align="center">OpenPencil</h1>
@@ -105,20 +105,17 @@ Orchestrator แบ่งหน้าที่ซับซ้อนออกเ�
 ## เริ่มต้นอย่างรวดเร็ว
 
 ```bash
-# ติดตั้ง dependencies
-bun install
-
-# เริ่ม dev server ที่ http://localhost:3000
-bun --bun run dev
+# Web dev server (builds the CanvasKit wasm bundle, then runs the headless web host)
+bash scripts/start-web-rust.sh
 ```
 
 หรือรันเป็นแอปพลิเคชัน Desktop:
 
 ```bash
-bun run electron:dev
+cargo run -p op-host-desktop
 ```
 
-> **ข้อกำหนดเบื้องต้น:** [Bun](https://bun.sh/) >= 1.0 และ [Node.js](https://nodejs.org/) >= 18
+> **ข้อกำหนดเบื้องต้น:** ต้องใช้ [Rust](https://www.rust-lang.org/) (stable) เพื่อ build ผลิตภัณฑ์ [Bun](https://bun.sh/) >= 1.0 และ [Node.js](https://nodejs.org/) >= 18 จำเป็นเฉพาะสำหรับ web SDK ใน `packages/` เท่านั้น
 
 ### Docker
 
@@ -224,7 +221,7 @@ op import:figma design.fig   # นำเข้าไฟล์ Figma
 cat design.dsl | op design - # Pipe จาก stdin
 ```
 
-รองรับ 3 วิธีการป้อนข้อมูล: สตริงแบบ inline, `@filepath` (อ่านจากไฟล์) หรือ `-` (อ่านจาก stdin) ทำงานร่วมกับแอปเดสก์ท็อปหรือ web dev server ดู [CLI README](./apps/cli/README.md) สำหรับคู่มือคำสั่งฉบับเต็ม
+รองรับ 3 วิธีการป้อนข้อมูล: สตริงแบบ inline, `@filepath` (อ่านจากไฟล์) หรือ `-` (อ่านจาก stdin) ทำงานร่วมกับแอปเดสก์ท็อปหรือ web dev server ดู [CLI README](./crates/op-cli) สำหรับคู่มือคำสั่งฉบับเต็ม
 
 **LLM Skill** — ติดตั้งปลั๊กอิน [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) เพื่อสอน AI agent (Claude Code, Cursor, Codex, Gemini CLI ฯลฯ) ออกแบบด้วย `op`
 
@@ -254,7 +251,7 @@ cat design.dsl | op design - # Pipe จาก stdin
 - Layered workflow — `design_skeleton` → `design_content` → `design_refine` พร้อม prompt ที่เน้นเฉพาะในแต่ละเฟส
 - Style Guides — สไตล์ในตัวกว่า 50 แบบ (glassmorphism, brutalist, retro ฯลฯ) พร้อม fuzzy matching ตาม tag ใช้ในการวางแผนและการสร้าง
 - โปรไฟล์ความสามารถหลายโมเดล — ปรับโหมดการคิด ความพยายาม และรูปแบบ prompt อัตโนมัติตามระดับโมเดล
-- Agent runtime ในตัว (`agent-native`, Zig NAPI) + ผู้ให้บริการ Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
+- Agent runtime ในตัว (Rust) + ผู้ให้บริการ Anthropic, Claude Agent SDK, OpenCode, Codex, Copilot, Gemini
 - Passthrough รูปแบบ Anthropic สำหรับผู้ให้บริการ LLM จีน — Kimi, Zhipu, GLM, DouBao, Ark, Bailian/DashScope, ModelScope, Coding Plans
 
 **การเชื่อมต่อ Git**
@@ -309,7 +306,7 @@ OpenPencil กำลังถูกเขียนใหม่ตั้งแต
 | **ขนาด payload บนเว็บ** | JS + WASM bundle                              | **8.2 MB** wasm / **2.18 MB** gzip บนเครือข่าย                       |
 | **การ Render**          | CanvasKit/Skia บนเว็บ                         | Skia backend เดียวที่เร่งด้วย GPU บน **ทุก** เป้าหมาย               |
 | **หน่วยความจำ**         | JavaScript GC หยุดชั่วคราว                   | ไม่มี GC — Rust ownership latency คาดเดาได้                          |
-| **Codebase**            | Web stack + Electron + Zig NAPI agent         | Rust workspace เดียว: editor · CLI · MCP · AI · codegen · Figma · Git |
+| **Codebase**            | Web stack + Electron         | Rust workspace เดียว: editor · CLI · MCP · AI · codegen · Figma · Git |
 | **เป้าหมาย**           | Web + desktop สอง stack แยกกัน               | Desktop (macOS/Win/Linux) · mobile (iOS/Android) · browser — one core |
 
 **ผลการวัดที่ได้จริง**
@@ -382,15 +379,20 @@ openpencil/
 ## Scripts
 
 ```bash
-bun --bun run dev          # Dev server (port 3000)
-bun --bun run build        # Production build
-bun --bun run test         # รันการทดสอบ (Vitest)
-npx tsc --noEmit           # ตรวจสอบ type
-bun run bump <version>     # Sync version ในทุก package.json
-bun run electron:dev       # Electron dev
-bun run electron:build     # Electron package
-bun run cli:dev            # รัน CLI จาก source
-bun run cli:compile        # คอมไพล์ CLI ไปยัง dist
+# Product (Rust — run from the repo root)
+cargo build --workspace              # Build all crates (add --release for prod)
+cargo test --workspace               # Run all tests
+cargo check --workspace              # Type check
+cargo clippy --workspace --all-targets -- -D warnings   # Lint
+cargo fmt --all                      # Format
+bash scripts/start-web-rust.sh       # Web dev server (wasm bundle + headless host)
+cargo run -p op-host-desktop         # Desktop app (binary: openpencil-desktop)
+cargo run -p op-cli -- <args>        # CLI (binary: op)
+
+# Web SDK / JS tooling (run from packages/)
+cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
+cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
 ## การมีส่วนร่วม
@@ -400,7 +402,7 @@ bun run cli:compile        # คอมไพล์ CLI ไปยัง dist
 1. Fork และ clone
 2. ตั้งค่า version sync: `git config core.hooksPath .githooks`
 3. สร้าง branch: `git checkout -b feat/my-feature`
-4. รันการตรวจสอบ: `npx tsc --noEmit && bun --bun run test`
+4. รันการตรวจสอบ: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Commit ด้วย [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`
 6. เปิด PR เข้า `main`
 
@@ -442,7 +444,7 @@ OpenPencil เป็นซอฟต์แวร์ฟรีและโอเพ
 ## ชุมชน
 
 <a href="https://discord.gg/h9Fmyy6pVh">
-  <img src="./apps/web/public/logo-discord.svg" alt="Discord" width="16" />
+  <img src="./screenshot/logo-discord.svg" alt="Discord" width="16" />
   <strong> เข้าร่วม Discord ของเรา</strong>
 </a>
 — ถามคำถาม แชร์ดีไซน์ เสนอฟีเจอร์
