@@ -546,6 +546,17 @@ fn parse_json_arg(raw: &str) -> Result<Value, String> {
     normalized = regex(r#":(\s*)([A-Za-z][\w-]*)""#)
         .replace_all(&normalized, r#":${1}"${2}""#)
         .into_owned();
+    // Repair a FULLY-unquoted string value — `"width":fill_container_str,` meant
+    // `"width":"fill_container_str"` (a weak model emitted a bare identifier, e.g.
+    // a leaked JS variable name). A letter-led bareword between a colon and a
+    // `,`/`}`/`]`. Numbers are digit-led (never match); a real quoted value
+    // starts with `"` (never matches); `true`/`false`/`null` get re-unquoted next.
+    normalized = regex(r#":(\s*)([A-Za-z][\w-]*)(\s*[,}\]])"#)
+        .replace_all(&normalized, r#":${1}"${2}"${3}"#)
+        .into_owned();
+    normalized = regex(r#":(\s*)"(true|false|null)"(\s*[,}\]])"#)
+        .replace_all(&normalized, r#":${1}${2}${3}"#)
+        .into_owned();
     normalized = regex(r#",\s*""\s*:\s*[^,}\]]+"#)
         .replace_all(&normalized, "")
         .into_owned();
