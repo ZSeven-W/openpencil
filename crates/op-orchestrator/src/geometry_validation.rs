@@ -164,6 +164,7 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             let mut cmds = Vec::new();
             collect_scale_ops(&v, &rects, &mut cmds);
             collect_collapse_fixes(&v, &rects, &mut cmds);
+            collect_text_overflow_fixes(&v, &rects, &mut cmds);
             cmds
         };
         if cmds.is_empty() {
@@ -219,6 +220,65 @@ fn collect_collapse_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut V
     }
     for c in children(v) {
         collect_collapse_fixes(c, rects, cmds);
+    }
+}
+
+/// Slack so a text a hair wider than its block isn't needlessly wrapped.
+const TEXT_OVERFLOW_EPS: f64 = 2.0;
+
+/// A text node whose RESOLVED width exceeds its parent block's — the parent is a
+/// constrained (`fill_container` / fixed) block whose `min_size: 0` lets it shrink
+/// BELOW its `fit_content` text, so the text overflows into the next column
+/// (measured: a 260px sidebar's schedule rows painted the client name over the
+/// appointment time). Constrain the text to its block — `width: fill_container` +
+/// `textGrowth: fixed-width` — so it wraps inside instead of overflowing. The
+/// next round re-resolves with the text now bounded, so it converges immediately.
+fn collect_text_overflow_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    if let Some(parent_w) = v
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| rects.get(id))
+        .map(|r| r.w)
+    {
+        for c in children(v) {
+            if c.get("type").and_then(Value::as_str) != Some("text") {
+                continue;
+            }
+            let Some(cid) = c.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(cr) = rects.get(cid) else {
+                continue;
+            };
+            // Already bounded to its block (fill + wrap) → nothing to correct.
+            let fill = c.get("width").and_then(Value::as_str) == Some("fill_container");
+            let wrap = c
+                .get("textGrowth")
+                .and_then(Value::as_str)
+                .is_some_and(|g| g.starts_with("fixed-width"));
+            if fill && wrap {
+                continue;
+            }
+            if cr.w > parent_w + TEXT_OVERFLOW_EPS {
+                cmds.push(EditorCommand::SetNodeLayoutProp {
+                    node_id: NodeId::new(cid.to_string()),
+                    property: "width".to_string(),
+                    value: LayoutPropValue::Keyword("fill_container".to_string()),
+                });
+                cmds.push(EditorCommand::SetNodeLayoutProp {
+                    node_id: NodeId::new(cid.to_string()),
+                    property: "textGrowth".to_string(),
+                    value: LayoutPropValue::Keyword("fixed-width".to_string()),
+                });
+            }
+        }
+    }
+    for c in children(v) {
+        collect_text_overflow_fixes(c, rects, cmds);
     }
 }
 
