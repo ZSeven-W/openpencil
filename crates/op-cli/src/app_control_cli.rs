@@ -228,10 +228,14 @@ fn open_in_browser(url: &str) {
     };
     #[cfg(target_os = "windows")]
     let mut command = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let mut c = Command::new("cmd");
-        // The empty "" is `start`'s window-title slot — without it a quoted
-        // URL would be consumed as the title.
-        c.args(["/C", "start", "", url]);
+        // Raw arg keeps the URL inside double quotes so cmd doesn't
+        // split it at `&`; the empty "" is `start`'s window-title slot —
+        // without it the quoted URL would be consumed as the title.
+        c.raw_arg(windows_start_args(url));
+        c.creation_flags(CREATE_NO_WINDOW);
         c
     };
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -241,6 +245,14 @@ fn open_in_browser(url: &str) {
         c
     };
     let _ = spawn_null(&mut command);
+}
+
+/// Args for `cmd /C start "" "<url>"` with the URL double-quoted so cmd
+/// doesn't split it at `&`. `"` is illegal in URLs — stripped
+/// defensively.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn windows_start_args(url: &str) -> String {
+    format!("/C start \"\" \"{}\"", url.replace('"', "%22"))
 }
 
 /// `op start --web` success JSON: the headless `start_json` shape plus

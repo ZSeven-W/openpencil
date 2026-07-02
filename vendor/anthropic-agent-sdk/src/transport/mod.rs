@@ -66,8 +66,15 @@ pub trait Transport: Send + Sync {
 pub async fn check_claude_version(cli_path: &std::path::Path) -> crate::Result<String> {
     use tokio::process::Command;
 
-    let output = Command::new(cli_path)
-        .arg("--version")
+    let mut cmd = Command::new(cli_path);
+    cmd.arg("--version");
+    #[cfg(windows)]
+    {
+        // CREATE_NO_WINDOW — version probes run behind the GUI; don't
+        // flash a console window per probe.
+        cmd.creation_flags(0x0800_0000);
+    }
+    let output = cmd
         .output()
         .await
         .map_err(|e| crate::ClaudeError::connection(format!("Failed to get CLI version: {e}")))?;

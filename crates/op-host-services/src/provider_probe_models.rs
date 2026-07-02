@@ -94,6 +94,7 @@ pub fn claude_initialize_query() -> ClaudeInitResult {
         cmd.env("CLAUDE_CODE_ENTRYPOINT", "sdk-ts");
     }
     cmd.env_remove("NODE_OPTIONS");
+    crate::chat_spawn::hide_console_window(&mut cmd);
     let Ok(mut child) = cmd.spawn() else {
         return ClaudeInitResult::NoAnswer;
     };
