@@ -128,9 +128,15 @@ fn rolled_back_batch_leaves_no_stale_app_state_ownership() {
             },
         ],
     });
-    assert!(!failed, "batch with a failing sub-command must report false");
     assert!(
-        s.doc.state.as_ref().is_none_or(|st| !st.contains_key("cart")),
+        !failed,
+        "batch with a failing sub-command must report false"
+    );
+    assert!(
+        s.doc
+            .state
+            .as_ref()
+            .is_none_or(|st| !st.contains_key("cart")),
         "rolled-back merge must not survive in doc.state"
     );
 
@@ -166,7 +172,10 @@ fn undo_restores_app_state_ownership_with_the_document() {
 
     assert!(s.undo(), "batch lands as one undo step");
     assert!(
-        s.doc.state.as_ref().is_none_or(|st| !st.contains_key("tab")),
+        s.doc
+            .state
+            .as_ref()
+            .is_none_or(|st| !st.contains_key("tab")),
         "undo must remove the merged key from doc.state"
     );
 
