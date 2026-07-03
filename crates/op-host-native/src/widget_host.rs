@@ -304,6 +304,13 @@ pub struct WidgetHostNative {
     /// `Runtime` (host-local; `!Send`). Built on enter from the
     /// document JSON, dropped on exit so the document stays untouched.
     pub(in crate::widget_host) preview: Option<crate::preview::PreviewSession>,
+    /// Live preview pointer-drag state: `true` between a canvas Down
+    /// and its Up, so cursor moves dispatch as drags (slider knob)
+    /// instead of hovers.
+    pub(in crate::widget_host) preview_press_active: bool,
+    /// Last preview pointer position in DOCUMENT space — the release
+    /// dispatches its Up here (the OS reports release without coords).
+    pub(in crate::widget_host) preview_last_doc: Option<(f32, f32)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -591,6 +598,8 @@ impl WidgetHostNative {
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
             preview: None,
+            preview_press_active: false,
+            preview_last_doc: None,
         }
     }
 
@@ -660,6 +669,8 @@ impl WidgetHostNative {
     /// touched it). Idempotent.
     pub fn exit_preview(&mut self) {
         self.preview = None;
+        self.preview_press_active = false;
+        self.preview_last_doc = None;
         self.editor_state.editor_ui.exit_preview();
         self.mark_dirty();
     }
@@ -701,12 +712,29 @@ impl WidgetHostNative {
         consumed
     }
 
+    /// Screen → document-space point when preview is active and the
+    /// point is inside the canvas region; `None` otherwise.
+    fn preview_doc_point(
+        &self,
+        screen_x: f32,
+        screen_y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<op_editor_ui::Point2D> {
+        self.preview.as_ref()?;
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        if screen_x < cx0 || screen_x > cx0 + cw || screen_y < cy0 || screen_y > cy0 + ch {
+            return None;
+        }
+        let canvas_local = op_editor_ui::Point2D::new(screen_x - cx0, screen_y - cy0);
+        Some(self.editor_state.viewport.to_document(canvas_local))
+    }
+
     /// Route a screen-space press into the live preview runtime as a
-    /// tap (Down→Up). `canvas_region` is the screen rect of the canvas
-    /// (`(left, top, w, h)`); the press is converted to canvas-local
-    /// then document space via the editor viewport so it matches the
-    /// painted scene transform. No-op (false) when not in preview or the
-    /// press is outside the canvas region.
+    /// pointer Down; the matching Up arrives via
+    /// [`Self::preview_dispatch_release`], with Moves in between so
+    /// drags (slider knobs) work. No-op (false) when not in preview or
+    /// the press is outside the canvas region.
     pub fn preview_dispatch_press(
         &mut self,
         screen_x: f32,
@@ -714,23 +742,94 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> bool {
-        if self.preview.is_none() {
+        use jian_core::gesture::pointer::PointerPhase;
+        let Some(doc) = self.preview_doc_point(screen_x, screen_y, viewport_w, viewport_h) else {
             return false;
-        }
-        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        if screen_x < cx0 || screen_x > cx0 + cw || screen_y < cy0 || screen_y > cy0 + ch {
-            return false;
-        }
-        // Canvas-local → document via the editor viewport (same
-        // transform the preview paint applies, inverted).
-        let canvas_local = op_editor_ui::Point2D::new(screen_x - cx0, screen_y - cy0);
-        let doc = self.editor_state.viewport.to_document(canvas_local);
+        };
+        self.preview_press_active = true;
+        self.preview_last_doc = Some((doc.x, doc.y));
         let handled = self
             .preview
             .as_mut()
-            .is_some_and(|p| p.dispatch_tap(doc.x, doc.y));
+            .is_some_and(|p| p.dispatch_pointer_phase(doc.x, doc.y, PointerPhase::Down));
         self.mark_dirty();
         handled
+    }
+
+    /// Route a cursor move into the live preview runtime — a drag
+    /// (`Move`) while the preview press is held, a `Hover` otherwise.
+    /// Returns `true` (move consumed) only when the point is on-canvas
+    /// AND not over a floating overlay panel, so top-bar hover and
+    /// floating-panel hover still work while previewing. (Other
+    /// floating chrome — e.g. the chat panel — is already
+    /// non-interactive in preview: `press.rs` swallows all non-topbar
+    /// presses, so preview owning its hover is consistent.)
+    pub fn preview_dispatch_move(&mut self, screen_x: f32, screen_y: f32) -> bool {
+        use jian_core::gesture::pointer::PointerPhase;
+        let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
+        if self.over_topmost_panel(screen_x, screen_y, vw, vh) {
+            return false;
+        }
+        let Some(doc) = self.preview_doc_point(screen_x, screen_y, vw, vh) else {
+            return false;
+        };
+        let phase = if self.preview_press_active {
+            PointerPhase::Move
+        } else {
+            PointerPhase::Hover
+        };
+        self.preview_last_doc = Some((doc.x, doc.y));
+        let emitted = self
+            .preview
+            .as_mut()
+            .is_some_and(|p| p.dispatch_pointer_phase(doc.x, doc.y, phase));
+        if emitted || self.preview_press_active {
+            self.mark_dirty();
+        }
+        true
+    }
+
+    /// Complete a preview drag: pointer Up at the last known document
+    /// point. Returns `true` when a preview press was in flight (the
+    /// release is consumed).
+    pub fn preview_dispatch_release(&mut self) -> bool {
+        use jian_core::gesture::pointer::PointerPhase;
+        if !self.preview_press_active {
+            return false;
+        }
+        self.preview_press_active = false;
+        if let Some((x, y)) = self.preview_last_doc {
+            if let Some(p) = self.preview.as_mut() {
+                p.dispatch_pointer_phase(x, y, PointerPhase::Up);
+            }
+        }
+        self.mark_dirty();
+        true
+    }
+
+    /// Route a wheel into the preview runtime; `false` (not consumed —
+    /// no `onScroll` node under the cursor) lets the caller fall back
+    /// to canvas pan/zoom so the user can still navigate while
+    /// previewing.
+    pub fn preview_dispatch_wheel(
+        &mut self,
+        screen_x: f32,
+        screen_y: f32,
+        delta_y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let Some(doc) = self.preview_doc_point(screen_x, screen_y, viewport_w, viewport_h) else {
+            return false;
+        };
+        let consumed = self
+            .preview
+            .as_mut()
+            .is_some_and(|p| p.dispatch_wheel(doc.x, doc.y, 0.0, delta_y));
+        if consumed {
+            self.mark_dirty();
+        }
+        consumed
     }
 
     /// Advance focus to the next (`shift=false`) / previous

@@ -13,6 +13,7 @@
 #![cfg(test)]
 
 use super::PreviewSession;
+use jian_core::gesture::pointer::PointerPhase;
 use jian_core::widget_state::WidgetState;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 
@@ -703,5 +704,108 @@ fn preview_promotes_role_input_frame_to_interactive_field() {
             .as_deref(),
         Some("a@b"),
         "typed text must surface in the overlaid preview scene"
+    );
+}
+
+/// A frame with an onHoverEnter action writing `$app.hovered`.
+fn hover_doc() -> jian_ops_schema::PenDocument {
+    let src = r##"{
+        "version": "1.1", "formatVersion": "1.1", "id": "x",
+        "app": { "name": "x", "version": "1", "id": "x" },
+        "state": { "hovered": { "type": "bool", "default": false } },
+        "children": [
+            { "type": "frame", "id": "card", "width": 200, "height": 100,
+              "fill": [{ "type": "solid", "color": "#ffffff" }],
+              "events": { "onHoverEnter": [ { "set": { "$app.hovered": "true" } } ] } }
+        ]
+    }"##;
+    jian_ops_schema::load_str(src)
+        .expect("parse hover doc")
+        .value
+}
+
+#[test]
+fn hover_move_fires_on_hover_enter() {
+    let doc = hover_doc();
+    let mut session =
+        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter");
+    session.set_now_ms(0);
+    session.dispatch_pointer_phase(20.0, 20.0, PointerPhase::Hover);
+    let v = session
+        .runtime()
+        .state
+        .app_get("hovered")
+        .expect("hovered seeded from doc state");
+    assert_eq!(
+        v.0,
+        serde_json::json!(true),
+        "onHoverEnter must fire on Hover move"
+    );
+}
+
+/// A slider so a Down→Move→Up drag can be asserted.
+fn slider_doc() -> jian_ops_schema::PenDocument {
+    let src = r##"{
+        "version": "1.1", "formatVersion": "1.1", "id": "x",
+        "app": { "name": "x", "version": "1", "id": "x" },
+        "children": [
+            { "type": "slider", "id": "vol", "width": 200, "height": 24,
+              "min": 0, "max": 100, "value": 50 }
+        ]
+    }"##;
+    jian_ops_schema::load_str(src)
+        .expect("parse slider doc")
+        .value
+}
+
+#[test]
+fn slider_drag_moves_value() {
+    let doc = slider_doc();
+    let mut session =
+        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter");
+    session.set_now_ms(0);
+    let (x, y, w, h) = session.node_rect("vol").expect("slider rect");
+    let cy = y + h / 2.0;
+    session.dispatch_pointer_phase(x + w * 0.5, cy, PointerPhase::Down);
+    session.dispatch_pointer_phase(x + w * 0.9, cy, PointerPhase::Move);
+    session.dispatch_pointer_phase(x + w * 0.9, cy, PointerPhase::Up);
+    match session.runtime().widget_states.get("vol") {
+        Some(WidgetState::Slider { value, .. }) => {
+            assert!(
+                *value > 60.0,
+                "drag to 90% must move the value past 60, got {value}"
+            );
+        }
+        other => panic!("expected Slider state, got {other:?}"),
+    }
+}
+
+#[test]
+fn wheel_routes_only_to_on_scroll_handler() {
+    // With an onScroll handler → consumed; without → not consumed
+    // (the host then falls back to canvas pan/zoom).
+    let src = r##"{
+        "version": "1.1", "formatVersion": "1.1", "id": "x",
+        "app": { "name": "x", "version": "1", "id": "x" },
+        "state": { "scrolled": { "type": "bool", "default": false } },
+        "children": [
+            { "type": "frame", "id": "list", "width": 200, "height": 100,
+              "events": { "onScroll": [ { "set": { "$app.scrolled": "true" } } ] } }
+        ]
+    }"##;
+    let doc = jian_ops_schema::load_str(src).expect("parse").value;
+    let mut session =
+        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter");
+    assert!(
+        session.dispatch_wheel(20.0, 20.0, 0.0, -12.0),
+        "onScroll node must consume"
+    );
+
+    let plain = text_input_doc();
+    let mut plain_session =
+        PreviewSession::enter(&plain, (800.0, 600.0), &default_theme(), 0).expect("enter");
+    assert!(
+        !plain_session.dispatch_wheel(20.0, 20.0, 0.0, -12.0),
+        "no handler → not consumed → host may pan/zoom"
     );
 }

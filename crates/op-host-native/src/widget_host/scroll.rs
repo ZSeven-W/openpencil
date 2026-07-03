@@ -540,6 +540,15 @@ impl WidgetHostNative {
         if self.try_scroll_layer_panel(x, y, layer_dx, layer_dy, viewport_height) {
             return true;
         }
+        // Live preview: a wheel over a node carrying `events.onScroll`
+        // goes to the runtime; otherwise fall through so the user can
+        // still pan/zoom the canvas while previewing. Runs below the
+        // panel/picker guards — they own the wheel over their rects.
+        if self.preview.is_some()
+            && self.preview_dispatch_wheel(x, y, delta_y, viewport_width, viewport_height)
+        {
+            return true;
+        }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
