@@ -1,7 +1,7 @@
 //! Footer toolbar geometry and paint for the AI chat panel.
 //!
 //! Computes the bottom single-row toolbar rects:
-//!   model pill (LEFT) | [gap] | ⚡ parallel-agents chip | attach | palette | send (RIGHT)
+//!   model pill (LEFT) | [gap] | ⚡ parallel-agents chip | attach | send (RIGHT)
 //!
 //! As of #38 the ⚡/📎/🎨 cluster moved from the LEFT (between model and gap) to
 //! the RIGHT. As of #42 the cluster sits snug against the single send/stop
@@ -46,7 +46,7 @@ const PARALLEL_AGENTS_ROW_H: f32 = PARALLEL_AGENTS_ROW_H_PUB;
 /// Width of the Parallel Agents picker overlay.
 const PARALLEL_AGENTS_PICKER_W: f32 = 130.0;
 
-/// Width of the bare-icon buttons (attach, palette) in the toolbar.
+/// Width of the bare-icon buttons (attach) in the toolbar.
 pub(crate) const FOOTER_ICON_W: f32 = 24.0;
 
 /// Diameter of the circular send/stop buttons.
@@ -73,7 +73,7 @@ impl<'a> AIChatPlaceholder<'a> {
         // Agent-team chip — zero-width logical rect for schema compat; contains() = false.
         let agent_team = Rect::xywh(model_x + FOOTER_MODEL_PILL_W, cy - 11.0, 0.0, 22.0);
 
-        // Right cluster (#38/#42 layout) — ⚡ chip | 📎 attach | 🎨 palette | send,
+        // Right cluster (#38/#42 layout) — ⚡ chip | 📎 attach | send,
         // laid out right-to-left from right_edge (stop shares the send slot).
         let right_edge = rect.origin.x + rect.size.x - PAD;
 
@@ -90,17 +90,9 @@ impl<'a> AIChatPlaceholder<'a> {
         // against the single circle with no reserved gap between 🎨 and send (#42).
         let stop = send;
 
-        // Palette icon — immediately left of the send/stop circle.
-        let palette_x = send.origin.x - FOOTER_GAP - FOOTER_ICON_W;
-        let palette = Rect::xywh(
-            palette_x,
-            cy - FOOTER_ICON_W / 2.0,
-            FOOTER_ICON_W,
-            FOOTER_ICON_W,
-        );
-
-        // Attach icon — immediately left of palette.
-        let attach_x = palette_x - FOOTER_GAP - FOOTER_ICON_W;
+        // Attach icon — immediately left of the send/stop circle. (The
+        // palette slot is removed until the feature behind it exists.)
+        let attach_x = send.origin.x - FOOTER_GAP - FOOTER_ICON_W;
         let attach = Rect::xywh(
             attach_x,
             cy - FOOTER_ICON_W / 2.0,
@@ -118,7 +110,6 @@ impl<'a> AIChatPlaceholder<'a> {
             speed,
             agent_team,
             attach,
-            palette,
             stop,
             send,
         }
@@ -276,7 +267,7 @@ pub(crate) fn paint_parallel_agents_picker(
 
 /// Paint the bottom-toolbar row of the AI chat panel (#27 / #32 layout).
 ///
-/// Draws: model pill | [gap] | ⚡ parallel-agents chip | 📎 attach | 🎨 palette | ↑ send (◻ stop while streaming)
+/// Draws: model pill | [gap] | ⚡ parallel-agents chip | 📎 attach | ↑ send (◻ stop while streaming)
 ///
 /// The ⚡ chip shows "{N}x" in gold (N = `agent_team_size`) and opens the
 /// Parallel Agents picker on click.
@@ -438,32 +429,6 @@ pub(crate) fn paint_bottom_toolbar(
         Point2D::new(
             attach_rect.origin.x + attach_icon_offset,
             attach_rect.origin.y + attach_icon_offset,
-        ),
-        12.0,
-        widget.theme.muted_foreground,
-        1.4,
-    );
-
-    // --- Palette button — bare icon, inert (#27 future affordance) ---
-    let palette_rect = footer.palette;
-    if widget.footer_hover == Some(ChatFooterButton::Palette)
-        || widget.footer_pressed == Some(ChatFooterButton::Palette)
-    {
-        cx.backend.fill_round_rect(
-            palette_rect,
-            6.0,
-            chat_neutral_feedback_color(
-                &widget.theme,
-                widget.footer_pressed == Some(ChatFooterButton::Palette),
-            ),
-        );
-    }
-    draw_icon(
-        cx.backend,
-        Icon::Palette,
-        Point2D::new(
-            palette_rect.origin.x + attach_icon_offset,
-            palette_rect.origin.y + attach_icon_offset,
         ),
         12.0,
         widget.theme.muted_foreground,
