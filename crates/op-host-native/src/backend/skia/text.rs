@@ -6,42 +6,7 @@
 
 use op_editor_ui::{Point2D, TextLayout};
 
-use super::font_script;
-use super::{NativeBackend, ROBOTO_TTF};
-
-/// Build a skia `FontStyle` from the canonical schema's CSS-style
-/// numeric weight (100-900) plus the slant bit. Width stays at the
-/// system default.
-fn font_style_for(weight: u16, italic: bool) -> skia_safe::FontStyle {
-    let w = weight as i32;
-    skia_safe::FontStyle::new(
-        skia_safe::font_style::Weight::from(w),
-        skia_safe::font_style::Width::NORMAL,
-        if italic {
-            skia_safe::font_style::Slant::Italic
-        } else {
-            skia_safe::font_style::Slant::Upright
-        },
-    )
-}
-
-fn primary_font_family(stack: &str) -> Option<&str> {
-    let first = stack.split(',').next()?.trim().trim_matches(['"', '\'']);
-    if first.is_empty()
-        || matches!(
-            first,
-            "system-ui" | "sans-serif" | "serif" | "monospace" | "-apple-system"
-        )
-    {
-        None
-    } else {
-        Some(first)
-    }
-}
-
-/// Synthetic oblique skew applied when the resolved typeface has no
-/// real italic variant — mirrors the synthetic-bold stroke trick.
-const SYNTH_ITALIC_SKEW: f32 = -0.25;
+use super::NativeBackend;
 
 pub(super) fn draw_text_runs(layout: &TextLayout) -> &[jian_core::render::TextRun] {
     layout.runs()
@@ -59,47 +24,9 @@ impl NativeBackend {
         c: char,
         weight: u16,
     ) -> Option<skia_safe::Typeface> {
-        self.typeface_for_char_styled(c, weight, false)
-    }
-
-    fn typeface_for_char_styled(
-        &mut self,
-        c: char,
-        weight: u16,
-        italic: bool,
-    ) -> Option<skia_safe::Typeface> {
-        // ASCII at weight 400 upright stays on the bundled
-        // Roboto-Regular for hot chrome paint; non-default weight,
-        // italic, or non-ASCII falls through to the system FontMgr,
-        // which honours weight + slant.
-        if c.is_ascii() && weight == 400 && !italic {
-            return self.ensure_typeface().cloned();
-        }
-        // CJK / Hangul fall through to the weight-aware FontMgr lookup below
-        // (`draw_text` no longer synth-strokes CJK, so bold needs a REAL bold
-        // face — not the default-weight cached one). The `or_else` keeps the
-        // cached system faces as a last-resort fallback.
-        let cp = c as i32;
-        let key = (cp, weight, italic);
-        if let Some(cached) = self.char_typeface_cache.get(&key) {
-            return cached.clone();
-        }
-        let style = font_style_for(weight, italic);
-        let tf = self
-            .font_mgr
-            .match_family_style_character("", style, &[], cp);
-        let resolved = tf.or_else(|| {
-            // Last-resort cached system face (rare — the weight-aware lookup
-            // above usually covers the char). Hangul prefers a Hangul-covering
-            // face over the Han-ideograph one.
-            if font_script::is_hangul_codepoint(c) {
-                self.ensure_korean_typeface().cloned()
-            } else {
-                self.ensure_cjk_typeface().cloned()
-            }
-        });
-        self.char_typeface_cache.insert(key, resolved.clone());
-        resolved
+        self.font_resolver
+            .typeface_for_char(None, c, weight, false)
+            .map(|resolved| resolved.typeface)
     }
 
     /// Upright convenience wrapper — production paths go through the
@@ -111,126 +38,9 @@ impl NativeBackend {
         family: &str,
         weight: u16,
     ) -> Option<skia_safe::Typeface> {
-        self.typeface_for_family_char_styled(c, family, weight, false)
-    }
-
-    fn typeface_for_family_char_styled(
-        &mut self,
-        c: char,
-        family: &str,
-        weight: u16,
-        italic: bool,
-    ) -> Option<skia_safe::Typeface> {
-        let Some(primary) = primary_font_family(family) else {
-            return self.typeface_for_char_styled(c, weight, italic);
-        };
-        if font_script::is_hangul_codepoint(c) || font_script::is_east_asian_codepoint(c) {
-            // Resolve CJK / Hangul at the REQUESTED weight (preferring the
-            // requested family when it covers the script). Previously this
-            // returned one cached Regular-weight system face and `draw_text`
-            // faked bold with a stroke outline — which muddied dense CJK /
-            // Hangul glyphs ("中文字体不好看"). Resolving from the char itself
-            // at the right weight gets a REAL bold face. Cache per
-            // (family, char, weight, italic), like the Latin path below.
-            let key = (primary.to_string(), c as i32, weight, italic);
-            if let Some(cached) = self.family_typeface_cache.get(&key) {
-                return cached.clone();
-            }
-            let style = font_style_for(weight, italic);
-            let resolved = self
-                .font_mgr
-                .match_family_style_character(primary, style, &[], c as i32)
-                .or_else(|| {
-                    self.font_mgr
-                        .match_family_style_character("", style, &[], c as i32)
-                });
-            self.family_typeface_cache.insert(key, resolved.clone());
-            return resolved;
-        }
-        let key = (primary.to_string(), c as i32, weight, italic);
-        if let Some(cached) = self.family_typeface_cache.get(&key) {
-            return cached.clone();
-        }
-        let style = font_style_for(weight, italic);
-        let resolved = self
-            .font_mgr
-            .match_family_style_character(primary, style, &[], c as i32)
-            .or_else(|| self.typeface_for_char_styled(c, weight, italic));
-        self.family_typeface_cache.insert(key, resolved.clone());
-        resolved
-    }
-
-    /// Split `text` into contiguous segments that share a typeface,
-    /// preserving char order. Glyphs without any covering typeface
-    /// are bucketed with the previous segment so they at least
-    /// occupy space (rather than disappearing).
-    fn segment_text_styled(
-        &mut self,
-        text: &str,
-        family: &str,
-        weight: u16,
-        italic: bool,
-    ) -> Vec<(skia_safe::Typeface, String)> {
-        let mut segments: Vec<(skia_safe::Typeface, String)> = Vec::new();
-        for c in text.chars() {
-            let tf = self.typeface_for_family_char_styled(c, family, weight, italic);
-            let Some(tf) = tf else {
-                if let Some(last) = segments.last_mut() {
-                    last.1.push(c);
-                }
-                continue;
-            };
-            match segments.last_mut() {
-                Some(last) if last.0.unique_id() == tf.unique_id() => last.1.push(c),
-                _ => segments.push((tf, c.to_string())),
-            }
-        }
-        segments
-    }
-
-    /// Lazy-init the Step 4 cached Roboto typeface (ASCII path).
-    fn ensure_typeface(&mut self) -> Option<&skia_safe::Typeface> {
-        if !self.typeface_tried {
-            self.typeface = self.font_mgr.new_from_data(ROBOTO_TTF, None);
-            self.typeface_tried = true;
-        }
-        self.typeface.as_ref()
-    }
-
-    /// Lazy-resolve a system typeface that has CJK glyph coverage.
-    /// Picks whichever font the system FontMgr would use for the
-    /// canonical Han ideograph U+4E00 — on macOS this is PingFang SC,
-    /// on Linux it's Noto Sans CJK, on Windows it's Microsoft YaHei
-    /// or similar. Cached for the lifetime of the backend so we
-    /// don't pay the FontMgr lookup more than once.
-    fn ensure_cjk_typeface(&mut self) -> Option<&skia_safe::Typeface> {
-        if !self.cjk_typeface_tried {
-            self.cjk_typeface = self.font_mgr.match_family_style_character(
-                "",
-                skia_safe::FontStyle::default(),
-                &[],
-                '一' as i32,
-            );
-            self.cjk_typeface_tried = true;
-        }
-        self.cjk_typeface.as_ref()
-    }
-
-    /// Lazy-init the cached Korean (Hangul) typeface, resolved from a
-    /// Hangul syllable so the OS picks a Hangul-covering face (e.g.
-    /// Apple SD Gothic Neo / Noto Sans KR) rather than the Chinese
-    /// font the Han-ideograph match returns.
-    fn ensure_korean_typeface(&mut self) -> Option<&skia_safe::Typeface> {
-        if !self.korean_typeface_tried {
-            self.korean_typeface = self.font_mgr.match_family_style_character(
-                "",
-                skia_safe::FontStyle::default(),
-                &[],
-                '한' as i32,
-            );
-            self.korean_typeface_tried = true;
-        }
-        self.korean_typeface.as_ref()
+        self.font_resolver
+            .typeface_for_char(Some(family), c, weight, false)
+            .map(|resolved| resolved.typeface)
     }
 
     /// Measure the rendered horizontal advance of `text` at
@@ -280,17 +90,8 @@ impl NativeBackend {
         weight: u16,
         italic: bool,
     ) -> f32 {
-        let segments = self.segment_text_styled(text, family, weight, italic);
-        if segments.is_empty() {
-            return 0.0;
-        }
-        let mut advance = 0.0_f32;
-        for (typeface, segment) in segments {
-            let font = skia_safe::Font::new(&typeface, font_size);
-            let (a, _) = font.measure_str(&segment, None);
-            advance += a;
-        }
-        advance
+        self.font_resolver
+            .measure_text(text, font_size, Some(family), weight, italic)
     }
 
     /// Family-aware width at the default weight/upright — the measurement
@@ -319,9 +120,9 @@ impl NativeBackend {
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
         let italic = layout.italic();
         for run in draw_text_runs(layout) {
-            let segments = self.segment_text_styled(
+            let segments = self.font_resolver.segment_text(
                 run.content.as_str(),
-                &run.font_family,
+                Some(&run.font_family),
                 run.font_weight,
                 italic,
             );
@@ -347,29 +148,23 @@ impl NativeBackend {
             let want_bold = run.font_weight >= 600;
             let mut x = origin.x + run.origin.x;
             let y = origin.y + run.origin.y;
-            for (typeface, segment) in segments {
-                let mut font = skia_safe::Font::new(&typeface, run.font_size);
-                if italic && !typeface.is_italic() {
-                    font.set_skew_x(SYNTH_ITALIC_SKEW);
+            for segment in segments {
+                let mut font = skia_safe::Font::new(&segment.typeface, run.font_size);
+                if segment.synthetic_italic {
+                    font.set_skew_x(jian_skia::SYNTHETIC_ITALIC_SKEW);
                 }
-                // Synthetic bold only for single-weight faces (the bundled
-                // Roboto for ASCII). CJK / Hangul now resolve to a REAL bold
-                // face, so stroking them would double-bold and muddy the
-                // dense glyphs — paint those fill-only. Check ANY char (not
-                // just the first) so a mixed-script segment can never slip a
-                // stroked CJK glyph through.
-                let seg_has_cjk = segment.chars().any(|c| {
-                    font_script::is_east_asian_codepoint(c) || font_script::is_hangul_codepoint(c)
-                });
-                if want_bold && !seg_has_cjk {
+                if want_bold && segment.synthetic_bold {
                     paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
                     paint.set_stroke_width(run.font_size * 0.06);
                 } else {
                     paint.set_style(skia_safe::PaintStyle::Fill);
                     paint.set_stroke_width(0.0);
                 }
-                canvas.draw_str(&segment, (x, y), &font, &paint);
-                let (advance, _) = font.measure_str(&segment, None);
+                canvas.draw_str(&segment.text, (x, y), &font, &paint);
+                let (mut advance, _) = font.measure_str(&segment.text, None);
+                if segment.synthetic_bold {
+                    advance *= jian_skia::SYNTHETIC_BOLD_WIDTH_FACTOR;
+                }
                 x += advance;
             }
         }

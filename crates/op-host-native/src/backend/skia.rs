@@ -67,7 +67,6 @@ pub(super) fn jian_color_to_color4f(c: Color) -> skia_safe::Color4f {
 // / `_radial_gradient`) and their helpers live in the sibling
 // `gradient.rs` so this spine stays under the 800-line cap. The
 // methods are added to `NativeBackend` via a sibling `impl` block.
-mod font_script;
 mod gradient;
 mod image;
 mod path;
@@ -84,38 +83,10 @@ use image::{cover_rect, image_adjustment_matrix};
 pub struct NativeBackend {
     skia: jian_skia::SkiaBackend,
     dpi: f32,
-    font_mgr: skia_safe::FontMgr,
-    /// Lazy-initialised typeface backed by the embedded Roboto TTF
-    /// (shared with shell-web). Step 4 perf fix: jian-skia's
-    /// `textlayout` path allocates a fresh `FontCollection` +
-    /// `FontMgr` per `DrawOp::Text` (~15ms each on M1), so a chrome
-    /// frame with ~30 text draws cost ~600ms. We bypass that path
-    /// entirely for chrome by caching typefaces here and rendering
-    /// via `Canvas::draw_str`.
-    ///
-    /// `typeface` covers ASCII (Roboto). `cjk_typeface` is resolved
-    /// lazily via `FontMgr::match_family_style_character` so non-
-    /// ASCII labels (localized CJK chrome strings) render through a
-    /// system CJK font (PingFang on macOS,
-    /// Noto CJK on Linux/Windows) without re-paying jian-skia's
-    /// per-call FontCollection cost.
-    typeface: Option<skia_safe::Typeface>,
-    typeface_tried: bool,
-    cjk_typeface: Option<skia_safe::Typeface>,
-    cjk_typeface_tried: bool,
-    /// Korean (Hangul) face — resolved separately from `cjk_typeface`
-    /// because the Han-ideograph match returns a Chinese font without
-    /// Hangul coverage.
-    korean_typeface: Option<skia_safe::Typeface>,
-    korean_typeface_tried: bool,
-    /// Default-family per-codepoint typeface cache, keyed by
-    /// `(codepoint, weight, italic)` — the slant bit keeps italic
-    /// resolutions from shadowing upright ones.
-    char_typeface_cache: std::collections::HashMap<(i32, u16, bool), Option<skia_safe::Typeface>>,
-    /// Explicit-family typeface cache for selected text / font picker
-    /// previews, keyed by `(primary family, codepoint, weight, italic)`.
-    family_typeface_cache:
-        std::collections::HashMap<(String, i32, u16, bool), Option<skia_safe::Typeface>>,
+    /// Shared font resolver used by native text paint/measure and by
+    /// jian-skia's `SkiaMeasure`, so geometry sees the same typeface
+    /// and synthetic-bold branch the painter uses.
+    font_resolver: jian_skia::FontResolver,
     /// Decoded-image cache keyed by [`op_editor_core::ChatImage::id`].
     /// `draw_image` decodes the raw bytes once on first sight; later
     /// frames reuse the cached `Image`. A decode failure is cached as
@@ -183,18 +154,15 @@ impl NativeBackend {
     /// image cache. The convenience `with_dpi` covers the common
     /// "fresh backend" path.
     pub fn new(skia: jian_skia::SkiaBackend, dpi: f32) -> Self {
+        let font_mgr = skia_safe::FontMgr::new();
+        let default_typeface = font_mgr.new_from_data(ROBOTO_TTF, None);
         let mut this = Self {
             skia,
             dpi,
-            font_mgr: skia_safe::FontMgr::new(),
-            typeface: None,
-            typeface_tried: false,
-            cjk_typeface: None,
-            cjk_typeface_tried: false,
-            korean_typeface: None,
-            korean_typeface_tried: false,
-            char_typeface_cache: std::collections::HashMap::new(),
-            family_typeface_cache: std::collections::HashMap::new(),
+            font_resolver: jian_skia::FontResolver::with_default_typeface(
+                font_mgr,
+                default_typeface,
+            ),
             image_cache: std::collections::HashMap::new(),
             image_cache_order: std::collections::VecDeque::new(),
             svg_path_cache: std::collections::HashMap::new(),
@@ -536,7 +504,7 @@ impl NativeBackend {
 
     #[cfg(test)]
     pub(crate) fn family_typeface_cache_len(&self) -> usize {
-        self.family_typeface_cache.len()
+        self.font_resolver.cache_len()
     }
 }
 
