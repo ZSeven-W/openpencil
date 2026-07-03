@@ -286,6 +286,30 @@ fn loop_finalize_gives_fill_less_text_a_visible_fill_on_dark_surface() {
 }
 
 #[test]
+fn loop_finalize_hoists_node_state_to_doc_root() {
+    let mut state = state_with_forest(json!([
+        {"type": "frame", "id": "sec", "name": "Hero", "width": 1200, "height": 400,
+         "state": {"count": {"type": "int", "default": 3}},
+         "children": [
+             {"type": "text", "id": "t", "name": "HeroLabel", "content": "hi"}
+         ]}
+    ]));
+    apply_loop_finalize(&mut state);
+
+    // Node-level `state` must be stripped from the tree…
+    let hero = find_by_name(state.active_children(), "Hero").expect("hero survives finalize");
+    let v = serde_json::to_value(hero).expect("serialize hero");
+    assert!(v.get("state").is_none(), "node state must be stripped");
+
+    // …and merged into the document root (the `$app` store).
+    let root_state = state.doc.state.as_ref().expect("doc-root state seeded");
+    assert_eq!(
+        root_state.get("count").and_then(|e| e.default.clone()),
+        Some(json!(3))
+    );
+}
+
+#[test]
 fn loop_finalize_leaves_text_on_gradient_surface_alone() {
     // A gradient (or image) fill cannot be reduced to a solid hex — guessing a
     // text color there risks dark-on-dark, the mirror of the bug the injection

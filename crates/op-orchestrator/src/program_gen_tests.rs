@@ -21,8 +21,9 @@ fn run_program_to_forest_nests_cells_under_rows_via_bindings() {
         "c1=I(r1, {\"type\":\"frame\",\"name\":\"Cell\"})\n",
         "I(c1, {\"type\":\"text\",\"content\":\"Alice\"})"
     );
-    let nodes = run_program_to_forest(program).expect("program builds a forest");
+    let (nodes, state) = run_program_to_forest(program).expect("program builds a forest");
     assert_eq!(nodes.len(), 1, "exactly one section root");
+    assert!(state.is_empty(), "program declared no state");
     let sec = &nodes[0];
     let tbl = &sec.children().expect("sec children")[0];
     let row = &tbl.children().expect("table children")[0];
@@ -51,7 +52,7 @@ fn image_without_src_and_bad_textgrowth_survive() {
         "I(sec, {\"type\":\"image\",\"name\":\"Avatar\",\"width\":40,\"height\":40})\n",
         "I(sec, {\"type\":\"text\",\"content\":\"Hi\",\"textGrowth\":\"fit_content\"})"
     );
-    let nodes = run_program_to_forest(program).expect("program builds a forest");
+    let (nodes, _state) = run_program_to_forest(program).expect("program builds a forest");
     let sec = &nodes[0];
     let kids = sec.children().expect("sec children");
     assert_eq!(
@@ -71,8 +72,36 @@ fn bare_identifier_sizing_value_survives() {
         "sec=I(null, {\"type\":\"frame\",\"name\":\"Sec\",\"layout\":\"vertical\",\"width\":\"fill_container\"})\n",
         "I(sec, {\"type\":\"text\",\"name\":\"Col Service\",\"content\":\"SERVICE\",\"width\":fill_container_str})"
     );
-    let nodes = run_program_to_forest(program).expect("program builds a forest");
+    let (nodes, _state) = run_program_to_forest(program).expect("program builds a forest");
     let sec = &nodes[0];
     let kids = sec.children().expect("sec children");
     assert_eq!(kids.len(), 1, "the bare-identifier-sized text survived");
+}
+
+#[test]
+fn run_program_to_forest_drains_hoisted_state_off_the_scratch_document() {
+    // A program whose `I()` node carries a `state` block must come back with
+    // that state DRAINED from the returned schema — and the returned nodes
+    // must have their own `state` field stripped (op-mcp's generation-hoist
+    // already stripped it before this executor ever saw the forest; this is
+    // a regression guard against that hoist landing on the scratch doc and
+    // getting silently discarded instead of returned to the caller).
+    let program = concat!(
+        "I(null, {\"type\":\"frame\",\"name\":\"Sec\",\"width\":\"fill_container\",",
+        "\"state\":{\"n\":{\"type\":\"int\",\"default\":0}},",
+        "\"children\":[{\"type\":\"text\",\"content\":\"Hi\"}]})"
+    );
+    let (nodes, state) = run_program_to_forest(program).expect("program builds a forest");
+    assert!(
+        state.contains_key("n"),
+        "hoisted state key must be returned to the caller, got {state:?}"
+    );
+    assert_eq!(nodes.len(), 1);
+    let jian_ops_schema::node::PenNode::Frame(frame) = &nodes[0] else {
+        panic!("expected a frame root");
+    };
+    assert!(
+        frame.state.is_none(),
+        "returned node must have its state drained, not just the scratch schema"
+    );
 }

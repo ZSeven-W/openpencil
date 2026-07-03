@@ -479,6 +479,25 @@ pub fn apply_loop_finalize(state: &mut EditorState) {
         crate::role_post_pass::enforce_surface_color_discipline(forest);
     }
 
+    // Hoist node-level `state` into the document root, mirroring the
+    // orchestrator's per-subtask `hoist_app_state` — without this the
+    // agentic-loop path leaves `$app.*` unseeded, so generated bindings
+    // and events reference keys that never reach `doc.state`. Runs over
+    // the REAL top-level nodes (not the unwrapped section forest) so a
+    // page wrapper's own `state` is hoisted too. Unplanned priority:
+    // any planned subtask default wins a conflict; doc-owned keys
+    // always win regardless.
+    let hoist_cmd = op_editor_core::hoist_app_state(
+        state.active_children_mut(),
+        op_editor_core::UNPLANNED_APP_STATE_IDX,
+    );
+    if matches!(
+        &hoist_cmd,
+        EditorCommand::MergeAppState { state: hoisted, .. } if !hoisted.is_empty()
+    ) {
+        state.apply(hoist_cmd);
+    }
+
     // The app-shell restructure (flat-vertical sidebar dashboard → horizontal
     // [sidebar | content]) runs inside `cleanup::finalize_design` below, the
     // whole-doc finalize point SHARED with the orchestrator path — so both the

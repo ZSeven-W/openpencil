@@ -26,7 +26,7 @@ fn js_loop_builds_repeated_rows_nested_under_the_table() {
             I(cell, {type:"text", content:r.name});
         }
     "#;
-    let nodes = parse_script(script).expect("script builds a forest");
+    let (nodes, _state) = parse_script(script).expect("script builds a forest");
     assert_eq!(nodes.len(), 1, "one section root");
     let sec = &nodes[0];
     let tbl = &sec.children().expect("sec children")[0];
@@ -65,7 +65,7 @@ fn flex_aligned_cells_survive_the_forest() {
             I(amtCell, {type:"text", content:d.amount});
         }
     "#;
-    let nodes = parse_script(script).expect("script builds a forest");
+    let (nodes, _state) = parse_script(script).expect("script builds a forest");
     let json = serde_json::to_string(&nodes).unwrap();
     // The flex_end amount cells must NOT be dropped — both amounts present.
     assert!(
@@ -104,7 +104,8 @@ fn truncated_script_repair_still_builds_a_forest_via_parse_script() {
         const b = I(sec, {type:"text", content:"kept-2"});
         I(sec, {type:"text", content:"dangl
     "#;
-    let nodes = parse_script(cut).expect("truncation repair must salvage a runnable forest");
+    let (nodes, _state) =
+        parse_script(cut).expect("truncation repair must salvage a runnable forest");
     let sec = &nodes[0];
     assert_eq!(
         sec.children().map(|c| c.len()).unwrap_or(0),
