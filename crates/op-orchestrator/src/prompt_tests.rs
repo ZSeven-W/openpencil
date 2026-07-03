@@ -136,7 +136,8 @@ fn subagent_prompt_carries_subtask_and_script_format() {
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
     assert!(cr.user_prompt.contains("Hero"));
     assert!(
-        cr.system_prompt.contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
+        cr.system_prompt
+            .contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
         "full attempt must use SCRIPT_FORMAT by default:\n{}",
         cr.system_prompt
     );
@@ -370,7 +371,9 @@ fn subagent_prompt_reduced_complexity_flips_protocol_even_on_full_tier() {
     let (full_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
     let (reduced_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), true, false);
     assert!(
-        full_cr.system_prompt.contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
+        full_cr
+            .system_prompt
+            .contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
         "full attempt uses script-gen even on Full tier"
     );
     assert!(
