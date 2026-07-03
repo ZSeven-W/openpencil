@@ -261,6 +261,14 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(),
     for (cmd, failure) in pre_commands {
         ctx.emit(cmd, failure)?;
     }
+    // Hoist node-level `state` as a SIBLING command — the program
+    // finisher batches ctx.commands itself; wrapping here would nest
+    // Batches, which apply rejects. Held until the insert below
+    // succeeds: emitting it first would leak an orphan `$app` state
+    // command into `ctx.commands` if the insert then fails (the line
+    // as a whole errors and is dropped, but a prior `ctx.emit` already
+    // recorded — state from a line that never landed must not ship).
+    let merge = super::batch_design::hoist_generation_state(&mut nodes);
     ctx.emit(
         EditorCommand::InsertAuthoredSubtree {
             nodes,
@@ -272,6 +280,20 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(),
             parent.as_deref().unwrap_or("null")
         ),
     )?;
+    if let Some(merge) = merge {
+        // Emit AFTER the insert succeeds (a failed line must not leak
+        // orphan $app state), then swap the two recorded commands so
+        // the batch still carries MergeAppState before its insert.
+        // Sim-apply order between the two is immaterial: merge touches
+        // only doc.state, the insert only the tree. (If this merge emit
+        // itself ever failed post-insert, the line would error after
+        // its insert already landed — state dropped but never
+        // orphaned; an additive MergeAppState on the sim can't
+        // realistically fail.)
+        ctx.emit(merge, "merge generated app state")?;
+        let n = ctx.commands.len();
+        ctx.commands.swap(n - 1, n - 2);
+    }
     ctx.bind(binding, &root_id);
     Ok(())
 }
@@ -355,7 +377,13 @@ fn execute_replace(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()
         return Err(format!("Replace target not found: {path}"));
     };
     let old_id = old.id_str().to_string();
-    let node = parse_node_json(&args[comma + 1..], ctx.post_process)?;
+    let mut node = parse_node_json(&args[comma + 1..], ctx.post_process)?;
+    // Drain node-level `state` BEFORE the probe clone; hold the merge
+    // and emit it only after the replace below succeeds (emit applies
+    // immediately — emitting the merge first would leak an orphan
+    // `$app` state command into `ctx.commands` if the replace then
+    // fails; state from a line that never landed must not ship).
+    let merge = super::batch_design::hoist_generation_state(std::slice::from_mut(&mut node));
 
     // Predict the ids `cmd_replace_subtree` will assign: it remaps off
     // the live seed/taken BEFORE removing the old subtree — identical
@@ -375,6 +403,20 @@ fn execute_replace(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()
         },
         &format!("Replace failed for: {path}"),
     )?;
+    if let Some(merge) = merge {
+        // Emit AFTER the replace succeeds (a failed line must not leak
+        // orphan $app state), then swap the two recorded commands so
+        // the batch still carries MergeAppState before its replace.
+        // Sim-apply order between the two is immaterial: merge touches
+        // only doc.state, the replace only the tree. (If this merge
+        // emit itself ever failed post-replace, the line would error
+        // after its replace already landed — state dropped but never
+        // orphaned; an additive MergeAppState on the sim can't
+        // realistically fail.)
+        ctx.emit(merge, "merge generated app state")?;
+        let n = ctx.commands.len();
+        ctx.commands.swap(n - 1, n - 2);
+    }
     ctx.bind(binding, &new_id);
     Ok(())
 }
