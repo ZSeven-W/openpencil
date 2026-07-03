@@ -167,6 +167,70 @@ fn paint_quick_action_card_pressed_uses_shared_feedback() {
 }
 
 #[test]
+fn paint_new_chat_tooltip_after_transcript_bubbles() {
+    let mut s = EditorState::new();
+    s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::NewChat);
+    s.chat
+        .messages
+        .push(op_editor_core::ChatMessage::user("Design the KPI row"));
+    let panel = AIChatPlaceholder::from_editor(&s);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let body = panel.body_rect(rect);
+    let user_bubble =
+        crate::widgets::ai_chat_transcript::build_transcript(&s.chat.messages, body, panel.locale)
+            [0]
+        .bubble
+        .as_ref()
+        .expect("user bubble")
+        .rect;
+    let tooltip = crate::widgets::ai_chat_panel_header::new_chat_tooltip_rect(rect);
+    let tooltip_bg = crate::Color {
+        r: 0.12,
+        g: 0.12,
+        b: 0.14,
+        a: 0.97,
+    };
+    let mut backend = PanelPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    let user_bubble_op = backend
+        .ops
+        .iter()
+        .position(|op| {
+            matches!(
+                op,
+                PanelPaintOp::FillRoundRect { rect, radius, color }
+                    if rect_close(*rect, user_bubble)
+                        && (*radius - 14.0).abs() < 0.01
+                        && color_close(*color, panel.theme.user_bubble)
+            )
+        })
+        .expect("user transcript bubble painted");
+    let tooltip_op = backend
+        .ops
+        .iter()
+        .position(|op| {
+            matches!(
+                op,
+                PanelPaintOp::FillRoundRect { rect, radius, color }
+                    if rect_close(*rect, tooltip)
+                        && (*radius - 6.0).abs() < 0.01
+                        && color_close(*color, tooltip_bg)
+            )
+        })
+        .expect("new-chat tooltip painted");
+
+    assert!(
+        tooltip_op > user_bubble_op,
+        "tooltip fill op index {tooltip_op} must be after transcript bubble index {user_bubble_op}"
+    );
+}
+
+#[test]
 fn paint_send_button_hover_adds_visible_feedback() {
     // The active send circle dims on hover (rest 1.0 → hover 0.9 alpha), so the
     // hovered fill must visibly differ from the resting fill — not just exist.
@@ -514,6 +578,16 @@ struct PanelPaintBackend {
     svg_strokes: Vec<(Point2D, f32, crate::Color, f32)>,
     svg_paths: Vec<String>,
     stroke_lines: usize,
+    ops: Vec<PanelPaintOp>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PanelPaintOp {
+    FillRoundRect {
+        rect: Rect,
+        radius: f32,
+        color: crate::Color,
+    },
 }
 
 impl crate::RenderBackend for PanelPaintBackend {
@@ -538,6 +612,11 @@ impl crate::RenderBackend for PanelPaintBackend {
     }
     fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: crate::Color) {
         self.round_rects.push((rect, radius, color));
+        self.ops.push(PanelPaintOp::FillRoundRect {
+            rect,
+            radius,
+            color,
+        });
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: crate::Color, _: f32) {}
     fn stroke_svg_path(

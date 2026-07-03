@@ -522,11 +522,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             self.theme.muted_foreground,
             1.4,
         );
-        // "New Chat ⌘T" tooltip — shown only when "+" is hovered.
-        if new_chat_hovered {
-            paint_new_chat_tooltip(cx, &self.theme, rect);
-        }
-
         // --- Maximize / minimize icon (just left of new-chat) ---
         let maximize_x = right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W;
         jian_widgets::components::icon_button::IconButton {
@@ -673,6 +668,12 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.state.agent_team_size,
                 self.parallel_agents_picker_hover,
             );
+        }
+
+        // "New Chat Cmd+T" tooltip paints after transcript and overlays so it
+        // cannot be covered by message bubbles below the header.
+        if new_chat_hovered {
+            paint_new_chat_tooltip(cx, &self.theme, rect);
         }
     }
 
