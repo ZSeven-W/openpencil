@@ -10,7 +10,12 @@
 //! DSL — giving the loop loops/data-driven emission without a separate
 //! element-builder tool.
 
+use std::collections::HashSet;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use jian_ops_schema::node::{ContainerProps, PenNode, TextContent};
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
+use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
 use op_mcp::ToolRegistry;
 
@@ -77,6 +82,22 @@ pub fn execute_design_tool(
     name: &str,
     args_json: &str,
 ) -> (ChatToolResult, bool) {
+    execute_design_tool_with_reveals(
+        state,
+        name,
+        args_json,
+        op_editor_core::agent_indicators::active_epoch(),
+    )
+}
+
+/// Execute one design tool call and register entrance reveals for nodes inserted
+/// by write batches when the host has an active indicator epoch.
+pub fn execute_design_tool_with_reveals(
+    state: &mut EditorState,
+    name: &str,
+    args_json: &str,
+    indicator_epoch: Option<u64>,
+) -> (ChatToolResult, bool) {
     let Some(_level) = design_tool_level(name) else {
         let envelope = serde_json::json!({ "success": false, "error": format!("tool not available in design agent: {name}") });
         return (
@@ -87,8 +108,16 @@ pub fn execute_design_tool(
             false,
         );
     };
+    let reveal_started_ms = reveal_now_millis();
+    let ids_before = should_register_batch_reveals(name, indicator_epoch)
+        .then(|| collect_active_node_ids(state));
     let registry = design_tool_registry(state, name);
     let (mut result, mutated) = execute_with_registry(state, name, args_json, registry);
+    if mutated && !result.is_error {
+        if let Some(ids_before) = ids_before.as_ref() {
+            register_new_node_reveals(ids_before, state, indicator_epoch, reveal_started_ms);
+        }
+    }
     // Per-batch layout feedback: after every WRITE batch, attach what the real
     // layout proves wrong (collapses / table overflow / text overflow) so the
     // model sees each batch's geometric consequences immediately and repairs
@@ -128,8 +157,24 @@ pub fn execute_agent_tool(
     name: &str,
     args_json: &str,
 ) -> (ChatToolResult, bool) {
+    execute_agent_tool_with_reveals(
+        state,
+        name,
+        args_json,
+        op_editor_core::agent_indicators::active_epoch(),
+    )
+}
+
+/// Host-facing tool router with an explicit indicator epoch for tests and
+/// desktop paths that already know the active design-loop epoch.
+pub fn execute_agent_tool_with_reveals(
+    state: &mut EditorState,
+    name: &str,
+    args_json: &str,
+    indicator_epoch: Option<u64>,
+) -> (ChatToolResult, bool) {
     if design_tool_level(name).is_some() {
-        execute_design_tool(state, name, args_json)
+        execute_design_tool_with_reveals(state, name, args_json, indicator_epoch)
     } else {
         execute_chat_tool(state, name, args_json)
     }
@@ -162,6 +207,148 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
         _ => {}
     }
     r
+}
+
+fn should_register_batch_reveals(name: &str, indicator_epoch: Option<u64>) -> bool {
+    indicator_epoch.is_some() && matches!(name, "batch_design" | EMIT_ELEMENTS_TOOL)
+}
+
+fn collect_active_node_ids(state: &EditorState) -> HashSet<String> {
+    let mut out = HashSet::new();
+    for node in state.active_children() {
+        collect_node_ids(node, &mut out);
+    }
+    out
+}
+
+fn collect_node_ids(node: &PenNode, out: &mut HashSet<String>) {
+    out.insert(node.id_str().to_string());
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_node_ids(child, out);
+        }
+    }
+}
+
+fn register_new_node_reveals(
+    ids_before: &HashSet<String>,
+    state: &EditorState,
+    indicator_epoch: Option<u64>,
+    reveal_started_ms: u64,
+) {
+    let Some(epoch) = indicator_epoch else {
+        return;
+    };
+    let mut stream = RevealStream {
+        index: 0,
+        next_start_ms: reveal_started_ms,
+    };
+    for node in state.active_children() {
+        register_node_reveals(
+            node,
+            ids_before,
+            epoch,
+            reveal_started_ms,
+            0,
+            None,
+            &mut stream,
+        );
+    }
+}
+
+struct RevealStream {
+    index: u64,
+    next_start_ms: u64,
+}
+
+fn register_node_reveals(
+    node: &PenNode,
+    ids_before: &HashSet<String>,
+    epoch: u64,
+    reveal_started_ms: u64,
+    depth: u64,
+    parent_reveal_start_ms: Option<u64>,
+    stream: &mut RevealStream,
+) {
+    let id = node.id_str();
+    let mut own_reveal_start_ms = parent_reveal_start_ms;
+    if !ids_before.contains(id) && should_reveal_node(node, depth) {
+        let own_stream_index = stream.index;
+        stream.index += 1;
+        let base_start = reveal_started_ms
+            + op_editor_core::agent_indicators::reveal_offset_ms(depth, own_stream_index);
+        let child_runway_start = parent_reveal_start_ms
+            .map(|started_at| {
+                started_at.saturating_add(op_editor_core::agent_indicators::REVEAL_CHILD_RUNWAY_MS)
+            })
+            .unwrap_or(reveal_started_ms);
+        let started_at = base_start.max(child_runway_start).max(stream.next_start_ms);
+        op_editor_core::agent_indicators::add_reveal(epoch, id, started_at);
+        stream.next_start_ms =
+            started_at.saturating_add(op_editor_core::agent_indicators::REVEAL_STAGGER_MS);
+        own_reveal_start_ms = Some(started_at);
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            register_node_reveals(
+                child,
+                ids_before,
+                epoch,
+                reveal_started_ms,
+                depth + 1,
+                own_reveal_start_ms,
+                stream,
+            );
+        }
+    }
+}
+
+fn should_reveal_node(node: &PenNode, depth: u64) -> bool {
+    depth == 0 || node_has_own_visual(node) || node_is_named_structure(node)
+}
+
+fn node_has_own_visual(node: &PenNode) -> bool {
+    match node {
+        PenNode::Frame(n) => {
+            container_has_own_visual(&n.container) || n.image_search_query.is_some()
+        }
+        PenNode::Group(n) => container_has_own_visual(&n.container),
+        PenNode::Rectangle(n) => container_has_own_visual(&n.container),
+        PenNode::Ref(_) => false,
+        PenNode::Text(n) => match &n.content {
+            TextContent::Plain(s) => !s.is_empty(),
+            TextContent::Styled(segments) => !segments.is_empty(),
+        },
+        _ => true,
+    }
+}
+
+fn container_has_own_visual(container: &ContainerProps) -> bool {
+    container
+        .fill
+        .as_ref()
+        .is_some_and(|fills| !fills.is_empty())
+        || container.stroke.is_some()
+        || container
+            .effects
+            .as_ref()
+            .is_some_and(|effects| !effects.is_empty())
+}
+
+fn node_is_named_structure(node: &PenNode) -> bool {
+    if !node.is_container() {
+        return false;
+    }
+    let base = node.base();
+    base.role.as_deref().is_some_and(|role| !role.is_empty())
+        || base.name.as_deref().is_some_and(|name| !name.is_empty())
+}
+
+fn reveal_now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
 }
 
 /// Extract `description` and `inputSchema` JSON string from `TOOL_SCHEMAS`
@@ -283,6 +470,36 @@ mod tests {
             !state.active_children().is_empty(),
             "doc must have a frame after batch_design"
         );
+    }
+
+    #[test]
+    fn execute_design_batch_design_registers_reveals_when_epoch_is_set() {
+        use op_editor_core::agent_indicators;
+
+        agent_indicators::clear();
+        let epoch = agent_indicators::begin();
+        let mut state = EditorState::new();
+        let (result, mutated) = execute_design_tool_with_reveals(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Root',width:120,height:80})\ntitle=I(root,{type:'text',name:'Title',content:'Hello',width:80,height:20})"}"#,
+            Some(epoch),
+        );
+        assert!(!result.is_error, "batch_design failed: {}", result.content);
+        assert!(mutated, "batch_design must mutate the document");
+
+        let ids: Vec<String> = collect_active_node_ids(&state).into_iter().collect();
+        assert!(ids.len() >= 2, "batch inserted a subtree, got {ids:?}");
+        let snapshot = agent_indicators::snapshot();
+        for id in ids {
+            assert!(
+                snapshot.reveals.contains_key(&id),
+                "newly inserted node {id} should have a reveal: {:?}",
+                snapshot.reveals
+            );
+        }
+        agent_indicators::end_if_epoch(epoch);
+        agent_indicators::clear();
     }
 
     #[test]

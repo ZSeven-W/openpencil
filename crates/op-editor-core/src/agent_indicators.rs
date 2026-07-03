@@ -203,6 +203,12 @@ pub fn begin() -> u64 {
     r.epoch
 }
 
+/// Return the currently active run epoch, if a host-owned indicator run is live.
+pub fn active_epoch() -> Option<u64> {
+    let r = REGISTRY.lock().unwrap();
+    r.run_active.then_some(r.epoch)
+}
+
 /// Clear indicators only if `epoch` is still the active run. A newer
 /// [`begin`] makes this a no-op, so a stale / cancelled run finishing
 /// late can't wipe the indicators of the run that replaced it. The
@@ -593,4 +599,20 @@ pub fn apply_remote(remote: &RemoteIndicators) -> bool {
         }
     }
     has_active_indicators(&r) || r.needs_final_frame
+}
+
+/// Latest scheduled reveal END (start + [`REVEAL_DURATION_MS`]) for `epoch`,
+/// or `None` when the epoch is stale or nothing is scheduled. The
+/// orchestrator's finalize gate polls this so tree-restructuring
+/// (`ReplaceSubtree` id churn) waits for the cursor sweep to finish instead
+/// of snapping the still-animating tail of the design in at once.
+pub fn latest_reveal_end_ms(epoch: u64) -> Option<u64> {
+    let r = REGISTRY.lock().unwrap();
+    if r.epoch != epoch {
+        return None;
+    }
+    r.reveals
+        .values()
+        .max()
+        .map(|s| s.saturating_add(REVEAL_DURATION_MS))
 }

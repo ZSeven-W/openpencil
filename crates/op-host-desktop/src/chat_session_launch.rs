@@ -418,6 +418,9 @@ pub fn drain_new_chat_request(
     // second one here (one "+" click == one new tab).
     *current_chat = None;
     *current_design = None;
+    if let Some(epoch) = op_editor_core::agent_indicators::active_epoch() {
+        op_editor_core::agent_indicators::end_if_epoch(epoch);
+    }
     // A fresh tab must start a fresh provider conversation — forget any
     // resumable Claude Code / Copilot session so stale context cannot
     // leak into the new chat.
@@ -440,6 +443,9 @@ pub fn drain_stop_request(
     }
     *current_chat = None;
     *current_design = None;
+    if let Some(epoch) = op_editor_core::agent_indicators::active_epoch() {
+        op_editor_core::agent_indicators::end_if_epoch(epoch);
+    }
     host.mark_editor_state_dirty();
     true
 }

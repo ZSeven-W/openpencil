@@ -8,15 +8,9 @@
 use super::*;
 use op_editor_core::{agent_indicators, EditorState};
 use op_host_services::design_agent_tools::execute_design_tool;
-use std::sync::{LazyLock, Mutex};
 
 /// A real styleguide name from the embedded corpus.
 const REAL_STYLEGUIDE: &str = "ai-product-dark";
-
-/// Serialize tests that touch the process-global indicator registry +
-/// the module-level spawn stash so the default parallel runner doesn't
-/// race them against each other.
-static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn spec(prompt: &str, containers: &[&str], styleguide: &str, guidelines: &[&str]) -> SpawnSpec {
     SpawnSpec {
@@ -183,7 +177,9 @@ fn parse_args_invalid_json_errors() {
 
 #[test]
 fn stash_top_level_succeeds_nested_refused() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Clear any leftover stash.
     let _ = take_pending_spawn();
 
@@ -214,7 +210,9 @@ fn stash_top_level_succeeds_nested_refused() {
 fn distinct_identities_and_epoch_scoped_frame_badges() {
     use op_orchestrator::agent_identity::assign_agent_identities;
 
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
 
     // Two specs → two distinct identities (colour + name).
     let identities = assign_agent_identities(2);
@@ -263,7 +261,9 @@ fn lazy_epoch_keeps_each_active_subs_badges_live_in_sequence() {
     // this. Simulate the pump's begin → badge → end cadence for two subs.
     use op_orchestrator::agent_identity::assign_agent_identities;
 
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     agent_indicators::clear();
 
     let ids = assign_agent_identities(2);
@@ -331,7 +331,9 @@ fn lazy_epoch_keeps_each_active_subs_badges_live_in_sequence() {
 fn pump_with_finished_subs_decrements_then_clears_agents_running() {
     use op_host_native::WidgetHostNative;
 
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
 
     let mut host = WidgetHostNative::new();
     // Seed the N/M header as `launch_sub_agents` would for two subs.
