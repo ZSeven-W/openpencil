@@ -33,6 +33,7 @@ COMMON COMMANDS:
   op replace <id> <json|@file|-> [--page PAGE] [--post-process]
                                           replace with PenNode JSON
   op design <dsl|json-array|@file|->      call batch_design(operations/nodes_json)
+      --script            treat the payload as a sandboxed JS program (I(parent, obj) + loops); implied for @file.js / @file.mjs
   op design:skeleton <json-array|@file|->
   op design:content [section] <json-array|@file|->
   op design:refine --root-id <id>
