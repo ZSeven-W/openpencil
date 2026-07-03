@@ -105,3 +105,82 @@ fn merge_app_state_empty_incoming_is_noop() {
     }));
     assert!(s.doc.state.is_none());
 }
+
+// (e) A rolled-back batch must not leave stale ownership: the failed
+// batch's MergeAppState never landed in doc.state, so a later merge of
+// the same key (any plan_idx) must land instead of being skipped
+// against a phantom owner.
+#[test]
+fn rolled_back_batch_leaves_no_stale_app_state_ownership() {
+    let mut s = EditorState::new();
+    let mut m = BTreeMap::new();
+    m.insert("cart".into(), entry(1));
+    let failed = s.apply(EditorCommand::Batch {
+        commands: vec![
+            EditorCommand::MergeAppState {
+                plan_idx: 0,
+                state: m,
+            },
+            // Batchable but fails: no node with this id exists.
+            EditorCommand::SetNodeText {
+                node_id: crate::node_id::NodeId::new("no-such-node".to_string()),
+                text: "x".into(),
+            },
+        ],
+    });
+    assert!(!failed, "batch with a failing sub-command must report false");
+    assert!(
+        s.doc.state.as_ref().is_none_or(|st| !st.contains_key("cart")),
+        "rolled-back merge must not survive in doc.state"
+    );
+
+    let mut retry = BTreeMap::new();
+    retry.insert("cart".into(), entry(7));
+    assert!(
+        s.apply(EditorCommand::MergeAppState {
+            plan_idx: 9,
+            state: retry,
+        }),
+        "post-rollback merge must land — stale ownership would skip it"
+    );
+    assert_eq!(
+        s.doc.state.as_ref().unwrap().get("cart").unwrap().default,
+        Some(serde_json::json!(7))
+    );
+}
+
+// (f) Undoing a batch restores the ownership map alongside doc.state,
+// so a re-generation after undo starts from a clean slate.
+#[test]
+fn undo_restores_app_state_ownership_with_the_document() {
+    let mut s = EditorState::new();
+    let mut m = BTreeMap::new();
+    m.insert("tab".into(), entry(3));
+    assert!(s.apply(EditorCommand::Batch {
+        commands: vec![EditorCommand::MergeAppState {
+            plan_idx: 2,
+            state: m,
+        }],
+    }));
+    assert!(s.doc.state.as_ref().unwrap().contains_key("tab"));
+
+    assert!(s.undo(), "batch lands as one undo step");
+    assert!(
+        s.doc.state.as_ref().is_none_or(|st| !st.contains_key("tab")),
+        "undo must remove the merged key from doc.state"
+    );
+
+    let mut again = BTreeMap::new();
+    again.insert("tab".into(), entry(8));
+    assert!(
+        s.apply(EditorCommand::MergeAppState {
+            plan_idx: 5,
+            state: again,
+        }),
+        "post-undo merge must land — ownership must have been restored"
+    );
+    assert_eq!(
+        s.doc.state.as_ref().unwrap().get("tab").unwrap().default,
+        Some(serde_json::json!(8))
+    );
+}

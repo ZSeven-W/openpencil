@@ -807,14 +807,16 @@ impl WidgetHostNative {
         true
     }
 
-    /// Route a wheel into the preview runtime; `false` (not consumed —
-    /// no `onScroll` node under the cursor) lets the caller fall back
-    /// to canvas pan/zoom so the user can still navigate while
-    /// previewing.
+    /// Route a wheel / trackpad-pan scroll into the preview runtime;
+    /// `false` (not consumed — no `onScroll` node under the cursor)
+    /// lets the caller fall back to canvas pan/zoom so the user can
+    /// still navigate while previewing. Mouse wheels carry only
+    /// `delta_y`; two-finger trackpad pans carry both axes.
     pub fn preview_dispatch_wheel(
         &mut self,
         screen_x: f32,
         screen_y: f32,
+        delta_x: f32,
         delta_y: f32,
         viewport_w: f32,
         viewport_h: f32,
@@ -825,7 +827,7 @@ impl WidgetHostNative {
         let consumed = self
             .preview
             .as_mut()
-            .is_some_and(|p| p.dispatch_wheel(doc.x, doc.y, 0.0, delta_y));
+            .is_some_and(|p| p.dispatch_wheel(doc.x, doc.y, delta_x, delta_y));
         if consumed {
             self.mark_dirty();
         }

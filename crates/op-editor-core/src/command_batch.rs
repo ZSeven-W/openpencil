@@ -162,6 +162,11 @@ impl EditorState {
                 self.selection = pre.selection;
                 self.ui.active_page_index = pre.active_page_index;
                 self.components = pre.components;
+                // Ownership must roll back with doc.state — a stale
+                // entry would mark a key generation-owned that the
+                // restored document no longer carries, silently
+                // skipping later merges of that key.
+                self.app_state_owner = pre.app_state_owner;
                 return false;
             }
         }
