@@ -35,8 +35,10 @@ pub(super) const NAV_TOP: f32 = 56.0;
 pub(super) const SECTION_GAP: f32 = 28.0;
 pub(super) const CARD_HEIGHT: f32 = 56.0;
 pub(super) const CARD_GAP: f32 = 8.0;
-pub(super) const CONNECT_BTN_W: f32 = 56.0;
-pub(super) const CONNECT_BTN_H: f32 = 28.0;
+// 56x28 left the centered "Connect" label ~3px from each edge (measured
+// on the Agents cards); 76x30 restores a comfortable button inset.
+pub(super) const CONNECT_BTN_W: f32 = 76.0;
+pub(super) const CONNECT_BTN_H: f32 = 30.0;
 pub(super) const AVATAR_SIZE: f32 = 28.0;
 pub(super) const AVATAR_ICON: f32 = 16.0;
 pub(super) const NAME_FONT: f32 = 13.0;
