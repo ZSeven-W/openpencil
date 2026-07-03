@@ -167,8 +167,12 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // Script-gen is THE protocol on the full first attempt; the reduced /
     // minimal retry rungs teach raw JSONL, so parsing falls back to
     // `parse_nodes` there (matching the prompt in build_subagent_prompt).
+    // `program_state` carries any doc-root `state` script-gen's underlying
+    // `run_program_to_forest` hoisted on the SCRATCH document it builds the
+    // forest against (see `program_gen`'s module doc) — the flat-JSONL rung
+    // has no such hoist, so it stays an empty schema there.
     let script_on = !reduced_complexity && !minimal_skills;
-    let mut nodes = if script_on {
+    let (mut nodes, program_state) = if script_on {
         match crate::script_gen::parse_script(&text) {
             Ok(n) => n,
             Err(e) => {
@@ -184,7 +188,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         }
     } else {
         match parse_nodes(&text) {
-            Ok(n) => n,
+            Ok(n) => (n, jian_ops_schema::state::StateSchema::new()),
             Err(e) => {
                 tracing::warn!(
                     subtask = %subtask.id,
@@ -286,7 +290,18 @@ pub(crate) async fn run_subtask_with_reveal_at(
         .iter()
         .position(|s| s.id == subtask.id)
         .unwrap_or(0);
-    let merge_state = op_editor_core::hoist_app_state(&mut nodes, plan_idx);
+    let mut merge_state = op_editor_core::hoist_app_state(&mut nodes, plan_idx);
+    // Union in whatever state script-gen's scratch-document run already
+    // hoisted (`program_state`) — it was tagged "unplanned" there since
+    // `program_gen`/`op-mcp` don't know this subtask's real plan_idx. Node-
+    // drained state (above) takes priority on key collisions via `or_insert`;
+    // in practice there's no real overlap since exactly one protocol runs per
+    // attempt, but `or_insert` keeps the merge deterministic regardless.
+    if let EditorCommand::MergeAppState { state, .. } = &mut merge_state {
+        for (k, v) in program_state {
+            state.entry(k).or_insert(v);
+        }
+    }
     let has_state =
         matches!(&merge_state, EditorCommand::MergeAppState { state, .. } if !state.is_empty());
     if has_state {

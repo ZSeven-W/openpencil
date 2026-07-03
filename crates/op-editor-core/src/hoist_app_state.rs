@@ -7,9 +7,9 @@
 //! (`op-editor-core`) then resolves cross-subtask conflicts
 //! deterministically regardless of concurrent replay order.
 
+use crate::EditorCommand;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::state::StateSchema;
-use crate::EditorCommand;
 
 /// `plan_idx` for generation paths that have no orchestrator plan
 /// (agentic-loop finalize, MCP inserts). `usize::MAX` is the weakest
