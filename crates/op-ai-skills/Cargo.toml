@@ -11,3 +11,9 @@ description = "OpenPencil AI skill engine — phase-driven prompt-skill resoluti
 # compile time so the engine ships self-contained — no runtime file
 # IO, and the crate stays usable on wasm32 targets. Pure Rust.
 include_dir = "0.7"
+
+[dev-dependencies]
+# Test-only: the loader test asserts the jian-components skill teaches
+# every role string jian's promote table honours, so the doc and the
+# table can never silently drift apart.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }

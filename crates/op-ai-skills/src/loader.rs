@@ -228,20 +228,11 @@ mod tests {
         assert_eq!(skill.meta.priority, 5);
         assert!(matches!(skill.meta.trigger, SkillTrigger::Always));
         assert!(skill.meta.phase.contains(&Phase::Generation));
-        // Must teach every role string promote.rs::role_to_kind honours so the
-        // model emits markers the promotion pass (D2) actually collapses.
-        for role in [
-            "input",
-            "form-input",
-            "textarea",
-            "text-area",
-            "select",
-            "dropdown",
-            "switch",
-            "toggle",
-            "checkbox",
-            "slider",
-        ] {
+        // Lockstep with jian's promote table: every role string the promote
+        // pass honours must be taught by the skill. Exported from jian so
+        // this test fails the moment the table grows or shrinks without a
+        // doc update, instead of trusting a hand-copied list that can drift.
+        for role in jian_ops_schema::promote::promotable_roles() {
             assert!(
                 skill.content.contains(role),
                 "jian-components must teach role marker `{role}`"
