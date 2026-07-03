@@ -155,9 +155,11 @@ fn append_does_not_mutate_preexisting_styled_node() {
 
     // The new section is a plain blue frame — deliberately different from the
     // Status Bar so any accidental bleed from the pre-existing child is visible.
-    const NEW_SECTION_JSON: &str = r##"[{
+    // Script-gen is the default subagent generation protocol, so this is a JS
+    // program calling the bound `I(parent, obj)` recorder rather than raw
+    // `_parent` JSONL.
+    const NEW_SECTION_JSON: &str = r##"I(null, {
         "type": "frame",
-        "id": "new-content-1",
         "name": "Content Area",
         "x": 0, "y": 44,
         "width": 390, "height": 600,
@@ -165,13 +167,12 @@ fn append_does_not_mutate_preexisting_styled_node() {
         "fill": [{ "type": "solid", "color": "#F0F8FF" }],
         "children": [{
             "type": "text",
-            "id": "new-body-text",
             "name": "body",
             "x": 16, "y": 16,
             "width": 358, "height": 24,
             "content": "Hello, world"
         }]
-    }]"##;
+    });"##;
 
     let llm = ScriptedLlm::new(vec![
         ScriptResponse::Text(PLAN_JSON.into()),

@@ -30,9 +30,13 @@ const PLAN_JSON: &str = r##"{
   ]
 }"##;
 
+// Script-gen is the default subagent generation protocol — the fixture is a
+// JS program calling the bound `I(parent, obj)` recorder rather than raw
+// `_parent` JSONL. Ids are dropped: the batch_design executor reassigns
+// fresh ids to every inserted node regardless of what's authored here.
 fn node_json(prefix: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
+        r#"I(null, {{"type":"frame","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","content":"{prefix}","fontSize":18}}]}});"#
     )
 }
 
@@ -53,7 +57,7 @@ const MULTI_SCREEN_PLAN_JSON: &str = r##"{
 
 fn node_json_mobile(prefix: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":390,"height":300,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
+        r#"I(null, {{"type":"frame","name":"Sec","x":0,"y":0,"width":390,"height":300,"children":[{{"type":"text","content":"{prefix}","fontSize":18}}]}});"#
     )
 }
 

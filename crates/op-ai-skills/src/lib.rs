@@ -229,12 +229,16 @@ mod tests {
             "must reference batch_design"
         );
         assert!(
-            prompt.contains("emit_elements"),
-            "must reference emit_elements (the preferred element-builder path)"
+            prompt.contains("script"),
+            "must reference batch_design's script mode (the preferred build path)"
         );
         assert!(
-            prompt.contains("stat_card") || prompt.contains("stat-card"),
-            "must teach high-level element kinds via emit_elements"
+            prompt.contains("I(parent") || prompt.contains("I(null"),
+            "must teach the I(parent, obj) script-gen call syntax"
+        );
+        assert!(
+            prompt.contains("no-op") || prompt.contains("NO-OP"),
+            "must teach that C/U/D/M/R/G and console are no-op stubs inside a script"
         );
         assert!(
             prompt.contains("get_screenshot"),

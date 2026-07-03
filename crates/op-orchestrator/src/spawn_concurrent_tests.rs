@@ -27,11 +27,15 @@ fn make_req() -> crate::types::DesignRequest {
     }
 }
 
-/// One node-JSON response per agent — distinct ids so each subtree is
-/// independently identifiable after insertion.
+/// One node-script response per agent — a distinct root `name` so each
+/// subtree is independently identifiable after insertion. Script-gen is the
+/// default subagent generation protocol (a JS program calling the bound
+/// `I(parent, obj)` recorder), and the batch_design executor reassigns fresh
+/// ids to every inserted node regardless of what's authored here, so `name`
+/// (not `id`) is the distinguishing field callers must key off of.
 fn node_json(id: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{id}-1","name":"Sec","x":0,"y":0,"width":400,"height":120,"children":[{{"type":"text","id":"{id}-t","content":"Hi","fontSize":18}}]}}]"#
+        r#"I(null, {{"type":"frame","name":"Sec-{id}","x":0,"y":0,"width":400,"height":120,"children":[{{"type":"text","content":"Hi","fontSize":18}}]}});"#
     )
 }
 
@@ -206,18 +210,23 @@ fn run_spawned_agents_replays_in_spec_order() {
 
     assert_eq!(results[0].id, "first");
     assert_eq!(results[1].id, "second");
-    // The InsertSubtree commands appear in spec order.
-    let insert_ids: Vec<String> = sink
+    // The InsertSubtree commands appear in spec order. `name` (not `id` — the
+    // batch_design executor reassigns fresh ids regardless of what's authored)
+    // is the distinguishing field `node_json` bakes in per spec.
+    let insert_names: Vec<Option<String>> = sink
         .applied
         .iter()
         .filter_map(|c| match c {
             EditorCommand::InsertSubtree { nodes, .. } => {
-                nodes.first().map(|n| n.id_str().to_string())
+                nodes.first().map(|n| n.base().name.clone())
             }
             _ => None,
         })
         .collect();
-    assert_eq!(insert_ids, vec!["first-1", "second-1"]);
+    assert_eq!(
+        insert_names,
+        vec![Some("Sec-first".to_string()), Some("Sec-second".to_string())]
+    );
 }
 
 /// A subtree is scoped to its spec's `parent_frame_id`: when a spec names a
