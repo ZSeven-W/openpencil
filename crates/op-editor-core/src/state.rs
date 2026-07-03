@@ -407,6 +407,7 @@ mod tests {
             selection: SelectionState::empty(),
             active_page_index: 0,
             components: ComponentLibrary::default(),
+            app_state_owner: std::collections::BTreeMap::new(),
         });
         s.ui.pen_in_progress = Some(crate::NodeId::new("n7"));
         s.ui.property_input.set_text("stale");

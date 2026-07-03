@@ -40,6 +40,13 @@ pub struct EditorSnapshot {
     /// Runtime component registry mirrored from reusable document nodes
     /// and explicit component commands.
     pub components: ComponentLibrary,
+    /// `MergeAppState` ownership map (`key → owning plan_idx`) at
+    /// snapshot time. Must travel with the snapshot: doc.state is
+    /// restored on undo / batch rollback, so ownership left behind
+    /// would mark keys as generation-owned that the restored document
+    /// no longer carries — later merges would be silently skipped or
+    /// mis-resolved against a stale owner.
+    pub app_state_owner: std::collections::BTreeMap<String, usize>,
 }
 
 /// Editor undo / redo stacks. `VecDeque` so the over-cap eviction is an
