@@ -332,6 +332,32 @@ pub(crate) async fn run_subtask_with_reveal_at(
     }
 }
 
+/// Block (worker thread, abort-aware) until the reveal overlay's scheduled
+/// sweep for `epoch` has finished playing. The finalize passes swap subtrees
+/// via `ReplaceSubtree`, whose fresh ids were never registered with the
+/// overlay — restructuring mid-sweep snaps the still-animating tail of the
+/// design in at once and orphans the agent cursor. Capped so a stuck clock
+/// can't hang the run.
+pub(crate) fn wait_for_reveal_drain(epoch: Option<u64>, abort: &crate::types::AbortFlag) {
+    let Some(epoch) = epoch else {
+        return;
+    };
+    let cap = reveal_now_millis().saturating_add(15_000);
+    loop {
+        if abort.is_set() {
+            return;
+        }
+        let now = reveal_now_millis();
+        let Some(end) = op_editor_core::agent_indicators::latest_reveal_end_ms(epoch) else {
+            return;
+        };
+        if now >= end || now >= cap {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis((end - now).min(120)));
+    }
+}
+
 pub(crate) fn reveal_now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
