@@ -12,10 +12,9 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_core::{EditorCommand, EditorState, NodeId, UIKit};
+use op_editor_core::{EditorCommand, EditorState, UIKit};
 
 use super::{McpTool, ToolErrorCode, ToolOutcome};
-use crate::element_alias_builders::semantic_alias_node;
 
 /// Sanitize a `kit-id` / `component-id` for embedding in a tool name
 /// — MCP tool names are `[a-zA-Z0-9_]+`, so dashes become underscores.
@@ -39,288 +38,6 @@ pub fn element_tool_name(component_id: &str) -> String {
     format!("insert_{}", sanitize(component_id))
 }
 
-const STARTER_KIT_ID: &str = "openpencil-starter";
-
-/// Exact-name aliases for the TS `pen-mcp` production element tools.
-/// Rust does not yet ship TS's full per-tool templates, so aliases
-/// instantiate the closest built-in starter-kit component instead of
-/// failing with `UnknownTool`.
-pub(crate) const TS_ELEMENT_ALIASES: &[&str] = &[
-    "add_action_menu_v0",
-    "add_action_menu_v1",
-    "add_activity_log_v0",
-    "add_activity_log_v1",
-    "add_activity_ring_v0",
-    "add_activity_ring_v1",
-    "add_alert_v0",
-    "add_alert_v1",
-    "add_attachment_row_v0",
-    "add_attachment_row_v1",
-    "add_avatar_group_v0",
-    "add_avatar_group_v1",
-    "add_avatar_v0",
-    "add_avatar_v1",
-    "add_badge_v0",
-    "add_badge_v1",
-    "add_body_text_v0",
-    "add_body_text_v1",
-    "add_bottom_nav_v0",
-    "add_bottom_nav_v1",
-    "add_breadcrumb_v0",
-    "add_breadcrumb_v1",
-    "add_calendar_grid_v0",
-    "add_calendar_grid_v1",
-    "add_callout_v0",
-    "add_callout_v1",
-    "add_card_row_v0",
-    "add_card_row_v1",
-    "add_carousel_dots_v0",
-    "add_carousel_dots_v1",
-    "add_chart_bars_v0",
-    "add_chart_bars_v1",
-    "add_chart_line_v0",
-    "add_chart_line_v1",
-    "add_chart_pie_v0",
-    "add_chart_pie_v1",
-    "add_chat_bubble_v0",
-    "add_chat_bubble_v1",
-    "add_checkbox_v0",
-    "add_checkbox_v1",
-    "add_chip_input_v0",
-    "add_chip_input_v1",
-    "add_code_block_v0",
-    "add_code_block_v1",
-    "add_color_swatch_v0",
-    "add_color_swatch_v1",
-    "add_combobox_v0",
-    "add_combobox_v1",
-    "add_comment_v0",
-    "add_comment_v1",
-    "add_cookie_banner_v0",
-    "add_cookie_banner_v1",
-    "add_data_table_row_v0",
-    "add_data_table_row_v1",
-    "add_date_picker_v0",
-    "add_date_picker_v1",
-    "add_divider_v0",
-    "add_divider_v1",
-    "add_drawer_shell_v0",
-    "add_drawer_shell_v1",
-    "add_empty_chart_v0",
-    "add_empty_chart_v1",
-    "add_empty_state_v0",
-    "add_empty_state_v1",
-    "add_event_card_v0",
-    "add_event_card_v1",
-    "add_fab_v0",
-    "add_fab_v1",
-    "add_faq_item_v0",
-    "add_faq_item_v1",
-    "add_filter_group_v0",
-    "add_filter_group_v1",
-    "add_form_field_v0",
-    "add_form_field_v1",
-    "add_heading_v0",
-    "add_heading_v1",
-    "add_icon_button_v0",
-    "add_icon_button_v1",
-    "add_icon_label_v0",
-    "add_icon_label_v1",
-    "add_image_placeholder_v0",
-    "add_image_placeholder_v1",
-    "add_inbox_message_v0",
-    "add_inbox_message_v1",
-    "add_inline_action_v0",
-    "add_inline_action_v1",
-    "add_input_with_action_v0",
-    "add_input_with_action_v1",
-    "add_invite_row_v0",
-    "add_invite_row_v1",
-    "add_kbd_v0",
-    "add_kbd_v1",
-    "add_legend_item_v0",
-    "add_legend_item_v1",
-    "add_link_v0",
-    "add_link_v1",
-    "add_list_row_v0",
-    "add_list_row_v1",
-    "add_member_row_v0",
-    "add_member_row_v1",
-    "add_metric_comparison_v0",
-    "add_metric_comparison_v1",
-    "add_metric_row_v0",
-    "add_metric_row_v1",
-    "add_modal_shell_v0",
-    "add_modal_shell_v1",
-    "add_nav_chip_row_v0",
-    "add_nav_chip_row_v1",
-    "add_notification_row_v0",
-    "add_notification_row_v1",
-    "add_otp_input_v0",
-    "add_otp_input_v1",
-    "add_pagination_v0",
-    "add_pagination_v1",
-    "add_phone_input_v0",
-    "add_phone_input_v1",
-    "add_price_v0",
-    "add_price_v1",
-    "add_pricing_card_v0",
-    "add_pricing_card_v1",
-    "add_profile_header_v0",
-    "add_profile_header_v1",
-    "add_progress_bar_v0",
-    "add_progress_bar_v1",
-    "add_quote_block_v0",
-    "add_quote_block_v1",
-    "add_radio_v0",
-    "add_radio_v1",
-    "add_range_slider_v0",
-    "add_range_slider_v1",
-    "add_rating_stars_v0",
-    "add_rating_stars_v1",
-    "add_search_bar_v0",
-    "add_search_bar_v1",
-    "add_section_header_v0",
-    "add_section_header_v1",
-    "add_segmented_control_v0",
-    "add_segmented_control_v1",
-    "add_select_v0",
-    "add_select_v1",
-    "add_setting_row_v0",
-    "add_setting_row_v1",
-    "add_share_row_v0",
-    "add_share_row_v1",
-    "add_sidebar_nav_v0",
-    "add_sidebar_nav_v1",
-    "add_skeleton_v0",
-    "add_skeleton_v1",
-    "add_social_login_row_v0",
-    "add_social_login_row_v1",
-    "add_spinner_v0",
-    "add_spinner_v1",
-    "add_stat_card_v0",
-    "add_stat_card_v1",
-    "add_stat_grid_v0",
-    "add_stat_grid_v1",
-    "add_status_badge_v0",
-    "add_status_badge_v1",
-    "add_step_card_v0",
-    "add_step_card_v1",
-    "add_stepper_v0",
-    "add_stepper_v1",
-    "add_switch_v0",
-    "add_switch_v1",
-    "add_tabs_v0",
-    "add_tabs_v1",
-    "add_tag_v0",
-    "add_tag_v1",
-    "add_text_button_v0",
-    "add_text_button_v1",
-    "add_textarea_v0",
-    "add_textarea_v1",
-    "add_timeline_v0",
-    "add_timeline_v1",
-    "add_toast_v0",
-    "add_toast_v1",
-    "add_toolbar_v0",
-    "add_toolbar_v1",
-    "add_tooltip_v0",
-    "add_tooltip_v1",
-    "add_top_nav_bar_v0",
-    "add_top_nav_bar_v1",
-    "add_upload_dropzone_v0",
-    "add_upload_dropzone_v1",
-    "add_user_card_v0",
-    "add_user_card_v1",
-    "add_video_placeholder_v0",
-    "add_video_placeholder_v1",
-];
-
-fn component_id_for_ts_element_alias(alias_name: &str) -> &'static str {
-    if alias_name.contains("divider") {
-        return "divider";
-    }
-    if contains_any(
-        alias_name,
-        &[
-            "nav",
-            "breadcrumb",
-            "pagination",
-            "tabs",
-            "segmented",
-            "stepper",
-            "carousel_dots",
-        ],
-    ) {
-        return "nav-bar";
-    }
-    if contains_any(
-        alias_name,
-        &[
-            "input",
-            "form_field",
-            "textarea",
-            "search_bar",
-            "select",
-            "checkbox",
-            "radio",
-            "switch",
-            "combobox",
-            "date_picker",
-            "otp",
-            "phone",
-            "range_slider",
-            "upload_dropzone",
-            "chip_input",
-            "filter_group",
-        ],
-    ) {
-        return "input-text";
-    }
-    if contains_any(
-        alias_name,
-        &[
-            "button",
-            "fab",
-            "inline_action",
-            "link",
-            "action_menu",
-            "share_row",
-            "toolbar",
-        ],
-    ) {
-        return "btn-primary";
-    }
-    if contains_any(
-        alias_name,
-        &[
-            "badge",
-            "tag",
-            "status",
-            "alert",
-            "toast",
-            "tooltip",
-            "spinner",
-            "progress",
-            "activity_ring",
-            "avatar",
-            "kbd",
-            "rating",
-            "color_swatch",
-            "legend_item",
-            "icon_label",
-            "price",
-        ],
-    ) {
-        return "badge";
-    }
-    "card-basic"
-}
-
-fn contains_any(s: &str, needles: &[&str]) -> bool {
-    needles.iter().any(|needle| s.contains(needle))
-}
-
 /// `insert_<comp>` MCP tool — instantiates one UIKit component onto
 /// the active page through the editor command bus.
 pub struct InsertKitComponent {
@@ -338,18 +55,6 @@ impl InsertKitComponent {
             component_id,
         }
     }
-
-    fn alias(
-        name: impl Into<String>,
-        kit_id: impl Into<String>,
-        component_id: impl Into<String>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            kit_id: kit_id.into(),
-            component_id: component_id.into(),
-        }
-    }
 }
 
 impl McpTool for InsertKitComponent {
@@ -357,25 +62,6 @@ impl McpTool for InsertKitComponent {
         &self.name
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
-        match semantic_alias_node(&self.name, args) {
-            Ok(Some(node)) => {
-                let mut result = BTreeMap::new();
-                result.insert("wrote".into(), "true".into());
-                result.insert("tool".into(), self.name.clone());
-                result.insert("semantic".into(), "true".into());
-                return ToolOutcome::OkWithCommand(
-                    result,
-                    EditorCommand::InsertSubtree {
-                        nodes: vec![node],
-                        parent_id: parent_id_arg(args),
-                        page_id: page_id_arg(args),
-                    },
-                );
-            }
-            Ok(None) => {}
-            Err(e) => return e,
-        }
-
         // `x` / `y` are optional doc-px floats; omitted slots default
         // to 0.0 at apply time.
         let doc_x = match parse_optional_f64(args, "x") {
@@ -399,30 +85,6 @@ impl McpTool for InsertKitComponent {
             },
         )
     }
-}
-
-fn parent_id_arg(args: &BTreeMap<String, String>) -> NodeId {
-    args.get("parent_id")
-        .or_else(|| args.get("parentId"))
-        .or_else(|| args.get("parent"))
-        .map(|raw| {
-            let trimmed = raw.trim();
-            if trimmed.is_empty() || trimmed == "0" || trimmed == "null" {
-                NodeId::NONE
-            } else {
-                NodeId::new(trimmed)
-            }
-        })
-        .unwrap_or(NodeId::NONE)
-}
-
-fn page_id_arg(args: &BTreeMap<String, String>) -> Option<String> {
-    args.get("pageId")
-        .or_else(|| args.get("page_id"))
-        .or_else(|| args.get("page"))
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
 }
 
 /// Parse a number arg as `Option<f64>`. An absent slot returns `None`
@@ -452,7 +114,7 @@ fn parse_optional_f64(
 /// component. The host's `rebuild_registry` chains this into the live
 /// `ToolRegistry`.
 pub fn insert_kit_component_tools(state: &EditorState) -> Vec<InsertKitComponent> {
-    let mut tools: Vec<_> = state
+    state
         .ui_kits
         .iter()
         .flat_map(|kit: &UIKit| {
@@ -460,22 +122,7 @@ pub fn insert_kit_component_tools(state: &EditorState) -> Vec<InsertKitComponent
                 .iter()
                 .map(|c| InsertKitComponent::new(kit.id.clone(), c.id.clone()))
         })
-        .collect();
-
-    for kit in state.ui_kits.iter().filter(|kit| kit.id == STARTER_KIT_ID) {
-        for &alias_name in TS_ELEMENT_ALIASES {
-            let component_id = component_id_for_ts_element_alias(alias_name);
-            if kit.components.iter().any(|c| c.id == component_id) {
-                tools.push(InsertKitComponent::alias(
-                    alias_name,
-                    kit.id.clone(),
-                    component_id,
-                ));
-            }
-        }
-    }
-
-    tools
+        .collect()
 }
 
 /// JSON-encoded `tools/list` schema for one element tool. The host
@@ -492,81 +139,11 @@ fn canonical_element_tool_schema(tool: &str, component_name: &str) -> String {
     )
 }
 
-fn ts_alias_element_tool_schema(tool: &str, component_name: &str) -> String {
-    if let Some(schema) = crate::element_ts_schema::ts_alias_schema(tool) {
-        return schema;
-    }
-
-    if tool == "add_text_button_v0" || tool == "add_text_button_v1" {
-        let theme_prop = if tool == "add_text_button_v1" {
-            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\". All modes are identical for this tool."}"#
-        } else {
-            ""
-        };
-        return format!(
-            r#"{{"name":"{tool}","description":"TS pen-mcp compatible text button. Inserts a padding-based text button with optional leading icon.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Button label text. Required."}},"leading_icon":{{"type":"string","description":"Optional Lucide icon slug shown before the label."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
-        );
-    }
-    if tool == "add_form_field_v0" || tool == "add_form_field_v1" {
-        let theme_prop = if tool == "add_form_field_v1" {
-            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\". All modes are identical for this tool."}"#
-        } else {
-            ""
-        };
-        return format!(
-            r#"{{"name":"{tool}","description":"TS pen-mcp compatible form field. Inserts a label plus 48px input with optional leading/trailing icons.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Field label. Required."}},"placeholder":{{"type":"string","description":"Placeholder text."}},"leading_icon":{{"type":"string","description":"Lucide icon name for leading icon."}},"trailing_icon":{{"type":"string","description":"Lucide icon name for trailing icon."}},"required":{{"type":"boolean","description":"When true, appends \" *\" to label."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
-        );
-    }
-    if tool == "add_checkbox_v0" || tool == "add_checkbox_v1" {
-        let theme_prop = if tool == "add_checkbox_v1" {
-            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\"."}"#
-        } else {
-            ""
-        };
-        return format!(
-            r#"{{"name":"{tool}","description":"TS pen-mcp compatible checkbox element. Inserts a semantic checkbox row with label and checked state.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Label text. Required."}},"checked":{{"type":"boolean","description":"Checked state. Default false."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
-        );
-    }
-    if tool == "add_radio_v0" || tool == "add_radio_v1" {
-        let theme_prop = if tool == "add_radio_v1" {
-            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\"."}"#
-        } else {
-            ""
-        };
-        return format!(
-            r#"{{"name":"{tool}","description":"TS pen-mcp compatible radio element. Inserts a semantic radio row with label and selected state.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"label":{{"type":"string","description":"Radio label text. Required."}},"selected":{{"type":"boolean","description":"Whether the radio is selected. Default false."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["label"]}}}}"#
-        );
-    }
-    if tool == "add_segmented_control_v0" || tool == "add_segmented_control_v1" {
-        let theme_prop = if tool == "add_segmented_control_v1" {
-            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\"."}"#
-        } else {
-            ""
-        };
-        return format!(
-            r#"{{"name":"{tool}","description":"TS pen-mcp compatible segmented control. Inserts an iOS pill-style segmented control with fill_container segments.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"items":{{"type":"array","items":{{"type":"object","properties":{{"label":{{"type":"string"}},"active":{{"type":"boolean"}}}},"required":["label"]}},"description":"Segment items. At most one should have active=true. Required."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":["items"]}}}}"#
-        );
-    }
-    if tool == "add_switch_v0" || tool == "add_switch_v1" {
-        let theme_prop = if tool == "add_switch_v1" {
-            r#","theme":{"type":"string","enum":["light","dark","system"],"description":"Theme variant. Default \"light\". All modes are identical for this tool."}"#
-        } else {
-            ""
-        };
-        return format!(
-            r#"{{"name":"{tool}","description":"TS pen-mcp compatible switch element. Inserts a semantic iOS/Material toggle switch.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"active":{{"type":"boolean","description":"Switch on/off state. Default false."}}{theme_prop},"parent_id":{{"type":"string","description":"Target parent node id"}},"pageId":{{"type":"string","description":"Target page id"}}}},"required":[]}}}}"#
-        );
-    }
-    format!(
-        r#"{{"name":"{tool}","description":"TS pen-mcp compatible alias. Inserts the Rust starter-kit {component_name} onto the active page. Optional x/y doc-px floats place the top-left; parent_id, pageId, filePath, and schemaVersion are accepted for client compatibility.","inputSchema":{{"type":"object","properties":{{"schemaVersion":{{"type":"string","description":"Accepted for TS element-tool compatibility"}},"filePath":{{"type":"string","description":"Optional target .op file path; omit to use the server document"}},"pageId":{{"type":"string","description":"Accepted for TS compatibility; semantic aliases target the requested page when applicable"}},"parent_id":{{"type":"string","description":"Accepted for TS compatibility; semantic aliases insert under the requested parent when applicable"}},"x":{{"type":"string","description":"top-left doc-px (float)"}},"y":{{"type":"string","description":"top-left doc-px (float)"}}}}}}}}"#
-    )
-}
-
 /// JSON-encoded schemas for every element tool the live state has —
 /// matches the iterator order of [`insert_kit_component_tools`] so
 /// counts agree.
 pub fn element_tool_schemas(state: &EditorState) -> Vec<String> {
-    let mut schemas: Vec<_> = state
+    state
         .ui_kits
         .iter()
         .flat_map(|kit| {
@@ -574,16 +151,5 @@ pub fn element_tool_schemas(state: &EditorState) -> Vec<String> {
                 .iter()
                 .map(|c| element_tool_schema(&c.name, &c.id))
         })
-        .collect();
-
-    for kit in state.ui_kits.iter().filter(|kit| kit.id == STARTER_KIT_ID) {
-        for &alias_name in TS_ELEMENT_ALIASES {
-            let component_id = component_id_for_ts_element_alias(alias_name);
-            if let Some(component) = kit.components.iter().find(|c| c.id == component_id) {
-                schemas.push(ts_alias_element_tool_schema(alias_name, &component.name));
-            }
-        }
-    }
-
-    schemas
+        .collect()
 }
