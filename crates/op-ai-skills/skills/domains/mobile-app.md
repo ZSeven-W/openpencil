@@ -5,7 +5,7 @@ phase: [generation]
 trigger:
   keywords: [mobile, phone, ios, android, 移动, 手机]
 priority: 25
-budget: 1500
+budget: 1700
 category: domain
 ---
 
@@ -26,12 +26,14 @@ The status bar (time, signal, wifi, battery) is **automatically pre-inserted** b
 
 ## 2) APP CONTENT (your layout)
 
+Chip rows (filter/date/guests pills): each chip HUGS (width fit_content, single-line text, height 36-44, cornerRadius=full); the ROW clips overflow (clipContent) instead of squeezing chips — never let a pill's text wrap. A badge/pill/button frame ALWAYS carries its content (text or icon) — an empty decorated frame renders as a mystery blob.
+
 ALL content elements must sit inside ONE wrapper container (vertical stack).
 
 Wrapper provides:
 
-- Consistent left/right padding: 16-20px (applied ONCE at wrapper level)
-- Gap-based vertical spacing between sections (use gap, NOT margins)
+- Consistent left/right padding: 16-28px (applied ONCE at wrapper level; reference-measured screens use [0,24] on the wrapper with a 402px root)
+- Gap-based vertical spacing between sections (use gap, NOT margins): 24-40 by density
 - padding-bottom equal to the gap value for bottom space (NOT spacer elements)
 
 Content stacking order inside the wrapper:
@@ -49,6 +51,9 @@ Rules:
 - Section header actions: prefer a 20px `chevron-right` / `arrow-right` icon, not visible "See all", "View all", "查看全部", or "查看更多" text.
 - Category sections: section root and chip row both use height="fit_content". Use a header row, then chip row/grid. Chip row uses gap 12 and justifyContent start even when there are only two categories; never space_between/space_around. Each category item frame contains icon + label. Show four full chips or wrap; no half-clipped item.
 - Product card rows: two equal `fill_container` cards, gap 12, inside the content rail; no fixed-width clipped second card.
+- List rows of [thumbnail, text stack]: alignItems="center" on the row — a missing alignItems top-pins the text against a taller thumbnail and leaves a dead band under it.
+- Corner badge on an image ("-35%", "NEW"): a CHILD of the image's wrapper frame with explicit x/y (e.g. x=8, y=8) — never a card-level sibling between the image and the content column (it renders straddling the seam).
+- Price + unit ("$1,170" + "/ person", "$29" + "/mo"): ONE hugging row, gap 4-8, alignItems baseline/end — price 20-24px bold accent, unit 12-13px muted right beside it. Never space_between them across the card (the unit ends up orphaned at the far edge). Strikethrough original price: smaller muted line above or inline before the deal price.
 - Header cart/notification controls are neutral icon buttons; counts are tiny circular badges, not square number blocks.
 - Exact user mobile tokens win: "圆角 8px / 间距 12px" means ordinary radius=8 and repeated gaps=12.
 - Title font size must be uniform across ALL screens in the app
