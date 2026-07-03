@@ -210,7 +210,7 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
 }
 
 fn should_register_batch_reveals(name: &str, indicator_epoch: Option<u64>) -> bool {
-    indicator_epoch.is_some() && matches!(name, "batch_design" | EMIT_ELEMENTS_TOOL)
+    indicator_epoch.is_some() && name == "batch_design"
 }
 
 fn collect_active_node_ids(state: &EditorState) -> HashSet<String> {
