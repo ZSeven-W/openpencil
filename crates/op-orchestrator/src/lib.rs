@@ -16,10 +16,7 @@ pub mod design_md_policy;
 //  generic sequential path; dashboard_columns keeps only normalizer predicates.)
 pub mod design_system;
 pub mod design_type;
-pub mod hoist_app_state;
 pub mod intent;
-pub mod manifest;
-pub mod manifest_hints;
 pub mod model_profile;
 pub(crate) mod orchestration_self_check;
 pub mod palette_harmonize;

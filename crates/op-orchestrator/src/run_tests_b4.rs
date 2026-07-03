@@ -28,9 +28,11 @@ fn stub_providers() -> ValidationProviders<'static> {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+// Script-gen (the default protocol) fixture: `I(parent, obj)` calls, not raw
+// `_parent` JSONL. Ids are dropped — batch_design reassigns fresh ones anyway.
 fn node_json(prefix: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
+        r#"I(null, {{"type":"frame","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","content":"{prefix}","fontSize":18}}]}});"#
     )
 }
 
@@ -645,9 +647,8 @@ fn append_cleanup_leaves_preexisting_nav_surface_untouched() {
     }"##;
 
     // Sub-agent inserts a simple hero section (no nav surface, no fill issues).
-    let new_section_json = r##"[{
+    let new_section_json = r##"I(null, {
         "type": "frame",
-        "id": "new-hero-1",
         "name": "Hero Section",
         "x": 0, "y": 0,
         "width": 390, "height": 300,
@@ -655,13 +656,12 @@ fn append_cleanup_leaves_preexisting_nav_surface_untouched() {
         "fill": [{ "type": "solid", "color": "#E8F4FF" }],
         "children": [{
             "type": "text",
-            "id": "new-hero-title",
             "content": "Welcome",
             "x": 20, "y": 20,
             "width": 350, "height": 40,
             "fontSize": 28
         }]
-    }]"##;
+    });"##;
 
     let llm = ScriptedLlm::new(vec![
         ScriptResponse::Text(PLAN_JSON.into()),

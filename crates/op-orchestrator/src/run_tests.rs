@@ -67,9 +67,16 @@ const MOBILE_PLAN_JSON: &str = r##"{
   ]
 }"##;
 
+// Script-gen is the default subagent generation protocol, so the fixture is a
+// JS program calling the bound `I(parent, obj)` recorder (a single insert
+// whose object nests its children inline) rather than raw `_parent` JSONL.
+// The batch_design executor reassigns fresh ids to every inserted node
+// regardless of what's authored here, so callers must not assert on the
+// literal "{prefix}-1" / "{prefix}-title" strings — the "content" field
+// (which survives verbatim) is what identifies which section landed.
 fn node_json(prefix: &str) -> String {
     format!(
-        r#"[{{"type":"frame","id":"{prefix}-1","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","id":"{prefix}-title","content":"{prefix}","fontSize":18}}]}}]"#
+        r#"I(null, {{"type":"frame","name":"Sec","x":0,"y":0,"width":1200,"height":300,"children":[{{"type":"text","content":"{prefix}","fontSize":18}}]}});"#
     )
 }
 
@@ -531,14 +538,14 @@ fn reshaped_dashboard_root_is_not_a_false_no_content() {
     }"##;
     fn full_section(id: &str, name: &str, layout: &str) -> String {
         format!(
-            r#"[{{"type":"frame","id":"{id}","name":"{name}","x":0,"y":0,"width":1200,"height":300,"layout":"{layout}","children":[{{"type":"text","id":"{id}-t","content":"{name}","fontSize":18}}]}}]"#
+            r#"I(null, {{"type":"frame","id":"{id}","name":"{name}","x":0,"y":0,"width":1200,"height":300,"layout":"{layout}","children":[{{"type":"text","content":"{name}","fontSize":18}}]}});"#
         )
     }
     // A flat sidebar-nav column with a footer-like last child — this trips the
     // whole-root `sink_structured_sidebar_footers` cleanup, which swaps the root
     // via `ReplaceSubtree` (allocating the fresh root id that the guarded check
     // must tolerate).
-    let sidebar = r#"[{"type":"frame","id":"nav","name":"Sidebar Navigation","x":0,"y":0,"width":260,"height":600,"layout":"vertical","children":[{"type":"frame","id":"logo","name":"Logo","width":"fill_container","height":40,"children":[{"type":"text","id":"logo-t","content":"Brand","fontSize":18}]},{"type":"frame","id":"navg","name":"Nav Group","width":"fill_container","height":200,"children":[{"type":"text","id":"navg-t","content":"Dashboard","fontSize":14}]},{"type":"frame","id":"owner","name":"Owner Profile","width":"fill_container","height":48,"children":[{"type":"text","id":"owner-t","content":"Marcus — Owner","fontSize":14}]}]}]"#;
+    let sidebar = r#"I(null, {"type":"frame","name":"Sidebar Navigation","x":0,"y":0,"width":260,"height":600,"layout":"vertical","children":[{"type":"frame","name":"Logo","width":"fill_container","height":40,"children":[{"type":"text","content":"Brand","fontSize":18}]},{"type":"frame","name":"Nav Group","width":"fill_container","height":200,"children":[{"type":"text","content":"Dashboard","fontSize":14}]},{"type":"frame","name":"Owner Profile","width":"fill_container","height":48,"children":[{"type":"text","content":"Marcus — Owner","fontSize":14}]}]});"#;
     let llm = ScriptedLlm::new(vec![
         ScriptResponse::Text(DASH_PLAN.into()),
         ScriptResponse::Text(sidebar.into()),

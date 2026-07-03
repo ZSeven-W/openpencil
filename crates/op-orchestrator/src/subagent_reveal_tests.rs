@@ -286,8 +286,10 @@ fn reveal_schedule_does_not_spend_stream_slots_on_structure_only_containers() {
 async fn run_subtask_records_inserted_root_ids() {
     // Scripted LLM returns one full-width section frame with a text child
     // (empty frames are rejected as blank containers, so we need a child).
+    // Script-gen is the default protocol, so the fixture is a JS program
+    // calling the bound `I(parent, obj)` recorder rather than raw JSONL.
     let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-        r#"{"type":"frame","id":"sec","name":"Hero","x":0,"y":0,"width":390,"height":200,"children":[{"type":"text","id":"sec-t","content":"Hello"}]}"#
+        r#"I(null, {"type":"frame","id":"sec","name":"Hero","x":0,"y":0,"width":390,"height":200,"children":[{"type":"text","id":"sec-t","content":"Hello"}]});"#
             .into(),
     )]);
     let mut sink = VecDocSink::new();
