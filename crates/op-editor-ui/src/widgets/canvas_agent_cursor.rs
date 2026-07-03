@@ -209,8 +209,13 @@ fn collect_waypoints(
     let reveal_start_ms = cx.indicators.reveals.get(&node.id).copied();
     if let Some(start_ms) = reveal_start_ms {
         *remaining -= 1;
+        // Suppress only when this node pops in WITH its ancestor — i.e. its
+        // reveal lands inside the dwell window AFTER the ancestor's start.
+        // (The reversed comparison parked the cursor on the page root for a
+        // whole run: the root reveals first at scaffold time, so "ancestor
+        // earlier than child" held for every descendant — measured.)
         let suppressed_by_ancestor = revealed_ancestor_start_ms
-            .is_some_and(|ancestor_start| ancestor_start <= start_ms + DWELL_MS);
+            .is_some_and(|ancestor_start| start_ms <= ancestor_start + DWELL_MS);
         let b = node.aggregate_bounds();
         let area = b.size.x * b.size.y;
         let standalone_tiny_leaf = node.children.is_empty()
@@ -238,12 +243,10 @@ fn collect_waypoints(
             ));
         }
     }
-    let child_revealed_ancestor_start_ms = match (revealed_ancestor_start_ms, reveal_start_ms) {
-        (Some(existing), Some(current)) => Some(existing.min(current)),
-        (Some(existing), None) => Some(existing),
-        (None, Some(current)) => Some(current),
-        (None, None) => None,
-    };
+    // Children compare against the NEAREST revealed ancestor: a section
+    // revealed long after the root opens a fresh dwell window for its own
+    // children (min-propagation would pin every window to the root's start).
+    let child_revealed_ancestor_start_ms = reveal_start_ms.or(revealed_ancestor_start_ms);
     for child in &node.children {
         collect_waypoints(
             child,

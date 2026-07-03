@@ -274,6 +274,31 @@ mod sprite_tests {
     }
 
     #[test]
+    fn section_revealed_long_after_root_gets_its_own_waypoint() {
+        // Regression: the dwell comparison was reversed, so the page root
+        // (revealed first at scaffold time) suppressed EVERY later section
+        // and the cursor sat on the root's center for the whole run.
+        let mut root = frame_with_children("root", &["section"]);
+        root.bounds = Rect::xywh(0.0, 0.0, 1440.0, 900.0);
+        root.children[0].bounds = Rect::xywh(40.0, 600.0, 400.0, 200.0);
+        let roots = vec![root];
+        let mut ind = AgentIndicators::default();
+        ind.reveals.insert("root".into(), 1_000);
+        ind.reveals.insert("section".into(), 5_000);
+
+        let sprites = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 5_000);
+
+        assert_eq!(sprites.len(), 1);
+        let rect = sprites[0]
+            .current_rect
+            .expect("late section waypoint is current");
+        assert!(
+            (rect.origin.x - 40.0).abs() < 0.01 && (rect.origin.y - 600.0).abs() < 0.01,
+            "cursor must move to the late section, not stay parked on the root: {rect:?}"
+        );
+    }
+
+    #[test]
     fn dense_leaf_reveals_coalesce_to_last_dwell_waypoint() {
         let ids = ["a", "b", "c", "d", "e"];
         let roots = vec![root_with_leaf_children(&ids, 60.0)];
