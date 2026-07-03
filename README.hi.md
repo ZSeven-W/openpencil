@@ -80,7 +80,7 @@ Claude Code, Codex, Gemini, OpenCode, Kiro, या Copilot CLIs में वन
 
 ### 🖥️ हर जगह चलता है
 
-वेब ऐप + Electron के ज़रिए macOS, Windows और Linux पर नेटिव डेस्कटॉप। GitHub Releases से ऑटो-अपडेट। `.op` फ़ाइल एसोसिएशन — डबल-क्लिक से खोलें।
+वेब ऐप + macOS, Windows और Linux पर नेटिव डेस्कटॉप — एक Rust कोर, एक एकल स्व-निहित बाइनरी, कोई ब्राउज़र इंजन नहीं। `.op` फ़ाइल एसोसिएशन — डबल-क्लिक से खोलें।
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **MCP सर्वर**
 
-- बिल्ट-इन MCP सर्वर — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs में वन-क्लिक इंस्टॉल
-- Node.js स्वचालित पहचान — यदि इंस्टॉल नहीं है तो HTTP ट्रांसपोर्ट पर स्वचालित फ़ॉलबैक और MCP HTTP सर्वर ऑटो-स्टार्ट
+- बिल्ट-इन MCP सर्वर (`op-mcp` crate) — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs में वन-क्लिक इंस्टॉल
+- Node.js की कोई आवश्यकता नहीं — डेस्कटॉप बाइनरी (`--mcp <path>`) के ज़रिए stdio ट्रांसपोर्ट, साथ ही चल रहे ऐप से एक लाइव HTTP एंडपॉइंट (`127.0.0.1:<port>/mcp`)
 - टर्मिनल से डिज़ाइन ऑटोमेशन: किसी भी MCP-संगत एजेंट के ज़रिए `.op` फ़ाइलें पढ़ें, बनाएँ और संपादित करें
 - **लेयर्ड डिज़ाइन वर्कफ़्लो** — उच्च-फ़िडेलिटी मल्टी-सेक्शन डिज़ाइन के लिए `design_skeleton` → `design_content` → `design_refine`
 - **सेगमेंटेड प्रॉम्प्ट रिट्रीवल** — केवल आवश्यक डिज़ाइन ज्ञान लोड करें (schema, layout, roles, icons, planning, आदि)
@@ -275,9 +275,9 @@ cat design.dsl | op design - # stdin से पाइप करें
 
 **डेस्कटॉप ऐप**
 
-- Electron के ज़रिए नेटिव macOS, Windows और Linux सपोर्ट
+- नेटिव macOS, Windows और Linux सपोर्ट — एक एकल स्व-निहित बाइनरी (winit + GPU Skia, कोई Electron नहीं)
 - `.op` फ़ाइल एसोसिएशन — डबल-क्लिक से खोलें, सिंगल-इंस्टेंस लॉक
-- GitHub Releases से ऑटो-अपडेट
+- GitHub Releases के विरुद्ध बैकग्राउंड में अपडेट जांच
 - इस रूप में सहेजें, हाल के खोलें और बंद करते समय असहेजे परिवर्तनों के डायलॉग वाला नेटिव एप्लिकेशन मेनू
 - हाल की फ़ाइलों का पर्सिस्टेंस
 
@@ -285,21 +285,22 @@ cat design.dsl | op design - # stdin से पाइप करें
 
 |                    |                                                                                  |
 | ------------------ | -------------------------------------------------------------------------------- |
-| **फ्रंटएंड**       | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **कैनवास**         | CanvasKit/Skia (WASM, GPU-एक्सेलेरेटेड)                                          |
-| **स्टेट**          | Zustand v5                                                                       |
-| **सर्वर**          | Nitro                                                                            |
-| **डेस्कटॉप**       | Electron 35                                                                      |
+| **कोर**            | Rust वर्कस्पेस (`crates/`) — एडिटर स्टेट, विजेट्स, होस्ट्स, MCP, AI, codegen     |
+| **रेंडरिंग**       | हर जगह GPU Skia — नेटिव पर `skia-safe` (GL), ब्राउज़र में CanvasKit (WASM/WebGL2) |
+| **UI टूलकिट**      | jian — वेंडर्ड Rust विजेट/रेंडर/इवेंट टूलकिट (`vendor/jian`)                     |
+| **विंडोइंग**       | winit (वेंडर्ड `casement` फ़ोर्क)                                                |
+| **डेस्कटॉप**       | नेटिव बाइनरी `openpencil-desktop` — कोई ब्राउज़र इंजन नहीं                       |
+| **वेब SDK**        | `op-web-sdk` + React 19 / Vue 3 एडाप्टर — रीड-ओनली `.op` व्यूअर (TypeScript)     |
 | **CLI**            | `op` — टर्मिनल नियंत्रण, बैच डिज़ाइन DSL                                         |
-| **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **रनटाइम**         | Bun · Vite 7                                                                     |
+| **AI**             | बिल्ट-इन Rust एजेंट रनटाइम · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Lint**           | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                               |
 | **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली                                    |
 
 ## Rust क्यों
 
-OpenPencil को पूरी तरह **Rust** में नए सिरे से लिखा जा रहा है ([#129](https://github.com/ZSeven-W/openpencil/issues/129))। TypeScript + Electron बिल्ड वह है जो आज उपलब्ध है; Rust रीराइट अगला कदम है — एक नेटिव कोर जो काफ़ी छोटा और तेज़ है, और एक ही कोडबेस से अधिक प्लेटफ़ॉर्म पर चलता है।
+OpenPencil को पूरी तरह **Rust** में नए सिरे से लिखा गया है ([#129](https://github.com/ZSeven-W/openpencil/issues/129))। रीराइट पूरा हो चुका है — TypeScript + Electron एडिटर को `v0.7.5` पर रिटायर कर दिया गया, और इस रिपॉज़िटरी का Rust वर्कस्पेस अब स्वयं प्रोडक्ट है: एक नेटिव कोर जो काफ़ी छोटा और तेज़ है, और एक ही कोडबेस से अधिक प्लेटफ़ॉर्म पर चलता है।
 
-|                         | TypeScript + Electron (आज)                      | Rust (रीराइट)                                                        |
+|                         | TypeScript + Electron (रिटायर, `v0.7.5`)         | Rust (आज)                                                             |
 | ----------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
 | **डेस्कटॉप रनटाइम**    | Electron — Chromium + Node.js बंडल करता है      | नेटिव विंडो (`winit` + GPU Skia), कोई ब्राउज़र इंजन नहीं            |
 | **डेस्कटॉप फ़ुटप्रिंट** | प्रति इंस्टॉल पूरा Chromium रनटाइम              | एकल स्व-निहित बाइनरी — **55.5 MB**                                  |
@@ -319,43 +320,40 @@ OpenPencil को पूरी तरह **Rust** में नए सिरे 
 - **नेटिव एक्सेसिबिलिटी** — macOS, Windows और Linux पर AccessKit, साथ ही वेब पर DOM मिरर — ब्राउज़र के a11y ट्री पर निर्भर रहने के बजाय।
 - **एक टाइप-चेक्ड वर्कस्पेस** — MCP होस्ट, CLI, AI प्रदाता, कोड जनरेशन, Figma इम्पोर्ट और Git इंटीग्रेशन सभी एक ही Rust वर्कस्पेस में रहते हैं, CI में `cargo-deny` सप्लाई-चेन गेटिंग के साथ।
 
-> **स्थिति:** Rust शेल सक्रिय विकास में है (नीचे रोडमैप देखें)। जब तक यह `v0.8.0` के लिए फ़ीचर पैरिटी तक नहीं पहुँचता, ऊपर दिए गए इंस्टॉलेबल डाउनलोड TypeScript + Electron बिल्ड हैं।
+> **स्थिति:** TypeScript एडिटर को `v0.7.5` पर रिटायर कर दिया गया था और अब यह केवल git इतिहास में मौजूद है; यह रिपॉज़िटरी अब Rust वर्कस्पेस है। `v0.8.0` Rust रिलीज़ सक्रिय विकास में है (नीचे रोडमैप देखें)।
 
 ## प्रोजेक्ट संरचना
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 TanStack Start वेब ऐप
-│   │   ├── src/
-│   │   │   ├── canvas/      CanvasKit/Skia इंजन — ड्रॉइंग, सिंक, लेआउट
-│   │   │   ├── components/  React UI — एडिटर, पैनल, शेयर्ड डायलॉग, आइकन
-│   │   │   ├── services/ai/ AI चैट, ऑर्केस्ट्रेटर, डिज़ाइन जनरेशन, स्ट्रीमिंग
-│   │   │   ├── stores/      Zustand — कैनवास, दस्तावेज़, पेज, हिस्ट्री, AI
-│   │   │   ├── mcp/         बाहरी CLI इंटीग्रेशन के लिए MCP सर्वर टूल
-│   │   │   ├── hooks/       कीबोर्ड शॉर्टकट, फ़ाइल ड्रॉप, Figma पेस्ट
-│   │   │   └── uikit/       पुन: उपयोगी कम्पोनेंट किट सिस्टम
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — स्ट्रीमिंग चैट, जनरेशन, वैलिडेशन
-│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot रैपर
-│   ├── desktop/             Electron डेस्कटॉप ऐप
-│   │   ├── main.ts          विंडो, Nitro फ़ोर्क, नेटिव मेनू, ऑटो-अपडेटर
-│   │   ├── ipc-handlers.ts  नेटिव फ़ाइल डायलॉग, थीम सिंक, प्राथमिकताएँ IPC
-│   │   └── preload.ts       IPC ब्रिज
-│   └── cli/                 CLI टूल — `op` कमांड
-│       ├── src/commands/    डिज़ाइन, दस्तावेज़, एक्सपोर्ट, इम्पोर्ट, नोड, पेज, वेरिएबल कमांड
-│       ├── connection.ts    चालू ऐप से WebSocket कनेक्शन
-│       └── launcher.ts      डेस्कटॉप ऐप या वेब सर्वर का स्वचालित पता लगाना और लॉन्च
-├── packages/
-│   ├── pen-types/           PenDocument मॉडल के लिए टाइप परिभाषाएँ
-│   ├── pen-core/            दस्तावेज़ ट्री ऑपरेशन, लेआउट इंजन, वेरिएबल
-│   ├── pen-codegen/         कोड जनरेटर (React, HTML, Vue, Flutter, ...)
-│   ├── pen-figma/           Figma .fig फ़ाइल पार्सर और कनवर्टर
-│   ├── pen-renderer/        स्टैंडअलोन CanvasKit/Skia रेंडरर
-│   ├── pen-sdk/             अम्ब्रेला SDK (सभी पैकेज री-एक्सपोर्ट)
-│   ├── pen-ai-skills/       AI प्रॉम्प्ट स्किल इंजन (चरणबद्ध प्रॉम्प्ट लोडिंग)
-│   └── agent/               AI एजेंट SDK (Vercel AI SDK, मल्टी-प्रदाता, एजेंट टीमें)
-└── .githooks/               ब्रांच नाम से प्री-कमिट वर्शन सिंक
+├── crates/                   Rust वर्कस्पेस — प्रोडक्ट
+│   ├── op-editor-core/       कैननिकल `.op` (PenDocument) एडिटर स्टेट + EditorCommand + डिज़ाइन वेरिएबल
+│   ├── op-editor-ui/         प्लेटफ़ॉर्म-मुक्त विजेट्स + RenderBackend फ़साड (wasm32-clean)
+│   ├── op-editor-host-core/  सभी होस्ट्स द्वारा साझा ट्रांसपोर्ट-मुक्त होस्ट स्टेट मशीनें
+│   ├── op-host-native/       नेटिव होस्ट लाइब्रेरी — winit + skia-safe GL (डेस्कटॉप + मोबाइल)
+│   ├── op-host-web/          ब्राउज़र बंडल — wasm32 cdylib, CanvasKit रेंडरर
+│   ├── op-host-desktop/      डेस्कटॉप बाइनरी `openpencil-desktop`; `--serve-web` डेमॉन भी
+│   ├── op-host-services/     हेडलेस serve-web / MCP डेमॉन लाइब्रेरी
+│   ├── op-host-web-server/   पतली GL-मुक्त वेब-सर्वर बाइनरी
+│   ├── op-cli/               CLI टूल — `op` कमांड
+│   ├── op-mcp/               MCP सर्वर — टूल्स, बैच डिज़ाइन, लेयर्ड वर्कफ़्लो
+│   ├── op-ai/                AI प्रदाता, चैट रनटाइम, स्ट्रीमिंग
+│   ├── op-ai-skills/         AI प्रॉम्प्ट स्किल इंजन (चरणबद्ध प्रॉम्प्ट लोडिंग)
+│   ├── op-orchestrator/      समवर्ती एजेंट-टीम ऑर्केस्ट्रेशन
+│   ├── op-codegen/           कोड जनरेटर (React, HTML, Vue, Flutter, ...)
+│   ├── op-figma/             Figma .fig फ़ाइल पार्सर और कनवर्टर
+│   ├── op-git/               Git इंटीग्रेशन — क्लोन, ब्रांच, पुश/पुल, मर्ज
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 वेब SDK वर्कस्पेस (Bun)
+│   ├── op-web-sdk/           रीड-ओनली `.op` वेब व्यूअर SDK (wasm बंडल को रैप करता है)
+│   ├── op-web-sdk-react/     React 19 एडाप्टर
+│   └── op-web-sdk-vue/       Vue 3 एडाप्टर
+├── vendor/                   वेंडर्ड सबसिस्टम (git सबमॉड्यूल)
+│   ├── jian/                 Skia विजेट/रेंडर/इवेंट टूलकिट
+│   ├── casement/             winit फ़ोर्क
+│   └── agent/                क्रॉस-प्रोडक्ट Rust एजेंट रनटाइम (agent-rs)
+└── .githooks/                ब्रांच नाम से प्री-कमिट वर्शन सिंक
 ```
 
 ## कीबोर्ड शॉर्टकट

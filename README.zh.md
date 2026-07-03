@@ -80,7 +80,7 @@
 
 ### 🖥️ 全平台运行
 
-Web 应用 + 通过 Electron 支持 macOS、Windows 和 Linux 原生桌面端。从 GitHub Releases 自动更新。`.op` 文件关联 — 双击即可打开。
+Web 应用 + macOS、Windows 和 Linux 原生桌面端 — 单一 Rust 核心，单个自包含二进制文件，无需浏览器引擎。`.op` 文件关联 — 双击即可打开。
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **MCP 服务器**
 
-- 内置 MCP 服务器 — 一键安装到 Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
-- 自动检测 Node.js — 若未安装则自动回退到 HTTP 传输模式并启动 MCP HTTP 服务器
+- 内置 MCP 服务器（`op-mcp` crate）— 一键安装到 Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
+- 无需 Node.js — 通过桌面应用二进制文件（`--mcp <path>`）使用 stdio 传输，运行中的应用还提供实时 HTTP 端点（`127.0.0.1:<port>/mcp`）
 - 从终端进行设计自动化：通过任意 MCP 兼容的智能体读取、创建和修改 `.op` 文件
 - **分层设计工作流** — `design_skeleton` → `design_content` → `design_refine`，实现更高保真度的多区块设计
 - **分段提示词检索** — 按需加载所需的设计知识（schema、layout、roles、icons、planning 等）
@@ -275,9 +275,9 @@ cat design.dsl | op design - # 从 stdin 管道输入
 
 **桌面应用**
 
-- 通过 Electron 支持原生 macOS、Windows 和 Linux
+- 原生支持 macOS、Windows 和 Linux — 单一自包含二进制文件（winit + GPU Skia，无需 Electron）
 - `.op` 文件关联 — 双击即可打开，单实例锁定
-- 从 GitHub Releases 自动更新
+- 后台检查 GitHub Releases 更新
 - 原生应用菜单，支持另存为、打开最近使用，以及关闭时的未保存更改对话框
 - 最近使用文件持久化
 
@@ -285,21 +285,22 @@ cat design.dsl | op design - # 从 stdin 管道输入
 
 |              |                                                                                  |
 | ------------ | -------------------------------------------------------------------------------- |
-| **前端**     | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **画布**     | CanvasKit/Skia（WASM, GPU 加速）                                                 |
-| **状态管理** | Zustand v5                                                                       |
-| **服务器**   | Nitro                                                                            |
-| **桌面端**   | Electron 35                                                                      |
+| **核心**     | Rust workspace（`crates/`）— 编辑器状态、组件、宿主、MCP、AI、代码生成           |
+| **渲染**     | 全平台统一使用 GPU Skia — 原生端 `skia-safe`（GL），浏览器端 CanvasKit（WASM/WebGL2） |
+| **UI 工具包** | jian — 内置的 Rust 组件/渲染/事件工具包（`vendor/jian`）                        |
+| **窗口管理** | winit（内置 `casement` fork）                                                    |
+| **桌面端**   | 原生二进制文件 `openpencil-desktop` — 无浏览器引擎                              |
+| **Web SDK**  | `op-web-sdk` + React 19 / Vue 3 适配器 — 只读 `.op` 查看器（TypeScript）         |
 | **CLI**      | `op` — 终端控制、批量设计 DSL                                                    |
-| **AI**       | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **运行时**   | Bun · Vite 7                                                                     |
+| **AI**       | 内置 Rust Agent 运行时 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **代码检查** | clippy · rustfmt（Rust）· oxlint · oxfmt（web SDK）                              |
 | **文件格式** | `.op` — 基于 JSON，人类可读，对 Git 友好                                         |
 
 ## 为什么选择 Rust
 
-OpenPencil 正在从头用 **Rust** 重写（[#129](https://github.com/ZSeven-W/openpencil/issues/129)）。现阶段发布的安装包是 TypeScript + Electron 版本；Rust 重写版本是下一步目标 — 一个体积更小、速度更快的原生核心，从单一代码库支持更多平台。
+OpenPencil 已从头用 **Rust** 完成重写（[#129](https://github.com/ZSeven-W/openpencil/issues/129)）。重写已经完成 — TypeScript + Electron 版编辑器已在 `v0.7.5` 退役，本仓库中的 Rust workspace 就是当前产品本身：一个体积更小、速度更快的原生核心，从单一代码库支持更多平台。
 
-|                   | TypeScript + Electron（当前）              | Rust（重写版）                                                           |
+|                   | TypeScript + Electron（已退役，`v0.7.5`）  | Rust（当前）                                                             |
 | ----------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
 | **桌面运行时**    | Electron — 内置 Chromium + Node.js         | 原生窗口（`winit` + GPU Skia），无浏览器引擎                             |
 | **桌面体积**      | 每次安装均含完整 Chromium 运行时           | 单一自包含二进制文件 — **55.5 MB**                                       |
@@ -319,43 +320,40 @@ OpenPencil 正在从头用 **Rust** 重写（[#129](https://github.com/ZSeven-W/
 - **原生无障碍** — macOS、Windows 和 Linux 上通过 AccessKit 实现，Web 端通过 DOM 镜像实现，而非依赖浏览器自身的无障碍树。
 - **单一类型检查工作区** — MCP 宿主、CLI、AI 提供商、代码生成、Figma 导入和 Git 集成全部位于同一个 Rust workspace，并在 CI 中通过 `cargo-deny` 进行供应链管控。
 
-> **状态：** Rust shell 正在积极开发中（参见下方路线图）。在其达到 `v0.8.0` 功能对等之前，上方提供的可安装下载包为 TypeScript + Electron 版本。
+> **状态：** TypeScript 版编辑器已在 `v0.7.5` 退役，仅存在于 Git 历史中；本仓库即为 Rust workspace。`v0.8.0` 版本的 Rust 发布正在积极开发中（参见下方路线图）。
 
 ## 项目结构
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 TanStack Start Web 应用
-│   │   ├── src/
-│   │   │   ├── canvas/      CanvasKit/Skia 引擎 — 绘图、同步、布局
-│   │   │   ├── components/  React UI — 编辑器、面板、共享对话框、图标
-│   │   │   ├── services/ai/ AI 聊天、编排器、设计生成、流式处理
-│   │   │   ├── stores/      Zustand — 画布、文档、页面、历史、AI
-│   │   │   ├── mcp/         供外部 CLI 集成使用的 MCP 服务器工具
-│   │   │   ├── hooks/       键盘快捷键、文件拖放、Figma 粘贴
-│   │   │   └── uikit/       可复用组件套件系统
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — 流式聊天、生成、验证
-│   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot 客户端封装
-│   ├── desktop/             Electron 桌面应用
-│   │   ├── main.ts          窗口、Nitro 子进程、原生菜单、自动更新
-│   │   ├── ipc-handlers.ts  原生文件对话框、主题同步、偏好设置 IPC
-│   │   └── preload.ts       IPC 桥接
-│   └── cli/                 CLI 工具 — `op` 命令
-│       ├── src/commands/    设计、文档、导出、导入、节点、页面、变量命令
-│       ├── connection.ts    与运行中应用的 WebSocket 连接
-│       └── launcher.ts      自动检测并启动桌面应用或 Web 服务器
-├── packages/
-│   ├── pen-types/           PenDocument 模型类型定义
-│   ├── pen-core/            文档树操作、布局引擎、变量
-│   ├── pen-codegen/         代码生成器（React、HTML、Vue、Flutter 等）
-│   ├── pen-figma/           Figma .fig 文件解析与转换
-│   ├── pen-renderer/        独立 CanvasKit/Skia 渲染器
-│   ├── pen-sdk/             聚合 SDK（重新导出所有包）
-│   ├── pen-ai-skills/       AI 提示词技能引擎（分阶段 prompt 加载）
-│   └── agent/               AI Agent SDK（Vercel AI SDK、多提供商、Agent 团队）
-└── .githooks/               预提交钩子：从分支名同步版本号
+├── crates/                   Rust workspace — 产品本体
+│   ├── op-editor-core/       规范的 `.op`（PenDocument）编辑器状态 + EditorCommand + 设计变量
+│   ├── op-editor-ui/         平台无关组件 + RenderBackend 门面（wasm32 兼容）
+│   ├── op-editor-host-core/  所有宿主共用、与传输层无关的宿主状态机
+│   ├── op-host-native/       原生宿主库 — winit + skia-safe GL（桌面端 + 移动端）
+│   ├── op-host-web/          浏览器构建产物 — wasm32 cdylib，CanvasKit 渲染器
+│   ├── op-host-desktop/      桌面应用二进制 `openpencil-desktop`；同时也是 `--serve-web` 守护进程
+│   ├── op-host-services/     无头 serve-web / MCP 守护进程库
+│   ├── op-host-web-server/   无 GL 依赖的轻量级 Web 服务器二进制
+│   ├── op-cli/               CLI 工具 — `op` 命令
+│   ├── op-mcp/               MCP 服务器 — 工具、批量设计、分层工作流
+│   ├── op-ai/                AI 提供商、聊天运行时、流式处理
+│   ├── op-ai-skills/         AI 提示词技能引擎（分阶段 prompt 加载）
+│   ├── op-orchestrator/      并发 Agent 团队编排
+│   ├── op-codegen/           代码生成器（React、HTML、Vue、Flutter 等）
+│   ├── op-figma/             Figma .fig 文件解析器与转换器
+│   ├── op-git/               Git 集成 — 克隆、分支、推送/拉取、合并
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 Web SDK 工作区（Bun）
+│   ├── op-web-sdk/           只读 `.op` Web 查看器 SDK（封装 wasm 构建产物）
+│   ├── op-web-sdk-react/     React 19 适配器
+│   └── op-web-sdk-vue/       Vue 3 适配器
+├── vendor/                   内置子系统（git 子模块）
+│   ├── jian/                 Skia 组件/渲染/事件工具包
+│   ├── casement/             winit fork
+│   └── agent/                跨产品 Rust Agent 运行时（agent-rs）
+└── .githooks/                预提交钩子：从分支名同步版本号
 ```
 
 ## 键盘快捷键

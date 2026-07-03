@@ -80,7 +80,7 @@ Tệp `.op` là JSON — dễ đọc, thân thiện Git, dễ so sánh khác bi�
 
 ### 🖥️ Chạy Mọi nơi
 
-Ứng dụng web + desktop gốc trên macOS, Windows và Linux qua Electron. Tự động cập nhật từ GitHub Releases. Liên kết tệp `.op` — nhấp đúp để mở.
+Ứng dụng web + desktop gốc trên macOS, Windows và Linux — một nhân Rust duy nhất, một tệp nhị phân độc lập duy nhất, không có browser engine. Liên kết tệp `.op` — nhấp đúp để mở.
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **Máy chủ MCP**
 
-- Máy chủ MCP tích hợp sẵn — cài đặt một cú nhấp vào Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
-- Tự động phát hiện Node.js — nếu chưa cài đặt, tự động chuyển sang HTTP transport và khởi động MCP HTTP server
+- Máy chủ MCP tích hợp sẵn (crate `op-mcp`) — cài đặt một cú nhấp vào Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
+- Không cần Node.js — stdio transport qua tệp nhị phân desktop (`--mcp <path>`), cộng với một HTTP endpoint trực tiếp (`127.0.0.1:<port>/mcp`) từ ứng dụng đang chạy
 - Tự động hóa thiết kế từ terminal: đọc, tạo và chỉnh sửa các tệp `.op` qua bất kỳ tác nhân tương thích MCP nào
 - **Quy trình thiết kế phân lớp** — `design_skeleton` → `design_content` → `design_refine` cho thiết kế đa phần có độ trung thực cao hơn
 - **Truy xuất prompt phân đoạn** — chỉ tải kiến thức thiết kế cần thiết (schema, layout, roles, icons, planning, v.v.)
@@ -275,31 +275,32 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 
 **Ứng dụng Desktop**
 
-- macOS, Windows và Linux gốc qua Electron
+- macOS, Windows và Linux gốc — một tệp nhị phân độc lập duy nhất (winit + GPU Skia, không có Electron)
 - Liên kết tệp `.op` — nhấp đúp để mở, khóa phiên bản đơn
-- Tự động cập nhật từ GitHub Releases
+- Kiểm tra cập nhật nền so với GitHub Releases
 - Menu ứng dụng gốc với Lưu thành, Mở gần đây và hộp thoại thay đổi chưa lưu khi đóng
 - Lưu danh sách tệp gần đây
 
 ## Công nghệ
 
-|                   |                                                                                  |
-| ----------------- | -------------------------------------------------------------------------------- |
-| **Frontend**      | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **Canvas**        | CanvasKit/Skia (WASM, tăng tốc GPU)                                              |
-| **Trạng thái**    | Zustand v5                                                                       |
-| **Máy chủ**       | Nitro                                                                            |
-| **Desktop**       | Electron 35                                                                      |
-| **CLI**           | `op` — điều khiển từ terminal, batch design DSL                                  |
-| **AI**            | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime**       | Bun · Vite 7                                                                     |
-| **Định dạng tệp** | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git                                |
+|                    |                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| **Lõi**            | Rust workspace (`crates/`) — trạng thái editor, widget, host, MCP, AI, codegen              |
+| **Dựng hình**      | GPU Skia ở khắp nơi — `skia-safe` (GL) trên nền tảng gốc, CanvasKit (WASM/WebGL2) trên trình duyệt |
+| **Bộ công cụ UI**  | jian — bộ công cụ widget/render/event Rust được vendor hóa (`vendor/jian`)                  |
+| **Cửa sổ**         | winit (bản fork `casement` được vendor hóa)                                                 |
+| **Desktop**        | Tệp nhị phân gốc `openpencil-desktop` — không có browser engine                             |
+| **Web SDK**        | `op-web-sdk` + các adapter React 19 / Vue 3 — trình xem `.op` chỉ đọc (TypeScript)           |
+| **CLI**            | `op` — điều khiển từ terminal, batch design DSL                                             |
+| **AI**             | Runtime tác nhân Rust tích hợp sẵn · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Lint**           | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                                           |
+| **Định dạng tệp**  | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git                                            |
 
 ## Tại sao chọn Rust
 
-OpenPencil đang được viết lại từ đầu bằng **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). Bản dựng TypeScript + Electron là phiên bản đang phát hành hiện tại; bản viết lại bằng Rust là bước tiếp theo — một nhân gốc duy nhất nhỏ hơn và nhanh hơn đáng kể, chạy trên nhiều nền tảng hơn từ một codebase duy nhất.
+OpenPencil đã được viết lại từ đầu bằng **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). Việc viết lại đã hoàn tất — editor TypeScript + Electron đã bị khai tử tại `v0.7.5`, và Rust workspace trong repo này chính là sản phẩm: một nhân gốc duy nhất nhỏ hơn và nhanh hơn đáng kể, chạy trên nhiều nền tảng hơn từ một codebase duy nhất.
 
-|                              | TypeScript + Electron (hiện tại)               | Rust (bản viết lại)                                                  |
+|                              | TypeScript + Electron (đã khai tử, `v0.7.5`)   | Rust (hiện tại)                                                      |
 | ---------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
 | **Runtime desktop**          | Electron — đi kèm Chromium + Node.js           | Cửa sổ gốc (`winit` + GPU Skia), không có browser engine             |
 | **Dung lượng desktop**       | Toàn bộ runtime Chromium mỗi lần cài đặt       | Tệp nhị phân độc lập duy nhất — **55.5 MB**                          |
@@ -319,43 +320,40 @@ OpenPencil đang được viết lại từ đầu bằng **Rust** ([#129](https
 - **Trợ năng gốc** — AccessKit trên macOS, Windows và Linux, cộng với DOM mirror trên web, thay vì dựa vào cây a11y của browser.
 - **Một workspace có kiểm tra kiểu** — MCP host, CLI, nhà cung cấp AI, tạo mã, nhập Figma và tích hợp Git đều nằm trong một Rust workspace duy nhất, với `cargo-deny` kiểm soát chuỗi cung ứng trong CI.
 
-> **Trạng thái:** shell Rust đang được phát triển tích cực (xem Lộ trình bên dưới). Cho đến khi đạt tính năng tương đương cho `v0.8.0`, các bản tải xuống có thể cài đặt ở trên là bản dựng TypeScript + Electron.
+> **Trạng thái:** editor TypeScript đã bị khai tử tại `v0.7.5` và chỉ còn tồn tại trong lịch sử git; repo này chính là Rust workspace. Bản phát hành Rust `v0.8.0` đang được phát triển tích cực (xem Lộ trình bên dưới).
 
 ## Cấu trúc dự án
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 Ứng dụng web TanStack Start
-│   │   ├── src/
-│   │   │   ├── canvas/      Engine CanvasKit/Skia — vẽ, đồng bộ, layout
-│   │   │   ├── components/  React UI — editor, panels, hộp thoại dùng chung, icons
-│   │   │   ├── services/ai/ AI chat, orchestrator, tạo thiết kế, streaming
-│   │   │   ├── stores/      Zustand — canvas, document, pages, history, AI
-│   │   │   ├── mcp/         Công cụ máy chủ MCP để tích hợp CLI bên ngoài
-│   │   │   ├── hooks/       Phím tắt, kéo thả tệp, dán từ Figma
-│   │   │   └── uikit/       Hệ thống kit component có thể tái sử dụng
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — streaming chat, generation, validation
-│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot wrappers
-│   ├── desktop/             Ứng dụng desktop Electron
-│   │   ├── main.ts          Cửa sổ, Nitro fork, menu gốc, auto-updater
-│   │   ├── ipc-handlers.ts  Hộp thoại file gốc, đồng bộ theme, tùy chọn IPC
-│   │   └── preload.ts       IPC bridge
-│   └── cli/                 Công cụ CLI — lệnh `op`
-│       ├── src/commands/    Lệnh design, document, export, import, node, page, variable
-│       ├── connection.ts    Kết nối WebSocket đến ứng dụng đang chạy
-│       └── launcher.ts      Tự động phát hiện và khởi chạy ứng dụng desktop hoặc web server
-├── packages/
-│   ├── pen-types/           Định nghĩa kiểu cho mô hình PenDocument
-│   ├── pen-core/            Thao tác cây tài liệu, layout engine, biến
-│   ├── pen-codegen/         Bộ tạo mã (React, HTML, Vue, Flutter, ...)
-│   ├── pen-figma/           Trình phân tích và chuyển đổi tệp Figma .fig
-│   ├── pen-renderer/        Bộ dựng hình CanvasKit/Skia độc lập
-│   ├── pen-sdk/             SDK tổng hợp (tái xuất tất cả các gói)
-│   ├── pen-ai-skills/       Engine kỹ năng AI prompt (tải prompt theo giai đoạn)
-│   └── agent/               SDK tác nhân AI (Vercel AI SDK, đa nhà cung cấp, đội tác nhân)
-└── .githooks/               Pre-commit đồng bộ phiên bản từ tên nhánh
+├── crates/                   Rust workspace — sản phẩm chính
+│   ├── op-editor-core/       Trạng thái editor `.op` (PenDocument) chuẩn + EditorCommand + biến thiết kế
+│   ├── op-editor-ui/         Widget không phụ thuộc nền tảng + RenderBackend facade (wasm32-clean)
+│   ├── op-editor-host-core/  Máy trạng thái host không phụ thuộc transport, dùng chung cho mọi host
+│   ├── op-host-native/       Thư viện host gốc — winit + skia-safe GL (desktop + mobile)
+│   ├── op-host-web/          Bundle trình duyệt — wasm32 cdylib, renderer CanvasKit
+│   ├── op-host-desktop/      Binary desktop `openpencil-desktop`; đồng thời là daemon `--serve-web`
+│   ├── op-host-services/     Thư viện daemon serve-web / MCP headless
+│   ├── op-host-web-server/   Binary web-server không cần GL
+│   ├── op-cli/               Công cụ CLI — lệnh `op`
+│   ├── op-mcp/               Máy chủ MCP — công cụ, batch design, quy trình phân lớp
+│   ├── op-ai/                Nhà cung cấp AI, runtime chat, streaming
+│   ├── op-ai-skills/         Engine kỹ năng AI prompt (tải prompt theo giai đoạn)
+│   ├── op-orchestrator/      Điều phối đội tác nhân đồng thời
+│   ├── op-codegen/           Bộ tạo mã (React, HTML, Vue, Flutter, ...)
+│   ├── op-figma/             Trình phân tích và chuyển đổi tệp Figma .fig
+│   ├── op-git/               Tích hợp Git — clone, branch, push/pull, merge
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 Web SDK workspace (Bun)
+│   ├── op-web-sdk/           SDK trình xem web `.op` chỉ đọc (bọc bundle wasm)
+│   ├── op-web-sdk-react/     Adapter React 19
+│   └── op-web-sdk-vue/       Adapter Vue 3
+├── vendor/                   Các subsystem được vendor hóa (git submodules)
+│   ├── jian/                 Bộ công cụ widget/render/event Skia
+│   ├── casement/             Bản fork của winit
+│   └── agent/                Runtime tác nhân Rust đa sản phẩm (agent-rs)
+└── .githooks/                Pre-commit đồng bộ phiên bản từ tên nhánh
 ```
 
 ## Phím tắt
