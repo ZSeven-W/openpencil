@@ -368,3 +368,93 @@ fn gap_reaches_rows_behind_an_unnamed_wrapper() {
             == Some(12.0)
     );
 }
+
+fn striped_table(name: &str, row_extra: fn(&mut Value)) -> PenNode {
+    let mk_row = |id: &str| {
+        let mut row = json!({
+            "type":"frame","id":id,"layout":"horizontal","gap":24,"children":[
+                {"type":"frame","id":format!("{id}a"),"children":[]},
+                {"type":"frame","id":format!("{id}b"),"children":[]},
+                {"type":"frame","id":format!("{id}c"),"children":[]}
+            ]
+        });
+        row_extra(&mut row);
+        row
+    };
+    node(json!({
+        "type":"frame","id":"tbl","name":name,"layout":"vertical","gap":16,
+        "children":[ mk_row("h"), mk_row("r1"), mk_row("r2"), mk_row("r3") ]
+    }))
+}
+
+#[test]
+fn positive_striped_rows_get_flushed() {
+    // test0703.op shape: table gap=16 while every row already carries a
+    // bottom hairline — the gap turns it into floating stripes; flush it.
+    let mut root = striped_table("Client List Table", |row| {
+        row.as_object_mut().unwrap().insert(
+            "stroke".into(),
+            json!({"thickness":{"bottom":1},"fill":[{"type":"solid","color":"#2A2A2A"}]}),
+        );
+    });
+    assert!(
+        flush_table_row_gap(&mut root),
+        "striped table must be flushed"
+    );
+    let v = val(&root);
+    assert_eq!(v["gap"].as_f64(), Some(0.0), "container gap zeroed: {v}");
+    // Row COLUMN gaps stay untouched.
+    assert_eq!(v["children"][1]["gap"].as_f64(), Some(24.0));
+}
+
+#[test]
+fn negative_bare_rows_keep_their_gap() {
+    // Rows with no fill and no stroke have nothing else separating them —
+    // the container gap is load-bearing, leave it.
+    let root = striped_table("Client List Table", |_| {});
+    let mut probe = root.clone();
+    assert!(
+        !flush_table_row_gap(&mut probe),
+        "bare rows must keep the container gap"
+    );
+}
+
+#[test]
+fn negative_non_table_named_stays() {
+    // A card list ("Today's Schedule") legitimately spaces filled cards —
+    // the name gate keeps the flush off it.
+    let root = striped_table("Today's Schedule", |row| {
+        row.as_object_mut()
+            .unwrap()
+            .insert("fill".into(), json!([{"type":"solid","color":"#141414"}]));
+    });
+    let mut probe = root.clone();
+    assert!(
+        !flush_table_row_gap(&mut probe),
+        "non-table containers keep their rhythm"
+    );
+}
+
+#[test]
+fn hairline_one_px_gap_row_still_gets_a_column_gap() {
+    // gap:1 (a model's "hairline") slipped past the old `< 1.0` gate and the
+    // header rendered as "NameContactLast Visit…" (measured, MAISON).
+    let mut root = node(json!({
+        "type":"frame","id":"tbl","name":"Client Table","layout":"vertical","children":[
+            {"type":"frame","id":"hdr","layout":"horizontal","gap":1,"children":[
+                {"type":"frame","id":"h1","children":[]},
+                {"type":"frame","id":"h2","children":[]},
+                {"type":"frame","id":"h3","children":[]}
+            ]},
+            {"type":"frame","id":"r1","layout":"horizontal","gap":1,"children":[
+                {"type":"frame","id":"c1","children":[]},
+                {"type":"frame","id":"c2","children":[]},
+                {"type":"frame","id":"c3","children":[]}
+            ]}
+        ]
+    }));
+    assert!(ensure_table_column_gap(&mut root));
+    let v = val(&root);
+    assert_eq!(v["children"][0]["gap"].as_f64(), Some(24.0), "{v}");
+    assert_eq!(v["children"][1]["gap"].as_f64(), Some(24.0));
+}
