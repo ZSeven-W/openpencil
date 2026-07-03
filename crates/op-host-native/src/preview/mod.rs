@@ -30,6 +30,12 @@
 //! metrics), plus a focus caret drawn on top. The editor's normal
 //! selection / handles / grid do NOT paint in preview.
 //!
+//! Binding overlay limits (Spec-2 slice): only `content` bindings are
+//! re-resolved; the scene is NOT re-laid-out, so text that grows past
+//! its authored box paints per the design painter's normal overflow
+//! behavior. `visible` / fill / geometry bindings are collected but not
+//! yet applied.
+//!
 //! ## Hit-testing across two coordinate spaces
 //!
 //! The design scene offsets every page-root by its authored
@@ -39,10 +45,14 @@
 //! root-relative space — subtract the containing root's authored origin
 //! — before [`Runtime::dispatch_pointer`]. See [`PreviewSession::dispatch_tap`].
 
+mod binding_sites;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_bindings;
 
-use jian_core::gesture::pointer::Modifiers;
+use binding_sites::{collect_binding_sites, BindingSite};
+use jian_core::gesture::pointer::{Modifiers, PointerPhase};
 use jian_core::widget_state::WidgetState;
 use jian_core::Runtime;
 use jian_ops_schema::compat::{load_str_with, LoadOptions};
@@ -89,6 +99,10 @@ pub struct PreviewSession {
     /// Non-fatal load warnings (e.g. legacy role promotions), formatted
     /// for display in the editor's `preview_warnings`.
     warnings: Vec<String>,
+    /// Compiled non-`bind:value` bindings from the promoted document,
+    /// re-evaluated against the live state graph each overlay pass (see
+    /// `apply_binding_sites`) so `set $app.*` writes become visible.
+    binding_sites: Vec<BindingSite>,
 }
 
 impl PreviewSession {
@@ -185,7 +199,7 @@ impl PreviewSession {
         )
         .map_err(|e| format!("parse document for preview: {e}"))?;
 
-        let warnings = loaded
+        let mut warnings = loaded
             .warnings
             .iter()
             .filter_map(format_warning)
@@ -197,6 +211,14 @@ impl PreviewSession {
         // the design scene from, so the painted scene and the runtime's
         // hit-test/state graph agree node-for-node.
         let promoted_doc = loaded.value.clone();
+
+        // Compile every non-`bind:value` binding on the promoted tree so
+        // Task C2's overlay pass can re-evaluate them against the live
+        // state graph each frame. Compile failures surface as warnings,
+        // never as `enter` errors — a bad binding just doesn't animate.
+        let mut binding_sites = Vec::new();
+        collect_binding_sites(&promoted_doc.children, &mut binding_sites, &mut warnings);
+
         let mut runtime =
             Runtime::new_from_document(loaded.value).map_err(|e| format!("build runtime: {e}"))?;
 
@@ -287,6 +309,7 @@ impl PreviewSession {
             root_frames,
             scene,
             warnings,
+            binding_sites,
         })
     }
 
@@ -331,7 +354,9 @@ impl PreviewSession {
         // overlay is a no-op, so paint the scene directly. Once any
         // widget carries runtime state we clone + overlay it.
         let overlaid;
-        let scene: &LayoutScene = if self.runtime.widget_states.iter().next().is_none() {
+        let scene: &LayoutScene = if self.runtime.widget_states.iter().next().is_none()
+            && self.binding_sites.is_empty()
+        {
             &self.scene
         } else {
             overlaid = self.overlay_runtime_state(&self.scene);
@@ -383,15 +408,35 @@ impl PreviewSession {
         scene
     }
 
-    /// Recursively overlay runtime widget state onto a scene subtree.
+    /// Recursively overlay runtime widget state + live binding values
+    /// onto a scene subtree.
     fn overlay_node(&self, node: &mut SceneNode) {
         if let Some(widget) = node.widget.as_mut() {
             if let Some(state) = self.runtime.widget_states.get(&node.id) {
                 apply_widget_state(widget, state);
             }
         }
+        self.apply_binding_sites(node);
         for child in node.children.iter_mut() {
             self.overlay_node(child);
+        }
+    }
+
+    /// Re-evaluate this node's compiled bindings against the live state
+    /// graph. Only `content` (scene text) lands today; other props are
+    /// skipped until the preview painter learns them. Linear scan over
+    /// the sites is fine at preview scale (a handful of bindings per
+    /// document); index by node id if profiles ever say otherwise.
+    fn apply_binding_sites(&self, node: &mut SceneNode) {
+        for site in self.binding_sites.iter().filter(|s| s.node_id == node.id) {
+            if site.prop != "content" {
+                continue;
+            }
+            let (value, _warnings) = site.expr.eval(&self.runtime.state, None, Some(&node.id));
+            node.text = Some(display_string(&value));
+            // Bound text is dynamic single-style content — styled runs
+            // resolved from the authored literal no longer apply.
+            node.text_runs.clear();
         }
     }
 
@@ -510,14 +555,44 @@ impl PreviewSession {
     /// paints. Returns `true` when the runtime emitted any semantic
     /// event.
     pub fn dispatch_tap(&mut self, scene_x: f32, scene_y: f32) -> bool {
+        let down = self.dispatch_pointer_phase(scene_x, scene_y, PointerPhase::Down);
+        let up = self.dispatch_pointer_phase(scene_x, scene_y, PointerPhase::Up);
+        down || up
+    }
+
+    /// Dispatch one pointer phase at a SCENE-space point. `Down`/`Up`/
+    /// `Move` carry mouse-left button semantics (a held drag — slider
+    /// knobs); `Hover` is an unpressed move (fires `onHoverEnter` /
+    /// `onHoverLeave` actions). Returns `true` when the runtime emitted
+    /// any semantic event.
+    pub fn dispatch_pointer_phase(
+        &mut self,
+        scene_x: f32,
+        scene_y: f32,
+        phase: PointerPhase,
+    ) -> bool {
         use jian_core::geometry::point;
-        use jian_core::gesture::pointer::{PointerEvent, PointerPhase};
+        use jian_core::gesture::pointer::{MouseButtons, PointerEvent, PointerKind};
         let (rt_x, rt_y) = self.scene_to_runtime(scene_x, scene_y);
-        let down = PointerEvent::simple(1, PointerPhase::Down, point(rt_x, rt_y));
-        let mut emitted = self.runtime.dispatch_pointer(down);
-        let up = PointerEvent::simple(1, PointerPhase::Up, point(rt_x, rt_y));
-        emitted.extend(self.runtime.dispatch_pointer(up));
-        !emitted.is_empty()
+        let mut ev = PointerEvent::simple(1, phase, point(rt_x, rt_y));
+        ev.kind = PointerKind::Mouse;
+        if matches!(phase, PointerPhase::Hover) {
+            ev.buttons = MouseButtons::empty();
+            ev.pressure = 0.0;
+        }
+        !self.runtime.dispatch_pointer(ev).is_empty()
+    }
+
+    /// Route a wheel at a SCENE-space point into the runtime. Returns
+    /// `true` only when a node carrying `events.onScroll` consumed it —
+    /// the host falls back to canvas pan/zoom otherwise. `dx`/`dy` are
+    /// screen-pixel deltas (same magnitude the design canvas pans by).
+    pub fn dispatch_wheel(&mut self, scene_x: f32, scene_y: f32, dx: f32, dy: f32) -> bool {
+        use jian_core::geometry::point;
+        use jian_core::gesture::pointer::WheelEvent;
+        let (rt_x, rt_y) = self.scene_to_runtime(scene_x, scene_y);
+        let ev = WheelEvent::simple(point(rt_x, rt_y), point(dx, dy));
+        !self.runtime.dispatch_wheel(ev).is_empty()
     }
 
     /// Translate a scene-space point into the runtime's root-relative
@@ -614,6 +689,12 @@ impl PreviewSession {
     pub(crate) fn available(&self) -> (f32, f32) {
         self.available
     }
+
+    /// Test-only: number of compiled binding sites.
+    #[cfg(test)]
+    pub(crate) fn binding_sites_len_for_test(&self) -> usize {
+        self.binding_sites.len()
+    }
 }
 
 /// Overlay one widget's live runtime value onto its scene widget. Only
@@ -644,6 +725,17 @@ fn apply_widget_state(widget: &mut SceneWidget, state: &WidgetState) {
         WidgetState::Tabs { active, .. } => {
             widget.value_str = active.clone();
         }
+    }
+}
+
+/// Human-readable form of an expression result for scene text: strings
+/// verbatim, null → empty, everything else via JSON rendering (ints
+/// print without a trailing `.0`).
+fn display_string(value: &jian_core::value::RuntimeValue) -> String {
+    match &value.0 {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Null => String::new(),
+        other => other.to_string(),
     }
 }
 

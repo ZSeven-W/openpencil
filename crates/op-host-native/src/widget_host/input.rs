@@ -552,6 +552,15 @@ impl WidgetHostNative {
                 return true;
             }
         }
+        // Live preview owns canvas cursor moves (hover + drag into the
+        // runtime). Runs below the modal guards (they own the cursor
+        // while open); floating overlays are excluded inside
+        // `preview_dispatch_move` via `over_topmost_panel`, and
+        // off-canvas moves fall through so top-bar hover still works
+        // while previewing.
+        if self.preview.is_some() && self.preview_dispatch_move(x, y) {
+            return true;
+        }
         // Top-most floating panel drags own cursor movement.
         if let Some(d) = self.design_md_drag {
             self.editor_state.editor_ui.design_md_panel_pos = Some((x - d.grab_dx, y - d.grab_dy));
@@ -1323,6 +1332,10 @@ impl WidgetHostNative {
     /// Mouse-release — ends active drag; chat-panel snaps corner.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         let pressed_released = self.release_pressed_feedback();
+        // Live preview drag → pointer Up into the runtime.
+        if self.preview_dispatch_release() {
+            return true;
+        }
         // Pen owns the release while authoring (TS onMouseUp).
         if self.apply_pen_release() {
             return true;
