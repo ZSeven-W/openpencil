@@ -3,6 +3,7 @@
 //! Split into a sibling file to keep `skia.rs` under the 800-line cap.
 
 use super::*;
+use jian_core::layout::measure::{FontStyleKind, MeasureBackend, MeasureRequest, StyledRun};
 use op_editor_ui::TextLayout;
 
 #[test]
@@ -155,18 +156,195 @@ fn dot_point_buffer_reuses_capacity_between_batches() {
 #[test]
 fn explicit_family_typeface_lookup_is_cached() {
     let mut be = NativeBackend::with_dpi(1.0);
-    assert_eq!(be.family_typeface_cache_len(), 0);
+    let baseline = be.family_typeface_cache_len();
 
     let first = be
         .typeface_for_family_char('A', "Georgia", 400)
         .map(|tf| tf.unique_id());
-    assert_eq!(be.family_typeface_cache_len(), 1);
+    assert_eq!(be.family_typeface_cache_len(), baseline + 1);
 
     let second = be
         .typeface_for_family_char('A', "Georgia", 400)
         .map(|tf| tf.unique_id());
     assert_eq!(second, first);
-    assert_eq!(be.family_typeface_cache_len(), 1);
+    assert_eq!(be.family_typeface_cache_len(), baseline + 1);
+}
+
+#[test]
+fn skia_measure_matches_native_weighted_font_resolution() {
+    jian_skia::register_bundled_fonts(vec![
+        include_bytes!("../../../../op-host-desktop/assets/fonts/CormorantGaramond-VF.ttf")
+            .to_vec(),
+        include_bytes!("../../../../op-host-desktop/assets/fonts/Inter-VF.ttf").to_vec(),
+    ]);
+
+    struct Case {
+        text: &'static str,
+        family: &'static str,
+        size: f32,
+        weight: u16,
+    }
+
+    let cases = [
+        Case {
+            text: "$48,920",
+            family: "Cormorant Garamond",
+            size: 40.0,
+            weight: 500,
+        },
+        Case {
+            text: "$48,920",
+            family: "Cormorant Garamond",
+            size: 40.0,
+            weight: 600,
+        },
+        Case {
+            text: "Julian Thorne",
+            family: "Inter",
+            size: 14.0,
+            weight: 600,
+        },
+        Case {
+            text: "中文字体",
+            family: "system-ui",
+            size: 18.0,
+            weight: 400,
+        },
+    ];
+
+    let skia = jian_skia::SkiaMeasure::new();
+    let mut native = NativeBackend::with_dpi(1.0);
+
+    for case in cases {
+        let run = StyledRun {
+            text: case.text,
+            font_family: Some(case.family),
+            font_size: case.size,
+            font_weight: case.weight,
+            font_style: FontStyleKind::Normal,
+            letter_spacing: 0.0,
+        };
+        let skia_width = skia
+            .measure(&MeasureRequest {
+                runs: &[run],
+                line_height: 0.0,
+                max_width: None,
+            })
+            .width;
+        let native_width = native.measure_text_family_styled(
+            case.text,
+            case.size,
+            case.family,
+            case.weight,
+            false,
+        );
+        let rel = (skia_width - native_width).abs() / skia_width.max(native_width).max(1.0);
+        println!(
+            "font parity text={:?} family={:?} size={} weight={} skia={:.3} native={:.3} diff={:.2}%",
+            case.text,
+            case.family,
+            case.size,
+            case.weight,
+            skia_width,
+            native_width,
+            rel * 100.0
+        );
+        assert!(
+            rel <= 0.02,
+            "width drift exceeded 2% for {:?} / {:?}: skia={:.3} native={:.3} diff={:.2}%",
+            case.text,
+            case.family,
+            skia_width,
+            native_width,
+            rel * 100.0
+        );
+    }
+}
+
+#[test]
+fn skia_measure_multiline_height_matches_native_painted_line_height() {
+    struct Case {
+        text: &'static str,
+        size: f32,
+        line_height: f32,
+        lines: u16,
+    }
+
+    let cases = [
+        Case {
+            text: "contact\nhello@darkbrew.cz",
+            size: 16.0,
+            line_height: 0.0,
+            lines: 2,
+        },
+        Case {
+            text: "first\nsecond\nthird",
+            size: 18.0,
+            line_height: 0.0,
+            lines: 3,
+        },
+        Case {
+            text: "contact\nhello@darkbrew.cz",
+            size: 16.0,
+            line_height: 1.5,
+            lines: 2,
+        },
+        Case {
+            text: "first\nsecond\nthird",
+            size: 18.0,
+            line_height: 1.5,
+            lines: 3,
+        },
+    ];
+
+    let skia = jian_skia::SkiaMeasure::new();
+    for case in cases {
+        let run = StyledRun {
+            text: case.text,
+            font_family: Some("system-ui"),
+            font_size: case.size,
+            font_weight: 400,
+            font_style: FontStyleKind::Normal,
+            letter_spacing: 0.0,
+        };
+        let measured = skia.measure(&MeasureRequest {
+            runs: &[run],
+            line_height: case.line_height,
+            max_width: None,
+        });
+        let native_line_height = case.size
+            * if case.line_height > 0.0 {
+                case.line_height
+            } else {
+                1.2
+            };
+        let native_height = f32::from(case.lines) * native_line_height;
+        let rel =
+            (measured.height - native_height).abs() / measured.height.max(native_height).max(1.0);
+        println!(
+            "multiline height parity text={:?} size={} line_height={} skia={:.3} native={:.3} lines={} diff={:.2}%",
+            case.text,
+            case.size,
+            case.line_height,
+            measured.height,
+            native_height,
+            measured.line_count,
+            rel * 100.0
+        );
+        assert_eq!(
+            measured.line_count, case.lines,
+            "literal newline line count drifted for {:?}",
+            case.text
+        );
+        assert!(
+            rel <= 0.02,
+            "height drift exceeded 2% for {:?}: skia={:.3} native={:.3} diff={:.2}%",
+            case.text,
+            measured.height,
+            native_height,
+            rel * 100.0
+        );
+    }
 }
 
 #[test]
