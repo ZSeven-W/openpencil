@@ -282,8 +282,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.colorPalettePrompt" => "Suggest a modern color palette for a pet care app",
         "ai.quickAction.dashboard" => "Technical dashboard web app for a utilities company",
         "ai.quickAction.dashboardPrompt" => "Technical dashboard web app for a utilities company",
-        "ai.quickAction.terminalDashboard" => "Terminal-style dashboard web app for a sports team",
-        "ai.quickAction.terminalDashboardPrompt" => "Terminal-style dashboard web app for a sports team",
+        "ai.quickAction.travelApp" => "Travel booking mobile app explore page",
+        "ai.quickAction.travelAppPrompt" => {
+            "Design a travel booking mobile app explore page. Include a search section with \"Where to?\" input, date picker chips, and guest count. Popular destinations as horizontal scrollable cards with destination photos, city names and starting prices. \"Deals of the Week\" section with 2 featured deal cards showing discount badges. Recently viewed section with 2 compact cards. Bottom tab bar (Explore, Wishlists, Trips, Messages, Profile). Warm, inviting design with orange accents."
+        }
         "ai.quickAction.coffeeShop" => "Dark bold website for a coffee shop in Prague",
         "ai.quickAction.coffeeShopPrompt" => "Dark bold website for a coffee shop in Prague",
         "ai.quickAction.barbershop" => "Luxury webapp for managing barbershop clients",
