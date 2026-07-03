@@ -1,34 +1,25 @@
 //! In-process design tool surface for the AI design agent loop.
 //!
-//! Mirrors `chat_canvas_tools.rs` for the 15-tool design toolset (vs the
-//! 7-tool CRUD set). For the 14 MCP-shared tools, schema definitions are
-//! derived from `mcp_serve::schemas::TOOL_SCHEMAS` — the same source the MCP
-//! server advertises — so the in-process and MCP surfaces stay byte-equal as
-//! JSON.
+//! Mirrors `chat_canvas_tools.rs` for the 14-tool design toolset (vs the
+//! 7-tool CRUD set). Schema definitions for every tool are derived from
+//! `mcp_serve::schemas::TOOL_SCHEMAS` — the same source the MCP server
+//! advertises — so the in-process and MCP surfaces stay byte-equal as JSON.
 //!
-//! The 15th tool, `emit_elements`, is LOOP-ONLY: it gives the loop the
-//! element-builder surface (the same builders the orchestrator's MANIFEST path
-//! uses, via `crate::emit_elements::EmitElements` →
-//! `op_orchestrator::manifest::parse_manifest`). Its schema is self-contained
-//! in [`crate::emit_elements::EMIT_ELEMENTS_SCHEMA`] rather than `TOOL_SCHEMAS`,
-//! so it never enters the MCP server's advertised catalog.
+//! The loop's design surface is `batch_design`, which accepts a sandboxed-JS
+//! `script` input (see `op_mcp::script_runner`) in addition to the `operations`
+//! DSL — giving the loop loops/data-driven emission without a separate
+//! element-builder tool.
 
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
 use op_editor_core::EditorState;
 use op_mcp::ToolRegistry;
 
 use crate::chat_canvas_tools::{execute_chat_tool, execute_with_registry};
-use crate::emit_elements::{EmitElements, EMIT_ELEMENTS_SCHEMA, EMIT_ELEMENTS_TOOL};
 use crate::mcp_serve::schemas;
 
-/// The 15-tool design toolset with auth levels.
-/// Reads = "read"; batch_design / emit_elements / set_variables / spawn_agents
-/// / export_nodes = "create".
-///
-/// `emit_elements` is the loop's element-builder surface (the same builders the
-/// orchestrator's MANIFEST path uses). It is LOOP-ONLY — its schema comes from
-/// [`EMIT_ELEMENTS_SCHEMA`], NOT from `mcp_serve::schemas::TOOL_SCHEMAS`, so the
-/// MCP server's advertised catalog is unchanged.
+/// The 14-tool design toolset with auth levels.
+/// Reads = "read"; batch_design / set_variables / spawn_agents /
+/// export_nodes = "create".
 pub const DESIGN_TOOLS: &[(&str, &str)] = &[
     ("get_editor_state", "read"),
     ("get_guidelines", "read"),
@@ -40,7 +31,6 @@ pub const DESIGN_TOOLS: &[(&str, &str)] = &[
     ("snapshot_layout", "read"),
     ("find_empty_space", "read"),
     ("batch_design", "create"),
-    (EMIT_ELEMENTS_TOOL, "create"),
     ("get_screenshot", "read"),
     ("export_nodes", "create"),
     ("spawn_agents", "create"),
@@ -62,17 +52,10 @@ pub fn design_tool_defs() -> Vec<ChatToolDef> {
     DESIGN_TOOLS
         .iter()
         .map(|(name, _)| {
-            // `emit_elements` is loop-only: its schema lives beside the tool
-            // (EMIT_ELEMENTS_SCHEMA), NOT in TOOL_SCHEMAS, so it never enters
-            // the MCP server's advertised catalog. Every other design tool is
-            // sourced from TOOL_SCHEMAS for byte-equal MCP parity.
-            let (description, input_schema_json) = if *name == EMIT_ELEMENTS_TOOL {
-                extract_from_schema_entry(EMIT_ELEMENTS_SCHEMA)
-                    .expect("EMIT_ELEMENTS_SCHEMA must be a valid tool descriptor")
-            } else {
-                extract_from_schemas(name)
-                    .unwrap_or_else(|| panic!("design tool {name} not found in TOOL_SCHEMAS"))
-            };
+            // Every design tool is sourced from TOOL_SCHEMAS for byte-equal
+            // MCP parity.
+            let (description, input_schema_json) = extract_from_schemas(name)
+                .unwrap_or_else(|| panic!("design tool {name} not found in TOOL_SCHEMAS"));
             ChatToolDef {
                 name: name.to_string(),
                 description,
@@ -111,7 +94,7 @@ pub fn execute_design_tool(
     // model sees each batch's geometric consequences immediately and repairs
     // them in-process, instead of piling defects up for the loop-end finalize.
     // Deterministic analogue of Pencil's per-batch snapshot_layout feedback.
-    if mutated && matches!(name, "batch_design" | EMIT_ELEMENTS_TOOL) && !result.is_error {
+    if mutated && name == "batch_design" && !result.is_error {
         let issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
         if !issues.is_empty() {
             if let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&result.content) {
@@ -173,7 +156,6 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
         "get_screenshot" => r.register(Box::new(get_screenshot_snapshot(state))),
         "export_nodes" => r.register(Box::new(export_nodes_snapshot(state))),
         "spawn_agents" => r.register(Box::new(op_mcp::spawn_agents_snapshot())),
-        EMIT_ELEMENTS_TOOL => r.register(Box::new(EmitElements)),
         "ToolSearch" => r.register(Box::new(op_mcp::tool_search_snapshot(
             schemas::TOOL_SCHEMAS,
         ))),
@@ -199,7 +181,7 @@ fn extract_from_schemas(name: &str) -> Option<(String, String)> {
 }
 
 /// Parse one tool descriptor JSON string into `(description, inputSchema)`.
-/// Used for `TOOL_SCHEMAS` entries and the loop-only `EMIT_ELEMENTS_SCHEMA`.
+/// Used for `TOOL_SCHEMAS` entries.
 fn extract_from_schema_entry(entry: &str) -> Option<(String, String)> {
     let v: serde_json::Value = serde_json::from_str(entry).ok()?;
     let description = v.get("description")?.as_str()?.to_string();
@@ -212,12 +194,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn design_tool_defs_cover_all_15_tools_with_schema_parity() {
+    fn design_tool_defs_cover_all_14_tools_with_schema_parity() {
         let defs = design_tool_defs();
 
-        // All 15 tools are present (14 MCP-sourced + the loop-only
-        // `emit_elements`).
-        assert_eq!(defs.len(), 15, "expected 15 design tool defs");
+        // All 14 tools are present, every one MCP-sourced.
+        assert_eq!(defs.len(), 14, "expected 14 design tool defs");
         for (name, _) in DESIGN_TOOLS {
             assert!(
                 defs.iter().any(|d| d.name == *name),
@@ -225,12 +206,10 @@ mod tests {
             );
         }
 
-        // PARITY: for each MCP-sourced tool, the input_schema_json in the def
-        // must equal the inputSchema value from TOOL_SCHEMAS (as parsed JSON),
-        // so in-process defs stay byte-equal to the MCP server. `emit_elements`
-        // is loop-only and intentionally NOT in TOOL_SCHEMAS — it is parity-
-        // checked separately below against EMIT_ELEMENTS_SCHEMA.
-        for def in defs.iter().filter(|d| d.name != EMIT_ELEMENTS_TOOL) {
+        // PARITY: for each tool, the input_schema_json in the def must equal
+        // the inputSchema value from TOOL_SCHEMAS (as parsed JSON), so
+        // in-process defs stay byte-equal to the MCP server.
+        for def in defs.iter() {
             // Find the matching TOOL_SCHEMAS entry.
             let schema_entry = schemas::TOOL_SCHEMAS
                 .iter()
@@ -259,38 +238,14 @@ mod tests {
             );
         }
 
-        // Every DESIGN_TOOLS entry except the loop-only `emit_elements` must
-        // exist in TOOL_SCHEMAS (no orphans). `emit_elements` is deliberately
-        // absent so it never enters the MCP server's advertised catalog.
-        for (name, _) in DESIGN_TOOLS
-            .iter()
-            .filter(|(n, _)| *n != EMIT_ELEMENTS_TOOL)
-        {
+        // Every DESIGN_TOOLS entry must exist in TOOL_SCHEMAS (no orphans).
+        for (name, _) in DESIGN_TOOLS {
             let found = schemas::TOOL_SCHEMAS.iter().any(|entry| {
                 let v: serde_json::Value = serde_json::from_str(entry).unwrap();
                 v.get("name").and_then(|n| n.as_str()) == Some(*name)
             });
             assert!(found, "design tool {name} is not in TOOL_SCHEMAS — orphan!");
         }
-
-        // `emit_elements` is loop-only: it must NOT be advertised by the MCP
-        // server, and its def must equal EMIT_ELEMENTS_SCHEMA.
-        assert!(
-            !schemas::TOOL_SCHEMAS.iter().any(|entry| {
-                let v: serde_json::Value = serde_json::from_str(entry).unwrap();
-                v.get("name").and_then(|n| n.as_str()) == Some(EMIT_ELEMENTS_TOOL)
-            }),
-            "emit_elements must stay OUT of the MCP server's TOOL_SCHEMAS catalog"
-        );
-        let emit_def = defs
-            .iter()
-            .find(|d| d.name == EMIT_ELEMENTS_TOOL)
-            .expect("emit_elements def present");
-        let canonical: serde_json::Value = serde_json::from_str(EMIT_ELEMENTS_SCHEMA).unwrap();
-        let def_schema: serde_json::Value =
-            serde_json::from_str(&emit_def.input_schema_json).unwrap();
-        assert_eq!(def_schema, canonical["inputSchema"]);
-        assert_eq!(emit_def.level, "create");
     }
 
     #[test]
