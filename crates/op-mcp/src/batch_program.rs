@@ -78,6 +78,7 @@ pub(crate) fn run_batch_design_program(
         results: Vec::new(),
         commands: Vec::new(),
         post_process,
+        auto_seq: 0,
     };
     // Pin the sim's active page to the requested page so sim READS
     // (path lookups, node counts) see the same children every emitted
@@ -129,6 +130,8 @@ struct ProgramCtx {
     results: Vec<Value>,
     commands: Vec<EditorCommand>,
     post_process: bool,
+    /// Monotonic counter for `_auto_*` bindless-line bindings.
+    auto_seq: usize,
 }
 
 impl ProgramCtx {
@@ -145,8 +148,19 @@ impl ProgramCtx {
     fn bind(&mut self, binding: &str, node_id: &str) {
         self.bindings
             .insert(binding.to_string(), node_id.to_string());
-        self.results
-            .push(json!({ "binding": binding, "nodeId": node_id }));
+        // A re-bound name (a redraft, or scratch reuse) updates its existing
+        // results entry in place — consumers look bindings up by FIRST match,
+        // which must never point at a superseded draft's deleted id.
+        if let Some(entry) = self
+            .results
+            .iter_mut()
+            .find(|r| r.get("binding").and_then(Value::as_str) == Some(binding))
+        {
+            entry["nodeId"] = json!(node_id);
+        } else {
+            self.results
+                .push(json!({ "binding": binding, "nodeId": node_id }));
+        }
     }
 
     /// Assign fresh sim-allocator ids to `nodes` (in place); returns
@@ -188,7 +202,12 @@ fn execute_line(line: &str, ctx: &mut ProgramCtx) -> Result<(), String> {
     if let Some(c) = bindless.captures(line) {
         let op = c.get(1).map_or("", |m| m.as_str());
         let args = c.get(2).map_or("", |m| m.as_str());
-        let binding = format!("_auto_{}_{op}", ctx.results.len());
+        // Numbered off a dedicated counter — `results.len()` stalls when a
+        // rebind updates its entry in place, and a stalled counter would hand
+        // two bindless lines the SAME auto name (turning the second into a
+        // phantom "redraft" of the first).
+        let binding = format!("_auto_{}_{op}", ctx.auto_seq);
+        ctx.auto_seq += 1;
         return execute_assign(op, &binding, args, ctx);
     }
     if let Some(c) = call.captures(line) {
@@ -229,6 +248,7 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(),
         Some(resolve_ref(parent_raw, &ctx.bindings))
     };
     let mut node = parse_node_json(&args[comma + 1..], ctx.post_process)?;
+    delete_superseded_draft(binding, parent.as_deref(), &node, ctx);
 
     // TS auto-replace: a root-level frame insert replaces the first
     // EMPTY root frame (inheriting its x/y) instead of siblinging it.
@@ -533,6 +553,68 @@ fn execute_move(args: &str, ctx: &mut ProgramCtx) -> Result<String, String> {
         &format!("Move failed for: {node_id}"),
     )?;
     Ok(node_id)
+}
+
+/// A RE-USED binding whose previous node sits under the SAME parent with the
+/// same type and (non-empty) name is a REDRAFT, not a new node: a weak model
+/// deliberating in-channel re-emits its section several times ("Let me
+/// redo…"), and appending every draft shipped SEVEN stacked navbars from one
+/// response (measured: minimax-m3, test0703-m3.op). Delete the superseded
+/// draft before the re-insert so the LAST draft wins. Scratch-style binding
+/// reuse (`t=I(cardA, …)` then `t=I(cardB, …)` — different parent, or unnamed
+/// leaves) keeps appending exactly as before; all four gates must agree
+/// before anything is removed. A previous draft already gone (its ancestor
+/// was itself redrafted) is skipped by the sim-apply guard.
+fn delete_superseded_draft(
+    binding: &str,
+    parent: Option<&str>,
+    node: &PenNode,
+    ctx: &mut ProgramCtx,
+) {
+    let Some(new_name) = node.base().name.as_deref().filter(|n| !n.is_empty()) else {
+        return;
+    };
+    let Some(prev_id) = ctx.bindings.get(binding).cloned() else {
+        return;
+    };
+    let parent_id = parent.map(|p| lookup_id(p, &ctx.alias));
+    let Some((prev, prev_parent)) =
+        find_node_with_parent(ctx.sim.active_children(), &prev_id, None)
+    else {
+        return;
+    };
+    let same_shape = std::mem::discriminant(prev) == std::mem::discriminant(node)
+        && prev.base().name.as_deref() == Some(new_name);
+    if !same_shape || prev_parent != parent_id.as_deref() {
+        return;
+    }
+    let del = EditorCommand::DeleteNode {
+        node_id: NodeId::new(&prev_id),
+        page_id: ctx.page_id.clone(),
+    };
+    if ctx.sim.apply(del.clone()) {
+        ctx.commands.push(del);
+    }
+}
+
+/// Locate `id` in the forest and return it together with its parent's id
+/// (`None` = document root).
+fn find_node_with_parent<'a>(
+    nodes: &'a [PenNode],
+    id: &str,
+    parent: Option<&'a str>,
+) -> Option<(&'a PenNode, Option<&'a str>)> {
+    for n in nodes {
+        if n.id_str() == id {
+            return Some((n, parent));
+        }
+        if let Some(children) = n.children() {
+            if let Some(hit) = find_node_with_parent(children, id, Some(n.id_str())) {
+                return Some(hit);
+            }
+        }
+    }
+    None
 }
 
 // --- Node JSON --------------------------------------------------------
