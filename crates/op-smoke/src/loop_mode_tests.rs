@@ -17,8 +17,9 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use jian_ops_schema::node::{PenNode, TextContent};
 use op_ai::chat_provider::{ChatToolExecutor, EffortLevel, ThinkingMode};
-use op_editor_core::EditorState;
+use op_editor_core::{EditorState, PenNodeExt};
 
 use crate::loop_mode::{run_loop, HeadlessExecutor};
 
@@ -49,59 +50,60 @@ fn headless_executor_batch_design_mutates_shared_state() {
 }
 
 #[test]
-fn headless_executor_emit_elements_produces_role_tagged_nodes() {
-    // The element-builder loop tool: a couple of high-level `el` lines must
-    // expand — via the SAME `op_orchestrator::manifest` assembler the
-    // orchestrator MANIFEST path uses — into role-tagged subtrees (stat-card),
-    // and land in the shared EditorState. This is the load-bearing capability
-    // the bare loop lacked: high-level element kinds + semantic roles, not raw
-    // primitives.
-    use jian_ops_schema::node::PenNode;
-    use op_editor_core::PenNodeExt;
-
-    fn collect_roles(node: &PenNode, out: &mut Vec<String>) {
-        if let Some(role) = node.base().role.as_deref() {
-            if !role.is_empty() {
-                out.push(role.to_string());
-            }
-        }
-        if let Some(children) = node.children() {
-            for child in children {
-                collect_roles(child, out);
-            }
-        }
-    }
-
+fn headless_executor_batch_design_script_builds_looped_nodes() {
+    // The loop's design tool is batch_design; its script mode gives the
+    // model loops/data-driven emission via I(parent, obj) calls — the
+    // retired element-builder tool previously provided this capability.
     let state = Arc::new(Mutex::new(EditorState::new()));
     let exec = HeadlessExecutor::new(state.clone(), false);
 
-    let args = r#"{"elements":"[{\"el\":\"stat_card\",\"label\":\"MRR\",\"value\":\"$48.2k\",\"trend\":\"up\"},{\"el\":\"stat_card\",\"label\":\"Users\",\"value\":\"12.4k\"}]"}"#;
-    let result = exec.execute("emit_elements", args);
+    let args = r#"{"script":"const root = I(null, {type: \"frame\", name: \"Stats\"});\nfor (const label of [\"Users\", \"Sales\", \"Churn\"]) { I(root, {type: \"text\", content: label}); }"}"#;
+    let result = exec.execute("batch_design", args);
     assert!(
         !result.is_error,
-        "emit_elements must succeed, got: {}",
+        "batch_design script must succeed, got: {}",
         result.content
     );
     let v: serde_json::Value = serde_json::from_str(&result.content).expect("valid JSON envelope");
     assert_eq!(v["success"], serde_json::Value::Bool(true));
+    // The insert-program envelope carries `data.nodeCount` = pre-insert count (0)
+    // + every inserted node — 1 root frame + 3 looped text children = 4. A
+    // regression that drops loop iterations (e.g. only the first `I()` survives)
+    // would report nodeCount=2 here, so this pins the full multiplicity.
     assert_eq!(
-        v["data"]["elementLines"], "2",
-        "two element lines built, got: {}",
+        v["data"]["nodeCount"],
+        serde_json::Value::Number(4.into()),
+        "script must insert 1 frame + 3 looped text nodes, got envelope: {}",
         result.content
     );
 
-    // The shared state really mutated, and the inserted subtree carries the
-    // semantic `stat-card` role the element builder stamps.
+    // The shared state really mutated — one root frame now exists, and it
+    // must carry all 3 loop iterations as children (not just the first).
     let guard = state.lock().unwrap();
-    let children = guard.active_children();
-    assert_eq!(children.len(), 2, "two top-level stat cards inserted");
-    let mut roles = Vec::new();
-    for node in children {
-        collect_roles(node, &mut roles);
-    }
-    assert!(
-        roles.iter().any(|r| r == "stat-card"),
-        "emit_elements must produce role-tagged nodes (stat-card), got roles {roles:?}"
+    let roots = guard.active_children();
+    assert_eq!(roots.len(), 1, "one root frame");
+    let root_children = roots[0]
+        .children()
+        .expect("root frame must carry the looped text children");
+    assert_eq!(
+        root_children.len(),
+        3,
+        "loop must have appended all 3 text children, got: {root_children:?}"
+    );
+    let labels: Vec<&str> = root_children
+        .iter()
+        .map(|child| match child {
+            PenNode::Text(t) => match &t.content {
+                TextContent::Plain(s) => s.as_str(),
+                TextContent::Styled(_) => panic!("expected plain text content, got styled"),
+            },
+            other => panic!("expected Text child, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        labels,
+        vec!["Users", "Sales", "Churn"],
+        "loop must preserve the data array's order/content, not just its count"
     );
 }
 

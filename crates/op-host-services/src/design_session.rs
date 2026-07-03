@@ -319,7 +319,7 @@ mod spawn_worker_tests {
     use std::time::{Duration, Instant};
 
     /// A recording `LlmClient` — counts how many times `call` ran and
-    /// returns one scripted node-JSON response per call (round-robin by
+    /// returns one scripted node-script response per call (round-robin by
     /// call order). Proves the worker invokes the REAL per-subtask runner
     /// N times, not a canned ack.
     struct RecordingLlm {
@@ -340,9 +340,16 @@ mod spawn_worker_tests {
         }
     }
 
+    // Script-gen is the default subagent generation protocol, so the fixture
+    // is a JS program calling the bound `I(parent, obj)` recorder (a single
+    // insert whose object nests its children inline) rather than raw
+    // `_parent` JSONL. The batch_design executor reassigns fresh ids to every
+    // inserted node regardless of what's authored here, so `name` (not `id`)
+    // is the field callers must key off of if they need to identify which
+    // response landed where.
     fn node_json(id: &str) -> String {
         format!(
-            r#"[{{"type":"frame","id":"{id}-1","name":"Sec","x":0,"y":0,"width":400,"height":120,"children":[{{"type":"text","id":"{id}-t","content":"Hi","fontSize":18}}]}}]"#
+            r#"I(null, {{"type":"frame","name":"Sec-{id}","x":0,"y":0,"width":400,"height":120,"children":[{{"type":"text","content":"Hi","fontSize":18}}]}});"#
         )
     }
 
