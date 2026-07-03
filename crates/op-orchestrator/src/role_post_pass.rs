@@ -1840,6 +1840,15 @@ fn fix_surface_color_discipline(node: &mut Value, is_root: bool) {
             node["fill"] = solid_fill("$color-surface-2");
         } else if !is_root && color == PAGE_BG_REF {
             node["fill"] = json!([]);
+        } else if color.starts_with("$color-text-") && is_container_kind(node) {
+            // A CONTAINER filled with a TEXT token is a slot-category error —
+            // a search pill painted `$color-text-primary` rendered as a WHITE
+            // capsule on the dark luxury theme (measured: ATELIER's search +
+            // FILTER pills). Text tokens color glyphs; the container slot for
+            // inputs/chips is surface-2. Its dark literal text (styled for
+            // the accidental white) flips to the text ladder with it.
+            node["fill"] = solid_fill("$color-surface-2");
+            rebind_dark_literal_text(node);
         }
     }
     // An elevation shadow needs a surface to sit on. A frame with no visible
@@ -1856,6 +1865,75 @@ fn fix_surface_color_discipline(node: &mut Value, is_root: bool) {
     if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
         for child in children.iter_mut() {
             fix_surface_color_discipline(child, false);
+        }
+    }
+}
+
+/// Container node kinds whose `fill` is a SURFACE slot (never a glyph color).
+fn is_container_kind(node: &Value) -> bool {
+    matches!(
+        node.get("type").and_then(Value::as_str),
+        Some("frame" | "group" | "rectangle" | "text_input")
+    )
+}
+
+/// A COUNT BADGE (a painted chip whose only child is a 1-3 digit text — a
+/// nav item's "12") reads as a stray square when the model omits its corner
+/// radius; the badge convention is a pill. Only fires when `cornerRadius`
+/// is ABSENT — an authored radius (0 included, the sharp-luxury look) is a
+/// decision and stays.
+fn round_count_badges(node: &mut Value) {
+    let is_frame = node.get("type").and_then(Value::as_str) == Some("frame");
+    if is_frame && node.get("cornerRadius").is_none() {
+        let painted = node
+            .get("fill")
+            .map(|f| match f {
+                Value::Array(a) => !a.is_empty(),
+                Value::Null => false,
+                _ => true,
+            })
+            .unwrap_or(false);
+        let kids = node
+            .get("children")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let lone_count_text = kids.len() == 1
+            && kids[0].get("type").and_then(Value::as_str) == Some("text")
+            && kids[0]
+                .get("content")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .is_some_and(|c| {
+                    !c.is_empty()
+                        && c.len() <= 3
+                        && c.chars().all(|ch| ch.is_ascii_digit() || ch == '+')
+                });
+        if painted && lone_count_text {
+            node["cornerRadius"] = json!(100.0);
+        }
+    }
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children.iter_mut() {
+            round_count_badges(child);
+        }
+    }
+}
+
+/// After a container's accidental text-token fill flips to a surface, its
+/// TEXT descendants styled for that light pill (dark literal hex) become
+/// unreadable on the dark surface — walk them onto the text ladder.
+fn rebind_dark_literal_text(node: &mut Value) {
+    if node.get("type").and_then(Value::as_str) == Some("text") {
+        if let Some(color) = get_first_solid_color(node) {
+            if hex_luminance(&color).is_some_and(|l| l < 0.45) {
+                node["fill"] = solid_fill("$color-text-muted");
+            }
+        }
+    }
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children.iter_mut() {
+            rebind_dark_literal_text(child);
         }
     }
 }
@@ -1884,6 +1962,7 @@ pub fn enforce_surface_color_discipline(nodes: &mut [PenNode]) {
             continue;
         };
         fix_surface_color_discipline(&mut v, true);
+        round_count_badges(&mut v);
         if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
             *node = new_node;
         }
