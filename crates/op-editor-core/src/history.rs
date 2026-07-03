@@ -47,6 +47,9 @@ pub struct EditorSnapshot {
     /// no longer carries — later merges would be silently skipped or
     /// mis-resolved against a stale owner.
     pub app_state_owner: std::collections::BTreeMap<String, usize>,
+    /// Document revision at snapshot time. Restoring it lets undo back
+    /// to a saved snapshot clear the dirty marker naturally.
+    pub revision: u64,
 }
 
 /// Editor undo / redo stacks. `VecDeque` so the over-cap eviction is an

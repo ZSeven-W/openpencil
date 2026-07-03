@@ -133,6 +133,8 @@ mod command_update_tests;
 #[cfg(test)]
 mod command_widget_tests;
 #[cfg(test)]
+mod dirty_tests;
+#[cfg(test)]
 mod fills_tests;
 #[cfg(test)]
 mod svg_import_tests;
