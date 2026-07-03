@@ -34,6 +34,7 @@
 //! undo of its sub-commands would.
 
 use crate::command::EditorCommand;
+use crate::command_apply::command_marks_document_dirty;
 use crate::EditorState;
 
 /// `true` when every piece of editor state `cmd` primarily mutates is
@@ -149,6 +150,7 @@ impl EditorState {
         if !commands.iter().all(batchable) {
             return false;
         }
+        let marks_document_dirty = commands.iter().any(command_marks_document_dirty);
         let pre = self.snapshot_for_history();
         let past_len = self.history.past.len();
         // Sub-command history pushes clear the redo stack; park it so a
@@ -167,6 +169,8 @@ impl EditorState {
                 // restored document no longer carries, silently
                 // skipping later merges of that key.
                 self.app_state_owner = pre.app_state_owner;
+                self.revision = pre.revision;
+                self.sync_dirty_flag();
                 return false;
             }
         }
@@ -174,7 +178,11 @@ impl EditorState {
         // entry, so a GUI undo reverts the whole program at once. The
         // push also clears redo — standard semantics for a new edit.
         self.history.past.truncate(past_len);
-        self.history_push_past(pre);
+        if marks_document_dirty {
+            self.revision = pre.revision;
+            self.sync_dirty_flag();
+            self.history_push_past(pre);
+        }
         true
     }
 }

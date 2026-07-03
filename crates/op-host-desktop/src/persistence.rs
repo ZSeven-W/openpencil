@@ -64,6 +64,7 @@ pub fn handle_save(
             Ok(()) => {
                 crate::settings_io::touch_recent(host, &path);
                 set_display_name(host, Some(&path));
+                host.editor_state_mut().mark_saved_revision();
                 return true;
             }
         }
@@ -88,6 +89,7 @@ pub fn handle_save_as(
             // just the OS window title — without this, first Save As writes
             // the file but the TopBar keeps showing "Untitled".
             set_display_name(host, Some(&path));
+            host.editor_state_mut().mark_saved_revision();
             *current_path = Some(path);
             refresh_title(current_path, window);
             true
@@ -114,6 +116,7 @@ fn load_into_host(host: &mut WidgetHostNative, path: &std::path::Path) -> Result
         bb
     );
     *host.editor_state_mut() = state;
+    host.editor_state_mut().mark_saved_revision();
     host.mark_editor_state_dirty();
     Ok(())
 }
@@ -201,6 +204,7 @@ pub fn run_action(
                 })
                 .unwrap_or((super::INITIAL_VIEWPORT_W, super::INITIAL_VIEWPORT_H));
             host.fit_content_to_viewport(vw, vh);
+            host.editor_state_mut().mark_saved_revision();
             host.mark_editor_state_dirty();
             *current_path = None;
             refresh_title(current_path, window);
