@@ -13,6 +13,9 @@ path = "src/lib.rs"
 [features]
 default = []
 debug-tools = ["dep:op-design-lint"]
+# Native-only QuickJS script→program expansion for batch_design + the
+# orchestrator. Never enabled by wasm consumers (bundled C engine).
+script = ["dep:rquickjs", "dep:tracing"]
 
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
@@ -22,4 +25,6 @@ op-design-lint = { path = "../op-design-lint", optional = true }
 op-editor-core = { path = "../op-editor-core" }
 op-pen-loader = { path = "../op-pen-loader" }
 regex = "1"
+rquickjs = { version = "0.9", optional = true }
 serde_json = { workspace = true }
+tracing = { workspace = true, optional = true }
