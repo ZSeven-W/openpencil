@@ -21,6 +21,12 @@ pub(crate) fn is_non_retryable(msg: &str) -> bool {
         || lower.contains("content blocked")
         || lower.contains("authentication failed")
         || lower.contains("censorship")
+        // A CLI's own transport-config failure is deterministic — codex's
+        // stream-reconnect rejects the macOS system proxy with "Invalid
+        // proxy configuration: http://127.0.0.1:7897" on EVERY attempt;
+        // burning the 3-attempt ladder + the salvage pass on it costs
+        // minutes and ends the same way. Fail fast with the message intact.
+        || lower.contains("invalid proxy configuration")
 }
 
 #[cfg(test)]
@@ -84,5 +90,17 @@ mod tests {
     #[test]
     fn socket_closed_is_retryable() {
         assert!(!is_non_retryable("socket closed unexpectedly"));
+    }
+}
+
+#[cfg(test)]
+mod proxy_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_proxy_configuration_is_non_retryable() {
+        assert!(is_non_retryable(
+            "stream disconnected before completion: URL error: Invalid proxy configuration: http://127.0.0.1:7897"
+        ));
     }
 }
