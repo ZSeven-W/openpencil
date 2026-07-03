@@ -66,9 +66,13 @@ batch_design(script="
 ")
 ```
 
-Fall back to the `operations` DSL (below) only for what a script's no-op stubs cannot express: editing existing nodes (`U`/`R`/`D`/`M` need the REAL DSL, not their script stubs), image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
+Fall back to the `operations` DSL (below) only for what a script's no-op stubs cannot express: editing existing nodes (`U`/`R`/`D`/`M` need the REAL DSL, not their script stubs), image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer). Generate section by section; do not emit a whole dashboard, landing page, or mobile screen in one giant batch.
 
-**Act on `layoutIssues` immediately.** Every `batch_design` result (script or DSL) may carry a `layoutIssues` list — the REAL resolved layout's defects (a collapsed fill container, table columns overflowing their row, text overflowing its block). These are measured facts, not suggestions: fix them with a follow-up `batch_design` (or `U(...)` updates) BEFORE building the next section. Do not carry a known layout defect forward.
+**Seed the artboard full-size in your FIRST batch.** The page root frame carries an explicit numeric width AND height from op one — desktop 1440x900, mobile 390x844 — then content fills it (grow the height later if content exceeds it). A root left at fit_content renders as a thin strip that jerks taller with every batch; the canvas must always look like a full artboard being filled in.
+
+**Misplaced sections: MOVE, never rebuild-and-abandon.** Every insert result echoes where the nodes landed — verify the parent is the one you meant (a content section inside the 240-280px sidebar column is almost always wrong). If you placed something under the wrong parent, relocate it with `M(nodeId, correctParent)` or delete the stale copy with `D(nodeId)` BEFORE rebuilding elsewhere; a rebuilt duplicate plus the abandoned original ships both.
+
+**Act on `layoutIssues` immediately.** After every tool result, read the returned JSON before deciding the next action. Every `batch_design` result (script or DSL) may carry a `layoutIssues` list — the REAL resolved layout's defects (a collapsed fill container, table columns overflowing their row, text overflowing its block). These are measured facts, not suggestions: fix them with a follow-up `batch_design` (or `U(...)` updates) BEFORE building the next section. Do not carry a known layout defect forward.
 
 ### Step 8 — Verify with a screenshot
 
