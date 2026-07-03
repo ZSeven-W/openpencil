@@ -737,6 +737,8 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
             crate::app_shell::evict_content_from_sidebar_column,
         );
         debug_probe_child_height(sink, &rid, "evict");
+        crate::sidebar_archetype::repair_sidebar_navbar_archetype(sink, &rid);
+        debug_probe_child_height(sink, &rid, "sidebar_archetype");
         // Flat table cells → Table → Row → Cell.
         rid = apply_root_transform(sink, &rid, crate::table_repair::regroup_flat_table_rows);
         debug_probe_child_height(sink, &rid, "regroup_table");

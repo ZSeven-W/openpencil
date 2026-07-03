@@ -57,6 +57,7 @@ pub(crate) mod role_layout_post_pass;
 pub mod role_post_pass;
 pub mod run;
 pub mod scaffold;
+pub(crate) mod sidebar_archetype;
 pub mod spacing_repair;
 pub mod spawn_concurrent;
 pub mod stub_repair;
@@ -68,6 +69,8 @@ pub mod tree_heuristics;
 mod geometry_chip_tests;
 #[cfg(test)]
 mod radial_stub_tests;
+#[cfg(test)]
+mod sidebar_archetype_tests;
 #[cfg(test)]
 mod test_support;
 
