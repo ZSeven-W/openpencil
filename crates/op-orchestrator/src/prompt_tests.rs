@@ -114,8 +114,11 @@ fn compact_prompt_carries_forced_guide_name() {
         .contains("CRITICAL OUTPUT FORMAT ENFORCEMENT"));
 }
 
+/// Script-gen is THE default generation protocol on the full attempt (no env
+/// var needed — see the Task 4 protocol collapse): the system prompt carries
+/// SCRIPT_FORMAT, not NODE_FORMAT/`_parent` JSONL.
 #[test]
-fn subagent_prompt_carries_subtask_and_node_format() {
+fn subagent_prompt_carries_subtask_and_script_format() {
     let st = Subtask {
         id: "hero".into(),
         label: "Hero".into(),
@@ -131,6 +134,33 @@ fn subagent_prompt_carries_subtask_and_node_format() {
         existing_section_labels: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    assert!(cr.user_prompt.contains("Hero"));
+    assert!(
+        cr.system_prompt.contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
+        "full attempt must use SCRIPT_FORMAT by default:\n{}",
+        cr.system_prompt
+    );
+}
+
+/// The reduced-complexity retry rung falls back to flat `_parent` JSONL
+/// (NODE_FORMAT) — matching what `subagent::run_subtask` parses there.
+#[test]
+fn subagent_prompt_reduced_complexity_carries_node_format() {
+    let st = Subtask {
+        id: "hero".into(),
+        label: "Hero".into(),
+        region: Region {
+            width: 1200.0,
+            height: 400.0,
+        },
+        id_prefix: "hero".into(),
+        parent_frame_id: Some("root".into()),
+        elements: None,
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+    let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), true, false);
     assert!(cr.user_prompt.contains("Hero"));
     assert!(cr.user_prompt.contains("hero-"));
     assert!(cr.system_prompt.contains("PenNode"));
@@ -179,9 +209,16 @@ fn subagent_prompt_carries_ts_layout_contract() {
         false,
     );
 
-    let required = "Page sections:|Food Categories [category chips]|Root frame: id=\"categories-root\"|width=\"fill_container\"|height=\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE SECTION CHROME|MOBILE VERTICAL RHYTHM|MOBILE TOP RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE QUALITY|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|MOBILE NAV SHADOW|NO FIXED FOOD TEMPLATE|Do not default to the same search + categories + orange promo + two product cards composition|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE|SIGNATURE MOMENT|WOW FACTOR|COMPOSITIONAL CONTRAST|PREMIUM DETAIL|NO DECORATION SPAM";
+    let required = "Page sections:|Food Categories [category chips]|\"fill_container\"|\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE SECTION CHROME|MOBILE VERTICAL RHYTHM|MOBILE TOP RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE QUALITY|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|MOBILE NAV SHADOW|NO FIXED FOOD TEMPLATE|Do not default to the same search + categories + orange promo + two product cards composition|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE|SIGNATURE MOMENT|WOW FACTOR|COMPOSITIONAL CONTRAST|PREMIUM DETAIL|NO DECORATION SPAM";
     // Mobile UI guardrails now load via the `mobile-ui` skill (system prompt);
-    // section + quality markers stay in the user prompt. Accept either.
+    // section + quality markers stay in the user prompt. Accept either. The
+    // `"fill_container"` / `"fit_content"` markers are quote-only (no
+    // `width=` / `height=` prefix) so they match both the flat-JSONL root_rule
+    // wording and script-gen's `width:"fill_container"` JS-object wording —
+    // the root-frame AUTHORING convention itself (`Root frame: id="..."` vs
+    // `const sec = I(null, ...)`) is protocol-specific and covered by the
+    // dedicated `subagent_prompt_carries_subtask_and_script_format` /
+    // `subagent_prompt_reduced_complexity_carries_node_format` tests.
     for required in required.split('|') {
         assert!(
             cr.system_prompt.contains(required) || cr.user_prompt.contains(required),
@@ -259,8 +296,14 @@ fn subagent_prompt_reduced_complexity_basic_is_shorter_than_full() {
     );
 }
 
+/// Before the Task 4 protocol collapse, `reduced_complexity` only drove
+/// tier-gated SKILL narrowing (a no-op for Full tier). It now ALSO selects
+/// the output protocol (script-gen on the full attempt, flat JSONL on the
+/// reduced rung) for EVERY tier — so holding `script_on` fixed via the core
+/// fn isolates the still-true "Full tier skill narrowing is a no-op"
+/// invariant from that new, tier-independent protocol switch.
 #[test]
-fn subagent_prompt_reduced_complexity_full_tier_is_noop() {
+fn subagent_prompt_reduced_complexity_full_tier_skill_filtering_is_noop() {
     let st = Subtask {
         id: "hero".into(),
         label: "Hero".into(),
@@ -275,13 +318,66 @@ fn subagent_prompt_reduced_complexity_full_tier_is_noop() {
         generated_root_id: None,
         existing_section_labels: None,
     };
-    // req() uses "claude" which maps to Full tier → reduced_complexity is no-op
-    let (full_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
-    let (reduced_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), true, false);
+    // req() uses "claude" which maps to Full tier → reduced_complexity's skill
+    // narrowing is a no-op there (unlike Basic, which drops to the
+    // retryAllowed 8-skill set). script_on held fixed at `true` for both calls.
+    let (full_cr, _) = build_subagent_prompt_core(
+        &st,
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        true,
+        &ComponentLibrary::default(),
+    );
+    let (reduced_cr, _) = build_subagent_prompt_core(
+        &st,
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        true,
+        false,
+        true,
+        &ComponentLibrary::default(),
+    );
     assert_eq!(
         full_cr.system_prompt, reduced_cr.system_prompt,
-        "reduced_complexity on Full tier should be a no-op"
+        "reduced_complexity's skill narrowing should be a no-op on Full tier"
     );
+}
+
+/// The new, tier-independent half of the same invariant: with `script_on`
+/// left to its normal `reduced_complexity`-derived value, the full attempt
+/// and the reduced rung now legitimately differ — even on Full tier — because
+/// `reduced_complexity` also flips the output protocol.
+#[test]
+fn subagent_prompt_reduced_complexity_flips_protocol_even_on_full_tier() {
+    let st = Subtask {
+        id: "hero".into(),
+        label: "Hero".into(),
+        region: Region {
+            width: 1200.0,
+            height: 400.0,
+        },
+        id_prefix: "hero".into(),
+        parent_frame_id: None,
+        elements: None,
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+    };
+    let (full_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
+    let (reduced_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), true, false);
+    assert!(
+        full_cr.system_prompt.contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
+        "full attempt uses script-gen even on Full tier"
+    );
+    assert!(
+        reduced_cr.system_prompt.contains("PenNode"),
+        "reduced rung falls back to flat JSONL even on Full tier"
+    );
+    assert_ne!(full_cr.system_prompt, reduced_cr.system_prompt);
 }
 
 /// Regression guard for the flag-passing fix: a Basic-tier model must load
@@ -293,7 +389,10 @@ fn subagent_prompt_reduced_complexity_full_tier_is_noop() {
 fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
     // Verbose-only marker (lives solely in jsonl-format.md) and simplified-only
     // marker (the parenthesized rectangle arg list lives solely in
-    // jsonl-format-simplified.md).
+    // jsonl-format-simplified.md). Both `jsonl-format` skills are dropped
+    // outright on the script-gen full attempt (SCRIPT_FORMAT governs the
+    // output contract alone), so this exercises the reduced-complexity JSONL
+    // rung, where the tier-based swap is actually live.
     const VERBOSE_ONLY: &str = "imageSearchQuery MUST be UNIQUE";
     const SIMPLIFIED_ONLY: &str = "rectangle (width,height,cornerRadius,fill)";
 
@@ -312,11 +411,11 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
         &plan(),
         &basic_req,
         AbortFlag::new(),
-        false,
+        true,
         false,
     );
     // req() is model "claude" → Full tier.
-    let (full_cr, _) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), false, false);
+    let (full_cr, _) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), true, false);
 
     assert!(
         basic_cr.system_prompt.contains(SIMPLIFIED_ONLY),
@@ -1117,37 +1216,6 @@ fn components_prompt_injects_manifest_and_ref_teaching() {
     );
 }
 
-/// The AVAILABLE COMPONENTS instantiation instruction must match the active
-/// output protocol. In raw/loop mode it teaches `{"type":"ref",…}`; in the
-/// element-manifest arm it teaches `{"el":"ref",…}`. Telling a manifest-arm
-/// model to emit raw-node syntax contradicts the el-line contract → 0 refs.
-#[test]
-fn components_manifest_instruction_matches_active_protocol() {
-    let lib = library_with(3);
-
-    // Raw/loop protocol (manifest off): teach the bare PenNode `type:ref`.
-    let raw = available_components_manifest(&lib, false).expect("library present");
-    assert!(
-        raw.contains("\"type\":\"ref\""),
-        "raw protocol must teach type:ref, got:\n{raw}"
-    );
-    assert!(
-        !raw.contains("\"el\":\"ref\""),
-        "raw protocol must NOT teach el:ref, got:\n{raw}"
-    );
-
-    // Element-manifest protocol (manifest on): teach the `el:ref` line.
-    let man = available_components_manifest(&lib, true).expect("library present");
-    assert!(
-        man.contains("\"el\":\"ref\""),
-        "manifest protocol must teach el:ref, got:\n{man}"
-    );
-    assert!(
-        !man.contains("\"type\":\"ref\""),
-        "manifest protocol must NOT teach the contradicting type:ref, got:\n{man}"
-    );
-}
-
 /// A large library is capped: the manifest lists at most
 /// `MAX_COMPONENT_MANIFEST_ENTRIES` and notes the remainder, so the prompt
 /// budget can't be blown by a 200-master kit.
@@ -1175,6 +1243,65 @@ fn large_component_library_is_capped() {
     assert!(
         listed <= MAX_COMPONENT_MANIFEST_ENTRIES,
         "listed {listed} entries exceeds cap {MAX_COMPONENT_MANIFEST_ENTRIES}"
+    );
+}
+
+/// Regression guard for the protocol-mismatch stop-gate: the AVAILABLE
+/// COMPONENTS manifest's trailing ref-syntax example must match whichever
+/// output protocol governs the REST of this prompt — script-gen (`I(...)`
+/// calls) on the full attempt, flat `_parent` JSONL on the
+/// reduced-complexity retry rung. Teaching the wrong dialect makes every
+/// `ref` silently vanish: a bare `{"_parent":...}` line is never recorded by
+/// the script sandbox (only `I(...)` calls are), so under script-gen the
+/// old always-flat instruction taught the model a no-op.
+///
+/// Uses `full_req()` (Full tier) for both calls so `reduced_complexity`'s
+/// tier-gated SKILL narrowing stays a no-op (per
+/// `subagent_prompt_reduced_complexity_full_tier_skill_filtering_is_noop`)
+/// and the manifest + `component-composition` skill both survive on either
+/// side — isolating the assertion to the protocol switch alone.
+#[test]
+fn components_manifest_instruction_matches_active_protocol() {
+    let lib = library_with(3);
+
+    // (a) Full attempt: script-gen is THE default protocol. The manifest
+    // must teach the `I(...)` ref call and must NOT teach the flat `_parent`
+    // ref line.
+    let (script_cr, _) = build_subagent_prompt(
+        &subtask(),
+        &plan(),
+        &full_req(),
+        AbortFlag::new(),
+        false,
+        false,
+        &lib,
+    );
+    let script_sys = &script_cr.system_prompt;
+    assert!(
+        script_sys.contains("I(<containerBinding>, {\"type\":\"ref\""),
+        "full-attempt (script-gen) manifest must teach the I(...) ref call:\n{script_sys}"
+    );
+    assert!(
+        !script_sys.contains("\"_parent\":\"<container-id>\""),
+        "full-attempt (script-gen) manifest must NOT teach the flat _parent ref line \
+         — a bare {{\"_parent\":...}} line is never recorded by the script sandbox:\n{script_sys}"
+    );
+
+    // (b) Reduced-complexity retry rung: falls back to flat `_parent` JSONL.
+    // The manifest must teach the `_parent` ref line.
+    let (flat_cr, _) = build_subagent_prompt(
+        &subtask(),
+        &plan(),
+        &full_req(),
+        AbortFlag::new(),
+        true,
+        false,
+        &lib,
+    );
+    let flat_sys = &flat_cr.system_prompt;
+    assert!(
+        flat_sys.contains("\"_parent\":\"<container-id>\""),
+        "reduced-complexity manifest must teach the flat _parent ref line:\n{flat_sys}"
     );
 }
 
@@ -1346,18 +1473,16 @@ fn tight_budget_dashboard_force_includes_component_composition() {
     };
 
     let lib = library_with(5);
-    // Drive the env-independent core with all three structured protocols OFF so
-    // this exercises the FLAT-JSONL tight-budget path the test is about —
-    // deterministically, regardless of the model's default protocol. (minimax-m3
-    // now defaults to script-gen, which drops the jsonl-format skill and frees
-    // budget; that would un-exhaust the 5200 budget and void the pin scenario.)
-    let (cr, report) = build_subagent_prompt_with_manifest(
+    // Drive the core with script_on forced OFF so this exercises the
+    // FLAT-JSONL tight-budget path the test is about — deterministically,
+    // regardless of the model's default protocol. (script-gen is THE default
+    // on the full attempt and drops the jsonl-format skill, freeing budget;
+    // that would un-exhaust the 5200 budget and void the pin scenario.)
+    let (cr, report) = build_subagent_prompt_core(
         &dash_subtask,
         &dash_plan,
         &basic_req,
         AbortFlag::new(),
-        false,
-        false,
         false,
         false,
         false,

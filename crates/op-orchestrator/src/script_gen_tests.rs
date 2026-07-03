@@ -1,4 +1,13 @@
-//! Tests for the JS-script generation path (`script_gen.rs`).
+//! Tests for the script-gen subagent parse path (`script_gen.rs`).
+//!
+//! `script_gen::parse_script` is a thin wrapper: `op_mcp::script_runner`
+//! (feature `script`) owns fence-stripping, sandboxing, resource limits, and
+//! truncation repair — that surface is covered end-to-end by op-mcp's
+//! `script_runner_tests.rs`, including the sandbox-stub / standard-ES /
+//! mid-run-salvage cases retired from here in the protocol-collapse (Task 4).
+//! What stays here is bridge-specific: does the recorded `batch_design`
+//! program actually assemble into a correct `PenNode` section forest via
+//! `program_gen::run_program_to_forest`.
 
 use super::parse_script;
 use op_editor_core::PenNodeExt;
@@ -30,32 +39,6 @@ fn js_loop_builds_repeated_rows_nested_under_the_table() {
         1,
         "text nested under the cell via the binding"
     );
-}
-
-#[test]
-fn script_gate_is_opt_in_only() {
-    // Script-gen (executable JS) is now env opt-in — OFF by default for EVERY
-    // model (program-DSL is the weak-model default). The env override decides
-    // when set, so this invariant only holds on the no-override path.
-    if std::env::var("OPENPENCIL_SCRIPT_GEN").is_ok() {
-        return;
-    }
-    for m in [
-        "glm-5.2",
-        "minimax-m3",
-        "deepseek-v4-pro",
-        "qwen-max",
-        "MiniMax-M3",
-        "claude-opus-4-8",
-        "gpt-4o",
-        "gemini-3-pro",
-        "o3-mini",
-    ] {
-        assert!(
-            !super::script_gen_enabled_for_model(m),
-            "{m} should not use script-gen unless OPENPENCIL_SCRIPT_GEN is set"
-        );
-    }
 }
 
 #[test]
@@ -106,83 +89,26 @@ fn flex_aligned_cells_survive_the_forest() {
     }
 }
 
-/// A Pencil-trained model (Pencil's own free backend is pencil-minimax-m3)
-/// habitually calls `console.log` and Pencil's other batch_design ops
-/// (`C/U/D/M/R/G`). The sandbox stubs them as no-ops so a stray call can't
-/// `ReferenceError` and abort the whole section — the section's `I(...)` nodes
-/// must still come through. (Pre-fix, each of these aborted the entire script.)
+/// Truncation repair (`op_mcp::script_runner::repair_truncated_script`) is
+/// exercised end-to-end through `parse_script`: a script cut mid-token after
+/// several complete statements must still build a forest from the surviving
+/// prefix instead of losing the whole section to a trailing SyntaxError (the
+/// JS parser fails before ANY `I(...)` call runs, so without repair the
+/// salvage-on-throw path in op-mcp's `eval_to_program` has nothing recorded
+/// to save).
 #[test]
-fn pencil_ops_and_console_do_not_abort_the_script() {
-    let base = r#"const s = I(null, {type:"frame", name:"S", layout:"vertical", width:"fill_container"});"#;
-    let cases: &[(&str, String)] = &[
-        (
-            "console.log",
-            format!("console.log('building section');\n{base}"),
-        ),
-        (
-            "console mid-script",
-            format!("{base}\nconsole.warn('done');"),
-        ),
-        (
-            "Pencil G() image-gen",
-            format!("{base}\nG(s, 'ai', 'a hero photo');"),
-        ),
-        (
-            "Pencil C() copy",
-            format!("{base}\nconst c = C(s, s, {{}});"),
-        ),
-        (
-            "Pencil U/D/M/R",
-            format!("{base}\nU('s',{{}}); D('x'); M('x','s',0); R('p',{{}});"),
-        ),
-    ];
-    for (label, script) in cases {
-        let nodes = parse_script(script)
-            .unwrap_or_else(|e| panic!("{label} must not abort the script: {e}"));
-        assert_eq!(nodes.len(), 1, "{label}: the section root must survive");
-    }
-}
-
-/// Real JS the models DO write must keep working (full ES via QuickJS).
-#[test]
-fn standard_es_constructs_work() {
-    let base = r#"const s = I(null, {type:"frame", name:"S", layout:"vertical", width:"fill_container"});"#;
-    for (label, extra) in [
-        ("Math", "const n = Math.round(3.7);"),
-        ("Date", "const d = new Date(2024,0,1);"),
-        ("template literal", "const t = `row ${1+1}`;"),
-        (
-            "map",
-            "[1,2,3].map(x => I(s, {type:'text', content:String(x)}));",
-        ),
-    ] {
-        let script = format!("{base}\n{extra}");
-        assert!(
-            parse_script(&script).is_ok(),
-            "{label} is standard ES and must run"
-        );
-    }
-}
-
-/// Partial-success recovery: a throw PART-WAY through the script keeps every
-/// node recorded before it. A typo'd binding reference (genuine ReferenceError
-/// we can't stub) on a late line must not erase the good nodes that preceded it.
-#[test]
-fn throw_midway_salvages_nodes_recorded_before_it() {
-    let script = r#"
-        const s = I(null, {type:"frame", name:"S", layout:"vertical", width:"fill_container"});
-        const a = I(s, {type:"text", content:"kept-1"});
-        const b = I(s, {type:"text", content:"kept-2"});
-        I(typoBindingNeverDefined, {type:"text", content:"lost"});
-        I(s, {type:"text", content:"after-throw"});
+fn truncated_script_repair_still_builds_a_forest_via_parse_script() {
+    let cut = r#"
+        const sec = I(null, {type:"frame", name:"Sec", layout:"vertical", width:"fill_container"});
+        const a = I(sec, {type:"text", content:"kept-1"});
+        const b = I(sec, {type:"text", content:"kept-2"});
+        I(sec, {type:"text", content:"dangl
     "#;
-    let nodes = parse_script(script).expect("partial program must be salvaged, not discarded");
-    let s = &nodes[0];
-    // The two texts recorded before the throw survive; the post-throw line never
-    // ran. (Section root + 2 kept children.)
+    let nodes = parse_script(cut).expect("truncation repair must salvage a runnable forest");
+    let sec = &nodes[0];
     assert_eq!(
-        s.children().map(|c| c.len()).unwrap_or(0),
+        sec.children().map(|c| c.len()).unwrap_or(0),
         2,
-        "the two nodes built before the throw must be kept"
+        "the two complete statements before the truncation must survive"
     );
 }

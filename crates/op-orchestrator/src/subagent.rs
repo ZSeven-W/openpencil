@@ -164,24 +164,10 @@ pub(crate) async fn run_subtask_with_reveal_at(
         "subagent text collected"
     );
 
-    // Parse into a PenNode tree. The manifest ("N-tool") path is OFF by
-    // default and runs only when `OPENPENCIL_MANIFEST` is explicitly
-    // truthy; it parses the element manifest first and falls back to the
-    // bare PenNode JSONL path when the text carries no manifest lines.
-    // Both routes converge on the same post-processing.
-    // Program-DSL protocol (OPENPENCIL_PROGRAM_GEN): the sub-agent emitted a
-    // `batch_design` program; run it through the Rust executor and take the
-    // produced section forest. Gated to the full first attempt exactly like the
-    // prompt (`program_on`) — the reduced/minimal retry rungs teach raw JSONL, so
-    // parsing must fall back to `parse_nodes` there too.
-    let model_id = req.model.as_deref().unwrap_or("");
-    let script_on = crate::script_gen::script_gen_enabled_for_model(model_id)
-        && !reduced_complexity
-        && !minimal_skills;
-    let program_on = !script_on
-        && crate::program_gen::program_gen_enabled_for_model(model_id)
-        && !reduced_complexity
-        && !minimal_skills;
+    // Script-gen is THE protocol on the full first attempt; the reduced /
+    // minimal retry rungs teach raw JSONL, so parsing falls back to
+    // `parse_nodes` there (matching the prompt in build_subagent_prompt).
+    let script_on = !reduced_complexity && !minimal_skills;
     let mut nodes = if script_on {
         match crate::script_gen::parse_script(&text) {
             Ok(n) => n,
@@ -195,45 +181,6 @@ pub(crate) async fn run_subtask_with_reveal_at(
                 );
                 return fail(e);
             }
-        }
-    } else if program_on {
-        match crate::program_gen::parse_program(&text) {
-            Ok(n) => n,
-            Err(e) => {
-                tracing::warn!(
-                    subtask = %subtask.id,
-                    text_len = text.len(),
-                    thinking_len,
-                    raw = %text,
-                    "subagent program-gen parse failed"
-                );
-                return fail(e);
-            }
-        }
-    } else if crate::manifest::manifest_enabled_for_model(model_id) {
-        match crate::manifest::parse_manifest(&text) {
-            Some(outcome) => {
-                for warning in &outcome.warnings {
-                    eprintln!("[manifest] {warning}");
-                }
-                if outcome.nodes.is_empty() {
-                    return fail("manifest parsed but produced no nodes".into());
-                }
-                outcome.nodes
-            }
-            None => match parse_nodes(&text) {
-                Ok(n) => n,
-                Err(e) => {
-                    tracing::warn!(
-                        subtask = %subtask.id,
-                        text_len = text.len(),
-                        thinking_len,
-                        raw = %text,
-                        "subagent parse failed (manifest + JSONL both missed)"
-                    );
-                    return fail(e.to_string());
-                }
-            },
         }
     } else {
         match parse_nodes(&text) {
@@ -339,7 +286,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         .iter()
         .position(|s| s.id == subtask.id)
         .unwrap_or(0);
-    let merge_state = crate::hoist_app_state::hoist_app_state(&mut nodes, plan_idx);
+    let merge_state = op_editor_core::hoist_app_state(&mut nodes, plan_idx);
     let has_state =
         matches!(&merge_state, EditorCommand::MergeAppState { state, .. } if !state.is_empty());
     if has_state {
@@ -774,7 +721,16 @@ mod tests {
         }
     }
 
+    // Raw flat/nested-children JSONL fixture — only the reduced-complexity
+    // retry rung parses this (script-gen is the default on the full attempt;
+    // see `run_subtask_reduced_complexity_falls_back_to_flat_jsonl` below).
     const NODE_JSON: &str = r#"[{"type":"frame","id":"hero-1","name":"Card","x":0,"y":0,"width":1200,"height":200,"children":[{"type":"text","id":"hero-title","content":"Hero","fontSize":18}]}]"#;
+    // Script-gen equivalent of `NODE_JSON` — a single I(null, {...}) call whose
+    // node object nests its children inline (batch_design's insert accepts a
+    // whole subtree per call). Authored ids are dropped: the batch_design
+    // executor reassigns fresh ids to every inserted node regardless, so tests
+    // that use this constant must not assert on literal id strings.
+    const NODE_SCRIPT: &str = r#"I(null, {"type":"frame","name":"Card","x":0,"y":0,"width":1200,"height":200,"children":[{"type":"text","content":"Hero","fontSize":18}]});"#;
 
     #[test]
     fn coalesce_folds_trailing_badge_leaf_into_lone_section() {
@@ -906,6 +862,71 @@ mod tests {
     }
 
     #[test]
+    fn childless_frame_with_stroke_is_content_not_blank() {
+        // The otp_input await-input slots: a childless Frame carrying an
+        // explicit stroke renders exactly like a bare rectangle — same
+        // pixels, different spelling. It must NOT count as blank scaffolding.
+        let json = r##"[
+            {"type":"frame","id":"root","name":"Root","children":[
+                {"type":"frame","id":"box","name":"Await Input","children":[],
+                 "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E2E8F0"}]}}
+            ]}
+        ]"##;
+        let nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        assert!(
+            has_content_node(&nodes[0]),
+            "a childless frame with a stroke paints real pixels"
+        );
+        assert!(
+            !is_blank_container_forest(&nodes),
+            "a stroked childless-frame forest must survive the blank-container guard"
+        );
+    }
+
+    #[test]
+    fn childless_frame_with_fill_is_content_not_blank() {
+        // Same shape as above but the paint comes from `fill` instead of
+        // `stroke` — both count as explicit paint on an otherwise-empty
+        // container.
+        let json = r##"[
+            {"type":"frame","id":"root","name":"Root","children":[
+                {"type":"frame","id":"box","name":"Color Block","children":[],
+                 "fill":[{"type":"solid","color":"#111111"}]}
+            ]}
+        ]"##;
+        let nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        assert!(
+            has_content_node(&nodes[0]),
+            "a childless frame with a fill paints real pixels"
+        );
+        assert!(
+            !is_blank_container_forest(&nodes),
+            "a filled childless-frame forest must survive the blank-container guard"
+        );
+    }
+
+    #[test]
+    fn childless_frame_without_paint_is_blank() {
+        // Same shape, no stroke/fill: genuinely empty scaffolding. This is
+        // the case the blank-container guard exists to catch, so it must
+        // still be rejected.
+        let json = r#"[
+            {"type":"frame","id":"root","name":"Root","children":[
+                {"type":"frame","id":"box","name":"Empty","children":[]}
+            ]}
+        ]"#;
+        let nodes: Vec<PenNode> = serde_json::from_str(json).expect("parse forest");
+        assert!(
+            !has_content_node(&nodes[0]),
+            "a childless frame with no paint is not content"
+        );
+        assert!(
+            is_blank_container_forest(&nodes),
+            "an unpainted childless-frame forest must be rejected as blank"
+        );
+    }
+
+    #[test]
     fn coalesce_keeps_ref_orphan_instead_of_dropping_it() {
         // A populated section plus a sibling component instance (`ref`). The ref
         // is childless but is real content — it must fold into the section, not
@@ -983,9 +1004,9 @@ mod tests {
         // a MergeAppState command BEFORE the InsertSubtree, and the inserted
         // nodes must carry no residual `state`.
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-            r#"[{"type":"frame","id":"hero-1","name":"Card","x":0,"y":0,"width":1200,"height":200,
+            r#"I(null, {"type":"frame","name":"Card","x":0,"y":0,"width":1200,"height":200,
                   "state":{"count":{"type":"int","default":0}},
-                  "children":[{"type":"text","id":"hero-title","content":"Hero","fontSize":18}]}]"#
+                  "children":[{"type":"text","content":"Hero","fontSize":18}]});"#
                 .into(),
         )]);
         let mut plan = plan();
@@ -1032,7 +1053,7 @@ mod tests {
 
     #[test]
     fn run_subtask_ok_applies_insert_subtree() {
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_SCRIPT.into())]);
         let mut sink = VecDocSink::new();
         let outcome = block_on(run_subtask(
             &subtask(),
@@ -1052,10 +1073,39 @@ mod tests {
         ));
     }
 
+    /// Reduced-complexity retry rung teaches raw JSONL, NOT script-gen — this is
+    /// a regression guard for the protocol collapse: `subagent::run_subtask`
+    /// must route parsing to `parse_nodes` there (matching `build_subagent_prompt`)
+    /// and the flat path must still build a forest end-to-end.
+    #[test]
+    fn run_subtask_reduced_complexity_falls_back_to_flat_jsonl() {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
+        let mut sink = VecDocSink::new();
+        let outcome = block_on(run_subtask(
+            &subtask(),
+            &plan(),
+            &req(),
+            &llm,
+            &mut sink,
+            &AbortFlag::new(),
+            true,
+            false,
+        ));
+        assert_eq!(outcome.node_count, 1);
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("expected InsertSubtree, got {:?}", sink.applied.last());
+        };
+        // The flat-JSONL path keeps the model-authored id verbatim (no
+        // batch_design remap), unlike script-gen — proving the two retry
+        // rungs still diverge as designed.
+        assert_eq!(nodes[0].id_str(), "hero-1");
+    }
+
     #[test]
     fn run_subtask_binds_generated_exact_color_to_document_variable() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-            r##"[{"type":"rectangle","id":"card","width":100,"height":50,"fill":[{"type":"solid","color":"#F8FAFC"}]}]"##
+            r##"I(null, {"type":"rectangle","width":100,"height":50,"fill":[{"type":"solid","color":"#F8FAFC"}]});"##
                 .into(),
         )]);
         let mut sink = VecDocSink::new();
@@ -1088,7 +1138,7 @@ mod tests {
     #[test]
     fn run_subtask_binds_generated_near_color_to_document_variable() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-            r##"[{"type":"rectangle","id":"card","width":100,"height":50,"fill":[{"type":"solid","color":"#FFF8F0"}]}]"##
+            r##"I(null, {"type":"rectangle","width":100,"height":50,"fill":[{"type":"solid","color":"#FFF8F0"}]});"##
                 .into(),
         )]);
         let mut sink = VecDocSink::new();
@@ -1122,7 +1172,7 @@ mod tests {
     fn run_subtask_staggers_reveals_for_live_inserted_nodes() {
         let _guard = crate::agent_indicator_test_support::lock();
         let epoch = op_editor_core::agent_indicators::begin();
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_SCRIPT.into())]);
         let mut sink = VecDocSink::new();
 
         let outcome = block_on(run_subtask_with_reveal_at(
@@ -1158,86 +1208,6 @@ mod tests {
         op_editor_core::agent_indicators::end_if_epoch(epoch);
     }
 
-    /// 离线冒烟：manifest 模式下,stub LLM 输出元素清单 → 解析、修复、
-    /// 组装、role 后处理、InsertSubtree 全链路走通。
-    /// 对并行 runner 安全:flag 置位期间,其它测试的非清单输出在
-    /// `parse_manifest` 返回 `None` 后照常回落 `parse_nodes`。
-    #[test]
-    fn run_subtask_manifest_mode_builds_elements_end_to_end() {
-        let _env = crate::test_support::MANIFEST_ENV_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("OPENPENCIL_MANIFEST", "1");
-        let manifest = concat!(
-            "{\"el\":\"section\",\"gap\":16,\"role\":\"stats\"}\n",
-            "{\"el\":\"heading\",\"in\":1,\"content\":\"Revenue Overview\"}\n",
-            "{\"el\":\"stat_card\",\"in\":1,\"label\":\"MRR\",\"value\":\"$48k\"}",
-        );
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(manifest.into())]);
-        let mut sink = VecDocSink::new();
-        let outcome = block_on(run_subtask(
-            &subtask(),
-            &plan(),
-            &req(),
-            &llm,
-            &mut sink,
-            &AbortFlag::new(),
-            false,
-            false,
-        ));
-        std::env::remove_var("OPENPENCIL_MANIFEST");
-
-        assert!(outcome.error.is_none(), "{:?}", outcome.error);
-        assert_eq!(outcome.node_count, 1, "one section root");
-        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
-            panic!("expected InsertSubtree, got {:?}", sink.applied.last());
-        };
-        assert_eq!(nodes.len(), 1);
-        let jian_ops_schema::node::PenNode::Frame(section) = &nodes[0] else {
-            panic!("section root must be a frame");
-        };
-        assert_eq!(
-            section.children.as_ref().map(Vec::len),
-            Some(2),
-            "heading + stat_card nested under the section"
-        );
-    }
-
-    /// ab-v9.2 现场:`{"el":"otp_input"}` 全空槽位 → builder 产出一排
-    /// 带描边的无子 frame。带显式 paint 的无子 frame 与无子矩形像素
-    /// 等价,必须算内容 —— 此前整树被判"空白容器",manifest 被拒后
-    /// 重试降级到手搓 raw 路径。
-    #[test]
-    fn manifest_element_of_stroked_empty_frames_is_content_not_blank() {
-        let _env = crate::test_support::MANIFEST_ENV_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        std::env::set_var("OPENPENCIL_MANIFEST", "1");
-        let manifest = concat!(
-            "{\"el\":\"section\",\"direction\":\"horizontal\",\"gap\":12}\n",
-            "{\"el\":\"otp_input\",\"in\":1,\"length\":6,\"focused_index\":0}",
-        );
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(manifest.into())]);
-        let mut sink = VecDocSink::new();
-        let outcome = block_on(run_subtask(
-            &subtask(),
-            &plan(),
-            &req(),
-            &llm,
-            &mut sink,
-            &AbortFlag::new(),
-            false,
-            false,
-        ));
-        std::env::remove_var("OPENPENCIL_MANIFEST");
-
-        assert!(outcome.error.is_none(), "{:?}", outcome.error);
-        assert_eq!(
-            outcome.node_count, 1,
-            "one section root with the otp element"
-        );
-    }
-
     #[test]
     fn run_subtask_zero_node_on_garbage() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text("the model refused".into())]);
@@ -1261,7 +1231,7 @@ mod tests {
         // 骨架屏 = frame 根 + 一排无子矩形线条;矩形虽带 ContainerProps
         // 但它是视觉本体,不能整批判空(ab-v9 全模型踩中)。
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-            r#"[{"type":"frame","id":"sk-root","name":"Skeleton","width":"fill_container","height":"fit_content","children":[{"type":"rectangle","id":"sk-1","width":"fill_container","height":16,"cornerRadius":8},{"type":"rectangle","id":"sk-2","width":205,"height":16,"cornerRadius":8}]}]"#
+            r#"I(null, {"type":"frame","name":"Skeleton","width":"fill_container","height":"fit_content","children":[{"type":"rectangle","width":"fill_container","height":16,"cornerRadius":8},{"type":"rectangle","width":205,"height":16,"cornerRadius":8}]});"#
                 .into(),
         )]);
         let mut sink = VecDocSink::new();
@@ -1282,7 +1252,7 @@ mod tests {
     #[test]
     fn run_subtask_rejects_blank_container_root() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-            r#"[{"type":"frame","id":"section-root","name":"Blank","x":0,"y":0,"width":390,"height":112,"children":[]}]"#
+            r#"I(null, {"type":"frame","name":"Blank","x":0,"y":0,"width":390,"height":112,"children":[]});"#
                 .into(),
         )]);
         let mut sink = VecDocSink::new();
@@ -1312,24 +1282,24 @@ mod tests {
         mobile_plan.root_frame.width = 390.0;
         mobile_plan.root_frame.height = 844.0;
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-            r#"[
-              {"type":"frame","id":"section-root","name":"Popular Section","width":"fill_container","height":"fit_content","layout":"vertical","children":[
-                {"type":"frame","id":"popular-row","name":"Popular Now Cards","width":"fill_container","height":"fit_content","layout":"horizontal","gap":20,"children":[
-                  {"type":"frame","id":"card-1","role":"card","width":170,"height":220,"children":[
-                    {"type":"image","id":"img-1","width":170,"height":120,"imageSearchQuery":"pasta plate"},
-                    {"type":"text","id":"title-1","content":"Truffle Carbonara"}
+            r#"I(null, {
+              "type":"frame","name":"Popular Section","width":"fill_container","height":"fit_content","layout":"vertical","children":[
+                {"type":"frame","name":"Popular Now Cards","width":"fill_container","height":"fit_content","layout":"horizontal","gap":20,"children":[
+                  {"type":"frame","role":"card","width":170,"height":220,"children":[
+                    {"type":"image","width":170,"height":120,"imageSearchQuery":"pasta plate"},
+                    {"type":"text","content":"Truffle Carbonara"}
                   ]},
-                  {"type":"frame","id":"card-2","role":"card","width":170,"height":220,"children":[
-                    {"type":"image","id":"img-2","width":170,"height":120,"imageSearchQuery":"burger plate"},
-                    {"type":"text","id":"title-2","content":"Smash Deluxe"}
+                  {"type":"frame","role":"card","width":170,"height":220,"children":[
+                    {"type":"image","width":170,"height":120,"imageSearchQuery":"burger plate"},
+                    {"type":"text","content":"Smash Deluxe"}
                   ]},
-                  {"type":"frame","id":"card-3","role":"card","width":170,"height":220,"children":[
-                    {"type":"image","id":"img-3","width":170,"height":120,"imageSearchQuery":"salmon bowl"},
-                    {"type":"text","id":"title-3","content":"Poke Salmon Bowl"}
+                  {"type":"frame","role":"card","width":170,"height":220,"children":[
+                    {"type":"image","width":170,"height":120,"imageSearchQuery":"salmon bowl"},
+                    {"type":"text","content":"Poke Salmon Bowl"}
                   ]}
                 ]}
-              ]}
-            ]"#
+              ]
+            });"#
             .into(),
         )]);
         let mut sink = VecDocSink::new();
@@ -1364,7 +1334,7 @@ mod tests {
     #[test]
     fn run_subtask_normalizes_section_root_for_parent_layout() {
         let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
-            r#"[{"type":"frame","id":"section-root","name":"Section","x":0,"y":0,"width":390,"height":112,"children":[{"type":"text","id":"title","content":"Pizza","fontSize":18}]}]"#
+            r#"I(null, {"type":"frame","name":"Section","x":0,"y":0,"width":390,"height":112,"children":[{"type":"text","content":"Pizza","fontSize":18}]});"#
                 .into(),
         )]);
         let mut sink = VecDocSink::new();
@@ -1425,7 +1395,7 @@ mod tests {
 
     #[test]
     fn run_subtask_emits_subtask_skills_progress() {
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_SCRIPT.into())]);
         let mut sink = VecDocSink::new();
         let mut events: Vec<crate::types::Progress> = Vec::new();
         let mut on_progress = |p: crate::types::Progress| events.push(p);
@@ -1458,18 +1428,18 @@ mod tests {
     fn run_subtask_promotes_role_input_frame_to_text_input() {
         // The LLM output contains a section frame whose only child is a
         // role="input" field with a muted placeholder and icon children.
-        let llm_json = r##"[
-          {"type":"frame","id":"s1","name":"Login Form","width":1200,"height":400,
+        let llm_script = r##"I(null, {
+          "type":"frame","name":"Login Form","width":1200,"height":400,
            "layout":"vertical","children":[
-             {"type":"frame","id":"email","role":"input","width":320,"height":48,
+             {"type":"frame","role":"input","width":320,"height":48,
               "fill":[{"type":"solid","color":"#f3f4f6"}],"children":[
-                {"type":"icon_font","id":"mail-ico","iconFontName":"mail","width":20,"height":20},
-                {"type":"text","id":"hint","content":"Email address",
+                {"type":"icon_font","iconFontName":"mail","width":20,"height":20},
+                {"type":"text","content":"Email address",
                  "fill":[{"type":"solid","color":"#9ca3af"}]}
               ]}
-           ]}
-        ]"##;
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(llm_json.into())]);
+           ]
+        });"##;
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(llm_script.into())]);
         let mut sink = VecDocSink::new();
         let outcome = block_on(run_subtask(
             &subtask(),
@@ -1502,7 +1472,10 @@ mod tests {
         let PenNode::TextInput(ti) = &children[0] else {
             panic!("role=input child must become TextInput after promotion");
         };
-        assert_eq!(ti.base.id, "email");
+        // script-gen's batch_design executor remaps every id to a fresh one
+        // (unlike the flat-JSONL path, which keeps the model-authored id), so
+        // this only asserts an id WAS assigned, not its literal value.
+        assert!(!ti.base.id.is_empty(), "promoted node must carry an id");
         assert!(ti.base.role.is_none(), "role cleared after promotion");
         assert_eq!(ti.leading_icon.as_deref(), Some("mail"));
         assert_eq!(ti.placeholder.as_deref(), Some("Email address"));

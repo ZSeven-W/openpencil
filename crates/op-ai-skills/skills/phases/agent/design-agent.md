@@ -13,7 +13,7 @@ Always start with `get_editor_state` to see the active page, the current selecti
 If you need access to many tools in one turn, call `ToolSearch` with:
 
 ```
-select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,emit_elements,batch_design,get_screenshot,find_empty_space,spawn_agents
+select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,batch_design,get_screenshot,find_empty_space,spawn_agents
 ```
 
 ### Step 3 — Branch on the task type
@@ -39,28 +39,36 @@ Call `batch_get` to read the structure of any component or section you plan to r
 
 Call `snapshot_layout` to inspect the current bounding boxes, hierarchy, and free space before inserting new frames. This prevents you from placing new content on top of existing frames.
 
-### Step 7 — Build with `emit_elements` (preferred)
+### Step 7 — Build with `batch_design`'s `script` mode (preferred)
 
-PREFER `emit_elements` over `batch_design`. Instead of hand-building primitive frames/text, emit a high-level element manifest — a JSON array of element lines — and the host expands each into a polished, role-tagged subtree (stat-card, profile-header, nav-item, …) with correct typography, spacing, and color.
+PREFER `batch_design(script=...)` over hand-writing the `operations` DSL line-by-line. Pass a `script` argument that is a real JavaScript program (no prose, no markdown fences) that builds the section by calling the global function `I(parent, obj)`:
 
-- `elements` is a JSON array of objects. Each object has an `"el"` kind plus that kind's params, e.g. `{"el":"stat_card","label":"MRR","value":"$48k","trend":"up"}`.
-- `{"el":"section","role":"hero","direction":"vertical","gap":16}` is a structural container. Its **1-based line number** is its handle; nest later lines into it with `"in": <line number>`. Sections can hold sections one level deep.
-- NEVER write `id`, `parent_id`, or `pageId` — nesting is by `"in"` only, referencing an earlier line in the same array. Unknown params and out-of-range enums are auto-repaired, so emit your best guess rather than omitting content.
-- Build the screen as ONE manifest array (sections + their nested elements). One `emit_elements` call per logical screen/region.
+```
+const id = I(parent, { ...node... });   // inserts a node, RETURNS its new id (a string)
+```
+
+- `parent` is `null` for a top-level root, or an id returned by an earlier `I(...)` call — a node is a child of X only if you call `I(X, {...})`.
+- Use REAL JavaScript — `const`/`let`, arrays of data, `for...of` / `.forEach` loops — to generate repeated structure (table rows, nav items, cards, list items) by looping over a data array instead of copy-pasting near-identical `I(...)` calls. PREFER a loop over hand-repeated calls.
+- `C`, `U`, `D`, `M`, `R`, `G`, and `console` are bound inside a script but are harmless NO-OP stubs there — they do not copy, update, delete, move, replace, or fill anything, and `console.log`/`warn`/`error` are silently swallowed. `I(parent, obj)` is the ONLY call with real effect inside a script.
+- Each node object starts with `type` (`"frame"`/`"text"`/`"rectangle"`/`"ellipse"`/`"path"`/`"icon_font"`) and uses camelCase props (`cornerRadius`, `fontSize`, `fontWeight`, `justifyContent`, `alignItems`, `clipContent`). Do NOT set `x`/`y` on children inside layout frames.
 
 Example:
 
 ```
-emit_elements(elements=[
-  {"el":"section","role":"stats","direction":"horizontal","gap":16},
-  {"el":"stat_card","in":1,"label":"MRR","value":"$48.2k","trend":"up"},
-  {"el":"stat_card","in":1,"label":"Active Users","value":"12.4k","trend":"up"}
-])
+batch_design(script="
+  const sec = I(null, {type:\"frame\", name:\"Stats\", layout:\"horizontal\", width:\"fill_container\", gap:16});
+  const cards = [{label:\"MRR\", value:\"$48.2k\"}, {label:\"Active Users\", value:\"12.4k\"}];
+  for (const c of cards) {
+    const card = I(sec, {type:\"frame\", layout:\"vertical\", width:\"fill_container\"});
+    I(card, {type:\"text\", content:c.label, fontSize:14});
+    I(card, {type:\"text\", content:c.value, fontSize:24, fontWeight:\"700\"});
+  }
+")
 ```
 
-Fall back to `batch_design` (DSL below) only for what `emit_elements` cannot express: editing existing nodes, image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
+Fall back to the `operations` DSL (below) only for what a script's no-op stubs cannot express: editing existing nodes (`U`/`R`/`D`/`M` need the REAL DSL, not their script stubs), image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer).
 
-**Act on `layoutIssues` immediately.** Every `batch_design` / `emit_elements` result may carry a `layoutIssues` list — the REAL resolved layout's defects (a collapsed fill container, table columns overflowing their row, text overflowing its block). These are measured facts, not suggestions: fix them with a follow-up `batch_design` (or `U(...)` updates) BEFORE building the next section. Do not carry a known layout defect forward.
+**Act on `layoutIssues` immediately.** Every `batch_design` result (script or DSL) may carry a `layoutIssues` list — the REAL resolved layout's defects (a collapsed fill container, table columns overflowing their row, text overflowing its block). These are measured facts, not suggestions: fix them with a follow-up `batch_design` (or `U(...)` updates) BEFORE building the next section. Do not carry a known layout defect forward.
 
 ### Step 8 — Verify with a screenshot
 

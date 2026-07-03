@@ -464,11 +464,12 @@ const MAX_DIAGNOSTICS: usize = 8;
 /// REPORT-mode counterpart of the fix loop: run the real jian layout over the
 /// CURRENT document and describe — without fixing — what the resolved geometry
 /// proves wrong (collapsed fill containers, table columns overflowing their
-/// row, text overflowing its block). Attached to every `batch_design` /
-/// `emit_elements` tool result so the design agent SEES each batch's layout
-/// consequences immediately and repairs them in-process — the deterministic
-/// analogue of Pencil's per-batch `snapshot_layout` feedback, with the
-/// detection cost paid in Rust instead of model turns.
+/// row, text overflowing its block). Attached to every `batch_design` tool
+/// result (including its script-mode path, the default subagent generation
+/// protocol) so the design agent SEES each batch's layout consequences
+/// immediately and repairs them in-process — the deterministic analogue of
+/// Pencil's per-batch `snapshot_layout` feedback, with the detection cost
+/// paid in Rust instead of model turns.
 pub fn geometry_diagnostics(state: &EditorState) -> Vec<String> {
     let rects = resolved_rects(state);
     let mut out = Vec::new();

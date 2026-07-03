@@ -1,10 +1,17 @@
-//! Tests for the program-DSL generation path (`program_gen.rs`).
+//! Tests for the shared program→forest executor (`program_gen.rs`).
+//!
+//! `parse_program` / `extract_program` / the env-gated protocol-selection
+//! functions were retired when script-gen became the default generation
+//! protocol for every model (the reduced/minimal retry rungs use flat JSONL
+//! instead of the program-DSL text format). `run_program_to_forest` survives
+//! as the shared executor `script_gen` runs its recorded `I(...)` program
+//! through — these tests exercise it directly.
 
-use super::{extract_program, parse_program};
+use super::run_program_to_forest;
 use op_editor_core::PenNodeExt;
 
 #[test]
-fn parse_program_nests_cells_under_rows_via_bindings() {
+fn run_program_to_forest_nests_cells_under_rows_via_bindings() {
     // The whole point: a cell's content lands UNDER the row, not as a sibling of
     // the table — purely because the parent is a captured binding.
     let program = concat!(
@@ -14,7 +21,7 @@ fn parse_program_nests_cells_under_rows_via_bindings() {
         "c1=I(r1, {\"type\":\"frame\",\"name\":\"Cell\"})\n",
         "I(c1, {\"type\":\"text\",\"content\":\"Alice\"})"
     );
-    let nodes = parse_program(program).expect("program builds a forest");
+    let nodes = run_program_to_forest(program).expect("program builds a forest");
     assert_eq!(nodes.len(), 1, "exactly one section root");
     let sec = &nodes[0];
     let tbl = &sec.children().expect("sec children")[0];
@@ -29,49 +36,8 @@ fn parse_program_nests_cells_under_rows_via_bindings() {
 }
 
 #[test]
-fn extract_program_strips_markdown_fences() {
-    let fenced = "```js\nsec=I(null, {\"type\":\"frame\"})\n```";
-    assert_eq!(extract_program(fenced), "sec=I(null, {\"type\":\"frame\"})");
-    let plain = "sec=I(null, {\"type\":\"frame\"})";
-    assert_eq!(extract_program(plain), plain);
-}
-
-#[test]
-fn parse_program_empty_is_error() {
-    assert!(parse_program("   ").is_err());
-}
-
-#[test]
-fn gate_defaults_on_for_weak_models_off_for_strong() {
-    // Env override decides everything when set, so this invariant only holds on
-    // the no-override path.
-    if std::env::var("OPENPENCIL_PROGRAM_GEN").is_ok()
-        || std::env::var("OPENPENCIL_SCRIPT_GEN").is_ok()
-        || std::env::var("OPENPENCIL_MANIFEST").is_ok()
-    {
-        return;
-    }
-    // Open / Chinese reasoning models default to program-DSL: flat JSONL is
-    // fragile for them, and executable JS is all-or-nothing on truncation.
-    for m in [
-        "glm-5.2",
-        "minimax-m3",
-        "deepseek-v4-pro",
-        "qwen-max",
-        "MiniMax-M3",
-    ] {
-        assert!(
-            super::program_gen_enabled_for_model(m),
-            "{m} should default to program-DSL"
-        );
-    }
-    // Claude / GPT / Gemini / o-series emit flat JSONL natively → program OFF.
-    for m in ["claude-opus-4-8", "gpt-4o", "gemini-3-pro", "o3-mini"] {
-        assert!(
-            !super::program_gen_enabled_for_model(m),
-            "{m} should keep flat-JSONL by default"
-        );
-    }
+fn run_program_to_forest_empty_is_error() {
+    assert!(run_program_to_forest("   ").is_err());
 }
 
 #[test]
@@ -85,7 +51,7 @@ fn image_without_src_and_bad_textgrowth_survive() {
         "I(sec, {\"type\":\"image\",\"name\":\"Avatar\",\"width\":40,\"height\":40})\n",
         "I(sec, {\"type\":\"text\",\"content\":\"Hi\",\"textGrowth\":\"fit_content\"})"
     );
-    let nodes = parse_program(program).expect("program builds a forest");
+    let nodes = run_program_to_forest(program).expect("program builds a forest");
     let sec = &nodes[0];
     let kids = sec.children().expect("sec children");
     assert_eq!(
@@ -105,7 +71,7 @@ fn bare_identifier_sizing_value_survives() {
         "sec=I(null, {\"type\":\"frame\",\"name\":\"Sec\",\"layout\":\"vertical\",\"width\":\"fill_container\"})\n",
         "I(sec, {\"type\":\"text\",\"name\":\"Col Service\",\"content\":\"SERVICE\",\"width\":fill_container_str})"
     );
-    let nodes = parse_program(program).expect("program builds a forest");
+    let nodes = run_program_to_forest(program).expect("program builds a forest");
     let sec = &nodes[0];
     let kids = sec.children().expect("sec children");
     assert_eq!(kids.len(), 1, "the bare-identifier-sized text survived");
