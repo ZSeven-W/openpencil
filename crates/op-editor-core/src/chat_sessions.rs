@@ -79,9 +79,18 @@ impl ChatSessions {
 
     /// Push a fresh `ChatState`, set it as active, and return its index.
     ///
-    /// The new tab starts blank (default), independent from all others.
+    /// The new tab starts with a blank TRANSCRIPT but inherits the model
+    /// registry from the tab it was opened from: model discovery is
+    /// app-level state that the provider probe writes into the active
+    /// tab, so a defaulted tab showed "No models connected" until the
+    /// next probe cycle (measured on the "+" button).
     pub fn new_tab(&mut self) -> usize {
-        self.tabs.push(ChatState::default());
+        let mut fresh = ChatState::default();
+        let from = &self.tabs[self.active];
+        fresh.discovered_models = from.discovered_models.clone();
+        fresh.available_models = from.available_models.clone();
+        fresh.selected_model = from.selected_model;
+        self.tabs.push(fresh);
         self.active = self.tabs.len() - 1;
         self.active
     }
@@ -104,8 +113,14 @@ impl ChatSessions {
             return; // out of range — no-op
         }
         if self.tabs.len() == 1 {
-            // Closing the only tab: reset in place rather than removing.
-            self.tabs[0] = ChatState::default();
+            // Closing the only tab: reset in place rather than removing —
+            // carrying the model registry over, same as `new_tab`.
+            let mut fresh = ChatState::default();
+            let from = &self.tabs[0];
+            fresh.discovered_models = from.discovered_models.clone();
+            fresh.available_models = from.available_models.clone();
+            fresh.selected_model = from.selected_model;
+            self.tabs[0] = fresh;
             self.active = 0;
             return;
         }
@@ -384,6 +399,32 @@ mod tests {
         s.switch_to(0);
         assert_eq!(s.messages.len(), 2);
         assert_eq!(s.title, "Working chat");
+    }
+
+    #[test]
+    fn new_tab_inherits_model_registry() {
+        // Regression: "+" produced a defaulted ChatState whose empty
+        // discovered/available model lists painted "No models connected"
+        // until the next provider probe.
+        let mut s = ChatSessions::default();
+        s.discovered_models = vec![crate::chat::ModelEntry::builtin(
+            crate::chat::AgentProvider::ClaudeCode,
+            "zhipu",
+            "glm-5.2",
+            "GLM 5.2",
+        )];
+        s.available_models = s.discovered_models.clone();
+        s.selected_model = 0;
+
+        s.new_tab();
+        assert_eq!(s.available_models.len(), 1, "fresh tab keeps the models");
+        assert_eq!(s.selected_model, 0);
+        assert!(s.messages.is_empty(), "transcript still starts blank");
+
+        // Closing the last tab resets in place but keeps the registry too.
+        s.close_tab(1);
+        s.close_tab(0);
+        assert_eq!(s.available_models.len(), 1);
     }
 
     #[test]
