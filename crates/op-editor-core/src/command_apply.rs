@@ -16,7 +16,10 @@
 //! The result type is `bool` — identical to shell-core's
 //! `apply_mcp_command`: `true` when the command changed something (so
 //! a host can decide whether to push undo / persist), `false` on an
-//! apply-time validation failure.
+//! apply-time validation failure. **Exception:** [`EditorState::
+//! merge_app_state`] (`MergeAppState`) reports "processed", not
+//! "changed" — see its doc comment for why a no-op merge must still
+//! return `true`.
 //!
 use crate::align::AlignAction;
 use crate::command::{EditorCommand, VariableScalarPayload};
@@ -154,9 +157,12 @@ fn apply_import_svg_on_active_page(
 }
 
 impl EditorState {
-    /// Apply one [`EditorCommand`]. Returns `true` when the command
-    /// actually changed the document / editor state, `false` on an
-    /// apply-time validation failure.
+    /// Apply one [`EditorCommand`]. Returns `true` when the command was
+    /// processed (which for most commands means it changed the document
+    /// / editor state), `false` on an apply-time validation failure.
+    /// Exception: an additive [`EditorCommand::MergeAppState`] whose
+    /// every key defers to an existing owner is a designed no-op and
+    /// still returns `true` — see [`Self::merge_app_state`].
     pub fn apply(&mut self, cmd: EditorCommand) -> bool {
         match cmd {
             // --- Raw node CRUD -------------------------------------
@@ -821,32 +827,62 @@ impl EditorState {
     /// inserted. On a conflicting key the incoming `plan_idx` is compared
     /// to the registered owner; if it is strictly lower it replaces both
     /// the owner record and the document value.
+    ///
+    /// ## Return contract
+    ///
+    /// The return value signals **"command processed"**, not **"keys
+    /// landed"**. `MergeAppState` is additive by design: doc-owned keys
+    /// always win, and among generation-added keys the lower `plan_idx`
+    /// wins. A run where every incoming key was skipped (already
+    /// doc-owned, or lost the `plan_idx` ownership race) is the designed
+    /// steady-state outcome, not a failure — it MUST return `true`.
+    ///
+    /// This matters beyond the local call site: `MergeAppState` rides
+    /// inside `EditorCommand::Batch` alongside a node insert/replace on
+    /// every generation path (`hoist_generation_state` +
+    /// `with_hoisted_state` in `op-mcp`), and `Batch`'s apply loop
+    /// (`command_batch.rs::cmd_batch`) treats the first sub-command that
+    /// returns `false` as a hard failure and rolls the ENTIRE batch back.
+    /// Returning `false` for a legitimate no-op merge would silently
+    /// reject an otherwise-valid insert/replace every time a regenerated
+    /// section declares a state key the document root already carries —
+    /// a completely normal flow, not a collision. There is currently no
+    /// invalid-command shape for `MergeAppState` (any `plan_idx` /
+    /// `StateEntry` payload is well-formed), so every path below returns
+    /// `true`.
     fn merge_app_state(
         &mut self,
         plan_idx: usize,
         incoming: std::collections::BTreeMap<String, jian_ops_schema::state::StateEntry>,
     ) -> bool {
         if incoming.is_empty() {
-            return false;
+            // Nothing to merge is a no-op, not a failure — see the
+            // return-contract note above. Kept as an early return
+            // (rather than falling into the loop) purely to skip the
+            // `get_or_insert_with` allocation on doc.state when there is
+            // nothing to write into it.
+            return true;
         }
         let root = self
             .doc
             .state
             .get_or_insert_with(std::collections::BTreeMap::new);
-        let mut changed = false;
         for (key, entry) in incoming {
             match self.app_state_owner.entry(key.clone()) {
                 std::collections::btree_map::Entry::Vacant(slot) => {
                     // Pre-existing doc-root key: owned by the file, skip.
+                    // Not a failure — the file's value is authoritative
+                    // and is left untouched.
                     if root.contains_key(&key) {
                         continue;
                     }
                     root.insert(key, entry);
                     slot.insert(plan_idx);
-                    changed = true;
                 }
                 std::collections::btree_map::Entry::Occupied(mut slot) => {
-                    // Generation-added key: lower plan_idx wins.
+                    // Generation-added key: lower plan_idx wins. Losing
+                    // the race is not a failure — the earlier subtask's
+                    // value already won and stays in place.
                     if plan_idx < *slot.get() {
                         tracing::warn!(
                             target: "op.skills",
@@ -857,11 +893,10 @@ impl EditorState {
                         );
                         root.insert(key, entry);
                         slot.insert(plan_idx);
-                        changed = true;
                     }
                 }
             }
         }
-        changed
+        true
     }
 }

@@ -1196,6 +1196,76 @@ fn batch_design_without_node_state_keeps_plain_command() {
 }
 
 #[test]
+fn batch_design_noop_state_merge_still_lands_the_insert() {
+    // Regression for the codex BLOCKER: regenerating a section into a
+    // document whose root state ALREADY carries the declared key is a
+    // completely normal flow (the merge is a legitimate additive
+    // no-op), not a failure. Before the fix, `merge_app_state` returned
+    // `false` for the fully-skipped-keys case, so the sim-validated
+    // `ctx.emit` in `batch_program.rs` treated the merge as a failed
+    // line — misreporting an `errors[]` entry for a line whose insert
+    // had already landed — and the SAME `merge_app_state` bug would
+    // sink the whole `Batch` at HOST apply time on the five other
+    // `with_hoisted_state` producers (insert_node / replace_node /
+    // design_content / design_skeleton / batch_design), since none of
+    // them sim-validate before batching.
+    use jian_ops_schema::state::{PrimitiveType, StateEntry, StateType};
+    let mut state = sample();
+    let mut existing: BTreeMap<String, StateEntry> = BTreeMap::new();
+    existing.insert(
+        "count".into(),
+        StateEntry {
+            kind: StateType::Primitive(PrimitiveType::Int),
+            default: Some(serde_json::json!(1)),
+            description: None,
+            persist: None,
+        },
+    );
+    state.doc.state = Some(existing);
+
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Card","width":320,"height":240,"state":{"count":{"type":"int","default":1}}})"##
+            .into(),
+    );
+    let (json, cmd) = match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(json, cmd) => (json, cmd),
+        other => panic!("expected OkJsonWithCommand, got {other:?}"),
+    };
+    // The line must not be misreported as errored — the merge is a
+    // designed no-op, not a failure.
+    assert!(
+        !json.contains("\"errors\""),
+        "a no-op state merge must not surface as a line error: {json}"
+    );
+
+    let before = state.active_children().len();
+    assert!(
+        state.apply(cmd),
+        "the outcome command must apply cleanly despite the pre-existing state key"
+    );
+    assert_eq!(
+        state.active_children().len(),
+        before + 1,
+        "the insert must land even though its declared state key was a no-op"
+    );
+    assert_eq!(
+        state
+            .doc
+            .state
+            .as_ref()
+            .unwrap()
+            .get("count")
+            .unwrap()
+            .default,
+        Some(serde_json::json!(1)),
+        "the doc-owned state entry is untouched"
+    );
+}
+
+#[test]
 fn batch_design_promotes_radio_group_role() {
     // Task D2: jian's promote table grew a `radio-group` role (D1) — a
     // legacy frame marked `role:"radio-group"` must collapse into a real
