@@ -286,8 +286,10 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.colorPalettePrompt" => "为一个宠物护理应用推荐一套现代配色方案",
         "ai.quickAction.dashboard" => "面向公用事业公司的技术仪表板 Web 应用",
         "ai.quickAction.dashboardPrompt" => "面向公用事业公司的技术仪表板 Web 应用",
-        "ai.quickAction.terminalDashboard" => "面向体育团队的终端风格仪表板 Web 应用",
-        "ai.quickAction.terminalDashboardPrompt" => "面向体育团队的终端风格仪表板 Web 应用",
+        "ai.quickAction.travelApp" => "旅行预订 App 发现页",
+        "ai.quickAction.travelAppPrompt" => {
+            "设计一个旅行预订App发现页。包含搜索区\"想去哪？\"输入框、日期选择标签、人数选择。热门目的地横向滑动卡片（目的地照片、城市名、起步价），\"本周特惠\"区2张特惠卡片带折扣标签，最近浏览区2张紧凑卡片。底部导航栏（发现、收藏、行程、消息、个人）。温暖友好的设计，橙色点缀。"
+        }
         "ai.quickAction.coffeeShop" => "面向布拉格咖啡店的深色大胆风格网站",
         "ai.quickAction.coffeeShopPrompt" => "面向布拉格咖啡店的深色大胆风格网站",
         "ai.quickAction.barbershop" => "用于管理理发店客户的豪华 Web 应用",

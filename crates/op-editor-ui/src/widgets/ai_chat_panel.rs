@@ -59,15 +59,15 @@ pub(crate) fn example_cards(locale: op_editor_core::Locale) -> [ExampleCard; 4] 
     // retained in the struct for potential future use but are not painted (#33 restyle).
     [
         ExampleCard {
-            title: t("ai.quickAction.dashboard"),
+            title: t("ai.quickAction.travelApp"),
             subtitle: String::new(),
-            prompt: t("ai.quickAction.dashboardPrompt"),
+            prompt: t("ai.quickAction.travelAppPrompt"),
             emoji: "",
         },
         ExampleCard {
-            title: t("ai.quickAction.terminalDashboard"),
+            title: t("ai.quickAction.dashboard"),
             subtitle: String::new(),
-            prompt: t("ai.quickAction.terminalDashboardPrompt"),
+            prompt: t("ai.quickAction.dashboardPrompt"),
             emoji: "",
         },
         ExampleCard {
