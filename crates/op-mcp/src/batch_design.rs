@@ -48,16 +48,66 @@ pub(crate) fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static st
     dispatch_batch_design(args, Some(phase))
 }
 
+/// Expand a `script` arg into the `operations` DSL program the rest of
+/// `batch_design` already understands. Returns:
+/// - `None` — `args` carries no `script` key; caller proceeds unchanged.
+/// - `Some(Ok(rewritten))` — `script` removed, `operations` set to the
+///   program the sandboxed runner recorded. Caller re-dispatches with the
+///   rewritten args so BOTH the flat `dispatch_batch_design` path (used by
+///   the `design_skeleton`/`design_content`/`design_refine` phase tools)
+///   and the primary `batch_design` tool's richer `operations` handling
+///   (`BatchDesign::call`, which intercepts `operations` before ever
+///   calling `dispatch_batch_design` — see `batch_design_result.rs`) see
+///   the exact same expansion and report through their own native shape.
+/// - `Some(Err(outcome))` — `script` combined with `operations`/
+///   `nodes_json`, or (feature off) `script` used at all.
+pub(crate) fn expand_script_arg(
+    args: &BTreeMap<String, String>,
+) -> Option<Result<BTreeMap<String, String>, ToolOutcome>> {
+    let script = args.get("script")?;
+    if args.contains_key("operations") || args.contains_key("nodes_json") {
+        return Some(Err(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "provide only one of script, operations, or nodes_json".into(),
+        )));
+    }
+    #[cfg(feature = "script")]
+    {
+        let program = match crate::script_runner::run_script_to_program(script) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(ToolOutcome::Err(ToolErrorCode::InvalidArgument, e))),
+        };
+        let mut forwarded = args.clone();
+        forwarded.remove("script");
+        forwarded.insert("operations".to_string(), program);
+        Some(Ok(forwarded))
+    }
+    #[cfg(not(feature = "script"))]
+    {
+        let _ = script;
+        Some(Err(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "script input requires a script-enabled host build".into(),
+        )))
+    }
+}
+
 pub(crate) fn dispatch_batch_design(
     args: &BTreeMap<String, String>,
     phase: Option<&'static str>,
 ) -> ToolOutcome {
+    if let Some(result) = expand_script_arg(args) {
+        return match result {
+            Ok(forwarded) => dispatch_batch_design(&forwarded, phase),
+            Err(outcome) => outcome,
+        };
+    }
     let page_id = optional_page_id(args);
     if let Some(operations) = args.get("operations") {
         return match parse_operations(operations) {
             Ok(ParsedOperations::Insert {
                 parent_id,
-                nodes,
+                mut nodes,
                 count,
                 promoted,
                 ..
@@ -71,13 +121,17 @@ pub(crate) fn dispatch_batch_design(
                 // Surface Phase E3 promotions so the client sees the
                 // legacy role frames that were normalized into widget nodes.
                 surface_promotions(&mut out, &promoted);
+                let hoist = hoist_generation_state(&mut nodes);
                 ToolOutcome::OkWithCommand(
                     out,
-                    EditorCommand::InsertSubtree {
-                        nodes,
-                        parent_id,
-                        page_id,
-                    },
+                    with_hoisted_state(
+                        hoist,
+                        EditorCommand::InsertSubtree {
+                            nodes,
+                            parent_id,
+                            page_id,
+                        },
+                    ),
                 )
             }
             Ok(ParsedOperations::Direct(command)) => {
@@ -198,6 +252,36 @@ pub(crate) fn promote_in_slice(nodes: &mut [PenNode], notes: &mut Vec<PromoteNot
         } else if let Some(children) = node.children_mut() {
             promote_in_slice(children, notes);
         }
+    }
+}
+
+/// Drain node-level `state` from a generated insert forest into one
+/// doc-root [`EditorCommand::MergeAppState`], tagged with the weakest
+/// (unplanned) priority — MCP inserts have no orchestrator plan index.
+/// Returns `None` when no node declared state, so plain inserts keep
+/// their existing single-command shape.
+pub(crate) fn hoist_generation_state(nodes: &mut [PenNode]) -> Option<EditorCommand> {
+    let cmd = op_editor_core::hoist_app_state(nodes, op_editor_core::UNPLANNED_APP_STATE_IDX);
+    match &cmd {
+        EditorCommand::MergeAppState { state, .. } if !state.is_empty() => Some(cmd),
+        _ => None,
+    }
+}
+
+/// Wrap `insert` in a [`EditorCommand::Batch`] carrying the hoisted
+/// `MergeAppState` FIRST (so `$app` keys land before the nodes that
+/// reference them), or return `insert` unchanged when nothing was
+/// hoisted. `MergeAppState` allocates no node ids, so prepending it
+/// never disturbs id prediction.
+pub(crate) fn with_hoisted_state(
+    hoist: Option<EditorCommand>,
+    insert: EditorCommand,
+) -> EditorCommand {
+    match hoist {
+        Some(merge) => EditorCommand::Batch {
+            commands: vec![merge, insert],
+        },
+        None => insert,
     }
 }
 

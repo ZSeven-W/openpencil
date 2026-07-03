@@ -19,7 +19,9 @@ use op_editor_core::command_node::remap_subtree_ids_mapping;
 use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use serde_json::{json, Value};
 
-use super::batch_design::{dispatch_batch_design, parse_operations, ParsedOperations};
+use super::batch_design::{
+    dispatch_batch_design, expand_script_arg, parse_operations, ParsedOperations,
+};
 use super::batch_page::optional_page_id;
 use super::read_nodes::{page_nodes_snapshots, PageNodes};
 use super::{EditorCommand, McpTool, ToolOutcome};
@@ -43,6 +45,19 @@ impl McpTool for BatchDesign {
         "batch_design"
     }
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        // `script` must be gated BEFORE the `operations` shortcut below —
+        // otherwise a caller that (invalidly) sends both `script` and
+        // `operations` would silently run the `operations` path instead of
+        // hitting the mutual-exclusion error. Expansion re-enters `call`
+        // with `operations` set so the script path reports through the
+        // exact same rich `results[]`/`nodeCount` envelope as a hand-authored
+        // `operations` program.
+        if let Some(result) = expand_script_arg(args) {
+            return match result {
+                Ok(forwarded) => self.call(&forwarded),
+                Err(outcome) => outcome,
+            };
+        }
         let Some(operations) = args.get("operations") else {
             // nodes_json (a Rust convenience) / missing → flat dispatch.
             return dispatch_batch_design(args, None);
@@ -148,13 +163,17 @@ impl BatchDesign {
             )]);
             parent_id = NodeId::NONE;
         }
+        let hoist = super::batch_design::hoist_generation_state(&mut nodes);
         ToolOutcome::OkJsonWithCommand(
             result.to_string(),
-            EditorCommand::InsertAuthoredSubtree {
-                nodes,
-                parent_id,
-                page_id: optional_page_id(args),
-            },
+            super::batch_design::with_hoisted_state(
+                hoist,
+                EditorCommand::InsertAuthoredSubtree {
+                    nodes,
+                    parent_id,
+                    page_id: optional_page_id(args),
+                },
+            ),
         )
     }
 

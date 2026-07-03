@@ -15,6 +15,9 @@ use super::{EditorCommand, ToolErrorCode, ToolOutcome};
 static NEXT_SKELETON_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn dispatch_design_skeleton(args: &BTreeMap<String, String>) -> ToolOutcome {
+    if let Some(err) = reject_script_with_structured_payload(args) {
+        return err;
+    }
     let root_frame = match parse_object_arg(args, "rootFrame") {
         Ok(value) => value,
         Err((code, message)) => return ToolOutcome::Err(code, message),
@@ -98,17 +101,25 @@ pub(crate) fn dispatch_design_skeleton(args: &BTreeMap<String, String>) -> ToolO
             "For each section, call design_content with the sectionId. After content is populated, call design_refine with rootId=\"{root_id}\"."
         ),
     );
+    let mut nodes = vec![root];
+    let hoist = super::batch_design::hoist_generation_state(&mut nodes);
     ToolOutcome::OkWithCommand(
         out,
-        EditorCommand::InsertAuthoredSubtree {
-            nodes: vec![root],
-            parent_id: NodeId::NONE,
-            page_id: optional_page_id(args),
-        },
+        super::batch_design::with_hoisted_state(
+            hoist,
+            EditorCommand::InsertAuthoredSubtree {
+                nodes,
+                parent_id: NodeId::NONE,
+                page_id: optional_page_id(args),
+            },
+        ),
     )
 }
 
 pub(crate) fn dispatch_design_content(args: &BTreeMap<String, String>) -> ToolOutcome {
+    if let Some(err) = reject_script_with_structured_payload(args) {
+        return err;
+    }
     let Some(section_id) = args
         .get("sectionId")
         .or_else(|| args.get("section_id"))
@@ -164,13 +175,17 @@ pub(crate) fn dispatch_design_content(args: &BTreeMap<String, String>) -> ToolOu
     out.insert("warnings".into(), warnings_json);
     out.insert("postProcessed".into(), post_processed.to_string());
     out.insert("postProcessFixes".into(), post_process_fixes.to_string());
+    let hoist = super::batch_design::hoist_generation_state(&mut parsed.nodes);
     ToolOutcome::OkWithCommand(
         out,
-        EditorCommand::InsertSubtree {
-            nodes: parsed.nodes,
-            parent_id: NodeId::new(section_id.to_string()),
-            page_id: optional_page_id(args),
-        },
+        super::batch_design::with_hoisted_state(
+            hoist,
+            EditorCommand::InsertSubtree {
+                nodes: parsed.nodes,
+                parent_id: NodeId::new(section_id.to_string()),
+                page_id: optional_page_id(args),
+            },
+        ),
     )
 }
 
@@ -211,6 +226,27 @@ pub(crate) fn dispatch_design_refine(args: &BTreeMap<String, String>) -> ToolOut
             page_id: optional_page_id(args),
         },
     )
+}
+
+/// `script` is a `batch_design`-only shorthand expanded by
+/// `batch_design::expand_script_arg` before the flat-dispatch path ever runs.
+/// The structured phase-tool branches (TS-shaped `rootFrame`+`sections` /
+/// `sectionId`+`children` / `rootId`) route straight here without going
+/// through `expand_script_arg`, so a call carrying BOTH a structured payload
+/// AND `script` would otherwise silently ignore `script` instead of erroring
+/// like `batch_design` does. Reject the combination outright — this check is
+/// about arg shape, not script expansion, so it applies regardless of the
+/// `script` cargo feature.
+pub(crate) fn reject_script_with_structured_payload(
+    args: &BTreeMap<String, String>,
+) -> Option<ToolOutcome> {
+    if args.contains_key("script") {
+        return Some(ToolOutcome::Err(
+            ToolErrorCode::InvalidArgument,
+            "script cannot be combined with the structured payload; use script alone or the structured keys alone".into(),
+        ));
+    }
+    None
 }
 
 fn parse_object_arg(
