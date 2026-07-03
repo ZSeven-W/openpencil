@@ -134,7 +134,7 @@ mod sprite_tests {
 
     fn frame_with_child(frame_id: &str, child_id: &str, x: f32) -> SceneNode {
         let mut child = SceneNode::leaf(child_id, NodeKind::Rect);
-        child.bounds = Rect::xywh(x + 20.0, 40.0, 40.0, 40.0);
+        child.bounds = Rect::xywh(x + 10.0, 30.0, 60.0, 60.0);
         let mut frame = SceneNode::leaf(frame_id, NodeKind::Frame);
         frame.bounds = Rect::xywh(x, 20.0, 200.0, 300.0);
         frame.children = vec![child];
@@ -146,6 +146,37 @@ mod sprite_tests {
             color: color.to_string(),
             name: name.to_string(),
         }
+    }
+
+    fn frame_with_children(frame_id: &str, child_ids: &[&str]) -> SceneNode {
+        let mut frame = SceneNode::leaf(frame_id, NodeKind::Frame);
+        frame.bounds = Rect::xywh(10.0, 20.0, 240.0, 180.0);
+        frame.children = child_ids
+            .iter()
+            .enumerate()
+            .map(|(idx, id)| {
+                let mut child = SceneNode::leaf(*id, NodeKind::Rect);
+                child.bounds = Rect::xywh(30.0 + idx as f32 * 52.0, 48.0, 44.0, 44.0);
+                child
+            })
+            .collect();
+        frame
+    }
+
+    fn root_with_leaf_children(child_ids: &[&str], size: f32) -> SceneNode {
+        let mut root = SceneNode::leaf("root", NodeKind::Frame);
+        root.bounds = Rect::xywh(0.0, 0.0, 640.0, 160.0);
+        root.children = child_ids
+            .iter()
+            .enumerate()
+            .map(|(idx, id)| {
+                let mut child = SceneNode::leaf(*id, NodeKind::Rect);
+                child.bounds.origin = Point2D::new(20.0 + idx as f32 * 90.0, 40.0);
+                child.bounds.size = Point2D::new(size, size);
+                child
+            })
+            .collect();
+        root
     }
 
     #[test]
@@ -165,9 +196,9 @@ mod sprite_tests {
             .current_rect
             .expect("started reveal is the current element");
         assert!(
-            (rect.origin.x - 20.0).abs() < 0.01
-                && (rect.origin.y - 40.0).abs() < 0.01
-                && (rect.size.x - 40.0).abs() < 0.01,
+            (rect.origin.x - 10.0).abs() < 0.01
+                && (rect.origin.y - 30.0).abs() < 0.01
+                && (rect.size.x - 60.0).abs() < 0.01,
             "breathing border targets the current element's screen rect"
         );
     }
@@ -191,9 +222,9 @@ mod sprite_tests {
         );
         let rect = sprites[0].current_rect.expect("current element rect");
         assert!(
-            (rect.origin.x - 140.0).abs() < 0.01
-                && (rect.origin.y - 130.0).abs() < 0.01
-                && (rect.size.x - 80.0).abs() < 0.01,
+            (rect.origin.x - 120.0).abs() < 0.01
+                && (rect.origin.y - 110.0).abs() < 0.01
+                && (rect.size.x - 120.0).abs() < 0.01,
             "border rect folds in pan + zoom"
         );
     }
@@ -221,10 +252,73 @@ mod sprite_tests {
     }
 
     #[test]
+    fn revealed_parent_suppresses_child_waypoints_in_same_window() {
+        let roots = vec![frame_with_children("section", &["a", "b", "c"])];
+        let mut ind = AgentIndicators::default();
+        ind.frames.insert("section".into(), tag("#4ECDC4", "Mochi"));
+        ind.reveals.insert("section".into(), 1_000);
+        ind.reveals.insert("a".into(), 1_010);
+        ind.reveals.insert("b".into(), 1_020);
+        ind.reveals.insert("c".into(), 1_030);
+
+        let sprites = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 1_030);
+
+        assert_eq!(sprites.len(), 1);
+        let rect = sprites[0].current_rect.expect("parent waypoint is current");
+        assert!(
+            (rect.origin.x - 10.0).abs() < 0.01
+                && (rect.origin.y - 20.0).abs() < 0.01
+                && (rect.size.x - 240.0).abs() < 0.01,
+            "cursor should park on the revealed section while children pop in"
+        );
+    }
+
+    #[test]
+    fn dense_leaf_reveals_coalesce_to_last_dwell_waypoint() {
+        let ids = ["a", "b", "c", "d", "e"];
+        let roots = vec![root_with_leaf_children(&ids, 60.0)];
+        let mut ind = AgentIndicators::default();
+        for (idx, id) in ids.iter().enumerate() {
+            ind.reveals.insert((*id).into(), 1_000 + idx as u64 * 50);
+        }
+
+        let sprites = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 1_000);
+
+        assert_eq!(sprites.len(), 1);
+        assert!(
+            sprites[0].current_rect.is_none(),
+            "coalesced dwell window should still be entering toward the last waypoint"
+        );
+        assert!(
+            sprites[0].pos.x > 350.0,
+            "cursor should aim at the last dense waypoint, not the first"
+        );
+    }
+
+    #[test]
+    fn standalone_large_reveal_keeps_waypoint_but_tiny_reveal_does_not() {
+        let large_roots = vec![root_with_leaf_children(&["card"], 60.0)];
+        let mut large = AgentIndicators::default();
+        large.reveals.insert("card".into(), 1_000);
+        let large_sprites = cursor_sprites(&large_roots, &large, Point2D::ZERO, 1.0, 1_000);
+        assert_eq!(large_sprites.len(), 1);
+        assert!(large_sprites[0].current_rect.is_some());
+
+        let tiny_roots = vec![root_with_leaf_children(&["dot"], 12.0)];
+        let mut tiny = AgentIndicators::default();
+        tiny.reveals.insert("dot".into(), 1_000);
+        let tiny_sprites = cursor_sprites(&tiny_roots, &tiny, Point2D::ZERO, 1.0, 1_000);
+        assert!(
+            tiny_sprites.is_empty(),
+            "standalone tiny reveals animate normally but do not get cursor waypoints"
+        );
+    }
+
+    #[test]
     fn current_rect_tracks_latest_started_element() {
         let mut frame = frame_with_child("f1", "c1", 0.0);
         let mut second = SceneNode::leaf("c2", NodeKind::Rect);
-        second.bounds = Rect::xywh(120.0, 40.0, 40.0, 40.0);
+        second.bounds = Rect::xywh(110.0, 30.0, 60.0, 60.0);
         frame.children.push(second);
         let roots = vec![frame];
         let mut ind = AgentIndicators::default();
@@ -234,13 +328,13 @@ mod sprite_tests {
         assert_eq!(flying.len(), 1, "same agent keeps a single cursor");
         let rect = flying[0].current_rect.expect("current rect mid-flight");
         assert!(
-            (rect.origin.x - 20.0).abs() < 0.01,
+            (rect.origin.x - 10.0).abs() < 0.01,
             "border stays on the departed element until the next one starts"
         );
         let arrived = cursor_sprites(&roots, &ind, Point2D::new(0.0, 0.0), 1.0, 1_300);
         let rect = arrived[0].current_rect.expect("current rect at arrival");
         assert!(
-            (rect.origin.x - 120.0).abs() < 0.01,
+            (rect.origin.x - 110.0).abs() < 0.01,
             "border hands off to the newly started element at its reveal instant"
         );
     }
@@ -298,7 +392,7 @@ mod paint_tests {
 
     fn scene() -> Vec<SceneNode> {
         let mut child = SceneNode::leaf("c1", NodeKind::Rect);
-        child.bounds = Rect::xywh(20.0, 40.0, 40.0, 40.0);
+        child.bounds = Rect::xywh(10.0, 30.0, 60.0, 60.0);
         let mut frame = SceneNode::leaf("f1", NodeKind::Frame);
         frame.bounds = Rect::xywh(0.0, 20.0, 200.0, 300.0);
         frame.children = vec![child];
@@ -345,7 +439,7 @@ mod paint_tests {
         );
         let (rect, border_color, _) = &backend.round_strokes[0];
         assert!(
-            (rect.origin.x - 20.0).abs() < 0.01 && (rect.origin.y - 40.0).abs() < 0.01,
+            (rect.origin.x - 10.0).abs() < 0.01 && (rect.origin.y - 30.0).abs() < 0.01,
             "border wraps the current element"
         );
         assert!(

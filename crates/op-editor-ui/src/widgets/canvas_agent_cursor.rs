@@ -22,6 +22,9 @@ use op_editor_core::agent_indicators::{AgentIndicators, AgentTag};
 
 /// Longest single flight; longer waypoint gaps depart late, arrive on time.
 const MAX_FLIGHT_MS: u64 = 350;
+/// Minimum time between cursor stops; denser waypoints collapse to the
+/// last placement in the dwell window.
+const DWELL_MS: u64 = 280;
 /// Fade-in slide duration before a queue's first waypoint.
 const ENTRY_MS: u64 = 250;
 /// Where the entry slide starts, relative to the first waypoint (screen px).
@@ -38,6 +41,9 @@ const FALLBACK_COLOR: Color = Color {
     b: 0.419,
     a: 1.0,
 };
+/// Tiny standalone leaves still reveal, but the cursor does not chase
+/// them. The threshold is in document-space square pixels.
+const MIN_STANDALONE_WAYPOINT_AREA: f32 = 2_000.0;
 
 /// Classic arrow-pointer silhouette, tip at the origin pointing up-left,
 /// in screen px (zoom-independent). Filled with the agent colour and
@@ -161,6 +167,12 @@ pub(crate) fn cursor_kinematics(waypoints: &[Waypoint], now_ms: u64) -> Option<K
 /// each group carries its tag plus `(node id, waypoint)` pairs.
 type AgentGroups = HashMap<Option<(String, String)>, (Option<AgentTag>, Vec<(String, Waypoint)>)>;
 
+struct CollectWaypointCx<'a> {
+    indicators: &'a AgentIndicators,
+    viewport_origin: Point2D,
+    zoom: f32,
+}
+
 /// One agent's cursor, fully resolved for painting this frame.
 #[derive(Debug, Clone)]
 pub(crate) struct CursorSprite {
@@ -179,30 +191,37 @@ pub(crate) struct CursorSprite {
 /// the snapshot has been located.
 fn collect_waypoints(
     node: &SceneNode,
-    indicators: &AgentIndicators,
+    cx: &CollectWaypointCx<'_>,
     inherited: Option<&AgentTag>,
-    viewport_origin: Point2D,
-    zoom: f32,
+    revealed_ancestor_start_ms: Option<u64>,
     remaining: &mut usize,
     out: &mut Vec<(Option<AgentTag>, String, Waypoint)>,
 ) {
     if *remaining == 0 {
         return;
     }
-    let tag = indicators
+    let tag = cx
+        .indicators
         .nodes
         .get(&node.id)
-        .or_else(|| indicators.frames.get(&node.id))
+        .or_else(|| cx.indicators.frames.get(&node.id))
         .or(inherited);
-    if let Some(start_ms) = indicators.reveals.get(&node.id).copied() {
+    let reveal_start_ms = cx.indicators.reveals.get(&node.id).copied();
+    if let Some(start_ms) = reveal_start_ms {
         *remaining -= 1;
+        let suppressed_by_ancestor = revealed_ancestor_start_ms
+            .is_some_and(|ancestor_start| ancestor_start <= start_ms + DWELL_MS);
         let b = node.aggregate_bounds();
-        if b.size.x > 0.0 && b.size.y > 0.0 {
+        let area = b.size.x * b.size.y;
+        let standalone_tiny_leaf = node.children.is_empty()
+            && revealed_ancestor_start_ms.is_none()
+            && area < MIN_STANDALONE_WAYPOINT_AREA;
+        if !suppressed_by_ancestor && !standalone_tiny_leaf && b.size.x > 0.0 && b.size.y > 0.0 {
             let rect = Rect::xywh(
-                viewport_origin.x + b.origin.x * zoom,
-                viewport_origin.y + b.origin.y * zoom,
-                b.size.x * zoom,
-                b.size.y * zoom,
+                cx.viewport_origin.x + b.origin.x * cx.zoom,
+                cx.viewport_origin.y + b.origin.y * cx.zoom,
+                b.size.x * cx.zoom,
+                b.size.y * cx.zoom,
             );
             let pos = Point2D::new(
                 rect.origin.x + rect.size.x / 2.0,
@@ -219,13 +238,18 @@ fn collect_waypoints(
             ));
         }
     }
+    let child_revealed_ancestor_start_ms = match (revealed_ancestor_start_ms, reveal_start_ms) {
+        (Some(existing), Some(current)) => Some(existing.min(current)),
+        (Some(existing), None) => Some(existing),
+        (None, Some(current)) => Some(current),
+        (None, None) => None,
+    };
     for child in &node.children {
         collect_waypoints(
             child,
-            indicators,
+            cx,
             tag,
-            viewport_origin,
-            zoom,
+            child_revealed_ancestor_start_ms,
             remaining,
             out,
         );
@@ -233,6 +257,20 @@ fn collect_waypoints(
             break;
         }
     }
+}
+
+fn coalesce_dwell_waypoints(placements: Vec<(String, Waypoint)>) -> Vec<(String, Waypoint)> {
+    let mut coalesced: Vec<(String, Waypoint)> = Vec::new();
+    for placement in placements {
+        if let Some((_, previous)) = coalesced.last() {
+            if placement.1.start_ms.saturating_sub(previous.start_ms) < DWELL_MS {
+                *coalesced.last_mut().expect("last checked above") = placement;
+                continue;
+            }
+        }
+        coalesced.push(placement);
+    }
+    coalesced
 }
 
 /// Resolve every agent's cursor for this frame. Pure: same scene +
@@ -249,16 +287,13 @@ pub(crate) fn cursor_sprites(
     }
     let mut remaining = indicators.reveals.len();
     let mut tagged: Vec<(Option<AgentTag>, String, Waypoint)> = Vec::new();
+    let collect_cx = CollectWaypointCx {
+        indicators,
+        viewport_origin,
+        zoom,
+    };
     for root in roots {
-        collect_waypoints(
-            root,
-            indicators,
-            None,
-            viewport_origin,
-            zoom,
-            &mut remaining,
-            &mut tagged,
-        );
+        collect_waypoints(root, &collect_cx, None, None, &mut remaining, &mut tagged);
         if remaining == 0 {
             break;
         }
@@ -281,7 +316,10 @@ pub(crate) fn cursor_sprites(
     let mut sprites = Vec::new();
     for (_, (tag, mut placements)) in ordered {
         placements.sort_by(|a, b| a.1.start_ms.cmp(&b.1.start_ms).then_with(|| a.0.cmp(&b.0)));
-        let waypoints: Vec<Waypoint> = placements.into_iter().map(|(_, wp)| wp).collect();
+        let waypoints: Vec<Waypoint> = coalesce_dwell_waypoints(placements)
+            .into_iter()
+            .map(|(_, wp)| wp)
+            .collect();
         let Some(kin) = cursor_kinematics(&waypoints, now_ms) else {
             continue;
         };
