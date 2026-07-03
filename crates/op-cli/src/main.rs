@@ -463,8 +463,14 @@ fn map_design_like(
 ) -> Result<Command, String> {
     let raw = resolve_arg(payload.map(String::as_str))?;
     let trimmed = raw.trim();
+    let script_requested = flags.contains_key("script")
+        || payload.map(String::as_str).is_some_and(|p| {
+            p.starts_with('@') && (p.ends_with(".js") || p.ends_with(".mjs"))
+        });
     let mut pairs = Vec::new();
-    if trimmed.starts_with('[') {
+    if script_requested {
+        pairs.push(pair("script", trimmed));
+    } else if trimmed.starts_with('[') {
         pairs.push(pair("nodes_json", trimmed));
     } else {
         pairs.push(pair("operations", trimmed));
