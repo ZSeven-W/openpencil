@@ -99,6 +99,12 @@ impl DesktopApp {
         // the connect probe is also a re-discovery (a CLI installed
         // mid-session no longer needs an app restart). Stable sort
         // keeps the catalog grouped in `AgentProvider::ALL` order.
+        //
+        // The retain stays INSIDE the success branch on purpose: a
+        // transient probe failure must not wipe the provider's models
+        // out of the picker (measured: "New Chat" showed "No models
+        // connected" after one flaky probe). A stale-but-listed model
+        // fails loudly at send time, which beats an empty picker.
         if connected && !models.is_empty() {
             es.chat.discovered_models.retain(|m| m.provider != provider);
             es.chat
@@ -145,6 +151,8 @@ mod tests {
         es.editor_ui.agent_settings.connected = [false; 5];
         es.editor_ui.agent_settings.provider_connection = Default::default();
         es.editor_ui.agent_settings.pending_provider_connect = None;
+        es.editor_ui.agent_settings.builtin_agents.clear();
+        es.editor_ui.agent_settings.acp_agents.clear();
         es.chat.discovered_models.clear();
         es.rebuild_chat_models();
     }
