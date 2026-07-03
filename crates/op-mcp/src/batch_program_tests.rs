@@ -495,3 +495,86 @@ fn empty_stroke_array_is_tolerated_as_no_stroke() {
         op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&id)).is_some()
     );
 }
+
+/// Count nodes named `name` anywhere in the forest.
+fn count_named(nodes: &[jian_ops_schema::node::PenNode], name: &str) -> usize {
+    nodes
+        .iter()
+        .map(|n| {
+            let own = usize::from(n.base().name.as_deref() == Some(name));
+            own + n.children().map(|c| count_named(c, name)).unwrap_or(0)
+        })
+        .sum()
+}
+
+#[test]
+fn redrafted_binding_converges_to_the_last_draft() {
+    // A weak model deliberating in-channel re-emits its section several times
+    // ("Let me redo…") with the SAME binding, parent, type, and name — one
+    // minimax-m3 response stacked SEVEN navbars this way. The re-insert must
+    // supersede the earlier draft, not sibling it.
+    let mut state = sample();
+    let program = concat!(
+        "nav=I(\"n10\", {\"type\":\"frame\",\"name\":\"Nav\",\"layout\":\"horizontal\",\"children\":[{\"type\":\"text\",\"name\":\"Brand\",\"content\":\"draft one\"}]})\n",
+        "nav=I(\"n10\", {\"type\":\"frame\",\"name\":\"Nav\",\"layout\":\"horizontal\",\"children\":[{\"type\":\"text\",\"name\":\"Brand\",\"content\":\"draft two\"},{\"type\":\"text\",\"name\":\"Links\",\"content\":\"Features\"}]})"
+    );
+    let (envelope, cmd) = call_operations(&state, program);
+    assert!(envelope.get("errors").is_none(), "{envelope}");
+    assert!(state.apply(cmd.expect("command")));
+    assert_eq!(
+        count_named(state.active_children(), "Nav"),
+        1,
+        "the redraft must replace draft one"
+    );
+    // The survivor is the LAST draft (two children, updated copy).
+    assert_eq!(count_named(state.active_children(), "Links"), 1);
+}
+
+#[test]
+fn scratch_binding_reuse_under_different_parents_keeps_both_nodes() {
+    // Lazy binding reuse is NOT a redraft: `t=I(cardA, …)` then
+    // `t=I(cardB, …)` targets different parents — both must survive.
+    let mut state = sample();
+    let program = concat!(
+        "a=I(\"n10\", {\"type\":\"frame\",\"name\":\"Card A\",\"layout\":\"vertical\"})\n",
+        "b=I(\"n10\", {\"type\":\"frame\",\"name\":\"Card B\",\"layout\":\"vertical\"})\n",
+        "t=I(a, {\"type\":\"text\",\"name\":\"Label\",\"content\":\"one\"})\n",
+        "t=I(b, {\"type\":\"text\",\"name\":\"Label\",\"content\":\"two\"})"
+    );
+    let (envelope, cmd) = call_operations(&state, program);
+    assert!(envelope.get("errors").is_none(), "{envelope}");
+    assert!(state.apply(cmd.expect("command")));
+    assert_eq!(
+        count_named(state.active_children(), "Label"),
+        2,
+        "different parents → both scratch inserts survive"
+    );
+}
+
+#[test]
+fn children_after_a_redraft_attach_to_the_new_draft() {
+    // Draft 1 inserts nav + a child under it; draft 2 re-emits nav (deleting
+    // draft 1's subtree INCLUDING the child), then re-emits the child whose
+    // previous node is already gone — the stale-binding delete must be a
+    // no-op and the child must land under the NEW nav.
+    let mut state = sample();
+    let program = concat!(
+        "nav=I(\"n10\", {\"type\":\"frame\",\"name\":\"Nav\",\"layout\":\"vertical\"})\n",
+        "u=I(nav, {\"type\":\"frame\",\"name\":\"Utility\",\"layout\":\"horizontal\"})\n",
+        "nav=I(\"n10\", {\"type\":\"frame\",\"name\":\"Nav\",\"layout\":\"vertical\"})\n",
+        "u=I(nav, {\"type\":\"frame\",\"name\":\"Utility\",\"layout\":\"horizontal\"})"
+    );
+    let (envelope, cmd) = call_operations(&state, program);
+    assert!(envelope.get("errors").is_none(), "{envelope}");
+    assert!(state.apply(cmd.expect("command")));
+    assert_eq!(count_named(state.active_children(), "Nav"), 1);
+    assert_eq!(count_named(state.active_children(), "Utility"), 1);
+    let nav_id = binding_id(&envelope, "nav");
+    let nav = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&nav_id))
+        .expect("final nav");
+    assert_eq!(
+        nav.children().map(|c| c.len()).unwrap_or(0),
+        1,
+        "utility must nest under the final draft"
+    );
+}
