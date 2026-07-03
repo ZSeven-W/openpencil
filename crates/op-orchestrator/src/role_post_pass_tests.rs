@@ -1250,3 +1250,88 @@ fn post_pass_forest_round_trips_and_fills_orphan_card() {
         "orphan card inside an unfilled section root gets a white fill"
     );
 }
+
+#[test]
+fn text_token_container_fill_flips_to_surface_with_its_dark_text() {
+    // ATELIER's verbatim slot error: a search pill filled with
+    // `$color-text-primary` (white capsule on the dark theme), its
+    // placeholder styled #404040 FOR that accidental white. The container
+    // flips to the surface slot; the dark literal text joins the ladder.
+    let mut nodes: Vec<jian_ops_schema::node::PenNode> = vec![serde_json::from_value(json!({
+        "type":"frame","id":"pill","name":"Search Container","layout":"horizontal","cornerRadius":8,
+        "fill":[{"type":"solid","color":"$color-text-primary"}],
+        "children":[
+            {"type":"text","id":"ph","content":"Search clients...","fill":[{"type":"solid","color":"#404040"}]},
+            {"type":"text","id":"gold","content":"FILTER","fill":[{"type":"solid","color":"$color-accent"}]}
+        ]
+    }))
+    .unwrap()];
+    enforce_surface_color_discipline(&mut nodes);
+    let v = serde_json::to_value(&nodes[0]).unwrap();
+    assert_eq!(
+        v["fill"][0]["color"].as_str(),
+        Some("$color-surface-2"),
+        "container fill rebound to the surface slot: {v}"
+    );
+    assert_eq!(
+        v["children"][0]["fill"][0]["color"].as_str(),
+        Some("$color-text-muted"),
+        "dark literal placeholder joins the text ladder"
+    );
+    assert_eq!(
+        v["children"][1]["fill"][0]["color"].as_str(),
+        Some("$color-accent"),
+        "token-bound text is left alone"
+    );
+}
+
+#[test]
+fn text_nodes_keep_text_tokens() {
+    // The rule targets CONTAINERS — a text node filled with a text token is
+    // exactly right and must not be touched.
+    let mut nodes: Vec<jian_ops_schema::node::PenNode> = vec![serde_json::from_value(json!({
+        "type":"text","id":"t","content":"Heading",
+        "fill":[{"type":"solid","color":"$color-text-primary"}]
+    }))
+    .unwrap()];
+    enforce_surface_color_discipline(&mut nodes);
+    let v = serde_json::to_value(&nodes[0]).unwrap();
+    assert_eq!(v["fill"][0]["color"].as_str(), Some("$color-text-primary"));
+}
+
+#[test]
+fn count_badge_without_radius_becomes_a_pill() {
+    let mut nodes: Vec<jian_ops_schema::node::PenNode> = vec![serde_json::from_value(json!({
+        "type":"frame","id":"badge","layout":"horizontal","padding":[3,8],
+        "fill":[{"type":"solid","color":"#C9A96220"}],
+        "children":[{"type":"text","id":"n","content":"12","fontSize":11}]
+    }))
+    .unwrap()];
+    enforce_surface_color_discipline(&mut nodes);
+    let v = serde_json::to_value(&nodes[0]).unwrap();
+    assert_eq!(v["cornerRadius"].as_f64(), Some(100.0), "{v}");
+}
+
+#[test]
+fn authored_radius_and_word_chips_stay() {
+    // cornerRadius 0 (sharp luxury) is a decision; a WORD chip ("VIP") is
+    // not a count badge.
+    let sharp: jian_ops_schema::node::PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"b1","layout":"horizontal","cornerRadius":0,"padding":[3,8],
+        "fill":[{"type":"solid","color":"#C9A96220"}],
+        "children":[{"type":"text","id":"n1","content":"12"}]
+    }))
+    .unwrap();
+    let word: jian_ops_schema::node::PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"b2","layout":"horizontal","padding":[3,8],
+        "fill":[{"type":"solid","color":"#22C55E18"}],
+        "children":[{"type":"text","id":"n2","content":"VIP"}]
+    }))
+    .unwrap();
+    let mut nodes = vec![sharp, word];
+    enforce_surface_color_discipline(&mut nodes);
+    let v0 = serde_json::to_value(&nodes[0]).unwrap();
+    let v1 = serde_json::to_value(&nodes[1]).unwrap();
+    assert_eq!(v0["cornerRadius"].as_f64(), Some(0.0));
+    assert!(v1.get("cornerRadius").is_none() || v1["cornerRadius"].is_null());
+}
