@@ -321,7 +321,22 @@ fn layout_measure_backend() -> Rc<dyn MeasureBackend> {
 /// root at its own (0, 0), so a tap must subtract the containing root's
 /// authored origin before it reaches `Runtime::dispatch_pointer`.
 pub fn root_authored_origin(n: &PenNode) -> (f32, f32) {
-    let base = match n {
+    let base = pen_base(n);
+    (base.x.unwrap_or(0.0) as f32, base.y.unwrap_or(0.0) as f32)
+}
+
+/// `Some(_)` when the node authored an `x` or `y` — the explicit-absolute
+/// signal `layout_repair`'s flow inference must yield to.
+pub(crate) fn node_base_xy(n: &PenNode) -> Option<(f64, f64)> {
+    let base = pen_base(n);
+    match (base.x, base.y) {
+        (None, None) => None,
+        (x, y) => Some((x.unwrap_or(0.0), y.unwrap_or(0.0))),
+    }
+}
+
+fn pen_base(n: &PenNode) -> &jian_ops_schema::node::base::PenNodeBase {
+    match n {
         PenNode::Frame(f) => &f.base,
         PenNode::Group(g) => &g.base,
         PenNode::Rectangle(r) => &r.base,
@@ -343,8 +358,7 @@ pub fn root_authored_origin(n: &PenNode) -> (f32, f32) {
         PenNode::Image(i) => &i.base,
         PenNode::IconFont(i) => &i.base,
         PenNode::Ref(r) => &r.base,
-    };
-    (base.x.unwrap_or(0.0) as f32, base.y.unwrap_or(0.0) as f32)
+    }
 }
 
 /// Choose the (available_width, available_height) the layout engine

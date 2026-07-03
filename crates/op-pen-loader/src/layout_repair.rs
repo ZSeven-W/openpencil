@@ -46,7 +46,9 @@ fn repair_node(node: &PenNode, rects: &mut BTreeMap<String, [f32; 4]>, is_root: 
             repair_horizontal_container(node, props, kids, rects);
         }
         None | Some(LayoutMode::None)
-            if is_frame(node) && should_infer_horizontal_layout(props, kids) =>
+            if is_frame(node)
+                && should_infer_horizontal_layout(props, kids)
+                && !explicit_absolute_intent(props, kids) =>
         {
             repair_inferred_horizontal_container(node, props, kids, rects);
         }
@@ -435,6 +437,20 @@ fn should_infer_horizontal_layout(props: &ContainerProps, kids: &[PenNode]) -> b
         || props.justify_content.is_some()
         || props.align_items.is_some()
         || kids.iter().any(child_has_fill_container_axis)
+}
+
+/// An EXPLICITLY authored `layout: "none"` whose children carry real x/y is
+/// absolute placement by spec — a badge dot pinned on a bell icon (x:28, y:8
+/// over a 20px icon at 12,12). Models belt-and-suspender these buttons with
+/// justifyContent+alignItems too, which used to trip the flow inference and
+/// stomp taffy's absolute positions (measured: the badge rendered BESIDE the
+/// bell). Legacy TS docs with an ABSENT layout field and stale x/y=0 children
+/// still get the inference — their coordinates are flow debris, not intent.
+fn explicit_absolute_intent(props: &ContainerProps, kids: &[PenNode]) -> bool {
+    matches!(props.layout.as_ref(), Some(LayoutMode::None))
+        && kids
+            .iter()
+            .any(|k| crate::adapter::node_base_xy(k).is_some_and(|(x, y)| x != 0.0 || y != 0.0))
 }
 
 fn inferred_horizontal_padding(node: &PenNode, props: &ContainerProps, kids: &[PenNode]) -> Sides {
