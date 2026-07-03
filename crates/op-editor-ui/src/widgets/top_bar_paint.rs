@@ -165,13 +165,15 @@ impl TopBar {
             (self.theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
-        // Approximate text width; skia textlayout would tell us the
-        // exact pixel width but for Step 4 we don't pull that in.
-        let approx_w = self.file_name.chars().count() as f32 * 9.0;
         let file_x = rect.origin.x + (rect.size.x - self.title_approx_width()) / 2.0;
         cx.backend
             .draw_text(&name, Point2D::new(file_x, center_y + 5.0));
         if self.edited {
+            // Anchor on the MEASURED name width, not the 9px/char estimate:
+            // narrow Latin glyphs paint well under the estimate, which left
+            // a visible dead gap before the marker (measured: ~20px on
+            // "test0703.op"; the reference chrome shows a single space).
+            let name_w = cx.backend.measure_text(&self.file_name, 13.0);
             let edited = TextLayout::single_run(
                 self.label_edited,
                 "system-ui",
@@ -179,10 +181,8 @@ impl TopBar {
                 (self.theme.muted_foreground).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
-            cx.backend.draw_text(
-                &edited,
-                Point2D::new(file_x + approx_w + 8.0, center_y + 4.0),
-            );
+            cx.backend
+                .draw_text(&edited, Point2D::new(file_x + name_w + 6.0, center_y + 4.0));
         }
 
         // Git-panel button just right of the file name (TS GitButton):
