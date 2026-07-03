@@ -741,3 +741,93 @@ fn already_horizontal_shell_gets_fill_height_sidebar() {
         "sidebar height → fill_container so its footer can sink"
     );
 }
+
+#[test]
+fn two_group_sidebar_missing_distribution_gets_the_contract() {
+    // MAISON clients page shape: the model built the correct two-group
+    // anatomy (Top Group + footer-like Bottom Group) inside "Sidebar
+    // Navigation" but forgot height:fill_container + space_between — the
+    // footer floated mid-rail. The two-group arm supplies both.
+    let mut root: PenNode = serde_json::from_value(serde_json::json!({
+        "type":"frame","id":"sb","name":"Sidebar Navigation","layout":"vertical","height":"fit_content","gap":40,
+        "children":[
+            {"type":"frame","id":"top","name":"Top Group","layout":"vertical","children":[
+                {"type":"text","id":"m","content":"MENU"}]},
+            {"type":"frame","id":"bot","name":"Bottom Group","layout":"vertical","children":[
+                {"type":"frame","id":"prof","name":"Stylist Profile","layout":"horizontal","children":[
+                    {"type":"text","id":"nm","content":"Marcus Vance"}]}]}
+        ]
+    }))
+    .expect("valid node");
+    assert!(sink_structured_sidebar_footers(&mut root));
+    let v = serde_json::to_value(&root).unwrap();
+    assert_eq!(v["height"].as_str(), Some("fill_container"), "{v}");
+    assert_eq!(v["justifyContent"].as_str(), Some("space_between"));
+    assert_eq!(
+        v["children"].as_array().unwrap().len(),
+        2,
+        "no spacer injected for the two-group shape"
+    );
+}
+
+#[test]
+fn two_group_sidebar_with_footer_first_is_left_alone() {
+    // Footer-like FIRST child = not the anatomy; don't distribute.
+    let mut root: PenNode = serde_json::from_value(serde_json::json!({
+        "type":"frame","id":"sb","name":"Sidebar","layout":"vertical","height":"fit_content",
+        "children":[
+            {"type":"frame","id":"prof","name":"User Profile","children":[]},
+            {"type":"frame","id":"nav","name":"Nav Group","children":[]}
+        ]
+    }))
+    .expect("valid node");
+    assert!(!sink_structured_sidebar_footers(&mut root));
+}
+
+#[test]
+fn schedule_section_is_evicted_from_the_sidebar() {
+    // Design-loop run parked "Today's Schedule" (+ appointment card) in the
+    // sidebar and rebuilt main WITHOUT deleting it — the eviction gate only
+    // knew table names. Schedule-family names must evict too.
+    let mut root: PenNode = serde_json::from_value(serde_json::json!({
+        "type":"frame","id":"root","name":"Page","layout":"horizontal","children":[
+            {"type":"frame","id":"sb","name":"Sidebar","width":260,"layout":"vertical","children":[
+                {"type":"frame","id":"nav","name":"Nav Group","children":[
+                    {"type":"text","id":"n1","content":"Dashboard"}]},
+                {"type":"frame","id":"sched","name":"Today's Schedule","layout":"vertical","children":[
+                    {"type":"frame","id":"apt1","name":"Appointment Card","children":[
+                        {"type":"text","id":"t1","content":"Alexander Sterling"}]}]}
+            ]},
+            {"type":"frame","id":"mc","name":"Main Content","layout":"vertical","children":[
+                {"type":"frame","id":"kpi","name":"Stats Row","children":[]}
+            ]}
+        ]
+    }))
+    .expect("valid node");
+    assert!(evict_content_from_sidebar_column(&mut root));
+    let v = serde_json::to_value(&root).unwrap();
+    let sb_names: Vec<&str> = v["children"][0]["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["name"].as_str())
+        .collect();
+    let mc_names: Vec<&str> = v["children"][1]["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["name"].as_str())
+        .collect();
+    assert!(
+        !sb_names.iter().any(|n| n.contains("Schedule")),
+        "{sb_names:?}"
+    );
+    assert!(
+        mc_names.iter().any(|n| n.contains("Schedule")),
+        "{mc_names:?}"
+    );
+    assert!(
+        sb_names.iter().any(|n| n.contains("Nav")),
+        "nav stays: {sb_names:?}"
+    );
+}

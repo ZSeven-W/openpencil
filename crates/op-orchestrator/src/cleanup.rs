@@ -744,6 +744,25 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         // "SPEND"+"STATUS" reads as "SPENDSTATUS").
         rid = apply_root_transform(sink, &rid, crate::table_repair::ensure_table_column_gap);
         debug_probe_child_height(sink, &rid, "table_gap");
+        // Row gap on the table CONTAINER (rows already zebra'd / hairlined) →
+        // flush rows, reference-grade rhythm comes from the rows themselves.
+        rid = apply_root_transform(sink, &rid, crate::table_repair::flush_table_row_gap);
+        // Card-level "-35%" tags meant for the image corner → adopt into the
+        // image wrapper as an absolute 8,8 overlay.
+        rid = apply_root_transform(sink, &rid, crate::chip_repair::adopt_corner_badges);
+        // [bell icon, 8px square] flow pairs → round the dot and pin it on
+        // the icon's top-right corner.
+        rid = apply_root_transform(sink, &rid, crate::chip_repair::adopt_notification_dots);
+        debug_probe_child_height(sink, &rid, "table_flush");
+        // Transparent wrapper padding inside an already-padded/gapped column →
+        // double inset: misaligned section edges + starved children (a padded
+        // "Key Metrics" strip squeezed its KPI cards until label touched icon).
+        rid = apply_root_transform(
+            sink,
+            &rid,
+            crate::spacing_repair::strip_wrapper_double_inset,
+        );
+        debug_probe_child_height(sink, &rid, "double_inset");
         // Footer-sink floor: a vertical column that wants to PUSH content apart
         // (justifyContent space_*) or carries a flexible spacer, but hugs its
         // height, gets promoted to fill_container so the footer actually sinks.
@@ -784,6 +803,8 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, rid);
         repair_overbold_text_hierarchy(sink, rid);
         strip_decorative_filled_strokes(sink, rid);
+        crate::radial_repair::repair_radial_stacks(sink, rid);
+        crate::stub_repair::remove_empty_decorated_stubs(sink, rid);
         // Geometry-driven validation LOOP: run the REAL jian layout, detect +
         // fix what the resolved rects prove wrong (table columns overflowing
         // their row, fill containers collapsed to 0 height by a hugging ancestor

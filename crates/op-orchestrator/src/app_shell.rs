@@ -380,9 +380,67 @@ fn try_sink_flat_sidebar_nav(v: &Value) -> bool {
     kids.last().map(is_footer_like).unwrap_or(false)
 }
 
+/// A sidebar wrapper that already HAS the two-group anatomy — EXACTLY
+/// [top group, footer-like bottom group] — but forgot the distribution
+/// contract (`height:fill_container` + `justifyContent:space_between`), so
+/// the footer floats right under the nav instead of sinking (measured: a
+/// "Sidebar Navigation" with a correct Top Group / Bottom Group pair, hug
+/// height, no justifyContent). The 3-children spacer arm can't reach it;
+/// this arm just supplies the missing two properties.
+fn try_sink_two_group_sidebar(v: &Value) -> bool {
+    if !is_sidebar_named(&ident_text(v)) {
+        return false;
+    }
+    if layout_str(v) != Some("vertical") {
+        return false;
+    }
+    if matches!(
+        v.get("justifyContent").and_then(Value::as_str),
+        Some("space_between") | Some("space_around") | Some("space_evenly")
+    ) {
+        return false;
+    }
+    let Some(kids) = v.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    kids.len() == 2 && two_group_footerish(&kids[1]) && !two_group_footerish(&kids[0])
+}
+
+/// Footer-ness for the two-group arm: the bottom group is usually NAMED
+/// "Bottom Group" (not user/profile), with the profile card one level down —
+/// so accept a "bottom"-named group or any DESCENDANT whose name reads as a
+/// user/profile/account card, on top of the plain [`is_footer_like`] check.
+fn two_group_footerish(v: &Value) -> bool {
+    if is_footer_like(v) || ident_text(v).contains("bottom") {
+        return true;
+    }
+    fn descendant_profile_named(v: &Value) -> bool {
+        let t = ident_text(v);
+        if ["user", "profile", "account", "avatar", "member"]
+            .iter()
+            .any(|k| t.contains(k))
+        {
+            return true;
+        }
+        v.get("children")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(descendant_profile_named)
+    }
+    descendant_profile_named(v)
+}
+
 /// Mutating walk: apply the sink to qualifying nodes, recursing into children.
 fn sink_mut(v: &mut Value) -> bool {
     let mut changed = false;
+    if try_sink_two_group_sidebar(v) {
+        if let Some(obj) = v.as_object_mut() {
+            obj.insert("height".into(), json!("fill_container"));
+            obj.insert("justifyContent".into(), json!("space_between"));
+            changed = true;
+        }
+    }
     if try_sink_flat_sidebar_nav(v) {
         let id = v
             .get("id")
@@ -570,6 +628,26 @@ fn is_table_named(t: &str) -> bool {
 fn sidebar_child_is_misplaced_content(v: &Value) -> bool {
     let t = ident_text(v);
     if t.contains("directory") || t.contains("data table") || t.contains("data grid") {
+        return true;
+    }
+    // Content-section names that never belong in a nav rail: a schedule /
+    // appointments / activity block is main-column material (measured: a
+    // design-loop run parked "Today's Schedule" + its appointment cards in
+    // the 260px sidebar, then rebuilt the main column WITHOUT deleting the
+    // misplaced copy — the old name set only knew tables). Nav / brand /
+    // profile / upgrade blocks don't carry these names, so the gate stays
+    // safe for legitimate rail content.
+    if [
+        "schedule",
+        "appointment",
+        "activity",
+        "upcoming",
+        "recent",
+        "timeline",
+    ]
+    .iter()
+    .any(|k| t.contains(k))
+    {
         return true;
     }
     fn walk(v: &Value) -> bool {
