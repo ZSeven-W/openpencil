@@ -18,6 +18,7 @@
 //! `agents_running > 0`, so this module is a no-op for them.
 
 use std::collections::HashSet;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::agent_indicators;
@@ -83,7 +84,7 @@ pub(super) fn pump_indicator(
 ) {
     // Lazy creation when the design loop starts a turn.
     if state.chat.agents_running.0 > 0 && indicator.is_none() {
-        let epoch = agent_indicators::begin();
+        let epoch = agent_indicators::active_epoch().unwrap_or_else(agent_indicators::begin);
         let identities = assign_agent_identities(1);
         let id = identities
             .into_iter()
@@ -111,6 +112,25 @@ pub(super) fn pump_indicator(
             *indicator = None;
         }
     }
+}
+
+/// True when the active design-loop epoch still has scheduled reveals that
+/// should finish before the loop-end structural finalizer rewrites the tree.
+pub(crate) fn reveal_drain_pending_for_active_epoch() -> bool {
+    let Some(epoch) = agent_indicators::active_epoch() else {
+        return false;
+    };
+    let Some(end) = agent_indicators::latest_reveal_end_ms(epoch) else {
+        return false;
+    };
+    reveal_now_millis() < end
+}
+
+fn reveal_now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

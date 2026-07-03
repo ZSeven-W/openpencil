@@ -13,7 +13,9 @@ use op_ai::chat_provider::{ChatProvider, ChatRequest, ThinkingMode};
 use op_editor_host_core::chat::ChatSession;
 use op_editor_host_core::design::DesignSession;
 use op_host_native::WidgetHostNative;
-use op_host_services::chat_builtin_http::ConfiguredBuiltinProvider;
+use op_host_services::chat_builtin_http::{
+    ConfiguredBuiltinProvider, DESIGN_LOOP_MAX_OUTPUT_TOKENS,
+};
 use op_host_services::chat_canvas_tools::{chat_tool_channel, ChatToolRequest};
 use op_host_services::chat_system_prompt::chat_history_from_transcript;
 use op_host_services::design_agent_tools::design_tool_defs;
@@ -127,7 +129,7 @@ fn resolve_design_thinking(model: Option<&str>, chat_default: ThinkingMode) -> T
 /// falls through to the orchestrator path).
 ///
 /// Mirrors `launch_if_pending`'s builtin chat branch but uses the
-/// design toolset and a 16384-token per-turn budget.
+/// design toolset and a section-batch-sized per-turn budget.
 pub(super) fn launch_design_loop_turn(
     host: &mut WidgetHostNative,
     user_text: String,
@@ -161,19 +163,18 @@ pub(super) fn launch_design_loop_turn(
         system_prompt: op_ai_skills::design_agent_system_prompt().to_string(),
         user_message: user_text,
         history,
-        // Per-TURN output cap. The real budget-burner was hidden reasoning, not
-        // the DSL: a glm-5.2 loop run streamed ~94k thinking chars vs ~4k of
-        // actual batch_design, blowing the cap so a turn truncated mid-JSON, its
-        // tool call failed to parse, and the loop stopped early with an
-        // unfinished design. The root fix is at the wire (the loop now sends
-        // thinking:{type:disabled} for glm/minimax); 16384 (up from 8192) is
-        // headroom so a genuinely large section-batch still completes per turn.
-        max_output_tokens: 16384,
+        // Design-loop turns should emit one <=25-op section batch, then wait for
+        // tool feedback. 6144 matches that 4-6k-token batch size and avoids
+        // rewarding monolithic whole-screen tool calls.
+        max_output_tokens: DESIGN_LOOP_MAX_OUTPUT_TOKENS,
         thinking,
         effort,
         attachments,
         model: None,
     };
+    // The host starts the indicator epoch before the worker can apply its first
+    // design batch; the indicator pump adopts this epoch for badges/teardown.
+    op_editor_core::agent_indicators::begin();
     *current_chat = Some(ChatSession::start_with_tools(provider, req, Some(tool_rx)));
     // Signal one agent running so the chat header shows "1/1 designing…"
     // and the canvas indicator pump registers frame glows.

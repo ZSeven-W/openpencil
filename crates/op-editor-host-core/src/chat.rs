@@ -1,5 +1,6 @@
 //! Shared chat turn worker and transcript folding logic.
 
+use std::collections::VecDeque;
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -92,6 +93,7 @@ pub fn chat_tool_channel() -> (UiChatToolExecutor, Receiver<ChatToolRequest>) {
 pub struct ChatSession {
     rx: Receiver<ChatDelta>,
     tool_rx: Option<Receiver<ChatToolRequest>>,
+    deferred_tool_requests: VecDeque<ChatToolRequest>,
     finished: bool,
 }
 
@@ -212,6 +214,7 @@ impl ChatSession {
         Self {
             rx,
             tool_rx,
+            deferred_tool_requests: VecDeque::new(),
             finished: false,
         }
     }
@@ -225,6 +228,7 @@ impl ChatSession {
         Self {
             rx,
             tool_rx,
+            deferred_tool_requests: VecDeque::new(),
             finished: false,
         }
     }
@@ -266,14 +270,18 @@ impl ChatSession {
 
     /// Drain pending host tool requests without blocking.
     pub fn drain_tool_requests(&mut self) -> Vec<ChatToolRequest> {
+        let mut requests: Vec<ChatToolRequest> = self.deferred_tool_requests.drain(..).collect();
         let Some(tool_rx) = self.tool_rx.as_ref() else {
-            return Vec::new();
+            return requests;
         };
-        let mut requests = Vec::new();
         while let Ok(req) = tool_rx.try_recv() {
             requests.push(req);
         }
         requests
+    }
+
+    pub fn defer_tool_request(&mut self, req: ChatToolRequest) {
+        self.deferred_tool_requests.push_back(req);
     }
 
     pub fn finished(&self) -> bool {
