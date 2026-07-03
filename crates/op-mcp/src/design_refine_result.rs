@@ -81,6 +81,9 @@ impl DesignRefine {
     /// the root (the same `refine_subtree` the host apply runs), then return it
     /// alongside the real `RefineDesign` command for the host to apply.
     fn refine_with_result(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        if let Some(err) = super::batch_layered::reject_script_with_structured_payload(args) {
+            return err;
+        }
         // Reuse the validated command construction (rootId + canvasWidth parse).
         let command = match dispatch_design_refine(args) {
             ToolOutcome::OkWithCommand(_flat, command) => command,

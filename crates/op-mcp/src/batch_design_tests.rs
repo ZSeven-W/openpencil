@@ -1144,3 +1144,172 @@ fn batch_design_falls_back_to_root_for_phantom_parent_binding() {
         "card nested in row"
     );
 }
+
+#[test]
+fn batch_design_operations_hoists_node_state() {
+    // An I()-program insert whose root frame declares node-level
+    // `state` must yield TWO sibling commands — MergeAppState(unplanned)
+    // then the insert — batched by the program finisher's existing
+    // 0/1/many wrap, with the node's `state` stripped.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Card","width":320,"height":240,"state":{"count":{"type":"int","default":1}}})"##
+            .into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(_, EditorCommand::Batch { commands }) => {
+            assert_eq!(commands.len(), 2);
+            match &commands[0] {
+                EditorCommand::MergeAppState { plan_idx, state } => {
+                    assert_eq!(*plan_idx, usize::MAX);
+                    assert!(state.contains_key("count"));
+                }
+                other => panic!("expected MergeAppState first, got {other:?}"),
+            }
+            match &commands[1] {
+                EditorCommand::InsertAuthoredSubtree { nodes, .. } => {
+                    let v = serde_json::to_value(&nodes[0]).expect("json");
+                    assert!(v.get("state").is_none(), "node state must be stripped");
+                }
+                other => panic!("expected InsertAuthoredSubtree second, got {other:?}"),
+            }
+        }
+        other => panic!("expected Batch command, got {other:?}"),
+    }
+}
+
+#[test]
+fn batch_design_without_node_state_keeps_plain_command() {
+    // No node-level state → the command shape is unchanged (no Batch).
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Plain","width":320,"height":240})"##.into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { .. }) => {}
+        other => panic!("expected plain InsertAuthoredSubtree, got {other:?}"),
+    }
+}
+
+#[test]
+fn batch_design_promotes_radio_group_role() {
+    // Task D2: jian's promote table grew a `radio-group` role (D1) — a
+    // legacy frame marked `role:"radio-group"` must collapse into a real
+    // `radio_group` node through the same operations/I() path, with each
+    // visible text child becoming an option.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"rg=I(null, {"type":"frame","name":"Plan","role":"radio-group","width":200,"height":80,"children":[{"type":"text","content":"Monthly"},{"type":"text","content":"Yearly"}]})"##
+            .into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) => {
+            let v = serde_json::to_value(&nodes[0]).expect("json");
+            assert_eq!(v["type"], "radio_group", "role frame must promote, got {v}");
+        }
+        other => panic!("unexpected outcome: {other:?}"),
+    }
+}
+
+#[test]
+fn insert_node_data_hoists_node_state() {
+    use crate::write_tools::insert_node_snapshot;
+    let tool = insert_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "data".into(),
+        r##"{"type":"frame","name":"Widgetful","width":200,"height":100,"state":{"on":{"type":"bool","default":false}},"children":[{"type":"text","content":"hi"}]}"##
+            .into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::Batch { commands }) => {
+            assert!(matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
+                if *plan_idx == usize::MAX && state.contains_key("on")));
+            assert!(matches!(&commands[1], EditorCommand::InsertSubtree { .. }));
+        }
+        other => panic!("expected Batch command, got {other:?}"),
+    }
+}
+
+#[test]
+fn design_content_hoists_node_state() {
+    use crate::batch_layered::dispatch_design_content;
+    let mut args = BTreeMap::new();
+    args.insert("sectionId".into(), "sec1".into());
+    args.insert(
+        "children".into(),
+        r##"[{"type":"frame","name":"Counter","width":200,"height":100,"state":{"n":{"type":"int","default":0}}}]"##
+            .into(),
+    );
+    match dispatch_design_content(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::Batch { commands }) => {
+            assert!(matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
+                if *plan_idx == usize::MAX && state.contains_key("n")));
+            assert!(matches!(&commands[1], EditorCommand::InsertSubtree { .. }));
+        }
+        other => panic!("expected Batch command, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "script")]
+#[test]
+fn batch_design_script_input_builds_nodes() {
+    let state = op_editor_core::EditorState::new();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert(
+        "script".to_string(),
+        r#"const root = I(null, {type: "frame", name: "S"});
+for (let i = 0; i < 3; i++) { I(root, {type: "text", content: "t" + i}); }"#
+            .to_string(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkJsonWithCommand(json, _cmd) => {
+            assert!(json.contains("\"nodeCount\""), "envelope: {json}");
+        }
+        other => panic!("expected OkJsonWithCommand, got {other:?}"),
+    }
+}
+
+#[cfg(feature = "script")]
+#[test]
+fn batch_design_rejects_script_plus_operations() {
+    let state = op_editor_core::EditorState::new();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert(
+        "script".to_string(),
+        "I(null, {type: \"frame\"});".to_string(),
+    );
+    args.insert(
+        "operations".to_string(),
+        "r=I(null, {\"type\":\"frame\"})".to_string(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::Err(ToolErrorCode::InvalidArgument, msg) => {
+            assert!(msg.contains("only one of"), "msg: {msg}");
+        }
+        other => panic!("expected InvalidArgument, got {other:?}"),
+    }
+}
+
+#[cfg(not(feature = "script"))]
+#[test]
+fn batch_design_script_unavailable_without_feature() {
+    let state = op_editor_core::EditorState::new();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert("script".to_string(), "I(null, {});".to_string());
+    match tool.call(&args) {
+        ToolOutcome::Err(ToolErrorCode::InvalidArgument, msg) => {
+            assert!(msg.contains("script-enabled"), "msg: {msg}");
+        }
+        other => panic!("expected InvalidArgument, got {other:?}"),
+    }
+}
