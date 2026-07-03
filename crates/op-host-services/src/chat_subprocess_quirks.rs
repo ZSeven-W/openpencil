@@ -23,6 +23,19 @@ const CODEX_ENV_ALLOWLIST: &[&str] = &[
     "LANG",
     "SHELL",
     "TMPDIR",
+    // HTTP(S) proxy pass-through: without these the CLI falls back to the
+    // macOS SYSTEM proxy, whose stream-reconnect path codex rejects
+    // ("Invalid proxy configuration: http://127.0.0.1:7897" — measured; a
+    // clash hiccup mid-stream then kills the whole turn). The env proxy is
+    // the path users actually validate in their terminal. `all_proxy`
+    // (socks5) is deliberately NOT forwarded — that scheme is what the
+    // reconnect client chokes on.
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
     // Windows-essential vars
     "SYSTEMROOT",
     "COMSPEC",
