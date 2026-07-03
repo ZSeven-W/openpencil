@@ -1229,8 +1229,10 @@ fn insert_node_data_hoists_node_state() {
     );
     match tool.call(&args) {
         ToolOutcome::OkWithCommand(_, EditorCommand::Batch { commands }) => {
-            assert!(matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
-                if *plan_idx == usize::MAX && state.contains_key("on")));
+            assert!(
+                matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
+                if *plan_idx == usize::MAX && state.contains_key("on"))
+            );
             assert!(matches!(&commands[1], EditorCommand::InsertSubtree { .. }));
         }
         other => panic!("expected Batch command, got {other:?}"),
@@ -1249,8 +1251,10 @@ fn design_content_hoists_node_state() {
     );
     match dispatch_design_content(&args) {
         ToolOutcome::OkWithCommand(_, EditorCommand::Batch { commands }) => {
-            assert!(matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
-                if *plan_idx == usize::MAX && state.contains_key("n")));
+            assert!(
+                matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
+                if *plan_idx == usize::MAX && state.contains_key("n"))
+            );
             assert!(matches!(&commands[1], EditorCommand::InsertSubtree { .. }));
         }
         other => panic!("expected Batch command, got {other:?}"),

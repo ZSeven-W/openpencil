@@ -40,6 +40,18 @@ fn binding_id(envelope: &Value, binding: &str) -> String {
         .to_string()
 }
 
+/// Recursively search a command (unwrapping `Batch`) for a leaked
+/// `MergeAppState` — the regression guard for a failed stateful
+/// `I()`/`R()` line (see `failed_insert_line_does_not_leak_merge_app_state`
+/// / `failed_replace_line_does_not_leak_merge_app_state`).
+fn contains_merge_app_state(cmd: &EditorCommand) -> bool {
+    match cmd {
+        EditorCommand::MergeAppState { .. } => true,
+        EditorCommand::Batch { commands } => commands.iter().any(contains_merge_app_state),
+        _ => false,
+    }
+}
+
 #[test]
 fn mixed_program_executes_all_ops_with_shared_bindings_and_slash_paths() {
     let mut state = sample();
@@ -222,6 +234,122 @@ D("ghost")"##;
     let first = &group.children().expect("children")[0];
     assert_eq!(first.id_str(), new_id, "predicted id must land in place");
     assert_eq!(first.base().name.as_deref(), Some("Swapped"));
+}
+
+#[test]
+fn replace_program_hoists_node_state() {
+    let state = sample();
+    let program = r##"swap=R("n13", {"type":"frame","name":"Counter","width":120,"height":24,"state":{"n":{"type":"int","default":0}}})
+D("ghost")"##;
+    let (envelope, cmd) = call_operations(&state, program);
+    assert!(envelope.get("errors").is_none(), "{envelope}");
+    match cmd.expect("command") {
+        EditorCommand::Batch { commands } => {
+            assert!(
+                matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
+                if *plan_idx == usize::MAX && state.contains_key("n"))
+            );
+            let replacement = commands
+                .iter()
+                .find_map(|c| match c {
+                    EditorCommand::ReplaceSubtree { node, .. } => Some(node),
+                    _ => None,
+                })
+                .expect("ReplaceSubtree in batch");
+            let v = serde_json::to_value(replacement.as_ref()).expect("json");
+            assert!(
+                v.get("state").is_none(),
+                "replacement state must be stripped"
+            );
+        }
+        other => panic!("expected Batch, got {other:?}"),
+    }
+}
+
+#[test]
+fn failed_insert_line_does_not_leak_merge_app_state() {
+    // A stateful `I()` line whose parent doesn't resolve to a container
+    // fails at the `InsertAuthoredSubtree` emit — AFTER the node's
+    // `state` would already have been hoisted. The line's error is
+    // collected and the line dropped (TS best-effort semantics), so its
+    // hoisted `MergeAppState` must never survive into the surviving
+    // command. `U(...)` (rather than a second `I()`) is the second line
+    // so `parse_operations` can't take the single-shot Insert-only fast
+    // path and this program is guaranteed to run through the mixed-DSL
+    // executor (`run_batch_design_program`) this fix targets.
+    let mut state = sample();
+    let program = r##"a=I("nonexistent-parent", {"type":"frame","name":"Ghost","width":100,"height":50,"state":{"n":{"type":"int","default":0}}})
+U("n11", {"name":"Renamed"})"##;
+    let (envelope, cmd) = call_operations(&state, program);
+    let errors = envelope["errors"].as_array().expect("errors present");
+    assert_eq!(errors.len(), 1, "{envelope}");
+    assert!(
+        errors[0]["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("Insert parent not found or not a container"),
+        "{envelope}"
+    );
+    let cmd = cmd.expect("the surviving U() line still emits a command");
+    assert!(
+        !contains_merge_app_state(&cmd),
+        "failed insert line must not leak orphan MergeAppState: {cmd:?}"
+    );
+    assert!(
+        state.apply(cmd),
+        "surviving command must still apply cleanly"
+    );
+}
+
+#[test]
+fn failed_replace_line_does_not_leak_merge_app_state() {
+    // The insert case above fails at the emit (parent-not-container is
+    // only checked inside `InsertAuthoredSubtree`'s apply). A plain
+    // `R("no-such-id", ...)` instead fails EARLIER, in `find_node_by_path`
+    // — before `hoist_generation_state` ever runs — so it can't exercise
+    // the vulnerable emit-ordering window this fix closes. To reach that
+    // window for replace, force the `ReplaceSubtree` emit ITSELF to fail
+    // post-hoist: a `pageId` that resolves to no page. The program's
+    // initial page-pin silently no-ops on the same unresolvable id
+    // (leaving the sim on its real, default active page), so
+    // `find_node_by_path` still finds "n13" and the node's `state` is
+    // hoisted — but the ReplaceSubtree command's own page stamp is then
+    // rejected at apply, reproducing exactly the failure shape codex
+    // flagged for `I()`.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert("pageId".into(), "does-not-exist".into());
+    args.insert(
+        "operations".into(),
+        r##"swap=R("n13", {"type":"frame","name":"Ghost","width":100,"height":50,"state":{"n":{"type":"int","default":0}}})
+D("ghost")"##
+            .into(),
+    );
+    let (envelope, cmd): (Value, Option<EditorCommand>) = match tool.call(&args) {
+        ToolOutcome::OkJson(json) => (serde_json::from_str(&json).expect("json"), None),
+        ToolOutcome::OkJsonWithCommand(json, cmd) => {
+            (serde_json::from_str(&json).expect("json"), Some(cmd))
+        }
+        other => panic!("expected a TS result envelope, got {other:?}"),
+    };
+    let errors = envelope["errors"].as_array().expect("errors present");
+    assert_eq!(errors.len(), 1, "{envelope}");
+    assert!(
+        errors[0]["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("Replace failed for:"),
+        "{envelope}"
+    );
+    // `D("ghost")` is a silent no-op (unknown id), so nothing else could
+    // legitimately contribute a command here — any surviving command
+    // must NOT be (or contain) the orphaned MergeAppState.
+    assert!(
+        cmd.as_ref()
+            .map(|c| !contains_merge_app_state(c))
+            .unwrap_or(true),
+        "failed replace line must not leak orphan MergeAppState: {cmd:?}"
+    );
 }
 
 #[test]

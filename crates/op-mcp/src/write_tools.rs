@@ -268,11 +268,16 @@ fn ts_data_tree_command(
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .map(str::to_string);
-    Ok(Some(EditorCommand::InsertSubtree {
-        nodes: vec![node],
-        parent_id,
-        page_id,
-    }))
+    let mut nodes = vec![node];
+    let hoist = super::batch_design::hoist_generation_state(&mut nodes);
+    Ok(Some(super::batch_design::with_hoisted_state(
+        hoist,
+        EditorCommand::InsertSubtree {
+            nodes,
+            parent_id,
+            page_id,
+        },
+    )))
 }
 
 #[allow(clippy::result_large_err)]
@@ -564,7 +569,7 @@ impl McpTool for ReplaceNode {
             Err(e) => return e,
         };
         match ts_data_tree_node(args) {
-            Ok(Some(node)) => {
+            Ok(Some(mut node)) => {
                 let drop_children = match parse_drop_children_arg(args) {
                     Ok(v) => v,
                     Err(e) => return e,
@@ -578,14 +583,22 @@ impl McpTool for ReplaceNode {
                     .map(str::to_string);
                 let mut out = BTreeMap::new();
                 out.insert("wrote".into(), "true".into());
+                // The replacement is GENERATED node JSON — hoist any
+                // node-level `state` to the document root, same as the
+                // insert paths and batch_program's R().
+                let hoist =
+                    super::batch_design::hoist_generation_state(std::slice::from_mut(&mut node));
                 return ToolOutcome::OkWithCommand(
                     out,
-                    EditorCommand::ReplaceSubtree {
-                        node_id,
-                        node: Box::new(node),
-                        drop_children,
-                        page_id,
-                    },
+                    super::batch_design::with_hoisted_state(
+                        hoist,
+                        EditorCommand::ReplaceSubtree {
+                            node_id,
+                            node: Box::new(node),
+                            drop_children,
+                            page_id,
+                        },
+                    ),
                 );
             }
             Ok(None) => {}

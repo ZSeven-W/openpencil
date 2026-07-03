@@ -132,6 +132,42 @@ fn replace_node_accepts_ts_data_tree_as_subtree() {
 }
 
 #[test]
+fn replace_node_data_hoists_node_state() {
+    // A generated `data` replacement declaring node-level `state` must
+    // hoist it to a doc-root MergeAppState (unplanned priority) and
+    // strip it off the ReplaceSubtree payload — same contract as the
+    // insert paths and batch_program's R().
+    let tool = replace_node_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n11".into());
+    args.insert(
+        "data".into(),
+        r##"{"type":"frame","name":"Counter","width":200,"height":100,"state":{"n":{"type":"int","default":0}},"children":[{"type":"text","content":"hi"}]}"##
+            .into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(_, EditorCommand::Batch { commands }) => {
+            assert_eq!(commands.len(), 2);
+            assert!(
+                matches!(&commands[0], EditorCommand::MergeAppState { plan_idx, state }
+                if *plan_idx == usize::MAX && state.contains_key("n"))
+            );
+            match &commands[1] {
+                EditorCommand::ReplaceSubtree { node, .. } => {
+                    let v = serde_json::to_value(node.as_ref()).expect("json");
+                    assert!(
+                        v.get("state").is_none(),
+                        "replacement state must be stripped"
+                    );
+                }
+                other => panic!("expected ReplaceSubtree second, got {other:?}"),
+            }
+        }
+        other => panic!("expected Batch command, got {other:?}"),
+    }
+}
+
+#[test]
 fn replace_node_preserves_ts_leaf_data_with_extra_fields_as_subtree() {
     let mut args = BTreeMap::new();
     args.insert("nodeId".into(), "n11".into());
