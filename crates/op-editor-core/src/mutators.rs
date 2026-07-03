@@ -264,6 +264,7 @@ impl EditorState {
             selection: self.selection.clone(),
             active_page_index: self.ui.active_page_index,
             components: self.components.clone(),
+            app_state_owner: self.app_state_owner.clone(),
         }
     }
 
@@ -289,6 +290,7 @@ impl EditorState {
         self.selection = snap.selection;
         self.ui.active_page_index = snap.active_page_index;
         self.components = snap.components;
+        self.app_state_owner = snap.app_state_owner;
     }
 
     /// Undo the last change. False when the undo stack is empty.

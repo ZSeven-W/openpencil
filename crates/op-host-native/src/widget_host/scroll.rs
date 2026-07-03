@@ -545,7 +545,7 @@ impl WidgetHostNative {
         // still pan/zoom the canvas while previewing. Runs below the
         // panel/picker guards — they own the wheel over their rects.
         if self.preview.is_some()
-            && self.preview_dispatch_wheel(x, y, delta_y, viewport_width, viewport_height)
+            && self.preview_dispatch_wheel(x, y, 0.0, delta_y, viewport_width, viewport_height)
         {
             return true;
         }
@@ -697,6 +697,17 @@ impl WidgetHostNative {
         // Left-rail LayerPanel — a trackpad pan over it scrolls its
         // Pages / Layers section instead of panning the canvas.
         if self.try_scroll_layer_panel(x, y, dx, dy, viewport_height) {
+            return true;
+        }
+        // Live preview: a two-finger trackpad pan over a node carrying
+        // `events.onScroll` goes to the runtime (same contract as the
+        // `apply_wheel` branch — the desktop runner routes PixelDelta
+        // scrolls here, never through `apply_wheel`); otherwise fall
+        // through so trackpad panning still navigates the canvas
+        // while previewing.
+        if self.preview.is_some()
+            && self.preview_dispatch_wheel(x, y, dx, dy, viewport_width, viewport_height)
+        {
             return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
