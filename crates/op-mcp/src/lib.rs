@@ -62,46 +62,7 @@ pub mod document_save;
 #[cfg(test)]
 mod document_save_tests;
 pub mod editor_state_tool;
-mod element_alias_builders;
-#[cfg(test)]
-mod element_atom_alias_tests;
-mod element_basic_alias_builders;
-mod element_calendar_alias_builders;
-mod element_complex_alias_builders;
-mod element_content_alias_builders;
-mod element_content_alias_support;
-#[cfg(test)]
-mod element_content_alias_tests;
-mod element_feedback_alias_builders;
-#[cfg(test)]
-mod element_feedback_alias_tests;
-mod element_flow_alias_builders;
-#[cfg(test)]
-mod element_flow_alias_tests;
-mod element_input_alias_builders;
-#[cfg(test)]
-mod element_input_alias_tests;
-pub mod element_manifest;
-mod element_misc_alias_builders;
-#[cfg(test)]
-mod element_misc_alias_tests;
-#[cfg(test)]
-mod element_parser_tests;
-mod element_ported_cards_a;
-mod element_ported_cards_b;
-mod element_ported_helpers;
-mod element_ported_inputs;
-mod element_ported_nav;
-mod element_ported_rows_a;
-mod element_ported_rows_b;
-mod element_ported_shells;
 pub mod element_tools;
-#[cfg(test)]
-mod element_tools_parity_tests;
-mod element_ts_schema;
-mod element_visual_alias_builders;
-#[cfg(test)]
-mod element_visual_alias_tests;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;
