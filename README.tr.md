@@ -80,7 +80,7 @@ Claude Code, Codex, Gemini, OpenCode, Kiro veya Copilot CLI'larına tek tıkla k
 
 ### 🖥️ Her Yerde Çalışır
 
-Web uygulaması + Electron ile macOS, Windows ve Linux'ta yerel masaüstü. GitHub Releases'ten otomatik güncelleme. `.op` dosya ilişkilendirmesi — açmak için çift tıklayın.
+Web uygulaması + macOS, Windows ve Linux'ta yerel masaüstü — tek bir Rust çekirdeği, tek bir bağımsız ikili, tarayıcı motoru yok. `.op` dosya ilişkilendirmesi — açmak için çift tıklayın.
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **MCP Sunucusu**
 
-- Yerleşik MCP sunucusu — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI'larına tek tıkla kurulum
-- Otomatik Node.js algılama — kurulu değilse otomatik olarak HTTP aktarımına geçer ve MCP HTTP sunucusunu otomatik başlatır
+- Yerleşik MCP sunucusu (`op-mcp` crate) — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI'larına tek tıkla kurulum
+- Node.js gerekmez — masaüstü ikili dosyası aracılığıyla stdio aktarımı (`--mcp <path>`), ayrıca çalışan uygulamadan canlı bir HTTP uç noktası (`127.0.0.1:<port>/mcp`)
 - Terminalden tasarım otomasyonu: herhangi bir MCP uyumlu ajan aracılığıyla `.op` dosyalarını okuyun, oluşturun ve düzenleyin
 - **Katmanlı tasarım iş akışı** — daha yüksek kaliteli çok bölümlü tasarımlar için `design_skeleton` → `design_content` → `design_refine`
 - **Bölümlenmiş prompt alımı** — yalnızca ihtiyacınız olan tasarım bilgisini yükleyin (şema, düzen, roller, simgeler, planlama vb.)
@@ -275,31 +275,32 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 
 **Masaüstü Uygulaması**
 
-- Electron aracılığıyla yerel macOS, Windows ve Linux desteği
+- Yerel macOS, Windows ve Linux desteği — tek bir bağımsız ikili (winit + GPU Skia, Electron yok)
 - `.op` dosya ilişkilendirmesi — açmak için çift tıklayın, tekli örnek kilidi
-- GitHub Releases'ten otomatik güncelleme
+- GitHub Releases'e karşı arka planda güncelleme kontrolü
 - Farklı Kaydet, Son Kullanılanları Aç ve kapatırken kaydedilmemiş değişiklikler iletişim kutusu içeren yerel uygulama menüsü
 - Son kullanılan dosyaların kalıcılığı
 
 ## Teknoloji Yığını
 
-|                    |                                                                                  |
-| ------------------ | -------------------------------------------------------------------------------- |
-| **Ön Uç**          | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **Kanvas**         | CanvasKit/Skia (WASM, GPU hızlandırmalı)                                         |
-| **Durum Yönetimi** | Zustand v5                                                                       |
-| **Sunucu**         | Nitro                                                                            |
-| **Masaüstü**       | Electron 35                                                                      |
-| **CLI**            | `op` — terminal kontrolü, toplu tasarım DSL                                      |
-| **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Çalışma Ortamı** | Bun · Vite 7                                                                     |
-| **Dosya Formatı**  | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu                     |
+|                         |                                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| **Çekirdek**            | Rust çalışma alanı (`crates/`) — editör durumu, widget'lar, host'lar, MCP, AI, codegen |
+| **Görüntü İşleme**      | Her yerde GPU Skia — yerelde `skia-safe` (GL), tarayıcıda CanvasKit (WASM/WebGL2) |
+| **Arayüz Araç Seti**    | jian — vendored Rust widget/render/event araç seti (`vendor/jian`)               |
+| **Pencere Yönetimi**    | winit (vendored `casement` çatalı)                                               |
+| **Masaüstü**            | Yerel ikili `openpencil-desktop` — tarayıcı motoru yok                           |
+| **Web SDK**             | `op-web-sdk` + React 19 / Vue 3 adaptörleri — salt okunur `.op` görüntüleyici (TypeScript) |
+| **CLI**                 | `op` — terminal kontrolü, toplu tasarım DSL                                      |
+| **AI**                  | Yerleşik Rust ajan çalışma ortamı · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Lint**                | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                               |
+| **Dosya Formatı**       | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu                     |
 
 ## Neden Rust
 
-OpenPencil, sıfırdan **Rust** ile yeniden yazılıyor ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). TypeScript + Electron derlemesi bugün dağıtılan sürümdür; Rust yeniden yazımı ise bir sonraki adımdır — tek bir doğal çekirdek: çok daha küçük, çok daha hızlı ve tek bir kod tabanından daha fazla platformda çalışır.
+OpenPencil, sıfırdan **Rust** ile yeniden yazıldı ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). Yeniden yazım tamamlandı — TypeScript + Electron editörü `v0.7.5` sürümünde kullanımdan kaldırıldı ve bu depodaki Rust çalışma alanı artık ürünün kendisidir: tek bir doğal çekirdek, çok daha küçük, çok daha hızlı ve tek bir kod tabanından daha fazla platformda çalışır.
 
-|                          | TypeScript + Electron (bugün)                     | Rust (yeniden yazım)                                                     |
+|                          | TypeScript + Electron (kullanımdan kaldırıldı, `v0.7.5`) | Rust (bugün)                                                             |
 | ------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------ |
 | **Masaüstü çalışma ortamı** | Electron — Chromium + Node.js içerir           | Yerel pencere (`winit` + GPU Skia), tarayıcı motoru yok                  |
 | **Masaüstü boyutu**      | Kurulum başına tam Chromium çalışma ortamı        | Tek, bağımsız ikili — **55.5 MB**                                        |
@@ -319,43 +320,40 @@ OpenPencil, sıfırdan **Rust** ile yeniden yazılıyor ([#129](https://github.c
 - **Yerel erişilebilirlik** — tarayıcının a11y ağacına güvenmek yerine macOS, Windows ve Linux'ta AccessKit; web'de ise bir DOM aynası.
 - **Tek tip denetimli çalışma alanı** — MCP sunucusu, CLI, AI sağlayıcıları, kod üretimi, Figma içe aktarma ve Git entegrasyonu; CI'da `cargo-deny` tedarik zinciri denetimi ile tek bir Rust çalışma alanında bulunur.
 
-> **Durum:** Rust kabuğu etkin geliştirme aşamasındadır (aşağıdaki Yol Haritası'na bakın). `v0.8.0` için özellik eşitliğine ulaşana kadar yukarıdaki indirilebilir dosyalar TypeScript + Electron derlemesidir.
+> **Durum:** TypeScript editörü `v0.7.5` sürümünde kullanımdan kaldırıldı ve yalnızca git geçmişinde bulunuyor; bu depo artık Rust çalışma alanıdır. `v0.8.0` Rust sürümü etkin geliştirme aşamasındadır (aşağıdaki Yol Haritası'na bakın).
 
 ## Proje Yapısı
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 TanStack Start web uygulaması
-│   │   ├── src/
-│   │   │   ├── canvas/      CanvasKit/Skia motoru — çizim, senkronizasyon, düzen
-│   │   │   ├── components/  React UI — editör, paneller, paylaşılan iletişim kutuları, simgeler
-│   │   │   ├── services/ai/ AI sohbet, orkestratör, tasarım üretimi, akış
-│   │   │   ├── stores/      Zustand — kanvas, belge, sayfalar, geçmiş, AI
-│   │   │   ├── mcp/         Harici CLI entegrasyonu için MCP sunucu araçları
-│   │   │   ├── hooks/       Klavye kısayolları, dosya bırakma, Figma yapıştırma
-│   │   │   └── uikit/       Yeniden kullanılabilir bileşen kiti sistemi
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — akış sohbet, üretim, doğrulama
-│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot sarmalayıcıları
-│   ├── desktop/             Electron masaüstü uygulaması
-│   │   ├── main.ts          Pencere, Nitro çatallanması, yerel menü, otomatik güncelleyici
-│   │   ├── ipc-handlers.ts  Yerel dosya diyalogları, tema senkronizasyonu, tercihler IPC
-│   │   └── preload.ts       IPC köprüsü
-│   └── cli/                 CLI aracı — `op` komutu
-│       ├── src/commands/    Tasarım, belge, dışa aktarma, içe aktarma, düğüm, sayfa, değişken komutları
-│       ├── connection.ts    Çalışan uygulamaya WebSocket bağlantısı
-│       └── launcher.ts      Masaüstü uygulamayı veya web sunucusunu otomatik algıla ve başlat
-├── packages/
-│   ├── pen-types/           PenDocument modeli için tür tanımları
-│   ├── pen-core/            Belge ağacı işlemleri, düzen motoru, değişkenler
-│   ├── pen-codegen/         Kod oluşturucular (React, HTML, Vue, Flutter, ...)
-│   ├── pen-figma/           Figma .fig dosya ayrıştırıcı ve dönüştürücü
-│   ├── pen-renderer/        Bağımsız CanvasKit/Skia işleyici
-│   ├── pen-sdk/             Şemsiye SDK (tüm paketleri yeniden dışa aktarır)
-│   ├── pen-ai-skills/       AI prompt beceri motoru (aşamalı prompt yükleme)
-│   └── agent/               AI ajan SDK'sı (Vercel AI SDK, çoklu sağlayıcı, ajan ekipleri)
-└── .githooks/               Dal adından ön-commit sürüm eşitleme
+├── crates/                   Rust çalışma alanı — ürünün kendisi
+│   ├── op-editor-core/       Standart `.op` (PenDocument) editör durumu + EditorCommand + tasarım değişkenleri
+│   ├── op-editor-ui/         Platformdan bağımsız widget'lar + RenderBackend arayüzü (wasm32 uyumlu)
+│   ├── op-editor-host-core/  Tüm host'lar tarafından paylaşılan, taşımadan bağımsız host durum makineleri
+│   ├── op-host-native/       Yerel host kütüphanesi — winit + skia-safe GL (masaüstü + mobil)
+│   ├── op-host-web/          Tarayıcı paketi — wasm32 cdylib, CanvasKit işleyici
+│   ├── op-host-desktop/      Masaüstü ikili dosyası `openpencil-desktop`; ayrıca `--serve-web` daemon'ı
+│   ├── op-host-services/     Headless serve-web / MCP daemon kütüphanesi
+│   ├── op-host-web-server/   GL içermeyen ince web sunucusu ikili dosyası
+│   ├── op-cli/               CLI aracı — `op` komutu
+│   ├── op-mcp/               MCP sunucusu — araçlar, toplu tasarım, katmanlı iş akışı
+│   ├── op-ai/                AI sağlayıcıları, sohbet çalışma ortamı, akış
+│   ├── op-ai-skills/         AI prompt beceri motoru (aşamalı prompt yükleme)
+│   ├── op-orchestrator/      Eşzamanlı ajan ekibi orkestrasyonu
+│   ├── op-codegen/           Kod oluşturucular (React, HTML, Vue, Flutter, ...)
+│   ├── op-figma/             Figma .fig dosya ayrıştırıcı ve dönüştürücü
+│   ├── op-git/               Git entegrasyonu — klonlama, dal, push/pull, birleştirme
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 Web SDK çalışma alanı (Bun)
+│   ├── op-web-sdk/           Salt okunur `.op` web görüntüleyici SDK'sı (wasm paketini sarmalar)
+│   ├── op-web-sdk-react/     React 19 adaptörü
+│   └── op-web-sdk-vue/       Vue 3 adaptörü
+├── vendor/                   Vendored alt sistemler (git submodule'ları)
+│   ├── jian/                 Skia widget/render/event araç seti
+│   ├── casement/             winit çatalı
+│   └── agent/                Ürünler arası Rust ajan çalışma ortamı (agent-rs)
+└── .githooks/                Dal adından ön-commit sürüm eşitleme
 ```
 
 ## Klavye Kısayolları

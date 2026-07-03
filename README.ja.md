@@ -80,7 +80,7 @@ Claude Code、Codex、Gemini、OpenCode、Kiro、Copilot CLI にワンクリッ�
 
 ### 🖥️ どこでも動作
 
-Web アプリ + Electron による macOS・Windows・Linux ネイティブデスクトップ。GitHub Releases からの自動アップデート。`.op` ファイル関連付け — ダブルクリックで開く。
+Web アプリ + macOS・Windows・Linux ネイティブデスクトップ — 単一の Rust コア、単一の自己完結型バイナリ、ブラウザエンジン不要。`.op` ファイル関連付け — ダブルクリックで開く。
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **MCP サーバー**
 
-- 内蔵 MCP サーバー — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI にワンクリックでインストール
-- Node.js を自動検出 — 未インストールの場合は HTTP トランスポートに自動フォールバックし、MCP HTTP サーバーを自動起動
+- 内蔵 MCP サーバー（`op-mcp` crate） — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI にワンクリックでインストール
+- Node.js は不要 — デスクトップバイナリ経由の stdio トランスポート（`--mcp <path>`）に加え、実行中のアプリからライブ HTTP エンドポイント（`127.0.0.1:<port>/mcp`）を提供
 - ターミナルからのデザイン自動化：MCP 対応エージェントを通じて `.op` ファイルの読み取り、作成、編集が可能
 - **レイヤードデザインワークフロー** — `design_skeleton` → `design_content` → `design_refine` による高忠実度マルチセクションデザイン
 - **セグメント化プロンプト取得** — 必要なデザイン知識のみをロード（schema、layout、roles、icons、planning など）
@@ -275,9 +275,9 @@ cat design.dsl | op design - # stdin からパイプ入力
 
 **デスクトップアプリ**
 
-- Electron によるネイティブ macOS・Windows・Linux 対応
+- macOS・Windows・Linux ネイティブ対応 — 単一の自己完結型バイナリ（winit + GPU Skia、Electron 不要）
 - `.op` ファイル関連付け — ダブルクリックで開く、シングルインスタンスロック
-- GitHub Releases からの自動アップデート
+- GitHub Releases に対するバックグラウンド更新チェック
 - 名前を付けて保存、最近使った項目を開く、および終了時の未保存変更ダイアログを備えたネイティブアプリケーションメニュー
 - 最近使ったファイルの永続化
 
@@ -285,21 +285,22 @@ cat design.dsl | op design - # stdin からパイプ入力
 
 |                    |                                                                                  |
 | ------------------ | -------------------------------------------------------------------------------- |
-| **フロントエンド** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **キャンバス**     | CanvasKit/Skia（WASM、GPU アクセラレーション）                                   |
-| **状態管理**       | Zustand v5                                                                       |
-| **サーバー**       | Nitro                                                                            |
-| **デスクトップ**   | Electron 35                                                                      |
+| **コア**           | Rust ワークスペース（`crates/`） — エディター状態、ウィジェット、ホスト、MCP、AI、codegen |
+| **レンダリング**   | あらゆる場所で GPU Skia — ネイティブは `skia-safe`（GL）、ブラウザは CanvasKit（WASM/WebGL2） |
+| **UI ツールキット** | jian — ベンダー化された Rust ウィジェット/レンダー/イベントツールキット（`vendor/jian`） |
+| **ウィンドウイング** | winit（ベンダー化された `casement` フォーク）                                   |
+| **デスクトップ**   | ネイティブバイナリ `openpencil-desktop` — ブラウザエンジン不要                   |
+| **Web SDK**        | `op-web-sdk` + React 19 / Vue 3 アダプター — 読み取り専用 `.op` ビューアー（TypeScript） |
 | **CLI**            | `op` — ターミナル制御、バッチデザインDSL                                         |
-| **AI**             | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **ランタイム**     | Bun · Vite 7                                                                     |
+| **AI**             | ビルトイン Rust エージェントランタイム · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **リント**         | clippy · rustfmt（Rust） · oxlint · oxfmt（Web SDK）                             |
 | **ファイル形式**   | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー                          |
 
 ## なぜ Rust か
 
-OpenPencil は **Rust** で一から書き直されています ([#129](https://github.com/ZSeven-W/openpencil/issues/129))。現在リリースされているのは TypeScript + Electron ビルドです。Rust による書き直しがその次のステップ — ひとつのネイティブコアで劇的に軽量かつ高速になり、単一のコードベースからより多くのプラットフォームで動作します。
+OpenPencil は **Rust** で一から書き直されました ([#129](https://github.com/ZSeven-W/openpencil/issues/129))。書き直しは完了しています — TypeScript + Electron エディターは `v0.7.5` で廃止され、このリポジトリの Rust ワークスペースが製品そのものです：ひとつのネイティブコアで劇的に軽量かつ高速になり、単一のコードベースからより多くのプラットフォームで動作します。
 
-|                       | TypeScript + Electron（今日）                  | Rust（書き直し後）                                                  |
+|                       | TypeScript + Electron（廃止済み、`v0.7.5`）    | Rust（現在）                                                        |
 | --------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
 | **デスクトップランタイム** | Electron — Chromium + Node.js をバンドル       | ネイティブウィンドウ（`winit` + GPU Skia）、ブラウザエンジン不要     |
 | **デスクトップフットプリント** | インストールごとに Chromium ランタイム全体     | 単一の自己完結型バイナリ — **55.5 MB**                              |
@@ -319,43 +320,40 @@ OpenPencil は **Rust** で一から書き直されています ([#129](https://
 - **ネイティブアクセシビリティ** — macOS・Windows・Linux では AccessKit を使用し、Web ではブラウザの a11y ツリーに依存する代わりに DOM ミラーを提供。
 - **型チェック済みの単一ワークスペース** — MCP ホスト、CLI、AI プロバイダー、コード生成、Figma インポート、Git 統合がすべて単一の Rust ワークスペースに収まり、CI では `cargo-deny` によるサプライチェーンのゲーティングを実施。
 
-> **ステータス：** Rust シェルは現在活発に開発中です（下記のロードマップを参照）。`v0.8.0` の機能同等性に達するまで、上記のインストーラブルダウンロードは TypeScript + Electron ビルドです。
+> **ステータス：** TypeScript エディターは `v0.7.5` で廃止され、現在は Git 履歴にのみ残っています。このリポジトリは Rust ワークスペースです。`v0.8.0` の Rust リリースは現在活発に開発中です（下記のロードマップを参照）。
 
 ## プロジェクト構成
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 TanStack Start Web アプリ
-│   │   ├── src/
-│   │   │   ├── canvas/      CanvasKit/Skia エンジン — 描画、同期、レイアウト
-│   │   │   ├── components/  React UI — エディター、パネル、共有ダイアログ、アイコン
-│   │   │   ├── services/ai/ AI チャット、オーケストレーター、デザイン生成、ストリーミング
-│   │   │   ├── stores/      Zustand — キャンバス、ドキュメント、ページ、履歴、AI
-│   │   │   ├── mcp/         外部 CLI 統合用 MCP サーバーツール
-│   │   │   ├── hooks/       キーボードショートカット、ファイルドロップ、Figma ペースト
-│   │   │   └── uikit/       再利用可能なコンポーネントキットシステム
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — ストリーミングチャット、生成、バリデーション
-│   │       └── utils/       Claude CLI、OpenCode、Codex、Copilot ラッパー
-│   ├── desktop/             Electron デスクトップアプリ
-│   │   ├── main.ts          ウィンドウ、Nitro フォーク、ネイティブメニュー、自動アップデーター
-│   │   ├── ipc-handlers.ts  ネイティブファイルダイアログ、テーマ同期、設定 IPC
-│   │   └── preload.ts       IPC ブリッジ
-│   └── cli/                 CLIツール — `op` コマンド
-│       ├── src/commands/    デザイン、ドキュメント、エクスポート、インポート、ノード、ページ、変数コマンド
-│       ├── connection.ts    実行中アプリへのWebSocket接続
-│       └── launcher.ts      デスクトップアプリまたはWebサーバーの自動検出・起動
-├── packages/
-│   ├── pen-types/           PenDocument モデルの型定義
-│   ├── pen-core/            ドキュメントツリー操作、レイアウトエンジン、変数
-│   ├── pen-codegen/         コードジェネレーター（React、HTML、Vue、Flutter、...）
-│   ├── pen-figma/           Figma .fig ファイルパーサーとコンバーター
-│   ├── pen-renderer/        スタンドアロン CanvasKit/Skia レンダラー
-│   ├── pen-sdk/             アンブレラ SDK（全パッケージの再エクスポート）
-│   ├── pen-ai-skills/       AI プロンプトスキルエンジン（フェーズ駆動プロンプト読込）
-│   └── agent/               AI エージェント SDK（Vercel AI SDK、マルチプロバイダー、エージェントチーム）
-└── .githooks/               ブランチ名からのプレコミットバージョン同期
+├── crates/                   Rust ワークスペース — 製品本体
+│   ├── op-editor-core/       正規の `.op`（PenDocument）エディター状態 + EditorCommand + デザイン変数
+│   ├── op-editor-ui/         プラットフォーム非依存ウィジェット + RenderBackend ファサード（wasm32 対応）
+│   ├── op-editor-host-core/  全ホスト共有のトランスポート非依存ホストステートマシン
+│   ├── op-host-native/       ネイティブホストライブラリ — winit + skia-safe GL（デスクトップ + モバイル）
+│   ├── op-host-web/          ブラウザバンドル — wasm32 cdylib、CanvasKit レンダラー
+│   ├── op-host-desktop/      デスクトップバイナリ `openpencil-desktop`；`--serve-web` デーモンも兼ねる
+│   ├── op-host-services/     ヘッドレス serve-web / MCP デーモンライブラリ
+│   ├── op-host-web-server/   軽量な GL 非依存 Web サーバーバイナリ
+│   ├── op-cli/               CLI ツール — `op` コマンド
+│   ├── op-mcp/               MCP サーバー — ツール、バッチデザイン、レイヤードワークフロー
+│   ├── op-ai/                AI プロバイダー、チャットランタイム、ストリーミング
+│   ├── op-ai-skills/         AI プロンプトスキルエンジン（フェーズ駆動プロンプト読込）
+│   ├── op-orchestrator/      並行エージェントチームのオーケストレーション
+│   ├── op-codegen/           コードジェネレーター（React、HTML、Vue、Flutter、...）
+│   ├── op-figma/             Figma .fig ファイルパーサーとコンバーター
+│   ├── op-git/               Git 統合 — クローン、ブランチ、プッシュ/プル、マージ
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 Web SDK ワークスペース（Bun）
+│   ├── op-web-sdk/           読み取り専用 `.op` Web ビューアー SDK（wasm バンドルをラップ）
+│   ├── op-web-sdk-react/     React 19 アダプター
+│   └── op-web-sdk-vue/       Vue 3 アダプター
+├── vendor/                   ベンダー化されたサブシステム（git サブモジュール）
+│   ├── jian/                 Skia ウィジェット/レンダー/イベントツールキット
+│   ├── casement/             winit フォーク
+│   └── agent/                製品横断 Rust エージェントランタイム（agent-rs）
+└── .githooks/                ブランチ名からのプレコミットバージョン同期
 ```
 
 ## キーボードショートカット
