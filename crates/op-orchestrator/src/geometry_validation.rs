@@ -879,6 +879,16 @@ fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<S
             out.push(line);
         }
     }
+    if out.len() < MAX_DIAGNOSTICS {
+        for line in crate::sidebar_archetype::horizontal_navbar_archetype_diagnostics(v, |id| {
+            rects.get(id).map(|r| r.w)
+        }) {
+            out.push(line);
+            if out.len() >= MAX_DIAGNOSTICS {
+                return;
+            }
+        }
+    }
     if table_overflow_scale(v, rects).is_some() {
         out.push(format!(
             "{}: fixed column widths sum wider than the resolved row — shrink the column widths (or make columns fill_container) so they fit",
