@@ -74,12 +74,6 @@ fn layout_str(v: &Value) -> Option<&str> {
     v.get("layout").and_then(Value::as_str)
 }
 
-fn ident_text(v: &Value) -> String {
-    let name = v.get("name").and_then(Value::as_str).unwrap_or("");
-    let id = v.get("id").and_then(Value::as_str).unwrap_or("");
-    format!("{name} {id}").to_lowercase()
-}
-
 /// A cell's fixed (numeric) width, or `None` when it is a keyword sizing
 /// (`fill_container` / `fit_content`).
 fn fixed_width(v: &Value) -> Option<f64> {
@@ -98,14 +92,33 @@ fn num(v: &Value, key: &str) -> f64 {
     }
 }
 
-fn is_table_named(t: &str) -> bool {
-    t.contains("table") || t.contains("data grid") || t.contains("datagrid")
+/// Sum of a frame's LEFT + RIGHT padding — the schema authors `padding` as a
+/// number (all sides), `[vertical, horizontal]`, or `[top, right, bottom,
+/// left]`. The overflow math must compare column widths against the row's
+/// INNER width; a `[12, 16]`-padded 860px row only offers 828px to its cells,
+/// and ignoring that put a real table 2px on the "fits" side of the gate
+/// while its flex column starved to 6px (measured: test0703.op).
+fn horizontal_padding(v: &Value) -> f64 {
+    match v.get("padding") {
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0) * 2.0,
+        Some(Value::Array(a)) => match a.len() {
+            1 => a[0].as_f64().unwrap_or(0.0) * 2.0,
+            2 => a[1].as_f64().unwrap_or(0.0) * 2.0,
+            4 => a[1].as_f64().unwrap_or(0.0) + a[3].as_f64().unwrap_or(0.0),
+            _ => 0.0,
+        },
+        _ => 0.0,
+    }
 }
 
 // ── Table column-overflow fix ──
 
 /// Reserved width for each `fill_container` column so scaling leaves it room.
 const MIN_FILL_COL: f64 = 40.0;
+/// A flex column that CARRIES TEXT needs real room, not a sliver — 40px still
+/// shreds "a.sterling@email.com" into a one-glyph-per-line tower that blows
+/// the row to 400px tall. Reserve enough for a readable two-line wrap.
+const MIN_FILL_TEXT_COL: f64 = 120.0;
 /// Slack so a table that fits by a hair isn't needlessly rescaled.
 const OVERFLOW_EPS: f64 = 4.0;
 /// Leave a little breathing room after scaling.
@@ -174,6 +187,9 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_text_overflow_fixes(&v, &rects, &mut cmds);
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
+            collect_card_row_height_fixes(&v, &rects, &mut cmds, false);
+            collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
+            collect_card_overflow_clips(&v, &rects, &mut cmds);
             cmds
         };
         if cmds.is_empty() {
@@ -267,8 +283,33 @@ fn collect_text_overflow_fixes(
         .map(|r| (r.x, r.w))
         .filter(|_| flex_parent)
     {
+        let pill_parent = crate::chip_repair::is_pill_chip(v);
         for c in children(v) {
             if c.get("type").and_then(Value::as_str) != Some("text") {
+                continue;
+            }
+            if pill_parent {
+                if let Some(cid) = c.get("id").and_then(Value::as_str) {
+                    let fill = c.get("width").and_then(Value::as_str) == Some("fill_container");
+                    let wrap = c
+                        .get("textGrowth")
+                        .and_then(Value::as_str)
+                        .is_some_and(|g| g.starts_with("fixed-width"));
+                    if fill {
+                        cmds.push(EditorCommand::SetNodeLayoutProp {
+                            node_id: NodeId::new(cid.to_string()),
+                            property: "width".to_string(),
+                            value: LayoutPropValue::Keyword("fit_content".to_string()),
+                        });
+                    }
+                    if wrap {
+                        cmds.push(EditorCommand::SetNodeLayoutProp {
+                            node_id: NodeId::new(cid.to_string()),
+                            property: "textGrowth".to_string(),
+                            value: LayoutPropValue::Keyword("auto".to_string()),
+                        });
+                    }
+                }
                 continue;
             }
             let Some(cid) = c.get("id").and_then(Value::as_str) else {
@@ -330,18 +371,32 @@ fn collect_frame_overflow_fixes(
 ) {
     let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
     if matches!(layout_str(v), Some("vertical" | "horizontal")) && !clips {
-        if let Some(pw) = v
+        if let Some((parent_x, pw)) = v
             .get("id")
             .and_then(Value::as_str)
             .and_then(|id| rects.get(id))
-            .map(|r| r.w)
+            .map(|r| (r.x, r.w))
         {
             for c in children(v) {
                 if c.get("type").and_then(Value::as_str) == Some("text") {
                     continue;
                 }
+                // An authored x/y is ABSOLUTE placement — a full-bleed bottom
+                // nav (x:0, width:root) deliberately overrides its wrapper's
+                // padding, and an overlay badge sits where it was pinned.
+                // Absolute children aren't flex participants; retargeting
+                // them to fill_container un-bleeds/unpins them (measured: a
+                // normalized mobile nav lost its edge-to-edge width).
+                if has_authored_position(c) {
+                    continue;
+                }
+                // Numeric, fit_content, or ABSENT width (auto hugs like fit —
+                // the ATELIER name stacks carried no width key at all and
+                // slipped past a fixed/fit-only gate while their tails sat
+                // 21px into the next column).
                 let resizable = fixed_width(c).is_some()
-                    || c.get("width").and_then(Value::as_str) == Some("fit_content");
+                    || c.get("width").and_then(Value::as_str) == Some("fit_content")
+                    || c.get("width").is_none();
                 if !resizable {
                     continue;
                 }
@@ -351,7 +406,19 @@ fn collect_frame_overflow_fixes(
                 let Some(cr) = rects.get(cid) else {
                     continue;
                 };
-                if cr.w > pw + TEXT_OVERFLOW_EPS && pw > 1.0 {
+                // Wider than the parent, OR its right edge past the parent's
+                // right edge — a leading sibling pushed it out (a 36px avatar
+                // + a fit name stack inside a 120px cell put the stack's tail
+                // 21px into the NEXT column; the width-only check saw
+                // 93 < 120 and acquitted it — measured, ATELIER). The
+                // right-edge branch is CONTAINERS-only: a 16px icon nudged
+                // 2px out by its label must not be stretched to fill.
+                let is_container = matches!(
+                    c.get("type").and_then(Value::as_str),
+                    Some("frame" | "group")
+                );
+                let past_right = is_container && cr.x + cr.w > parent_x + pw + TEXT_OVERFLOW_EPS;
+                if (cr.w > pw + TEXT_OVERFLOW_EPS || past_right) && pw > 1.0 {
                     cmds.push(EditorCommand::SetNodeLayoutProp {
                         node_id: NodeId::new(cid.to_string()),
                         property: "width".to_string(),
@@ -378,7 +445,10 @@ const ROW_GAP_FIX: f64 = 16.0;
 /// the name gate). Flush segmented controls stay safe: those are 2-3 equal
 /// small children, gated out by the ≥3-cells + row-cell height + text checks.
 fn collect_row_gap_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut Vec<EditorCommand>) {
-    if layout_str(v) == Some("horizontal") && num(v, "gap") <= 0.0 {
+    // `< 8.0`, not `<= 0.0`: a 1-7px authored gap still resolves as touching
+    // (the jam proof below requires <3px breathing anyway), and an
+    // exactly-1.0 hairline gap slipped through every gate (measured).
+    if layout_str(v) == Some("horizontal") && num(v, "gap") < 8.0 {
         let kids = children(v);
         let frame_kids: Vec<&Value> = kids
             .iter()
@@ -389,15 +459,31 @@ fn collect_row_gap_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut Ve
                 )
             })
             .collect();
-        let distributes = matches!(
-            v.get("justifyContent").and_then(Value::as_str),
-            Some("space_between" | "space_around" | "space_evenly")
-        );
         // TWO text-bearing frame columns jammed at 0px (a date column against
-        // a details stack) are the two-column form of the same defect — but
-        // only when the row top-packs (a space_between pair separates itself,
-        // so a jammed pair there is the ancestor chain's problem, not gap's).
-        let enough_cells = frame_kids.len() >= 3 || (frame_kids.len() == 2 && !distributes);
+        // a details stack) are the two-column form of the same defect. A
+        // space_between pair USED to be excluded ("it separates itself") —
+        // but a fill_container descendant eats every px of slack, so a
+        // distributed top bar resolves its title flush against its search
+        // box with nothing left to distribute (measured). Geometry proof
+        // overrules the keyword: if they TOUCH, they need a gap; the
+        // row-overfull fixer absorbs the added width on the next round.
+        // A row whose cells are ALL `fill_container` distributes its space
+        // by construction — the fills touching is the layout working as
+        // built (a normalized bottom nav's segmented items), not a jam. A
+        // row with at least one RIGID cell that still resolves flush is a
+        // real jam (a fixed date column against a fill details stack, or
+        // two fit blocks whose fill grandchild ate the slack).
+        let all_fill = frame_kids
+            .iter()
+            .all(|c| c.get("width").and_then(Value::as_str) == Some("fill_container"));
+        // TWO text-bearing frame columns jammed at 0px are the two-column
+        // form of the defect. A space_between pair used to be excluded ("it
+        // separates itself") — but a fill descendant eats every px of slack,
+        // so a distributed top bar resolves its title flush against its
+        // search box with nothing left to distribute (measured). Geometry
+        // proof overrules the keyword; the row-overfull fixer absorbs the
+        // added width on the next round.
+        let enough_cells = !all_fill && frame_kids.len() >= 2;
         if enough_cells {
             let rects_of: Vec<Option<&Rect>> = frame_kids
                 .iter()
@@ -431,6 +517,287 @@ fn collect_row_gap_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut Ve
     }
     for c in children(v) {
         collect_row_gap_fixes(c, rects, cmds);
+    }
+}
+
+/// Max tolerated resolved height delta inside a KPI/stat card row.
+const CARD_ROW_HEIGHT_EPS: f64 = 6.0;
+
+/// A horizontal row of painted KPI/stat cards whose authored card heights all
+/// hug content but whose real layout is visibly ragged. Equalize by making each
+/// card fill the row cross-axis; jian resolves fill-of-hug to the row content
+/// height, guarded by `real_layout_fill_of_hug_parent_resolves_to_content_not_collapse`.
+fn collect_card_row_height_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+    in_table: bool,
+) {
+    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if layout_str(v) == Some("horizontal") && !clips && !in_table {
+        let kids = children(v);
+        if kids.len() >= 3
+            && kids.iter().all(is_colored_frame_card)
+            && kids.iter().all(child_height_is_hug_or_unset)
+        {
+            let kid_rects: Vec<&Rect> = kids
+                .iter()
+                .filter_map(|c| {
+                    c.get("id")
+                        .and_then(Value::as_str)
+                        .and_then(|id| rects.get(id))
+                })
+                .collect();
+            if kid_rects.len() == kids.len() {
+                let min_h = kid_rects.iter().map(|r| r.h).fold(f64::INFINITY, f64::min);
+                let max_h = kid_rects
+                    .iter()
+                    .map(|r| r.h)
+                    .fold(f64::NEG_INFINITY, f64::max);
+                if max_h - min_h >= CARD_ROW_HEIGHT_EPS {
+                    for c in kids {
+                        if let Some(id) = c.get("id").and_then(Value::as_str) {
+                            cmds.push(EditorCommand::SetNodeLayoutProp {
+                                node_id: NodeId::new(id.to_string()),
+                                property: "height".to_string(),
+                                value: LayoutPropValue::Keyword("fill_container".to_string()),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let child_in_table = in_table || is_table_shape(v);
+    for c in children(v) {
+        collect_card_row_height_fixes(c, rects, cmds, child_in_table);
+    }
+}
+
+fn is_colored_frame_card(v: &Value) -> bool {
+    v.get("type").and_then(Value::as_str) == Some("frame")
+        && (fill_is_non_empty(v) || stroke_is_non_null(v))
+}
+
+fn fill_is_non_empty(v: &Value) -> bool {
+    match v.get("fill") {
+        Some(Value::Array(a)) => !a.is_empty(),
+        Some(Value::Null) | None => false,
+        Some(Value::String(s)) => !s.trim().is_empty(),
+        Some(_) => true,
+    }
+}
+
+fn stroke_is_non_null(v: &Value) -> bool {
+    v.get("stroke").is_some_and(|stroke| !stroke.is_null())
+}
+
+fn child_height_is_hug_or_unset(v: &Value) -> bool {
+    match v.get("height") {
+        Some(Value::String(s)) => s == "fit_content",
+        Some(Value::Null) | None => true,
+        _ => false,
+    }
+}
+
+/// Does this node carry an authored `x` or `y` (absolute placement)?
+fn has_authored_position(v: &Value) -> bool {
+    v.get("x").map(|x| !x.is_null()).unwrap_or(false)
+        || v.get("y").map(|y| !y.is_null()).unwrap_or(false)
+}
+
+/// Slack before a row counts as overfull — sub-8px overhangs are invisible.
+const ROW_OVERFULL_EPS: f64 = 8.0;
+/// Only children this wide are worth flexifying — icons / dots / dividers
+/// can't meaningfully absorb a deficit.
+const MIN_FLEXIFY_W: f64 = 120.0;
+
+/// Is `v` table-shaped (≥2 horizontal rows of ≥3 cells)? Overfull TABLE rows
+/// belong to the column scaler, which keeps columns aligned across rows —
+/// flexifying one row's widest column would break the vertical alignment.
+fn is_table_shape(v: &Value) -> bool {
+    layout_str(v) != Some("horizontal")
+        && children(v)
+            .iter()
+            .filter(|r| layout_str(r) == Some("horizontal") && children(r).len() >= 3)
+            .count()
+            >= 2
+}
+
+/// A horizontal row whose children's RESOLVED widths + gaps sum wider than
+/// its resolved inner width. No single child is wider than the row — the
+/// per-child fixers are blind to this — but the row is overfull: children
+/// overlap mid-row and the tail child clips at the edge (measured: a top bar
+/// whose serif title block + 280px search + date + actions summed ~1110px in
+/// an ~876px row — the title ran INTO the search box and the CTA button
+/// clipped at the page edge). Repair: retarget the widest rigid child
+/// (numeric ≥120 or `fit_content` resolving ≥120) to `fill_container` —
+/// flex min-size 0 lets it absorb the deficit, and the loop's next round
+/// re-resolves, chaining into nested rows until the row fits.
+fn collect_row_overfull_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+    in_table: bool,
+) {
+    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if layout_str(v) == Some("horizontal") && !clips && !in_table {
+        if let Some(row) = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+        {
+            let inner = row.w - horizontal_padding(v);
+            // Absolute children don't consume flex space — exclude them
+            // from both the sum and the flexify candidates.
+            let kids: Vec<&Value> = children(v)
+                .iter()
+                .filter(|c| !has_authored_position(c))
+                .collect();
+            let kid_rects: Vec<Option<&Rect>> = kids
+                .iter()
+                .map(|c| {
+                    c.get("id")
+                        .and_then(Value::as_str)
+                        .and_then(|id| rects.get(id))
+                })
+                .collect();
+            if inner > 1.0 && !kids.is_empty() && kid_rects.iter().all(Option::is_some) {
+                if crate::chip_repair::all_children_are_pill_chips(&kids) {
+                    if let Some(row_id) = v.get("id").and_then(Value::as_str) {
+                        cmds.push(EditorCommand::SetNodeLayoutProp {
+                            node_id: NodeId::new(row_id.to_string()),
+                            property: "clipContent".to_string(),
+                            value: LayoutPropValue::Bool(true),
+                        });
+                    }
+                    return;
+                }
+                let gap = num(v, "gap");
+                let sum: f64 = kid_rects.iter().flatten().map(|r| r.w).sum::<f64>()
+                    + gap * (kids.len().saturating_sub(1)) as f64;
+                // NARROW-CARD anatomy guard, independent of the text measure:
+                // a display value + a painted chip can't share a ~200px line
+                // even when a lossy measure claims they fit (the estimate
+                // backend under-reads 40px display digits; the PAINT
+                // overlapped — measured). Reference metric cards stack them.
+                let stacked = if inner <= 260.0 {
+                    let before = cmds.len();
+                    stack_overfull_value_chip_row(v, &kids, rects, cmds);
+                    cmds.len() > before
+                } else {
+                    false
+                };
+                if !stacked && sum > inner + ROW_OVERFULL_EPS {
+                    // Widest rigid child ≥120px, containers before text.
+                    let candidate = kids
+                        .iter()
+                        .zip(kid_rects.iter().flatten())
+                        .filter(|(c, r)| {
+                            let rigid = fixed_width(c).is_some()
+                                || c.get("width").and_then(Value::as_str) == Some("fit_content")
+                                || c.get("width").is_none();
+                            let texty = c.get("type").and_then(Value::as_str) == Some("text");
+                            rigid && !texty && r.w >= MIN_FLEXIFY_W
+                        })
+                        .max_by(|a, b| a.1.w.total_cmp(&b.1.w));
+                    if let Some((c, _)) = candidate {
+                        if let Some(cid) = c.get("id").and_then(Value::as_str) {
+                            cmds.push(EditorCommand::SetNodeLayoutProp {
+                                node_id: NodeId::new(cid.to_string()),
+                                property: "width".to_string(),
+                                value: LayoutPropValue::Keyword("fill_container".to_string()),
+                            });
+                        }
+                    } else {
+                        stack_overfull_value_chip_row(v, &kids, rects, cmds);
+                    }
+                }
+            }
+        }
+    }
+    let table = is_table_shape(v);
+    for c in children(v) {
+        collect_row_overfull_fixes(c, rects, cmds, table);
+    }
+}
+
+/// Dead-end branch of the overfull repair: the row has NO flexify candidate
+/// (a display-size TEXT value can't shrink, a painted CHIP must hug). A KPI
+/// card's bottom row — a 40px "$48,920" beside a "+8.2%" trend chip in a
+/// ~180px card — overflows with nothing to give (measured: the chip's tinted
+/// box painted OVER the value's tail). The design-correct repair is the
+/// reference metric-card anatomy: value on its own line, change chip BELOW.
+/// Applies only to the exact [display text, small painted chip] pair.
+fn stack_overfull_value_chip_row(
+    v: &Value,
+    kids: &[&Value],
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    if kids.len() != 2 {
+        return;
+    }
+    let is_display_text = |c: &Value| {
+        c.get("type").and_then(Value::as_str) == Some("text") && num(c, "fontSize") >= 24.0
+    };
+    let is_chip = |c: &Value| {
+        matches!(
+            c.get("type").and_then(Value::as_str),
+            Some("frame" | "group")
+        ) && c
+            .get("fill")
+            .map(|f| match f {
+                Value::Array(a) => !a.is_empty(),
+                Value::Null => false,
+                _ => true,
+            })
+            .unwrap_or(false)
+            && c.get("id")
+                .and_then(Value::as_str)
+                .and_then(|id| rects.get(id))
+                .is_some_and(|r| r.h <= 44.0)
+    };
+    let chip = if is_display_text(kids[0]) && is_chip(kids[1]) {
+        kids[1]
+    } else if is_display_text(kids[1]) && is_chip(kids[0]) {
+        kids[0]
+    } else {
+        return;
+    };
+    let Some(row_id) = v.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    cmds.push(EditorCommand::SetNodeLayoutProp {
+        node_id: NodeId::new(row_id.to_string()),
+        property: "layout".to_string(),
+        value: LayoutPropValue::Keyword("vertical".to_string()),
+    });
+    cmds.push(EditorCommand::SetNodeLayoutProp {
+        node_id: NodeId::new(row_id.to_string()),
+        property: "justifyContent".to_string(),
+        value: LayoutPropValue::Keyword("start".to_string()),
+    });
+    cmds.push(EditorCommand::SetNodeLayoutProp {
+        node_id: NodeId::new(row_id.to_string()),
+        property: "alignItems".to_string(),
+        value: LayoutPropValue::Keyword("start".to_string()),
+    });
+    cmds.push(EditorCommand::SetNodeLayoutProp {
+        node_id: NodeId::new(row_id.to_string()),
+        property: "gap".to_string(),
+        value: LayoutPropValue::Number(8.0),
+    });
+    if let Some(chip_id) = chip.get("id").and_then(Value::as_str) {
+        // The chip hugs again — an earlier flexify (or the model) may have
+        // left it fill_container, which as a stacked line would paint a
+        // full-width tinted bar.
+        cmds.push(EditorCommand::SetNodeLayoutProp {
+            node_id: NodeId::new(chip_id.to_string()),
+            property: "width".to_string(),
+            value: LayoutPropValue::Keyword("fit_content".to_string()),
+        });
     }
 }
 
@@ -502,9 +869,25 @@ fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<S
             diag_label(v)
         ));
     }
+    if out.len() < MAX_DIAGNOSTICS {
+        let resolved_size = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+            .map(|r| (r.w, r.h));
+        if let Some(line) = crate::stub_repair::empty_decorated_stub_diagnostic(v, resolved_size) {
+            out.push(line);
+        }
+    }
     if table_overflow_scale(v, rects).is_some() {
         out.push(format!(
             "{}: fixed column widths sum wider than the resolved row — shrink the column widths (or make columns fill_container) so they fit",
+            diag_label(v)
+        ));
+    }
+    if let Some((cols, inner)) = table_columns_exceed_width(v, rects) {
+        out.push(format!(
+            "{}: {cols} columns cannot fit a {inner}px row — no rescale can save this; drop columns (stack name+email in one cell) or widen the table",
             diag_label(v)
         ));
     }
@@ -512,11 +895,11 @@ fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<S
     // parents are intentional croppers (scrollers, image masks) — skip them.
     let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
     if matches!(layout_str(v), Some("vertical" | "horizontal")) && !clips {
-        if let Some(pw) = v
+        if let Some((parent_x, pw)) = v
             .get("id")
             .and_then(Value::as_str)
             .and_then(|id| rects.get(id))
-            .map(|r| r.w)
+            .map(|r| (r.x, r.w))
         {
             for c in children(v) {
                 if out.len() >= MAX_DIAGNOSTICS {
@@ -529,7 +912,19 @@ fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<S
                 else {
                     continue;
                 };
-                if cr.w <= pw + TEXT_OVERFLOW_EPS {
+                // Same trigger the fixers use: wider than the parent OR (for
+                // containers) a right edge pushed past the parent's.
+                let is_container = matches!(
+                    c.get("type").and_then(Value::as_str),
+                    Some("frame" | "group")
+                );
+                let past_right = is_container && cr.x + cr.w > parent_x + pw + TEXT_OVERFLOW_EPS;
+                if cr.w <= pw + TEXT_OVERFLOW_EPS && !past_right {
+                    continue;
+                }
+                if crate::chip_repair::is_pill_chip(v)
+                    && c.get("type").and_then(Value::as_str) == Some("text")
+                {
                     continue;
                 }
                 if c.get("type").and_then(Value::as_str) == Some("text") {
@@ -551,8 +946,61 @@ fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<S
         }
     }
     collect_sibling_jam_diagnostics(v, rects, out);
+    collect_starved_fill_diagnostics(v, rects, out);
     for c in children(v) {
         collect_diagnostics(c, rects, out);
+    }
+}
+
+/// A text-bearing `fill_container` child squeezed to a sliver in a horizontal
+/// row — rigid siblings ate the width, the flex column resolved to a few px,
+/// and its text wraps one glyph per line into a tower that blows the row's
+/// height (measured: a 6px email column inflated its table rows to 432px).
+/// Nothing OVERFLOWS in this failure — width-exceeds-parent checks are blind
+/// to it — so the starvation itself is the report.
+const STARVED_FILL_W: f64 = 24.0;
+
+fn collect_starved_fill_diagnostics(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    out: &mut Vec<String>,
+) {
+    if out.len() >= MAX_DIAGNOSTICS || layout_str(v) != Some("horizontal") {
+        return;
+    }
+    let Some(pw) = v
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| rects.get(id))
+        .map(|r| r.w)
+    else {
+        return;
+    };
+    if pw < 200.0 {
+        return; // a narrow chip/control row can't meaningfully starve anyone
+    }
+    for c in children(v) {
+        if out.len() >= MAX_DIAGNOSTICS {
+            return;
+        }
+        if c.get("width").and_then(Value::as_str) != Some("fill_container") || !bears_text(c) {
+            continue;
+        }
+        let Some(cr) = c
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+        else {
+            continue;
+        };
+        if cr.w > 0.0 && cr.w < STARVED_FILL_W {
+            out.push(format!(
+                "{}: fill_container column starved to {}px in a {}px row — its fixed-width siblings eat the space and its text shreds vertically; shrink the fixed column widths so this one gets room",
+                diag_label(c),
+                cr.w.round(),
+                pw.round()
+            ));
+        }
     }
 }
 
@@ -597,7 +1045,10 @@ fn collect_sibling_jam_diagnostics(
     rects: &HashMap<String, Rect>,
     out: &mut Vec<String>,
 ) {
-    if out.len() >= MAX_DIAGNOSTICS || layout_str(v) != Some("horizontal") {
+    let Some(layout @ ("horizontal" | "vertical")) = layout_str(v) else {
+        return;
+    };
+    if out.len() >= MAX_DIAGNOSTICS {
         return;
     }
     let kids = children(v);
@@ -619,7 +1070,11 @@ fn collect_sibling_jam_diagnostics(
         if ra.w <= 0.0 || rb.w <= 0.0 {
             continue;
         }
-        let breathing = rb.x - (ra.x + ra.w);
+        let breathing = if layout == "vertical" {
+            rb.y - (ra.y + ra.h)
+        } else {
+            rb.x - (ra.x + ra.w)
+        };
         // Intentional OVERLAY, not an accident: one sibling's center inside
         // the other's box — a number set on a ring (ellipse + short text), a
         // corner badge on an avatar. Layout can't express children for an
@@ -628,15 +1083,33 @@ fn collect_sibling_jam_diagnostics(
             let (cx, cy) = (inner.x + inner.w / 2.0, inner.y + inner.h / 2.0);
             cx > outer.x && cx < outer.x + outer.w && cy > outer.y && cy < outer.y + outer.h
         };
-        let overlay = center_inside(ra, rb) || center_inside(rb, ra);
+        // An ellipse + a SHORT text sibling is the ring/badge stack by
+        // construction — an ellipse can't carry children, so models sibling
+        // the number on purpose. The center-inside test alone misses the
+        // boundary case (a "2" whose center lands EXACTLY on the ring's top
+        // edge — measured, p44), so the pair's shape is the intent signal.
+        let is_ellipse = |v: &Value| v.get("type").and_then(Value::as_str) == Some("ellipse");
+        let is_short_text = |v: &Value| {
+            v.get("type").and_then(Value::as_str) == Some("text")
+                && v.get("content")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| c.trim().chars().count() <= 4)
+        };
+        let ring_badge = (is_ellipse(a) && is_short_text(b)) || (is_ellipse(b) && is_short_text(a));
+        let overlay = ring_badge || center_inside(ra, rb) || center_inside(rb, ra);
+        let all_fill_cells = crate::chip_repair::is_fill_container_frame(a)
+            && crate::chip_repair::is_fill_container_frame(b);
         if breathing < -SIBLING_OVERLAP_EPS && !overlay {
+            let axis = if layout == "vertical" { "stack" } else { "row" };
             out.push(format!(
-                "{} and {}: siblings OVERLAP by {}px — their combined width exceeds the row; shrink widths or wrap text so they fit side by side",
+                "{} and {}: siblings OVERLAP by {}px — their resolved boxes collide in the {axis}; resize or add spacing so they do not paint on top of each other",
                 diag_label(a),
                 diag_label(b),
                 (-breathing).round()
             ));
-        } else if breathing < SIBLING_JAM_GAP
+        } else if layout == "horizontal"
+            && breathing < SIBLING_JAM_GAP
+            && !all_fill_cells
             && ra.h.min(rb.h) <= ROW_CELL_MAX_H
             && is_cell_like(a)
             && is_cell_like(b)
@@ -696,66 +1169,202 @@ fn collect_scale_ops(v: &Value, rects: &HashMap<String, Rect>, ops: &mut Vec<Edi
     }
 }
 
-/// If `v` is a table container (a `table`-named vertical frame with ≥2 horizontal
-/// rows of ≥3 cells) whose columns overflow the row's RESOLVED width, return the
-/// scale factor (< 1.0) to apply to its fixed columns + gap. `None` when it isn't
-/// a table or doesn't overflow.
+/// If `v` is a table-shaped container (≥2 horizontal rows of ≥3 cells — the
+/// STRUCTURE is the gate, not the name; "VIP Client List" shipped a starved
+/// 6px email column because a name gate only trusted `table`-named frames)
+/// whose fixed columns crowd out the rows' RESOLVED inner width, return the
+/// scale factor (< 1.0) to apply to its fixed columns + gap. Each row is
+/// measured against its own inner width (rect minus padding) and each
+/// text-bearing flex column reserves a readable floor; the WORST row decides,
+/// so uneven header/data column sets can't hide the deficit. `None` when the
+/// shape isn't a table or everything fits.
 fn table_overflow_scale(v: &Value, rects: &HashMap<String, Rect>) -> Option<f64> {
     if layout_str(v) == Some("horizontal") {
         return None;
     }
-    if !is_table_named(&ident_text(v)) {
-        return None;
-    }
-    // Representative row: the first horizontal child with ≥3 cells.
-    let row = children(v)
-        .iter()
-        .find(|r| layout_str(r) == Some("horizontal") && children(r).len() >= 3)?;
-    // Need at least a header + one data row to be a real table.
-    let data_rows = children(v)
+    let rows: Vec<&Value> = children(v)
         .iter()
         .filter(|r| layout_str(r) == Some("horizontal") && children(r).len() >= 3)
-        .count();
-    if data_rows < 2 {
+        .collect();
+    // Need at least a header + one data row to be a real table.
+    if rows.len() < 2 {
         return None;
     }
-    let cells = children(row);
-    let n_gaps = (cells.len() - 1) as f64;
-    let gap = num(row, "gap");
-    let mut fixed_sum = 0.0;
-    let mut fill_count = 0.0;
-    for cell in cells {
-        match fixed_width(cell) {
-            Some(w) => fixed_sum += w,
-            None => fill_count += 1.0, // fill_container / fit_content
+    let mut worst: Option<f64> = None;
+    for row in rows {
+        let cells = children(row);
+        let n_gaps = (cells.len() - 1) as f64;
+        let gap = num(row, "gap");
+        let mut fixed_sum = 0.0;
+        let mut flex_floor = 0.0;
+        for cell in cells {
+            match fixed_width(cell) {
+                Some(w) => fixed_sum += w,
+                // fill_container / fit_content — reserve room for it.
+                None => {
+                    flex_floor += if bears_text(cell) {
+                        MIN_FILL_TEXT_COL
+                    } else {
+                        MIN_FILL_COL
+                    }
+                }
+            }
+        }
+        if fixed_sum <= 0.0 {
+            continue; // all-flex row can't overflow via fixed widths
+        }
+        let Some(row_id) = row.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(row_w) = rects.get(row_id).map(|r| r.w - horizontal_padding(row)) else {
+            continue;
+        };
+        if row_w <= 1.0 {
+            continue;
+        }
+        // Minimum width the row NEEDS: fixed columns + gaps + the flex floors.
+        // If that already fits the resolved inner width, this row is fine.
+        let needed = fixed_sum + gap * n_gaps + flex_floor;
+        if needed <= row_w + OVERFLOW_EPS {
+            continue;
+        }
+        // Scale the fixed budget (columns + gaps) to fit alongside the floors.
+        let fixed_budget = (row_w - flex_floor) * FIT_MARGIN;
+        let scalable = fixed_sum + gap * n_gaps;
+        if scalable <= 0.0 {
+            continue;
+        }
+        // UNSALVAGEABLE by scaling: even at MIN_SCALE the fixed budget can't
+        // fit beside the flex floors (a 6-column table crammed into a
+        // half-width pane — its five text-bearing fill columns alone need
+        // more than the row offers). Scaling anyway is worse than useless:
+        // the geometry loop re-applies the scale EVERY round, compounding
+        // 0.35ⁿ and crushing the column gap to a sliver (24→3, measured).
+        // Leave the row alone and let the too-many-columns diagnostic speak.
+        if fixed_budget / scalable < MIN_SCALE {
+            continue;
+        }
+        let scale = (fixed_budget / scalable).clamp(MIN_SCALE, 1.0);
+        if scale < 1.0 - 0.001 {
+            worst = Some(worst.map_or(scale, |w: f64| w.min(scale)));
         }
     }
-    if fixed_sum <= 0.0 {
-        return None; // all-flex table can't overflow via fixed widths
+    worst
+}
+
+#[cfg(test)]
+#[path = "geometry_chip_private_tests.rs"]
+mod chip_private_tests;
+/// A ROUNDED, PAINTED card whose child's resolved rect pokes past the card's
+/// own bounds (a heart-rate sparkline path hanging out of the card's right
+/// rounded edge — measured). Rounded cards crop by convention (the CSS
+/// border-radius + overflow expectation); set `clipContent` so the overshoot
+/// crops at the radius instead of painting outside the card. Geometry-proven
+/// and one-way (never un-clips); plain unrounded wrappers are left alone —
+/// their overflows belong to the resize fixers.
+const CARD_CLIP_RADIUS_MIN: f64 = 8.0;
+const CARD_CLIP_OVERSHOOT_EPS: f64 = 2.0;
+
+fn collect_card_overflow_clips(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    let painted = v
+        .get("fill")
+        .map(|f| match f {
+            Value::Array(a) => !a.is_empty(),
+            Value::Null => false,
+            _ => true,
+        })
+        .unwrap_or(false);
+    let rounded = num(v, "cornerRadius") >= CARD_CLIP_RADIUS_MIN;
+    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if painted && rounded && !clips {
+        if let Some(pr) = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+        {
+            // ANY descendant counts — the overshooting sparkline sits two
+            // wrappers below the card, not as a direct child.
+            fn any_descendant_overshoots(
+                v: &Value,
+                rects: &HashMap<String, Rect>,
+                pr: &Rect,
+            ) -> bool {
+                children(v).iter().any(|c| {
+                    let out = c
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .and_then(|id| rects.get(id))
+                        .is_some_and(|cr| {
+                            cr.x + cr.w > pr.x + pr.w + CARD_CLIP_OVERSHOOT_EPS
+                                || cr.y + cr.h > pr.y + pr.h + CARD_CLIP_OVERSHOOT_EPS
+                                || cr.x < pr.x - CARD_CLIP_OVERSHOOT_EPS
+                                || cr.y < pr.y - CARD_CLIP_OVERSHOOT_EPS
+                        });
+                    out || any_descendant_overshoots(c, rects, pr)
+                })
+            }
+            let overshoots = any_descendant_overshoots(v, rects, pr);
+            if overshoots {
+                if let Some(id) = v.get("id").and_then(Value::as_str) {
+                    cmds.push(EditorCommand::SetNodeLayoutProp {
+                        node_id: NodeId::new(id.to_string()),
+                        property: "clipContent".to_string(),
+                        value: LayoutPropValue::Bool(true),
+                    });
+                }
+            }
+        }
     }
-    let row_id = row.get("id").and_then(Value::as_str)?;
-    let row_w = rects.get(row_id)?.w;
-    if row_w <= 1.0 {
+    for c in children(v) {
+        collect_card_overflow_clips(c, rects, cmds);
+    }
+}
+
+/// Table-shaped container whose TEXT-BEARING flex columns alone (at their
+/// readable floors) exceed the row's inner width — unsalvageable by any
+/// rescale; the design needs fewer columns. Returns `(columns, inner_px)`
+/// of the worst row for the diagnostic.
+fn table_columns_exceed_width(v: &Value, rects: &HashMap<String, Rect>) -> Option<(usize, i64)> {
+    if layout_str(v) == Some("horizontal") {
         return None;
     }
-    // Minimum width the row NEEDS: fixed columns + gaps + a floor for each flex
-    // column. If that already fits the resolved row width, nothing to do.
-    let needed = fixed_sum + gap * n_gaps + fill_count * MIN_FILL_COL;
-    if needed <= row_w + OVERFLOW_EPS {
+    let rows: Vec<&Value> = children(v)
+        .iter()
+        .filter(|r| layout_str(r) == Some("horizontal") && children(r).len() >= 3)
+        .collect();
+    if rows.len() < 2 {
         return None;
     }
-    // Scale the fixed budget (columns + gaps) so it fits alongside the flex floor.
-    let flex_floor = fill_count * MIN_FILL_COL;
-    let fixed_budget = (row_w - flex_floor) * FIT_MARGIN;
-    let scalable = fixed_sum + gap * n_gaps;
-    if scalable <= 0.0 {
-        return None;
+    for row in rows {
+        let cells = children(row);
+        let mut floor_sum = 0.0;
+        for cell in cells {
+            floor_sum += match fixed_width(cell) {
+                Some(w) => w * MIN_SCALE,
+                None => {
+                    if bears_text(cell) {
+                        MIN_FILL_TEXT_COL
+                    } else {
+                        MIN_FILL_COL
+                    }
+                }
+            };
+        }
+        let Some(row_id) = row.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(inner) = rects.get(row_id).map(|r| r.w - horizontal_padding(row)) else {
+            continue;
+        };
+        if inner > 1.0 && floor_sum > inner {
+            return Some((cells.len(), inner.round() as i64));
+        }
     }
-    let scale = (fixed_budget / scalable).clamp(MIN_SCALE, 1.0);
-    if scale >= 1.0 - 0.001 {
-        return None;
-    }
-    Some(scale)
+    None
 }
 
 #[cfg(test)]

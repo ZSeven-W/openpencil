@@ -78,18 +78,45 @@ fn fitting_table_is_not_scaled() {
 }
 
 #[test]
-fn non_table_named_container_is_ignored() {
-    // A "Navigation" column with wide rows is NOT a table — never scaled.
+fn unnamed_table_shape_still_scales() {
+    // The gate is STRUCTURE (≥2 rows of ≥3 cells) + geometric proof, not the
+    // name — a "VIP Client List" shipped a starved 6px flex column because a
+    // name gate only trusted `table`-named frames.
     let w = || json!(240);
     let widths = [w(), w(), w(), w(), w()];
-    let nav = json!({
-        "type": "frame", "id": "nav", "name": "Navigation", "layout": "vertical", "children": [
+    let tbl = json!({
+        "type": "frame", "id": "anon", "layout": "vertical", "children": [
             row("n1", &widths), row("n2", &widths)
         ]
     });
     let mut rects = std::collections::HashMap::new();
+    for rid in ["n1", "n2"] {
+        rects.insert(
+            rid.to_string(),
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 800.0,
+                h: 40.0,
+            },
+        );
+    }
+    assert!(table_overflow_scale(&tbl, &rects).is_some());
+}
+
+#[test]
+fn single_overflowing_row_is_not_a_table() {
+    // One wide row (a toolbar, a hero strip) is not table-shaped — no scaling.
+    let w = || json!(240);
+    let widths = [w(), w(), w(), w(), w()];
+    let strip = json!({
+        "type": "frame", "id": "hero", "layout": "vertical", "children": [
+            row("only", &widths)
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
     rects.insert(
-        "n1".to_string(),
+        "only".to_string(),
         Rect {
             x: 0.0,
             y: 0.0,
@@ -97,7 +124,54 @@ fn non_table_named_container_is_ignored() {
             h: 40.0,
         },
     );
-    assert!(table_overflow_scale(&nav, &rects).is_none());
+    assert!(table_overflow_scale(&strip, &rects).is_none());
+}
+
+#[test]
+fn padded_row_with_text_fill_column_triggers_on_inner_width() {
+    // test0703.op's exact failure shape: 860px rows padded [12,16] (inner
+    // 828), fixed columns 220+120+140+166+96 = 742 + 5×16 gaps = 822, one
+    // fill_container contact column CARRYING TEXT. Nothing overflows — the
+    // flex column just starves to 6px and its email shreds vertically. The
+    // padding-aware + text-floor math must catch it.
+    let cells = |rid: &str| {
+        json!([
+            cell(&format!("{rid}-name"), json!(220)),
+            { "type": "frame", "id": format!("{rid}-contact"), "width": "fill_container",
+              "children": [ { "type": "text", "id": format!("{rid}-email"), "content": "a.sterling@email.com" } ] },
+            cell(&format!("{rid}-visit"), json!(120)),
+            cell(&format!("{rid}-barber"), json!(140)),
+            cell(&format!("{rid}-status"), json!(166)),
+            cell(&format!("{rid}-actions"), json!(96)),
+        ])
+    };
+    let mk_row = |rid: &str| {
+        json!({ "type": "frame", "id": rid, "layout": "horizontal", "gap": 16,
+                "padding": [12, 16], "children": cells(rid) })
+    };
+    let tbl = json!({
+        "type": "frame", "id": "vip", "name": "VIP Client List", "layout": "vertical",
+        "children": [ mk_row("r1"), mk_row("r2"), mk_row("r3") ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    for rid in ["r1", "r2", "r3"] {
+        rects.insert(
+            rid.to_string(),
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 860.0,
+                h: 40.0,
+            },
+        );
+    }
+    let scale = table_overflow_scale(&tbl, &rects).expect("starved flex column detected");
+    // Fixed 742 + gaps 80 must shrink until the text column gets its 120px
+    // floor inside the 828px inner width: scale ≈ (828-120)*0.97/822 ≈ 0.835.
+    assert!(
+        (0.7..0.9).contains(&scale),
+        "expected a moderate rescale, got {scale}"
+    );
 }
 
 #[test]
@@ -539,6 +613,243 @@ fn real_layout_fill_of_hug_parent_resolves_to_content_not_collapse() {
 }
 
 #[test]
+fn real_layout_equalizes_luxe_cut_metric_card_row_heights() {
+    use crate::test_support::VecDocSink;
+    use crate::types::DocSink;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    let stroke = || json!({"thickness": 1, "fill": [{"type": "solid", "color": "#E5E7EB"}]});
+    let card = |id: &str, name: &str, title: &str| {
+        json!({
+            "type":"frame","id":id,"name":name,"layout":"vertical","gap":8,
+            "width":"fill_container","height":"fit_content","padding":[16,16],
+            "stroke": stroke(),
+            "children":[
+                {"type":"text","id":format!("{id}-title"),"name":format!("{name} Title"),
+                 "content":title,"fontSize":15,"width":"fill_container","textGrowth":"fixed-width"},
+                {"type":"text","id":format!("{id}-value"),"name":format!("{name} Value"),
+                 "content":"$48,920","fontSize":28},
+                {"type":"text","id":format!("{id}-label"),"name":format!("{name} Label"),
+                 "content":"vs last month","fontSize":12}
+            ]
+        })
+    };
+    let root: PenNode = serde_json::from_value(json!({
+        "type":"frame","id":"root","name":"LUXE CUT Dashboard","width":960,"height":"fit_content","layout":"vertical","gap":24,"children":[
+            {"type":"frame","id":"metrics","name":"Key Metrics","layout":"horizontal","gap":16,
+             "width":"fill_container","height":"fit_content","children":[
+                card("card1", "Metric Card 1", "Revenue"),
+                card("card2", "Metric Card 2", "Average revenue per client visit this month"),
+                card("card3", "Metric Card 3", "Bookings"),
+                card("card4", "Metric Card 4", "Retention")
+             ]}
+        ]
+    }))
+    .expect("valid root");
+
+    let mut sink = VecDocSink::new();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state().active_children()[0].id_str().to_string();
+
+    let before_rects = resolved_rects(sink.state());
+    let before = resolved_heights_by_name(
+        sink.state(),
+        &before_rects,
+        &[
+            "Metric Card 1",
+            "Metric Card 2",
+            "Metric Card 3",
+            "Metric Card 4",
+        ],
+    );
+    let before_min = before.iter().copied().fold(f64::INFINITY, f64::min);
+    let before_max = before.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        before_max - before_min > 6.0,
+        "fixture must be ragged before repair, got {before:?}"
+    );
+
+    let rounds = geometry_validate_and_fix(&mut sink, &root_id);
+    assert!(rounds >= 1, "ragged card row must trigger a fix round");
+
+    let after_rects = resolved_rects(sink.state());
+    let after = resolved_heights_by_name(
+        sink.state(),
+        &after_rects,
+        &[
+            "Metric Card 1",
+            "Metric Card 2",
+            "Metric Card 3",
+            "Metric Card 4",
+        ],
+    );
+    let after_min = after.iter().copied().fold(f64::INFINITY, f64::min);
+    let after_max = after.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        after_max - after_min <= 1.0,
+        "cards must resolve to equal heights after repair, got {after:?}"
+    );
+}
+
+#[test]
+fn card_row_with_authored_numeric_child_height_is_left_untouched() {
+    let row = json!({
+        "type":"frame","id":"row","name":"Cards","layout":"horizontal","children":[
+            stroked_card_json("c1", json!("fit_content")),
+            stroked_card_json("c2", json!(180)),
+            stroked_card_json("c3", json!("fit_content"))
+        ]
+    });
+    let rects = card_row_rects([140.0, 180.0, 142.0]);
+    let mut cmds = Vec::new();
+
+    collect_card_row_height_fixes(&row, &rects, &mut cmds, false);
+
+    assert!(
+        cmds.is_empty(),
+        "numeric child height is deliberate: {cmds:?}"
+    );
+}
+
+#[test]
+fn transparent_wrapper_row_is_not_equalized_as_cards() {
+    let row = json!({
+        "type":"frame","id":"row","name":"Wrappers","layout":"horizontal","children":[
+            transparent_card_json("c1"),
+            transparent_card_json("c2"),
+            transparent_card_json("c3")
+        ]
+    });
+    let rects = card_row_rects([140.0, 180.0, 142.0]);
+    let mut cmds = Vec::new();
+
+    collect_card_row_height_fixes(&row, &rects, &mut cmds, false);
+
+    assert!(
+        cmds.is_empty(),
+        "transparent wrappers are not colored cards: {cmds:?}"
+    );
+}
+
+#[test]
+fn card_rows_inside_table_context_are_left_untouched() {
+    let table = json!({
+        "type":"frame","id":"table","name":"Table","layout":"vertical","children":[
+            {"type":"frame","id":"row1","layout":"horizontal","children":[
+                stroked_card_json("r1c1", json!("fit_content")),
+                stroked_card_json("r1c2", json!("fit_content")),
+                stroked_card_json("r1c3", json!("fit_content"))
+            ]},
+            {"type":"frame","id":"row2","layout":"horizontal","children":[
+                stroked_card_json("r2c1", json!("fit_content")),
+                stroked_card_json("r2c2", json!("fit_content")),
+                stroked_card_json("r2c3", json!("fit_content"))
+            ]}
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    for (id, h) in [
+        ("row1", 180.0),
+        ("row2", 180.0),
+        ("r1c1", 140.0),
+        ("r1c2", 180.0),
+        ("r1c3", 142.0),
+        ("r2c1", 140.0),
+        ("r2c2", 180.0),
+        ("r2c3", 142.0),
+    ] {
+        rects.insert(
+            id.to_string(),
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h,
+            },
+        );
+    }
+    let mut cmds = Vec::new();
+
+    collect_card_row_height_fixes(&table, &rects, &mut cmds, false);
+
+    assert!(
+        cmds.is_empty(),
+        "table rows belong to table repair: {cmds:?}"
+    );
+}
+
+fn resolved_heights_by_name(
+    state: &op_editor_core::EditorState,
+    rects: &HashMap<String, Rect>,
+    names: &[&str],
+) -> Vec<f64> {
+    let v = serde_json::to_value(state.active_children()[0].clone()).unwrap();
+    names
+        .iter()
+        .map(|name| {
+            let id = find_id_by_name(&v, name).unwrap_or_else(|| panic!("{name} exists"));
+            rects
+                .get(&id)
+                .unwrap_or_else(|| panic!("{name} resolved"))
+                .h
+        })
+        .collect()
+}
+
+fn find_id_by_name(v: &serde_json::Value, name: &str) -> Option<String> {
+    if v.get("name").and_then(|x| x.as_str()) == Some(name) {
+        return v.get("id").and_then(|x| x.as_str()).map(String::from);
+    }
+    v.get("children")
+        .and_then(|c| c.as_array())
+        .into_iter()
+        .flatten()
+        .find_map(|c| find_id_by_name(c, name))
+}
+
+fn stroked_card_json(id: &str, height: serde_json::Value) -> serde_json::Value {
+    json!({
+        "type":"frame","id":id,"name":id,"height":height,
+        "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E5E7EB"}]},
+        "children":[]
+    })
+}
+
+fn transparent_card_json(id: &str) -> serde_json::Value {
+    json!({"type":"frame","id":id,"name":id,"height":"fit_content","children":[]})
+}
+
+fn card_row_rects(heights: [f64; 3]) -> HashMap<String, Rect> {
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "row".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 360.0,
+            h: heights.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        },
+    );
+    for (id, h) in ["c1", "c2", "c3"].into_iter().zip(heights) {
+        rects.insert(
+            id.to_string(),
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h,
+            },
+        );
+    }
+    rects
+}
+
+#[test]
 fn text_overflow_fix_skips_absolute_positioned_parents() {
     // Under `layout: none` children are absolutely positioned — a text wider
     // than the parent is a positioning choice, not a flex overflow to repair.
@@ -738,6 +1049,75 @@ fn overlapping_siblings_are_reported_regardless_of_content() {
     assert!(out[0].contains("OVERLAP"), "got {out:?}");
 }
 
+#[test]
+fn vertical_overlapping_siblings_are_reported() {
+    let stack = json!({
+        "type":"frame","id":"stack","name":"Stack","layout":"vertical","children":[
+            {"type":"frame","id":"a","name":"Contact Block","children":[]},
+            {"type":"frame","id":"b","name":"Footer","children":[]}
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "a".into(),
+        Rect {
+            x: 0.0,
+            y: 10.0,
+            w: 240.0,
+            h: 60.0,
+        },
+    );
+    rects.insert(
+        "b".into(),
+        Rect {
+            x: 0.0,
+            y: 65.0,
+            w: 240.0,
+            h: 40.0,
+        },
+    ); // 5px vertical overlap
+    let mut out = Vec::new();
+    collect_sibling_jam_diagnostics(&stack, &rects, &mut out);
+    assert_eq!(out.len(), 1);
+    assert!(
+        out[0].contains("Contact Block") && out[0].contains("Footer"),
+        "got {out:?}"
+    );
+    assert!(out[0].contains("OVERLAP"), "got {out:?}");
+}
+
+#[test]
+fn vertical_ring_badge_overlay_is_not_reported_as_an_overlap() {
+    let stack = json!({
+        "type":"frame","id":"stack","name":"Ring","layout":"vertical","children":[
+            {"type":"ellipse","id":"e","width":36,"height":36},
+            {"type":"text","id":"t","content":"2","fontSize":15}
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "e".into(),
+        Rect {
+            x: 40.0,
+            y: 0.0,
+            w: 36.0,
+            h: 36.0,
+        },
+    );
+    rects.insert(
+        "t".into(),
+        Rect {
+            x: 53.0,
+            y: 9.0,
+            w: 10.0,
+            h: 18.0,
+        },
+    );
+    let mut out = Vec::new();
+    collect_sibling_jam_diagnostics(&stack, &rects, &mut out);
+    assert!(out.is_empty(), "overlay must not be reported: {out:?}");
+}
+
 /// Manual repair harness (not part of the suite): load OP_REPAIR_IN, run the
 /// whole-doc loop finalize (Class-A + cleanup + geometry), save OP_REPAIR_OUT.
 /// `OP_REPAIR_IN=/path/in.op OP_REPAIR_OUT=/path/out.op cargo test -p
@@ -780,7 +1160,9 @@ fn finalize_only_harness() {
 }
 
 /// Manual probe: print resolved rects for nodes whose name matches
-/// OP_PROBE_NAME inside OP_REPAIR_IN.
+/// OP_PROBE_NAME inside OP_REPAIR_IN. Set OP_PROBE_UNDER=1 to print the
+/// whole resolved subtree of every match (rows/cells are usually unnamed,
+/// so matching the named ancestor and dumping under it is the useful mode).
 #[test]
 #[ignore]
 fn resolved_rect_probe() {
@@ -788,25 +1170,32 @@ fn resolved_rect_probe() {
     let pat = std::env::var("OP_PROBE_NAME")
         .unwrap_or_default()
         .to_lowercase();
+    let under = std::env::var("OP_PROBE_UNDER").is_ok();
     let text = std::fs::read_to_string(&inp).expect("read input");
     let doc: jian_ops_schema::PenDocument = serde_json::from_str(&text).expect("parse .op");
     let state = op_editor_core::EditorState::from_document(doc);
     let rects = resolved_rects(&state);
     for root in state.active_children() {
         let v = serde_json::to_value(root).unwrap();
-        fn walk(v: &serde_json::Value, rects: &HashMap<String, Rect>, pat: &str, depth: usize) {
+        #[allow(clippy::too_many_arguments)]
+        fn walk(
+            v: &serde_json::Value,
+            rects: &HashMap<String, Rect>,
+            pat: &str,
+            under: bool,
+            in_match: bool,
+            depth: usize,
+        ) {
             let name = v.get("name").and_then(|x| x.as_str()).unwrap_or("");
             let nid = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
-            if !pat.is_empty()
-                && (name.to_lowercase().contains(pat) || nid.eq_ignore_ascii_case(pat))
-            {
-                if let Some(r) = v
-                    .get("id")
-                    .and_then(|x| x.as_str())
-                    .and_then(|id| rects.get(id))
-                {
+            let hit = !pat.is_empty()
+                && (name.to_lowercase().contains(pat) || nid.eq_ignore_ascii_case(pat));
+            if hit || (under && in_match) {
+                let kind = v.get("type").and_then(|x| x.as_str()).unwrap_or("?");
+                let label = if name.is_empty() { nid } else { name };
+                if let Some(r) = rects.get(nid) {
                     eprintln!(
-                        "{:indent$}{name}: x={:.0} y={:.0} w={:.0} h={:.0}",
+                        "{:indent$}{label} [{kind}]: x={:.2} y={:.2} w={:.2} h={:.2}",
                         "",
                         r.x,
                         r.y,
@@ -814,6 +1203,8 @@ fn resolved_rect_probe() {
                         r.h,
                         indent = depth
                     );
+                } else {
+                    eprintln!("{:indent$}{label} [{kind}]: <no rect>", "", indent = depth);
                 }
             }
             for c in v
@@ -822,11 +1213,149 @@ fn resolved_rect_probe() {
                 .into_iter()
                 .flatten()
             {
-                walk(c, rects, pat, depth + 1);
+                walk(c, rects, pat, under, in_match || hit, depth + 1);
             }
         }
-        walk(&v, &rects, &pat, 0);
+        walk(&v, &rects, &pat, under, false, 0);
     }
+}
+
+/// Manual corpus replay: load p01.op..p52.op from OP_GEOMETRY_REPLAY_DIR, run
+/// geometry_validate_and_fix on every active root, and assert the parsed doc is
+/// unchanged. This is the dirty-diff gate for geometry-only replay.
+#[test]
+#[ignore]
+fn replay_geometry_validate_corpus() {
+    let dir = std::env::var("OP_GEOMETRY_REPLAY_DIR").expect("OP_GEOMETRY_REPLAY_DIR");
+    let out_dir = std::env::var("OP_GEOMETRY_REPLAY_OUT_DIR").ok();
+    if let Some(out_dir) = &out_dir {
+        std::fs::create_dir_all(out_dir).expect("create replay out dir");
+    }
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
+        .expect("read replay dir")
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(is_numbered_corpus_op)
+        })
+        .collect();
+    files.sort();
+
+    let mut dirty = Vec::new();
+    let mut baseline_input_dirty = Vec::new();
+    let mut baseline_rounds = 0usize;
+    let mut current_rounds = 0usize;
+    for path in &files {
+        let text = std::fs::read_to_string(path).expect("read corpus op");
+        let doc: jian_ops_schema::PenDocument = serde_json::from_str(&text).expect("parse op");
+        let mut baseline_state = op_editor_core::EditorState::from_document(doc.clone());
+        let mut current_state = op_editor_core::EditorState::from_document(doc);
+        let before = serde_json::to_value(&current_state.doc).expect("before value");
+        let root_ids: Vec<String> = current_state
+            .active_children()
+            .iter()
+            .map(|root| {
+                use op_editor_core::PenNodeExt;
+                root.id_str().to_string()
+            })
+            .collect();
+        let baseline_root_ids = root_ids.clone();
+        {
+            let mut sink = crate::loop_finalize::StateDocSink {
+                state: &mut baseline_state,
+            };
+            for root_id in baseline_root_ids {
+                baseline_rounds += geometry_validate_and_fix_without_card_rows(&mut sink, &root_id);
+            }
+        }
+        {
+            let mut sink = crate::loop_finalize::StateDocSink {
+                state: &mut current_state,
+            };
+            for root_id in root_ids {
+                current_rounds += geometry_validate_and_fix(&mut sink, &root_id);
+            }
+        }
+        let baseline_after = serde_json::to_value(&baseline_state.doc).expect("baseline value");
+        let current_after = serde_json::to_value(&current_state.doc).expect("current value");
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("?")
+            .to_string();
+        if before != baseline_after {
+            baseline_input_dirty.push(name.clone());
+        }
+        if baseline_after != current_after {
+            if let Some(out_dir) = &out_dir {
+                let out_path = std::path::Path::new(out_dir).join(format!("{name}.current.op"));
+                std::fs::write(
+                    out_path,
+                    serde_json::to_string_pretty(&current_state.doc).expect("serialize dirty doc"),
+                )
+                .expect("write dirty doc");
+            }
+            dirty.push(name);
+        }
+    }
+
+    eprintln!(
+        "[GEOMETRY-REPLAY] checked={} baseline_input_dirty={} dirty={} baseline_rounds={} current_rounds={} dirty_files={:?} baseline_input_dirty_files={:?}",
+        files.len(),
+        baseline_input_dirty.len(),
+        dirty.len(),
+        baseline_rounds,
+        current_rounds,
+        dirty,
+        baseline_input_dirty
+    );
+    assert_eq!(files.len(), 52, "expected p01.op..p52.op corpus");
+    assert!(
+        dirty.is_empty(),
+        "dirty geometry replay files versus baseline: {dirty:?}"
+    );
+}
+
+fn geometry_validate_and_fix_without_card_rows(sink: &mut dyn DocSink, root_id: &str) -> usize {
+    let mut rounds = 0;
+    for _ in 0..MAX_ROUNDS {
+        let rects = resolved_rects(sink.state());
+        let cmds = {
+            let Some(root) = op_editor_core::walkers::find_node(
+                sink.state().active_children(),
+                &NodeId::new(root_id.to_string()),
+            ) else {
+                break;
+            };
+            let Ok(v) = serde_json::to_value(root) else {
+                break;
+            };
+            let mut cmds = Vec::new();
+            collect_scale_ops(&v, &rects, &mut cmds);
+            collect_collapse_fixes(&v, &rects, &mut cmds);
+            collect_text_overflow_fixes(&v, &rects, &mut cmds);
+            collect_frame_overflow_fixes(&v, &rects, &mut cmds);
+            collect_row_gap_fixes(&v, &rects, &mut cmds);
+            collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
+            cmds
+        };
+        if cmds.is_empty() {
+            break;
+        }
+        for cmd in cmds {
+            sink.apply(cmd);
+        }
+        rounds += 1;
+    }
+    rounds
+}
+
+fn is_numbered_corpus_op(name: &str) -> bool {
+    name.len() == "p01.op".len()
+        && name.starts_with('p')
+        && name.ends_with(".op")
+        && name[1..3].chars().all(|c| c.is_ascii_digit())
 }
 
 #[test]
@@ -1081,4 +1610,143 @@ fn ring_badge_overlay_is_not_reported_as_an_overlap() {
     let mut out = Vec::new();
     collect_sibling_jam_diagnostics(&row, &rects, &mut out);
     assert!(out.is_empty(), "overlay must not be reported: {out:?}");
+}
+
+#[test]
+fn real_layout_overfull_top_bar_flexifies_until_it_fits() {
+    use crate::test_support::VecDocSink;
+    use crate::types::DocSink;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    // test0703.op (MAISON) verbatim shape: a space_between top bar whose fit
+    // title block + fit actions cluster (280px search + date + button) sum
+    // wider than the row — the title ran into the search box and the button
+    // clipped at the page edge. No single child is wider than the row, so
+    // the per-child fixers are blind; the overfull fixer must flexify the
+    // widest rigid child (the cluster, then its search) until everything's
+    // right edge is back inside the row.
+    let doc = r##"{
+        "type":"frame","id":"root","name":"Page","width":700,"height":"fit_content","layout":"vertical","children":[
+            {"type":"frame","id":"bar","name":"Top Bar","layout":"horizontal","width":"fill_container","height":"fit_content",
+             "justifyContent":"space_between","alignItems":"center","children":[
+                {"type":"frame","id":"title","name":"Title Block","layout":"horizontal","gap":12,"width":"fit_content","height":"fit_content","children":[
+                    {"type":"text","id":"t1","content":"MANAGEMENT","fontSize":12},
+                    {"type":"text","id":"t2","content":"Client Management Suite","fontSize":34}
+                ]},
+                {"type":"frame","id":"cluster","name":"Right Cluster","layout":"horizontal","gap":24,"width":"fit_content","height":"fit_content","alignItems":"center","children":[
+                    {"type":"frame","id":"search","name":"Global Search","layout":"horizontal","gap":8,"width":280,"height":40,"children":[
+                        {"type":"text","id":"ph","content":"Search clients...","fontSize":13}
+                    ]},
+                    {"type":"text","id":"date","content":"Wed, Oct 25","fontSize":13},
+                    {"type":"frame","id":"cta","name":"Add Client","layout":"horizontal","width":120,"height":40,"children":[]}
+                ]}
+            ]}
+        ]
+    }"##;
+    let root: PenNode = serde_json::from_str(doc).expect("valid root");
+    let mut sink = VecDocSink::new();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state().active_children()[0].id_str().to_string();
+    let rounds = geometry_validate_and_fix(&mut sink, &root_id);
+    assert!(rounds >= 1, "overfull bar must trigger at least one round");
+
+    // Geometry proof: every descendant's right edge sits inside the bar's.
+    let rects = resolved_rects(sink.state());
+    let v = serde_json::to_value(sink.state().active_children()[0].clone()).unwrap();
+    let bar = v["children"][0]["id"].as_str().unwrap();
+    let bar_right = {
+        let r = &rects[bar];
+        r.x + r.w
+    };
+    fn walk(v: &serde_json::Value, out: &mut Vec<String>) {
+        if let Some(id) = v.get("id").and_then(|x| x.as_str()) {
+            out.push(id.to_string());
+        }
+        for c in v
+            .get("children")
+            .and_then(|c| c.as_array())
+            .into_iter()
+            .flatten()
+        {
+            walk(c, out);
+        }
+    }
+    let mut ids = Vec::new();
+    walk(&v["children"][0], &mut ids);
+    for id in ids {
+        if let Some(r) = rects.get(&id) {
+            assert!(
+                r.x + r.w <= bar_right + 2.0,
+                "{id} still hangs past the bar: right={} bar_right={bar_right}",
+                r.x + r.w
+            );
+        }
+    }
+}
+
+#[test]
+fn real_layout_wraps_a_stack_pushed_past_its_cell_by_an_avatar() {
+    use crate::test_support::VecDocSink;
+    use crate::types::DocSink;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::PenNodeExt;
+
+    // ATELIER's verbatim shape: a 120px name cell holding [36px avatar, fit
+    // name stack]. The stack alone (93px) fits the cell, but avatar + gap
+    // push its tail 21px into the NEXT column — the width-only check
+    // acquitted it. The right-edge check must flexify the stack; the text
+    // inside then wraps on the following round.
+    let doc = r##"{
+        "type":"frame","id":"page","name":"Page","width":400,"height":300,"layout":"vertical","children":[
+            {"type":"frame","id":"row","name":"Row","width":"fill_container","height":"fit_content","layout":"horizontal","gap":24,"children":[
+                {"type":"frame","id":"cell","name":"Cell Client","width":120,"height":"fit_content","layout":"horizontal","gap":12,"alignItems":"center","children":[
+                    {"type":"frame","id":"av","name":"Avatar","width":36,"height":36,"children":[]},
+                    {"type":"frame","id":"stack","name":"Name Stack","width":"fit_content","height":"fit_content","layout":"vertical","gap":2,"children":[
+                        {"type":"text","id":"nm","content":"Maximilian Thornebury-Ashworth","fontSize":14,"fontWeight":600},
+                        {"type":"text","id":"tier","content":"VIP Member","fontSize":11}
+                    ]}
+                ]},
+                {"type":"frame","id":"contact","name":"Cell Contact","width":"fill_container","height":"fit_content","layout":"vertical","children":[
+                    {"type":"text","id":"em","content":"j.thorne@mail.com","fontSize":13}
+                ]}
+            ]}
+        ]
+    }"##;
+    let root: PenNode = serde_json::from_str(doc).expect("valid root");
+    let mut sink = VecDocSink::new();
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state().active_children()[0].id_str().to_string();
+    let rounds = geometry_validate_and_fix(&mut sink, &root_id);
+    assert!(rounds >= 1, "pushed-out stack must trigger a fix round");
+
+    // Geometry proof: the name stack's right edge is back inside the cell.
+    let rects = resolved_rects(sink.state());
+    let v = serde_json::to_value(sink.state().active_children()[0].clone()).unwrap();
+    fn find_id(v: &serde_json::Value, name: &str) -> Option<String> {
+        if v.get("name").and_then(|x| x.as_str()) == Some(name) {
+            return v.get("id").and_then(|x| x.as_str()).map(String::from);
+        }
+        v.get("children")
+            .and_then(|c| c.as_array())
+            .into_iter()
+            .flatten()
+            .find_map(|c| find_id(c, name))
+    }
+    let cell = &rects[&find_id(&v, "Cell Client").unwrap()];
+    let stack = &rects[&find_id(&v, "Name Stack").unwrap()];
+    assert!(
+        stack.x + stack.w <= cell.x + cell.w + 2.0,
+        "stack tail back inside the cell: stack_right={} cell_right={}",
+        stack.x + stack.w,
+        cell.x + cell.w
+    );
 }

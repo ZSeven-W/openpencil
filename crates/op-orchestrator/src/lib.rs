@@ -42,6 +42,7 @@ pub mod variables;
 
 pub mod app_shell;
 pub mod append;
+pub(crate) mod chip_repair;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;
 pub(crate) mod cleanup_typography;
@@ -49,17 +50,24 @@ pub mod concurrent;
 pub mod geometry_validation;
 pub mod loop_finalize;
 pub mod prompt;
+pub mod radial_repair;
 pub mod role_defaults;
 pub mod role_infer;
 pub(crate) mod role_layout_post_pass;
 pub mod role_post_pass;
 pub mod run;
 pub mod scaffold;
+pub mod spacing_repair;
 pub mod spawn_concurrent;
+pub mod stub_repair;
 pub mod subagent;
 pub mod table_repair;
 pub mod tree_heuristics;
 
+#[cfg(test)]
+mod geometry_chip_tests;
+#[cfg(test)]
+mod radial_stub_tests;
 #[cfg(test)]
 mod test_support;
 

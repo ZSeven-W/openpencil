@@ -576,6 +576,86 @@ fn is_row_like(r: &Value) -> bool {
             >= 2
 }
 
+// Weak models ALSO separate a table's ROWS with a container gap (measured:
+// 16px on a "Client List Table" whose rows already carried bottom hairlines
+// AND zebra fills), turning the table into floating stripes with page
+// background bleeding between rows. Reference-grade tables are FLUSH — the
+// container has gap 0 and the rhythm comes from each row's own padding +
+// hairline/tint. Zero the vertical gap, but ONLY when the rows PROVE they
+// carry their own separation (≥2 rows with a fill or a bottom stroke) — rows
+// with nothing of their own keep the gap, it's the only thing separating them.
+
+/// Zero the row gap of table-named containers whose rows carry their own
+/// separation. Returns `true` iff a gap was flushed.
+pub(crate) fn flush_table_row_gap(root: &mut PenNode) -> bool {
+    let Ok(mut v) = serde_json::to_value(&*root) else {
+        return false;
+    };
+    if !flush_gap_in_value(&mut v) {
+        return false;
+    }
+    match serde_json::from_value::<PenNode>(v) {
+        Ok(new_node) => {
+            *root = new_node;
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+fn flush_gap_in_value(v: &mut Value) -> bool {
+    let mut changed = false;
+    if is_table_container(v)
+        && num(v, "gap").map(|g| g >= 8.0).unwrap_or(false)
+        && count_self_separating_rows(v) >= 2
+    {
+        if let Some(obj) = v.as_object_mut() {
+            obj.insert("gap".into(), json!(0.0));
+            changed = true;
+        }
+    }
+    if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
+        for c in kids.iter_mut() {
+            changed |= flush_gap_in_value(c);
+        }
+    }
+    changed
+}
+
+/// Rows (direct or through unnamed wrappers) that carry their OWN visual
+/// separation — a fill (zebra tint) or a bottom hairline stroke.
+fn count_self_separating_rows(container: &Value) -> usize {
+    fn count(node: &Value) -> usize {
+        if is_unnamed_vertical_wrapper(node) {
+            return node
+                .get("children")
+                .and_then(Value::as_array)
+                .map(|inner| inner.iter().map(count).sum())
+                .unwrap_or(0);
+        }
+        usize::from(is_row_like(node) && row_separates_itself(node))
+    }
+    container
+        .get("children")
+        .and_then(Value::as_array)
+        .map(|kids| kids.iter().map(count).sum())
+        .unwrap_or(0)
+}
+
+/// Does this row paint its own separation? A non-empty fill, or a stroke
+/// with any thickness (a `{bottom: 1}` hairline is the canonical shape).
+fn row_separates_itself(row: &Value) -> bool {
+    let has_fill = row
+        .get("fill")
+        .map(|f| match f {
+            Value::Array(a) => !a.is_empty(),
+            Value::Null => false,
+            _ => true,
+        })
+        .unwrap_or(false);
+    has_fill || row.get("stroke").map(|s| !s.is_null()).unwrap_or(false)
+}
+
 /// A ≥3-column row whose current gap is missing or effectively zero.
 fn row_needs_gap(row: &Value) -> bool {
     let cols = row
@@ -588,7 +668,11 @@ fn row_needs_gap(row: &Value) -> bool {
     }
     match row.get("gap") {
         None | Some(Value::Null) => true,
-        Some(_) => num(row, "gap").map(|g| g < 1.0).unwrap_or(true),
+        // A 1-7px "gap" on a ≥3-column data row is never real column
+        // spacing — a model wrote gap:1 meaning a hairline and the columns
+        // rendered as one word ("NameContactLast Visit…", measured); the
+        // old `< 1.0` gate let exactly-1.0 escape every column repair.
+        Some(_) => num(row, "gap").map(|g| g < 8.0).unwrap_or(true),
     }
 }
 
