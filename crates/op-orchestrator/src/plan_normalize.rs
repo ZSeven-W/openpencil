@@ -89,7 +89,17 @@ fn is_bottom_nav_subtask(st: &Subtask) -> bool {
 }
 
 fn ensure_requested_bottom_nav_subtask(plan: &mut OrchestratorPlan, req: &DesignRequest) {
-    if !prompt_requests_bottom_nav(&req.prompt) || plan.subtasks.iter().any(is_bottom_nav_subtask) {
+    if plan.subtasks.iter().any(is_bottom_nav_subtask) {
+        return;
+    }
+    // Two ways in: the prompt asked for it, OR this is an app HOME/main
+    // screen — a multi-section mobile plan whose root/screen reads as a
+    // home/feed — where a bottom tab bar is anatomy, not an option (a
+    // glm "Food App Home" planned 4 content sections and simply skipped
+    // the navbar the teaching asked for; plan-level completeness is the
+    // deterministic backstop). Single-task flows (<3 sections) never
+    // qualify.
+    if !prompt_requests_bottom_nav(&req.prompt) && !plan_is_app_home_screen(plan) {
         return;
     }
 
@@ -110,6 +120,25 @@ fn ensure_requested_bottom_nav_subtask(plan: &mut OrchestratorPlan, req: &Design
         generated_root_id: None,
         existing_section_labels: None,
     });
+}
+
+/// A multi-section mobile plan whose root frame is named like an app
+/// home/main/feed screen — the shape whose bottom tab bar is mandatory.
+fn plan_is_app_home_screen(plan: &OrchestratorPlan) -> bool {
+    if plan.subtasks.len() < 3 {
+        return false;
+    }
+    let name = plan.root_frame.name.to_lowercase();
+    [
+        "home",
+        "main screen",
+        "feed",
+        "discover",
+        "browse",
+        "dashboard",
+    ]
+    .iter()
+    .any(|k| name.contains(k))
 }
 
 /// 就地规范化 `plan`:
@@ -228,6 +257,49 @@ mod tests {
             subtasks,
             style_guide_name: None,
         }
+    }
+
+    #[test]
+    fn app_home_plan_without_navbar_gets_one_appended() {
+        // glm planned "Food App Home" with 4 content sections and no navbar —
+        // an app home's bottom tab bar is anatomy, not an option.
+        let mut p = plan(
+            390.0,
+            vec![
+                subtask("header", "Header & Search"),
+                subtask("cats", "Category Rail"),
+                subtask("feat", "Featured Restaurant Banner"),
+                subtask("popular", "Popular Dishes"),
+            ],
+        );
+        p.root_frame.name = "Food App Home".into();
+        normalize(&mut p, &req_with_prompt("well-designed food app"));
+        let labels: Vec<String> = p.subtasks.iter().map(|s| s.label.to_lowercase()).collect();
+        assert!(
+            labels.iter().any(|l| l.contains("navigation")),
+            "navbar appended: {labels:?}"
+        );
+        assert!(
+            labels.last().unwrap().contains("navigation"),
+            "navbar is LAST: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn single_task_mobile_flow_gets_no_navbar() {
+        let mut p = plan(
+            390.0,
+            vec![subtask("form", "Login Form"), subtask("cta", "Actions")],
+        );
+        p.root_frame.name = "Login Screen".into();
+        normalize(&mut p, &req_with_prompt("mobile login screen"));
+        assert!(
+            !p.subtasks
+                .iter()
+                .any(|s| s.label.to_lowercase().contains("navigation")),
+            "{:?}",
+            p.subtasks.iter().map(|s| &s.label).collect::<Vec<_>>()
+        );
     }
 
     #[test]
