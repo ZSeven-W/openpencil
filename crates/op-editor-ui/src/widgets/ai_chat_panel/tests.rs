@@ -636,10 +636,10 @@ fn bottom_toolbar_layout_model_pill_is_leftmost() {
 }
 
 #[test]
-fn bottom_toolbar_layout_order_is_model_speed_attach_palette_send() {
-    // #38: ⚡/📎/🎨 moved right; #42: stop shares the send slot. Full
+fn bottom_toolbar_layout_order_is_model_speed_attach_send() {
+    // #38: ⚡/📎 moved right; #42: stop shares the send slot. Full
     // left-to-right order is:
-    //   model (LEFT) | [gap] | speed | attach | palette | send (RIGHT)
+    //   model (LEFT) | [gap] | speed | attach | send (RIGHT)
     let s = EditorState::new();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -647,7 +647,7 @@ fn bottom_toolbar_layout_order_is_model_speed_attach_palette_send() {
     let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
     let footer = panel.footer_layout(rect, input, toolbar_top);
 
-    // Left-to-right order: model < speed < attach < palette < send
+    // Left-to-right order: model < speed < attach < send
     assert!(
         footer.model.origin.x < footer.speed.origin.x,
         "model left of speed"
@@ -657,19 +657,15 @@ fn bottom_toolbar_layout_order_is_model_speed_attach_palette_send() {
         "speed left of attach"
     );
     assert!(
-        footer.attach.origin.x < footer.palette.origin.x,
-        "attach left of palette"
-    );
-    assert!(
-        footer.palette.origin.x < footer.send.origin.x,
-        "palette left of send"
+        footer.attach.origin.x < footer.send.origin.x,
+        "attach left of send"
     );
     // #42: stop shares the send slot (toggle in place), not a separate button.
     assert!(
         (footer.stop.origin.x - footer.send.origin.x).abs() < 0.01,
         "stop shares the send slot"
     );
-    // #38 specific: speed/attach/palette must all be RIGHT of the model pill.
+    // #38 specific: speed/attach must all be RIGHT of the model pill.
     let model_right = footer.model.origin.x + footer.model.size.x;
     assert!(
         footer.speed.origin.x > model_right + 4.0,
@@ -707,28 +703,6 @@ fn hit_test_stop_circle_only_active_while_streaming() {
         panel2.hit_test(rect, stop_center),
         Some(AIChatHit::Stop),
         "stop hit must not fire while idle"
-    );
-}
-
-#[test]
-fn hit_test_palette_button_is_inert() {
-    // Palette is a no-op in #27; clicking it returns Inside (consumed).
-    let mut s = EditorState::new();
-    seed_available_model(&mut s);
-    let panel = AIChatPlaceholder::from_editor(&s);
-    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
-    let input = panel.input_rect(rect);
-    let toolbar_top = input.origin.y + INPUT_AREA_HEIGHT;
-    let footer = panel.footer_layout(rect, input, toolbar_top);
-    let palette_center = Point2D::new(
-        footer.palette.origin.x + footer.palette.size.x / 2.0,
-        footer.palette.origin.y + footer.palette.size.y / 2.0,
-    );
-
-    assert_eq!(
-        panel.hit_test(rect, palette_center),
-        Some(AIChatHit::Inside),
-        "palette button should be consumed (inert) in #27 layout"
     );
 }
 

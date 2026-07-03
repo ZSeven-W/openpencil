@@ -188,7 +188,7 @@ impl<'a> AIChatPlaceholder<'a> {
                 return Some(AIChatHit::FocusInput);
             }
             // Bottom toolbar strip (#27 layout):
-            //   model pill | ⚡ speed chip | 📎 attach | 🎨 palette | [gap] | ◻ stop | ↑ send
+            //   model pill | ⚡ speed chip | 📎 attach | [gap] | ◻ stop | ↑ send
             if point.y >= toolbar_top {
                 let footer = self.footer_layout(rect, input_rect, toolbar_top);
                 let streaming = self.is_streaming();
@@ -219,10 +219,6 @@ impl<'a> AIChatPlaceholder<'a> {
                     } else {
                         AIChatHit::AddAttachment
                     });
-                }
-                // Palette is inert in #27 — consume the click so canvas is not affected.
-                if (footer.palette).contains(point) {
-                    return Some(AIChatHit::Inside);
                 }
                 // Stop circle — only a live target while streaming.
                 if streaming && (footer.stop).contains(point) {
@@ -450,9 +446,6 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         if !streaming && (footer.attach).contains(point) {
             return Some(op_editor_core::ChatFooterButton::AddAttachment);
-        }
-        if (footer.palette).contains(point) {
-            return Some(op_editor_core::ChatFooterButton::Palette);
         }
         if streaming && (footer.stop).contains(point) {
             return Some(op_editor_core::ChatFooterButton::Stop);

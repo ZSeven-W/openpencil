@@ -359,8 +359,6 @@ pub(crate) struct FooterLayout {
     pub(crate) agent_team: Rect,
     /// Paperclip attach button — bare icon, muted.
     pub(crate) attach: Rect,
-    /// Palette button — bare icon, muted, currently inert (#27 spec).
-    pub(crate) palette: Rect,
     /// Stop circle — shown only while a turn streams.
     pub(crate) stop: Rect,
     /// Send/stop circle — the primary action button.
@@ -633,7 +631,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         }
 
         // Bottom toolbar (#27) — single row:
-        //   model pill | ⚡ speed chip | 📎 attach | 🎨 palette | [gap] | ◻ stop | ↑ send
+        //   model pill | ⚡ speed chip | 📎 attach | [gap] | ◻ stop | ↑ send
         let toolbar_y = input_rect.origin.y + input_area_h + attach_h;
         let toolbar_center_y = toolbar_y + INPUT_TOOLBAR_HEIGHT / 2.0;
         let footer = self.footer_layout(rect, self.input_rect(rect), toolbar_y);
