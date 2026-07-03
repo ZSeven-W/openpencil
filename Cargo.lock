@@ -3093,6 +3093,7 @@ name = "op-ai-skills"
 version = "0.8.0"
 dependencies = [
  "include_dir",
+ "jian-ops-schema",
 ]
 
 [[package]]

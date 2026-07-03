@@ -25,6 +25,15 @@ ROLE → WIDGET (the only honoured markers):
 - `role: "switch"` or `role: "toggle"` → switch (on/off)
 - `role: "checkbox"` → checkbox (label + box)
 - `role: "slider"` → slider (range)
+- `role: "radio-group"` (alias `"radio"`) → radio_group — options; each
+  visible text child of a marked legacy frame becomes one option.
+- `role: "number-input"` → number_input — placeholder / value / min /
+  max; muted text child = placeholder, plain text child = value.
+- `role: "progress"` (alias `"progress-bar"`) → progress — value / max /
+  indeterminate; display-only (not focusable).
+
+Tabs are NOT promoted from role markers — emit first-class `tabs` nodes
+directly (they're in the allowed node kinds).
 
 (Alternatively `semantics: { role: "input" }` also promotes to text_input.)
 
