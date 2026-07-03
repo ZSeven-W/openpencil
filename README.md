@@ -89,7 +89,7 @@ Built-in style guide library with tag-based fuzzy matching. Apply visual styles 
 
 ### 🖥️ Runs Everywhere
 
-Web app + native desktop on macOS, Windows, and Linux via Electron. Auto-updates from GitHub Releases. `.op` file association — double-click to open.
+Web app + native desktop on macOS, Windows, and Linux — one Rust core, a single self-contained binary, no browser engine. `.op` file association — double-click to open.
 
 </td>
 <td width="50%">
@@ -112,7 +112,7 @@ Export to React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack C
 
 ### 🧩 Embeddable SDK
 
-`pen-engine` (headless) + `pen-react` (React UI SDK) — embed the design engine in your own app. DesignProvider, DesignCanvas, hooks, panels, and toolbar components out of the box.
+`op-web-sdk` (vanilla) + `op-web-sdk-react` / `op-web-sdk-vue` adapters — embed a read-only `.op` viewer in your own app, powered by the same wasm renderer the editor ships.
 
 </td>
 </tr>
@@ -159,15 +159,15 @@ Or use the install script (macOS / Linux):
 curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
 ```
 
-## Cloning（含 Rust 子系统）
+## Cloning (with submodules)
 
 ```bash
 git clone --recurse-submodules https://github.com/ZSeven-W/openpencil.git
-# Or already cloned:
-git submodule update --init --recursive
+# Or already cloned — sync first so stale submodule URLs pick up .gitmodules changes:
+git submodule sync --recursive && git submodule update --init --recursive
 ```
 
-`vendor/agent` is the `agent-rs` submodule (cross-product, OP + Zode share); HTTPS URL needs no SSH key.
+Three submodules live under `vendor/`, all public and fetched over HTTPS (no SSH key needed): `jian` (Skia widget/render/event toolkit), `casement` (winit fork), and `agent` (`agent-rs` — cross-product Rust agent runtime, shared by OP + Zode). `vendor/anthropic-agent-sdk` is tracked in-tree, not a submodule.
 
 ## Quick Start (Development)
 
@@ -263,8 +263,8 @@ docker build --target full -t openpencil-full .
 
 **MCP Server**
 
-- Built-in MCP server (`pen-mcp` package) — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
-- Auto-detects Node.js — if not installed, falls back to HTTP transport and auto-starts the MCP HTTP server
+- Built-in MCP server (`op-mcp` crate) — one-click install into Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLIs
+- No Node.js required — stdio transport via the desktop binary (`--mcp <path>`), plus a live HTTP endpoint (`127.0.0.1:<port>/mcp`) from the running app
 - Design automation from terminal: read, create, and modify `.op` files via any MCP-compatible agent
 - **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` for higher-fidelity multi-section designs
 - **Segmented prompt retrieval** — load only the design knowledge you need (schema, layout, roles, icons, planning, etc.)
@@ -346,33 +346,32 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 
 **Desktop App**
 
-- Native macOS, Windows, and Linux via Electron
+- Native macOS, Windows, and Linux — a single self-contained binary (winit + GPU Skia, no Electron)
 - `.op` file association — double-click to open, single-instance lock
-- Auto-update from GitHub Releases
+- Background update check against GitHub Releases
 - Native application menu with Save As, Open Recent, and an unsaved-changes dialog on close
 - Recent files persistence
 
 ## Tech Stack
 
-|                 |                                                                                         |
-| --------------- | --------------------------------------------------------------------------------------- |
-| **Frontend**    | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                       |
-| **Canvas**      | CanvasKit/Skia (WASM, GPU-accelerated)                                                  |
-| **Engine**      | pen-engine (headless) · pen-react (React UI SDK)                                        |
-| **State**       | Zustand v5                                                                              |
-| **Server**      | Nitro                                                                                   |
-| **Desktop**     | Electron 35                                                                             |
-| **CLI**         | `op` — terminal control, batch design DSL                                               |
-| **AI**          | Built-in Rust runtime · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime**     | Bun · Vite 7                                                                            |
-| **Lint**        | oxlint · oxfmt                                                                          |
-| **File format** | `.op` — JSON-based, human-readable, Git-friendly                                        |
+|                 |                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| **Core**        | Rust workspace (`crates/`) — editor state, widgets, hosts, MCP, AI, codegen                 |
+| **Rendering**   | GPU Skia everywhere — `skia-safe` (GL) on native, CanvasKit (WASM/WebGL2) in the browser    |
+| **UI toolkit**  | jian — vendored Rust widget/render/event toolkit (`vendor/jian`)                            |
+| **Windowing**   | winit (vendored `casement` fork)                                                            |
+| **Desktop**     | Native binary `openpencil-desktop` — no browser engine                                      |
+| **Web SDK**     | `op-web-sdk` + React 19 / Vue 3 adapters — read-only `.op` viewer (TypeScript)              |
+| **CLI**         | `op` — terminal control, batch design DSL                                                   |
+| **AI**          | Built-in Rust agent runtime · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Lint**        | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                                          |
+| **File format** | `.op` — JSON-based, human-readable, Git-friendly                                            |
 
 ## Why Rust
 
-OpenPencil is being rewritten from the ground up in **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). The TypeScript + Electron build is what ships today; the Rust rewrite is what's next — one native core that is dramatically smaller and faster, and runs on more platforms from a single codebase.
+OpenPencil was rewritten from the ground up in **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). The rewrite is complete — the TypeScript + Electron editor was retired at `v0.7.5`, and the Rust workspace in this repo is the product: one native core that is dramatically smaller and faster, and runs on more platforms from a single codebase.
 
-|                       | TypeScript + Electron (today)                  | Rust (the rewrite)                                                  |
+|                       | TypeScript + Electron (retired, `v0.7.5`)      | Rust (today)                                                        |
 | --------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
 | **Desktop runtime**   | Electron — bundles Chromium + Node.js          | Native window (`winit` + GPU Skia), no browser engine               |
 | **Desktop footprint** | Full Chromium runtime per install              | Single self-contained binary — **55.5 MB**                          |
@@ -392,47 +391,40 @@ OpenPencil is being rewritten from the ground up in **Rust** ([#129](https://git
 - **Native accessibility** — AccessKit on macOS, Windows, and Linux, plus a DOM mirror on web, instead of leaning on a browser's a11y tree.
 - **One type-checked workspace** — the MCP host, CLI, AI providers, code generation, Figma import, and Git integration all live in a single Rust workspace, with `cargo-deny` supply-chain gating in CI.
 
-> **Status:** the Rust shell is under active development (see the Roadmap below). Until it reaches feature parity for `v0.8.0`, the installable downloads above are the TypeScript + Electron build.
+> **Status:** the TypeScript editor was retired at `v0.7.5` and lives only in git history; this repository is the Rust workspace. The `v0.8.0` Rust release is under active development (see the Roadmap below).
 
 ## Project Structure
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 TanStack Start web app
-│   │   ├── src/
-│   │   │   ├── canvas/      CanvasKit/Skia engine — drawing, sync, layout
-│   │   │   ├── components/  React UI — editor, panels, shared dialogs, icons
-│   │   │   ├── services/ai/ AI chat, orchestrator, design generation, streaming
-│   │   │   ├── services/codegen/ Code generation service wrappers
-│   │   │   ├── stores/      Zustand — canvas, document, pages, history, AI
-│   │   │   ├── hooks/       Keyboard shortcuts, file drop, Figma paste, MCP sync
-│   │   │   ├── i18n/        Internationalization — 15 locales
-│   │   │   └── uikit/       Reusable component kit system
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — streaming chat, agent, generation, image search
-│   │       ├── api/mcp/     MCP HTTP transport endpoints
-│   │       └── utils/       Claude, OpenCode, Codex, Copilot, Gemini CLI wrappers
-│   ├── desktop/             Electron desktop app
-│   │   ├── main.ts          Window, Nitro fork, native menu, auto-updater
-│   │   ├── ipc-handlers.ts  Native file dialogs, theme sync, prefs IPC
-│   │   └── preload.ts       IPC bridge
-│   └── cli/                 CLI tool — `op` command
-│       ├── src/commands/    Design, document, export, import, node, page, variable commands
-│       ├── connection.ts    WebSocket connection to running app
-│       └── launcher.ts      Auto-detect and launch desktop app or web server
-├── packages/
-│   ├── pen-types/           Type definitions for PenDocument model
-│   ├── pen-core/            Document tree ops, layout engine, variables
-│   ├── pen-engine/          Headless design engine — document, selection, history, viewport
-│   ├── pen-react/           React UI SDK — provider, canvas, hooks, panels, toolbar
-│   ├── pen-codegen/         Code generators (React, HTML, Vue, Flutter, ...)
-│   ├── pen-figma/           Figma .fig file parser and converter
-│   ├── pen-renderer/        Standalone CanvasKit/Skia renderer
-│   ├── pen-mcp/             MCP server — tools, routes, document manager
-│   ├── pen-sdk/             Umbrella SDK (re-exports all packages)
-│   └── pen-ai-skills/       AI prompt skill engine (phase-driven prompt loading)
-└── .githooks/               Pre-commit version sync from branch name
+├── crates/                   Rust workspace — the product
+│   ├── op-editor-core/       Canonical `.op` (PenDocument) editor state + EditorCommand + design variables
+│   ├── op-editor-ui/         Platform-free widgets + RenderBackend facade (wasm32-clean)
+│   ├── op-editor-host-core/  Transport-free host state machines shared by all hosts
+│   ├── op-host-native/       Native host lib — winit + skia-safe GL (desktop + mobile)
+│   ├── op-host-web/          Browser bundle — wasm32 cdylib, CanvasKit renderer
+│   ├── op-host-desktop/      Desktop binary `openpencil-desktop`; also the `--serve-web` daemon
+│   ├── op-host-services/     Headless serve-web / MCP daemon lib
+│   ├── op-host-web-server/   Thin GL-free web-server binary
+│   ├── op-cli/               CLI tool — `op` command
+│   ├── op-mcp/               MCP server — tools, batch design, layered workflow
+│   ├── op-ai/                AI providers, chat runtime, streaming
+│   ├── op-ai-skills/         AI prompt skill engine (phase-driven prompt loading)
+│   ├── op-orchestrator/      Concurrent agent-team orchestration
+│   ├── op-codegen/           Code generators (React, HTML, Vue, Flutter, ...)
+│   ├── op-figma/             Figma .fig file parser and converter
+│   ├── op-git/               Git integration — clone, branch, push/pull, merge
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 Web SDK workspace (Bun)
+│   ├── op-web-sdk/           Read-only `.op` web viewer SDK (wraps the wasm bundle)
+│   ├── op-web-sdk-react/     React 19 adapter
+│   └── op-web-sdk-vue/       Vue 3 adapter
+├── vendor/                   Vendored subsystems (git submodules)
+│   ├── jian/                 Skia widget/render/event toolkit
+│   ├── casement/             winit fork
+│   └── agent/                Cross-product Rust agent runtime (agent-rs)
+└── .githooks/                Pre-commit version sync from branch name
 ```
 
 ## Keyboard Shortcuts
@@ -472,9 +464,9 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 cd packages && bun run bump <version>             # Sync SDK package.json versions
 ```
 
-### Rust subsystem (Step 0+)
+### Rust workspace details
 
-OpenPencil 正在进行全量 Rust 化。当前状态见 `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md`（v7 FROZEN）。
+The Rust-ification is complete — the Rust workspace is the product. Kickoff spec: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN).
 
 ```bash
 # Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
@@ -501,8 +493,6 @@ cargo deny check && cargo deny --target wasm32-unknown-unknown check bans       
 **Shared library crates:** `op-editor-core` (canonical `.op` state), `op-editor-ui` (platform-free widgets + `RenderBackend`), `op-editor-host-core` (transport-free host state machines), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — plus `op-smoke` (headless design-turn test runner). The browser bundle renders through the official CanvasKit skia WASM (loaded separately), so the retired `skia-safe-op` wasm fork + `wasm-libc-shim` no longer exist.
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
-
-**Phase boundary:** Step 0 = workspace skeleton only (no feature porting). Real implementation begins at Step 1 (kill-spike) and beyond.
 
 ## Contributing
 

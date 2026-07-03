@@ -80,7 +80,7 @@ Claude Code, Codex, Gemini, OpenCode, Kiro 또는 Copilot CLI에 원클릭 설�
 
 ### 🖥️ 어디서든 실행
 
-웹 앱 + Electron을 통한 macOS, Windows, Linux 네이티브 데스크톱. GitHub Releases에서 자동 업데이트. `.op` 파일 연결 — 더블 클릭으로 열기.
+웹 앱 + macOS, Windows, Linux 네이티브 데스크톱 — 하나의 Rust 코어, 단일 자급자족 바이너리, 브라우저 엔진 없음. `.op` 파일 연결 — 더블 클릭으로 열기.
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **MCP 서버**
 
-- 내장 MCP 서버 — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI에 원클릭 설치
-- Node.js 자동 감지 — 설치되지 않은 경우 HTTP 전송 모드로 자동 대체하고 MCP HTTP 서버를 자동 시작
+- 내장 MCP 서버 (`op-mcp` 크레이트) — Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI에 원클릭 설치
+- Node.js 불필요 — 데스크톱 바이너리(`--mcp <path>`)를 통한 stdio 전송, 그리고 실행 중인 앱이 제공하는 실시간 HTTP 엔드포인트(`127.0.0.1:<port>/mcp`)
 - 터미널에서 디자인 자동화: MCP 호환 에이전트를 통해 `.op` 파일 읽기, 생성, 편집
 - **계층적 디자인 워크플로** — `design_skeleton` → `design_content` → `design_refine`으로 더 높은 충실도의 멀티 섹션 디자인
 - **세그먼트 프롬프트 검색** — 필요한 디자인 지식만 로드 (schema, layout, roles, icons, planning 등)
@@ -275,31 +275,32 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 
 **데스크톱 앱**
 
-- Electron을 통한 네이티브 macOS, Windows, Linux 지원
+- 네이티브 macOS, Windows, Linux — 단일 자급자족 바이너리 (winit + GPU Skia, Electron 없음)
 - `.op` 파일 연결 — 더블 클릭으로 열기, 단일 인스턴스 잠금
-- GitHub Releases에서 자동 업데이트
+- GitHub Releases 대비 백그라운드 업데이트 확인
 - 다른 이름으로 저장, 최근 항목 열기, 닫을 때 저장되지 않은 변경 사항 대화상자를 지원하는 네이티브 애플리케이션 메뉴
 - 최근 파일 영속성
 
 ## 기술 스택
 
-|                |                                                                                  |
-| -------------- | -------------------------------------------------------------------------------- |
-| **프론트엔드** | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **캔버스**     | CanvasKit/Skia (WASM, GPU 가속)                                                  |
-| **상태 관리**  | Zustand v5                                                                       |
-| **서버**       | Nitro                                                                            |
-| **데스크톱**   | Electron 35                                                                      |
-| **CLI**        | `op` — 터미널 제어, 배치 디자인 DSL                                              |
-| **AI**         | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **런타임**     | Bun · Vite 7                                                                     |
-| **파일 형식**  | `.op` — JSON 기반, 사람이 읽을 수 있는, Git 친화적                               |
+|               |                                                                                |
+| ------------- | ------------------------------------------------------------------------------ |
+| **코어**      | Rust 워크스페이스 (`crates/`) — 에디터 상태, 위젯, 호스트, MCP, AI, 코드젠     |
+| **렌더링**    | 모든 곳에서 GPU Skia — 네이티브는 `skia-safe` (GL), 브라우저는 CanvasKit (WASM/WebGL2) |
+| **UI 툴킷**   | jian — 벤더링된 Rust 위젯/렌더/이벤트 툴킷 (`vendor/jian`)                     |
+| **윈도잉**    | winit (벤더링된 `casement` 포크)                                               |
+| **데스크톱**  | 네이티브 바이너리 `openpencil-desktop` — 브라우저 엔진 없음                    |
+| **웹 SDK**    | `op-web-sdk` + React 19 / Vue 3 어댑터 — 읽기 전용 `.op` 뷰어 (TypeScript)      |
+| **CLI**       | `op` — 터미널 제어, 배치 디자인 DSL                                            |
+| **AI**        | 내장 Rust 에이전트 런타임 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **린트**      | clippy · rustfmt (Rust) · oxlint · oxfmt (웹 SDK)                              |
+| **파일 형식** | `.op` — JSON 기반, 사람이 읽을 수 있는, Git 친화적                             |
 
 ## Rust를 선택한 이유
 
-OpenPencil은 **Rust**로 처음부터 다시 작성되고 있습니다 ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). 현재 배포되는 빌드는 TypeScript + Electron이며, Rust 재작성 버전이 그 다음 단계입니다 — 단일 네이티브 코어로 크기는 획기적으로 줄고 속도는 빨라지며, 하나의 코드베이스에서 더 많은 플랫폼을 지원합니다.
+OpenPencil은 처음부터 **Rust**로 다시 작성되었습니다 ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). 재작성이 완료되었습니다 — TypeScript + Electron 에디터는 `v0.7.5`에서 은퇴했고, 이 저장소의 Rust 워크스페이스가 바로 제품입니다: 단일 네이티브 코어로 크기는 획기적으로 줄고 속도는 빨라지며, 하나의 코드베이스에서 더 많은 플랫폼을 지원합니다.
 
-|                         | TypeScript + Electron (현재)                              | Rust (재작성 버전)                                                       |
+|                         | TypeScript + Electron (은퇴, `v0.7.5`)                    | Rust (현재)                                                              |
 | ----------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------ |
 | **데스크톱 런타임**     | Electron — Chromium + Node.js 번들                        | 네이티브 윈도우 (`winit` + GPU Skia), 브라우저 엔진 없음                 |
 | **데스크톱 설치 크기**  | 설치마다 전체 Chromium 런타임 포함                        | 단일 자급자족 바이너리 — **55.5 MB**                                     |
@@ -319,43 +320,40 @@ OpenPencil은 **Rust**로 처음부터 다시 작성되고 있습니다 ([#129](
 - **네이티브 접근성** — 브라우저의 접근성 트리에 의존하는 대신 macOS, Windows, Linux에서는 AccessKit을, 웹에서는 DOM 미러를 사용합니다.
 - **타입 검사된 단일 워크스페이스** — MCP 호스트, CLI, AI 제공자, 코드 생성, Figma 가져오기, Git 통합이 모두 단일 Rust 워크스페이스 안에 있으며, CI에서 `cargo-deny`로 공급망을 검증합니다.
 
-> **상태:** Rust 셸은 활발히 개발 중입니다 (아래 로드맵 참고). `v0.8.0` 기능 동등성에 도달할 때까지는 위의 설치 가능한 다운로드가 TypeScript + Electron 빌드입니다.
+> **상태:** TypeScript 에디터는 `v0.7.5`에서 은퇴하여 이제 git 히스토리에만 남아 있으며, 이 저장소는 Rust 워크스페이스입니다. `v0.8.0` Rust 릴리스는 활발히 개발 중입니다 (아래 로드맵 참고).
 
 ## 프로젝트 구조
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 TanStack Start 웹 앱
-│   │   ├── src/
-│   │   │   ├── canvas/      CanvasKit/Skia 엔진 — 드로잉, 동기화, 레이아웃
-│   │   │   ├── components/  React UI — 에디터, 패널, 공유 다이얼로그, 아이콘
-│   │   │   ├── services/ai/ AI 채팅, 오케스트레이터, 디자인 생성, 스트리밍
-│   │   │   ├── stores/      Zustand — 캔버스, 문서, 페이지, 히스토리, AI
-│   │   │   ├── mcp/         외부 CLI 통합용 MCP 서버 도구
-│   │   │   ├── hooks/       키보드 단축키, 파일 드롭, Figma 붙여넣기
-│   │   │   └── uikit/       재사용 가능한 컴포넌트 킷 시스템
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — 스트리밍 채팅, 생성, 유효성 검사
-│   │       └── utils/       Claude CLI, OpenCode, Codex, Copilot 래퍼
-│   ├── desktop/             Electron 데스크톱 앱
-│   │   ├── main.ts          윈도우, Nitro 포크, 네이티브 메뉴, 자동 업데이터
-│   │   ├── ipc-handlers.ts  네이티브 파일 대화상자, 테마 동기화, 환경설정 IPC
-│   │   └── preload.ts       IPC 브리지
-│   └── cli/                 CLI 도구 — `op` 명령어
-│       ├── src/commands/    디자인, 문서, 내보내기, 가져오기, 노드, 페이지, 변수 명령어
-│       ├── connection.ts    실행 중인 앱과의 WebSocket 연결
-│       └── launcher.ts      데스크톱 앱 또는 웹 서버 자동 감지 및 실행
-├── packages/
-│   ├── pen-types/           PenDocument 모델 타입 정의
-│   ├── pen-core/            문서 트리 연산, 레이아웃 엔진, 변수
-│   ├── pen-codegen/         코드 생성기 (React, HTML, Vue, Flutter, ...)
-│   ├── pen-figma/           Figma .fig 파일 파서 및 변환기
-│   ├── pen-renderer/        독립형 CanvasKit/Skia 렌더러
-│   ├── pen-sdk/             통합 SDK (모든 패키지 재export)
-│   ├── pen-ai-skills/       AI 프롬프트 스킬 엔진 (단계별 프롬프트 로딩)
-│   └── agent/               AI 에이전트 SDK (Vercel AI SDK, 멀티 제공자, 에이전트 팀)
-└── .githooks/               브랜치 이름에서 버전 동기화를 위한 pre-commit
+├── crates/                   Rust 워크스페이스 — 제품 본체
+│   ├── op-editor-core/       정규 `.op` (PenDocument) 에디터 상태 + EditorCommand + 디자인 변수
+│   ├── op-editor-ui/         플랫폼 독립적 위젯 + RenderBackend 파사드 (wasm32-clean)
+│   ├── op-editor-host-core/  모든 호스트가 공유하는 전송 계층 독립적 호스트 상태 머신
+│   ├── op-host-native/       네이티브 호스트 라이브러리 — winit + skia-safe GL (데스크톱 + 모바일)
+│   ├── op-host-web/          브라우저 번들 — wasm32 cdylib, CanvasKit 렌더러
+│   ├── op-host-desktop/      데스크톱 바이너리 `openpencil-desktop`; `--serve-web` 데몬 겸용
+│   ├── op-host-services/     헤드리스 serve-web / MCP 데몬 라이브러리
+│   ├── op-host-web-server/   GL 없는 경량 web-server 바이너리
+│   ├── op-cli/               CLI 도구 — `op` 명령어
+│   ├── op-mcp/               MCP 서버 — 도구, 배치 디자인, 계층적 워크플로
+│   ├── op-ai/                AI 제공자, 채팅 런타임, 스트리밍
+│   ├── op-ai-skills/         AI 프롬프트 스킬 엔진 (단계별 프롬프트 로딩)
+│   ├── op-orchestrator/      동시 에이전트 팀 오케스트레이션
+│   ├── op-codegen/           코드 생성기 (React, HTML, Vue, Flutter, ...)
+│   ├── op-figma/             Figma .fig 파일 파서 및 변환기
+│   ├── op-git/               Git 통합 — 클론, 브랜치, 푸시/풀, 병합
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 웹 SDK 워크스페이스 (Bun)
+│   ├── op-web-sdk/           읽기 전용 `.op` 웹 뷰어 SDK (wasm 번들을 래핑)
+│   ├── op-web-sdk-react/     React 19 어댑터
+│   └── op-web-sdk-vue/       Vue 3 어댑터
+├── vendor/                   벤더링된 서브시스템 (git submodules)
+│   ├── jian/                 Skia 위젯/렌더/이벤트 툴킷
+│   ├── casement/             winit 포크
+│   └── agent/                제품 공용 Rust 에이전트 런타임 (agent-rs)
+└── .githooks/                브랜치 이름에서 버전 동기화를 위한 pre-commit
 ```
 
 ## 키보드 단축키

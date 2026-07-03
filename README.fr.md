@@ -80,7 +80,7 @@ Les fichiers `.op` sont du JSON — lisibles par l'humain, compatibles Git, comp
 
 ### 🖥️ Fonctionne partout
 
-Application web + bureau natif sur macOS, Windows et Linux via Electron. Mises à jour automatiques depuis GitHub Releases. Association de fichiers `.op` — double-cliquez pour ouvrir.
+Application web + bureau natif sur macOS, Windows et Linux — un seul cœur Rust, un binaire unique autonome, sans moteur de navigateur. Association de fichiers `.op` — double-cliquez pour ouvrir.
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **Serveur MCP**
 
-- Serveur MCP intégré — installation en un clic dans les CLI Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot
-- Détection automatique de Node.js — si non installé, bascule vers le transport HTTP et démarre automatiquement le serveur MCP HTTP
+- Serveur MCP intégré (crate `op-mcp`) — installation en un clic dans les CLI Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot
+- Aucun besoin de Node.js — transport stdio via le binaire de bureau (`--mcp <path>`), plus un point de terminaison HTTP en direct (`127.0.0.1:<port>/mcp`) depuis l'application en cours d'exécution
 - Automatisation du design depuis le terminal : lire, créer et modifier des fichiers `.op` via tout agent compatible MCP
 - **Workflow de design en couches** — `design_skeleton` → `design_content` → `design_refine` pour des designs multi-sections de plus haute fidélité
 - **Récupération segmentée des prompts** — chargez uniquement les connaissances de design nécessaires (schéma, layout, rôles, icônes, planification, etc.)
@@ -275,31 +275,32 @@ Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depu
 
 **Application de bureau**
 
-- macOS, Windows et Linux natifs via Electron
+- macOS, Windows et Linux natifs — un binaire unique autonome (winit + GPU Skia, sans Electron)
 - Association de fichiers `.op` — double-cliquez pour ouvrir, verrouillage d'instance unique
-- Mise à jour automatique depuis GitHub Releases
+- Vérification des mises à jour en arrière-plan auprès de GitHub Releases
 - Menu d'application natif avec Enregistrer sous, Ouvrir les récents et une boîte de dialogue de modifications non enregistrées à la fermeture
 - Persistance des fichiers récents
 
 ## Stack technique
 
-|                       |                                                                                  |
-| --------------------- | -------------------------------------------------------------------------------- |
-| **Frontend**          | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **Canevas**           | CanvasKit/Skia (WASM, accélération GPU)                                          |
-| **État**              | Zustand v5                                                                       |
-| **Serveur**           | Nitro                                                                            |
-| **Bureau**            | Electron 35                                                                      |
-| **CLI**               | `op` — contrôle depuis le terminal, DSL de design par lots                       |
-| **IA**                | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime**           | Bun · Vite 7                                                                     |
-| **Format de fichier** | `.op` — basé sur JSON, lisible par l'humain, compatible Git                      |
+|                       |                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| **Cœur**              | Workspace Rust (`crates/`) — état de l'éditeur, widgets, hôtes, MCP, IA, codegen             |
+| **Rendu**             | GPU Skia partout — `skia-safe` (GL) en natif, CanvasKit (WASM/WebGL2) dans le navigateur     |
+| **Kit UI**            | jian — kit d'outils Rust vendored pour widgets/rendu/événements (`vendor/jian`)              |
+| **Fenêtrage**         | winit (fork vendored `casement`)                                                             |
+| **Bureau**            | Binaire natif `openpencil-desktop` — sans moteur de navigateur                               |
+| **SDK web**           | `op-web-sdk` + adaptateurs React 19 / Vue 3 — visualiseur `.op` en lecture seule (TypeScript) |
+| **CLI**               | `op` — contrôle depuis le terminal, DSL de design par lots                                   |
+| **IA**                | Runtime d'agent Rust intégré · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Lint**              | clippy · rustfmt (Rust) · oxlint · oxfmt (SDK web)                                           |
+| **Format de fichier** | `.op` — basé sur JSON, lisible par l'humain, compatible Git                                 |
 
 ## Pourquoi Rust
 
-OpenPencil est en cours de réécriture complète en **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). La version TypeScript + Electron est celle qui est distribuée aujourd'hui ; la réécriture en Rust est la prochaine étape — un cœur natif unique, nettement plus léger et plus rapide, fonctionnant sur davantage de plateformes à partir d'une seule base de code.
+OpenPencil a été réécrit intégralement en **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). La réécriture est terminée — l'éditeur TypeScript + Electron a été retiré en `v0.7.5`, et le workspace Rust de ce dépôt est le produit : un cœur natif unique, nettement plus léger et plus rapide, fonctionnant sur davantage de plateformes à partir d'une seule base de code.
 
-|                            | TypeScript + Electron (aujourd'hui)                   | Rust (la réécriture)                                                       |
+|                            | TypeScript + Electron (retiré, `v0.7.5`)               | Rust (aujourd'hui)                                                         |
 | -------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------- |
 | **Exécution bureau**       | Electron — embarque Chromium + Node.js                | Fenêtre native (`winit` + GPU Skia), sans moteur de navigateur              |
 | **Empreinte bureau**       | Runtime Chromium complet par installation             | Binaire unique autonome — **55.5 MB**                                      |
@@ -319,43 +320,40 @@ OpenPencil est en cours de réécriture complète en **Rust** ([#129](https://gi
 - **Accessibilité native** — AccessKit sur macOS, Windows et Linux, plus un miroir DOM sur le web, plutôt que de s'appuyer sur l'arbre a11y d'un navigateur.
 - **Un workspace avec vérification de types** — l'hôte MCP, le CLI, les fournisseurs AI, la génération de code, l'import Figma et l'intégration Git résident tous dans un seul workspace Rust, avec filtrage de la chaîne d'approvisionnement par `cargo-deny` en CI.
 
-> **Statut :** le shell Rust est en développement actif (voir la Feuille de route ci-dessous). Jusqu'à ce qu'il atteigne la parité de fonctionnalités pour `v0.8.0`, les téléchargements installables ci-dessus correspondent à la version TypeScript + Electron.
+> **Statut :** l'éditeur TypeScript a été retiré en `v0.7.5` et ne subsiste que dans l'historique Git ; ce dépôt est le workspace Rust. La version Rust `v0.8.0` est en développement actif (voir la Feuille de route ci-dessous).
 
 ## Structure du projet
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 Application web TanStack Start
-│   │   ├── src/
-│   │   │   ├── canvas/      Moteur CanvasKit/Skia — dessin, sync, mise en page
-│   │   │   ├── components/  Interface React — éditeur, panneaux, boîtes de dialogue partagées, icônes
-│   │   │   ├── services/ai/ Chat IA, orchestrateur, génération de design, streaming
-│   │   │   ├── stores/      Zustand — canevas, document, pages, historique, IA
-│   │   │   ├── mcp/         Outils serveur MCP pour l'intégration CLI externe
-│   │   │   ├── hooks/       Raccourcis clavier, dépôt de fichiers, collage Figma
-│   │   │   └── uikit/       Système de kits de composants réutilisables
-│   │   └── server/
-│   │       ├── api/ai/      API Nitro — chat en streaming, génération, validation
-│   │       └── utils/       Enveloppes Claude CLI, OpenCode, Codex, Copilot
-│   ├── desktop/             Application de bureau Electron
-│   │   ├── main.ts          Fenêtre, fork Nitro, menu natif, mise à jour automatique
-│   │   ├── ipc-handlers.ts  Dialogues fichiers natifs, sync thème, préférences IPC
-│   │   └── preload.ts       Pont IPC
-│   └── cli/                 Outil CLI — commande `op`
-│       ├── src/commands/    Commandes design, document, export, import, nœud, page, variable
-│       ├── connection.ts    Connexion WebSocket à l'app en cours d'exécution
-│       └── launcher.ts      Détection automatique et lancement de l'app de bureau ou du serveur web
-├── packages/
-│   ├── pen-types/           Définitions de types pour le modèle PenDocument
-│   ├── pen-core/            Opérations sur l'arbre du document, moteur de mise en page, variables
-│   ├── pen-codegen/         Générateurs de code (React, HTML, Vue, Flutter, ...)
-│   ├── pen-figma/           Parseur et convertisseur de fichiers Figma .fig
-│   ├── pen-renderer/        Moteur de rendu CanvasKit/Skia autonome
-│   ├── pen-sdk/             SDK parapluie (réexporte tous les packages)
-│   ├── pen-ai-skills/       Moteur de compétences AI (chargement de prompts par phases)
-│   └── agent/               SDK agent AI (Vercel AI SDK, multi-fournisseur, équipes d'agents)
-└── .githooks/               Synchronisation de version pre-commit depuis le nom de branche
+├── crates/                   Workspace Rust — le produit
+│   ├── op-editor-core/       État canonique de l'éditeur `.op` (PenDocument) + EditorCommand + variables de design
+│   ├── op-editor-ui/         Widgets indépendants de la plateforme + façade RenderBackend (wasm32-clean)
+│   ├── op-editor-host-core/  Machines à états d'hôte sans transport, partagées par tous les hôtes
+│   ├── op-host-native/       Bibliothèque hôte native — winit + skia-safe GL (bureau + mobile)
+│   ├── op-host-web/          Bundle navigateur — cdylib wasm32, rendu CanvasKit
+│   ├── op-host-desktop/      Binaire de bureau `openpencil-desktop` ; aussi le daemon `--serve-web`
+│   ├── op-host-services/     Bibliothèque daemon serve-web / MCP headless
+│   ├── op-host-web-server/   Binaire web-server léger, sans GL
+│   ├── op-cli/               Outil CLI — commande `op`
+│   ├── op-mcp/               Serveur MCP — outils, design par lots, workflow en couches
+│   ├── op-ai/                Fournisseurs IA, runtime de chat, streaming
+│   ├── op-ai-skills/         Moteur de compétences de prompts IA (chargement piloté par phases)
+│   ├── op-orchestrator/      Orchestration d'équipes d'agents concurrentes
+│   ├── op-codegen/           Générateurs de code (React, HTML, Vue, Flutter, ...)
+│   ├── op-figma/             Parseur et convertisseur de fichiers Figma .fig
+│   ├── op-git/               Intégration Git — clone, branche, push/pull, fusion
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 Workspace SDK web (Bun)
+│   ├── op-web-sdk/           SDK visualiseur web `.op` en lecture seule (enveloppe le bundle wasm)
+│   ├── op-web-sdk-react/     Adaptateur React 19
+│   └── op-web-sdk-vue/       Adaptateur Vue 3
+├── vendor/                   Sous-systèmes vendored (sous-modules git)
+│   ├── jian/                 Kit d'outils widgets/rendu/événements Skia
+│   ├── casement/             Fork de winit
+│   └── agent/                Runtime d'agent Rust transversal (agent-rs)
+└── .githooks/                Synchronisation de version pre-commit depuis le nom de branche
 ```
 
 ## Raccourcis clavier

@@ -80,7 +80,7 @@ File `.op` adalah JSON — mudah dibaca manusia, ramah Git, mudah dibandingkan. 
 
 ### 🖥️ Berjalan di Mana Saja
 
-Aplikasi web + desktop native di macOS, Windows, dan Linux melalui Electron. Pembaruan otomatis dari GitHub Releases. Asosiasi file `.op` — klik dua kali untuk membuka.
+Aplikasi web + desktop native di macOS, Windows, dan Linux — satu inti Rust, satu binary mandiri, tanpa engine browser. Asosiasi file `.op` — klik dua kali untuk membuka.
 
 </td>
 </tr>
@@ -193,8 +193,8 @@ docker build --target full -t openpencil-full .
 
 **Server MCP**
 
-- Server MCP bawaan — instal satu klik ke Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
-- Deteksi otomatis Node.js — jika tidak terinstal, otomatis beralih ke transport HTTP dan memulai server MCP HTTP
+- Server MCP bawaan (crate `op-mcp`) — instal satu klik ke Claude Code / Codex / Gemini / OpenCode / Kiro / Copilot CLI
+- Tidak memerlukan Node.js — transport stdio melalui binary desktop (`--mcp <path>`), ditambah endpoint HTTP langsung (`127.0.0.1:<port>/mcp`) dari aplikasi yang berjalan
 - Otomasi desain dari terminal: baca, buat, dan modifikasi file `.op` melalui agen yang kompatibel dengan MCP
 - **Alur kerja desain berlapis** — `design_skeleton` → `design_content` → `design_refine` untuk desain multi-bagian dengan fidelitas lebih tinggi
 - **Pengambilan prompt tersegmentasi** — muat hanya pengetahuan desain yang Anda butuhkan (schema, layout, roles, icons, planning, dll.)
@@ -275,9 +275,9 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 
 **Aplikasi Desktop**
 
-- macOS, Windows, dan Linux native melalui Electron
+- macOS, Windows, dan Linux native — satu binary mandiri (winit + GPU Skia, tanpa Electron)
 - Asosiasi file `.op` — klik dua kali untuk membuka, kunci instans tunggal
-- Pembaruan otomatis dari GitHub Releases
+- Pemeriksaan pembaruan latar belakang terhadap GitHub Releases
 - Menu aplikasi native dengan Simpan sebagai, Buka Terbaru, dan dialog perubahan belum tersimpan saat ditutup
 - Persistensi file terbaru
 
@@ -285,21 +285,22 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 
 |                 |                                                                                  |
 | --------------- | -------------------------------------------------------------------------------- |
-| **Frontend**    | React 19 · TanStack Start · Tailwind CSS v4 · shadcn/ui · i18next                |
-| **Kanvas**      | CanvasKit/Skia (WASM, akselerasi GPU)                                            |
-| **State**       | Zustand v5                                                                       |
-| **Server**      | Nitro                                                                            |
-| **Desktop**     | Electron 35                                                                      |
+| **Inti**        | Workspace Rust (`crates/`) — state editor, widget, host, MCP, AI, codegen        |
+| **Rendering**   | GPU Skia di mana saja — `skia-safe` (GL) pada native, CanvasKit (WASM/WebGL2) di browser |
+| **Toolkit UI**  | jian — toolkit widget/render/event Rust yang di-vendor (`vendor/jian`)           |
+| **Windowing**   | winit (fork `casement` yang di-vendor)                                          |
+| **Desktop**     | Binary native `openpencil-desktop` — tanpa engine browser                        |
+| **Web SDK**     | `op-web-sdk` + adapter React 19 / Vue 3 — viewer `.op` baca-saja (TypeScript)     |
 | **CLI**         | `op` — kontrol terminal, batch design DSL                                        |
-| **AI**          | Vercel AI SDK v6 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
-| **Runtime**     | Bun · Vite 7                                                                     |
+| **AI**          | Runtime agen Rust bawaan · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
+| **Lint**        | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                               |
 | **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git                           |
 
 ## Mengapa Rust
 
-OpenPencil sedang ditulis ulang dari awal dalam **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). Build TypeScript + Electron adalah yang tersedia saat ini; penulisan ulang dalam Rust adalah langkah berikutnya — satu inti native yang jauh lebih kecil dan lebih cepat, serta berjalan di lebih banyak platform dari satu basis kode.
+OpenPencil telah ditulis ulang dari awal dalam **Rust** ([#129](https://github.com/ZSeven-W/openpencil/issues/129)). Penulisan ulang ini telah selesai — editor TypeScript + Electron dipensiunkan pada `v0.7.5`, dan workspace Rust di repo ini adalah produknya: satu inti native yang jauh lebih kecil dan lebih cepat, serta berjalan di lebih banyak platform dari satu basis kode.
 
-|                           | TypeScript + Electron (saat ini)                   | Rust (penulisan ulang)                                                        |
+|                           | TypeScript + Electron (dipensiunkan, `v0.7.5`)     | Rust (saat ini)                                                                |
 | ------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
 | **Runtime desktop**       | Electron — menyertakan Chromium + Node.js          | Jendela native (`winit` + GPU Skia), tanpa engine browser                     |
 | **Jejak desktop**         | Runtime Chromium penuh per instalasi               | Satu binary mandiri — **55.5 MB**                                             |
@@ -319,43 +320,40 @@ OpenPencil sedang ditulis ulang dari awal dalam **Rust** ([#129](https://github.
 - **Aksesibilitas native** — AccessKit di macOS, Windows, dan Linux, ditambah mirror DOM di web, alih-alih mengandalkan pohon a11y browser.
 - **Satu workspace bertipe** — host MCP, CLI, penyedia AI, pembuatan kode, impor Figma, dan integrasi Git semuanya berada dalam satu workspace Rust, dengan penjagaan rantai pasokan `cargo-deny` di CI.
 
-> **Status:** shell Rust sedang dalam pengembangan aktif (lihat Peta Jalan di bawah). Hingga mencapai paritas fitur untuk `v0.8.0`, unduhan yang dapat diinstal di atas adalah build TypeScript + Electron.
+> **Status:** editor TypeScript dipensiunkan pada `v0.7.5` dan kini hanya ada dalam riwayat git; repositori ini adalah workspace Rust. Rilis Rust `v0.8.0` sedang dalam pengembangan aktif (lihat Peta Jalan di bawah).
 
 ## Struktur Proyek
 
 ```text
 openpencil/
-├── apps/
-│   ├── web/                 Aplikasi web TanStack Start
-│   │   ├── src/
-│   │   │   ├── canvas/      Mesin CanvasKit/Skia — menggambar, sinkronisasi, tata letak
-│   │   │   ├── components/  UI React — editor, panel, dialog bersama, ikon
-│   │   │   ├── services/ai/ Chat AI, orkestrator, pembuatan desain, streaming
-│   │   │   ├── stores/      Zustand — kanvas, dokumen, halaman, riwayat, AI
-│   │   │   ├── mcp/         Alat server MCP untuk integrasi CLI eksternal
-│   │   │   ├── hooks/       Pintasan keyboard, seret file, tempel Figma
-│   │   │   └── uikit/       Sistem kit komponen yang dapat digunakan ulang
-│   │   └── server/
-│   │       ├── api/ai/      Nitro API — chat streaming, pembuatan, validasi
-│   │       └── utils/       Pembungkus Claude CLI, OpenCode, Codex, Copilot
-│   ├── desktop/             Aplikasi desktop Electron
-│   │   ├── main.ts          Jendela, fork Nitro, menu native, pembaruan otomatis
-│   │   ├── ipc-handlers.ts  Dialog file native, sinkronisasi tema, preferensi IPC
-│   │   └── preload.ts       Jembatan IPC
-│   └── cli/                 Alat CLI — perintah `op`
-│       ├── src/commands/    Perintah design, document, export, import, node, page, variable
-│       ├── connection.ts    Koneksi WebSocket ke aplikasi yang berjalan
-│       └── launcher.ts      Deteksi otomatis dan jalankan aplikasi desktop atau web server
-├── packages/
-│   ├── pen-types/           Definisi tipe untuk model PenDocument
-│   ├── pen-core/            Operasi pohon dokumen, mesin tata letak, variabel
-│   ├── pen-codegen/         Generator kode (React, HTML, Vue, Flutter, ...)
-│   ├── pen-figma/           Parser dan konverter file Figma .fig
-│   ├── pen-renderer/        Renderer CanvasKit/Skia mandiri
-│   ├── pen-sdk/             SDK payung (re-ekspor semua paket)
-│   ├── pen-ai-skills/       Engine skill AI prompt (pemuatan prompt bertahap)
-│   └── agent/               SDK agen AI (Vercel AI SDK, multi-penyedia, tim agen)
-└── .githooks/               Pre-commit sinkronisasi versi dari nama branch
+├── crates/                   Workspace Rust — produknya
+│   ├── op-editor-core/       State editor `.op` (PenDocument) kanonis + EditorCommand + variabel desain
+│   ├── op-editor-ui/         Widget platform-independen + fasad RenderBackend (wasm32-clean)
+│   ├── op-editor-host-core/  State machine host tanpa transport, digunakan bersama semua host
+│   ├── op-host-native/       Lib host native — winit + skia-safe GL (desktop + mobile)
+│   ├── op-host-web/          Bundle browser — wasm32 cdylib, renderer CanvasKit
+│   ├── op-host-desktop/      Binary desktop `openpencil-desktop`; juga daemon `--serve-web`
+│   ├── op-host-services/     Lib daemon serve-web / MCP headless
+│   ├── op-host-web-server/   Binary web-server ringan tanpa GL
+│   ├── op-cli/               Alat CLI — perintah `op`
+│   ├── op-mcp/               Server MCP — alat, batch design, alur kerja berlapis
+│   ├── op-ai/                Penyedia AI, runtime chat, streaming
+│   ├── op-ai-skills/         Engine skill prompt AI (pemuatan prompt bertahap)
+│   ├── op-orchestrator/      Orkestrasi tim agen konkuren
+│   ├── op-codegen/           Generator kode (React, HTML, Vue, Flutter, ...)
+│   ├── op-figma/             Parser dan konverter file Figma .fig
+│   ├── op-git/               Integrasi Git — clone, branch, push/pull, merge
+│   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
+│                             op-config-store / op-process-io / op-acp / op-smoke / ...
+├── packages/                 Workspace Web SDK (Bun)
+│   ├── op-web-sdk/           SDK viewer web `.op` baca-saja (membungkus bundle wasm)
+│   ├── op-web-sdk-react/     Adapter React 19
+│   └── op-web-sdk-vue/       Adapter Vue 3
+├── vendor/                   Subsistem yang di-vendor (git submodules)
+│   ├── jian/                 Toolkit widget/render/event Skia
+│   ├── casement/             Fork winit
+│   └── agent/                Runtime agen Rust lintas produk (agent-rs)
+└── .githooks/                Pre-commit sinkronisasi versi dari nama branch
 ```
 
 ## Pintasan Keyboard
