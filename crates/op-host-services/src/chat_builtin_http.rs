@@ -21,6 +21,17 @@ use crate::chat_agent_loop::{run_anthropic_agent_loop, run_openai_agent_loop, Ag
 use crate::chat_canvas_tools::MAX_TOOL_TURNS;
 use crate::chat_runtime::{resolved_skill_preamble, shared_runtime, BlockingRecvIter};
 
+/// Design turns build one <=25-op section batch per model turn, plus repair
+/// turns after layoutIssues feedback. 28 sits in the requested 24-32 window:
+/// enough for roughly 8-10 sections with fixes, without letting a bad loop run
+/// indefinitely. Plain chat keeps [`MAX_TOOL_TURNS`].
+pub const DESIGN_LOOP_MAX_TURNS: usize = 28;
+
+/// A <=25-op batch plus one concise tool call fits comfortably in 4-6k output
+/// tokens. 6144 keeps section batches complete without encouraging the model to
+/// emit a whole screen in one turn.
+pub const DESIGN_LOOP_MAX_OUTPUT_TOKENS: u32 = 6_144;
+
 #[derive(Clone)]
 pub struct ConfiguredBuiltinProvider {
     kind: BuiltinAgentKind,
@@ -178,7 +189,11 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                     max_output_tokens,
                     tools: provider.tools.clone(),
                     executor,
-                    max_turns: MAX_TOOL_TURNS,
+                    max_turns: if provider.finalize_on_exit {
+                        DESIGN_LOOP_MAX_TURNS
+                    } else {
+                        MAX_TOOL_TURNS
+                    },
                     finalize_on_exit: provider.finalize_on_exit,
                     disable_thinking,
                 };

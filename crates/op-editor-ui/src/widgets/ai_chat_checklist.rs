@@ -12,7 +12,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
-use op_editor_core::chat::{ChatRole, ChatState};
+use op_editor_core::chat::{ChatMessage, ChatRole, ChatState};
 
 pub(crate) const PROGRESS_H: f32 = 2.0;
 pub(crate) const HEADER_H: f32 = 32.0;
@@ -75,6 +75,10 @@ pub(crate) fn fixed_checklist_items(chat: &ChatState) -> Vec<ChecklistItem> {
         use_progress_position_fallback = !steps.is_empty();
     }
     if steps.is_empty() {
+        let tool_items = loop_tool_call_items(chat, message);
+        if !tool_items.is_empty() {
+            return tool_items;
+        }
         return Vec::new();
     }
 
@@ -119,6 +123,57 @@ pub(crate) fn fixed_checklist_items(chat: &ChatState) -> Vec<ChecklistItem> {
     } else {
         items
     }
+}
+
+fn loop_tool_call_items(chat: &ChatState, message: &ChatMessage) -> Vec<ChecklistItem> {
+    if chat.agents_running.1 == 0 || message.tool_calls.is_empty() {
+        return Vec::new();
+    }
+    message
+        .tool_calls
+        .iter()
+        .enumerate()
+        .map(|(index, call)| {
+            let status = tool_call_status(&call.args);
+            let done = status.as_deref() == Some("done");
+            let failed = status.as_deref() == Some("error");
+            let active = status.as_deref() == Some("running")
+                || (status.is_none() && message.streaming && index + 1 == message.tool_calls.len());
+            ChecklistItem {
+                label: tool_call_label(&call.name),
+                done,
+                active,
+                failed,
+                details: Vec::new(),
+                expanded: false,
+            }
+        })
+        .collect()
+}
+
+fn tool_call_status(args: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(args)
+        .ok()?
+        .get("status")?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn tool_call_label(name: &str) -> String {
+    match name {
+        "get_editor_state" => "Read canvas state",
+        "get_style_guide_tags" | "get_style_guide" => "Load style guide",
+        "get_variables" => "Read variables",
+        "batch_get" => "Read components",
+        "snapshot_layout" => "Inspect layout",
+        "find_empty_space" => "Find placement",
+        "emit_elements" => "Emit elements",
+        "batch_design" => "Apply design batch",
+        "get_screenshot" => "Verify screenshot",
+        "spawn_agents" => "Spawn section agents",
+        other => other,
+    }
+    .to_string()
 }
 
 pub(crate) fn fixed_checklist_height(chat: &ChatState, collapsed: bool) -> f32 {
@@ -567,6 +622,32 @@ mod tests {
         assert!(items[0].done);
         assert!(items[1].active);
         assert_eq!(items[1].label, "Subtask `hero` — Hero section");
+    }
+
+    #[test]
+    fn fixed_checklist_uses_loop_tool_call_sequence_when_no_plan_steps() {
+        let mut message = ChatMessage::assistant_streaming();
+        message.tool_calls = vec![
+            op_editor_core::ChatToolCall {
+                name: "get_editor_state".into(),
+                args: r#"{"status":"done"}"#.into(),
+            },
+            op_editor_core::ChatToolCall {
+                name: "batch_design".into(),
+                args: r#"{"status":"running"}"#.into(),
+            },
+        ];
+
+        let mut chat = ChatState::default();
+        chat.agents_running = (1, 1);
+        chat.messages = vec![message];
+        let items = fixed_checklist_items(&chat);
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].label, "Read canvas state");
+        assert!(items[0].done);
+        assert_eq!(items[1].label, "Apply design batch");
+        assert!(items[1].active);
     }
 
     #[test]

@@ -94,6 +94,10 @@ fn drain_tool_requests(
         // passes the orchestrator runs per subtask. Runs on the UI thread (the
         // owner of the live `EditorState`), like every other tool mutation.
         if req.name == op_ai::chat_provider::LOOP_FINALIZE_OP {
+            if crate::design_loop_indicator::reveal_drain_pending_for_active_epoch() {
+                session.defer_tool_request(req);
+                continue;
+            }
             op_orchestrator::apply_loop_finalize(state);
             changed = true;
             let _ = req.ack.send(ChatToolResult {
@@ -243,3 +247,7 @@ fn attach_tool_result_to_transcript(
 #[cfg(test)]
 #[path = "chat_session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "chat_session_reveal_tests.rs"]
+mod reveal_tests;
