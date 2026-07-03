@@ -276,6 +276,84 @@ fn design_refine_root_id_returns_ts_result_and_refine_command() {
 }
 
 #[test]
+fn design_skeleton_rejects_script_combined_with_structured_payload() {
+    // `script` is a batch_design-only shorthand; the structured rootFrame +
+    // sections branch must reject a co-present `script` instead of silently
+    // dropping it (the structured keys win the routing decision in
+    // `DesignSkeleton::call`, so a smuggled `script` would otherwise never be
+    // inspected at all).
+    let tool = design_skeleton_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert(
+        "rootFrame".into(),
+        r#"{"name":"Page","width":375,"height":812}"#.into(),
+    );
+    args.insert(
+        "sections".into(),
+        r#"[{"name":"Hero","height":240}]"#.into(),
+    );
+    args.insert("script".into(), "I(0,{\"type\":\"frame\"})".into());
+
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+            assert!(msg.contains("script"), "{msg}");
+        }
+        other => panic!("expected InvalidArgument for script + structured payload, got {other:?}"),
+    }
+}
+
+#[test]
+fn design_content_rejects_script_combined_with_structured_payload() {
+    let tool = design_content_snapshot();
+    let mut args = BTreeMap::new();
+    args.insert("sectionId".into(), "section-1".into());
+    args.insert(
+        "children".into(),
+        r##"[{"type":"text","name":"Title","content":"Hello","width":120,"height":24}]"##.into(),
+    );
+    args.insert("script".into(), "I(0,{\"type\":\"frame\"})".into());
+
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+            assert!(msg.contains("script"), "{msg}");
+        }
+        other => panic!("expected InvalidArgument for script + structured payload, got {other:?}"),
+    }
+}
+
+#[test]
+fn design_refine_rejects_script_combined_with_structured_payload() {
+    let mut state = EditorState::new();
+    assert!(state.apply(EditorCommand::InsertNode {
+        kind: "frame".into(),
+        name: "Root".into(),
+        x: 0,
+        y: 0,
+        width: 300,
+        height: 200,
+        fill_hex: None,
+        target_parent: NodeId::NONE,
+        page_id: None,
+    }));
+    let root_id = state.active_children()[0].base().id.clone();
+
+    let tool = design_refine_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert("rootId".into(), root_id);
+    args.insert("script".into(), "I(0,{\"type\":\"frame\"})".into());
+
+    match tool.call(&args) {
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+            assert!(msg.contains("script"), "{msg}");
+        }
+        other => panic!("expected InvalidArgument for script + structured payload, got {other:?}"),
+    }
+}
+
+#[test]
 fn design_refine_missing_root_errors_like_ts() {
     // TS design-refine throws "Root node not found: <id>" when the root is
     // absent; Rust must surface the same rather than apply a no-op.
