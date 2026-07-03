@@ -917,7 +917,11 @@ fn build_subagent_prompt_core(
     // (MiniMax M2.7/M3 are Basic) emit clean `_parent` trees with it. The
     // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
     // so this agrees with whichever skill the tier loads (no contradiction).
-    system_prompt.push_str(if script_on { SCRIPT_FORMAT } else { NODE_FORMAT });
+    system_prompt.push_str(if script_on {
+        SCRIPT_FORMAT
+    } else {
+        NODE_FORMAT
+    });
     // Append the selected style guide's palette/fonts so the sub-agent follows
     // it instead of inventing a conflicting one.
     if let Some(sg) = &style_guide_instruction {
