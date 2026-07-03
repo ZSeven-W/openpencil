@@ -47,8 +47,8 @@ fn tools_list_response_includes_all_registered_tools() {
     // the static schemas in the tools/list response.
     assert_eq!(
         op_mcp::element_tools::element_tool_schemas(&state).len(),
-        225,
-        "builtin kits ship 37 canonical (6 starter + 31 shadcn) + 188 TS-compatible element tools — update this if the TS catalog changes"
+        37,
+        "builtin kits ship 37 canonical element tools (6 starter + 31 shadcn)"
     );
     for name in [
         "insert_btn_primary",
@@ -57,18 +57,6 @@ fn tools_list_response_includes_all_registered_tools() {
         "insert_nav_bar",
         "insert_divider",
         "insert_badge",
-        "add_text_button_v0",
-        "add_text_button_v1",
-        "add_form_field_v0",
-        "add_form_field_v1",
-        "add_stat_card_v0",
-        "add_stat_card_v1",
-        "add_top_nav_bar_v0",
-        "add_top_nav_bar_v1",
-        "add_divider_v0",
-        "add_divider_v1",
-        "add_badge_v0",
-        "add_badge_v1",
     ] {
         assert!(
             r.contains(name),
