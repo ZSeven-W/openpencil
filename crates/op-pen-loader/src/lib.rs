@@ -37,6 +37,11 @@ mod style_payload;
 mod text_style;
 mod widget_payload;
 
+#[cfg(test)]
+mod path_layout_tests;
+#[cfg(test)]
+mod widget_payload_tests;
+
 pub mod payload;
 pub mod variables;
 

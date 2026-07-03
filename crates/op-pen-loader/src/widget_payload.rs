@@ -22,15 +22,17 @@ use jian_ops_schema::node::{
 
 use crate::adapter::node_to_payload;
 use crate::payload::{NodePayload, WidgetOption, WidgetPayload};
-use crate::style_payload::{
-    apply_container_style, assign_first_fill, base_payload, stroke_to_payload,
-};
+use crate::style_payload::{apply_container_style, base_payload};
 
 pub(crate) fn text_input_to_payload(n: &TextInputNode) -> NodePayload {
     let mut p = base_payload(&n.base, "text");
     p.text = n.value.clone().or_else(|| n.placeholder.clone());
-    assign_first_fill(&mut p, n.fill.as_deref());
-    p.stroke = stroke_to_payload(n.stroke.as_ref());
+    apply_container_style(
+        &mut p,
+        n.fill.as_deref(),
+        n.stroke.as_ref(),
+        n.corner_radius.as_ref(),
+    );
     p.widget = Some(WidgetPayload {
         kind: "text_input".into(),
         value_str: n.value.clone(),
