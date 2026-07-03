@@ -32,8 +32,6 @@ pub enum ChatFooterButton {
     AgentTeam,
     /// Paperclip attachment button.
     AddAttachment,
-    /// Palette button — currently inert (#27 future affordance).
-    Palette,
     /// Send button in its normal idle state.
     Send,
     /// Stop button shown while a response streams.

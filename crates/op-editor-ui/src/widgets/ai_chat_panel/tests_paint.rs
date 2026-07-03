@@ -296,7 +296,7 @@ fn from_editor_picks_up_chat_button_press_targets() {
 #[test]
 fn paint_footer_neutral_hovers_use_visible_feedback() {
     // #27 restyle: model pill and speed/attach have hover washes; send
-    // is now a filled circle (bg always present); palette is bare icon.
+    // is now a filled circle (bg always present).
     // Test the subset that emit a neutral wash rect on hover.
     let cases = [
         op_editor_core::ChatFooterButton::ModelPicker,
@@ -320,7 +320,6 @@ fn paint_footer_neutral_hovers_use_visible_feedback() {
             op_editor_core::ChatFooterButton::SpeedChip => footer.speed,
             op_editor_core::ChatFooterButton::AgentTeam => footer.agent_team,
             op_editor_core::ChatFooterButton::AddAttachment => footer.attach,
-            op_editor_core::ChatFooterButton::Palette => footer.palette,
             op_editor_core::ChatFooterButton::Send => footer.send,
             op_editor_core::ChatFooterButton::Stop => unreachable!(),
         };
