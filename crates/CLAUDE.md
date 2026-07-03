@@ -415,11 +415,19 @@ Every host close path clears its respective hover state so reopening starts un-h
 
 ### Tool catalog
 
-**77 first-party tools** registered today (v0.8.0+). The
+**113 static-schema tools** registered today (v0.8.0+). The
 authoritative list is `openpencil-desktop/src/mcp_serve.rs` —
 `TOOL_SCHEMAS` (JSON inputSchemas) plus the `rebuild_registry`
 `r.register(...)` calls, guarded by an exact-count assertion test
-(`tools_list_response_includes_all_seventy_seven_tools`).
+(`tools_list_response_includes_all_registered_tools`). A further
+**37 kit-component tools** (`insert_<component>`, one per built-in
+UIKit component — 6 starter-kit + 31 shadcn) are appended dynamically
+via `op_mcp::element_tools::insert_kit_component_tools` and ride
+alongside the static schemas in the `tools/list` response. These 37
+tools are what remains of the old TS element ecosystem — the ~188
+`add_*` element-alias tools, their per-category builders/shards, and
+the layered element manifest (`emit_elements`) are retired; callers
+that need an arbitrary tree reach for `batch_design` instead.
 
 By category:
 
@@ -452,6 +460,18 @@ By category:
   (`mcp/scalar_vars.rs` + `mcp/component_tools.rs`).
 - **Batch design** — `batch_design` / `design_skeleton` /
   `design_content` / `design_refine` (`mcp/batch_design.rs`).
+  `batch_design` accepts exactly one of `nodes_json` (a flat
+  descriptor array), `operations` (the insert-only `I(parent, node)`
+  program DSL), or `script` — a JavaScript program sandboxed through
+  `op_mcp::script_runner` (feature `script`, native-only; 64 MiB
+  memory / 2 s wall-clock / 4096 recorded-line / 256 KiB source-size
+  limits) whose only effect is calling `I(parent, node)` to emit the
+  same program. The orchestrator's subagents share this exact runner:
+  script-gen (a real JS program driving `I(...)`) is THE default
+  generation protocol on every model's full first attempt; the
+  reduced-complexity / minimal-skills retry rungs fall back to a flat
+  newline-delimited JSON protocol instead (one `{"_parent": ...}`
+  node object per line, no script sandbox), parsed by `parse_nodes`.
 
 Read tools snapshot `Document` state at registration time. Write tools stay `&self`: they validate args and return `ToolOutcome::OkWithCommand(result, command)` for the host to apply via `Document::apply_mcp_command(command)`. The apply path follows pre-validate-then-mutate discipline (id space, target existence, geometry, hex, container-children consent) so a bad arg never leaves the document half-mutated.
 
