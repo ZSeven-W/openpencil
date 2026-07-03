@@ -542,6 +542,14 @@ impl Orchestrator {
             });
         }
 
+        // Let the reveal sweep FINISH before cleanup restructures the tree:
+        // `finalize_design`'s ReplaceSubtree allocates fresh ids that were
+        // never registered with the reveal overlay, so a section still
+        // mid-animation snaps in all at once and the agent cursor loses its
+        // target (measured: the tail of a run popped in "一口气" while
+        // earlier sections streamed). Worker-thread wait, abort-aware.
+        crate::subagent::wait_for_reveal_drain(self.agent_indicator_epoch, abort);
+
         // -- 阶段 4:清理 --（有内容才跑；空 root 无可清理）
         // Append mode (skip_root_insertion): scope cleanup to ONLY the roots
         // this run inserted (post-remap ids from each outcome) so pre-existing
