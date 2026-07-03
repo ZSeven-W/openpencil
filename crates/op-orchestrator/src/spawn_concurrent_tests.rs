@@ -225,7 +225,10 @@ fn run_spawned_agents_replays_in_spec_order() {
         .collect();
     assert_eq!(
         insert_names,
-        vec![Some("Sec-first".to_string()), Some("Sec-second".to_string())]
+        vec![
+            Some("Sec-first".to_string()),
+            Some("Sec-second".to_string())
+        ]
     );
 }
 
