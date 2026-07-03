@@ -129,6 +129,8 @@ mod replace_node_tests;
 pub mod scalar_vars;
 #[cfg(test)]
 mod scalar_vars_tests;
+#[cfg(feature = "script")]
+pub mod script_runner;
 pub mod selected_ops_tools;
 #[cfg(test)]
 mod selected_ops_tools_tests;
