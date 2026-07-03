@@ -67,6 +67,16 @@ pub struct EditorState {
     pub viewport: Viewport,
     /// Undo / redo stacks.
     pub history: History,
+    /// Monotonic local document-content revision. Selection, viewport,
+    /// hover, panels, and other editor-only state do not increment it.
+    pub revision: u64,
+    /// Revision captured by the host after a successful load / save /
+    /// save-as / new baseline.
+    pub saved_revision: u64,
+    /// Monotonic allocator behind `revision`. Never rolled back by
+    /// undo/restore, so an edit made after undoing past the save point
+    /// can never reuse the saved revision value (false-clean guard).
+    pub(crate) revision_counter: u64,
     /// Cross-action clipboard buffer. Copy / cut fill it; paste
     /// drains it (clones, so repeated paste works). Not part of the
     /// `.op` file — transient editor state.
@@ -127,6 +137,9 @@ impl EditorState {
             tool: Tool::default(),
             viewport: Viewport::IDENTITY,
             history: History::new(),
+            revision: 0,
+            saved_revision: 0,
+            revision_counter: 0,
             clipboard: Vec::new(),
             ui: UiDraftState::new(),
             editor_ui: EditorUiState::new(),
@@ -176,8 +189,12 @@ impl EditorState {
         let old_doc = std::mem::replace(&mut self.doc, doc);
         self.selection = SelectionState::empty();
         self.history = History::new();
+        self.revision = 0;
+        self.saved_revision = 0;
+        self.revision_counter = 0;
         self.ui = UiDraftState::new();
         self.editor_ui.clear_document_derived();
+        self.sync_dirty_flag();
         // Generation-run ownership is doc-scoped; clear on whole-doc replace.
         self.app_state_owner.clear();
         drop_document_after_replace(old_doc);
@@ -203,7 +220,43 @@ impl EditorState {
         self.editor_ui.clear_document_derived();
         // Generation-run ownership is doc-scoped; clear on whole-doc replace.
         self.app_state_owner.clear();
+        self.sync_dirty_flag();
         drop_document_after_replace(old_doc);
+    }
+
+    /// Revision of the live document-content state.
+    pub fn document_revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Revision captured at the last successful save/load baseline.
+    pub fn saved_revision(&self) -> u64 {
+        self.saved_revision
+    }
+
+    /// True when document content changed since the last saved baseline.
+    pub fn is_dirty(&self) -> bool {
+        self.revision != self.saved_revision
+    }
+
+    /// Mark the current document revision as saved.
+    pub fn mark_saved_revision(&mut self) {
+        self.saved_revision = self.revision;
+        self.sync_dirty_flag();
+    }
+
+    /// Record a successful document-content mutation.
+    pub fn mark_document_changed(&mut self) {
+        // Allocate from the monotonic counter, NOT `revision + 1`: after
+        // save -> undo -> new edit, `revision + 1` would collide with the
+        // saved revision and report a clean file over divergent content.
+        self.revision_counter = self.revision_counter.saturating_add(1);
+        self.revision = self.revision_counter;
+        self.sync_dirty_flag();
+    }
+
+    pub(crate) fn sync_dirty_flag(&mut self) {
+        self.editor_ui.document_dirty = self.is_dirty();
     }
 }
 
@@ -408,6 +461,7 @@ mod tests {
             active_page_index: 0,
             components: ComponentLibrary::default(),
             app_state_owner: std::collections::BTreeMap::new(),
+            revision: s.revision,
         });
         s.ui.pen_in_progress = Some(crate::NodeId::new("n7"));
         s.ui.property_input.set_text("stale");

@@ -168,13 +168,22 @@ impl TopBar {
         // Approximate text width; skia textlayout would tell us the
         // exact pixel width but for Step 4 we don't pull that in.
         let approx_w = self.file_name.chars().count() as f32 * 9.0;
-        cx.backend.draw_text(
-            &name,
-            Point2D::new(
-                rect.origin.x + (rect.size.x - approx_w) / 2.0,
-                center_y + 5.0,
-            ),
-        );
+        let file_x = rect.origin.x + (rect.size.x - self.title_approx_width()) / 2.0;
+        cx.backend
+            .draw_text(&name, Point2D::new(file_x, center_y + 5.0));
+        if self.edited {
+            let edited = TextLayout::single_run(
+                self.label_edited,
+                "system-ui",
+                11.0,
+                (self.theme.muted_foreground).to_jian(),
+                Point2D::new(0.0, 0.0),
+            );
+            cx.backend.draw_text(
+                &edited,
+                Point2D::new(file_x + approx_w + 8.0, center_y + 4.0),
+            );
+        }
 
         // Git-panel button just right of the file name (TS GitButton):
         // a branch glyph + optional branch name. Always shown on

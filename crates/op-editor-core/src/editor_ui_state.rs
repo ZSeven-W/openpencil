@@ -805,6 +805,9 @@ pub struct EditorUiState {
     pub recent_files: Vec<RecentFile>,
     /// TopBar display name; `None` = "Untitled".
     pub file_name_display: Option<String>,
+    /// Derived from `EditorState::revision != saved_revision`; painted
+    /// by the TopBar only, never serialized.
+    pub document_dirty: bool,
 
     // --- Modals -----------------------------------------------------
     /// Raster export scale (1.0 / 2.0 / 3.0). Default 2.0.
@@ -1254,6 +1257,7 @@ impl Default for EditorUiState {
             pending_file_action: None,
             recent_files: Vec::new(),
             file_name_display: None,
+            document_dirty: false,
             export_scale: 2.0,
             export_dialog_open: false,
             export_dialog_hover: None,

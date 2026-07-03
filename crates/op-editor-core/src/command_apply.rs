@@ -105,6 +105,28 @@ fn command_page_index(state: &EditorState, page_id: Option<&str>) -> Option<usiz
     }
 }
 
+pub(crate) fn command_marks_document_dirty(cmd: &EditorCommand) -> bool {
+    use EditorCommand as C;
+    if let C::Batch { commands } = cmd {
+        return commands.iter().any(command_marks_document_dirty);
+    }
+    !matches!(
+        cmd,
+        C::SetActiveTool { .. }
+            | C::SetViewport { .. }
+            | C::Undo
+            | C::Redo
+            | C::CopySelected
+            | C::ClearSelection
+            | C::SetSelection { .. }
+            | C::SetSelectionSet { .. }
+            | C::ToggleNodeSelection { .. }
+            | C::SetActivePage { .. }
+            | C::SetActiveAxisValue { .. }
+            | C::CycleActiveAxisValue { .. }
+    )
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_insert_node_on_active_page(
     state: &mut EditorState,
@@ -164,7 +186,9 @@ impl EditorState {
     /// every key defers to an existing owner is a designed no-op and
     /// still returns `true` — see [`Self::merge_app_state`].
     pub fn apply(&mut self, cmd: EditorCommand) -> bool {
-        match cmd {
+        let marks_document_dirty = command_marks_document_dirty(&cmd);
+        let revision_before = self.revision;
+        let changed = match cmd {
             // --- Raw node CRUD -------------------------------------
             EditorCommand::InsertNode {
                 kind,
@@ -814,7 +838,11 @@ impl EditorState {
             // promotion count + per-node notes are surfaced by the
             // dedicated method; here `apply` reports only changed-or-not.
             EditorCommand::PromoteLegacyWidgets => self.promote_legacy_widgets().changed(),
+        };
+        if changed && marks_document_dirty && self.revision == revision_before {
+            self.mark_document_changed();
         }
+        changed
     }
 
     /// Apply [`EditorCommand::MergeAppState`]. Backward-compat: never

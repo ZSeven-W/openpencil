@@ -304,6 +304,7 @@ impl DesktopApp {
         if fit_blank_frame {
             host.fit_content_to_viewport(INITIAL_VIEWPORT_W, INITIAL_VIEWPORT_H);
         }
+        host.editor_state_mut().mark_saved_revision();
         host.mark_editor_state_dirty();
         // Baseline for the unsaved-changes prompt — the fresh,
         // empty document is by definition "saved" (nothing to lose).
@@ -423,6 +424,7 @@ impl DesktopApp {
         self.image_search.reset();
         self.saved_doc_fingerprint =
             op_host_services::doc_io::document_fingerprint(self.host.editor_state());
+        self.host.editor_state_mut().mark_saved_revision();
         self.rebind_git_session_for_current_path();
     }
 
