@@ -178,6 +178,60 @@ fn loop_finalize_on_empty_doc_is_noop() {
     assert!(state.active_children().is_empty());
 }
 
+#[test]
+fn loop_finalize_removes_sparse_overlapping_duplicate_root() {
+    let sparse_children: Vec<serde_json::Value> = (0..5)
+        .map(|idx| {
+            json!({
+                "type": "text",
+                "id": format!("stub-{idx}"),
+                "name": "Header Item",
+                "content": "Header"
+            })
+        })
+        .collect();
+    let rich_children: Vec<serde_json::Value> = (0..168)
+        .map(|idx| {
+            json!({
+                "type": "text",
+                "id": format!("real-{idx}"),
+                "name": "Content Item",
+                "content": "Content"
+            })
+        })
+        .collect();
+    let mut state = state_with_forest(json!([
+        {
+            "type": "frame",
+            "id": "stub",
+            "name": "Explore",
+            "width": 390,
+            "height": 844,
+            "fill": [{ "type": "solid", "color": "#FFFDF7" }],
+            "children": sparse_children
+        },
+        {
+            "type": "frame",
+            "id": "real",
+            "name": "Explore",
+            "width": 390,
+            "height": "fit_content",
+            "children": rich_children
+        }
+    ]));
+
+    apply_loop_finalize(&mut state);
+
+    let roots = state.active_children();
+    assert_eq!(
+        roots.len(),
+        1,
+        "loop finalize should delete the sparse root"
+    );
+    assert_eq!(roots[0].base().name.as_deref(), Some("Explore"));
+    assert_eq!(crate::cleanup::count_descendants(&roots[0]), 168);
+}
+
 /// The reported glm bug shape (a single page-root wrapper whose first child is a
 /// full-width sidebar) is restructured into a horizontal `[sidebar | Main
 /// Content]` app-shell by `apply_loop_finalize`, AND the restructure survives
