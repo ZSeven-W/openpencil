@@ -34,9 +34,45 @@ I(b0_missing_binding_reference.oops, {});"#,
 }
 
 #[test]
+fn reasoning_block_before_fenced_script_is_stripped() {
+    // A reasoning model (MiniMax-M3 rides Adaptive) emits <think>…</think>
+    // full of draft JS, then the real fenced script. Feeding the think block
+    // to QuickJS was a guaranteed syntax error that dropped the model onto the
+    // fragile flat-JSONL rung (measured: a travel page collapsed to 44 flat
+    // siblings). The think body must be stripped, the fenced script harvested.
+    let program = run_script_to_program(
+        "<think>\nLet me plan. Maybe I(null,{type:\"frame\"}) then rows...\nActually reconsider.\n</think>\n\nHere is the design:\n\n```js\nconst root = I(null, {type: \"frame\", name: \"Root\"});\nI(root, {type: \"text\", content: \"Hi\"});\n```",
+    )
+    .expect("think + fence must parse");
+    assert_eq!(program.lines().count(), 2);
+    assert!(program.lines().next().unwrap().starts_with("b0=I(null, "));
+}
+
+#[test]
+fn prose_preamble_before_fence_is_ignored() {
+    // Models add a sentence before the fence; a start-anchored strip passed
+    // the prose to the runtime as source.
+    let program = run_script_to_program(
+        "Sure — here's the section:\n```javascript\nI(null, {type: \"frame\"});\n```",
+    )
+    .expect("prose + fence must parse");
+    assert_eq!(program.lines().count(), 1);
+}
+
+#[test]
+fn reasoning_block_before_bare_script_is_stripped() {
+    // Think block, then a bare (unfenced) program.
+    let program = run_script_to_program("<think>draft: I(x)</think>\nI(null, {type: \"frame\"});")
+        .expect("think + bare script must parse");
+    assert_eq!(program.lines().count(), 1);
+}
+
+#[test]
 fn empty_script_is_an_error() {
     assert!(run_script_to_program("   \n").is_err());
     assert!(run_script_to_program("```\n```").is_err());
+    // A think block with no script after it is empty, not a syntax error.
+    assert!(run_script_to_program("<think>only reasoning, no answer</think>").is_err());
 }
 
 #[test]

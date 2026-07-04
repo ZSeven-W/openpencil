@@ -278,14 +278,56 @@ fn describe_js_error(ctx: &rquickjs::Ctx<'_>, err: rquickjs::Error) -> String {
     format!("script error: {err}")
 }
 
+/// Strip reasoning-model `<think>…</think>` blocks, returning the real
+/// answer. Mirrors `op_orchestrator::parse::strip_reasoning` (kept local —
+/// op-mcp is below op-orchestrator in the crate graph): a reasoning model
+/// (MiniMax-M3, DeepSeek-R) emits `<think>…</think>` before its script, and
+/// the think body itself is full of draft JS. Take everything after the LAST
+/// closing tag, then drop any trailing unclosed `<think>` (a think block
+/// truncated by max_tokens).
+fn strip_reasoning(text: &str) -> &str {
+    let after_closed = ["</think>", "</thinking>"]
+        .iter()
+        .filter_map(|tag| text.rfind(tag).map(|i| i + tag.len()))
+        .max()
+        .map(|i| &text[i..])
+        .unwrap_or(text);
+    match ["<think>", "<thinking>"]
+        .iter()
+        .filter_map(|tag| after_closed.find(tag))
+        .min()
+    {
+        Some(start) => &after_closed[..start],
+        None => after_closed,
+    }
+}
+
+/// Extract the JavaScript program from a raw model response.
+///
+/// Robust to what real models actually emit around the script — not just a
+/// clean fenced block at position zero:
+/// 1. Reasoning `<think>…</think>` is stripped first. A model that keeps its
+///    reasoning (M3 rides `Adaptive`) prefixes the script with a think block
+///    full of draft JS; feeding that to QuickJS is a guaranteed syntax error,
+///    which used to drop the model onto the fragile flat-JSONL retry rung
+///    (measured: a full travel page collapsed to 44 flat siblings).
+/// 2. A ```` ``` ```` fenced block is extracted from ANYWHERE — models add a
+///    prose preamble ("Here's the design:") before the fence, so a
+///    start-anchored strip missed it and passed the prose to the runtime.
+/// 3. No fence → the reasoning-stripped text is the script (bare-script case).
 fn strip_fences(text: &str) -> String {
-    let trimmed = text.trim();
-    if let Some(rest) = trimmed.strip_prefix("```") {
-        let body = rest.split_once('\n').map(|x| x.1).unwrap_or(rest);
+    let text = strip_reasoning(text).trim();
+    if let Some(open) = text.find("```") {
+        // Drop the ``` and any language tag on the fence line (```js).
+        let after_open = &text[open + 3..];
+        let body = after_open.split_once('\n').map(|x| x.1).unwrap_or("");
+        // Body ends at the next closing fence; if the response was truncated
+        // mid-block there is no closing fence, so keep the runnable prefix and
+        // let `repair_truncated_script` salvage it.
         let body = body.rsplit_once("```").map(|x| x.0).unwrap_or(body);
         return body.trim().to_string();
     }
-    trimmed.to_string()
+    text.to_string()
 }
 
 #[cfg(test)]
