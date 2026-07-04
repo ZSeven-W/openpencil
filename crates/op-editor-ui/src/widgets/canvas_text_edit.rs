@@ -47,7 +47,7 @@ pub struct TextEditLayout {
 /// `paint_text_node`.
 pub fn text_edit_layout(backend: &mut dyn RenderBackend, node: &SceneNode) -> TextEditLayout {
     let text = node.text.as_deref().unwrap_or("");
-    let font_size = if node.font_size > 0.0 {
+    let mut font_size = if node.font_size > 0.0 {
         node.font_size
     } else {
         13.0
@@ -77,19 +77,44 @@ pub fn text_edit_layout(backend: &mut dyn RenderBackend, node: &SceneNode) -> Te
     } else {
         text.split('\n').map(str::to_string).collect()
     };
+    // Shrink-to-fit for auto-width text: an auto-width (`text_wrap ==
+    // false`) node's box was sized by the authoring app to hug the
+    // text in ITS font. A wider fallback font overflows that box (and
+    // gets clipped by the parent frame). Scale the font down so the
+    // widest line fits, preserving the imported layout. Wrapping text
+    // breaks lines instead, so it is left untouched.
+    let mut letter_spacing = node.letter_spacing;
+    let box_w = node.bounds.size.x;
+    if !node.text_wrap && box_w > 0.0 {
+        let widest = lines
+            .iter()
+            .map(|l| measure_line_width(backend, l, font_size, weight, letter_spacing))
+            .fold(0.0_f32, f32::max);
+        if widest > box_w {
+            // Floor the scale so the text never becomes unreadable.
+            let scale = (box_w / widest).clamp(MIN_SHRINK_SCALE, 1.0);
+            font_size *= scale;
+            letter_spacing *= scale;
+        }
+    }
     let line_starts = line_start_offsets(text, &lines);
     TextEditLayout {
         line_starts,
         font_size,
         weight,
         line_h: font_size * line_height,
-        letter_spacing: node.letter_spacing,
+        letter_spacing,
         align_width: wrap_width_doc.unwrap_or(node.bounds.size.x),
         origin: node.bounds.origin,
         text_align: node.text_align,
         lines,
     }
 }
+
+/// Auto-width text never shrinks below this fraction of its authored
+/// font size — a badly-mismatched fallback font would otherwise render
+/// unreadably small.
+const MIN_SHRINK_SCALE: f32 = 0.35;
 
 /// Measure a painted line's full width — substring advance plus
 /// letter-spacing BETWEEN glyphs (mirrors the painter).
@@ -404,6 +429,45 @@ mod tests {
         let layout = text_edit_layout(&mut b, &node);
         assert_eq!(layout.lines, vec!["hello ", "world"]);
         assert_eq!(layout.line_ranges(), vec![(0, 6), (6, 11)]);
+    }
+
+    #[test]
+    fn auto_width_text_shrinks_to_fit_its_box() {
+        // Auto-width (text_wrap=false) text whose fallback-font width
+        // overflows the authored box shrinks so it fits — Figma sized
+        // the box to hug the text in its own (narrower) font.
+        let mut b = UniformBackend; // 10 px / char, size-independent
+                                    // "hello world" = 11 chars → 110 px at any size; box is 60 px.
+        let node = text_node("hello world", 60.0);
+        let layout = text_edit_layout(&mut b, &node);
+        // scale = 60 / 110 ≈ 0.5454 → font 20 → ~10.9.
+        let expected = 20.0 * (60.0 / 110.0);
+        assert!(
+            (layout.font_size - expected).abs() < 0.01,
+            "auto-width overflow should shrink font to {expected}, got {}",
+            layout.font_size
+        );
+        // Single line preserved (no wrap).
+        assert_eq!(layout.lines, vec!["hello world"]);
+    }
+
+    #[test]
+    fn auto_width_text_that_fits_keeps_its_font_size() {
+        let mut b = UniformBackend;
+        // "hi" = 20 px, box 200 px → no shrink.
+        let node = text_node("hi", 200.0);
+        let layout = text_edit_layout(&mut b, &node);
+        assert!((layout.font_size - 20.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn wrapping_text_does_not_shrink() {
+        let mut b = UniformBackend;
+        let mut node = text_node("hello world", 60.0);
+        node.text_wrap = true;
+        let layout = text_edit_layout(&mut b, &node);
+        // Wrapping text keeps its font size and breaks lines instead.
+        assert!((layout.font_size - 20.0).abs() < 0.001);
     }
 
     #[test]
