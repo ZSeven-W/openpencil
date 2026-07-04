@@ -95,6 +95,11 @@ pub struct ChatSession {
     tool_rx: Option<Receiver<ChatToolRequest>>,
     deferred_tool_requests: VecDeque<ChatToolRequest>,
     finished: bool,
+    /// A design-agent-loop turn folds the model's free-text narration into the
+    /// collapsed thinking area instead of the visible bubble — the tool-call
+    /// checklist already carries the progress, so the raw "Let me build the
+    /// header…" chatter is noise. Plain chat / CLI turns keep it `false`.
+    is_design_loop: bool,
 }
 
 /// Result of a single non-blocking [`ChatSession::poll`].
@@ -117,10 +122,26 @@ impl ChatPoll {
     }
 }
 
-/// Fold one [`ChatPoll`] into the trailing assistant `message`.
+/// Fold one [`ChatPoll`] into the trailing assistant `message` (narration
+/// stays in the visible bubble).
 pub fn apply_poll_to_message(message: &mut ChatMessage, poll: &ChatPoll) {
+    apply_poll_to_message_with(message, poll, false);
+}
+
+/// Fold one [`ChatPoll`] into the trailing assistant `message`. When
+/// `fold_narration_into_thinking` is set (design-agent loop), the model's
+/// free-text `text` goes to the collapsed thinking area instead of the visible
+/// content — the tool-call checklist carries the progress, so the raw chatter
+/// is noise. Errors ALWAYS surface in `content` regardless.
+pub fn apply_poll_to_message_with(
+    message: &mut ChatMessage,
+    poll: &ChatPoll,
+    fold_narration_into_thinking: bool,
+) {
     if let Some(err) = &poll.error {
         message.content = format!("error: {err}");
+    } else if fold_narration_into_thinking {
+        message.thinking.push_str(&poll.text);
     } else {
         message.content.push_str(&poll.text);
     }
@@ -216,7 +237,21 @@ impl ChatSession {
             tool_rx,
             deferred_tool_requests: VecDeque::new(),
             finished: false,
+            is_design_loop: false,
         }
+    }
+
+    /// Mark this turn as a design-agent loop so the pump folds the model's
+    /// free-text narration into the collapsed thinking area (see
+    /// [`apply_poll_to_message_with`]). Chainable.
+    pub fn into_design_loop(mut self) -> Self {
+        self.is_design_loop = true;
+        self
+    }
+
+    /// True when this turn is a design-agent loop.
+    pub fn is_design_loop(&self) -> bool {
+        self.is_design_loop
     }
 
     /// Wrap externally supplied channels, used when a host owns its own
@@ -230,6 +265,7 @@ impl ChatSession {
             tool_rx,
             deferred_tool_requests: VecDeque::new(),
             finished: false,
+            is_design_loop: false,
         }
     }
 
