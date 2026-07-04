@@ -41,6 +41,11 @@ pub(crate) const RESIZE_GUTTER: f32 = 4.0;
 pub(crate) const RESIZE_CORNER: f32 = 12.0;
 pub(crate) const INPUT_AREA_HEIGHT: f32 = 56.0;
 pub(crate) const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
+pub(crate) const SELECTION_CHIP_ROW_HEIGHT: f32 = 28.0;
+const SELECTION_CHIP_HEIGHT: f32 = 20.0;
+const SELECTION_CHIP_PAD_X: f32 = 10.0;
+const SELECTION_CHIP_CLEAR_W: f32 = 18.0;
+const SELECTION_CHIP_FONT: f32 = 11.0;
 #[cfg(test)]
 const INPUT_BASE_HEIGHT: f32 = INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT;
 
@@ -210,6 +215,48 @@ impl<'a> AIChatPlaceholder<'a> {
         }
     }
 
+    /// Height of the selected-count chip row — `0` when no canvas node is selected.
+    pub(crate) fn selection_chip_row_h(&self) -> f32 {
+        if self.selected_count == 0 {
+            0.0
+        } else {
+            SELECTION_CHIP_ROW_HEIGHT
+        }
+    }
+
+    fn selection_chip_label(&self) -> String {
+        op_i18n::translate(self.locale, "common.selected")
+            .replace("{{count}}", &self.selected_count.to_string())
+    }
+
+    pub(crate) fn selection_chip_rect(&self, input_rect: Rect) -> Option<Rect> {
+        if self.selected_count == 0 {
+            return None;
+        }
+        let label = self.selection_chip_label();
+        let label_w = footer_label_width(&label, SELECTION_CHIP_FONT);
+        let chip_w = (SELECTION_CHIP_PAD_X + label_w + 6.0 + SELECTION_CHIP_CLEAR_W)
+            .min(input_rect.size.x)
+            .max(56.0);
+        Some(Rect {
+            origin: Point2D::new(
+                input_rect.origin.x,
+                input_rect.origin.y + (SELECTION_CHIP_ROW_HEIGHT - SELECTION_CHIP_HEIGHT) / 2.0,
+            ),
+            size: Point2D::new(chip_w, SELECTION_CHIP_HEIGHT),
+        })
+    }
+
+    pub(crate) fn selection_chip_clear_rect(&self, input_rect: Rect) -> Option<Rect> {
+        self.selection_chip_rect(input_rect).map(|chip| Rect {
+            origin: Point2D::new(
+                chip.origin.x + chip.size.x - SELECTION_CHIP_CLEAR_W,
+                chip.origin.y,
+            ),
+            size: Point2D::new(SELECTION_CHIP_CLEAR_W, chip.size.y),
+        })
+    }
+
     /// Total input-block height, including the attachment row when
     /// attachments are staged.
     #[cfg(test)]
@@ -232,7 +279,10 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     pub(crate) fn input_height_for_width(&self, panel_w: f32) -> f32 {
-        self.input_area_height_for_width(panel_w) + INPUT_TOOLBAR_HEIGHT + self.attachment_row_h()
+        self.selection_chip_row_h()
+            + self.input_area_height_for_width(panel_w)
+            + INPUT_TOOLBAR_HEIGHT
+            + self.attachment_row_h()
     }
 
     pub(crate) fn input_area_height_for_rect(&self, rect: Rect) -> f32 {
@@ -283,8 +333,10 @@ impl<'a> AIChatPlaceholder<'a> {
             &self.state.available_models,
             self.model_picker_input.text(),
         );
-        let toolbar_top =
-            input_rect.origin.y + self.input_area_height_for_rect(rect) + self.attachment_row_h();
+        let toolbar_top = input_rect.origin.y
+            + self.selection_chip_row_h()
+            + self.input_area_height_for_rect(rect)
+            + self.attachment_row_h();
         let bottom = toolbar_top - 4.0;
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, bottom - height),
@@ -346,6 +398,41 @@ impl<'a> AIChatPlaceholder<'a> {
             size: Point2D::new(rect.size.x - PAD * 2.0, input_h),
         }
     }
+}
+
+fn paint_selection_chip(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    widget: &AIChatPlaceholder<'_>,
+    input_rect: Rect,
+) {
+    let Some(chip) = widget.selection_chip_rect(input_rect) else {
+        return;
+    };
+    let label = widget.selection_chip_label();
+    cx.backend.fill_round_rect(chip, 6.0, theme.muted);
+    let label_layout = TextLayout::single_run(
+        &label,
+        "system-ui",
+        SELECTION_CHIP_FONT,
+        (theme.muted_foreground).to_jian(),
+        Point2D::new(0.0, 0.0),
+    );
+    let baseline_y = chip.origin.y + chip.size.y / 2.0 + SELECTION_CHIP_FONT * 0.35;
+    cx.backend.draw_text(
+        &label_layout,
+        Point2D::new(chip.origin.x + SELECTION_CHIP_PAD_X, baseline_y),
+    );
+    let clear_layout = TextLayout::single_run(
+        "×",
+        "system-ui",
+        SELECTION_CHIP_FONT,
+        (theme.muted_foreground).to_jian(),
+        Point2D::new(0.0, 0.0),
+    );
+    let clear_x = chip.origin.x + chip.size.x - SELECTION_CHIP_CLEAR_W / 2.0 - 3.0;
+    cx.backend
+        .draw_text(&clear_layout, Point2D::new(clear_x, baseline_y));
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -601,8 +688,11 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.state.checklist_scroll.offset,
             );
         }
+        let input_block_rect = self.input_rect(rect);
+        paint_selection_chip(cx, &self.theme, self, input_block_rect);
+        let selection_h = self.selection_chip_row_h();
         let input_rect = Rect {
-            origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0),
+            origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0 + selection_h),
             size: Point2D::new(
                 rect.size.x - PAD * 2.0,
                 self.input_area_height_for_rect(rect),
@@ -692,3 +782,7 @@ mod tests_paint;
 #[cfg(test)]
 #[path = "ai_chat_panel/tests_transcript.rs"]
 mod tests_transcript;
+
+#[cfg(test)]
+#[path = "ai_chat_panel/tests_selected_chip.rs"]
+mod tests_selected_chip;

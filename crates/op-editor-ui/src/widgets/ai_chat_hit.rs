@@ -63,6 +63,9 @@ pub enum AIChatHit {
     /// Click on a staged-attachment chip — payload is the index
     /// into `chat.pending_attachments` to drop.
     RemoveAttachment(usize),
+    /// Click on the selected-count chip's clear target — host clears
+    /// the current canvas selection.
+    ClearSelection,
     /// Click on a message's thinking-block header — host toggles
     /// `ChatMessage::thinking_collapsed` for that message index.
     ToggleThinking(usize),
