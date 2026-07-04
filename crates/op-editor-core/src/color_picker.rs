@@ -96,6 +96,8 @@ impl EditorState {
         if !sel.is_real() || !self.is_editable(&sel) {
             return false;
         }
+        // Snapshot before mutating so the add is undoable.
+        self.commit_history();
         let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
             return false;
         };
@@ -109,6 +111,8 @@ impl EditorState {
         if !sel.is_real() || !self.is_editable(&sel) {
             return false;
         }
+        // Snapshot before mutating so the add is undoable.
+        self.commit_history();
         let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
             return false;
         };
@@ -496,6 +500,23 @@ mod tests {
         assert!(
             matches!(effects.last(), Some(PenEffect::Blur(_))),
             "add_layer_blur must append a Blur effect, got {effects:?}"
+        );
+    }
+
+    #[test]
+    fn add_layer_blur_is_undoable() {
+        let mut s = doc_with_rect();
+        let before = crate::node_effects(s.selected_node().unwrap()).len();
+        assert!(s.add_layer_blur_to_selected());
+        assert_eq!(
+            crate::node_effects(s.selected_node().unwrap()).len(),
+            before + 1
+        );
+        assert!(s.undo(), "add layer blur must be undoable");
+        assert_eq!(
+            crate::node_effects(s.selected_node().unwrap()).len(),
+            before,
+            "undo must remove the added blur"
         );
     }
 
