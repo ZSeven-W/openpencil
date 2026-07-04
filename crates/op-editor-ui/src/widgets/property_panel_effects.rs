@@ -8,10 +8,10 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel::EffectSummary;
+use crate::widgets::property_panel::{EffectSummary, PropertyPanelAction};
 use crate::widgets::property_panel_inputs::{
-    paint_section_divider, paint_section_label, paint_text_input_view_value, INPUT_RADIUS, PAD_X,
-    SECTION_GAP,
+    paint_section_divider, paint_section_label_with_add, paint_text_input_view_value, INPUT_RADIUS,
+    PAD_X, SECTION_GAP,
 };
 use crate::widgets::property_panel_layout::{
     effect_block_height, effect_color_rect, effect_has_color_row, effect_param_fields,
@@ -36,7 +36,7 @@ pub fn paint_effects_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut row_y = paint_effects_header(cx, theme, labels.effects, x, y, width);
+    let mut row_y = paint_section_label_with_add(cx, theme, labels.effects, x, y, width);
     if effects.is_empty() {
         row_y += 8.0;
     } else {
@@ -49,38 +49,71 @@ pub fn paint_effects_section(
     row_y + SECTION_GAP
 }
 
-/// Effects-section header — the section label plus TWO add buttons: a
-/// blur-circle (adds a Layer Blur) and a `+` (adds a Drop Shadow). The
-/// two-button layout mirrors the `effect_add_button_rects` walker in
-/// `property_panel_layout` so paint + hit-test stay aligned.
-pub(crate) fn paint_effects_header(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    label: &str,
-    x: f32,
-    y: f32,
-    width: f32,
-) -> f32 {
-    let next_y = paint_section_label(cx, theme, label, x, y, width);
-    // `+` (Drop Shadow) at the far right; blur-circle (Layer Blur) 22px
-    // to its left.
-    draw_icon(
-        cx.backend,
-        Icon::Plus,
-        Point2D::new(x + width - PAD_X - 14.0, y + 6.0),
-        14.0,
-        theme.muted_foreground,
-        1.4,
-    );
-    draw_icon(
-        cx.backend,
-        Icon::Circle,
-        Point2D::new(x + width - PAD_X - 14.0 - 22.0, y + 6.0),
-        14.0,
-        theme.muted_foreground,
-        1.4,
-    );
-    next_y
+/// Rows of the Effects "+" add-menu (Drop Shadow / Layer Blur), in
+/// paint order. Shared by paint + hit-test.
+pub(crate) const EFFECT_ADD_MENU_ROWS: [(PropertyPanelAction, &str); 2] = [
+    (PropertyPanelAction::AddDropShadowEffect, "Drop Shadow"),
+    (PropertyPanelAction::AddLayerBlur, "Layer Blur"),
+];
+
+pub(crate) const EFFECT_ADD_MENU_ROW_H: f32 = 30.0;
+pub(crate) const EFFECT_ADD_MENU_W: f32 = 148.0;
+
+/// The add-menu popover rect, anchored to the "+" button's rect
+/// (`add_rect` from the action walker). Drops just below the button,
+/// right-aligned to it.
+pub(crate) fn effect_add_menu_rect(add_rect: Rect) -> Rect {
+    let h = EFFECT_ADD_MENU_ROWS.len() as f32 * EFFECT_ADD_MENU_ROW_H + 8.0;
+    let right = add_rect.origin.x + add_rect.size.x;
+    Rect {
+        origin: Point2D::new(
+            right - EFFECT_ADD_MENU_W,
+            add_rect.origin.y + add_rect.size.y,
+        ),
+        size: Point2D::new(EFFECT_ADD_MENU_W, h),
+    }
+}
+
+/// `(action, row_rect)` for each add-menu row, given the menu rect.
+pub(crate) fn effect_add_menu_row_rects(menu: Rect) -> Vec<(PropertyPanelAction, Rect)> {
+    EFFECT_ADD_MENU_ROWS
+        .iter()
+        .enumerate()
+        .map(|(i, (action, _))| {
+            let ry = menu.origin.y + 4.0 + i as f32 * EFFECT_ADD_MENU_ROW_H;
+            (
+                *action,
+                Rect {
+                    origin: Point2D::new(menu.origin.x, ry),
+                    size: Point2D::new(menu.size.x, EFFECT_ADD_MENU_ROW_H),
+                },
+            )
+        })
+        .collect()
+}
+
+/// Paint the Effects "+" add-menu popover (Drop Shadow / Layer Blur)
+/// anchored to `add_rect`. Caller gates this on the picker being open.
+pub(crate) fn paint_effect_add_menu(cx: &mut PaintCx<'_>, theme: &Theme, add_rect: Rect) {
+    let menu = effect_add_menu_rect(add_rect);
+    cx.backend
+        .fill_round_rect(menu, INPUT_RADIUS, theme.popover);
+    cx.backend
+        .stroke_round_rect(menu, INPUT_RADIUS, theme.border, 1.0);
+    for (i, (_, label)) in EFFECT_ADD_MENU_ROWS.iter().enumerate() {
+        let ry = menu.origin.y + 4.0 + i as f32 * EFFECT_ADD_MENU_ROW_H;
+        let text = TextLayout::single_run(
+            label,
+            "system-ui",
+            12.0,
+            theme.foreground.to_jian(),
+            Point2D::new(0.0, 0.0),
+        );
+        cx.backend.draw_text(
+            &text,
+            Point2D::new(menu.origin.x + 12.0, ry + EFFECT_ADD_MENU_ROW_H / 2.0 + 4.0),
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

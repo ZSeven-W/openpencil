@@ -385,10 +385,15 @@ impl WidgetHostNative {
                     Some(op_editor_core::editor_ui_state::FileAction::ExportImageConfirm);
             }
             A::AddEffect => {
+                self.editor_state.editor_ui.toggle_effect_add_picker();
+            }
+            A::AddDropShadowEffect => {
                 self.editor_state.add_drop_shadow_to_selected();
+                self.editor_state.editor_ui.close_effect_add_picker();
             }
             A::AddLayerBlur => {
                 self.editor_state.add_layer_blur_to_selected();
+                self.editor_state.editor_ui.close_effect_add_picker();
             }
             A::RemoveEffect(index) => {
                 let id = self.editor_state.selection.anchor.clone();

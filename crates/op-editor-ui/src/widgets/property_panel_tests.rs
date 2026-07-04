@@ -231,42 +231,40 @@ fn ellipse_selection_exposes_arc_layer_inputs() {
 }
 
 #[test]
-fn effects_header_emits_both_add_buttons_without_overlap() {
+fn effects_add_menu_hits_shadow_and_blur_rows() {
+    use crate::widgets::EffectAddMenuHit;
     let mut state = EditorState::sample();
     state.set_single_selection(NodeId::new("n10"));
+    // Open the add-menu, then rebuild the panel so it reflects the flag.
+    state.editor_ui.toggle_effect_add_picker();
+    assert!(state.editor_ui.effect_add_picker_open);
     let panel = PropertyPanel::for_selection(&state).expect("frame panel");
+    assert!(panel.effect_add_picker_open);
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1600.0),
     };
-    let rects = sections::action_button_rects_with_fill_picker(
-        rect,
-        visible_for(&panel),
-        &panel.snapshot.effects,
-        &panel.snapshot.fills,
-        false,
-        0,
-        false,
-        false,
-        false,
-        false,
-        false,
-    );
-    let add_shadow = rects
-        .iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::AddEffect))
-        .map(|(_, r)| *r)
-        .expect("effects header emits an AddEffect (drop shadow) rect");
-    let add_blur = rects
-        .iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::AddLayerBlur))
-        .map(|(_, r)| *r)
-        .expect("effects header emits an AddLayerBlur rect");
-    // Blur button sits left of the "+"; the two must not overlap so a
-    // click resolves to exactly one effect kind.
-    assert!(
-        add_blur.origin.x + add_blur.size.x <= add_shadow.origin.x,
-        "add-buttons overlap: blur={add_blur:?} shadow={add_shadow:?}"
+    let add_rect = panel
+        .effect_add_button_rect(panel.scrolled_rect(rect))
+        .expect("effects header emits an AddEffect '+' rect");
+    let menu = crate::widgets::property_panel_effects::effect_add_menu_rect(add_rect);
+    let rows = crate::widgets::property_panel_effects::effect_add_menu_row_rects(menu);
+    assert_eq!(rows.len(), 2, "menu has Drop Shadow + Layer Blur rows");
+    // Hit-testing each row centre resolves to the matching add action.
+    for (expected, row) in rows {
+        let center = Point2D::new(
+            row.origin.x + row.size.x / 2.0,
+            row.origin.y + row.size.y / 2.0,
+        );
+        assert_eq!(
+            panel.effect_add_menu_hit(rect, center),
+            EffectAddMenuHit::Row(expected)
+        );
+    }
+    // A click well outside the menu dismisses.
+    assert_eq!(
+        panel.effect_add_menu_hit(rect, Point2D::new(5.0, 5.0)),
+        EffectAddMenuHit::Outside
     );
 }
 

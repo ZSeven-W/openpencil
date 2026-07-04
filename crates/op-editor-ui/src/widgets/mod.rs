@@ -246,7 +246,7 @@ pub use text_input::TextInputWidget;
 pub use tree::{TreeItem, TreeWidget};
 
 pub use layer_panel::{LayerItem, LayerPanel};
-pub use property_panel::{FontWeightChoice, PropertyPanel, PropertyPanelAction};
+pub use property_panel::{EffectAddMenuHit, FontWeightChoice, PropertyPanel, PropertyPanelAction};
 pub use toolbar::Toolbar;
 
 pub use canvas_viewport::{

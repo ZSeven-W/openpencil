@@ -110,6 +110,17 @@ fn apply_resolved_variable_colors(
     }
 }
 
+/// Result of hit-testing the Effects "+" add-menu popover.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EffectAddMenuHit {
+    /// A choice row was clicked — apply this action, then close.
+    Row(PropertyPanelAction),
+    /// Inside the menu chrome (not a row) — swallow, keep open.
+    Inside,
+    /// Outside the menu — dismiss.
+    Outside,
+}
+
 pub struct PropertyPanel {
     pub id: WidgetId,
     pub snapshot: NodeSnapshot,
@@ -143,6 +154,9 @@ pub struct PropertyPanel {
     /// Which fill row the open fill-type dropdown targets (the Fill
     /// section stacks one type dropdown per fill).
     pub fill_type_picker_index: usize,
+    /// Whether the Effects "+" add-menu (Drop Shadow / Layer Blur) is
+    /// open.
+    pub effect_add_picker_open: bool,
     pub color_variable_picker_open: Option<op_editor_core::ColorTarget>,
     pub color_variables: Vec<ColorVariableOption>,
     pub fill_variable_ref: Option<String>,
@@ -422,6 +436,7 @@ impl PropertyPanel {
             fill_type,
             fill_type_picker: ui.fill_type_picker.clone(),
             fill_type_picker_index: ui.fill_type_picker_index,
+            effect_add_picker_open: ui.effect_add_picker_open,
             color_variable_picker_open: ui.property_color_variable_picker_open,
             color_variables,
             fill_variable_ref,
@@ -508,6 +523,49 @@ impl PropertyPanel {
             ),
             size: panel_rect.size,
         }
+    }
+
+    /// Hit-test the Effects "+" add-menu against `point` (panel space).
+    /// `Row` = a choice was clicked, `Inside` = swallow (keep open),
+    /// `Outside` = dismiss. Only meaningful while the menu is open.
+    pub fn effect_add_menu_hit(&self, panel_rect: Rect, point: Point2D) -> EffectAddMenuHit {
+        let Some(add_rect) = self.effect_add_button_rect(self.scrolled_rect(panel_rect)) else {
+            return EffectAddMenuHit::Outside;
+        };
+        let menu = crate::widgets::property_panel_effects::effect_add_menu_rect(add_rect);
+        for (action, row) in crate::widgets::property_panel_effects::effect_add_menu_row_rects(menu)
+        {
+            if row.contains(point) {
+                return EffectAddMenuHit::Row(action);
+            }
+        }
+        if menu.contains(point) {
+            EffectAddMenuHit::Inside
+        } else {
+            EffectAddMenuHit::Outside
+        }
+    }
+
+    /// The Effects section "+" button rect — `scrolled` is the already
+    /// scroll-adjusted panel rect (`scrolled_rect`). The anchor the
+    /// add-menu popover drops from.
+    pub(crate) fn effect_add_button_rect(&self, scrolled: Rect) -> Option<Rect> {
+        sections::action_button_rects_with_fill_picker(
+            scrolled,
+            self.visible_sections(),
+            &self.snapshot.effects,
+            &self.snapshot.fills,
+            self.fill_type_picker.open,
+            self.fill_type_picker_index,
+            self.font_picker.open,
+            self.font_weight_picker_open,
+            self.export_scale_picker_open,
+            self.export_format_picker_open,
+            self.padding_mode_popover_open,
+        )
+        .into_iter()
+        .find(|(a, _)| matches!(a, PropertyPanelAction::AddEffect))
+        .map(|(_, r)| r)
     }
 
     /// Whether `point` is inside the scrolling section viewport —
@@ -661,6 +719,15 @@ impl PropertyPanel {
                 }
                 SelectHit::Inside => return None,
                 SelectHit::Outside => {}
+            }
+        }
+        // Effects "+" add-menu: when open, its rows win over the panel
+        // body; clicks inside its chrome are swallowed.
+        if self.effect_add_picker_open {
+            match self.effect_add_menu_hit(panel_rect, point) {
+                EffectAddMenuHit::Row(action) => return Some(action),
+                EffectAddMenuHit::Inside => return None,
+                EffectAddMenuHit::Outside => {}
             }
         }
         if !self.point_in_section_viewport(panel_rect, point) {
@@ -1204,6 +1271,16 @@ impl Widget for PropertyPanel {
                 y,
                 w,
             );
+        }
+        // Effects "+" add-menu overlay (Drop Shadow / Layer Blur).
+        if self.effect_add_picker_open {
+            if let Some(add_rect) = self.effect_add_button_rect(scrolled) {
+                crate::widgets::property_panel_effects::paint_effect_add_menu(
+                    cx,
+                    &self.theme,
+                    add_rect,
+                );
+            }
         }
         // Fill-type picker overlay sits on top of everything below
         // the Fill section so it can extend past the section divider.

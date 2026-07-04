@@ -236,11 +236,14 @@ pub enum PropertyPanelAction {
     /// `FileAction::ExportImageConfirm` so the document exports at
     /// the chosen scale + format (pops the native Save dialog).
     ExportImageNow,
-    /// User clicked the Effects section's "+" — host appends a
-    /// default drop shadow to the selected node.
+    /// User clicked the Effects section's "+" — host toggles the
+    /// add-menu (Drop Shadow / Layer Blur choice).
     AddEffect,
-    /// User clicked the Effects section's blur-circle — host appends a
-    /// default Gaussian layer blur to the selected node.
+    /// User picked "Drop Shadow" in the add-menu — host appends a
+    /// default drop shadow to the selected node and closes the menu.
+    AddDropShadowEffect,
+    /// User picked "Layer Blur" in the add-menu — host appends a
+    /// default Gaussian layer blur to the selected node and closes it.
     AddLayerBlur,
     /// User clicked the "✕" on an effect row — host removes the
     /// effect at this index from the selected node.
