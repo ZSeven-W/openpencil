@@ -351,14 +351,15 @@ fn whole_screen_draw_overrides_modify_in_standard_route() {
     // search 页面" has 修改 + 画 + 页面) must route to New, not Modify — else
     // it edits the existing frame instead of opening a new one.
     let provider = Scripted::text("DESIGN_MODIFY");
+    let state = state_with_page();
     assert_eq!(
-        classify_intent_for_standard_route(&provider, "修改后重新画一个search 页面", None),
+        classify_intent_for_standard_route(&provider, &state, "修改后重新画一个search 页面", None),
         DesignIntent::New,
         "a whole-screen draw must win over the modify classifier"
     );
     // But a genuine edit of the current screen still routes to Modify.
     assert_eq!(
-        classify_intent_for_standard_route(&provider, "把这个页面改成深色", None),
+        classify_intent_for_standard_route(&provider, &state, "把这个页面改成深色", None),
         DesignIntent::Modify,
         "editing the current screen stays on the modify route"
     );
@@ -370,18 +371,19 @@ fn english_page_edits_stay_on_modify_route() {
     // for a new-screen draw — it needs a creation verb (draw/create/design/…),
     // which "change"/"resize"/"make" are not.
     let provider = Scripted::text("CHAT");
+    let state = state_with_page();
     assert_eq!(
-        classify_intent_for_standard_route(&provider, "change the home page layout", None),
+        classify_intent_for_standard_route(&provider, &state, "change the home page layout", None),
         DesignIntent::Modify,
         "editing an existing page is a modify, not a new design"
     );
     assert_eq!(
-        classify_intent_for_standard_route(&provider, "resize the screen header", None),
+        classify_intent_for_standard_route(&provider, &state, "resize the screen header", None),
         DesignIntent::Modify,
     );
     // A genuine English page DRAW still routes to New.
     assert_eq!(
-        classify_intent_for_standard_route(&provider, "draw a checkout page", None),
+        classify_intent_for_standard_route(&provider, &state, "draw a checkout page", None),
         DesignIntent::New,
         "a creation verb + page noun is a new screen"
     );
@@ -418,8 +420,9 @@ fn whole_screen_draw_requests_llm_design_md_extraction() {
 #[test]
 fn named_follow_on_page_forces_new_route_before_llm_classifier() {
     let provider = Scripted::text("CHAT");
+    let state = state_with_page();
     assert_eq!(
-        classify_intent_for_standard_route(&provider, "继续画出发现页", None),
+        classify_intent_for_standard_route(&provider, &state, "继续画出发现页", None),
         DesignIntent::New,
         "named app pages must not be classified as plain chat or append"
     );

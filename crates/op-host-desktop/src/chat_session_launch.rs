@@ -237,8 +237,14 @@ fn should_launch_direct_modify(state: &EditorState, user_text: &str) -> bool {
     // A whole-screen draw request ("继续画一下 search 页面") must reach the
     // design pipeline's new-frame route, never get hijacked into editing the
     // existing frame in place — even when it also trips the modify classifier.
-    !op_host_services::chat_intent::requests_new_whole_screen(user_text)
-        && op_host_services::chat_intent::looks_like_modify_request(user_text)
+    if op_host_services::chat_intent::requests_new_whole_screen(user_text) {
+        return false;
+    }
+    let keyword_intent = op_host_services::chat_intent::classify_by_keywords(user_text);
+    let selected_target_instruction = !state.selection.set.is_empty()
+        && keyword_intent != op_host_services::chat_intent::DesignIntent::Chat;
+    (keyword_intent == op_host_services::chat_intent::DesignIntent::Modify
+        || selected_target_instruction)
         && op_host_services::chat_intent::build_modify_plan(state, user_text).is_some()
 }
 
@@ -756,3 +762,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "chat_session_launch_selection_tests.rs"]
+mod selection_tests;

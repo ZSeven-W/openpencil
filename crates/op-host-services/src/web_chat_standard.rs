@@ -190,6 +190,7 @@ pub fn stream_standard_turn<W: Write>(
 
     let classified = crate::chat_intent::classify_intent_for_standard_route(
         classify_provider.as_ref(),
+        &snapshot,
         &req.ai.user,
         model.clone(),
     );

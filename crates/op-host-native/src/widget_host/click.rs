@@ -301,6 +301,11 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::ClearSelection => {
+                        self.editor_state.clear_selection();
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::ToggleThinking(idx) => {
                         self.editor_state.chat.toggle_message_thinking(idx);
                         self.mark_dirty();

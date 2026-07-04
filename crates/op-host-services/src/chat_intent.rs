@@ -103,6 +103,7 @@ const MODIFY_CJK: &[&str] = &[
 const CHAT_KEYWORDS: &[&str] = &[
     "what is", "how do", "explain", "tell me", "help", "why", "can you", "question", "describe",
 ];
+const CHAT_CJK: &[&str] = &["是什么", "什么", "怎么", "为什么", "解释", "说明", "帮助"];
 
 fn is_word_char(c: char) -> bool {
     // JS `\w` — ASCII alphanumeric plus underscore.
@@ -140,7 +141,8 @@ fn matches_any_word_phrase(text_lower: &str, phrases: &[&str]) -> bool {
 /// TS `classifyByKeywords` — verbatim rule order.
 pub fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
-    let chat = matches_any_word_phrase(&lower, CHAT_KEYWORDS);
+    let chat =
+        matches_any_word_phrase(&lower, CHAT_KEYWORDS) || CHAT_CJK.iter().any(|k| text.contains(k));
     let modify = matches_any_word_phrase(&lower, MODIFY_KEYWORDS)
         || MODIFY_CJK.iter().any(|k| text.contains(k));
     if chat && !modify {
@@ -162,6 +164,7 @@ pub fn looks_like_modify_request(text: &str) -> bool {
 /// prompts; keep those on the modify path before asking the model.
 pub fn classify_intent_for_standard_route(
     provider: &dyn ChatProvider,
+    state: &EditorState,
     text: &str,
     model: Option<String>,
 ) -> DesignIntent {
@@ -173,7 +176,13 @@ pub fn classify_intent_for_standard_route(
     if requests_new_whole_screen(text) {
         return DesignIntent::New;
     }
-    if looks_like_modify_request(text) {
+    let keyword_intent = classify_by_keywords(text);
+    if !state.selection.set.is_empty() && keyword_intent == DesignIntent::Chat {
+        return DesignIntent::Chat;
+    }
+    let selected_target_instruction =
+        !state.selection.set.is_empty() && keyword_intent != DesignIntent::Chat;
+    if keyword_intent == DesignIntent::Modify || selected_target_instruction {
         return DesignIntent::Modify;
     }
     if is_named_follow_on_screen(text) {
@@ -839,6 +848,7 @@ pub fn run_cli_turn(
 ) {
     let classified = classify_intent_for_standard_route(
         plan.classify_provider.as_ref(),
+        &plan.initial_state,
         &plan.user_text,
         plan.model.clone(),
     );
@@ -982,3 +992,7 @@ pub fn run_modify_turn(
 #[cfg(test)]
 #[path = "chat_intent_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "chat_intent_selection_tests.rs"]
+mod selection_tests;
