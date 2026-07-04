@@ -231,6 +231,46 @@ fn ellipse_selection_exposes_arc_layer_inputs() {
 }
 
 #[test]
+fn effects_header_emits_both_add_buttons_without_overlap() {
+    let mut state = EditorState::sample();
+    state.set_single_selection(NodeId::new("n10"));
+    let panel = PropertyPanel::for_selection(&state).expect("frame panel");
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(280.0, 1600.0),
+    };
+    let rects = sections::action_button_rects_with_fill_picker(
+        rect,
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        &panel.snapshot.fills,
+        false,
+        0,
+        false,
+        false,
+        false,
+        false,
+        false,
+    );
+    let add_shadow = rects
+        .iter()
+        .find(|(a, _)| matches!(a, PropertyPanelAction::AddEffect))
+        .map(|(_, r)| *r)
+        .expect("effects header emits an AddEffect (drop shadow) rect");
+    let add_blur = rects
+        .iter()
+        .find(|(a, _)| matches!(a, PropertyPanelAction::AddLayerBlur))
+        .map(|(_, r)| *r)
+        .expect("effects header emits an AddLayerBlur rect");
+    // Blur button sits left of the "+"; the two must not overlap so a
+    // click resolves to exactly one effect kind.
+    assert!(
+        add_blur.origin.x + add_blur.size.x <= add_shadow.origin.x,
+        "add-buttons overlap: blur={add_blur:?} shadow={add_shadow:?}"
+    );
+}
+
+#[test]
 fn hit_test_action_export_section_returns_picker_toggles() {
     // Single-frame selection paints every section + Export.
     let mut state = EditorState::sample();

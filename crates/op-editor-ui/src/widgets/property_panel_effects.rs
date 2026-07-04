@@ -10,8 +10,8 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel::EffectSummary;
 use crate::widgets::property_panel_inputs::{
-    paint_section_divider, paint_section_label_with_add, paint_text_input_view_value, INPUT_RADIUS,
-    PAD_X, SECTION_GAP,
+    paint_section_divider, paint_section_label, paint_text_input_view_value, INPUT_RADIUS, PAD_X,
+    SECTION_GAP,
 };
 use crate::widgets::property_panel_layout::{
     effect_block_height, effect_color_rect, effect_has_color_row, effect_param_fields,
@@ -36,7 +36,7 @@ pub fn paint_effects_section(
     y: f32,
     width: f32,
 ) -> f32 {
-    let mut row_y = paint_section_label_with_add(cx, theme, labels.effects, x, y, width);
+    let mut row_y = paint_effects_header(cx, theme, labels.effects, x, y, width);
     if effects.is_empty() {
         row_y += 8.0;
     } else {
@@ -47,6 +47,40 @@ pub fn paint_effects_section(
     }
     paint_section_divider(cx, theme, x, row_y, width);
     row_y + SECTION_GAP
+}
+
+/// Effects-section header — the section label plus TWO add buttons: a
+/// blur-circle (adds a Layer Blur) and a `+` (adds a Drop Shadow). The
+/// two-button layout mirrors the `effect_add_button_rects` walker in
+/// `property_panel_layout` so paint + hit-test stay aligned.
+pub(crate) fn paint_effects_header(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    label: &str,
+    x: f32,
+    y: f32,
+    width: f32,
+) -> f32 {
+    let next_y = paint_section_label(cx, theme, label, x, y, width);
+    // `+` (Drop Shadow) at the far right; blur-circle (Layer Blur) 22px
+    // to its left.
+    draw_icon(
+        cx.backend,
+        Icon::Plus,
+        Point2D::new(x + width - PAD_X - 14.0, y + 6.0),
+        14.0,
+        theme.muted_foreground,
+        1.4,
+    );
+    draw_icon(
+        cx.backend,
+        Icon::Circle,
+        Point2D::new(x + width - PAD_X - 14.0 - 22.0, y + 6.0),
+        14.0,
+        theme.muted_foreground,
+        1.4,
+    );
+    next_y
 }
 
 #[allow(clippy::too_many_arguments)]
