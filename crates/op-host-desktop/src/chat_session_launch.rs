@@ -267,6 +267,11 @@ fn launch_direct_modify_turn(
         user_message: plan.user_message,
         max_output_tokens: 8192,
         model: selected_cli_model_id(host),
+        // Structured-JSON turn: reasoning models (MiniMax-M3, GLM-5.x)
+        // burn the whole output budget inside <think> and emit zero
+        // nodes (measured: an M3 modify turn died in analysis prose).
+        // Same policy as the orchestrator's design subtasks.
+        thinking: op_ai::chat_provider::ThinkingMode::Disabled,
         ..Default::default()
     };
     let (chat_tx, chat_rx) = mpsc::channel::<ChatDelta>();
