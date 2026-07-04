@@ -430,6 +430,86 @@ fn geometry_seeding_uses_fill_override_as_tie_breaker() {
     );
 }
 
+/// A SWAPPED instance (`overriddenSymbolID` present) carries derived
+/// data for the SWAPPED-in component, not its base `symbolID`. The
+/// seeding must NOT pool/pin it under the base component's cache —
+/// doing so poisons genuine base-component instances that reuse the
+/// cache. Verified for geometry seeding.
+#[test]
+fn swapped_instance_does_not_seed_base_component_cache() {
+    let make_leaf = |name: &str, lid: u32, w: f32, h: f32, x: f32| {
+        let mut n = sized_leaf(name, lid, w, h);
+        n.figma.set("type", FigValue::Str("RECTANGLE".into()));
+        n.figma.set(
+            "transform",
+            obj(vec![
+                ("m02", FigValue::Float(x)),
+                ("m12", FigValue::Float(0.0)),
+            ]),
+        );
+        n
+    };
+    // Base component 0:0 with two nodes at 20 / 8.
+    let base_sym = symbol_root(vec![
+        make_leaf("combined", 10, 20.0, 20.0, 0.0),
+        make_leaf("accent", 11, 8.0, 8.0, 11.0),
+    ]);
+    let mut symbol_tree = HashMap::new();
+    symbol_tree.insert("0:0".to_string(), base_sym);
+
+    let geom = |pk_lid: u32, w: f32, h: f32, x: f32| {
+        ov_with(
+            vec![guid(9, pk_lid)],
+            vec![
+                ("size", size(w, h)),
+                (
+                    "transform",
+                    obj(vec![
+                        ("m02", FigValue::Float(x)),
+                        ("m12", FigValue::Float(0.0)),
+                    ]),
+                ),
+            ],
+        )
+    };
+    // A SWAPPED instance: symbolID = base (0:0), overriddenSymbolID =
+    // some other component. Its derived (sizes 8 then 20) would pin
+    // 9:50 -> accent if seeded — poisoning the base cache.
+    let swapped = TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("INSTANCE".into())),
+            ("guid", guid(1, 100)),
+            ("size", size(100.0, 100.0)),
+            ("overriddenSymbolID", guid(0, 99)),
+            (
+                "symbolData",
+                obj(vec![
+                    ("symbolID", guid(0, 0)),
+                    ("symbolOverrides", FigValue::Array(vec![])),
+                ]),
+            ),
+            (
+                "derivedSymbolData",
+                FigValue::Array(vec![geom(50, 8.0, 8.0, 11.0), geom(51, 20.0, 20.0, 0.0)]),
+            ),
+        ]),
+        children: vec![],
+    };
+    let root = TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("FRAME".into())),
+            ("guid", guid(1, 1)),
+        ]),
+        children: vec![swapped],
+    };
+    let mut cache: HashMap<String, String> = HashMap::new();
+    seed_assignments_from_instances(&root, &symbol_tree, &mut cache);
+    assert!(
+        cache.keys().all(|k| !k.starts_with("0:0|")),
+        "swapped instance must not seed the base 0:0 cache, cache={cache:?}"
+    );
+}
+
 #[test]
 fn pooled_seeding_does_not_overwrite_existing_pin() {
     let sym = symbol_root(vec![

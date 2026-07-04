@@ -21,7 +21,10 @@ pub fn seed_assignments_from_instances(
 
     fn collect(node: &TreeNode, pool: &mut Pool) {
         let figma = &node.figma;
-        if figma.get_str("type") == Some("INSTANCE") {
+        // A swapped instance's derived belongs to the swapped-in
+        // component, not its base `symbolID`, so pooling it under the
+        // base guid would poison genuine base-component instances.
+        if figma.get_str("type") == Some("INSTANCE") && figma.get("overriddenSymbolID").is_none() {
             if let Some(sym_guid) = figma
                 .get("symbolData")
                 .and_then(|s| s.get("symbolID"))
@@ -94,7 +97,9 @@ pub fn seed_assignments_from_instances(
 
     fn collect_geom(node: &TreeNode, out: &mut GeomSeeds) {
         let figma = &node.figma;
-        if figma.get_str("type") == Some("INSTANCE") {
+        // Swapped instances (see `collect`) must not seed the base
+        // component's cache — their geometry is the swapped-in one's.
+        if figma.get_str("type") == Some("INSTANCE") && figma.get("overriddenSymbolID").is_none() {
             if let Some(sym_guid) = figma
                 .get("symbolData")
                 .and_then(|s| s.get("symbolID"))
