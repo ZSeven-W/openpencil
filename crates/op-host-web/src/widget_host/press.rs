@@ -460,6 +460,33 @@ impl WidgetHost {
             return true;
         }
 
+        // 0c0z. Effects "+" add-menu — outside-click dismiss.
+        if self.editor_state.editor_ui.effect_add_picker_open {
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = Rect {
+                    origin: Point2D::new(
+                        viewport_width - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                match panel.effect_add_menu_hit(property_rect, Point2D::new(x, y)) {
+                    op_editor_ui::widgets::EffectAddMenuHit::Row(action) => {
+                        self.apply_property_action(action);
+                        return true;
+                    }
+                    op_editor_ui::widgets::EffectAddMenuHit::Inside => return true,
+                    op_editor_ui::widgets::EffectAddMenuHit::Outside => {}
+                }
+            }
+            self.editor_state.editor_ui.close_effect_add_picker();
+            self.mark_dirty();
+            return true;
+        }
+
         // 0c0a0. Fill/stroke colour-variable picker — outside-click dismiss.
         if self
             .editor_state
