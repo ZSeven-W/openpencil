@@ -6,9 +6,9 @@
 
 use op_ai::chat_provider::ChatToolResult;
 use op_editor_core::{ChatState, EditorState};
+pub use op_editor_host_core::chat::ChatSession;
 #[cfg(test)]
 pub use op_editor_host_core::chat::{apply_poll_to_message, ChatPoll};
-pub use op_editor_host_core::chat::ChatSession;
 use op_host_native::WidgetHostNative;
 
 use op_host_services::design_agent_tools::execute_agent_tool;
