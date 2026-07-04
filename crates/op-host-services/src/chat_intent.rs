@@ -180,8 +180,13 @@ pub fn classify_intent_for_standard_route(
     if !state.selection.set.is_empty() && keyword_intent == DesignIntent::Chat {
         return DesignIntent::Chat;
     }
-    let selected_target_instruction =
-        !state.selection.set.is_empty() && keyword_intent != DesignIntent::Chat;
+    // A selection biases toward modify — UNLESS the prompt is itself a
+    // whole-screen design request (a stray selection must not hijack "Design
+    // a … page" into an edit; `requests_new_whole_screen` misses these when
+    // they mention "section", so check the veto-free creation signal too).
+    let selected_target_instruction = !state.selection.set.is_empty()
+        && keyword_intent != DesignIntent::Chat
+        && !has_new_screen_creation_signal(text);
     if keyword_intent == DesignIntent::Modify || selected_target_instruction {
         return DesignIntent::Modify;
     }
@@ -459,6 +464,23 @@ pub fn requests_new_whole_screen(prompt: &str) -> bool {
     if EXISTING_SCREEN_CTX_CJK.iter().any(|k| prompt.contains(k)) {
         return false;
     }
+    let cjk_page = ["页面", "页", "屏幕", "屏"]
+        .iter()
+        .any(|k| prompt.contains(k));
+    if cjk_page && DRAW_VERB_CJK.iter().any(|v| prompt.contains(v)) {
+        return true;
+    }
+    english_requests_new_screen(&prompt.to_lowercase())
+}
+
+/// Core "this is a NEW screen/design" signal: a creation verb aimed at a
+/// page/screen noun. Unlike [`requests_new_whole_screen`] it does NOT veto on
+/// section-add phrasing — a full new-page spec that merely mentions the word
+/// "section" ("Include a search section…", "Deals of the Week section") still
+/// reads as new. Used to stop a stray canvas selection from hijacking a
+/// whole-screen design prompt into the modify path (measured: a travel-app
+/// design with a node selected routed to modify → M3 flat-JSONL → empty).
+pub fn has_new_screen_creation_signal(prompt: &str) -> bool {
     let cjk_page = ["页面", "页", "屏幕", "屏"]
         .iter()
         .any(|k| prompt.contains(k));
