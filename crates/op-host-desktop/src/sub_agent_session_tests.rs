@@ -351,6 +351,7 @@ fn pump_with_finished_subs_decrements_then_clears_agents_running() {
                 name: "Kiki".into(),
             },
             indicator: None,
+            root_seed_mobile: false,
         },
         SubAgentSession {
             session: None,
@@ -359,6 +360,7 @@ fn pump_with_finished_subs_decrements_then_clears_agents_running() {
                 name: "Mochi".into(),
             },
             indicator: None,
+            root_seed_mobile: false,
         },
     ];
     let mut active = 0usize;
