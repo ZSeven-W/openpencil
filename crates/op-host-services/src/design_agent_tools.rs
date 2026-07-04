@@ -620,9 +620,8 @@ mod tests {
         assert!(super::root_seed_prompt_is_mobile(
             "Technical dashboard app for a utilities company"
         ));
-        assert!(super::root_seed_prompt_is_mobile(
-            "Technical dashboard web app for a utilities company"
-        ));
+        // "web app" phrasing is covered (negatively) by
+        // web_app_prompts_are_not_mobile_seeded below.
         assert!(super::root_seed_prompt_is_mobile(
             "mobile companion for our web app"
         ));
