@@ -242,3 +242,21 @@ fn legacy_dark_help_card_missing_stroke_fill_uses_divider_color() {
 
     assert_eq!(stroke.color, [0.16470589, 0.16862746, 0.1882353, 1.0]);
 }
+
+#[test]
+fn screen_marker_survives_load_save_roundtrip() {
+    // Lock: `FrameNode.screen` (screen-routing schema field) must
+    // round-trip through the canonical `jian_ops_schema::load_str` →
+    // `serde_json::to_string` cycle unchanged, so op-pen-loader's own
+    // load/save path never drops a designer-authored screen marker.
+    // This is a schema-level guard (not the payload adapter this file's
+    // other tests exercise via `load()`/`pen_document_to_payload`) — the
+    // field is already locked at the `FrameNode` unit level in vendor
+    // jian (`node/frame.rs::frame_screen_marker_roundtrip`); this test
+    // locks the SAME invariant through a full `PenDocument`.
+    let src = r#"{"version":"1.0","pages":[{"id":"p","name":"P","children":[
+      {"type":"frame","id":"home","screen":"/"}]}]}"#;
+    let loaded = jian_ops_schema::load_str(src).unwrap().value;
+    let back = serde_json::to_string(&loaded).unwrap();
+    assert!(back.contains(r#""screen":"/""#));
+}

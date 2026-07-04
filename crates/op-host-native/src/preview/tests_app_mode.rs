@@ -81,6 +81,13 @@ fn preview_uses_active_page_for_runtime() {
 /// authored canvas `x`/`y` (as the designer laid them out side by side).
 /// `project_screens` runs INSIDE `enter`, so this fixture is exactly
 /// what the editor would save — projection has not happened yet.
+///
+/// `home` also carries a `bind:value` text input (`email`, bound to
+/// `$state.email`) — the cross-screen persistence fixture: typing into
+/// it then navigating away and back must show the state graph still
+/// holds the typed value (`jian_core::screens::reconcile_screens`
+/// preserves `$app`/`$state` across a mounted-document swap; only the
+/// per-node `WidgetStateStore` entry is pruned and needs a re-seed).
 const TWO_SCREEN_DOC_JSON: &str = r##"{
     "version": "1.1",
     "formatVersion": "1.1",
@@ -94,7 +101,9 @@ const TWO_SCREEN_DOC_JSON: &str = r##"{
                   { "type": "switch", "id": "sw-home", "x": 20, "y": 20, "width": 44, "height": 24 },
                   { "type": "frame", "id": "go", "x": 20, "y": 60, "width": 120, "height": 40,
                     "semantics": { "role": "button" },
-                    "events": { "onTap": [ { "push": "\"/detail\"" } ] } }
+                    "events": { "onTap": [ { "push": "\"/detail\"" } ] } },
+                  { "type": "text_input", "id": "email", "x": 20, "y": 110, "width": 160, "height": 32,
+                    "bindings": { "bind:value": "$state.email" } }
               ] },
             { "type": "frame", "id": "detail", "screen": "/detail",
               "x": 500, "y": 0, "width": 200, "height": 200,
@@ -196,4 +205,71 @@ fn unknown_push_appends_warning_and_stays() {
     assert!(session.reconcile(), "rejection appends a warning");
     assert_eq!(session.current_path_for_test(), "/");
     assert!(session.warnings().len() > before);
+}
+
+#[test]
+fn bound_input_value_survives_screen_roundtrip() {
+    // Cross-screen persistence contract: `reconcile_screens` preserves
+    // `$app`/`$state` across a mounted-document swap
+    // (`jian_core::screens::reconcile_screens` doc comment + its own
+    // `reconcile_switches_screen_and_preserves_app_state` test), but the
+    // per-node `WidgetStateStore` entry for a widget that isn't in the
+    // newly-mounted tree gets pruned (`Runtime::replace_document`'s
+    // `retain_ids`). So the home screen's "email" input must lose its
+    // LIVE widget-state entry while /detail is mounted, then re-seed
+    // from the persisted `$state.email` app value the next time
+    // something touches it (`WidgetStateStore::get_or_init` +
+    // `bound_app_value`) — proving the persistence survives at the
+    // PreviewSession level, not just the raw jian-core Runtime level.
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(TWO_SCREEN_DOC_JSON).unwrap();
+    let mut session = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
+
+    assert!(
+        session.focus_node_for_test("email"),
+        "the bound text input must be in the focus chain"
+    );
+    assert!(
+        session.dispatch_text("hi"),
+        "focused input should consume text"
+    );
+    assert_eq!(session.widget_text_for_test("email"), "hi");
+
+    session.router_for_test().push("/detail");
+    assert!(session.reconcile(), "push must reconcile into a switch");
+    assert_eq!(session.current_path_for_test(), "/detail");
+
+    session.router_for_test().pop();
+    assert!(session.reconcile(), "pop must reconcile back to home");
+    assert_eq!(session.current_path_for_test(), "/");
+
+    // The re-mounted bound input re-seeds from `$state.email` the next
+    // time its widget state is touched — the persistence contract this
+    // test locks.
+    assert_eq!(
+        session.widget_text_for_test("email"),
+        "hi",
+        "bound input value must survive a push/pop screen round-trip"
+    );
+}
+
+#[test]
+fn reenter_after_exit_resets_to_entry_screen_and_state() {
+    // Exit-reset regression: dropping a `PreviewSession` (the host's
+    // `exit_preview` path) must leave NO residue that a fresh `enter`
+    // could observe — a fresh session on the SAME document always
+    // starts at the entry screen, never wherever the prior session's
+    // router had navigated to.
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(TWO_SCREEN_DOC_JSON).unwrap();
+    let mut session = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
+    session.router_for_test().push("/detail");
+    assert!(session.reconcile(), "push must reconcile into a switch");
+    assert_eq!(session.current_path_for_test(), "/detail");
+    drop(session); // mirrors the host's exit_preview drop
+
+    let fresh = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
+    assert_eq!(
+        fresh.current_path_for_test(),
+        "/",
+        "re-entering preview must start at the entry screen again"
+    );
 }
