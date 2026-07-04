@@ -159,6 +159,14 @@ fn node_stroke(node: &PenNode) -> Option<&PenStroke> {
 
 /// Mutably borrow a node's `effects` list, creating an empty one
 /// when the variant supports effects but has none yet.
+/// Whether a node variant carries an `effects` list — mirrors the
+/// `node_effects_mut` match. `false` for `IconFont` / `Ref`, so the
+/// effect-add path can skip the history snapshot for a target it
+/// can't mutate (avoids an empty undo + dirty state).
+pub fn node_supports_effects(node: &PenNode) -> bool {
+    !matches!(node, PenNode::IconFont(_) | PenNode::Ref(_))
+}
+
 fn node_effects_mut(node: &mut PenNode) -> Option<&mut Vec<PenEffect>> {
     match node {
         PenNode::Frame(n) => Some(n.container.effects.get_or_insert_with(Vec::new)),
