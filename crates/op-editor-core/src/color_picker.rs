@@ -102,6 +102,19 @@ impl EditorState {
         push_drop_shadow(node)
     }
 
+    /// Append a default Gaussian layer-blur effect to the anchor node.
+    /// Editable-gated companion to [`Self::add_drop_shadow_to_selected`].
+    pub fn add_layer_blur_to_selected(&mut self) -> bool {
+        let sel = self.selection.anchor.clone();
+        if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
+            return false;
+        };
+        crate::fills::push_layer_blur(node)
+    }
+
     // --- HSV colour picker ------------------------------------------
 
     /// Open the floating colour picker on the given target. Seeds HSV
@@ -471,6 +484,19 @@ mod tests {
         assert!(s.add_drop_shadow_to_selected());
         // A second call appends a second shadow.
         assert!(s.add_drop_shadow_to_selected());
+    }
+
+    #[test]
+    fn add_layer_blur_appends_blur_effect() {
+        use jian_ops_schema::style::PenEffect;
+        let mut s = doc_with_rect();
+        assert!(s.add_layer_blur_to_selected());
+        let node = s.selected_node().expect("selection");
+        let effects = crate::node_effects(node);
+        assert!(
+            matches!(effects.last(), Some(PenEffect::Blur(_))),
+            "add_layer_blur must append a Blur effect, got {effects:?}"
+        );
     }
 
     #[test]

@@ -999,6 +999,18 @@ pub fn push_drop_shadow(node: &mut PenNode) -> bool {
     true
 }
 
+/// Append a default Gaussian layer-blur effect (Figma "Layer blur").
+/// `false` for variants that carry no `effects` field.
+pub fn push_layer_blur(node: &mut PenNode) -> bool {
+    let Some(effects) = node_effects_mut(node) else {
+        return false;
+    };
+    effects.push(PenEffect::Blur(jian_ops_schema::style::BlurBody {
+        radius: 4.0,
+    }));
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

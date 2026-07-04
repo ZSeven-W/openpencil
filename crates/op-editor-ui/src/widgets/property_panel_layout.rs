@@ -514,14 +514,20 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.effects {
-        // Mirrors `paint_effects_section`: header + one block per
-        // effect (header row + parameter rows). The header's "+"
-        // button maps to `AddEffect`.
+        // Mirrors `paint_effects_header`: header + one block per
+        // effect. The header carries TWO add buttons — a `+` (Drop
+        // Shadow) on the far right and a blur-circle (Layer Blur) 22px
+        // to its left.
         let plus = Rect {
             origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
             size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
         };
         out.push((PropertyPanelAction::AddEffect, plus));
+        let blur_add = Rect {
+            origin: Point2D::new(x0 + w - PAD_X - 44.0, y),
+            size: Point2D::new(20.0, SECTION_HEADER_HEIGHT),
+        };
+        out.push((PropertyPanelAction::AddLayerBlur, blur_add));
         y += SECTION_HEADER_HEIGHT;
         for (ei, eff) in effects.iter().enumerate() {
             // Card outer rect — used to anchor the title-row remove

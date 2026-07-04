@@ -387,6 +387,9 @@ impl WidgetHostNative {
             A::AddEffect => {
                 self.editor_state.add_drop_shadow_to_selected();
             }
+            A::AddLayerBlur => {
+                self.editor_state.add_layer_blur_to_selected();
+            }
             A::RemoveEffect(index) => {
                 let id = self.editor_state.selection.anchor.clone();
                 if id.is_real() {

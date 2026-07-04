@@ -239,6 +239,9 @@ pub enum PropertyPanelAction {
     /// User clicked the Effects section's "+" — host appends a
     /// default drop shadow to the selected node.
     AddEffect,
+    /// User clicked the Effects section's blur-circle — host appends a
+    /// default Gaussian layer blur to the selected node.
+    AddLayerBlur,
     /// User clicked the "✕" on an effect row — host removes the
     /// effect at this index from the selected node.
     RemoveEffect(usize),
