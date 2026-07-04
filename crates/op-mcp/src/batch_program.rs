@@ -187,10 +187,10 @@ impl ProgramCtx {
 fn execute_line(line: &str, ctx: &mut ProgramCtx) -> Result<(), String> {
     // TS line grammar (dotAll `s` flag — pretty-printed JSON bodies
     // carry literal newlines inside the arg list):
-    //   binding=OP(args)  for I/C/R/M/G
-    //   OP(args)          for I/C/R/G (auto-binding) and U/D/M (call)
-    let assign = regex(r"(?s)^(\w+)\s*=\s*([ICRMG])\((.+)\)$");
-    let bindless = regex(r"(?s)^([ICRG])\((.+)\)$");
+    //   binding=OP(args)  for I/C/K/R/M/G
+    //   OP(args)          for I/C/K/R/G (auto-binding) and U/D/M (call)
+    let assign = regex(r"(?s)^(\w+)\s*=\s*([ICKRMG])\((.+)\)$");
+    let bindless = regex(r"(?s)^([ICKRG])\((.+)\)$");
     let call = regex(r"(?s)^([UDM])\((.+)\)$");
 
     if let Some(c) = assign.captures(line) {
@@ -227,6 +227,7 @@ fn execute_assign(op: &str, binding: &str, args: &str, ctx: &mut ProgramCtx) -> 
     match op {
         "I" => execute_insert(binding, args, ctx),
         "C" => execute_copy(binding, args, ctx),
+        "K" => execute_kit_instantiate(binding, args, ctx),
         "R" => execute_replace(binding, args, ctx),
         "G" => execute_image(binding, args, ctx),
         "M" => {
@@ -384,6 +385,59 @@ fn execute_copy(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(), S
         ),
     )?;
     ctx.bind(binding, &clone_id);
+    Ok(())
+}
+
+/// `binding=K("kit/component", parent[, overrides])` — instantiate a
+/// built-in UI-kit component. Model-facing ids are compact aliases:
+/// `starter/<component-id>` maps to kit `openpencil-starter`, and
+/// `shadcn/<short-id>` maps to kit `shadcn-ui` with component
+/// `shadcn-<short-id>` (for example `shadcn/btn-primary` →
+/// `shadcn-ui` / `shadcn-btn-primary`). Exact `<kit-id>/<component-id>`
+/// pairs are also accepted for imported/future kits.
+fn execute_kit_instantiate(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(), String> {
+    let parts = split_top_level_args(args);
+    if !(2..=3).contains(&parts.len()) {
+        return Err("K() requires kitComponentId, parent, and optional overrides".into());
+    }
+    let kit_component_id = parse_string_arg(parts[0].trim(), "K() kitComponentId")?;
+    let (kit_id, component_id) = resolve_kit_component_id(&kit_component_id, &ctx.sim)?;
+    let parent_raw = parts[1].trim();
+    let parent = if matches!(parent_raw, "null" | "undefined") {
+        NodeId::NONE
+    } else {
+        let resolved = resolve_ref(parent_raw, &ctx.bindings);
+        NodeId::new(lookup_id(&resolved, &ctx.alias))
+    };
+    let overrides_json = match parts.get(2) {
+        None => None,
+        Some(raw) => {
+            let value = parse_json_arg(raw)?;
+            if !value.is_object() {
+                return Err("K() overrides JSON must be an object".into());
+            }
+            Some(value.to_string())
+        }
+    };
+    ctx.emit(
+        EditorCommand::InstantiateKitComponent {
+            kit_id,
+            component_id,
+            doc_x: None,
+            doc_y: None,
+            target_parent: parent,
+            page_id: ctx.page_id.clone(),
+            overrides_json,
+        },
+        "K() kit/component not found, parent is not a container, or overrides are invalid",
+    )?;
+    let node_id = ctx.sim.selection.anchor.clone();
+    if !node_id.is_real()
+        || op_editor_core::walkers::find_node(ctx.sim.active_children(), &node_id).is_none()
+    {
+        return Err("K() did not produce a selected node".into());
+    }
+    ctx.bind(binding, node_id.as_str());
     Ok(())
 }
 
@@ -699,6 +753,47 @@ fn parse_json_arg(raw: &str) -> Result<Value, String> {
             let ellipsis = if raw.chars().count() > 300 { "..." } else { "" };
             format!("Failed to parse JSON ({e}): {snippet}{ellipsis}")
         })
+}
+
+fn parse_string_arg(raw: &str, label: &str) -> Result<String, String> {
+    let value = parse_json_arg(raw)?;
+    value
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| format!("{label} must be a JSON string"))
+}
+
+fn resolve_kit_component_id(raw: &str, state: &EditorState) -> Result<(String, String), String> {
+    let Some((kit_part, component_part)) = raw.split_once('/') else {
+        return Err(
+            "K() kitComponentId must be starter/<id>, shadcn/<id>, or <kit-id>/<component-id>"
+                .into(),
+        );
+    };
+    let kit_id = match kit_part {
+        "starter" => "openpencil-starter".to_string(),
+        "shadcn" => "shadcn-ui".to_string(),
+        other => other.to_string(),
+    };
+    let component_id = if kit_id == "shadcn-ui" && !component_part.starts_with("shadcn-") {
+        format!("shadcn-{component_part}")
+    } else {
+        component_part.to_string()
+    };
+    let Some(kit) = state.ui_kits.iter().find(|kit| kit.id == kit_id) else {
+        return Err(format!("K() kit not found: {kit_part}"));
+    };
+    if !kit
+        .components
+        .iter()
+        .any(|component| component.id == component_id)
+    {
+        return Err(format!(
+            "K() component not found: {raw} (resolved to {}/{})",
+            kit.id, component_id
+        ));
+    }
+    Ok((kit.id.clone(), component_id))
 }
 
 /// Append the closing brackets for any `{`/`[` left open at end-of-string
