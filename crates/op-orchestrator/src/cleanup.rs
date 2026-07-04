@@ -82,6 +82,75 @@ fn remove_duplicate_status_bars(sink: &mut dyn DocSink, root_id: &str) {
     }
 }
 
+pub(crate) fn remove_duplicate_bottom_nav_sections_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        remove_duplicate_bottom_nav_sections(sink, &root_id);
+    }
+}
+
+/// Mobile root-level bottom-nav dedupe. Weak-model Chinese prompts can produce
+/// both a localized bottom nav section and an English normalized bottom nav.
+/// Keep the bottom-most/last top-level nav and remove earlier duplicates.
+fn remove_duplicate_bottom_nav_sections(sink: &mut dyn DocSink, root_id: &str) {
+    let dupes: Vec<NodeId> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        if !is_mobile_root(root) {
+            return;
+        }
+        let Some(children) = root.children() else {
+            return;
+        };
+        let nav_indices: Vec<usize> = children
+            .iter()
+            .enumerate()
+            .filter_map(|(index, child)| is_bottom_nav_section(child).then_some(index))
+            .collect();
+        if nav_indices.len() < 2 {
+            return;
+        }
+        let keep_index = nav_indices
+            .iter()
+            .copied()
+            .max_by(|a, b| compare_bottom_nav_position(children, *a, *b))
+            .expect("nav_indices is non-empty");
+        nav_indices
+            .into_iter()
+            .filter(|index| *index != keep_index)
+            .map(|index| NodeId::new(children[index].id_str().to_string()))
+            .collect()
+    };
+    for id in dupes {
+        sink.apply(EditorCommand::DeleteNode {
+            node_id: id,
+            page_id: None,
+        });
+    }
+}
+
+fn is_bottom_nav_section(node: &PenNode) -> bool {
+    cleanup_mobile_chrome::bottom_nav_surface_target(node, false).is_some()
+}
+
+fn compare_bottom_nav_position(
+    children: &[PenNode],
+    left_index: usize,
+    right_index: usize,
+) -> std::cmp::Ordering {
+    let left_y = children[left_index].base().y.unwrap_or(left_index as f64);
+    let right_y = children[right_index].base().y.unwrap_or(right_index as f64);
+    left_y
+        .total_cmp(&right_y)
+        .then_with(|| left_index.cmp(&right_index))
+}
+
 /// Pass ②:移动端浅色 root 下的 nav surface 纠偏。弱模型常把
 /// bottom nav / tab bar 套用成黑色安全模板,和当前浅色页面调性断裂。
 /// TS 端只补"缺失 fill"的 nav;Rust cleanup 还需要兜住已写
@@ -818,6 +887,7 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         let rid = rid.as_str();
 
         remove_duplicate_status_bars(sink, rid);
+        remove_duplicate_bottom_nav_sections(sink, rid);
         repair_light_mobile_nav_surfaces(sink, rid);
         repair_mobile_content_sections(sink, rid);
         cleanup_mobile_chrome::repair_mobile_structural_chrome(sink, rid);
@@ -963,6 +1033,10 @@ mod tests_mobile_dense;
 #[cfg(test)]
 #[path = "cleanup_mobile_chrome_tests.rs"]
 mod tests_mobile_chrome;
+
+#[cfg(test)]
+#[path = "cleanup_mobile_bottom_nav_dedup_tests.rs"]
+mod tests_mobile_bottom_nav_dedup;
 
 #[cfg(test)]
 #[path = "cleanup_desktop_dashboard_tests.rs"]

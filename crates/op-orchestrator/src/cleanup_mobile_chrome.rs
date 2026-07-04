@@ -247,7 +247,10 @@ fn collect_bottom_nav_chrome_repairs(
     }
 }
 
-fn bottom_nav_surface_target(root_child: &PenNode, allow_structural: bool) -> Option<&PenNode> {
+pub(super) fn bottom_nav_surface_target(
+    root_child: &PenNode,
+    allow_structural: bool,
+) -> Option<&PenNode> {
     if is_bottom_nav_surface(root_child, allow_structural) {
         return Some(root_child);
     }
@@ -286,6 +289,12 @@ fn is_bottom_nav_surface(node: &PenNode, allow_structural: bool) -> bool {
             "bottom-navigation",
             "bottom tab",
             "bottom-tab",
+            "底部导航",
+            "底部导航栏",
+            "导航栏",
+            "底栏",
+            "标签栏",
+            "底部标签栏",
         ],
     ) {
         return true;
