@@ -447,6 +447,7 @@ pub fn apply_loop_finalize(state: &mut EditorState) {
         let mut sink = StateDocSink { state: &mut *state };
         crate::abandoned_duplicate_roots::remove_abandoned_duplicate_roots(&mut sink);
         crate::cleanup::remove_duplicate_bottom_nav_sections_for_all_roots(&mut sink);
+        crate::cleanup::collapse_nested_horizontal_padding_for_all_roots(&mut sink);
     }
     if state.active_children().is_empty() {
         return;
