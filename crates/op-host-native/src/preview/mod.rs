@@ -721,4 +721,50 @@ impl PreviewSession {
     pub(crate) fn root_frames_len_for_test(&self) -> usize {
         self.root_frames.len()
     }
+
+    /// Test-only: focus a node by schema `id` directly (skips the
+    /// Tab-ring walk `focus_next`/`focus_previous` use), then seed its
+    /// widget runtime state the same way those two do. Returns `true`
+    /// when the id resolved to a live node AND that node is in the
+    /// focus chain (`FocusManager::request` rejects ids outside it).
+    #[cfg(test)]
+    pub(crate) fn focus_node_for_test(&mut self, id: &str) -> bool {
+        let Some(key) = self
+            .runtime
+            .document
+            .as_ref()
+            .and_then(|d| d.tree.by_id.get(id).copied())
+        else {
+            return false;
+        };
+        self.runtime.focus_request(key);
+        self.seed_focused_widget_state();
+        self.runtime.focus.current() == Some(key)
+    }
+
+    /// Test-only: the current text value of the text-input-family
+    /// widget with schema `id`, forcing the same lazy
+    /// `WidgetStateStore::get_or_init` seed a live interaction would
+    /// (mirrors `seed_focused_widget_state`'s borrow pattern) — so a
+    /// bound input re-mounted after a screen switch reads back its
+    /// persisted `$state.*` value even without an intervening focus
+    /// call. Empty string for any other widget kind or an unknown id.
+    #[cfg(test)]
+    pub(crate) fn widget_text_for_test(&mut self, id: &str) -> String {
+        let schema = self.runtime.document.as_ref().and_then(|d| {
+            let key = d.tree.by_id.get(id).copied()?;
+            d.tree.nodes.get(key).map(|n| n.schema.clone())
+        });
+        let Some(schema) = schema else {
+            return String::new();
+        };
+        match self
+            .runtime
+            .widget_states
+            .get_or_init(&schema, &self.runtime.state)
+        {
+            Some(WidgetState::TextInput(st)) => st.text().to_string(),
+            _ => String::new(),
+        }
+    }
 }
