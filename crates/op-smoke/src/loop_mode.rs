@@ -60,7 +60,7 @@ use op_ai::chat_provider::{
 use op_editor_core::{BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey, EditorState};
 use op_host_services::chat_builtin_http::ConfiguredBuiltinProvider;
 use op_host_services::design_agent_tools::{
-    design_tool_defs, design_tool_level, execute_agent_tool,
+    design_tool_defs, design_tool_level, execute_agent_tool_with_root_seed_guard, RootSeedGuard,
 };
 
 /// Headless [`ChatToolExecutor`] owning the live `EditorState` behind a
@@ -70,14 +70,28 @@ use op_host_services::design_agent_tools::{
 /// dump step can serialize the same mutated state.
 pub struct HeadlessExecutor {
     state: Arc<Mutex<EditorState>>,
+    root_seed_guard: Mutex<RootSeedGuard>,
     /// Echo each tool call + truncated result to stderr when
     /// `OPENPENCIL_SMOKE_DUMP` is set, so ab-v9 logs capture the run.
     dump: bool,
 }
 
 impl HeadlessExecutor {
+    #[cfg(test)]
     pub fn new(state: Arc<Mutex<EditorState>>, dump: bool) -> Self {
-        Self { state, dump }
+        Self {
+            state,
+            root_seed_guard: Mutex::new(RootSeedGuard::disabled()),
+            dump,
+        }
+    }
+
+    pub fn with_prompt(state: Arc<Mutex<EditorState>>, dump: bool, prompt: &str) -> Self {
+        Self {
+            state,
+            root_seed_guard: Mutex::new(RootSeedGuard::from_prompt(prompt)),
+            dump,
+        }
     }
 }
 
@@ -108,7 +122,17 @@ impl ChatToolExecutor for HeadlessExecutor {
                 .state
                 .lock()
                 .expect("EditorState mutex poisoned by a panicking tool call");
-            execute_agent_tool(&mut state, name, args_json)
+            let mut root_seed_guard = self
+                .root_seed_guard
+                .lock()
+                .expect("RootSeedGuard mutex poisoned by a panicking tool call");
+            execute_agent_tool_with_root_seed_guard(
+                &mut state,
+                name,
+                args_json,
+                None,
+                Some(&mut *root_seed_guard),
+            )
         };
         if self.dump {
             let level = design_tool_level(name).unwrap_or("?");
@@ -249,7 +273,11 @@ pub fn run_loop(
 
     let state = Arc::new(Mutex::new(initial));
 
-    let executor = Arc::new(HeadlessExecutor::new(state.clone(), dump));
+    let executor = Arc::new(HeadlessExecutor::with_prompt(
+        state.clone(),
+        dump,
+        &user_prompt,
+    ));
     let provider = build_design_provider(base_url, api_key, model, executor)?;
 
     let request = ChatRequest {
