@@ -29,23 +29,34 @@ pub fn parse_loop_flag(opt: Option<&str>) -> bool {
     matches!(opt.map(str::trim), Some("1") | Some("true") | Some("on"))
 }
 
+/// Recognised explicit opt-OUT values for the design-agent loop.
+fn parse_loop_off(opt: Option<&str>) -> bool {
+    matches!(opt.map(str::trim), Some("0") | Some("false") | Some("off"))
+}
+
 /// Pure predicate for the design-agent-loop gate.
 ///
-/// Returns true when EITHER:
-/// - `experimental` is true (Settings → System "Experimental features" toggle), OR
-/// - `env` is a recognised truthy env-var value ("1" / "true" / "on").
+/// The loop is the DEFAULT design path for builtin (API-key) providers —
+/// the G3 A/B measured it ahead of the single-shot orchestrator on audit
+/// cleanliness (11 vs 33 issues over 10 prompt pairs) at comparable wall
+/// time. `OPENPENCIL_DESIGN_AGENT_LOOP=0|false|off` opts back into the
+/// single-shot orchestrator; truthy values and the Settings toggle keep
+/// forcing the loop on (harmless now, kept for muscle memory).
 ///
 /// Kept free of I/O so it is unit-testable without env-var flakiness.
 pub fn loop_enabled(experimental: bool, env: Option<&str>) -> bool {
-    experimental || parse_loop_flag(env)
+    if parse_loop_off(env) {
+        return false;
+    }
+    let _ = experimental;
+    true
 }
 
 /// Returns true when the design-agent loop should run for this turn.
 ///
-/// Combines the in-app Settings → System "Experimental features" toggle
-/// (`state.editor_ui.agent_settings.experimental_features_enabled`) with
-/// the `OPENPENCIL_DESIGN_AGENT_LOOP` env var — either one being set is
-/// sufficient. Both off → false, preserving the default orchestrator path.
+/// Default ON; the `OPENPENCIL_DESIGN_AGENT_LOOP` env var is the explicit
+/// opt-out back to the single-shot orchestrator (CLI providers never reach
+/// this gate — they stay on the orchestrator path in `launch_if_pending`).
 pub(super) fn design_agent_loop_enabled(state: &op_editor_core::EditorState) -> bool {
     loop_enabled(
         state.editor_ui.agent_settings.experimental_features_enabled,
@@ -229,7 +240,10 @@ mod tests {
     // ── loop_enabled OR-gate: 4 combinations ──────────────────────────────
     #[test]
     fn loop_enabled_both_off_is_false() {
-        assert!(!loop_enabled(false, None), "both off must yield false");
+        assert!(
+            loop_enabled(false, None),
+            "loop is the default now — no toggle, no env, still on"
+        );
     }
 
     #[test]
@@ -249,11 +263,13 @@ mod tests {
     }
 
     #[test]
-    fn loop_enabled_both_on_is_true() {
+    fn loop_enabled_env_opt_out_wins() {
         assert!(
-            loop_enabled(true, Some("0")),
-            "experimental=true overrides env=0"
+            !loop_enabled(true, Some("0")),
+            "the explicit env opt-out returns the single-shot orchestrator"
         );
+        assert!(!loop_enabled(false, Some("false")));
+        assert!(!loop_enabled(false, Some(" off ")));
     }
 
     // ── parse_loop_flag (unchanged) ───────────────────────────────────────
