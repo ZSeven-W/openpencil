@@ -58,6 +58,11 @@ impl WidgetHost {
                         self.mark_dirty();
                         return true;
                     }
+                    AIChatHit::ClearSelection => {
+                        self.editor_state.clear_selection();
+                        self.mark_dirty();
+                        return true;
+                    }
                     AIChatHit::Example { prompt, .. } => {
                         self.editor_state.chat.set_input_text(prompt);
                         self.editor_state.chat.focus_input_at_end(self.now_ms);
