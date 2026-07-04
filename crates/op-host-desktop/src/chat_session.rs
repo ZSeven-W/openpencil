@@ -53,7 +53,11 @@ pub fn pump(
             .messages
             .last_mut()
         {
-            apply_poll_to_message(msg, &poll);
+            op_editor_host_core::chat::apply_poll_to_message_with(
+                msg,
+                &poll,
+                session.is_design_loop(),
+            );
             changed = true;
         }
     }

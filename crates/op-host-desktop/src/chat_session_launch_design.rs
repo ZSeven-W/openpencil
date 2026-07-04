@@ -180,7 +180,8 @@ pub(super) fn launch_design_loop_turn(
     // The host starts the indicator epoch before the worker can apply its first
     // design batch; the indicator pump adopts this epoch for badges/teardown.
     op_editor_core::agent_indicators::begin_with_root_seed_hint(root_seed_mobile);
-    *current_chat = Some(ChatSession::start_with_tools(provider, req, Some(tool_rx)));
+    *current_chat =
+        Some(ChatSession::start_with_tools(provider, req, Some(tool_rx)).into_design_loop());
     // Signal one agent running so the chat header shows "1/1 designing…"
     // and the canvas indicator pump registers frame glows.
     host.editor_state_mut().chat.agents_running = (1, 1);

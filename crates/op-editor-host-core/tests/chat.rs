@@ -4,7 +4,8 @@ use op_ai::chat_provider::{
 };
 use op_editor_core::{ChatMessage, ChatToolCall};
 use op_editor_host_core::chat::{
-    apply_poll_to_message, chat_history_from_transcript, chat_tool_channel, ChatPoll, ChatSession,
+    apply_poll_to_message, apply_poll_to_message_with, chat_history_from_transcript,
+    chat_tool_channel, ChatPoll, ChatSession,
 };
 
 fn drain_session(session: &mut ChatSession) -> (String, String, Vec<ChatToolCall>, Option<String>) {
@@ -121,6 +122,65 @@ fn apply_poll_appends_content_and_clears_streaming_on_finish() {
     );
     assert_eq!(msg.content, "hi!");
     assert!(!msg.streaming);
+}
+
+#[test]
+fn design_loop_folds_narration_into_thinking_but_keeps_errors_visible() {
+    // Design-loop turns fold the model's free-text narration into the collapsed
+    // thinking area (the tool-call checklist carries progress); plain chat keeps
+    // it in the visible bubble; errors always surface in content.
+    let mut design = ChatMessage::assistant_streaming();
+    apply_poll_to_message_with(
+        &mut design,
+        &ChatPoll {
+            text: "Let me build the header".into(),
+            thinking: "raw".into(),
+            tool_calls: vec![],
+            error: None,
+            finished: false,
+        },
+        true,
+    );
+    assert_eq!(
+        design.content, "",
+        "narration must NOT hit the visible bubble"
+    );
+    assert!(design.thinking.contains("Let me build the header"));
+    assert!(design.thinking.contains("raw"));
+
+    let mut chat = ChatMessage::assistant_streaming();
+    apply_poll_to_message_with(
+        &mut chat,
+        &ChatPoll {
+            text: "Sure, here you go".into(),
+            thinking: String::new(),
+            tool_calls: vec![],
+            error: None,
+            finished: false,
+        },
+        false,
+    );
+    assert_eq!(
+        chat.content, "Sure, here you go",
+        "plain chat keeps narration visible"
+    );
+
+    let mut errd = ChatMessage::assistant_streaming();
+    apply_poll_to_message_with(
+        &mut errd,
+        &ChatPoll {
+            text: "ignored".into(),
+            thinking: String::new(),
+            tool_calls: vec![],
+            error: Some("boom".into()),
+            finished: true,
+        },
+        true,
+    );
+    assert_eq!(
+        errd.content, "error: boom",
+        "errors always surface in content"
+    );
 }
 
 #[test]
