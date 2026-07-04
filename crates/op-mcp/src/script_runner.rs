@@ -29,6 +29,9 @@ const PRELUDE: &str = r#"
 globalThis.I = function (parent, obj) {
   return __record(parent == null ? "null" : String(parent), JSON.stringify(obj));
 };
+globalThis.K = function (kitComponentId, parent, overrides) {
+  return __recordK(JSON.stringify(String(kitComponentId)), parent == null ? "null" : String(parent), JSON.stringify(overrides == null ? {} : overrides));
+};
 var __stubSeq = 0;
 function __opStub() { __stubSeq += 1; return "stub" + __stubSeq; }
 globalThis.C = __opStub;
@@ -93,36 +96,34 @@ fn eval_to_program(script: &str) -> Result<String, String> {
     let counter: Rc<Cell<usize>> = Rc::new(Cell::new(0));
     let bytes_used: Rc<Cell<usize>> = Rc::new(Cell::new(0));
     let lines_rec = lines.clone();
+    let counter_rec = counter.clone();
     let bytes_rec = bytes_used.clone();
+    let lines_rec_k = lines.clone();
+    let counter_rec_k = counter.clone();
+    let bytes_rec_k = bytes_used.clone();
 
     let outcome: Result<(), String> = ctx.with(|ctx| {
         let record = Function::new(ctx.clone(), move |parent: String, json: String| -> String {
-            let n = counter.get();
-            counter.set(n + 1);
-            let bind = format!("b{n}");
-            // Mirrors the line-count cap: bindings keep incrementing so
-            // later I(...) calls still resolve, but once either cap is
-            // met the line stops accumulating. The byte cap is enforced on
-            // the WHOLE line BEFORE pushing (check-then-add would let one
-            // arbitrarily large line overshoot the advertised cap by its
-            // own size), and it latches: a refused line ends recording so
-            // the program stays a clean prefix — no holes referencing
-            // bindings whose insert was dropped.
-            if n < MAX_RECORDED_LINES && bytes_rec.get() < MAX_RECORDED_BYTES {
-                let line = format!("{bind}=I({parent}, {json})");
-                if bytes_rec.get() + line.len() <= MAX_RECORDED_BYTES {
-                    bytes_rec.set(bytes_rec.get() + line.len());
-                    lines_rec.borrow_mut().push(line);
-                } else {
-                    bytes_rec.set(MAX_RECORDED_BYTES);
-                }
-            }
-            bind
+            push_recorded_line(&lines_rec, &counter_rec, &bytes_rec, |bind| {
+                format!("{bind}=I({parent}, {json})")
+            })
         })
         .map_err(|e| format!("bind __record: {e}"))?;
+        let record_k = Function::new(
+            ctx.clone(),
+            move |kit: String, parent: String, json: String| -> String {
+                push_recorded_line(&lines_rec_k, &counter_rec_k, &bytes_rec_k, |bind| {
+                    format!("{bind}=K({kit}, {parent}, {json})")
+                })
+            },
+        )
+        .map_err(|e| format!("bind __recordK: {e}"))?;
         ctx.globals()
             .set("__record", record)
             .map_err(|e| format!("set __record: {e}"))?;
+        ctx.globals()
+            .set("__recordK", record_k)
+            .map_err(|e| format!("set __recordK: {e}"))?;
         ctx.eval::<(), _>(PRELUDE)
             .map_err(|e| format!("prelude: {e}"))?;
         ctx.eval::<(), _>(script)
@@ -148,6 +149,34 @@ fn eval_to_program(script: &str) -> Result<String, String> {
             Ok(program)
         }
     }
+}
+
+fn push_recorded_line(
+    lines: &Rc<RefCell<Vec<String>>>,
+    counter: &Rc<Cell<usize>>,
+    bytes_used: &Rc<Cell<usize>>,
+    build: impl FnOnce(&str) -> String,
+) -> String {
+    let n = counter.get();
+    counter.set(n + 1);
+    let bind = format!("b{n}");
+    // Mirrors the line-count cap: bindings keep incrementing so later
+    // calls still resolve, but once either cap is met the line stops
+    // accumulating. The byte cap is enforced on the WHOLE line BEFORE
+    // pushing (check-then-add would let one arbitrarily large line
+    // overshoot the advertised cap by its own size), and it latches:
+    // a refused line ends recording so the program stays a clean
+    // prefix — no holes referencing bindings whose insert was dropped.
+    if n < MAX_RECORDED_LINES && bytes_used.get() < MAX_RECORDED_BYTES {
+        let line = build(&bind);
+        if bytes_used.get() + line.len() <= MAX_RECORDED_BYTES {
+            bytes_used.set(bytes_used.get() + line.len());
+            lines.borrow_mut().push(line);
+        } else {
+            bytes_used.set(MAX_RECORDED_BYTES);
+        }
+    }
+    bind
 }
 
 /// Best-effort repair for a model-truncated script: cut back to the last

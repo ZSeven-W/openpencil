@@ -852,14 +852,41 @@ impl EditorState {
                 component_id,
                 doc_x,
                 doc_y,
-            } => self
-                .instantiate_kit_component(
-                    &kit_id,
-                    &component_id,
-                    doc_x.unwrap_or(0.0),
-                    doc_y.unwrap_or(0.0),
-                )
-                .is_some(),
+                target_parent,
+                page_id,
+                overrides_json,
+            } => {
+                let Some(target_page_index) = command_page_index(self, page_id.as_deref()) else {
+                    return false;
+                };
+                let original_page_index = self.ui.active_page_index;
+                let original_selection = self.selection.clone();
+                let cross_page = page_id.is_some() && target_page_index != original_page_index;
+                if page_id.is_some() {
+                    self.ui.active_page_index = target_page_index;
+                }
+                let changed = self
+                    .instantiate_kit_component_under_parent(
+                        &kit_id,
+                        &component_id,
+                        &target_parent,
+                        doc_x.unwrap_or(0.0),
+                        doc_y.unwrap_or(0.0),
+                        overrides_json.as_deref(),
+                    )
+                    .is_some();
+                if cross_page {
+                    self.ui.active_page_index = original_page_index;
+                    self.selection = original_selection.clone();
+                    if changed {
+                        if let Some(snapshot) = self.history.past.back_mut() {
+                            snapshot.active_page_index = original_page_index;
+                            snapshot.selection = original_selection;
+                        }
+                    }
+                }
+                changed
+            }
 
             // --- Layout / text property writer ----------------------
             EditorCommand::SetNodeLayoutProp {

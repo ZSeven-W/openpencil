@@ -17,6 +17,25 @@ for (const label of ["A", "B", "C"]) { I(row, {type: "text", content: label}); }
 }
 
 #[test]
+fn kit_stub_records_a_k_operation_and_returns_its_binding() {
+    let program = run_script_to_program(
+        r#"const root = I(null, {type: "frame", name: "Root"});
+const button = K("shadcn/btn-primary", root, {descendants: {"shadcn-btn-primary-label": {content: "Book now"}}});
+I(button, {type: "text", content: "Nested"});"#,
+    )
+    .expect("script runs");
+    let lines: Vec<&str> = program.lines().collect();
+    assert_eq!(lines.len(), 3);
+    assert!(lines[0].starts_with("b0=I(null, "));
+    assert_eq!(
+        lines[1],
+        r#"b1=K("shadcn/btn-primary", b0, {"descendants":{"shadcn-btn-primary-label":{"content":"Book now"}}})"#
+    );
+    assert!(lines[2].starts_with("b2=I(b1, "));
+    assert!(lines[2].contains(r#""content":"Nested""#));
+}
+
+#[test]
 fn fence_wrapped_script_is_unwrapped() {
     let program =
         run_script_to_program("```js\nI(null, {type: \"frame\"});\n```").expect("fenced ok");
