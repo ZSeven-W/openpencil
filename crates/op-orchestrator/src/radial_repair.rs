@@ -211,7 +211,12 @@ fn estimated_text_size(v: &Value) -> Option<(f64, f64)> {
     }
     let content = v.get("content").and_then(Value::as_str).unwrap_or("");
     let font_size = numeric(v, "fontSize").unwrap_or(16.0).max(1.0);
-    let width = (content.chars().count() as f64 * font_size * 0.56).max(font_size);
+    // 0.56em/char under-measures wider font stacks: on Linux CI the same
+    // label resolved wide enough to WRAP inside the authored estimate,
+    // adding a line and sinking the ring label 6px below center (measured).
+    // 35% headroom keeps the forced width single-line on every platform;
+    // the label is centered, so surplus width cannot misplace it.
+    let width = (content.chars().count() as f64 * font_size * 0.56 * 1.35).max(font_size);
     let line_height = numeric(v, "lineHeight")
         .map(|lh| if lh <= 4.0 { lh * font_size } else { lh })
         .unwrap_or(font_size * 1.2);
