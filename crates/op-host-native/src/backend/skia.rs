@@ -549,3 +549,7 @@ pub fn enumerate_system_font_families() -> Vec<String> {
 #[cfg(test)]
 #[path = "skia/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "skia/font_import_tests.rs"]
+mod font_import_tests;

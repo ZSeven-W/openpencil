@@ -33,6 +33,20 @@ mod library;
 mod measure_cache;
 mod path_bounds;
 mod scene_cache;
+
+/// Process-global font-registry generation. Advances on every runtime font
+/// import/removal so measure/scene caches know to drop stale layout. Only
+/// meaningful when the real skia shaper is linked; the estimate backend has no
+/// fonts, so it stays a constant `0` and those caches never clear on this axis.
+#[cfg(feature = "skia-measure")]
+pub(crate) fn current_font_generation() -> u64 {
+    jian_skia::font_generation()
+}
+
+#[cfg(not(feature = "skia-measure"))]
+pub(crate) fn current_font_generation() -> u64 {
+    0
+}
 mod style_payload;
 mod text_style;
 mod widget_payload;

@@ -10,11 +10,15 @@
 //! lookups. The backend lives in a thread-local that outlives individual passes,
 //! so the cache spans reconversions.
 //!
-//! Measurement is a pure function of its inputs, so cached entries never go
-//! stale; the cache only grows with the set of distinct (text, font, width)
-//! tuples in play and is bounded by [`MAX_ENTRIES`].
+//! Measurement is a pure function of its inputs *for a fixed font set*, so
+//! cached entries only go stale when the process-global font registry changes
+//! (a runtime import/removal bumps [`jian_skia::font_generation`]). The cache
+//! watches that generation and drops every entry when it advances, so an
+//! already-open document re-measures with the new faces. Within a generation it
+//! only grows with the set of distinct (text, font, width) tuples in play and
+//! is bounded by [`MAX_ENTRIES`].
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -74,6 +78,7 @@ impl MeasureKey {
 pub struct CachingMeasureBackend {
     inner: Rc<dyn MeasureBackend>,
     cache: RefCell<HashMap<MeasureKey, MeasureResult>>,
+    built_generation: Cell<u64>,
 }
 
 impl CachingMeasureBackend {
@@ -81,12 +86,19 @@ impl CachingMeasureBackend {
         Self {
             inner,
             cache: RefCell::new(HashMap::new()),
+            built_generation: Cell::new(crate::current_font_generation()),
         }
     }
 }
 
 impl MeasureBackend for CachingMeasureBackend {
     fn measure(&self, req: &MeasureRequest<'_>) -> MeasureResult {
+        // A runtime font import/removal invalidates every memoized width.
+        let generation = crate::current_font_generation();
+        if generation != self.built_generation.get() {
+            self.cache.borrow_mut().clear();
+            self.built_generation.set(generation);
+        }
         let key = MeasureKey::from_request(req);
         if let Some(hit) = self.cache.borrow().get(&key) {
             return *hit;
