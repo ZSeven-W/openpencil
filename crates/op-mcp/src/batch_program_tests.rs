@@ -52,6 +52,22 @@ fn contains_merge_app_state(cmd: &EditorCommand) -> bool {
     }
 }
 
+fn subtree_contains_text(node: &jian_ops_schema::node::PenNode, expected: &str) -> bool {
+    let value = serde_json::to_value(node).expect("node json");
+    if value.get("type").and_then(Value::as_str) == Some("text")
+        && value.get("content").and_then(Value::as_str) == Some(expected)
+    {
+        return true;
+    }
+    node.children()
+        .map(|children| {
+            children
+                .iter()
+                .any(|child| subtree_contains_text(child, expected))
+        })
+        .unwrap_or(false)
+}
+
 #[test]
 fn mixed_program_executes_all_ops_with_shared_bindings_and_slash_paths() {
     let mut state = sample();
@@ -95,6 +111,60 @@ D("n14")"##;
     assert_eq!(copy.children().expect("copy children").len(), 1);
     // D removed n14.
     assert!(op_editor_core::walkers::find_node(children, &NodeId::new("n14")).is_none());
+}
+
+#[test]
+fn kit_op_instantiates_shadcn_component_under_parent() {
+    let mut state = op_editor_core::EditorState::new();
+    let program = r##"root=I(null, {"type":"frame","name":"Root","width":320,"height":240})
+button=K("shadcn/btn-primary", root)"##;
+    let (envelope, cmd) = call_operations(&state, program);
+
+    assert!(envelope.get("errors").is_none(), "{envelope}");
+    let root_id = binding_id(&envelope, "root");
+    let button_id = binding_id(&envelope, "button");
+    assert_ne!(root_id, button_id);
+
+    assert!(state.apply(cmd.expect("K program emits a command")));
+    let root = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&root_id))
+        .expect("root frame");
+    let root_children = root.children().expect("root children");
+    let button = op_editor_core::walkers::find_node(root_children, &NodeId::new(&button_id))
+        .expect("button under root");
+    assert_eq!(button.base().name.as_deref(), Some("Primary Button"));
+    assert!(
+        button.children().map(|c| !c.is_empty()).unwrap_or(false),
+        "kit instance must carry the shadcn button subtree"
+    );
+    assert!(
+        subtree_contains_text(button, "Button"),
+        "shadcn primary button label should survive"
+    );
+}
+
+#[test]
+fn kit_op_applies_descendant_text_overrides_before_remapping_ids() {
+    let mut state = op_editor_core::EditorState::new();
+    let program = r##"root=I(null, {"type":"frame","name":"Root","width":320,"height":240})
+button=K("shadcn/btn-primary", root, {"descendants":{"shadcn-btn-primary-label":{"content":"Book now"}}})"##;
+    let (envelope, cmd) = call_operations(&state, program);
+
+    assert!(envelope.get("errors").is_none(), "{envelope}");
+    let root_id = binding_id(&envelope, "root");
+    let button_id = binding_id(&envelope, "button");
+
+    assert!(state.apply(cmd.expect("K override program emits a command")));
+    let root = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&root_id))
+        .expect("root frame");
+    let button = op_editor_core::walkers::find_node(
+        root.children().expect("root children"),
+        &NodeId::new(&button_id),
+    )
+    .expect("button under root");
+    assert!(
+        subtree_contains_text(button, "Book now"),
+        "descendants override must land on the original shadcn label before ids are remapped"
+    );
 }
 
 #[test]

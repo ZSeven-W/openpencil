@@ -340,15 +340,21 @@ pub enum EditorCommand {
     DeleteComponent { component_id: NodeId },
     /// Rename a component registration.
     RenameComponent { component_id: NodeId, name: String },
-    /// Instantiate a UIKit component onto the active page. The kit /
-    /// component lookup happens against [`crate::EditorState::ui_kits`]
-    /// at apply time; `(doc_x, doc_y)` default to `(0, 0)` when the
-    /// caller does not specify a drop point.
+    /// Instantiate a UIKit component. The kit / component lookup
+    /// happens against [`crate::EditorState::ui_kits`] at apply time;
+    /// `(doc_x, doc_y)` default to `(0, 0)` when the caller does not
+    /// specify a drop point. `target_parent = NONE` inserts at the
+    /// page root; otherwise the parent must be a container on the
+    /// target page. `overrides_json` is a TS-style object applied to
+    /// the template before fresh ids are minted.
     InstantiateKitComponent {
         kit_id: String,
         component_id: String,
         doc_x: Option<f64>,
         doc_y: Option<f64>,
+        target_parent: NodeId,
+        page_id: Option<String>,
+        overrides_json: Option<String>,
     },
     /// Switch the active page.
     SetActivePage { index: u32 },

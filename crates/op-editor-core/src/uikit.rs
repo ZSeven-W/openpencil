@@ -12,6 +12,7 @@ use jian_ops_schema::node::{
     FrameNode, PenNode, PenNodeBase, RectangleNode, TextContent, TextNode,
 };
 use jian_ops_schema::sizing::SizingBehavior;
+use serde_json::{Map, Value};
 
 use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
 use crate::pen_node_ext::PenNodeExt;
@@ -439,6 +440,35 @@ impl EditorState {
         doc_x: f64,
         doc_y: f64,
     ) -> Option<NodeId> {
+        self.instantiate_kit_component_under_parent(
+            kit_id,
+            component_id,
+            &NodeId::NONE,
+            doc_x,
+            doc_y,
+            None,
+        )
+    }
+
+    /// Parent-aware variant used by the batch-design `K()` op. Overrides are
+    /// applied while the authored kit ids still exist, so
+    /// `descendants["shadcn-btn-primary-label"]` can target template children
+    /// before the final fresh document ids are minted.
+    pub fn instantiate_kit_component_under_parent(
+        &mut self,
+        kit_id: &str,
+        component_id: &str,
+        parent_id: &NodeId,
+        doc_x: f64,
+        doc_y: f64,
+        overrides_json: Option<&str>,
+    ) -> Option<NodeId> {
+        if parent_id.is_real() {
+            match walkers::find_node(self.active_children(), parent_id) {
+                Some(parent) if parent.is_container() => {}
+                _ => return None,
+            }
+        }
         let (template, label, kit_vars) = {
             let kit = self.ui_kits.iter().find(|k| k.id == kit_id)?;
             let comp = kit.components.iter().find(|c| c.id == component_id)?;
@@ -448,6 +478,18 @@ impl EditorState {
                 kit.variables.clone(),
             )
         };
+        let mut authored = template.clone();
+        authored.base_mut().name = Some(label);
+        // Template children are authored parent-relative, so placing
+        // the instance only needs the ROOT origin moved to
+        // `(doc_x, doc_y)` — descendants ride along at their authored
+        // offsets (`translate_subtree` shifts the root alone).
+        let dx = doc_x - authored.base().x.unwrap_or(0.0);
+        let dy = doc_y - authored.base().y.unwrap_or(0.0);
+        walkers::translate_subtree(&mut authored, dx, dy);
+        if !apply_kit_overrides(&mut authored, overrides_json) {
+            return None;
+        }
         let snap = self.snapshot_for_history();
         // Copy referenced `$variable` definitions from the kit into the
         // target document so kit fills/spacing keep resolving (TS
@@ -471,15 +513,7 @@ impl EditorState {
         }
         let mut next_id = self.max_node_id().checked_add(1)?;
         let mut taken = std::collections::HashSet::new();
-        let mut clone = walkers::deep_clone_with_new_ids(&template, &mut next_id, &mut taken);
-        // Template children are authored parent-relative, so placing
-        // the instance only needs the ROOT origin moved to
-        // `(doc_x, doc_y)` — descendants ride along at their authored
-        // offsets (`translate_subtree` shifts the root alone).
-        let dx = doc_x - clone.base().x.unwrap_or(0.0);
-        let dy = doc_y - clone.base().y.unwrap_or(0.0);
-        walkers::translate_subtree(&mut clone, dx, dy);
-        clone.base_mut().name = Some(label);
+        let mut clone = walkers::deep_clone_with_new_ids(&authored, &mut next_id, &mut taken);
         // TS deletes the clone's root `reusable` flag so the inserted
         // instance is standalone (`component-browser-card.tsx:36-40`);
         // without this an instantiated imported-kit component would be
@@ -488,11 +522,103 @@ impl EditorState {
             f.reusable = None;
         }
         let new_id = NodeId::new(clone.base().id.clone());
-        self.active_children_mut().push(clone);
+        if parent_id.is_real() {
+            let parent = walkers::find_node_mut(self.active_children_mut(), parent_id)?;
+            parent.children_mut()?.push(clone);
+        } else {
+            self.active_children_mut().push(clone);
+        }
         self.set_single_selection(new_id.clone());
         self.history_push_past(snap);
         Some(new_id)
     }
+}
+
+fn apply_kit_overrides(node: &mut PenNode, overrides_json: Option<&str>) -> bool {
+    let Some(raw) = overrides_json else {
+        return true;
+    };
+    let Ok(Value::Object(overrides)) = serde_json::from_str::<Value>(raw) else {
+        return false;
+    };
+    let label_text = overrides
+        .get("label")
+        .or_else(|| overrides.get("text"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let descendants = overrides.get("descendants").and_then(Value::as_object);
+    let Ok(mut value) = serde_json::to_value(&*node) else {
+        return false;
+    };
+    let Some(root) = value.as_object_mut() else {
+        return false;
+    };
+
+    apply_root_descendant_override(root, descendants);
+    for (key, override_value) in &overrides {
+        if matches!(
+            key.as_str(),
+            "id" | "children" | "descendants" | "label" | "text"
+        ) {
+            continue;
+        }
+        root.insert(key.clone(), override_value.clone());
+    }
+    if let Some(Value::Array(children)) = root.get("children").cloned() {
+        let overridden = children
+            .iter()
+            .map(|child| crate::ref_resolve::apply_overrides(child, descendants))
+            .collect();
+        root.insert("children".into(), Value::Array(overridden));
+    }
+    if let Some(text) = label_text {
+        let _ = set_first_text_content(&mut value, &text);
+    }
+    let Ok(overridden) = serde_json::from_value::<PenNode>(value) else {
+        return false;
+    };
+    *node = overridden;
+    true
+}
+
+fn apply_root_descendant_override(
+    root: &mut Map<String, Value>,
+    descendants: Option<&Map<String, Value>>,
+) {
+    let Some(root_id) = root.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(override_map) = descendants
+        .and_then(|d| d.get(root_id))
+        .and_then(Value::as_object)
+    else {
+        return;
+    };
+    for (key, value) in override_map {
+        if matches!(key.as_str(), "id" | "children" | "descendants") {
+            continue;
+        }
+        root.insert(key.clone(), value.clone());
+    }
+}
+
+fn set_first_text_content(value: &mut Value, text: &str) -> bool {
+    let Some(obj) = value.as_object_mut() else {
+        return false;
+    };
+    if obj.get("type").and_then(Value::as_str) == Some("text") {
+        obj.insert("content".into(), Value::String(text.to_string()));
+        return true;
+    }
+    let Some(Value::Array(children)) = obj.get_mut("children") else {
+        return false;
+    };
+    for child in children {
+        if set_first_text_content(child, text) {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

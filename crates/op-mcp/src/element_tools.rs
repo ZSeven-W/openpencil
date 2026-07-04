@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_core::{EditorCommand, EditorState, UIKit};
+use op_editor_core::{EditorCommand, EditorState, NodeId, UIKit};
 
 use super::{McpTool, ToolErrorCode, ToolOutcome};
 
@@ -82,6 +82,9 @@ impl McpTool for InsertKitComponent {
                 component_id: self.component_id.clone(),
                 doc_x,
                 doc_y,
+                target_parent: NodeId::NONE,
+                page_id: None,
+                overrides_json: None,
             },
         )
     }
