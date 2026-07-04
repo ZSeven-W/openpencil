@@ -9,7 +9,7 @@ use super::*;
 
 // ── Fingerprint assignment (Strategy 2 upgrade) ───────────────────
 
-fn text_leaf(name: &str, lid: u32, chars: &str, w: f32, h: f32) -> TreeNode {
+pub(super) fn text_leaf(name: &str, lid: u32, chars: &str, w: f32, h: f32) -> TreeNode {
     let mut n = sized_leaf(name, lid, w, h, 0.0);
     n.figma.set("type", FigValue::Str("TEXT".into()));
     n.figma.set(
@@ -413,6 +413,159 @@ fn unmatched_low_opacity_fill_falls_back_to_walk_order() {
     );
 }
 
+/// Component-swap stale-derived shape (Test.fig Sales-card icon): an
+/// `overriddenSymbolID` swap leaves the OLD component's derived
+/// entries in the array (listed FIRST, so they seed the virtual-GUID
+/// base and claim the walk-order prior) alongside the NEW component's
+/// entries. A near-EXACT geometric match must beat the stale entry's
+/// walk-order advantage so the swapped-in frame gets its true size.
+#[test]
+fn near_exact_geometry_beats_stale_walk_order_prior() {
+    // Swapped-in Graph icon subtree: frame 19.39, Stroke1 16.13,
+    // Stroke3 8.92 (master sizes from Test.fig).
+    let stroke3 = sized_leaf("stroke3", 12, 8.92, 8.79, 0.0);
+    let stroke1 = sized_leaf("stroke1", 11, 16.13, 16.04, 0.0);
+    let mut frame = sized_leaf("frame", 10, 19.39, 19.84, 0.0);
+    frame.figma.set("type", FigValue::Str("FRAME".into()));
+    let frame = TreeNode {
+        children: vec![stroke1, stroke3],
+        ..frame
+    };
+    // Real Graph symbol is 24×24 → instance 20×20 gives ratio 0.833.
+    let sym = TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("SYMBOL".into())),
+            ("guid", guid(0, 0)),
+            ("size", size(24.0, 24.0)),
+        ]),
+        children: vec![frame],
+    };
+    // 8 derived entries as production forwards them: the STALE 2-User
+    // component (13723-13727, FIRST — seeds the base + walk prior)
+    // then the correct Graph entries (13627-13629). Instance box 20×20.
+    let d = |lid: u32, x: f32, y: f32| derived_with(vec![guid(2, lid)], vec![("size", size(x, y))]);
+    let derived = vec![
+        d(13723, 15.4, 14.63),
+        d(13724, 11.4, 4.67),
+        d(13725, 7.31, 7.31),
+        d(13726, 2.36, 5.43),
+        d(13727, 2.2, 2.9),
+        d(13627, 16.16, 16.54),
+        d(13628, 13.44, 13.37),
+        d(13629, 7.43, 7.32),
+    ];
+    // Production also forwards strokePaints overrides on the two
+    // Graph strokes (13628/13629) — include them so the scoring
+    // matches the real path.
+    let stroke_paint = || FigValue::Array(vec![obj(vec![("type", FigValue::Str("SOLID".into()))])]);
+    let over = vec![
+        ov_with(vec![guid(2, 13628)], vec![("strokePaints", stroke_paint())]),
+        ov_with(vec![guid(2, 13629)], vec![("strokePaints", stroke_paint())]),
+    ];
+    let out = apply_instance_overrides(
+        &sym,
+        Some(&over),
+        Some(&derived),
+        Some(FigVec2 { x: 20.0, y: 20.0 }),
+    );
+    fn find<'a>(nodes: &'a [TreeNode], name: &str) -> Option<&'a TreeNode> {
+        for n in nodes {
+            if n.figma.get_str("name") == Some(name) {
+                return Some(n);
+            }
+            if let Some(h) = find(&n.children, name) {
+                return Some(h);
+            }
+        }
+        None
+    }
+    let frame = find(&out, "frame").expect("frame present");
+    let fsz = FigVec2::from_value(frame.figma.get("size").unwrap()).unwrap();
+    assert!(
+        (fsz.x - 16.16).abs() < 0.3 && (fsz.y - 16.54).abs() < 0.3,
+        "near-exact Graph frame derived must win over stale 2-User derived, got {fsz:?}"
+    );
+    let stroke1 = find(&out, "stroke1").expect("stroke1 present");
+    let s1 = FigVec2::from_value(stroke1.figma.get("size").unwrap()).unwrap();
+    assert!(
+        (s1.x - 13.44).abs() < 0.3,
+        "stroke1 must keep its own derived size, got {s1:?}"
+    );
+}
+
+/// Component-swap SAME-SIZED-frame shape (Test.fig Folder/Graph
+/// cards): the stale pre-swap "2 User" frame derived (15.4) and the
+/// swapped-in Folder frame's true size are nearly IDENTICAL, so the
+/// near-exact bonus can't disambiguate them and the stale entry wins
+/// on walk-order. The stale cluster must be dropped by geometric fit
+/// before fingerprinting.
+#[test]
+fn swap_drops_stale_cluster_with_same_sized_frame() {
+    // Swapped-in Folder icon: frame 18.5, two 8-ish strokes.
+    let s1 = sized_leaf("fstroke1", 12, 8.7, 8.7, 0.0);
+    let s2 = sized_leaf("fstroke2", 11, 8.6, 8.6, 0.0);
+    let mut frame = sized_leaf("folderframe", 10, 18.5, 17.55, 0.0);
+    frame.figma.set("type", FigValue::Str("FRAME".into()));
+    let frame = TreeNode {
+        children: vec![s2, s1],
+        ..frame
+    };
+    let sym = TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("SYMBOL".into())),
+            ("guid", guid(0, 0)),
+            ("size", size(24.0, 24.0)),
+        ]),
+        children: vec![frame],
+    };
+    // Instance 20×20 → ratio 0.833: Folder frame → 15.42, strokes → ~7.25.
+    let d = |lid: u32, x: f32, y: f32| derived_with(vec![guid(2, lid)], vec![("size", size(x, y))]);
+    // STALE 2-User cluster (13723-13727) FIRST — frame 15.4 ≈ Folder
+    // frame's scaled 15.42, so it's indistinguishable by size.
+    let derived = vec![
+        d(13723, 15.4, 14.63),
+        d(13724, 11.4, 4.67),
+        d(13725, 7.31, 7.31),
+        d(13726, 2.36, 5.43),
+        d(13727, 2.2, 2.9),
+        // VALID Folder cluster (13617-13619) — all near-exact to Folder.
+        d(13617, 15.42, 14.63),
+        d(13618, 7.25, 7.25),
+        d(13619, 7.17, 7.17),
+    ];
+    let out = filter_and_apply_swap(&sym, &derived, FigVec2 { x: 20.0, y: 20.0 });
+    fn find<'a>(nodes: &'a [TreeNode], name: &str) -> Option<&'a TreeNode> {
+        for n in nodes {
+            if n.figma.get_str("name") == Some(name) {
+                return Some(n);
+            }
+            if let Some(h) = find(&n.children, name) {
+                return Some(h);
+            }
+        }
+        None
+    }
+    let frame = find(&out, "folderframe").expect("frame present");
+    let fsz = FigVec2::from_value(frame.figma.get("size").unwrap()).unwrap();
+    // Whichever cluster wins, the frame must end ~15.4 (both agree) —
+    // the real signal is the STROKES: they must be Folder's ~7.25,
+    // NOT the stale 2-User's 11.4/2.36/2.2.
+    assert!((fsz.x - 15.42).abs() < 0.3, "frame size, got {fsz:?}");
+    let stroke = find(&out, "fstroke1").expect("stroke present");
+    let ssz = FigVec2::from_value(stroke.figma.get("size").unwrap()).unwrap();
+    assert!(
+        (ssz.x - 7.25).abs() < 0.5,
+        "Folder stroke must get its own ~7.25 size, not a stale 2-User size, got {ssz:?}"
+    );
+}
+
+/// Helper: run the swap-stale-derived filter then apply, mirroring
+/// what `convert_instance` does when `overriddenSymbolID` swaps.
+fn filter_and_apply_swap(sym: &TreeNode, derived: &[FigValue], isz: FigVec2) -> Vec<TreeNode> {
+    let filtered = crate::instance::filter_swap_stale_derived(derived, sym, Some(isz));
+    apply_instance_overrides(sym, None, Some(&filtered), Some(isz))
+}
+
 /// Space-between drift signature (Test.fig summary-card filter): the
 /// derived transform moves a node along ONE axis only (x pushed by
 /// justify, y identical). d=dx+dy lands in the dead zone between the
@@ -511,282 +664,4 @@ fn conflicted_image_fill_reject_stays_dropped() {
         !fills_of("a") && !fills_of("c"),
         "conflicted loser must not revive onto a sibling via walk order"
     );
-}
-
-/// Some files anchor the virtual numbering at the symbol ROOT (the
-/// base pk's derived size equals the symbol size). The walk-order
-/// fallback must then use the root-anchored walk — the children-first
-/// walk would shift every mapping by one.
-#[test]
-fn root_anchored_numbering_uses_root_walk_fallback() {
-    let sym = symbol_root(vec![
-        sized_leaf("a", 10, 100.0, 100.0, 0.0),
-        sized_leaf("b", 11, 100.0, 100.0, 0.0),
-        sized_leaf("c", 12, 100.0, 100.0, 0.0),
-    ]);
-    // Base pk 9:50 carries the SYMBOL's own size (100×100 root) →
-    // numbering is root-anchored: 9:50=root, 9:51=a, 9:52=b, 9:53=c.
-    let derived = vec![
-        derived_with(vec![guid(9, 50)], vec![("size", size(100.0, 100.0))]),
-        guid_path(vec![guid(9, 51)]),
-        guid_path(vec![guid(9, 52)]),
-        guid_path(vec![guid(9, 53)]),
-        guid_path(vec![guid(9, 54)]),
-    ];
-    // Signal-less name override on 9:51 → must land on "a" (root walk),
-    // not "b" (children-walk guess).
-    let over = vec![ov_with(
-        vec![guid(9, 51)],
-        vec![("name", FigValue::Str("Tinted".into()))],
-    )];
-    let out = apply_instance_overrides(&sym, Some(&over), Some(&derived), None);
-    let names: Vec<Option<&str>> = out.iter().map(|c| c.figma.get_str("name")).collect();
-    assert_eq!(
-        names[0],
-        Some("Tinted"),
-        "root-anchored numbering: 9:51 is the FIRST child, got {names:?}"
-    );
-}
-
-/// Multi-session virtual spaces: a secondary session's numbering is
-/// anchored at some SUBTREE of the symbol (its own component-history
-/// space). The anchor is only trusted when the group's text-demand
-/// entries land on TEXT nodes under it — then signal-less opacity
-/// hides apply to the right items.
-#[test]
-fn secondary_session_anchors_to_validated_subtree() {
-    let t = |name: &str, lid: u32, chars: &str| text_leaf(name, lid, chars, 40.0, 14.0);
-    let crumbs = TreeNode {
-        figma: obj(vec![
-            ("type", FigValue::Str("FRAME".into())),
-            ("guid", guid(1, 20)),
-            ("name", FigValue::Str("crumbs".into())),
-            ("size", size(200.0, 20.0)),
-        ]),
-        children: vec![
-            t("t1", 21, "Page"),
-            t("t2", 22, "Page"),
-            t("t3", 23, "Page"),
-        ],
-    };
-    let header = sized_leaf("header", 10, 300.0, 40.0, 0.0);
-    let sym = symbol_root(vec![header, crumbs]);
-
-    // 4 bare base-session entries (9:xx) dodge Strategy 1's count
-    // match; secondary session 30 carries 3 text-demand entries and a
-    // visible=false on 30:71 (→ t1 under the crumbs-children anchor).
-    let derived = vec![
-        guid_path(vec![guid(9, 50)]),
-        guid_path(vec![guid(9, 51)]),
-        guid_path(vec![guid(9, 52)]),
-        guid_path(vec![guid(9, 53)]),
-        derived_with(vec![guid(30, 71)], vec![("derivedTextData", obj(vec![]))]),
-        derived_with(vec![guid(30, 72)], vec![("derivedTextData", obj(vec![]))]),
-        derived_with(vec![guid(30, 73)], vec![("derivedTextData", obj(vec![]))]),
-    ];
-    let over = vec![ov_with(
-        vec![guid(30, 71)],
-        vec![("visible", FigValue::Bool(false))],
-    )];
-    let out = apply_instance_overrides(&sym, Some(&over), Some(&derived), None);
-    fn find<'a>(nodes: &'a [TreeNode], name: &str) -> Option<&'a TreeNode> {
-        for n in nodes {
-            if n.figma.get_str("name") == Some(name) {
-                return Some(n);
-            }
-            if let Some(hit) = find(&n.children, name) {
-                return Some(hit);
-            }
-        }
-        None
-    }
-    let t1 = find(&out, "t1").expect("t1 present");
-    assert_eq!(
-        t1.figma.get_bool("visible"),
-        Some(false),
-        "validated subtree anchor must route the hide to t1"
-    );
-    let header = find(&out, "header").expect("header present");
-    assert_ne!(header.figma.get_bool("visible"), Some(false));
-}
-
-/// Breadcrumb regression shape (Test.fig Top Nav): a foreign group's
-/// text demands ALL validate under a wrong lid-order anchor, but the
-/// group also carries a nested-path HEAD pk — which that anchor maps
-/// onto a plain FRAME. A head can only be an INSTANCE, so the anchor
-/// must be rejected: the opacity=0 meant for an item row must never
-/// hide the container frame.
-fn breadcrumb_shape() -> (TreeNode, Vec<FigValue>, Vec<FigValue>) {
-    let t = |name: &str, lid: u32, chars: &str| text_leaf(name, lid, chars, 40.0, 14.0);
-    let item = |lid: u32, text_lid: u32| TreeNode {
-        figma: obj(vec![
-            ("type", FigValue::Str("FRAME".into())),
-            ("guid", guid(1, lid)),
-            ("name", FigValue::Str("item".into())),
-            ("size", size(45.0, 15.0)),
-        ]),
-        children: vec![t("page", text_lid, "Page")],
-    };
-    let home = TreeNode {
-        figma: obj(vec![
-            ("type", FigValue::Str("INSTANCE".into())),
-            ("guid", guid(1, 21)),
-            ("name", FigValue::Str("home".into())),
-            ("size", size(16.0, 16.0)),
-        ]),
-        children: vec![],
-    };
-    let crumbs = TreeNode {
-        figma: obj(vec![
-            ("type", FigValue::Str("FRAME".into())),
-            ("guid", guid(1, 20)),
-            ("name", FigValue::Str("crumbs".into())),
-            ("size", size(200.0, 20.0)),
-        ]),
-        children: vec![home, item(22, 23), item(24, 25)],
-    };
-    let header = sized_leaf("header", 10, 300.0, 40.0, 0.0);
-    let sym = symbol_root(vec![header, crumbs]);
-
-    // Base-session bare entries (9:xx) dodge Strategy 1. Session 30:
-    // two IDENTICAL opacity=0 overrides (the hidden items), two
-    // derived-text entries, and a nested path headed at 30:75. Under
-    // the crumbs-self lid-order walk (71=crumbs, 72=home, 73=item,
-    // 74=page, 75=item, 76=page) the text demands 74/76 both land on
-    // TEXT — but 75 (a nested HEAD, so an INSTANCE) lands on a FRAME.
-    let derived = vec![
-        guid_path(vec![guid(9, 50)]),
-        guid_path(vec![guid(9, 51)]),
-        derived_with(vec![guid(30, 74)], vec![("derivedTextData", obj(vec![]))]),
-        derived_with(vec![guid(30, 76)], vec![("derivedTextData", obj(vec![]))]),
-    ];
-    let over = vec![
-        ov_with(vec![guid(30, 71)], vec![("opacity", FigValue::Float(0.0))]),
-        ov_with(vec![guid(30, 73)], vec![("opacity", FigValue::Float(0.0))]),
-        ov_with(
-            vec![guid(30, 75), guid(29221, 5)],
-            vec![("name", FigValue::Str("x".into()))],
-        ),
-    ];
-    (sym, over, derived)
-}
-
-fn find_named<'a>(nodes: &'a [TreeNode], name: &str) -> Vec<&'a TreeNode> {
-    let mut out = Vec::new();
-    fn go<'a>(nodes: &'a [TreeNode], name: &str, out: &mut Vec<&'a TreeNode>) {
-        for n in nodes {
-            if n.figma.get_str("name") == Some(name) {
-                out.push(n);
-            }
-            go(&n.children, name, out);
-        }
-    }
-    go(nodes, name, &mut out);
-    out
-}
-
-#[test]
-fn foreign_anchor_rejected_when_nested_head_lands_on_non_instance() {
-    let (sym, over, derived) = breadcrumb_shape();
-    let out = apply_instance_overrides(&sym, Some(&over), Some(&derived), None);
-    let crumbs = &find_named(&out, "crumbs")[0];
-    assert_ne!(
-        crumbs.figma.get_f64("opacity"),
-        Some(0.0),
-        "container frame must not take an item's opacity=0"
-    );
-    let home = &find_named(&out, "home")[0];
-    assert_ne!(home.figma.get_f64("opacity"), Some(0.0));
-}
-
-/// When no anchor validates, K identical cosmetic overrides matching
-/// a UNIQUE family of K same-named same-typed siblings apply to the
-/// whole family — permutation-independent, so no guessing involved.
-#[test]
-fn foreign_identical_overrides_apply_to_unique_sibling_family() {
-    let (sym, over, derived) = breadcrumb_shape();
-    let out = apply_instance_overrides(&sym, Some(&over), Some(&derived), None);
-    let items = find_named(&out, "item");
-    assert_eq!(items.len(), 2);
-    for it in &items {
-        assert_eq!(
-            it.figma.get_f64("opacity"),
-            Some(0.0),
-            "identical opacity=0 pair must land on the unique item family"
-        );
-    }
-    let crumbs = &find_named(&out, "crumbs")[0];
-    assert_ne!(crumbs.figma.get_f64("opacity"), Some(0.0));
-}
-
-/// The family pairing is order-ARBITRARY — it is only safe because
-/// every entry carries the same cosmetic payload. Any per-pk derived
-/// data riding on those pks (fontSize, sizes, …) must therefore be
-/// dropped, not applied through the arbitrary pairing.
-#[test]
-fn family_fallback_applies_only_the_cosmetic_payload() {
-    let (sym, over, mut derived) = breadcrumb_shape();
-    // A derived fontSize rides on family payload pk 30:71 — fontSize
-    // alone is not a fingerprint signal, so the pk still reaches the
-    // family fallback with this data attached.
-    derived.push(derived_with(
-        vec![guid(30, 71)],
-        vec![("fontSize", FigValue::Float(99.0))],
-    ));
-    let out = apply_instance_overrides(&sym, Some(&over), Some(&derived), None);
-    let items = find_named(&out, "item");
-    assert_eq!(items.len(), 2);
-    for it in &items {
-        assert_eq!(
-            it.figma.get_f64("opacity"),
-            Some(0.0),
-            "cosmetic payload still applies to the family"
-        );
-        assert_ne!(
-            it.figma.get_f64("fontSize"),
-            Some(99.0),
-            "per-pk derived data must not ride the arbitrary pairing"
-        );
-    }
-}
-
-/// A signal-bearing entry REJECTED by the fingerprint (its size
-/// contradicts every candidate) must not keep its walk-order guess in
-/// the head-resolution map — otherwise nested overrides forward into
-/// a node the evidence already disqualified.
-#[test]
-fn rejected_mapping_does_not_forward_nested_overrides() {
-    let mut nested_instance = sized_leaf("nested", 10, 50.0, 50.0, 0.0);
-    nested_instance
-        .figma
-        .set("type", FigValue::Str("INSTANCE".into()));
-    let sym = symbol_root(vec![
-        nested_instance,
-        sized_leaf("b", 11, 60.0, 60.0, 0.0),
-        sized_leaf("c", 12, 70.0, 70.0, 0.0),
-    ]);
-    // Walk order maps 9:50 → "nested". Its derived size (900×900)
-    // grossly contradicts every candidate → fingerprint rejects it.
-    let derived = vec![
-        derived_with(vec![guid(9, 50)], vec![("size", size(900.0, 900.0))]),
-        guid_path(vec![guid(9, 51)]),
-        // Nested entry headed by the REJECTED pk.
-        derived_with(
-            vec![guid(9, 50), guid(11, 8523)],
-            vec![("fontSize", FigValue::Float(20.0))],
-        ),
-    ];
-    let out = apply_instance_overrides(&sym, None, Some(&derived), None);
-    let nested = out
-        .iter()
-        .find(|n| n.figma.get_str("name") == Some("nested"))
-        .expect("nested present");
-    assert!(
-        nested.figma.get("derivedSymbolData").is_none(),
-        "nested forwarding must not ride a rejected walk guess, got {:?}",
-        nested.figma.get("derivedSymbolData")
-    );
-    // And the contradicted size must not have been applied anywhere.
-    let sz = FigVec2::from_value(nested.figma.get("size").unwrap()).unwrap();
-    assert!((sz.x - 50.0).abs() < 0.001);
 }
