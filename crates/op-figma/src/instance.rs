@@ -10,20 +10,25 @@
 //!      root, so root-level overrides can be filtered out.
 //!   3. Index-mapping fallback over all derived entries.
 
-use crate::common::round2;
 use crate::figma_types::FigVec2;
 use crate::kiwi::FigValue;
 use crate::tree::{guid_to_string, TreeNode};
 use std::collections::{HashMap, HashSet};
 
+mod apply;
 mod assignment;
 #[cfg(test)]
 mod assignment_tests;
 mod fingerprint;
+#[cfg(test)]
+mod fingerprint_tests;
 mod foreign_session;
 #[cfg(test)]
 mod tests;
 
+use apply::{
+    apply_to_node, flatten_dfs, local_id, strip_first_guid, virtual_guid_base, walk_virtual,
+};
 pub use assignment::seed_assignments_from_instances;
 use assignment::{guessed_mapping_is_implausible, rescale_only};
 
@@ -411,28 +416,37 @@ pub fn apply_instance_overrides_cached(
             .collect();
         // `None` = pair-count guard tripped, no scoring ran: everything
         // goes through the walk-order fallback below. `Some` = entries
-        // missing from the map contradicted every candidate — drop
-        // them rather than walk-order them back into corruption.
+        // missing from the map were rejected. HARD-signal rejections
+        // (size / transform / text contradicted every candidate) drop
+        // — walk-ordering them back would restore the corruption the
+        // evidence disproved. Fill-hint-only rejections merely mean
+        // no candidate carries such a fill (the override may be
+        // ADDING one) — those keep the walk-order fallback.
         let mut walk_fallback: Vec<fingerprint::VirtualEntry> = signal_less;
         match fingerprint::assign(&unpinned_signal, &candidates, ratios) {
             Some(assigned) => {
-                // Entries the fingerprint REJECTED contradicted every
-                // candidate — their walk-order guesses must not
-                // survive into nested-head resolution either.
-                for e in &unpinned_signal {
-                    if !assigned.contains_key(&e.pk) {
+                for e in unpinned_signal {
+                    if let Some(ng) = assigned.get(&e.pk) {
+                        assignment_cache.insert(cache_key(&e.pk), ng.clone());
+                        apply_pin(
+                            &e.pk,
+                            ng,
+                            &mut node_derived,
+                            &mut node_override,
+                            &mut pk_to_node_guid,
+                        );
+                    } else if fingerprint::has_hard_signal(&e)
+                        || fingerprint::hint_matches_any(&e, &flat_symbol[1..])
+                    {
+                        // Rejected on contradicting evidence, or the
+                        // hint's target exists but another entry won
+                        // it — either way the walk-order guess must
+                        // not survive into application or
+                        // nested-head resolution.
                         pk_to_node_guid.remove(&e.pk);
+                    } else {
+                        walk_fallback.push(e);
                     }
-                }
-                for (pk, ng) in &assigned {
-                    assignment_cache.insert(cache_key(pk), ng.clone());
-                    apply_pin(
-                        pk,
-                        ng,
-                        &mut node_derived,
-                        &mut node_override,
-                        &mut pk_to_node_guid,
-                    );
                 }
             }
             None => walk_fallback.extend(unpinned_signal),
@@ -442,7 +456,7 @@ pub fn apply_instance_overrides_cached(
         // entry when the fingerprint guard bailed: cache pin first,
         // then walk-order fallback with the root-walk filter for
         // root-level overrides.
-        let mut foreign: Vec<(String, bool)> = Vec::new();
+        let mut foreign: Vec<foreign_session::ForeignPk> = Vec::new();
         for e in &walk_fallback {
             let pk = &e.pk;
             if let Some(ng) = assignment_cache.get(&cache_key(pk)).cloned() {
@@ -463,7 +477,11 @@ pub fn apply_instance_overrides_cached(
                     .map(|sid| sid != session_id)
                     .unwrap_or(false);
                 if is_foreign {
-                    foreign.push((pk.clone(), fingerprint::demands_text(e)));
+                    foreign.push(foreign_session::ForeignPk {
+                        pk: pk.clone(),
+                        demands_text: fingerprint::demands_text(e),
+                        demands_instance: false,
+                    });
                 }
                 continue;
             }
@@ -486,16 +504,69 @@ pub fn apply_instance_overrides_cached(
             }
         }
 
-        // Foreign-session groups: apply only under a UNIQUE anchor
-        // whose walk lands every text-demanding entry on a TEXT node
-        // (see foreign_session.rs). No anchor → safely dropped.
-        for group in foreign_session::group_by_session(&foreign) {
-            let Some(map) = foreign_session::resolve_group(&group, symbol_node) else {
+        // Nested-path HEADS in a foreign session are group members
+        // too: they demand an INSTANCE node — a strong validation
+        // constraint the single-segment entries can't provide.
+        for pk in override_order.iter().chain(derived_order.iter()) {
+            if !pk.contains('/') {
                 continue;
+            }
+            let head = pk.split('/').next().unwrap_or("");
+            if walk_map.contains_key(head) || guid_in_subtree.contains(head) {
+                continue;
+            }
+            let is_foreign = head
+                .split(':')
+                .next()
+                .and_then(|s| s.parse::<u32>().ok())
+                .map(|sid| sid != session_id)
+                .unwrap_or(false);
+            if !is_foreign {
+                continue;
+            }
+            if let Some(fp) = foreign.iter_mut().find(|f| f.pk == head) {
+                fp.demands_instance = true;
+            } else {
+                foreign.push(foreign_session::ForeignPk {
+                    pk: head.to_string(),
+                    demands_text: false,
+                    demands_instance: true,
+                });
+            }
+        }
+
+        // Foreign-session groups: apply only under a UNIQUE anchor
+        // whose walk satisfies every demand (text → TEXT node, nested
+        // head → INSTANCE node); with no anchor, fall back to the
+        // uniform-family match (see foreign_session.rs). Neither →
+        // safely dropped.
+        for group in foreign_session::group_by_session(&foreign) {
+            let (map, family_mode) = match foreign_session::resolve_group(&group, symbol_node) {
+                Some(m) => (m, false),
+                None => {
+                    match foreign_session::resolve_uniform_family(
+                        &group,
+                        symbol_node,
+                        &override_map,
+                    ) {
+                        Some(m) => (m, true),
+                        None => continue,
+                    }
+                }
             };
-            for (pk, _) in &group.pks {
+            for pk in group.pks.iter().map(|fp| &fp.pk) {
                 let Some(ng) = map.get(pk) else { continue };
                 if *ng == root_guid {
+                    continue;
+                }
+                if family_mode {
+                    // The family pairing is order-ARBITRARY — safe only
+                    // for the identical cosmetic payload it validated.
+                    // Per-pk derived data and nested-head resolution
+                    // must not ride it.
+                    if let Some(ov) = override_map.get(pk) {
+                        node_override.entry(ng.clone()).or_insert((*ov).clone());
+                    }
                     continue;
                 }
                 pk_to_node_guid.insert(pk.clone(), ng.clone());
@@ -647,198 +718,4 @@ pub fn apply_instance_overrides_cached(
             )
         })
         .collect()
-}
-
-/// Local-id getter — falls back to 0 when `guid.localID` is absent
-/// (matches TS `a.figma.guid?.localID ?? 0`).
-fn local_id(node: &TreeNode) -> u32 {
-    node.figma
-        .get("guid")
-        .and_then(|g| g.get_f64("localID"))
-        .map(|n| n as u32)
-        .unwrap_or(0)
-}
-
-/// Pre-order DFS over a TreeNode (children sorted ascending by
-/// localID). The starting node is included as the first entry.
-fn flatten_dfs<'a>(node: &'a TreeNode, out: &mut Vec<&'a TreeNode>) {
-    out.push(node);
-    let mut sorted: Vec<&TreeNode> = node.children.iter().collect();
-    sorted.sort_by_key(|n| local_id(n));
-    for c in sorted {
-        flatten_dfs(c, out);
-    }
-}
-
-/// Walk a subtree in pre-order DFS, recording the virtual GUID
-/// `sessionID:firstLocalID + idx` → actual GUID for each node. Mirrors
-/// the TS `walkFull` / `walkRoot` helpers.
-fn walk_virtual(
-    node: &TreeNode,
-    session_id: u32,
-    first_local_id: u32,
-    idx: &mut u32,
-    out: &mut HashMap<String, String>,
-) {
-    if let Some(g) = node.figma.get("guid").and_then(guid_to_string) {
-        out.insert(format!("{}:{}", session_id, first_local_id + *idx), g);
-    }
-    *idx += 1;
-    let mut sorted: Vec<&TreeNode> = node.children.iter().collect();
-    sorted.sort_by_key(|n| local_id(n));
-    for c in sorted {
-        walk_virtual(c, session_id, first_local_id, idx, out);
-    }
-}
-
-/// Read `(sessionID, firstLocalID)` from the first single-segment
-/// derived entry — Strategy-2's virtual-GUID base. None when either
-/// field is missing.
-fn virtual_guid_base(len1_derived: &[&FigValue]) -> Option<(u32, u32)> {
-    let first = len1_derived.first()?;
-    let first_guid = first
-        .get("guidPath")
-        .and_then(|p| p.get_array("guids"))
-        .and_then(|g| g.first())?;
-    let sid = first_guid.get_f64("sessionID")? as u32;
-    let lid = first_guid.get_f64("localID")? as u32;
-    Some((sid, lid))
-}
-
-/// Build a copy of `entry` with the first `guidPath` segment dropped.
-fn strip_first_guid(entry: &FigValue) -> Option<FigValue> {
-    let guids = entry.get("guidPath")?.get_array("guids")?;
-    if guids.len() < 2 {
-        return None;
-    }
-    let mut copy = entry.clone();
-    let rest: Vec<FigValue> = guids[1..].to_vec();
-    let mut path = FigValue::Object(Vec::new());
-    path.set("guids", FigValue::Array(rest));
-    copy.set("guidPath", path);
-    Some(copy)
-}
-
-/// Recursively clone the subtree, applying derived data + overrides to
-/// each node keyed by its guid.
-fn apply_to_node(
-    node: &TreeNode,
-    node_override: &HashMap<String, FigValue>,
-    node_derived: &HashMap<String, FigValue>,
-    nested_override: &HashMap<String, Vec<FigValue>>,
-    nested_derived: &HashMap<String, Vec<FigValue>>,
-) -> TreeNode {
-    let key = node
-        .figma
-        .get("guid")
-        .and_then(guid_to_string)
-        .unwrap_or_default();
-    let d = node_derived.get(&key);
-    let ov = node_override.get(&key);
-    let nested_ov = nested_override.get(&key);
-    let nested_d = nested_derived.get(&key);
-
-    if d.is_none() && ov.is_none() && nested_ov.is_none() && nested_d.is_none() {
-        return TreeNode {
-            figma: node.figma.clone(),
-            children: node
-                .children
-                .iter()
-                .map(|c| {
-                    apply_to_node(
-                        c,
-                        node_override,
-                        node_derived,
-                        nested_override,
-                        nested_derived,
-                    )
-                })
-                .collect(),
-        };
-    }
-
-    let mut figma = node.figma.clone();
-
-    // Derived data — scale stroke weight before overwriting size.
-    if let Some(d) = d {
-        if let (Some(dsize), Some(nsize)) = (
-            d.get("size").and_then(FigVec2::from_value),
-            node.figma.get("size").and_then(FigVec2::from_value),
-        ) {
-            if let Some(sw) = figma.get_f64("strokeWeight") {
-                if nsize.x != 0.0 && nsize.y != 0.0 {
-                    let scale = (dsize.x / nsize.x).min(dsize.y / nsize.y);
-                    if scale < 0.99 {
-                        figma.set("strokeWeight", FigValue::Float(round2(sw * scale) as f32));
-                    }
-                }
-            }
-        }
-        if let Some(size) = d.get("size") {
-            figma.set("size", size.clone());
-        }
-        if let Some(t) = d.get("transform") {
-            figma.set("transform", t.clone());
-        }
-        if let Some(fs) = d.get("fontSize") {
-            figma.set("fontSize", fs.clone());
-        }
-        if let Some(dtd) = d.get("derivedTextData") {
-            if dtd.get("characters").is_some() {
-                figma.set("textData", dtd.clone());
-            }
-        }
-    }
-
-    // Override props — copy every non-blacklisted key. Explicit
-    // `Null` is preserved (TS `if (value !== undefined)`: only
-    // `undefined` is skipped, `null` is copied as an intentional
-    // reset).
-    if let Some(FigValue::Object(pairs)) = ov {
-        for (k, v) in pairs {
-            if !OVERRIDE_SKIP_KEYS.contains(&k.as_str()) {
-                figma.set(k, v.clone());
-            }
-        }
-    }
-
-    // Forward nested entries into nested INSTANCE nodes.
-    let is_instance =
-        figma.get_str("type") == Some("INSTANCE") || figma.get("symbolData").is_some();
-    if is_instance {
-        if let Some(nested) = nested_ov {
-            let mut existing: Vec<FigValue> = figma
-                .get("symbolData")
-                .and_then(|s| s.get_array("symbolOverrides"))
-                .map(|a| a.to_vec())
-                .unwrap_or_default();
-            existing.extend(nested.clone());
-            let mut symbol_data = figma
-                .get("symbolData")
-                .cloned()
-                .unwrap_or(FigValue::Object(Vec::new()));
-            symbol_data.set("symbolOverrides", FigValue::Array(existing));
-            figma.set("symbolData", symbol_data);
-        }
-        if let Some(nested) = nested_d {
-            figma.set("derivedSymbolData", FigValue::Array(nested.clone()));
-        }
-    }
-
-    TreeNode {
-        figma,
-        children: node
-            .children
-            .iter()
-            .map(|c| {
-                apply_to_node(
-                    c,
-                    node_override,
-                    node_derived,
-                    nested_override,
-                    nested_derived,
-                )
-            })
-            .collect(),
-    }
 }
