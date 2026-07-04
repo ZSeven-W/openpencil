@@ -320,10 +320,15 @@ impl WidgetHost {
                     .property_color_variable_picker_open = None;
             }
             A::AddEffect => {
+                self.editor_state.editor_ui.toggle_effect_add_picker();
+            }
+            A::AddDropShadowEffect => {
                 self.editor_state.add_drop_shadow_to_selected();
+                self.editor_state.editor_ui.close_effect_add_picker();
             }
             A::AddLayerBlur => {
                 self.editor_state.add_layer_blur_to_selected();
+                self.editor_state.editor_ui.close_effect_add_picker();
             }
             A::RemoveEffect(index) => {
                 let id = self.editor_state.selection.anchor.clone();

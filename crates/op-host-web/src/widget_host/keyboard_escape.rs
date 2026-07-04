@@ -178,6 +178,11 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        if self.editor_state.editor_ui.effect_add_picker_open {
+            self.editor_state.editor_ui.close_effect_add_picker();
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.image_fill_popover_open {
             self.editor_state.editor_ui.image_fill_popover_open = false;
             self.mark_dirty();
