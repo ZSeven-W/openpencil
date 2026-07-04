@@ -585,7 +585,12 @@ fn layer_panel_caches_content_widths_on_build() {
 
 #[test]
 fn visible_row_range_jumps_directly_to_scrolled_rows() {
-    let range = visible_row_range(1_000, LAYER_ROW_HEIGHT * 500.0, LAYER_ROW_HEIGHT * 10.0);
+    let range = visible_row_range(
+        1_000,
+        LAYER_ROW_HEIGHT * 500.0,
+        LAYER_ROW_HEIGHT * 10.0,
+        LAYER_ROW_HEIGHT,
+    );
 
     assert_eq!(range.start, 500);
     assert!(
@@ -600,9 +605,55 @@ fn row_index_at_maps_scrolled_point_to_item_without_linear_scan() {
     let scroll = LAYER_ROW_HEIGHT * 500.0;
     let point_y = rows_top + LAYER_ROW_HEIGHT * 2.5;
 
-    let (index, row_top) = row_index_at(1_000, rows_top, scroll, LAYER_ROW_HEIGHT * 10.0, point_y)
-        .expect("point lands on a visible row");
+    let (index, row_top) = row_index_at(
+        1_000,
+        rows_top,
+        scroll,
+        LAYER_ROW_HEIGHT * 10.0,
+        LAYER_ROW_HEIGHT,
+        point_y,
+    )
+    .expect("point lands on a visible row");
 
     assert_eq!(index, 502);
     assert!((row_top - (rows_top + LAYER_ROW_HEIGHT * 2.0)).abs() < 0.01);
+}
+
+/// Pages rows are 32 px tall; the visible-row window and hit-test must
+/// use PAGE_ROW_HEIGHT, not the 28 px layer height. With 45 pages
+/// scrolled near the bottom, the window must still start at the row
+/// whose top the offset lands on — using the wrong height skips rows
+/// and leaves a blank gap above the last page.
+#[test]
+fn pages_visible_range_uses_page_row_height() {
+    // Scroll so the top of row 39 is at the viewport top.
+    let scroll = PAGE_ROW_HEIGHT * 39.0;
+    let range = visible_row_range(45, scroll, PAGE_ROW_HEIGHT * 6.0, PAGE_ROW_HEIGHT);
+    assert_eq!(
+        range.start, 39,
+        "pages window must start at the 32px-row index, got {range:?}"
+    );
+    assert!(
+        range.end >= 45,
+        "window must reach the last page, got {range:?}"
+    );
+}
+
+#[test]
+fn pages_hit_test_uses_page_row_height() {
+    let rows_top = 60.0;
+    let scroll = PAGE_ROW_HEIGHT * 39.0;
+    // Cursor 2.5 rows down from the viewport top → row 41.
+    let point_y = rows_top + PAGE_ROW_HEIGHT * 2.5;
+    let (index, row_top) = row_index_at(
+        45,
+        rows_top,
+        scroll,
+        PAGE_ROW_HEIGHT * 6.0,
+        PAGE_ROW_HEIGHT,
+        point_y,
+    )
+    .expect("point lands on a page row");
+    assert_eq!(index, 41, "hit-test must map to the 32px-row index");
+    assert!((row_top - (rows_top + PAGE_ROW_HEIGHT * 2.0)).abs() < 0.01);
 }

@@ -409,12 +409,13 @@ pub(super) fn visible_row_range(
     row_count: usize,
     scroll: f32,
     viewport_h: f32,
+    row_height: f32,
 ) -> std::ops::Range<usize> {
-    if row_count == 0 || viewport_h <= 0.0 {
+    if row_count == 0 || viewport_h <= 0.0 || row_height <= 0.0 {
         return 0..0;
     }
-    let start = (scroll.max(0.0) / LAYER_ROW_HEIGHT).floor() as usize;
-    let visible = (viewport_h / LAYER_ROW_HEIGHT).ceil().max(0.0) as usize;
+    let start = (scroll.max(0.0) / row_height).floor() as usize;
+    let visible = (viewport_h / row_height).ceil().max(0.0) as usize;
     let end = start
         .saturating_add(visible)
         .saturating_add(2)
@@ -429,9 +430,10 @@ pub(super) fn row_index_at(
     rows_top: f32,
     scroll: f32,
     viewport_h: f32,
+    row_height: f32,
     point_y: f32,
 ) -> Option<(usize, f32)> {
-    if row_count == 0 || viewport_h <= 0.0 {
+    if row_count == 0 || viewport_h <= 0.0 || row_height <= 0.0 {
         return None;
     }
     if point_y < rows_top || point_y > rows_top + viewport_h {
@@ -441,10 +443,10 @@ pub(super) fn row_index_at(
     if local_y < 0.0 {
         return None;
     }
-    let index = (local_y / LAYER_ROW_HEIGHT).floor() as usize;
+    let index = (local_y / row_height).floor() as usize;
     if index >= row_count {
         return None;
     }
-    let row_top = rows_top - scroll.max(0.0) + index as f32 * LAYER_ROW_HEIGHT;
+    let row_top = rows_top - scroll.max(0.0) + index as f32 * row_height;
     Some((index, row_top))
 }
