@@ -64,10 +64,16 @@ impl PreviewSession {
     }
 
     /// The scene-space bounds of the currently-mounted screen's first
-    /// root, or `None` when nothing is mounted. Used by the host to
-    /// center the viewport on the entry screen / a switched screen
-    /// (Task 9).
+    /// root, or `None`. Used by the host to center the viewport on the
+    /// entry screen / a switched screen (Task 9).
+    ///
+    /// Gated on APP MODE: returns `None` for a classic workbench-mode
+    /// session even though `root_frames` is populated there, so neither
+    /// call site (`enter_preview` centering, `reconcile` re-centering)
+    /// ever recenters an ordinary unmarked document — preserving the
+    /// "no behavior change for unmarked docs" invariant.
     pub fn current_screen_scene_rect(&self) -> Option<Rect> {
+        self.app.as_ref()?;
         self.root_frames.first().map(|f| f.scene_rect)
     }
 
@@ -115,17 +121,18 @@ impl PreviewSession {
         // paint-side projections the same way `enter` built them for
         // the entry screen, so the newly-mounted root paints + hit-tests
         // exactly as it would have if the session had started there.
+        //
+        // `reconcile_screens` has ALREADY advanced `current_path` +
+        // swapped the runtime document, so this switch is committed and
+        // will never be retried (the next pass sees the path unchanged).
+        // The scene + binding-sites rebuild (both infallible) therefore
+        // runs UNCONDITIONALLY and BEFORE the fallible `solve_roots` —
+        // otherwise a `solve_roots` error would leave paint permanently
+        // stuck rendering the old screen. Rebuilding scene first means a
+        // `solve_roots` failure leaves the visible scene matching the
+        // new screen; only `root_frames` (the hit-test mapping) stays
+        // stale — strictly better than nothing rebuilt.
         app.page_idx = app.table.page_index(&app.current_path).unwrap_or(0);
-        match solve_roots(&mut self.runtime) {
-            Ok((frames, available)) => {
-                self.root_frames = frames;
-                self.available = available;
-            }
-            Err(e) => {
-                self.warnings.push(format!("preview: relayout failed: {e}"));
-                return true;
-            }
-        }
         self.scene = op_pen_loader::pen_document_to_layout_scene(
             &app.promoted_doc,
             &app.theme,
@@ -144,6 +151,15 @@ impl PreviewSession {
             &mut self.binding_sites,
             &mut self.warnings,
         );
+        match solve_roots(&mut self.runtime) {
+            Ok((frames, available)) => {
+                self.root_frames = frames;
+                self.available = available;
+            }
+            Err(e) => {
+                self.warnings.push(format!("preview: relayout failed: {e}"));
+            }
+        }
         true
     }
 
