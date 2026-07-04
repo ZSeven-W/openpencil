@@ -22,13 +22,6 @@ use op_host_services::design_agent_tools::{design_tool_defs, root_seed_prompt_is
 
 use super::clear_fresh_starter_frame_for_design;
 
-/// Parse the design-agent-loop env-flag value without reading the env
-/// directly — testable without env-var flakiness. Accepts "1", "true",
-/// and "on" (after trimming); everything else (including `None`) → false.
-pub fn parse_loop_flag(opt: Option<&str>) -> bool {
-    matches!(opt.map(str::trim), Some("1") | Some("true") | Some("on"))
-}
-
 /// Recognised explicit opt-OUT values for the design-agent loop.
 fn parse_loop_off(opt: Option<&str>) -> bool {
     matches!(opt.map(str::trim), Some("0") | Some("false") | Some("off"))
@@ -270,34 +263,5 @@ mod tests {
         );
         assert!(!loop_enabled(false, Some("false")));
         assert!(!loop_enabled(false, Some(" off ")));
-    }
-
-    // ── parse_loop_flag (unchanged) ───────────────────────────────────────
-
-    #[test]
-    fn parse_loop_flag_returns_false_when_unset() {
-        assert!(!parse_loop_flag(None), "unset env var must yield false");
-    }
-
-    #[test]
-    fn parse_loop_flag_returns_true_for_accepted_values() {
-        assert!(parse_loop_flag(Some("1")));
-        assert!(parse_loop_flag(Some("true")));
-        assert!(parse_loop_flag(Some("on")));
-        // Whitespace around the value must be stripped.
-        assert!(parse_loop_flag(Some("  1  ")));
-        assert!(parse_loop_flag(Some(" true ")));
-        assert!(parse_loop_flag(Some(" on ")));
-    }
-
-    #[test]
-    fn parse_loop_flag_returns_false_for_rejected_values() {
-        assert!(!parse_loop_flag(Some("0")));
-        assert!(!parse_loop_flag(Some("false")));
-        assert!(!parse_loop_flag(Some("off")));
-        assert!(!parse_loop_flag(Some("")));
-        assert!(!parse_loop_flag(Some("yes")));
-        assert!(!parse_loop_flag(Some("True"))); // case-sensitive
-        assert!(!parse_loop_flag(Some("ON"))); // case-sensitive
     }
 }
