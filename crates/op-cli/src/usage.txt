@@ -18,6 +18,7 @@ COMMON COMMANDS:
   op stop                                  stop the running editor / MCP server
   op install [--target T]                  install openpencil-skill for AI agents
   op uninstall [--target T]                uninstall openpencil-skill
+  op skill:export <skill> [--out DIR]       export embedded skill as DIR/<skill>/SKILL.md
   op status                               check whether MCP HTTP is reachable
   op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
@@ -37,6 +38,11 @@ COMMON COMMANDS:
   op design:skeleton <json-array|@file|->
   op design:content [section] <json-array|@file|->
   op design:refine --root-id <id>
+  op design:upsert-vars --key K --file vars.json [--source P] [--hash H]
+  op design:upsert-component --key K --name N --file node.json [--source P] [--hash H]
+  op design:upsert-screen --key K --file node.json [--source P] [--hash H]
+  op design:status [--kind token|component|screen]
+  op design:lint [--node ID]
   op page list|add [--name N]|remove|rename|reorder|duplicate ...
   op vars                                 get variables + theme axes
   op vars:set <json|@file|-> [--replace] set variables

@@ -1,6 +1,6 @@
 //! Snapshot extraction for the right-rail `PropertyPanel`.
 
-use crate::layout_scene::{NodeKind, SceneStroke};
+use crate::layout_scene::{NodeKind, SceneStroke, SceneStrokeAlign};
 use crate::widgets::property_panel_action::{
     LayoutAlignValue, LayoutJustifyValue, TextAlignValue, TextGrowthValue, TextVerticalAlignValue,
 };
@@ -638,11 +638,13 @@ impl NodeSnapshot {
                 color,
                 width: stroke_width.unwrap_or(1.0) as f32,
                 sides: stroke_sides_for_scene(node),
+                align: SceneStrokeAlign::Center,
             }),
             (None, Some(width)) if width > 0.0 => Some(SceneStroke {
                 color: Self::DEFAULT_STROKE_SWATCH,
                 width: width as f32,
                 sides: stroke_sides_for_scene(node),
+                align: SceneStrokeAlign::Center,
             }),
             _ => None,
         };

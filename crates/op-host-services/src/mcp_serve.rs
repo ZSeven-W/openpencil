@@ -19,24 +19,24 @@ use op_mcp::{
     add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot, batch_design_snapshot,
     batch_get_snapshot, clear_selection_snapshot, codegen_assemble_snapshot,
     codegen_clean_snapshot, codegen_plan_snapshot, codegen_submit_chunk_snapshot,
-    copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot, create_component_snapshot,
-    create_variable_snapshot, cut_selected_snapshot, cycle_active_axis_value_snapshot,
-    debug_tools_enabled, delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
-    delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
-    design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
-    duplicate_page_snapshot, duplicate_selected_snapshot, export_design_md_snapshot,
-    find_empty_space_snapshot, find_node_by_name_snapshot, get_active_theme_snapshot,
-    get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
-    get_design_prompt_snapshot, get_editor_state_snapshot, get_guidelines_snapshot,
-    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
-    get_node_snapshot, get_selection_set_snapshot, get_style_guide_snapshot,
-    get_style_guide_tags_snapshot, get_variables_snapshot, get_viewport_snapshot,
-    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
-    instantiate_component_snapshot, list_components_snapshot, list_node_kinds_snapshot,
-    list_pages_snapshot, list_theme_presets_snapshot, list_variables_snapshot,
-    load_theme_preset_snapshot, move_node_snapshot, nudge_selected_snapshot,
-    open_document_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
-    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
+    conversion_status_snapshot, copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot,
+    create_component_snapshot, create_variable_snapshot, cut_selected_snapshot,
+    cycle_active_axis_value_snapshot, debug_tools_enabled, delete_component_snapshot,
+    delete_node_snapshot, delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
+    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
+    document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
+    export_design_md_snapshot, find_empty_space_snapshot, find_node_by_name_snapshot,
+    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
+    get_design_md_snapshot, get_design_prompt_snapshot, get_editor_state_snapshot,
+    get_guidelines_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
+    get_style_guide_snapshot, get_style_guide_tags_snapshot, get_variables_snapshot,
+    get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    instantiate_component_snapshot, lint_document_snapshot, list_components_snapshot,
+    list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
+    list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
+    nudge_selected_snapshot, open_document_snapshot, paste_clipboard_snapshot, read_nodes_snapshot,
+    redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
     rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
     reorder_selected_snapshot, replace_all_matching_properties_snapshot, replace_node_snapshot,
     run_stdio_with_applier, save_document_snapshot, save_theme_preset_snapshot,
@@ -51,7 +51,8 @@ use op_mcp::{
     set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
     set_variable_string_snapshot, set_variables_snapshot, set_viewport_snapshot,
     snapshot_layout_snapshot, spawn_agents_snapshot, toggle_node_selection_snapshot,
-    tool_search_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot, McpTool,
+    tool_search_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
+    upsert_component_snapshot, upsert_screen_snapshot, upsert_variables_snapshot, McpTool,
     ToolRegistry,
 };
 #[cfg(feature = "mcp-debug-tools")]
@@ -436,6 +437,11 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("list_pages", list_pages_snapshot(doc));
     register_tool!("list_variables", list_variables_snapshot(doc));
     register_tool!("get_variables", get_variables_snapshot(doc));
+    register_tool!("upsert_variables", upsert_variables_snapshot());
+    register_tool!("upsert_component", upsert_component_snapshot());
+    register_tool!("upsert_screen", upsert_screen_snapshot());
+    register_tool!("conversion_status", conversion_status_snapshot(doc));
+    register_tool!("lint_document", lint_document_snapshot(doc));
     register_tool!("save_theme_preset", save_theme_preset_snapshot(doc));
     register_tool!("load_theme_preset", load_theme_preset_snapshot());
     register_tool!("list_theme_presets", list_theme_presets_snapshot());
@@ -774,6 +780,8 @@ use export_tool::export_nodes_snapshot;
 
 #[cfg(test)]
 mod codegen_wire_tests;
+#[cfg(test)]
+mod conversion_flow_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

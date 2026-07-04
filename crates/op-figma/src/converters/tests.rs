@@ -49,6 +49,7 @@ fn fresh_ctx() -> ConversionContext {
         id_counter: 1,
         blobs: Vec::new(),
         layout_mode: FigLayoutMode::OpenPencil,
+        instance_assignments: HashMap::new(),
     }
 }
 
@@ -186,4 +187,99 @@ fn icon_fill_style_emits_fill_no_stroke() {
         other => panic!("expected Path, got {other:?}"),
     }
     clear_icon_lookup();
+}
+
+// ── order_children: auto-layout flow order ────────────────────────
+
+fn rect_child(name: &str, local_id: u32, position: &str) -> TreeNode {
+    TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("RECTANGLE".into())),
+            (
+                "guid",
+                obj(vec![
+                    ("sessionID", FigValue::Uint(1)),
+                    ("localID", FigValue::Uint(local_id)),
+                ]),
+            ),
+            ("name", FigValue::Str(name.into())),
+            (
+                "parentIndex",
+                obj(vec![("position", FigValue::Str(position.into()))]),
+            ),
+            (
+                "size",
+                obj(vec![
+                    ("x", FigValue::Float(10.0)),
+                    ("y", FigValue::Float(10.0)),
+                ]),
+            ),
+        ]),
+        children: vec![],
+    }
+}
+
+fn auto_layout_frame(children: Vec<TreeNode>) -> TreeNode {
+    TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("FRAME".into())),
+            (
+                "guid",
+                obj(vec![
+                    ("sessionID", FigValue::Uint(1)),
+                    ("localID", FigValue::Uint(100)),
+                ]),
+            ),
+            ("name", FigValue::Str("stack".into())),
+            ("stackMode", FigValue::Str("VERTICAL".into())),
+            (
+                "size",
+                obj(vec![
+                    ("x", FigValue::Float(100.0)),
+                    ("y", FigValue::Float(50.0)),
+                ]),
+            ),
+        ]),
+        // Tree-builder order: DESCENDING parentIndex.position, i.e.
+        // z-order with the topmost (= last layout item) first.
+        children,
+    }
+}
+
+fn child_names(node: &PenNode) -> Vec<String> {
+    match node {
+        PenNode::Frame(f) => f
+            .children
+            .as_ref()
+            .map(|cs| {
+                cs.iter()
+                    .map(|c| match c {
+                        PenNode::Rectangle(r) => r.base.name.clone().unwrap_or_default(),
+                        _ => String::new(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        other => panic!("expected Frame, got {other:?}"),
+    }
+}
+
+#[test]
+fn openpencil_mode_orders_auto_layout_children_in_flow_order() {
+    // Flow (layout) order is A then B; the tree builder hands the
+    // converter [B, A] (descending z). OpenPencil mode feeds a flex
+    // solver, so the emitted children MUST be flow order [A, B].
+    let tree = auto_layout_frame(vec![rect_child("B", 2, "\""), rect_child("A", 1, "!")]);
+    let mut ctx = fresh_ctx();
+    let node = convert_frame(&tree, None, &mut ctx);
+    assert_eq!(child_names(&node), vec!["A".to_string(), "B".to_string()]);
+}
+
+#[test]
+fn preserve_mode_orders_auto_layout_children_in_flow_order() {
+    let tree = auto_layout_frame(vec![rect_child("B", 2, "\""), rect_child("A", 1, "!")]);
+    let mut ctx = fresh_ctx();
+    ctx.layout_mode = FigLayoutMode::Preserve;
+    let node = convert_frame(&tree, None, &mut ctx);
+    assert_eq!(child_names(&node), vec!["A".to_string(), "B".to_string()]);
 }

@@ -12,7 +12,7 @@ use super::{McpTool, ToolErrorCode, ToolOutcome};
 
 /// Read tool that returns the product-design guidelines for `topic`.
 ///
-/// Supported topics: `"web-app"`, `"mobile"`.
+/// Supported topics include `"web-app"`, `"mobile"`, and `"code-to-design"`.
 /// Unknown topics return the same error envelope shape as `get_style_guide`
 /// on a bad argument — `ToolOutcome::Ok` with an `"error"` key in the result
 /// map (not a JSON-RPC transport error).
@@ -29,7 +29,7 @@ impl McpTool for GetGuidelines {
             _ => {
                 return ToolOutcome::Err(
                     ToolErrorCode::MissingArgument,
-                    "topic is required (\"web-app\" or \"mobile\")".into(),
+                    "topic is required (\"web-app\", \"mobile\", or \"code-to-design\")".into(),
                 )
             }
         };
@@ -47,7 +47,9 @@ impl McpTool for GetGuidelines {
                 let mut out = BTreeMap::new();
                 out.insert(
                     "error".into(),
-                    format!("Unknown topic: \"{topic}\". Supported topics: web-app, mobile."),
+                    format!(
+                        "Unknown topic: \"{topic}\". Supported topics: web-app, mobile, code-to-design."
+                    ),
                 );
                 ToolOutcome::Ok(out)
             }
@@ -104,6 +106,19 @@ mod tests {
                     content.contains("THREE-SECTION ARCHITECTURE"),
                     "mobile guideline must contain THREE-SECTION ARCHITECTURE: {content}"
                 );
+            }
+            other => panic!("expected Ok, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn code_to_design_returns_five_step_content() {
+        match call("code-to-design") {
+            ToolOutcome::Ok(out) => {
+                assert_eq!(out.get("topic").map(String::as_str), Some("code-to-design"));
+                let content = out.get("content").expect("content field");
+                assert!(content.contains("Five-step"), "{content}");
+                assert!(content.contains("upsert_screen"), "{content}");
             }
             other => panic!("expected Ok, got {other:?}"),
         }

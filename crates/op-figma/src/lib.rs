@@ -369,6 +369,7 @@ fn build_node(variant: FigmaNodeVariant, base: PenNodeBase) -> PenNode {
             children: None,
             image_search_query: None,
             reusable: None,
+            screen: None,
             slot: None,
             state: None,
             bindings: None,

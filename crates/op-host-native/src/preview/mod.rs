@@ -44,21 +44,36 @@
 //! transform) and must be translated back into the runtime's
 //! root-relative space — subtract the containing root's authored origin
 //! — before [`Runtime::dispatch_pointer`]. See [`PreviewSession::dispatch_tap`].
+//!
+//! ## Module split
+//!
+//! To honor the 800-line-per-file cap, [`AppMode`] + the per-root
+//! `solve_roots` + the app-mode query methods live in `app_mode.rs`,
+//! and the leaf formatter helpers (`apply_widget_state` /
+//! `display_string` / `format_warning`) live in `scene_helpers.rs`.
+//! `RootFrame` + `PreviewSession` stay here (shared), with the fields
+//! those sibling modules touch scoped `pub(in crate::preview)` (not
+//! `pub(super)`, which resolves to `pub(crate)` at this top-level
+//! module and would trip `private_interfaces` on the `AppMode` type).
 
+mod app_mode;
 mod binding_sites;
+mod scene_helpers;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_bindings;
 
+use app_mode::AppMode;
 use binding_sites::{collect_binding_sites, BindingSite};
+use scene_helpers::{apply_widget_state, display_string, format_warning};
+
 use jian_core::gesture::pointer::{Modifiers, PointerPhase};
 use jian_core::widget_state::WidgetState;
 use jian_core::Runtime;
 use jian_ops_schema::compat::{load_str_with, LoadOptions};
-use jian_ops_schema::error::LoadWarning;
 
-use op_editor_ui::layout_scene::{LayoutScene, SceneNode, SceneWidget};
+use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 use op_editor_ui::widgets::{paint_scene_page, PaintCx};
 use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
 
@@ -66,12 +81,15 @@ use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
 /// (root offset baked in) and the jian runtime's root-relative
 /// hit-test space. Used to translate a scene-space tap back into the
 /// space `Runtime::dispatch_pointer` expects.
-struct RootFrame {
+///
+/// Fields are `pub(in crate::preview)` so `app_mode::solve_roots` (which
+/// constructs these) can reach them from the child module.
+pub(in crate::preview) struct RootFrame {
     /// The root's bounds in SCENE space (authored origin + size).
-    scene_rect: Rect,
+    pub(in crate::preview) scene_rect: Rect,
     /// The root's authored `(base.x, base.y)` — the delta between scene
     /// space and the runtime's root-relative space.
-    offset: (f32, f32),
+    pub(in crate::preview) offset: (f32, f32),
 }
 
 /// A live preview runtime built from a snapshot of the editor document.
@@ -89,7 +107,9 @@ pub struct PreviewSession {
     #[cfg_attr(not(test), allow(dead_code))]
     available: (f32, f32),
     /// Per-root scene↔runtime coordinate mapping for tap translation.
-    root_frames: Vec<RootFrame>,
+    /// `pub(in crate::preview)` so `app_mode`'s
+    /// `current_screen_scene_rect` can read the first frame's scene rect.
+    pub(in crate::preview) root_frames: Vec<RootFrame>,
     /// The design `LayoutScene` preview paints, built from the SAME
     /// prepared + PROMOTED document the runtime was seeded from (so a
     /// generated/legacy `role=input` field renders as an interactive
@@ -103,6 +123,10 @@ pub struct PreviewSession {
     /// re-evaluated against the live state graph each overlay pass (see
     /// `apply_binding_sites`) so `set $app.*` writes become visible.
     binding_sites: Vec<BindingSite>,
+    /// APP MODE state (routed multi-screen doc), or `None` for the
+    /// classic single-page workbench preview. `pub(in crate::preview)`
+    /// so `app_mode`'s `is_app_mode` can read it. See [`AppMode`].
+    pub(in crate::preview) app: Option<AppMode>,
 }
 
 impl PreviewSession {
@@ -128,6 +152,16 @@ impl PreviewSession {
     /// theme (`active_theme`) before the runtime is built, so the live
     /// state graph (e.g. seeded input values) reflects the same theme
     /// the design canvas paints.
+    ///
+    /// ## App mode
+    ///
+    /// If the document carries at least one explicitly `screen`-marked
+    /// top-level frame (`jian_ops_schema::screen_projection::
+    /// project_screens`), `enter` projects it into a synthetic
+    /// multi-page document (entry screen at `pages[0]`) and installs a
+    /// [`jian_core::screens::ScreenRouter`] on `runtime.nav`; only the
+    /// entry screen is mounted. Docs with no screen markers keep today's
+    /// exact active-page workbench behavior, unchanged.
     ///
     /// Returns `Err(message)` if serialization, parsing, runtime build,
     /// or layout fails — the host then declines to enter preview and
@@ -164,6 +198,19 @@ impl PreviewSession {
             );
         }
 
+        // Screen projection: marked multi-screen docs enter APP MODE
+        // (entry screen mounted, ScreenRouter installed); unmarked docs
+        // fall through to the classic active-page workbench path.
+        let mut projection_warnings: Vec<String> = Vec::new();
+        let mut app_projected = false;
+        if let Some((normalized, ws)) =
+            jian_ops_schema::screen_projection::project_screens(&prepared)
+        {
+            projection_warnings.extend(ws.iter().map(|w| format!("preview: {w}")));
+            prepared = std::borrow::Cow::Owned(normalized);
+            app_projected = true;
+        }
+
         // Project the editor's ACTIVE page so the runtime's roots match
         // the page the design scene paints. jian's loader always takes
         // `pages[0]` as roots (vendor/jian `document/loader.rs`), so a
@@ -173,10 +220,14 @@ impl PreviewSession {
         // clearing `pages`) makes the loader use them. This fixes
         // ENTERING preview on any page; switching pages WHILE in preview
         // needs the host to re-enter (the runtime is built once here).
-        if prepared
-            .pages
-            .as_ref()
-            .is_some_and(|pages| !pages.is_empty())
+        // Skipped in APP MODE: the normalized doc's `pages[0]` is already
+        // the entry screen and must keep ALL its synthetic pages (Task 9
+        // switches among them via the router).
+        if !app_projected
+            && prepared
+                .pages
+                .as_ref()
+                .is_some_and(|pages| !pages.is_empty())
         {
             let mut owned = prepared.into_owned();
             if let Some(pages) = owned.pages.take() {
@@ -212,95 +263,57 @@ impl PreviewSession {
         // hit-test/state graph agree node-for-node.
         let promoted_doc = loaded.value.clone();
 
+        // APP MODE: derive the route table + router from the normalized
+        // doc. In workbench mode `app` stays `None`.
+        let mut app = None;
+        if app_projected {
+            let table = jian_core::screens::ScreenTable::from_document(promoted_doc.clone())
+                .ok_or_else(|| "projected document lost its routes".to_string())?;
+            let router = std::rc::Rc::new(jian_core::screens::ScreenRouter::new(
+                table.entry_path(),
+                table.paths(),
+            ));
+            app = Some(AppMode {
+                current_path: table.entry_path().to_owned(),
+                page_idx: 0,
+                theme: active_theme.clone(),
+                promoted_doc: promoted_doc.clone(),
+                table,
+                router,
+            });
+        }
+
         // Compile every non-`bind:value` binding on the promoted tree so
         // Task C2's overlay pass can re-evaluate them against the live
         // state graph each frame. Compile failures surface as warnings,
         // never as `enter` errors — a bad binding just doesn't animate.
+        // APP MODE compiles bindings off the ENTRY page's children (the
+        // mounted screen), not the top-level `children` — the normalized
+        // doc keeps everything under `pages`.
         let mut binding_sites = Vec::new();
-        collect_binding_sites(&promoted_doc.children, &mut binding_sites, &mut warnings);
+        let site_children: &[jian_ops_schema::node::PenNode] = if app_projected {
+            &promoted_doc.pages.as_ref().unwrap()[0].children
+        } else {
+            &promoted_doc.children
+        };
+        collect_binding_sites(site_children, &mut binding_sites, &mut warnings);
+        warnings.extend(projection_warnings);
 
         let mut runtime =
             Runtime::new_from_document(loaded.value).map_err(|e| format!("build runtime: {e}"))?;
+        if let Some(a) = &app {
+            runtime.nav = a.router.clone();
+        }
 
-        // Per-root layout, mirroring `op_pen_loader::compute_layout`:
-        // install the real skia paragraph shaper (so `fit_content` text
-        // frames hit-test against the glyph advances paint draws), then
-        // `compute` EACH root against its OWN authored available size.
-        // `Runtime::build_layout` would lay every root against a single
-        // size, diverging from the design canvas. The returned taffy
-        // NodeIds are positional with `doc.tree.roots` (see
-        // `LayoutEngine::build`), so we zip them to pair each root with
-        // the id `compute` needs.
-        runtime
-            .layout
-            .set_backend(std::rc::Rc::new(jian_skia::SkiaMeasure::new()));
-        let primary_available = {
-            let Some(rt_doc) = runtime.document.as_ref() else {
-                return Err("preview runtime has no document".to_string());
-            };
-            let root_keys = rt_doc.tree.roots.clone();
-            let taffy_roots = runtime
-                .layout
-                .build(&rt_doc.tree)
-                .map_err(|e| format!("build layout tree: {e}"))?;
-            // `build` never clears `runtime.document`; surface an error
-            // rather than panic to keep the no-panic contract.
-            let Some(rt_doc) = runtime.document.as_ref() else {
-                return Err("preview runtime document vanished after layout build".to_string());
-            };
-            let mut primary: Option<(f32, f32)> = None;
-            for (root_key, taffy_root) in root_keys.iter().zip(taffy_roots.iter()) {
-                let per_root = rt_doc
-                    .tree
-                    .nodes
-                    .get(*root_key)
-                    .map(|node_data| op_pen_loader::root_available_size(&node_data.schema))
-                    .unwrap_or((1440.0, 900.0));
-                if primary.is_none() {
-                    primary = Some(per_root);
-                }
-                runtime
-                    .layout
-                    .compute(*taffy_root, per_root)
-                    .map_err(|e| format!("compute layout: {e}"))?;
-            }
-            primary.unwrap_or((1440.0, 900.0))
-        };
-        runtime.rebuild_spatial();
-
-        // Capture each root's scene↔runtime coordinate mapping for tap
-        // translation. The design scene offsets every root by its
-        // authored `(base.x, base.y)`; the runtime lays each at its own
-        // origin. `runtime.document` + `runtime.layout` are disjoint
-        // fields, so the two immutable borrows below co-exist.
-        let root_frames = {
-            let mut frames = Vec::new();
-            if let Some(rt_doc) = runtime.document.as_ref() {
-                for root_key in rt_doc.tree.roots.iter() {
-                    let Some(node_data) = rt_doc.tree.nodes.get(*root_key) else {
-                        continue;
-                    };
-                    let offset = op_pen_loader::root_authored_origin(&node_data.schema);
-                    let rrect = runtime.layout.node_rect(*root_key);
-                    let (rx, ry, rw, rh) = rrect
-                        .map(|r| (r.origin.x, r.origin.y, r.size.width, r.size.height))
-                        .unwrap_or((0.0, 0.0, 0.0, 0.0));
-                    frames.push(RootFrame {
-                        scene_rect: Rect {
-                            origin: Point2D::new(offset.0 + rx, offset.1 + ry),
-                            size: Point2D::new(rw, rh),
-                        },
-                        offset,
-                    });
-                }
-            }
-            frames
-        };
+        let (root_frames, primary_available) = app_mode::solve_roots(&mut runtime)?;
 
         // Build the design scene from the promoted document. The active
         // page was projected to the top-level `children` in `enter`, so
         // it is page index 0. Refs/tokens are already resolved in
         // `promoted_doc`, so the builder's detector walks early-out.
+        // APP MODE: page 0 of `promoted_doc` is the entry screen (the
+        // same convention `project_screens` guarantees), so this stays
+        // page-index 0 either way.
         let scene = op_pen_loader::pen_document_to_layout_scene(&promoted_doc, active_theme, 0);
 
         Ok(Self {
@@ -310,6 +323,7 @@ impl PreviewSession {
             scene,
             warnings,
             binding_sites,
+            app,
         })
     }
 
@@ -646,7 +660,9 @@ impl PreviewSession {
             .and_then(|d| d.tree.nodes.get(key))
             .map(|n| n.schema.clone());
         if let Some(schema) = schema {
-            self.runtime.widget_states.get_or_init(&schema);
+            self.runtime
+                .widget_states
+                .get_or_init(&schema, &self.runtime.state);
         }
     }
 
@@ -695,74 +711,12 @@ impl PreviewSession {
     pub(crate) fn binding_sites_len_for_test(&self) -> usize {
         self.binding_sites.len()
     }
-}
 
-/// Overlay one widget's live runtime value onto its scene widget. Only
-/// value fields change — geometry / options / labels stay as the design
-/// scene resolved them. The static design value is the fallback (no
-/// runtime state exists until the user interacts).
-fn apply_widget_state(widget: &mut SceneWidget, state: &WidgetState) {
-    match state {
-        // text_input / text_area / number_input. `Some("")` falls back
-        // to the placeholder in `text_field_display_text`, so an empty
-        // edited field shows its placeholder again.
-        WidgetState::TextInput(st) => {
-            widget.value_str = Some(st.text().to_owned());
-        }
-        // switch / checkbox.
-        WidgetState::Toggle { on } => {
-            widget.checked = Some(*on);
-        }
-        WidgetState::Slider { value, .. } => {
-            widget.value_num = Some(*value as f32);
-        }
-        WidgetState::Select { value, .. } => {
-            widget.value_str = value.clone();
-        }
-        WidgetState::Radio { value, .. } => {
-            widget.value_str = value.clone();
-        }
-        WidgetState::Tabs { active, .. } => {
-            widget.value_str = active.clone();
-        }
-    }
-}
-
-/// Human-readable form of an expression result for scene text: strings
-/// verbatim, null → empty, everything else via JSON rendering (ints
-/// print without a trailing `.0`).
-fn display_string(value: &jian_core::value::RuntimeValue) -> String {
-    match &value.0 {
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Null => String::new(),
-        other => other.to_string(),
-    }
-}
-
-/// Format a load warning for the editor's diagnostics surface. Only
-/// surfaces the actionable ones (legacy promotions, future versions,
-/// skipped logic) — generic unknown-field noise is dropped.
-fn format_warning(w: &LoadWarning) -> Option<String> {
-    match w {
-        LoadWarning::LegacyRolePromoted {
-            path,
-            from_role,
-            to,
-        } => Some(format!(
-            "LegacyRolePromoted: '{path}' role '{from_role}' → {to}"
-        )),
-        LoadWarning::FutureFormatVersion {
-            found,
-            supported_max,
-        } => Some(format!(
-            "FutureFormatVersion: {found} (supported ≤ {supported_max})"
-        )),
-        LoadWarning::LogicModulesSkipped { reason } => {
-            Some(format!("LogicModulesSkipped: {reason}"))
-        }
-        LoadWarning::InvalidExpression { path, reason, .. } => {
-            Some(format!("InvalidExpression: '{path}': {reason}"))
-        }
-        LoadWarning::UnknownField { .. } => None,
+    /// Test-only: number of currently-mounted page-roots (1 in APP MODE
+    /// — the entry screen only; N for an unmarked doc's top-level
+    /// frames).
+    #[cfg(test)]
+    pub(crate) fn root_frames_len_for_test(&self) -> usize {
+        self.root_frames.len()
     }
 }

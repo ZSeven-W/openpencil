@@ -288,6 +288,7 @@ fn build_container_node(
             children: None,
             image_search_query: None,
             reusable: None,
+            screen: None,
             slot: None,
             state,
             bindings,

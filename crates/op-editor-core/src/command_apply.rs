@@ -29,6 +29,7 @@ use crate::state::EditorState;
 use crate::tool::Tool;
 use crate::viewport::Viewport;
 use crate::walkers::find_node;
+use jian_ops_schema::conversion::{ConversionEntry, ConversionKind};
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
 
 /// Resolve an `align` action string into an [`AlignAction`].
@@ -566,6 +567,29 @@ impl EditorState {
             EditorCommand::SetVariables { variables, replace } => {
                 self.set_variables_bulk(variables, replace)
             }
+            EditorCommand::UpsertVariables {
+                variables,
+                key,
+                source_path,
+                source_hash,
+            } => {
+                if variables.is_empty() {
+                    return false;
+                }
+                self.set_variables_bulk(variables, false);
+                crate::conversion::upsert_conversion_entry(
+                    &mut self.doc,
+                    ConversionEntry {
+                        kind: ConversionKind::Token,
+                        key,
+                        source_path,
+                        source_hash,
+                        node_id: None,
+                        node_ids: None,
+                    },
+                );
+                true
+            }
             EditorCommand::SetThemes { themes, replace } => self.set_themes_bulk(themes, replace),
             EditorCommand::MergeThemePreset { variables, themes } => {
                 self.set_variables_bulk(variables, false) && self.set_themes_bulk(themes, false)
@@ -574,6 +598,26 @@ impl EditorState {
                 self.doc.design_md = Some(*spec);
                 true
             }
+            EditorCommand::UpsertComponent {
+                key,
+                name,
+                root,
+                source_path,
+                source_hash,
+            } => crate::conversion::upsert_component(
+                self,
+                key,
+                name,
+                *root,
+                source_path,
+                source_hash,
+            ),
+            EditorCommand::UpsertScreen {
+                key,
+                root,
+                source_path,
+                source_hash,
+            } => crate::conversion::upsert_screen(self, key, *root, source_path, source_hash),
             EditorCommand::SetActiveAxisValue { axis, value } => {
                 self.set_active_axis_value(&axis, &value)
             }

@@ -65,6 +65,7 @@ pub fn build_leaf_node(
             children: Some(Vec::new()),
             image_search_query: None,
             reusable: None,
+            screen: None,
             slot: None,
             state: None,
             bindings: None,

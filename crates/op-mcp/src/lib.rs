@@ -47,6 +47,12 @@ mod codegen_tools_tests;
 pub mod component_tools;
 #[cfg(test)]
 mod component_tools_tests;
+pub mod conversion_status;
+#[cfg(test)]
+mod conversion_status_tests;
+pub mod conversion_tools;
+#[cfg(test)]
+mod conversion_tools_tests;
 #[cfg(test)]
 mod copy_node_tests;
 #[cfg(feature = "debug-tools")]
@@ -70,6 +76,9 @@ pub mod guidelines_tools;
 mod insert_node_args;
 mod insert_node_data;
 pub mod json_serializer;
+pub mod lint_tools;
+#[cfg(test)]
+mod lint_tools_tests;
 pub mod node_attr_tools;
 #[cfg(test)]
 mod node_attr_tools_tests;
@@ -153,6 +162,11 @@ pub use component_tools::{
     rename_component_snapshot, set_node_collapsed_snapshot, CreateComponent, DeleteComponent,
     InstantiateComponent, RenameComponent, SetNodeCollapsed,
 };
+pub use conversion_status::{conversion_status_snapshot, ConversionStatus};
+pub use conversion_tools::{
+    upsert_component_snapshot, upsert_screen_snapshot, upsert_variables_snapshot,
+    UpsertComponentTool, UpsertScreenTool, UpsertVariablesTool,
+};
 #[cfg(feature = "debug-tools")]
 pub use debug_tools::{
     debug_logs_tail_snapshot, debug_screenshot_snapshot, debug_tools_enabled,
@@ -173,6 +187,7 @@ pub use document_save::{save_document_snapshot, SaveDocument};
 pub use extra_read_tools::{get_node_children_snapshot, ChildRecord, GetNodeChildren};
 pub use guidelines_tools::{get_guidelines_snapshot, GetGuidelines};
 pub use json_serializer::{response_to_json, tool_response_to_json};
+pub use lint_tools::{lint_document_snapshot, LintDocument};
 pub use node_attr_tools::{
     add_node_effect_snapshot, remove_node_effect_snapshot, set_ellipse_arc_snapshot,
     set_node_corner_radius_snapshot, set_node_fill_hex_snapshot, set_node_flip_snapshot,

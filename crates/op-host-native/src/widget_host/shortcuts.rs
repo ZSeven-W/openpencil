@@ -319,6 +319,7 @@ impl WidgetHostNative {
         use op_editor_core::PropertyTab;
         self.editor_state.editor_ui.property_tab = match self.editor_state.editor_ui.property_tab {
             PropertyTab::Design => PropertyTab::Code,
+            PropertyTab::Interact => PropertyTab::Code,
             PropertyTab::Code => PropertyTab::Design,
         };
         self.mark_dirty();

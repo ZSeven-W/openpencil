@@ -258,6 +258,13 @@ pub struct StrokePayload {
     pub width: f32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sides: Option<[f32; 4]>,
+    /// Stroke placement: -1 inside, 0 center (default), +1 outside.
+    #[serde(default, skip_serializing_if = "is_zero_i8")]
+    pub align: i8,
+}
+
+fn is_zero_i8(v: &i8) -> bool {
+    *v == 0
 }
 
 /// One styled text segment, flattened in document order. Sentinels

@@ -44,6 +44,7 @@ fn make_frame_node(id: &str) -> PenNode {
         children: None,
         image_search_query: None,
         reusable: None,
+        screen: None,
         slot: None,
         state: None,
         bindings: None,

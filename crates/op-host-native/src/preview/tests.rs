@@ -13,6 +13,7 @@
 #![cfg(test)]
 
 use super::PreviewSession;
+use jian_core::action::services::Router;
 use jian_core::gesture::pointer::PointerPhase;
 use jian_core::widget_state::WidgetState;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
@@ -778,6 +779,105 @@ fn slider_drag_moves_value() {
         }
         other => panic!("expected Slider state, got {other:?}"),
     }
+}
+
+/// A marked multi-screen document in EDITOR shape: one canvas page
+/// carrying two top-level frames, each with a `screen` marker and their
+/// authored canvas `x`/`y` (as the designer laid them out side by side).
+/// `project_screens` runs INSIDE `enter`, so this fixture is exactly
+/// what the editor would save — projection has not happened yet.
+const TWO_SCREEN_DOC_JSON: &str = r##"{
+    "version": "1.1",
+    "formatVersion": "1.1",
+    "id": "x",
+    "app": { "name": "x", "version": "1", "id": "x" },
+    "pages": [
+        { "id": "canvas", "name": "Canvas", "children": [
+            { "type": "frame", "id": "home", "screen": "/",
+              "x": 0, "y": 0, "width": 200, "height": 200,
+              "children": [
+                  { "type": "switch", "id": "sw-home", "x": 20, "y": 20, "width": 44, "height": 24 },
+                  { "type": "frame", "id": "go", "x": 20, "y": 60, "width": 120, "height": 40,
+                    "semantics": { "role": "button" },
+                    "events": { "onTap": [ { "push": "\"/detail\"" } ] } }
+              ] },
+            { "type": "frame", "id": "detail", "screen": "/detail",
+              "x": 500, "y": 0, "width": 200, "height": 200,
+              "children": [
+                  { "type": "switch", "id": "sw-detail", "x": 20, "y": 20, "width": 44, "height": 24 }
+              ] }
+        ] }
+    ]
+}"##;
+
+/// One page with two plain (unmarked) top-level frames — the classic
+/// workbench shape. No `screen` marker anywhere, so `project_screens`
+/// must return `None` and `enter` must keep today's active-page
+/// workbench behavior (both frames mount as roots).
+const UNMARKED_TWO_FRAME_PAGE_JSON: &str = r##"{
+    "version": "1.1",
+    "formatVersion": "1.1",
+    "id": "x",
+    "app": { "name": "x", "version": "1", "id": "x" },
+    "pages": [
+        { "id": "p0", "name": "P0", "children": [
+            { "type": "frame", "id": "a", "width": 100, "height": 100 },
+            { "type": "frame", "id": "b", "x": 200, "width": 100, "height": 100 }
+        ] }
+    ]
+}"##;
+
+#[test]
+fn marked_doc_enters_app_mode_mounting_entry_screen() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(TWO_SCREEN_DOC_JSON).unwrap();
+    let session = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
+    assert!(session.is_app_mode());
+    // Entry screen only: one mounted root.
+    assert_eq!(session.root_frames_len_for_test(), 1);
+}
+
+#[test]
+fn unmarked_doc_keeps_workbench_mode() {
+    let doc: jian_ops_schema::PenDocument =
+        serde_json::from_str(UNMARKED_TWO_FRAME_PAGE_JSON).unwrap();
+    let session = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
+    assert!(!session.is_app_mode());
+    // Both top-level frames of the active page mount side by side.
+    assert_eq!(session.root_frames_len_for_test(), 2);
+}
+
+/// Locate the "go" nav button's painted centre (SCENE space). `home`
+/// (its root) is authored at `(0, 0)` in `TWO_SCREEN_DOC_JSON`, so scene
+/// space == the runtime's root-relative space here — mirrors the
+/// `node_rect` lookup pattern in `overlay_reflects_widget_toggle_on_tap`.
+fn go_button_center_for_test(session: &PreviewSession) -> (f32, f32) {
+    let (x, y, w, h) = session.node_rect("go").expect("go button laid out");
+    (x + w / 2.0, y + h / 2.0)
+}
+
+#[test]
+fn tap_push_switches_screen_via_reconcile() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(TWO_SCREEN_DOC_JSON).unwrap();
+    let mut session = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
+    // Tap the nav button center (scene coords; screens sit at origin in
+    // app mode).
+    let (bx, by) = go_button_center_for_test(&session);
+    session.dispatch_tap(bx, by);
+    assert!(session.reconcile(), "push must reconcile into a switch");
+    assert!(session.is_app_mode());
+    // The mounted screen is now /detail: entry-screen button gone.
+    assert_eq!(session.current_path_for_test(), "/detail");
+}
+
+#[test]
+fn unknown_push_appends_warning_and_stays() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(TWO_SCREEN_DOC_JSON).unwrap();
+    let mut session = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
+    session.router_for_test().push("/missing");
+    let before = session.warnings().len();
+    assert!(session.reconcile(), "rejection appends a warning");
+    assert_eq!(session.current_path_for_test(), "/");
+    assert!(session.warnings().len() > before);
 }
 
 #[test]

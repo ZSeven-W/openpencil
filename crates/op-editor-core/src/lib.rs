@@ -40,6 +40,7 @@ mod command_root_replace;
 pub mod command_style_replace;
 pub mod component_browser_state;
 pub mod components;
+pub mod conversion;
 pub mod design_md;
 pub mod design_md_button_state;
 pub mod drag_mutators;
@@ -134,6 +135,8 @@ mod command_update_tests;
 mod command_widget_tests;
 #[cfg(test)]
 mod dirty_tests;
+#[cfg(test)]
+mod conversion_tests;
 #[cfg(test)]
 mod fills_tests;
 #[cfg(test)]

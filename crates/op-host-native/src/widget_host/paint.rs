@@ -63,6 +63,22 @@ impl WidgetHostNative {
             return;
         }
 
+        // APP MODE per-frame reconcile: drain rejected navs into
+        // `preview_warnings` and, on a screen switch, re-center the
+        // viewport on the newly-mounted screen. Runs before the `ui`
+        // borrow below (and before the preview paint branch further
+        // down) so the switched screen paints this same frame, not one
+        // frame late, and so the `preview_warnings` write here doesn't
+        // conflict with `ui`'s borrow of `self.editor_state.editor_ui`.
+        if let Some(preview) = self.preview.as_mut() {
+            if preview.reconcile() {
+                self.editor_state.editor_ui.preview_warnings = preview.warnings().to_vec();
+                if let Some(rect) = preview.current_screen_scene_rect() {
+                    self.center_canvas_on(rect, viewport_width, viewport_height);
+                }
+            }
+        }
+
         // Rebuild the layout-resolved render scene ONCE for the whole
         // paint pass. Every widget builder below reads `editor_state`
         // directly; the canvas reads `self.layout_scene`.
