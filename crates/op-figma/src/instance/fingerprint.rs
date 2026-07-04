@@ -208,6 +208,12 @@ fn score(e: &VirtualEntry, node: &TreeNode, node_idx: usize, ratios: (f64, f64))
     let (rx, ry) = ratios;
     let mut s = 0.0;
     let mut evidence = false;
+    // Smallest geometric distance seen across the size/transform
+    // blocks — a near-EXACT match is decisive evidence that must beat
+    // the walk-order prior (which is meaningless when the derived
+    // array mixes two components, e.g. an `overriddenSymbolID` swap
+    // leaves the pre-swap component's stale entries in the array).
+    let mut best_geom_d = f64::INFINITY;
 
     if let (Some(ds), Some(ns)) = (
         entry_size(e),
@@ -216,6 +222,7 @@ fn score(e: &VirtualEntry, node: &TreeNode, node_idx: usize, ratios: (f64, f64))
         let dx = (ds.x - ns.x).abs().min((ds.x - ns.x * rx).abs());
         let dy = (ds.y - ns.y).abs().min((ds.y - ns.y * ry).abs());
         let d = dx + dy;
+        best_geom_d = best_geom_d.min(d);
         s += if d <= 4.0 {
             3.0
         } else if d <= 24.0 {
@@ -234,6 +241,7 @@ fn score(e: &VirtualEntry, node: &TreeNode, node_idx: usize, ratios: (f64, f64))
                 let dx = (tx - ax).abs().min((tx - ax * rx).abs());
                 let dy = (ty - ay).abs().min((ty - ay * ry).abs());
                 let d = dx + dy;
+                best_geom_d = best_geom_d.min(d);
                 s += if d <= 4.0 {
                     3.0
                 } else if d <= 8.0 {
@@ -303,6 +311,17 @@ fn score(e: &VirtualEntry, node: &TreeNode, node_idx: usize, ratios: (f64, f64))
 
     if !evidence {
         return None;
+    }
+    // Near-exact geometric match bonus — a candidate within ~1px on
+    // both axes is almost certainly the true target, so it must
+    // outweigh the walk-order prior (max 0.4) that a stale sibling
+    // entry could otherwise win on (e.g. an `overriddenSymbolID` swap
+    // leaves the pre-swap component's stale derived first in the
+    // array). Capped at 0.45 so it beats the 0.4 walk prior but stays
+    // below a real fill-disambiguation signal (~0.5+); fades to 0 by
+    // d=1.
+    if best_geom_d <= 1.0 {
+        s += 0.45 * (1.0 - best_geom_d);
     }
     // Small walk-order proximity prior — tie-break only, can't clear
     // the threshold alone.

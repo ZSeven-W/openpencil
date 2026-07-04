@@ -24,6 +24,9 @@ mod fingerprint;
 mod fingerprint_tests;
 mod foreign_session;
 #[cfg(test)]
+mod foreign_tests;
+mod swap_filter;
+#[cfg(test)]
 mod tests;
 
 use apply::{
@@ -31,6 +34,7 @@ use apply::{
 };
 pub use assignment::seed_assignments_from_instances;
 use assignment::{guessed_mapping_is_implausible, rescale_only};
+pub(crate) use swap_filter::filter_swap_stale_derived;
 
 /// Layout keys an instance inherits from its master SYMBOL.
 const LAYOUT_KEYS: &[&str] = &[
