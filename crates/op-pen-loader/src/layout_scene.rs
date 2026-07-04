@@ -270,6 +270,7 @@ fn node_payload_to_scene(
         image_adjustments: image_adjustments_to_scene(node.image_adjustments),
         effects: crate::effects::effects_from_payload_ref(&node.effects)
             .into_iter()
+            .chain(crate::effects::blur_effect_from_payload(node.layer_blur))
             .map(|e| scale_effect_opacity(e, cum_opacity))
             .collect(),
         hidden: node.hidden,
@@ -350,6 +351,8 @@ fn scale_effect_opacity(e: Effect, k: f32) -> Effect {
             color: mul_alpha(s.color, k),
             ..s
         }),
+        // Blur has no colour to fold node opacity into.
+        Effect::Blur(b) => Effect::Blur(b),
     }
 }
 

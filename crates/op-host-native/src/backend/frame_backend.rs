@@ -49,6 +49,10 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         let _ = self.inner.save(self.canvas);
     }
 
+    fn push_blur_layer(&mut self, sigma: f32) {
+        self.inner.push_blur_layer(self.canvas, sigma);
+    }
+
     fn restore(&mut self) {
         self.inner.restore(self.canvas);
     }
