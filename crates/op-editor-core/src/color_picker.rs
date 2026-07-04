@@ -92,23 +92,31 @@ impl EditorState {
     /// Editable-gated. Mirrors shell-core's
     /// `add_drop_shadow_to_selected`.
     pub fn add_drop_shadow_to_selected(&mut self) -> bool {
-        let sel = self.selection.anchor.clone();
-        if !sel.is_real() || !self.is_editable(&sel) {
-            return false;
-        }
-        // Snapshot before mutating so the add is undoable.
-        self.commit_history();
-        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
-            return false;
-        };
-        push_drop_shadow(node)
+        self.add_effect_to_selected(push_drop_shadow)
     }
 
     /// Append a default Gaussian layer-blur effect to the anchor node.
     /// Editable-gated companion to [`Self::add_drop_shadow_to_selected`].
     pub fn add_layer_blur_to_selected(&mut self) -> bool {
+        self.add_effect_to_selected(crate::fills::push_layer_blur)
+    }
+
+    /// Shared effect-add path: history is snapshotted ONLY when the
+    /// anchor node exists and actually carries an effects list, so a
+    /// Ref / IconFont / missing target never leaves an empty undo +
+    /// dirty state.
+    fn add_effect_to_selected(
+        &mut self,
+        push: fn(&mut jian_ops_schema::node::PenNode) -> bool,
+    ) -> bool {
         let sel = self.selection.anchor.clone();
         if !sel.is_real() || !self.is_editable(&sel) {
+            return false;
+        }
+        let supported = crate::walkers::find_node(self.active_children(), &sel)
+            .map(crate::fills::node_supports_effects)
+            .unwrap_or(false);
+        if !supported {
             return false;
         }
         // Snapshot before mutating so the add is undoable.
@@ -116,7 +124,7 @@ impl EditorState {
         let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
             return false;
         };
-        crate::fills::push_layer_blur(node)
+        push(node)
     }
 
     // --- HSV colour picker ------------------------------------------
@@ -500,6 +508,29 @@ mod tests {
         assert!(
             matches!(effects.last(), Some(PenEffect::Blur(_))),
             "add_layer_blur must append a Blur effect, got {effects:?}"
+        );
+    }
+
+    #[test]
+    fn add_effect_on_effectless_node_creates_no_undo_state() {
+        // An icon_font node carries no `effects` list. Adding an
+        // effect must be a no-op that leaves NO empty undo/dirty state.
+        let src = r#"{"version":"0.8.0","children":[
+            {"type":"icon_font","id":"i1","name":"Icon",
+             "x":0,"y":0,"width":20,"height":20,"iconFontName":"star"}
+        ]}"#;
+        let doc = jian_ops_schema::load_str(src)
+            .expect("fixture parses")
+            .value;
+        let mut s = EditorState::from_document(doc);
+        s.set_single_selection(NodeId::new("i1"));
+        assert!(
+            !s.add_layer_blur_to_selected(),
+            "effect-less node must reject the add"
+        );
+        assert!(
+            !s.undo(),
+            "rejected add must not have pushed an empty undo state"
         );
     }
 
