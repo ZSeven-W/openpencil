@@ -119,6 +119,34 @@ mod text_tests {
     }
 
     #[test]
+    fn rectangle_container_paints_its_children() {
+        // Regression: a `rectangle` is a container in the canonical schema,
+        // so models nest content (images, labels) inside one. The painter
+        // treated NodeKind::Rect as a leaf and never recursed, so a photo
+        // inside an image-area rectangle rendered as a blank fill.
+        let mut rect = SceneNode::leaf("card", NodeKind::Rect);
+        rect.bounds = Rect::xywh(0.0, 0.0, 200.0, 120.0);
+        let mut label = SceneNode::leaf("label", NodeKind::Text);
+        label.bounds = Rect::xywh(0.0, 0.0, 200.0, 20.0);
+        label.text = Some("INSIDE".to_string());
+        label.font_size = 14.0;
+        label.line_height = 1.0;
+        rect.children.push(label);
+
+        let mut backend = TextCaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        paint_node(&mut cx, &rect, Point2D::ZERO, 1.0, rect.bounds);
+
+        assert!(
+            backend.lines.iter().any(|l| l == "INSIDE"),
+            "rectangle must paint its child text; got {:?}",
+            backend.lines
+        );
+    }
+
+    #[test]
     fn text_node_paint_honors_horizontal_alignment_and_ts_top_baseline() {
         let mut node = SceneNode::leaf("t", NodeKind::Text);
         node.bounds = Rect::xywh(0.0, 0.0, 200.0, 80.0);
