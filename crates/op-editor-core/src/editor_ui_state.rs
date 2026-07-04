@@ -1037,6 +1037,9 @@ pub struct EditorUiState {
     /// the row whose picker is showing. Meaningless when the picker is
     /// closed; defaults to `0`.
     pub fill_type_picker_index: usize,
+    /// Whether the Effects section's "+" add-menu (Drop Shadow / Layer
+    /// Blur choice) is open. `false` = closed.
+    pub effect_add_picker_open: bool,
     /// Fill/stroke colour-variable dropdown currently open in the
     /// PropertyPanel; `None` means closed.
     pub property_color_variable_picker_open: Option<crate::ui_draft::ColorTarget>,
@@ -1329,6 +1332,7 @@ impl Default for EditorUiState {
             size_clip_content: false,
             fill_type_picker: jian_widgets::components::select::SelectState::default(),
             fill_type_picker_index: 0,
+            effect_add_picker_open: false,
             property_color_variable_picker_open: None,
             image_fill_popover_open: false,
             font_picker: jian_widgets::components::select::SelectState::default(),
@@ -1447,6 +1451,19 @@ impl EditorUiState {
 
     pub fn button_pressed(&self, target: crate::button_press_state::ButtonPressTarget) -> bool {
         self.pressed_button == Some(target)
+    }
+
+    /// Toggle the Effects "+" add-menu (Drop Shadow / Layer Blur).
+    pub fn toggle_effect_add_picker(&mut self) {
+        self.effect_add_picker_open = !self.effect_add_picker_open;
+    }
+
+    /// Close the Effects add-menu. Returns true when it was open (so
+    /// the host knows a repaint / press-swallow is needed).
+    pub fn close_effect_add_picker(&mut self) -> bool {
+        let was = self.effect_add_picker_open;
+        self.effect_add_picker_open = false;
+        was
     }
 
     pub fn toggle_fill_type_picker(&mut self) {
