@@ -13,6 +13,7 @@
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use jian_ops_schema::node::container::LayoutMode;
 use jian_ops_schema::node::{ContainerProps, PenNode, TextContent};
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
 use op_editor_core::pen_node_ext::PenNodeExt;
@@ -98,6 +99,18 @@ pub fn execute_design_tool_with_reveals(
     args_json: &str,
     indicator_epoch: Option<u64>,
 ) -> (ChatToolResult, bool) {
+    execute_design_tool_with_root_seed_guard(state, name, args_json, indicator_epoch, None)
+}
+
+/// Execute one design tool call with an optional root seed guard for headless
+/// loop callers that do not use an indicator epoch.
+pub fn execute_design_tool_with_root_seed_guard(
+    state: &mut EditorState,
+    name: &str,
+    args_json: &str,
+    indicator_epoch: Option<u64>,
+    mut root_seed_guard: Option<&mut RootSeedGuard>,
+) -> (ChatToolResult, bool) {
     let Some(_level) = design_tool_level(name) else {
         let envelope = serde_json::json!({ "success": false, "error": format!("tool not available in design agent: {name}") });
         return (
@@ -111,6 +124,9 @@ pub fn execute_design_tool_with_reveals(
     let reveal_started_ms = reveal_now_millis();
     let ids_before = should_register_batch_reveals(name, indicator_epoch)
         .then(|| collect_active_node_ids(state));
+    let root_ids_before =
+        should_track_root_seed_candidate(state, name, indicator_epoch, root_seed_guard.as_deref())
+            .then(|| collect_active_top_level_node_ids(state));
     let registry = design_tool_registry(state, name);
     let (mut result, mutated) = execute_with_registry(state, name, args_json, registry);
     if mutated && !result.is_error {
@@ -118,23 +134,37 @@ pub fn execute_design_tool_with_reveals(
             register_new_node_reveals(ids_before, state, indicator_epoch, reveal_started_ms);
         }
     }
-    // Per-batch layout feedback: after every WRITE batch, attach what the real
-    // layout proves wrong (collapses / table overflow / text overflow) so the
-    // model sees each batch's geometric consequences immediately and repairs
-    // them in-process, instead of piling defects up for the loop-end finalize.
-    // Deterministic analogue of Pencil's per-batch snapshot_layout feedback.
     if mutated && name == "batch_design" && !result.is_error {
+        let root_seed_hint = root_ids_before.as_ref().and_then(|ids_before| {
+            maybe_apply_root_seed_guard(state, ids_before, indicator_epoch, root_seed_guard.take())
+        });
+
+        // Per-batch layout feedback: after every WRITE batch, attach what the
+        // real layout proves wrong (collapses / table overflow / text overflow)
+        // so the model sees each batch's geometric consequences immediately and
+        // repairs them in-process, instead of piling defects up for the loop-end
+        // finalize. Deterministic analogue of Pencil's per-batch
+        // snapshot_layout feedback.
         let issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
-        if !issues.is_empty() {
+        if !issues.is_empty() || root_seed_hint.is_some() {
             if let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&result.content) {
                 if let Some(obj) = envelope.as_object_mut() {
-                    obj.insert("layoutIssues".into(), serde_json::json!(issues));
-                    obj.insert(
-                        "layoutHint".into(),
-                        serde_json::json!(
+                    if !issues.is_empty() {
+                        obj.insert("layoutIssues".into(), serde_json::json!(issues));
+                    }
+                    let mut hints = Vec::new();
+                    if !issues.is_empty() {
+                        hints.push(
                             "The resolved layout has the issues above. Fix them with a follow-up batch_design before building the next section."
-                        ),
-                    );
+                                .to_string(),
+                        );
+                    }
+                    if let Some(hint) = root_seed_hint {
+                        hints.push(hint);
+                    }
+                    if !hints.is_empty() {
+                        obj.insert("layoutHint".into(), serde_json::json!(hints.join(" ")));
+                    }
                     result.content = envelope.to_string();
                 }
             }
@@ -173,10 +203,208 @@ pub fn execute_agent_tool_with_reveals(
     args_json: &str,
     indicator_epoch: Option<u64>,
 ) -> (ChatToolResult, bool) {
+    execute_agent_tool_with_root_seed_guard(state, name, args_json, indicator_epoch, None)
+}
+
+/// Host-facing router with an optional local root seed guard for tool loops
+/// without an indicator epoch.
+pub fn execute_agent_tool_with_root_seed_guard(
+    state: &mut EditorState,
+    name: &str,
+    args_json: &str,
+    indicator_epoch: Option<u64>,
+    root_seed_guard: Option<&mut RootSeedGuard>,
+) -> (ChatToolResult, bool) {
     if design_tool_level(name).is_some() {
-        execute_design_tool_with_reveals(state, name, args_json, indicator_epoch)
+        execute_design_tool_with_root_seed_guard(
+            state,
+            name,
+            args_json,
+            indicator_epoch,
+            root_seed_guard,
+        )
     } else {
         execute_chat_tool(state, name, args_json)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootSeedTarget {
+    Mobile,
+    Desktop,
+}
+
+impl RootSeedTarget {
+    fn from_mobile(mobile: bool) -> Self {
+        if mobile {
+            Self::Mobile
+        } else {
+            Self::Desktop
+        }
+    }
+
+    fn dimensions(self) -> (f64, f64) {
+        match self {
+            Self::Mobile => (390.0, 844.0),
+            Self::Desktop => (1440.0, 900.0),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RootSeedGuard {
+    target: RootSeedTarget,
+    consumed: bool,
+}
+
+impl RootSeedGuard {
+    pub fn from_prompt(prompt: &str) -> Self {
+        Self {
+            target: root_seed_target_for_prompt(prompt),
+            consumed: false,
+        }
+    }
+
+    pub fn disabled() -> Self {
+        Self {
+            target: RootSeedTarget::Desktop,
+            consumed: true,
+        }
+    }
+
+    fn pending_target(&self) -> Option<RootSeedTarget> {
+        (!self.consumed).then_some(self.target)
+    }
+
+    fn mark_consumed(&mut self) {
+        self.consumed = true;
+    }
+}
+
+pub fn root_seed_target_for_prompt(prompt: &str) -> RootSeedTarget {
+    RootSeedTarget::from_mobile(root_seed_prompt_is_mobile(prompt))
+}
+
+pub fn root_seed_prompt_is_mobile(prompt: &str) -> bool {
+    if prompt.contains("手机") {
+        return true;
+    }
+    prompt
+        .to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|word| matches!(word, "mobile" | "app" | "phone"))
+}
+
+fn should_track_root_seed_candidate(
+    _state: &EditorState,
+    name: &str,
+    indicator_epoch: Option<u64>,
+    root_seed_guard: Option<&RootSeedGuard>,
+) -> bool {
+    if name != "batch_design" {
+        return false;
+    }
+    root_seed_guard
+        .and_then(RootSeedGuard::pending_target)
+        .is_some()
+        || indicator_epoch
+            .and_then(op_editor_core::agent_indicators::root_seed_hint_if_pending)
+            .is_some()
+}
+
+fn collect_active_top_level_node_ids(state: &EditorState) -> HashSet<String> {
+    state
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect()
+}
+
+fn maybe_apply_root_seed_guard(
+    state: &mut EditorState,
+    ids_before: &HashSet<String>,
+    indicator_epoch: Option<u64>,
+    root_seed_guard: Option<&mut RootSeedGuard>,
+) -> Option<String> {
+    let explicit_target = root_seed_guard
+        .as_ref()
+        .and_then(|guard| guard.pending_target());
+    let epoch_target = indicator_epoch
+        .and_then(op_editor_core::agent_indicators::root_seed_hint_if_pending)
+        .map(RootSeedTarget::from_mobile);
+    let target = explicit_target.or(epoch_target)?;
+    let hint = seed_root_frame_if_needed(state, ids_before, target);
+
+    if let Some(guard) = root_seed_guard {
+        guard.mark_consumed();
+    } else if let Some(epoch) = indicator_epoch {
+        op_editor_core::agent_indicators::mark_root_seed_guard_consumed(epoch);
+    }
+
+    hint
+}
+
+fn seed_root_frame_if_needed(
+    state: &mut EditorState,
+    ids_before: &HashSet<String>,
+    target: RootSeedTarget,
+) -> Option<String> {
+    let root = root_seed_candidate_mut(state, ids_before)?;
+    let width_before = root.width_px();
+    let height_before = root.height_px();
+    if width_before.is_some() && height_before.is_some() {
+        return None;
+    }
+
+    let (target_width, target_height) = target.dimensions();
+    if width_before.is_none() {
+        root.set_width_px(target_width);
+    }
+    if height_before.is_none() {
+        root.set_height_px(target_height);
+    }
+    default_root_layout_to_vertical(root);
+
+    let width = root.width_px().unwrap_or(target_width);
+    let height = root.height_px().unwrap_or(target_height);
+    Some(format!(
+        "root seeded to {}x{} - grow height if content exceeds.",
+        format_seed_dimension(width),
+        format_seed_dimension(height)
+    ))
+}
+
+fn root_seed_candidate_mut<'a>(
+    state: &'a mut EditorState,
+    ids_before: &HashSet<String>,
+) -> Option<&'a mut PenNode> {
+    let roots = state.active_children_mut();
+    let new_root_index = roots
+        .iter()
+        .position(|node| !ids_before.contains(node.id_str()) && matches!(node, PenNode::Frame(_)));
+    if let Some(index) = new_root_index {
+        return roots.get_mut(index);
+    }
+    if roots.len() == 1 && matches!(roots[0], PenNode::Frame(_)) {
+        roots.get_mut(0)
+    } else {
+        None
+    }
+}
+
+fn default_root_layout_to_vertical(node: &mut PenNode) {
+    if let PenNode::Frame(frame) = node {
+        if frame.container.layout.is_none() {
+            frame.container.layout = Some(LayoutMode::Vertical);
+        }
+    }
+}
+
+fn format_seed_dimension(value: f64) -> String {
+    if (value.fract()).abs() < f64::EPSILON {
+        format!("{}", value as i64)
+    } else {
+        format!("{value:.1}")
     }
 }
 
@@ -378,6 +606,24 @@ fn extract_from_schema_entry(entry: &str) -> Option<(String, String)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn web_app_prompts_are_not_mobile_seeded() {
+        assert!(!super::root_seed_prompt_is_mobile(
+            "Technical dashboard web app for a utilities company"
+        ));
+        assert!(!super::root_seed_prompt_is_mobile(
+            "Luxury webapp for managing barbershop clients"
+        ));
+        // A mobile ask that also says "web app" stays mobile.
+        assert!(super::root_seed_prompt_is_mobile(
+            "mobile companion for our web app"
+        ));
+        assert!(super::root_seed_prompt_is_mobile(
+            "Design a travel booking mobile app explore page"
+        ));
+        assert!(super::root_seed_prompt_is_mobile("设计一个手机端首页"));
+    }
+
     use super::*;
 
     #[test]
@@ -540,6 +786,169 @@ mod tests {
             "clean layout must not attach issues: {}",
             result.content
         );
+    }
+
+    #[test]
+    fn execute_design_first_batch_seeds_mobile_sizeless_root() {
+        let mut state = EditorState::new();
+        let mut guard = RootSeedGuard::from_prompt("travel itinerary app");
+        let (result, mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Mobile Page'})"}"#,
+            None,
+            Some(&mut guard),
+        );
+
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let root = only_root_frame(&state);
+        assert_eq!(root.width_px(), Some(390.0));
+        assert_eq!(root.height_px(), Some(844.0));
+        assert!(root_frame_layout_is_vertical(root));
+        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert!(
+            v["layoutHint"]
+                .as_str()
+                .unwrap_or("")
+                .contains("root seeded to 390x844"),
+            "seed hint must be visible to the next batch: {}",
+            result.content
+        );
+    }
+
+    #[test]
+    fn execute_design_first_batch_seeds_desktop_sizeless_root() {
+        let mut state = EditorState::new();
+        let mut guard = RootSeedGuard::from_prompt("build a SaaS analytics dashboard");
+        let (result, mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Dashboard'})"}"#,
+            None,
+            Some(&mut guard),
+        );
+
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let root = only_root_frame(&state);
+        assert_eq!(root.width_px(), Some(1440.0));
+        assert_eq!(root.height_px(), Some(900.0));
+        assert!(root_frame_layout_is_vertical(root));
+    }
+
+    #[test]
+    fn execute_design_root_seed_preserves_authored_numeric_width() {
+        let mut state = EditorState::new();
+        let mut guard = RootSeedGuard::from_prompt("mobile hotel booking");
+        let (result, mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Phone',width:320,height:'fit_content'})"}"#,
+            None,
+            Some(&mut guard),
+        );
+
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let root = only_root_frame(&state);
+        assert_eq!(
+            root.width_px(),
+            Some(320.0),
+            "authored numeric width must stay untouched"
+        );
+        assert_eq!(root.height_px(), Some(844.0));
+    }
+
+    #[test]
+    fn execute_design_root_seed_guard_consumes_after_first_successful_batch() {
+        let mut state = EditorState::new();
+        let mut guard = RootSeedGuard::from_prompt("phone onboarding flow");
+        let (first, first_mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Root',width:390,height:844})"}"#,
+            None,
+            Some(&mut guard),
+        );
+        assert!(!first.is_error, "first batch failed: {}", first.content);
+        assert!(first_mutated);
+
+        let (second, second_mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"second=I(null,{type:'frame',name:'Second',width:'fit_content',height:'fit_content'})"}"#,
+            None,
+            Some(&mut guard),
+        );
+
+        assert!(!second.is_error, "second batch failed: {}", second.content);
+        assert!(second_mutated);
+        let second_root = state
+            .active_children()
+            .iter()
+            .find(|node| node.base().name.as_deref() == Some("Second"))
+            .expect("second top-level frame exists");
+        assert_eq!(
+            second_root.width_px(),
+            None,
+            "second batch must not be seeded after the first success"
+        );
+        assert_eq!(
+            second_root.height_px(),
+            None,
+            "second batch must not be seeded after the first success"
+        );
+        let v: serde_json::Value = serde_json::from_str(&second.content).unwrap();
+        assert!(
+            v.get("layoutHint")
+                .and_then(|h| h.as_str())
+                .is_none_or(|hint| !hint.contains("root seeded")),
+            "second batch must not get another root seed hint: {}",
+            second.content
+        );
+    }
+
+    #[test]
+    fn execute_design_tool_without_loop_root_seed_guard_does_not_seed() {
+        let mut state = EditorState::new();
+        let (result, mutated) = execute_design_tool(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Plain',width:'fit_content',height:'fit_content'})"}"#,
+        );
+
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let root = only_root_frame(&state);
+        assert_eq!(root.width_px(), None);
+        assert_eq!(root.height_px(), None);
+        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert!(
+            v.get("layoutHint")
+                .and_then(|h| h.as_str())
+                .is_none_or(|hint| !hint.contains("root seeded")),
+            "non-loop path must not inject root seed feedback: {}",
+            result.content
+        );
+    }
+
+    fn only_root_frame(state: &EditorState) -> &PenNode {
+        let children = state.active_children();
+        assert_eq!(children.len(), 1, "expected a single root frame");
+        let root = &children[0];
+        assert!(matches!(root, PenNode::Frame(_)), "expected frame root");
+        root
+    }
+
+    fn root_frame_layout_is_vertical(node: &PenNode) -> bool {
+        let PenNode::Frame(frame) = node else {
+            return false;
+        };
+        matches!(
+            frame.container.layout,
+            Some(jian_ops_schema::node::container::LayoutMode::Vertical)
+        )
     }
 
     // --- execute_agent_tool tests ---

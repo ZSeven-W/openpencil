@@ -45,6 +45,7 @@ use op_orchestrator::agent_identity::assign_agent_identities;
 
 use op_ai_skills::style_guide::{select_style_guide, style_guide_registry, SelectOptions};
 use op_editor_core::agent_indicators;
+use op_host_services::design_agent_tools::root_seed_prompt_is_mobile;
 
 use crate::chat_session::{self, builtin_provider_with_design_tools, ChatSession};
 use crate::design_loop_indicator::{
@@ -73,6 +74,8 @@ pub(crate) struct SubAgentSession {
     /// Canvas indicator — `None` until this sub becomes active (lazy
     /// epoch begin), `Some` while/after it runs.
     pub indicator: Option<DesignLoopIndicator>,
+    /// Precomputed from the sub prompt and attached when the lazy epoch begins.
+    pub root_seed_mobile: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +221,7 @@ pub(crate) fn launch_sub_agents(
             session: Some(session),
             identity,
             indicator: None,
+            root_seed_mobile: root_seed_prompt_is_mobile(&spec.prompt),
         });
     }
 
@@ -283,7 +287,7 @@ pub(crate) fn pump_sub_agents(
         // The initial-frame snapshot is taken NOW (after prior subs
         // finished), so only THIS sub's new frames get badged.
         if subs[*active].indicator.is_none() {
-            let epoch = agent_indicators::begin();
+            let epoch = agent_indicators::begin_with_root_seed_hint(subs[*active].root_seed_mobile);
             let initial_frame_ids = collect_top_level_frame_ids(host.editor_state());
             let identity = subs[*active].identity.clone();
             subs[*active].indicator = Some(DesignLoopIndicator {

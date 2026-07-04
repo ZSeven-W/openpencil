@@ -88,6 +88,12 @@ pub struct AgentIndicators {
     /// user interaction).
     needs_final_frame: bool,
     last_reveal_snapshot_ms: Option<u64>,
+    /// Optional per-turn root seed profile for the design-agent loop.
+    /// `Some(true)` means mobile artboard, `Some(false)` means desktop.
+    root_seed_mobile: Option<bool>,
+    /// True after the first successful `batch_design` of this epoch has
+    /// consumed the root seed guard.
+    root_seed_consumed: bool,
 }
 
 impl AgentIndicators {
@@ -101,6 +107,8 @@ impl AgentIndicators {
         self.finishing = false;
         self.needs_final_frame = false;
         self.last_reveal_snapshot_ms = None;
+        self.root_seed_mobile = None;
+        self.root_seed_consumed = false;
     }
 }
 
@@ -203,10 +211,42 @@ pub fn begin() -> u64 {
     r.epoch
 }
 
+/// Begin a new run with a design-loop root seed profile attached.
+///
+/// The profile is consumed by the first successful `batch_design` executor
+/// call for this epoch. Non-design runs should keep using [`begin`].
+pub fn begin_with_root_seed_hint(mobile: bool) -> u64 {
+    let mut r = REGISTRY.lock().unwrap();
+    r.epoch += 1;
+    r.clear_maps();
+    r.run_active = true;
+    r.root_seed_mobile = Some(mobile);
+    r.epoch
+}
+
 /// Return the currently active run epoch, if a host-owned indicator run is live.
 pub fn active_epoch() -> Option<u64> {
     let r = REGISTRY.lock().unwrap();
     r.run_active.then_some(r.epoch)
+}
+
+/// Return the root seed profile for `epoch` if its first batch has not
+/// consumed the guard yet.
+pub fn root_seed_hint_if_pending(epoch: u64) -> Option<bool> {
+    let r = REGISTRY.lock().unwrap();
+    if r.epoch == epoch && r.run_active && !r.root_seed_consumed {
+        r.root_seed_mobile
+    } else {
+        None
+    }
+}
+
+/// Mark the root seed guard consumed for `epoch`.
+pub fn mark_root_seed_guard_consumed(epoch: u64) {
+    let mut r = REGISTRY.lock().unwrap();
+    if r.epoch == epoch {
+        r.root_seed_consumed = true;
+    }
 }
 
 /// Clear indicators only if `epoch` is still the active run. A newer

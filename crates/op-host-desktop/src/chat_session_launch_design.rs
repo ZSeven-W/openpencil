@@ -18,7 +18,7 @@ use op_host_services::chat_builtin_http::{
 };
 use op_host_services::chat_canvas_tools::{chat_tool_channel, ChatToolRequest};
 use op_host_services::chat_system_prompt::chat_history_from_transcript;
-use op_host_services::design_agent_tools::design_tool_defs;
+use op_host_services::design_agent_tools::{design_tool_defs, root_seed_prompt_is_mobile};
 
 use super::clear_fresh_starter_frame_for_design;
 
@@ -156,6 +156,7 @@ pub(super) fn launch_design_loop_turn(
     // empty design (see `design_turn_thinking_mode`). Resolved before the
     // `&mut` borrow below.
     let thinking = design_turn_thinking_mode(host);
+    let root_seed_mobile = root_seed_prompt_is_mobile(&user_text);
     let chat = &mut host.editor_state_mut().chat;
     let effort = chat.effort_level;
     let attachments = std::mem::take(&mut chat.pending_attachments);
@@ -174,7 +175,7 @@ pub(super) fn launch_design_loop_turn(
     };
     // The host starts the indicator epoch before the worker can apply its first
     // design batch; the indicator pump adopts this epoch for badges/teardown.
-    op_editor_core::agent_indicators::begin();
+    op_editor_core::agent_indicators::begin_with_root_seed_hint(root_seed_mobile);
     *current_chat = Some(ChatSession::start_with_tools(provider, req, Some(tool_rx)));
     // Signal one agent running so the chat header shows "1/1 designing…"
     // and the canvas indicator pump registers frame glows.
