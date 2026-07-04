@@ -291,8 +291,19 @@ fn convert_instance(
                     .get("symbolData")
                     .and_then(|s| s.get_array("symbolOverrides"))
                     .map(|a| a.to_vec());
-                let derived = figma.get_array("derivedSymbolData").map(|a| a.to_vec());
                 let instance_size = figma.get("size").and_then(FigVec2::from_value);
+                // A component swap (`overriddenSymbolID` differs from the
+                // base `symbolID`) leaves the pre-swap component's stale
+                // derived cluster in the array — drop it so it can't
+                // hijack the fingerprint mapping onto the swapped subtree.
+                let is_swap = figma.get("overriddenSymbolID").is_some();
+                let derived = figma.get_array("derivedSymbolData").map(|a| {
+                    if is_swap {
+                        crate::instance::filter_swap_stale_derived(a, &symbol_node, instance_size)
+                    } else {
+                        a.to_vec()
+                    }
+                });
                 let children = apply_instance_overrides_cached(
                     &symbol_node,
                     overrides.as_deref(),
