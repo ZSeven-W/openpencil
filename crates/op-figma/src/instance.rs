@@ -16,8 +16,16 @@ use crate::kiwi::FigValue;
 use crate::tree::{guid_to_string, TreeNode};
 use std::collections::{HashMap, HashSet};
 
+mod assignment;
+#[cfg(test)]
+mod assignment_tests;
+mod fingerprint;
+mod foreign_session;
 #[cfg(test)]
 mod tests;
+
+pub use assignment::seed_assignments_from_instances;
+use assignment::{guessed_mapping_is_implausible, rescale_only};
 
 /// Layout keys an instance inherits from its master SYMBOL.
 const LAYOUT_KEYS: &[&str] = &[
@@ -101,30 +109,38 @@ fn guid_path_key(entry: &FigValue) -> Option<String> {
     }
 }
 
-/// Apply a SYMBOL instance's overrides + derived data onto a clone of
-/// the SYMBOL subtree, returning the modified children.
-pub fn apply_instance_overrides(
+/// Apply a SYMBOL instance's overrides + derived data onto a clone of the
+/// SYMBOL subtree with a throwaway assignment cache.
+#[cfg(test)]
+pub(crate) fn apply_instance_overrides(
     symbol_node: &TreeNode,
     overrides: Option<&[FigValue]>,
     derived: Option<&[FigValue]>,
     instance_size: Option<FigVec2>,
+) -> Vec<TreeNode> {
+    let mut cache = HashMap::new();
+    apply_instance_overrides_cached(symbol_node, overrides, derived, instance_size, &mut cache)
+}
+
+/// Apply overrides with a cross-instance assignment cache. Instances
+/// of the same SYMBOL share one virtual-GUID space, so an assignment
+/// pinned by one instance's evidence (`"sym|pk"` → node guid) is
+/// reused verbatim by every later instance — including for signal-less
+/// entries (bare `visible` / `name`) that could never be fingerprinted
+/// on their own.
+pub fn apply_instance_overrides_cached(
+    symbol_node: &TreeNode,
+    overrides: Option<&[FigValue]>,
+    derived: Option<&[FigValue]>,
+    instance_size: Option<FigVec2>,
+    assignment_cache: &mut HashMap<String, String>,
 ) -> Vec<TreeNode> {
     let overrides = overrides.unwrap_or(&[]);
     let derived = derived.unwrap_or(&[]);
 
     // Fast path — nothing to apply: just rescale to the instance size.
     if derived.is_empty() && overrides.is_empty() {
-        if let (Some(size), Some(Some(sym_size))) = (
-            instance_size,
-            symbol_node.figma.get("size").map(FigVec2::from_value),
-        ) {
-            if sym_size.x != 0.0 && sym_size.y != 0.0 {
-                let sx = size.x / sym_size.x;
-                let sy = size.y / sym_size.y;
-                return crate::common::scale_tree_children(&symbol_node.children, sx, sy);
-            }
-        }
-        return symbol_node.children.clone();
+        return rescale_only(symbol_node, instance_size);
     }
 
     // ── Index inputs ─────────────────────────────────────────────────
@@ -287,26 +303,208 @@ pub fn apply_instance_overrides(
             .and_then(guid_to_string)
             .unwrap_or_default();
 
-        for (pk, ng) in &full_pk_to_node {
+        // Anchor detection: when the BASE pk's derived size matches the
+        // symbol's own size, the numbering starts at the ROOT (base =
+        // root, base+1 = first child) — the walk fallback must then use
+        // the root-anchored walk, or every mapping shifts by one.
+        let base_pk = format!("{session_id}:{first_local_id}");
+        let root_anchored = derived_map
+            .get(&base_pk)
+            .and_then(|d| d.get("size"))
+            .and_then(FigVec2::from_value)
+            .zip(symbol_node.figma.get("size").and_then(FigVec2::from_value))
+            .map(|(ds, ss)| {
+                let close = |a: f64, b: f64| (a - b).abs() <= (0.03 * b.abs()).max(4.0);
+                close(ds.x, ss.x) && close(ds.y, ss.y)
+            })
+            .unwrap_or(false);
+        let walk_map: &HashMap<String, String> = if root_anchored {
+            &root_pk_to_node
+        } else {
+            &full_pk_to_node
+        };
+
+        for (pk, ng) in walk_map {
             pk_to_node_guid.insert(pk.clone(), ng.clone());
         }
-        for (pk, d) in &derived_map {
-            if pk.contains('/') {
-                continue;
-            }
-            if let Some(ng) = full_pk_to_node.get(pk) {
-                node_derived.insert(ng.clone(), (*d).clone());
+
+        // Merge every single-segment virtual pk into a VirtualEntry.
+        let mut virt_pks: Vec<&String> = Vec::new();
+        let mut seen_pk: HashSet<&String> = HashSet::new();
+        for pk in derived_order.iter().chain(override_order.iter()) {
+            if !pk.contains('/') && seen_pk.insert(pk) {
+                virt_pks.push(pk);
             }
         }
-        for (pk, ov) in &override_map {
-            if pk.contains('/') {
-                continue;
+        let lid_of = |pk: &str| -> f64 {
+            pk.split(':')
+                .nth(1)
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.0)
+        };
+        let entries: Vec<fingerprint::VirtualEntry> = virt_pks
+            .iter()
+            .map(|pk| fingerprint::VirtualEntry {
+                pk: (*pk).clone(),
+                rel_idx: lid_of(pk) - first_local_id as f64,
+                derived: derived_map.get(*pk).copied(),
+                overrides: override_map.get(*pk).copied(),
+            })
+            .collect();
+        let (with_signal, signal_less): (Vec<_>, Vec<_>) =
+            entries.into_iter().partition(fingerprint::has_signal);
+
+        // Signal-bearing entries: fingerprint assignment (the virtual
+        // allocation order is not recoverable — see fingerprint.rs).
+        let ratios = match (
+            instance_size,
+            symbol_node.figma.get("size").and_then(FigVec2::from_value),
+        ) {
+            (Some(inst), Some(sym)) if sym.x > 0.0 && sym.y > 0.0 => {
+                (inst.x / sym.x, inst.y / sym.y)
             }
-            if root_pk_to_node.get(pk).map(String::as_str) == Some(root_guid.as_str()) {
-                continue;
+            _ => (1.0, 1.0),
+        };
+        // Cross-instance cache: pins established by earlier instances
+        // of this SYMBOL apply verbatim and reserve their nodes.
+        let cache_key = |pk: &str| format!("{root_guid}|{pk}");
+        let mut pinned_nodes: HashSet<String> = HashSet::new();
+        let apply_pin = |pk: &String,
+                         ng: &String,
+                         node_derived: &mut HashMap<String, FigValue>,
+                         node_override: &mut HashMap<String, FigValue>,
+                         pk_to_node_guid: &mut HashMap<String, String>| {
+            pk_to_node_guid.insert(pk.clone(), ng.clone());
+            if let Some(d) = derived_map.get(pk) {
+                node_derived.insert(ng.clone(), (*d).clone());
             }
-            if let Some(ng) = full_pk_to_node.get(pk) {
+            if let Some(ov) = override_map.get(pk) {
                 node_override.insert(ng.clone(), (*ov).clone());
+            }
+        };
+        let mut unpinned_signal: Vec<fingerprint::VirtualEntry> = Vec::new();
+        for e in with_signal {
+            if let Some(ng) = assignment_cache.get(&cache_key(&e.pk)).cloned() {
+                pinned_nodes.insert(ng.clone());
+                apply_pin(
+                    &e.pk,
+                    &ng,
+                    &mut node_derived,
+                    &mut node_override,
+                    &mut pk_to_node_guid,
+                );
+            } else {
+                unpinned_signal.push(e);
+            }
+        }
+
+        let candidates: Vec<&TreeNode> = flat_symbol[1..]
+            .iter()
+            .copied()
+            .filter(|n| {
+                n.figma
+                    .get("guid")
+                    .and_then(guid_to_string)
+                    .map(|g| !pinned_nodes.contains(&g))
+                    .unwrap_or(true)
+            })
+            .collect();
+        // `None` = pair-count guard tripped, no scoring ran: everything
+        // goes through the walk-order fallback below. `Some` = entries
+        // missing from the map contradicted every candidate — drop
+        // them rather than walk-order them back into corruption.
+        let mut walk_fallback: Vec<fingerprint::VirtualEntry> = signal_less;
+        match fingerprint::assign(&unpinned_signal, &candidates, ratios) {
+            Some(assigned) => {
+                // Entries the fingerprint REJECTED contradicted every
+                // candidate — their walk-order guesses must not
+                // survive into nested-head resolution either.
+                for e in &unpinned_signal {
+                    if !assigned.contains_key(&e.pk) {
+                        pk_to_node_guid.remove(&e.pk);
+                    }
+                }
+                for (pk, ng) in &assigned {
+                    assignment_cache.insert(cache_key(pk), ng.clone());
+                    apply_pin(
+                        pk,
+                        ng,
+                        &mut node_derived,
+                        &mut node_override,
+                        &mut pk_to_node_guid,
+                    );
+                }
+            }
+            None => walk_fallback.extend(unpinned_signal),
+        }
+
+        // Signal-less entries (bare name / visible tweaks) — plus every
+        // entry when the fingerprint guard bailed: cache pin first,
+        // then walk-order fallback with the root-walk filter for
+        // root-level overrides.
+        let mut foreign: Vec<(String, bool)> = Vec::new();
+        for e in &walk_fallback {
+            let pk = &e.pk;
+            if let Some(ng) = assignment_cache.get(&cache_key(pk)).cloned() {
+                apply_pin(
+                    pk,
+                    &ng,
+                    &mut node_derived,
+                    &mut node_override,
+                    &mut pk_to_node_guid,
+                );
+                continue;
+            }
+            if !walk_map.contains_key(pk) {
+                let is_foreign = pk
+                    .split(':')
+                    .next()
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .map(|sid| sid != session_id)
+                    .unwrap_or(false);
+                if is_foreign {
+                    foreign.push((pk.clone(), fingerprint::demands_text(e)));
+                }
+                continue;
+            }
+            if let Some(d) = derived_map.get(pk) {
+                if let Some(ng) = walk_map.get(pk) {
+                    if *ng != root_guid {
+                        node_derived.entry(ng.clone()).or_insert((*d).clone());
+                    }
+                }
+            }
+            if let Some(ov) = override_map.get(pk) {
+                if root_pk_to_node.get(pk).map(String::as_str) == Some(root_guid.as_str()) {
+                    continue;
+                }
+                if let Some(ng) = walk_map.get(pk) {
+                    if *ng != root_guid {
+                        node_override.entry(ng.clone()).or_insert((*ov).clone());
+                    }
+                }
+            }
+        }
+
+        // Foreign-session groups: apply only under a UNIQUE anchor
+        // whose walk lands every text-demanding entry on a TEXT node
+        // (see foreign_session.rs). No anchor → safely dropped.
+        for group in foreign_session::group_by_session(&foreign) {
+            let Some(map) = foreign_session::resolve_group(&group, symbol_node) else {
+                continue;
+            };
+            for (pk, _) in &group.pks {
+                let Some(ng) = map.get(pk) else { continue };
+                if *ng == root_guid {
+                    continue;
+                }
+                pk_to_node_guid.insert(pk.clone(), ng.clone());
+                if let Some(d) = derived_map.get(pk) {
+                    node_derived.entry(ng.clone()).or_insert((*d).clone());
+                }
+                if let Some(ov) = override_map.get(pk) {
+                    node_override.entry(ng.clone()).or_insert((*ov).clone());
+                }
             }
         }
     } else {
@@ -341,6 +539,63 @@ pub fn apply_instance_overrides(
                 }
             }
         }
+    }
+
+    // ── Guessed-mapping confidence gate ──────────────────────────────
+    // Strategies 1-3 GUESS the derived→node mapping from walk order,
+    // but Figma's virtual-GUID allocation order is not recoverable
+    // from the tree, so a wrong guess lands transforms / sizes on the
+    // wrong nodes (overlapping text). Derived sizes that grossly
+    // contradict the mapped nodes' own sizes betray a bad guess: when
+    // a severe MAJORITY of the comparable entries contradict (≥2 and
+    // more than half), the whole guessed application is dropped in
+    // favour of a plain rescale — a small geometry drift beats a
+    // corrupted layout.
+    if !use_direct
+        && guessed_mapping_is_implausible(&node_derived, &flat_symbol, instance_size, symbol_node)
+    {
+        // Rescale-only fallback — but multi-segment entries whose head
+        // names a REAL subtree node are mapping-independent, so they
+        // still forward into that node's nested slots.
+        let mut safe_nested_override: HashMap<String, Vec<FigValue>> = HashMap::new();
+        let mut safe_nested_derived: HashMap<String, Vec<FigValue>> = HashMap::new();
+        let collect_safe = |order: &[String],
+                            map: &HashMap<String, &FigValue>,
+                            out: &mut HashMap<String, Vec<FigValue>>| {
+            for pk in order {
+                if !pk.contains('/') {
+                    continue;
+                }
+                let head = pk.split('/').next().unwrap_or("");
+                if !guid_in_subtree.contains(head) {
+                    continue;
+                }
+                if let Some(entry) = map.get(pk) {
+                    if let Some(rest) = strip_first_guid(entry) {
+                        out.entry(head.to_string()).or_default().push(rest);
+                    }
+                }
+            }
+        };
+        collect_safe(&override_order, &override_map, &mut safe_nested_override);
+        collect_safe(&derived_order, &derived_map, &mut safe_nested_derived);
+        let rescaled = rescale_only(symbol_node, instance_size);
+        if safe_nested_override.is_empty() && safe_nested_derived.is_empty() {
+            return rescaled;
+        }
+        let empty: HashMap<String, FigValue> = HashMap::new();
+        return rescaled
+            .iter()
+            .map(|c| {
+                apply_to_node(
+                    c,
+                    &empty,
+                    &empty,
+                    &safe_nested_override,
+                    &safe_nested_derived,
+                )
+            })
+            .collect();
     }
 
     // ── Nested forwarding ────────────────────────────────────────────

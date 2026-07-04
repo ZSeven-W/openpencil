@@ -3094,12 +3094,14 @@ version = "0.8.0"
 dependencies = [
  "include_dir",
  "jian-ops-schema",
+ "serde_json",
 ]
 
 [[package]]
 name = "op-cli"
 version = "0.8.0"
 dependencies = [
+ "op-ai-skills",
  "op-config-store",
  "op-figma",
  "op-process-io",

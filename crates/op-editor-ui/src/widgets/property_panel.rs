@@ -23,7 +23,7 @@
 //! Host calls [`PropertyPanel::for_selection`] which returns
 //! `Option<Self>`; `None` = panel hidden entirely.
 
-use crate::layout_scene::SceneStroke;
+use crate::layout_scene::{SceneStroke, SceneStrokeAlign};
 use crate::theme::Theme;
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::editor_state_ext::theme_for;
@@ -105,6 +105,7 @@ fn apply_resolved_variable_colors(
             color,
             width,
             sides: crate::widgets::property_panel_snapshot::stroke_sides_for_scene(node),
+            align: SceneStrokeAlign::Center,
         });
     }
 }
@@ -593,6 +594,7 @@ impl PropertyPanel {
             panel_rect.origin.x,
             panel_rect.origin.y,
             point,
+            self.snapshot.widget.is_some(),
         ) {
             return Some(PropertyPanelAction::SetPropertyTab(tab));
         }
@@ -834,6 +836,7 @@ impl PropertyPanel {
             panel_rect.origin.x,
             panel_rect.origin.y,
             point,
+            self.snapshot.widget.is_some(),
         )
     }
 }
@@ -984,6 +987,7 @@ impl Widget for PropertyPanel {
             sections::TabStripState {
                 active: self.tab,
                 hover: self.tab_hover,
+                show_interact: self.snapshot.widget.is_some(),
             },
             x,
             rect.origin.y,

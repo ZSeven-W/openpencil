@@ -508,6 +508,9 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
     matches!(
         (tool, key),
         ("set_variables", "variables")
+            | ("upsert_variables", "variables")
+            | ("upsert_component", "node_json")
+            | ("upsert_screen", "node_json")
             | ("set_themes", "themes")
             | ("read_nodes", "nodeIds")
             | ("batch_get", "patterns")

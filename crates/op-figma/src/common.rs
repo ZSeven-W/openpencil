@@ -103,6 +103,9 @@ pub struct ConversionContext {
     /// Geometry / image blob pool.
     pub blobs: Vec<BlobOrString>,
     pub layout_mode: FigLayoutMode,
+    /// Cross-instance virtual-GUID assignment pins ("sym|pk" → node
+    /// guid) shared by every instance of the same SYMBOL.
+    pub instance_assignments: HashMap<String, String>,
 }
 
 impl ConversionContext {

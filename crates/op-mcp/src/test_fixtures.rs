@@ -106,6 +106,7 @@ pub fn frame(
         children: Some(children),
         image_search_query: None,
         reusable: None,
+        screen: None,
         slot: None,
         state: None,
         bindings: None,

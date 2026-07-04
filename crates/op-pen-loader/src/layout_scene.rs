@@ -25,8 +25,8 @@ use jian_scene::layout_scene::NodeKind;
 use jian_scene::layout_scene::{
     stable_image_source_id, DropShadow, Effect, LayoutScene, SceneFillType, SceneGradient,
     SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneShader, SceneShaderUniform,
-    SceneStroke, SceneTextAlign, SceneTextRun, SceneTextVerticalAlign, SceneWidget,
-    SceneWidgetOption,
+    SceneStroke, SceneStrokeAlign, SceneTextAlign, SceneTextRun, SceneTextVerticalAlign,
+    SceneWidget, SceneWidgetOption,
 };
 use op_editor_core::render_backend::Color;
 use op_editor_core::scene_vars::VariableTable;
@@ -478,6 +478,11 @@ fn scene_stroke(
             .unwrap_or_else(|| array_to_color(s.color)),
         width: s.width,
         sides: s.sides,
+        align: match s.align {
+            a if a < 0 => SceneStrokeAlign::Inside,
+            a if a > 0 => SceneStrokeAlign::Outside,
+            _ => SceneStrokeAlign::Center,
+        },
     }
 }
 

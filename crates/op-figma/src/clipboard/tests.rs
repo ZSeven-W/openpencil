@@ -277,6 +277,7 @@ fn fix_unresolved_images_recurses_into_frame_children() {
         children: Some(vec![inner]),
         image_search_query: None,
         reusable: None,
+        screen: None,
         slot: None,
         state: None,
         bindings: None,

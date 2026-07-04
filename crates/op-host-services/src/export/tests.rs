@@ -4,7 +4,7 @@
 
 use super::test_support::{filled_rect, scene_with};
 use super::*;
-use op_editor_ui::layout_scene::{NodeKind, SceneNode, SceneStroke};
+use op_editor_ui::layout_scene::{NodeKind, SceneNode, SceneStroke, SceneStrokeAlign};
 use op_editor_ui::{Color, Rect};
 
 #[test]
@@ -308,6 +308,7 @@ fn export_node_raster_paints_svg_path_d_stroke() {
         },
         width: 3.0,
         sides: None,
+        align: SceneStrokeAlign::Center,
     });
 
     let scene = scene_with(vec![path]);
@@ -343,6 +344,7 @@ fn export_raster_paints_only_authored_stroke_sides() {
         },
         width: 4.0,
         sides: Some([0.0, 0.0, 4.0, 0.0]),
+        align: SceneStrokeAlign::Center,
     });
     let scene = scene_with(vec![node]);
     let tmp = std::env::temp_dir().join(format!("op-export-sided-{}.png", std::process::id()));
