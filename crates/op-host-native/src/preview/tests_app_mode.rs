@@ -215,12 +215,13 @@ fn bound_input_value_survives_screen_roundtrip() {
     // `reconcile_switches_screen_and_preserves_app_state` test), but the
     // per-node `WidgetStateStore` entry for a widget that isn't in the
     // newly-mounted tree gets pruned (`Runtime::replace_document`'s
-    // `retain_ids`). So the home screen's "email" input must lose its
-    // LIVE widget-state entry while /detail is mounted, then re-seed
-    // from the persisted `$state.email` app value the next time
-    // something touches it (`WidgetStateStore::get_or_init` +
-    // `bound_app_value`) — proving the persistence survives at the
-    // PreviewSession level, not just the raw jian-core Runtime level.
+    // `retain_ids`). So the home screen's "email" input loses its LIVE
+    // widget-state entry while /detail is mounted; `reconcile`'s switch
+    // branch then re-seeds every widget on the newly-mounted screen
+    // (`PreviewSession::seed_all_widget_states` → `get_or_init` +
+    // `bound_app_value`), so the persisted `$state.email` value is back
+    // in the store on the FIRST frame after the switch — visible through
+    // the real paint overlay path, not just after the next tap/focus.
     let doc: jian_ops_schema::PenDocument = serde_json::from_str(TWO_SCREEN_DOC_JSON).unwrap();
     let mut session = PreviewSession::enter(&doc, (1200.0, 800.0), &Default::default(), 0).unwrap();
 
@@ -242,9 +243,29 @@ fn bound_input_value_survives_screen_roundtrip() {
     assert!(session.reconcile(), "pop must reconcile back to home");
     assert_eq!(session.current_path_for_test(), "/");
 
-    // The re-mounted bound input re-seeds from `$state.email` the next
-    // time its widget state is touched — the persistence contract this
-    // test locks.
+    // The REAL paint path: `preview_scene_for_test` walks the same
+    // `overlay_node` (`widget_states.get()`, non-mutating) that
+    // `paint_scene` uses. Asserting the re-mounted email widget's
+    // displayed value here — WITHOUT any test-only forced seed first —
+    // proves `reconcile`'s seed pass made the persisted value visible on
+    // remount. This assertion FAILS if that seed pass is removed (the
+    // store entry would be absent and the overlay would fall back to the
+    // authored empty value); it must come before `widget_text_for_test`,
+    // which force-seeds via `get_or_init` and would otherwise mask the
+    // gap.
+    let scene = session.preview_scene_for_test();
+    let email = scene
+        .active_page()
+        .and_then(|p| p.find("email"))
+        .expect("email node in re-mounted overlaid scene");
+    assert_eq!(
+        email.widget.as_ref().and_then(|w| w.value_str.as_deref()),
+        Some("hi"),
+        "re-mounted bound input must render its persisted value through the paint overlay"
+    );
+
+    // And the value is genuinely recoverable from the widget-state store
+    // too (belt-and-braces: the store, not just the overlay clone).
     assert_eq!(
         session.widget_text_for_test("email"),
         "hi",

@@ -160,7 +160,54 @@ impl PreviewSession {
                 self.warnings.push(format!("preview: relayout failed: {e}"));
             }
         }
+
+        // Seed every widget on the newly-mounted screen so the paint-time
+        // overlay (`overlay_node` reads `widget_states.get()`
+        // non-mutating) shows persisted app-scope values on the FIRST
+        // frame after the switch — not just after the next tap/focus.
+        // `replace_document` (inside `reconcile_screens`) pruned the
+        // store to the new tree's ids via `retain_ids`, so a bound input
+        // re-mounted here has no live entry; `get_or_init` re-seeds it
+        // from the preserved `$state.*` value (Task 5 read-back). Runs
+        // AFTER the scene/layout rebuild so it seeds against the screen
+        // that will actually paint.
+        self.seed_all_widget_states();
         true
+    }
+
+    /// Seed EVERY widget on the currently-mounted document so the
+    /// paint-time overlay ([`super::PreviewSession::overlay_node`], which
+    /// reads `widget_states.get()` non-mutating) surfaces each widget's
+    /// value immediately — without waiting for the next tap/focus to
+    /// lazily seed it. `WidgetStateStore::get_or_init` is idempotent and
+    /// reads bound app-scope values via the loader's `bind:value`
+    /// read-back (`jian_core::widget_state::bound_app_value`): an unbound
+    /// widget seeds its authored prop, and a widget bound to `$state.*`
+    /// carrying a persisted value (e.g. a text input typed on a prior
+    /// screen) seeds THAT value.
+    ///
+    /// Whole-tree generalization of
+    /// `PreviewSession::seed_focused_widget_state`; called only from
+    /// `reconcile`'s screen-switch branch (the entry screen at `enter`
+    /// starts with an empty store where authored == app-scope, so `enter`
+    /// needs no equivalent). Follows the same clone-then-mutate borrow
+    /// discipline: collect the schema clones FIRST (releasing the
+    /// `runtime.document` borrow) before taking `widget_states` mutably.
+    fn seed_all_widget_states(&mut self) {
+        let schemas: Vec<jian_ops_schema::node::PenNode> = match self.runtime.document.as_ref() {
+            Some(doc) => doc
+                .tree
+                .nodes
+                .iter()
+                .map(|(_, node_data)| node_data.schema.clone())
+                .collect(),
+            None => return,
+        };
+        for schema in &schemas {
+            self.runtime
+                .widget_states
+                .get_or_init(schema, &self.runtime.state);
+        }
     }
 
     /// Test-only: the APP MODE screen path currently mounted
