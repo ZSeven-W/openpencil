@@ -60,6 +60,7 @@ mod sub_agent_session;
 mod tcc_selftest;
 mod theme_preset_host;
 mod update_check;
+mod window_resize;
 mod window_state;
 
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
