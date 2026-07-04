@@ -62,6 +62,8 @@ mod scene_helpers;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_app_mode;
+#[cfg(test)]
 mod tests_bindings;
 
 use app_mode::AppMode;
