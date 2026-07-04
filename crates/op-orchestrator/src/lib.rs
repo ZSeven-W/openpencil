@@ -40,6 +40,7 @@ pub(crate) mod validation_fixes_b3;
 mod variable_binding;
 pub mod variables;
 
+pub(crate) mod abandoned_duplicate_roots;
 pub mod app_shell;
 pub mod append;
 pub(crate) mod chip_repair;

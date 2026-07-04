@@ -703,11 +703,31 @@ fn debug_probe_child_height(sink: &dyn DocSink, root_id: &str, tag: &str) {
 }
 
 pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids: &[&str]) {
+    let effective_root_ids: Vec<String> = if root_ids.is_empty() {
+        Vec::new()
+    } else {
+        // Page-global root dedupe must happen before per-root passes so a
+        // deleted sparse scaffold id can be replaced by the kept rich root id.
+        let removal = crate::abandoned_duplicate_roots::remove_abandoned_duplicate_roots(sink);
+        let mut seen = std::collections::BTreeSet::new();
+        root_ids
+            .iter()
+            .map(|root_id| {
+                let root_id = *root_id;
+                removal
+                    .kept_for_removed(root_id)
+                    .unwrap_or(root_id)
+                    .to_string()
+            })
+            .filter(|root_id| seen.insert(root_id.clone()))
+            .collect()
+    };
+
     // Doc-global (not per-root): heal theme-polarity splits in the variable
     // table BEFORE the per-root passes, so every pass that resolves `$refs`
     // (surface discipline, geometry text fills) sees the repaired palette.
     crate::loop_finalize::fix_theme_variable_polarity(sink);
-    for root_id in root_ids {
+    for root_id in &effective_root_ids {
         debug_probe_child_height(sink, root_id, "cleanup-entry");
         // FIRST: whole-root structural restructures, shared by BOTH the
         // orchestrator (per-subtask role passes already ran) and the agentic
@@ -931,6 +951,10 @@ fn has_redundant_shadowed_border(node: &PenNode) -> bool {
 #[cfg(test)]
 #[path = "cleanup_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cleanup_abandoned_duplicate_roots_tests.rs"]
+mod tests_abandoned_duplicate_roots;
 
 #[cfg(test)]
 #[path = "cleanup_mobile_dense_tests.rs"]

@@ -20,6 +20,7 @@
 //!
 //! The Class-A sequence in `subagent.rs` is:
 //!
+//! 0. `remove_abandoned_duplicate_roots` — whole-page top-level repair → INCLUDED
 //! 1. `coalesce_subtask_section`            — SUBTASK-BOUNDARY dependent → EXCLUDED
 //! 2. `role_infer::resolve_forest_roles`    — boundary-independent → INCLUDED
 //! 3. `role_post_pass::post_pass_forest`    — boundary-independent → INCLUDED
@@ -438,6 +439,14 @@ fn ensure_text_fill_forest(nodes: &mut [PenNode], state: &EditorState) {
 /// See the module doc for the included-vs-excluded pass list and the rationale
 /// for excluding the two subtask-boundary-dependent passes.
 pub fn apply_loop_finalize(state: &mut EditorState) {
+    if state.active_children().is_empty() {
+        return;
+    }
+
+    {
+        let mut sink = StateDocSink { state: &mut *state };
+        crate::abandoned_duplicate_roots::remove_abandoned_duplicate_roots(&mut sink);
+    }
     if state.active_children().is_empty() {
         return;
     }
