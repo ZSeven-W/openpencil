@@ -151,6 +151,12 @@ fn dense_row_kind(node: &PenNode) -> Option<DenseRowKind> {
             "tab bar",
             "tab-bar",
             "tabbar",
+            "底部导航",
+            "底部导航栏",
+            "导航栏",
+            "底栏",
+            "标签栏",
+            "底部标签栏",
         ],
     ) {
         return Some(DenseRowKind::Nav);
