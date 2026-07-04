@@ -72,18 +72,58 @@ fn entry_characters<'a>(e: &'a VirtualEntry) -> Option<&'a str> {
         .and_then(|t| t.get_str("characters"))
 }
 
-fn has_fill_override(e: &VirtualEntry) -> bool {
-    any_key(e.overrides, &["fillPaints"])
+/// How discriminating an entry's fill override is. IMAGE paints and
+/// rare (low-opacity) solids identify their target on their own;
+/// ordinary fills only nudge the score.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum FillHint {
+    /// Override carries an IMAGE paint — only image-filled nodes
+    /// (thumbnails, avatars) receive image overrides.
+    Image,
+    /// Override carries a translucent SOLID (opacity < 0.9) — a
+    /// status-chip-style tint that matches its node's authored
+    /// opacity.
+    RareSolid(f64),
+    /// Any other paint — presence is weak evidence.
+    Plain,
+}
+
+pub(super) fn fill_hint(e: &VirtualEntry) -> Option<FillHint> {
+    let paints = e.overrides.and_then(|o| o.get_array("fillPaints"))?;
+    let first = paints.first()?;
+    match first.get_str("type") {
+        Some("IMAGE") => Some(FillHint::Image),
+        Some("SOLID") => {
+            let op = first.get_f64("opacity").unwrap_or(1.0);
+            if op < 0.9 {
+                Some(FillHint::RareSolid(op))
+            } else {
+                Some(FillHint::Plain)
+            }
+        }
+        Some(_) => Some(FillHint::Plain),
+        None => None,
+    }
 }
 
 /// Whether this entry carries data the scorer can actually GROUND an
-/// assignment on: a size, a translation, or text characters. Entries
-/// without one of these (bare `name` / `visible` / `fontSize` /
-/// fill-only tweaks) can never clear [`ASSIGN_THRESHOLD`], so the
-/// caller must route them through the walk-order fallback instead —
-/// otherwise they'd silently vanish. Fill presence and text-key
-/// demands still contribute to SCORING, just not to routing.
+/// assignment on: a size, a translation, text characters, or a
+/// STRONG fill hint (image / rare solid). Entries without one of
+/// these (bare `name` / `visible` / `fontSize` / plain-fill tweaks)
+/// can never clear [`ASSIGN_THRESHOLD`], so the caller must route
+/// them through the walk-order fallback instead — otherwise they'd
+/// silently vanish. Plain fills and text-key demands still
+/// contribute to SCORING, just not to routing.
 pub(super) fn has_signal(e: &VirtualEntry) -> bool {
+    has_hard_signal(e) || matches!(fill_hint(e), Some(FillHint::Image | FillHint::RareSolid(_)))
+}
+
+/// Signals that positively CONTRADICT candidates on a rejection:
+/// size / translation / text content. A rejection of an entry whose
+/// only signal is a fill hint means the hint was merely INAPPLICABLE
+/// (no candidate carries such a fill) — the caller should walk-order
+/// it instead of dropping it.
+pub(super) fn has_hard_signal(e: &VirtualEntry) -> bool {
     entry_size(e).is_some() || entry_translation(e).is_some() || entry_characters(e).is_some()
 }
 
@@ -127,6 +167,37 @@ fn class_affinity(a: u8, b: u8) -> f64 {
 /// Minimum score an assignment needs — pure walk-order priors (max
 /// 0.4) can never clear it; real evidence is required.
 const ASSIGN_THRESHOLD: f64 = 1.5;
+
+/// Whether a node's authored fills satisfy a strong hint.
+fn hint_matches_node(hint: FillHint, figma: &FigValue) -> bool {
+    let node_paints = figma.get_array("fillPaints");
+    match hint {
+        FillHint::Image => node_paints
+            .map(|a| a.iter().any(|p| p.get_str("type") == Some("IMAGE")))
+            .unwrap_or(false),
+        FillHint::RareSolid(op) => node_paints
+            .map(|a| {
+                a.iter().any(|p| {
+                    p.get_str("type") == Some("SOLID")
+                        && (p.get_f64("opacity").unwrap_or(1.0) - op).abs() <= 0.05
+                })
+            })
+            .unwrap_or(false),
+        FillHint::Plain => false,
+    }
+}
+
+/// Whether ANY node in `nodes` satisfies this entry's strong fill
+/// hint. Distinguishes the two rejection flavours for a
+/// fill-hint-only entry: no match anywhere → the hint was
+/// inapplicable (walk-order fallback is safe); a match exists → the
+/// entry LOST a conflict and must stay dropped.
+pub(super) fn hint_matches_any(e: &VirtualEntry, nodes: &[&TreeNode]) -> bool {
+    let Some(hint) = fill_hint(e) else {
+        return false;
+    };
+    nodes.iter().any(|n| hint_matches_node(hint, &n.figma))
+}
 
 fn score(e: &VirtualEntry, node: &TreeNode, node_idx: usize, ratios: (f64, f64)) -> Option<f64> {
     let figma = &node.figma;
@@ -173,6 +244,11 @@ fn score(e: &VirtualEntry, node: &TreeNode, node_idx: usize, ratios: (f64, f64))
                     // clears the threshold, but loses to any closer
                     // candidate in the greedy pass.
                     1.5
+                } else if (dx <= 2.0 && dy <= 100.0) || (dy <= 2.0 && dx <= 100.0) {
+                    // Single-axis drift: justify/space-between moves a
+                    // node along one axis while the other matches
+                    // exactly — still identifying.
+                    1.5
                 } else if d > 150.0 {
                     -1.5
                 } else {
@@ -194,12 +270,34 @@ fn score(e: &VirtualEntry, node: &TreeNode, node_idx: usize, ratios: (f64, f64))
         }
     }
 
-    if has_fill_override(e) {
-        let node_has_fill = figma
-            .get_array("fillPaints")
-            .map(|a| !a.is_empty())
-            .unwrap_or(false);
-        s += if node_has_fill { 0.5 } else { -0.25 };
+    if let Some(hint) = fill_hint(e) {
+        let node_paints = figma.get_array("fillPaints");
+        let node_has_fill = node_paints.map(|a| !a.is_empty()).unwrap_or(false);
+        s += match hint {
+            FillHint::Image => {
+                if hint_matches_node(hint, figma) {
+                    2.5
+                } else {
+                    -1.0
+                }
+            }
+            FillHint::RareSolid(_) => {
+                if hint_matches_node(hint, figma) {
+                    2.0
+                } else if node_has_fill {
+                    0.0
+                } else {
+                    -0.25
+                }
+            }
+            FillHint::Plain => {
+                if node_has_fill {
+                    0.5
+                } else {
+                    -0.25
+                }
+            }
+        };
         evidence = true;
     }
 

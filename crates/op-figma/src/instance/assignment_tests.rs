@@ -218,6 +218,218 @@ fn pooled_seeding_assigns_by_cross_instance_evidence() {
     );
 }
 
+/// Geometry pre-seeding (Test.fig category icon): a sibling instance
+/// with rich derived data (size + transform) proves the pk -> node
+/// mapping; an instance carrying only a plain fill override on the
+/// same pk must reuse that pin instead of its (shifted) walk order.
+#[test]
+fn geometry_seeding_pins_from_rich_sibling_instance() {
+    let make_leaf = |name: &str, lid: u32, w: f32, h: f32, x: f32| {
+        let mut n = sized_leaf(name, lid, w, h);
+        n.figma.set("type", FigValue::Str("RECTANGLE".into()));
+        n.figma.set(
+            "transform",
+            obj(vec![
+                ("m02", FigValue::Float(x)),
+                ("m12", FigValue::Float(0.0)),
+            ]),
+        );
+        n
+    };
+    let make_sym = || {
+        symbol_root(vec![
+            make_leaf("combined", 10, 20.0, 20.0, 0.0),
+            make_leaf("accent", 11, 8.0, 8.0, 11.0),
+        ])
+    };
+    let mut symbol_tree = HashMap::new();
+    symbol_tree.insert("0:0".to_string(), make_sym());
+
+    let make_instance = |lid: u32, ov: Vec<FigValue>, dv: Vec<FigValue>| TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("INSTANCE".into())),
+            ("guid", guid(1, lid)),
+            ("size", size(100.0, 100.0)),
+            (
+                "symbolData",
+                obj(vec![
+                    ("symbolID", guid(0, 0)),
+                    ("symbolOverrides", FigValue::Array(ov)),
+                ]),
+            ),
+            ("derivedSymbolData", FigValue::Array(dv)),
+        ]),
+        children: vec![],
+    };
+    let geom = |pk_lid: u32, w: f32, h: f32, x: f32| {
+        ov_with(
+            vec![guid(9, pk_lid)],
+            vec![
+                ("size", size(w, h)),
+                (
+                    "transform",
+                    obj(vec![
+                        ("m02", FigValue::Float(x)),
+                        ("m12", FigValue::Float(0.0)),
+                    ]),
+                ),
+            ],
+        )
+    };
+    // Rich instance: derived geometry proves 9:50 -> accent (8x8 at
+    // x=11) even though walk order would say combined.
+    let rich = make_instance(
+        100,
+        vec![],
+        vec![geom(50, 8.0, 8.0, 11.0), geom(51, 20.0, 20.0, 0.0)],
+    );
+    let root = TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("FRAME".into())),
+            ("guid", guid(1, 1)),
+        ]),
+        children: vec![rich],
+    };
+    let mut cache: HashMap<String, String> = HashMap::new();
+    seed_assignments_from_instances(&root, &symbol_tree, &mut cache);
+    assert_eq!(
+        cache.get("0:0|9:50").map(String::as_str),
+        Some("1:11"),
+        "rich geometry must pin 9:50 -> accent, cache={cache:?}"
+    );
+
+    // Poor instance: a plain fill on 9:50 (walk order says combined)
+    // must follow the seeded pin onto accent.
+    let sym_b = make_sym();
+    let over_b = vec![ov_with(
+        vec![guid(9, 50)],
+        vec![(
+            "fillPaints",
+            FigValue::Array(vec![obj(vec![("type", FigValue::Str("SOLID".into()))])]),
+        )],
+    )];
+    // 4 bare entries != 3 subtree nodes so Strategy 1's index
+    // mapping (which never consults the cache) stays out of the way.
+    let derived_b = vec![
+        guid_path(vec![guid(9, 50)]),
+        guid_path(vec![guid(9, 51)]),
+        guid_path(vec![guid(9, 52)]),
+        guid_path(vec![guid(9, 53)]),
+    ];
+    let out_b =
+        apply_instance_overrides_cached(&sym_b, Some(&over_b), Some(&derived_b), None, &mut cache);
+    let has_fill = |name: &str| {
+        out_b
+            .iter()
+            .find(|n| n.figma.get_str("name") == Some(name))
+            .and_then(|n| n.figma.get_array("fillPaints"))
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
+    };
+    assert!(
+        has_fill("accent"),
+        "seeded pin routes the plain fill to accent"
+    );
+    assert!(!has_fill("combined"), "walk-order guess must not win");
+}
+
+/// Seeding regression shape (Test.fig orderCard chip): the chip and
+/// its sibling "right" frame TIE on geometry. The instance's fill
+/// override on the same pk is the tie-breaker — seeding without it
+/// pins the pk to the wrong sibling and the cache then poisons every
+/// later conversion.
+#[test]
+fn geometry_seeding_uses_fill_override_as_tie_breaker() {
+    let make_leaf = |name: &str, lid: u32, w: f32, h: f32, x: f32, filled: bool| {
+        let mut n = sized_leaf(name, lid, w, h);
+        n.figma.set("type", FigValue::Str("FRAME".into()));
+        n.figma.set(
+            "transform",
+            obj(vec![
+                ("m02", FigValue::Float(x)),
+                ("m12", FigValue::Float(0.0)),
+            ]),
+        );
+        if filled {
+            n.figma.set(
+                "fillPaints",
+                FigValue::Array(vec![obj(vec![
+                    ("type", FigValue::Str("SOLID".into())),
+                    ("opacity", FigValue::Float(0.12)),
+                ])]),
+            );
+        }
+        n
+    };
+    // Walk order: right(10) first, chip(11) second; geometry ties.
+    let make_sym = || {
+        symbol_root(vec![
+            make_leaf("right", 10, 76.0, 15.0, 244.0, false),
+            make_leaf("chip", 11, 77.0, 19.0, 243.0, true),
+        ])
+    };
+    let mut symbol_tree = HashMap::new();
+    symbol_tree.insert("0:0".to_string(), make_sym());
+
+    let rich = TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("INSTANCE".into())),
+            ("guid", guid(1, 100)),
+            ("size", size(100.0, 100.0)),
+            (
+                "symbolData",
+                obj(vec![
+                    ("symbolID", guid(0, 0)),
+                    (
+                        "symbolOverrides",
+                        FigValue::Array(vec![ov_with(
+                            vec![guid(9, 50)],
+                            vec![(
+                                "fillPaints",
+                                FigValue::Array(vec![obj(vec![
+                                    ("type", FigValue::Str("SOLID".into())),
+                                    ("opacity", FigValue::Float(0.12)),
+                                ])]),
+                            )],
+                        )]),
+                    ),
+                ]),
+            ),
+            (
+                "derivedSymbolData",
+                FigValue::Array(vec![ov_with(
+                    vec![guid(9, 50)],
+                    vec![
+                        ("size", size(77.0, 19.0)),
+                        (
+                            "transform",
+                            obj(vec![
+                                ("m02", FigValue::Float(243.0)),
+                                ("m12", FigValue::Float(0.0)),
+                            ]),
+                        ),
+                    ],
+                )]),
+            ),
+        ]),
+        children: vec![],
+    };
+    let root = TreeNode {
+        figma: obj(vec![
+            ("type", FigValue::Str("FRAME".into())),
+            ("guid", guid(1, 1)),
+        ]),
+        children: vec![rich],
+    };
+    let mut cache: HashMap<String, String> = HashMap::new();
+    seed_assignments_from_instances(&root, &symbol_tree, &mut cache);
+    let pinned = cache.get("0:0|9:50").map(String::as_str);
+    assert!(
+        pinned.is_none() || pinned == Some("1:11"),
+        "a geometry tie must not pin the fill-carrying pk to the unfilled sibling, got {pinned:?}"
+    );
+}
+
 #[test]
 fn pooled_seeding_does_not_overwrite_existing_pin() {
     let sym = symbol_root(vec![
