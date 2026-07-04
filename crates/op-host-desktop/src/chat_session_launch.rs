@@ -240,6 +240,13 @@ fn should_launch_direct_modify(state: &EditorState, user_text: &str) -> bool {
     if op_host_services::chat_intent::requests_new_whole_screen(user_text) {
         return false;
     }
+    // Same intent, but section-add-blind: a full new-page spec that mentions
+    // "section" ("Include a search section…") still reads as new, so a stray
+    // selection can't drag it into modify (measured: a travel-app design with
+    // a node selected fell into run_modify_turn → M3 flat-JSONL → empty).
+    if op_host_services::chat_intent::has_new_screen_creation_signal(user_text) {
+        return false;
+    }
     let keyword_intent = op_host_services::chat_intent::classify_by_keywords(user_text);
     let selected_target_instruction = !state.selection.set.is_empty()
         && keyword_intent != op_host_services::chat_intent::DesignIntent::Chat;

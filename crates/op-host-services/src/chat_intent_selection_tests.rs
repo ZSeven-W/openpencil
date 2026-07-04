@@ -82,3 +82,24 @@ fn selection_bias_does_not_hijack_whole_new_screen_or_chat() {
         DesignIntent::Chat
     );
 }
+
+#[test]
+fn selection_does_not_hijack_english_section_heavy_new_design() {
+    // Regression: "Design a … page" whose spec mentions "section" three times
+    // trips `is_section_add_request`, so `requests_new_whole_screen` is false;
+    // a stray selection then dragged the whole new-design prompt into modify
+    // (measured: M3 flat-JSONL → "Could not parse design nodes"). The
+    // creation-signal veto keeps it New.
+    let provider = Scripted;
+    let state = state_with_selected_card();
+    let prompt = "Design a travel booking mobile app explore page. Include a search section with \"Where to?\" input, date picker chips, and guest count. \"Deals of the Week\" section with 2 featured deal cards. Recently viewed section with 2 compact cards. Bottom tab bar. Warm, inviting design with orange accents.";
+    assert!(
+        crate::chat_intent::has_new_screen_creation_signal(prompt),
+        "creation signal must fire on a design-a-page prompt"
+    );
+    assert_ne!(
+        classify_intent_for_standard_route(&provider, &state, prompt, None),
+        DesignIntent::Modify,
+        "a section-heavy new-design prompt must not be hijacked to modify by a selection"
+    );
+}
