@@ -48,6 +48,37 @@ fn hex_luminance(hex: &str) -> Option<f64> {
     Some(0.299 * r + 0.587 * g + 0.114 * b)
 }
 
+fn hex_saturation(hex: &str) -> Option<f64> {
+    let h = hex.strip_prefix('#').unwrap_or(hex);
+    // Keep this guard in lockstep with `hex_luminance`: byte slicing below is
+    // only valid once malformed / short / non-ASCII strings are rejected.
+    if !h.is_ascii() || h.len() < 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&h[0..2], 16).ok()? as f64 / 255.0;
+    let g = u8::from_str_radix(&h[2..4], 16).ok()? as f64 / 255.0;
+    let b = u8::from_str_radix(&h[4..6], 16).ok()? as f64 / 255.0;
+    let max = r.max(g).max(b);
+    if max == 0.0 {
+        return Some(0.0);
+    }
+    let min = r.min(g).min(b);
+    Some((max - min) / max)
+}
+
+fn preferred_foreground_for_bg(bg_hex: &str) -> &'static str {
+    let Some(lum) = hex_luminance(bg_hex) else {
+        return "#0F172A";
+    };
+    if lum < 0.5 {
+        return "#FFFFFF";
+    }
+    if lum <= 0.72 && hex_saturation(bg_hex).is_some_and(|sat| sat >= 0.5) {
+        return "#FFFFFF";
+    }
+    "#0F172A"
+}
+
 fn fill_array(node: &Value) -> Option<&Vec<Value>> {
     node.get("fill").and_then(Value::as_array)
 }
@@ -222,16 +253,14 @@ fn fix_button_foreground_contrast(node: &mut Value) {
     // icon at `#0F172A` on a `$color-accent` filter button). These tokens are
     // always saturated colours that need a WHITE foreground, so treat the bg
     // as dark and let the same override logic below flip the children.
-    let (bg, lum) = match resolve_color_maybe_ref(&bg_raw) {
-        Some(bg) => match hex_luminance(&bg) {
-            Some(lum) => (bg, lum),
-            None => return, // unparseable bg → can't pick safely, skip
-        },
-        None if is_saturated_accent_token(&bg_raw) => ("#EA580C".to_string(), 0.35),
+    let bg = match resolve_color_maybe_ref(&bg_raw) {
+        Some(bg) if hex_luminance(&bg).is_some() => bg,
+        Some(_) => return, // unparseable bg → can't pick safely, skip
+        None if is_saturated_accent_token(&bg_raw) => "#EA580C".to_string(),
         None => return,
     };
 
-    let fg = if lum < 0.5 { "#FFFFFF" } else { "#0F172A" };
+    let fg = preferred_foreground_for_bg(&bg);
     let fg_fill = solid_fill(fg);
 
     let Some(children) = node.get("children").and_then(Value::as_array) else {
@@ -1996,6 +2025,76 @@ pub fn enforce_surface_color_discipline(nodes: &mut [PenNode]) {
         if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
             *node = new_node;
         }
+    }
+}
+
+#[cfg(test)]
+mod saturated_fill_contrast_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn preferred_foreground_uses_white_for_saturated_mid_tone_fills() {
+        for color in ["#F97316", "#F59E0B", "#22C55E", "#2563EB", "#EA580C"] {
+            assert_eq!(
+                preferred_foreground_for_bg(color),
+                "#FFFFFF",
+                "{color} should use white foreground"
+            );
+        }
+    }
+
+    #[test]
+    fn preferred_foreground_keeps_dark_for_pale_and_bright_fills() {
+        for color in ["#FEF3C7", "#FDE047", "#F1F5F9", "#FFFFFF"] {
+            assert_eq!(
+                preferred_foreground_for_bg(color),
+                "#0F172A",
+                "{color} should use dark foreground"
+            );
+        }
+    }
+
+    #[test]
+    fn raw_hex_saturated_orange_button_flips_dark_child_foreground_to_white() {
+        let mut button = json!({
+            "type": "frame",
+            "role": "icon-button",
+            "fill": [{"type": "solid", "color": "#F97316"}],
+            "children": [{
+                "type": "icon_font",
+                "iconFontName": "sliders",
+                "fill": [{"type": "solid", "color": "#0F172A"}]
+            }]
+        });
+
+        fix_button_foreground_contrast(&mut button);
+
+        assert_eq!(
+            button["children"][0]["fill"],
+            json!([{"type": "solid", "color": "#FFFFFF"}])
+        );
+    }
+
+    #[test]
+    fn pale_amber_button_keeps_dark_child_foreground() {
+        let mut button = json!({
+            "type": "frame",
+            "role": "button",
+            "fill": [{"type": "solid", "color": "#FEF3C7"}],
+            "children": [{
+                "type": "text",
+                "content": "Details",
+                "fill": [{"type": "solid", "color": "#0F172A"}]
+            }]
+        });
+
+        fix_button_foreground_contrast(&mut button);
+
+        assert_eq!(
+            button["children"][0]["fill"],
+            json!([{"type": "solid", "color": "#0F172A"}])
+        );
     }
 }
 
