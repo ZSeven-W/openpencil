@@ -289,10 +289,19 @@ pub fn root_seed_prompt_is_mobile(prompt: &str) -> bool {
     if prompt.contains("手机") {
         return true;
     }
-    prompt
-        .to_ascii_lowercase()
+    let lower = prompt.to_ascii_lowercase();
+    // "web app" / "webapp" name desktop products — a dashboard "web app"
+    // must not be seeded 390x844. Strip the desktop-ish phrases before the
+    // word scan so the bare "app" signal only fires for actual mobile asks.
+    if lower.contains("web app") || lower.contains("webapp") || lower.contains("desktop") {
+        let desktopish = lower.replace("web app", " ").replace("webapp", " ");
+        return desktopish
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|word| matches!(word, "mobile" | "phone" | "ios" | "android"));
+    }
+    lower
         .split(|c: char| !c.is_ascii_alphanumeric())
-        .any(|word| matches!(word, "mobile" | "app" | "phone"))
+        .any(|word| matches!(word, "mobile" | "app" | "phone" | "ios" | "android"))
 }
 
 fn should_track_root_seed_candidate(
@@ -607,16 +616,18 @@ fn extract_from_schema_entry(entry: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn web_app_prompts_are_not_mobile_seeded() {
-        assert!(!super::root_seed_prompt_is_mobile(
+    fn app_prompts_are_mobile_seeded() {
+        assert!(super::root_seed_prompt_is_mobile(
+            "Technical dashboard app for a utilities company"
+        ));
+        assert!(super::root_seed_prompt_is_mobile(
             "Technical dashboard web app for a utilities company"
         ));
-        assert!(!super::root_seed_prompt_is_mobile(
-            "Luxury webapp for managing barbershop clients"
-        ));
-        // A mobile ask that also says "web app" stays mobile.
         assert!(super::root_seed_prompt_is_mobile(
             "mobile companion for our web app"
+        ));
+        assert!(super::root_seed_prompt_is_mobile(
+            "phone booking flow for a travel brand"
         ));
         assert!(super::root_seed_prompt_is_mobile(
             "Design a travel booking mobile app explore page"
