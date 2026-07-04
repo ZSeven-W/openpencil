@@ -35,6 +35,7 @@ pub mod tree;
 // `op_editor_core::EditorState`).
 pub mod layer_context_menu;
 pub mod layer_panel;
+mod layer_panel_hit;
 mod layer_panel_paint;
 #[cfg(test)]
 mod layer_panel_tests;
