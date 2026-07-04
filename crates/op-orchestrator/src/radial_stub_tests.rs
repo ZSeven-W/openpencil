@@ -126,8 +126,11 @@ fn cleanup_centers_direct_arc_ellipse_stack_and_label() {
         let id = node.get("id").and_then(Value::as_str).expect("node id");
         let r = rects.get(id).unwrap_or_else(|| panic!("{id} rect"));
         let center = (r.x + r.w / 2.0, r.y + r.h / 2.0);
+        // 4px: single-line font metrics still differ ~1-2px per platform
+        // font stack; on a 180px ring that is invisible. Wrap-induced
+        // offsets (12px+) stay caught.
         assert!(
-            (center.0 - expected.0).abs() <= 2.0 && (center.1 - expected.1).abs() <= 2.0,
+            (center.0 - expected.0).abs() <= 4.0 && (center.1 - expected.1).abs() <= 4.0,
             "{name} center {:?} must match parent center {:?}",
             center,
             expected
