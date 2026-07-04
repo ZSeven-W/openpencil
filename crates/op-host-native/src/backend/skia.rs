@@ -439,6 +439,26 @@ impl NativeBackend {
         canvas.save()
     }
 
+    /// Begin a Gaussian-blur layer: draws until the matching
+    /// `restore` are captured into an offscreen layer and blurred by
+    /// `sigma` px on restore (Figma "Layer blur"). A non-positive
+    /// sigma degrades to a plain `save`.
+    pub fn push_blur_layer(&self, canvas: &skia_safe::Canvas, sigma: f32) {
+        if sigma <= 0.0 {
+            canvas.save();
+            return;
+        }
+        let filter =
+            skia_safe::image_filters::blur((sigma, sigma), skia_safe::TileMode::Decal, None, None);
+        let mut paint = skia_safe::Paint::default();
+        paint.set_anti_alias(true);
+        if let Some(f) = filter {
+            paint.set_image_filter(f);
+        }
+        let rec = skia_safe::canvas::SaveLayerRec::default().paint(&paint);
+        canvas.save_layer(&rec);
+    }
+
     /// Pop the most recent save.
     pub fn restore(&self, canvas: &skia_safe::Canvas) {
         canvas.restore();

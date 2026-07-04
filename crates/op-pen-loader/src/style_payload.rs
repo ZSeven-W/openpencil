@@ -58,6 +58,7 @@ pub(crate) fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         text_vertical_align: String::new(),
         text_wrap: false,
         effects: Vec::new(),
+        layer_blur: None,
         image_src: None,
         image_fit: None,
         image_adjustments: None,

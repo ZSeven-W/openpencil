@@ -685,7 +685,9 @@ fn node_opacity_dims_drop_shadow_color() {
     let scene = editor_state_to_layout_scene(&state_from(src));
     let effects = &scene.pages[0].children[0].effects;
     assert_eq!(effects.len(), 1, "expected one drop shadow");
-    let Effect::DropShadow(s) = &effects[0];
+    let Effect::DropShadow(s) = &effects[0] else {
+        panic!("expected a drop shadow effect");
+    };
     assert!(
         (s.color.a - 0.5).abs() < 1e-3,
         "node opacity should dim shadow alpha, got {}",
@@ -709,7 +711,9 @@ fn inner_shadow_flag_survives_into_scene() {
     let scene = editor_state_to_layout_scene(&state_from(src));
     let effects = &scene.pages[0].children[0].effects;
     assert_eq!(effects.len(), 1, "expected one shadow");
-    let Effect::DropShadow(s) = &effects[0];
+    let Effect::DropShadow(s) = &effects[0] else {
+        panic!("expected a drop shadow effect");
+    };
     assert!(s.inner, "inner:true must survive into the scene effect");
 }
 

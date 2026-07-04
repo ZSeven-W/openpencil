@@ -37,7 +37,9 @@ fn paint_drop_shadows(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, 
         node.corner_radius * zoom
     };
     for effect in &node.effects {
-        let Effect::DropShadow(s) = effect;
+        let Effect::DropShadow(s) = effect else {
+            continue;
+        };
         // Inset shadows are painted inside the silhouette by the
         // per-kind painter, not here — skip them in the outer pass.
         if s.inner {
@@ -468,6 +470,20 @@ fn paint_node_inner<'a>(
         }
     }
 
+    // Gaussian layer blur (Figma "Layer blur"): capture the node's
+    // whole rendered output — shadows, fill, stroke, children — into
+    // an offscreen layer and blur it on the matching `restore`. The
+    // CSS radius → Skia sigma conversion is `radius / 2`, scaled by
+    // the viewport zoom. Popped at every return path below alongside
+    // the transform save.
+    let blur_sigma = node.effects.iter().find_map(|e| match e {
+        Effect::Blur(b) if b.radius > 0.0 => Some(b.radius * 0.5 * zoom),
+        _ => None,
+    });
+    if let Some(sigma) = blur_sigma {
+        cx.backend.push_blur_layer(sigma);
+    }
+
     // Drop shadows paint behind the node's own fill. Only kinds
     // whose silhouette a rounded rect / ellipse can represent
     // faithfully (Frame / Rect / Ellipse) cast one; Polygon / Line
@@ -613,6 +629,9 @@ fn paint_node_inner<'a>(
         NodeKind::Path => {
             if let Some(d) = node.svg_path.as_deref() {
                 paint_svg_path_node(cx, node, world_rect, zoom, d);
+                if blur_sigma.is_some() {
+                    cx.backend.restore();
+                }
                 if transformed {
                     cx.backend.restore();
                 }
@@ -672,6 +691,9 @@ fn paint_node_inner<'a>(
         }
     }
 
+    if blur_sigma.is_some() {
+        cx.backend.restore();
+    }
     if transformed {
         cx.backend.restore();
     }
@@ -760,7 +782,9 @@ pub(crate) fn paint_svg_path_node(
     // silhouette. Outer shadows on paths stay deferred (no shape-mask
     // drop-shadow path for arbitrary vectors yet).
     for effect in &node.effects {
-        let Effect::DropShadow(s) = effect;
+        let Effect::DropShadow(s) = effect else {
+            continue;
+        };
         if s.inner {
             cx.backend.fill_inner_shadow_svg_path(
                 d,
