@@ -59,6 +59,35 @@ fn variable_row_input_keeps_resume_time_redraws_active() {
 }
 
 #[test]
+fn selected_count_chip_clear_click_clears_canvas_selection() {
+    let mut app = DesktopApp::new(None);
+    app.host.editor_state_mut().selection.set = vec![
+        op_editor_core::NodeId::new("n1"),
+        op_editor_core::NodeId::new("n2"),
+    ];
+    app.host.editor_state_mut().chat.panel_position = Some((100.0, 100.0));
+    let chat = &app.host.editor_state().chat;
+    let chat_rect = op_editor_ui::Rect::xywh(100.0, 100.0, chat.panel_width, chat.panel_height);
+    let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor(app.host.editor_state());
+    let input = panel.input_rect(chat_rect);
+    let clear_point = (0..160)
+        .flat_map(|dx| (0..28).map(move |dy| (dx, dy)))
+        .map(|(dx, dy)| {
+            op_editor_ui::Point2D::new(input.origin.x + dx as f32, input.origin.y + dy as f32)
+        })
+        .find(|point| {
+            panel.hit_test(chat_rect, *point)
+                == Some(op_editor_ui::widgets::AIChatHit::ClearSelection)
+        })
+        .expect("clear-selection hit point");
+
+    assert!(app
+        .host
+        .apply_click(clear_point.x, clear_point.y, 1200.0, 800.0));
+    assert!(app.host.editor_state().selection.set.is_empty());
+}
+
+#[test]
 fn fresh_app_fits_blank_frame_like_ts_canvas_init() {
     let app = DesktopApp::new(None);
     let v = app.host.editor_state().viewport;
