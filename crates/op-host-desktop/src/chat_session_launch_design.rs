@@ -22,34 +22,32 @@ use op_host_services::design_agent_tools::{design_tool_defs, root_seed_prompt_is
 
 use super::clear_fresh_starter_frame_for_design;
 
-/// Recognised explicit opt-OUT values for the design-agent loop.
-fn parse_loop_off(opt: Option<&str>) -> bool {
-    matches!(opt.map(str::trim), Some("0") | Some("false") | Some("off"))
+/// Recognised explicit opt-IN values for the design-agent loop.
+fn parse_loop_on(opt: Option<&str>) -> bool {
+    matches!(opt.map(str::trim), Some("1") | Some("true") | Some("on"))
 }
 
 /// Pure predicate for the design-agent-loop gate.
 ///
-/// The loop is the DEFAULT design path for builtin (API-key) providers —
-/// the G3 A/B measured it ahead of the single-shot orchestrator on audit
-/// cleanliness (11 vs 33 issues over 10 prompt pairs) at comparable wall
-/// time. `OPENPENCIL_DESIGN_AGENT_LOOP=0|false|off` opts back into the
-/// single-shot orchestrator; truthy values and the Settings toggle keep
-/// forcing the loop on (harmless now, kept for muscle memory).
+/// The single-shot ORCHESTRATOR (plan → scaffold → subagents → cleanup) is the
+/// default for builtin (API-key) providers. It injects the mobile status-bar +
+/// chrome and runs the role-resolver post-passes that the loop currently lacks:
+/// a loop-generated mobile screen shipped with NO status bar and a degraded
+/// node vocabulary (no path/rectangle/text_input), while the orchestrator (used
+/// by CLI providers) produced a polished screen for the same model. So the loop
+/// is OPT-IN until it grows the same scaffold chrome — enable it via the
+/// Settings "Experimental features" toggle or `OPENPENCIL_DESIGN_AGENT_LOOP=1|true|on`.
 ///
 /// Kept free of I/O so it is unit-testable without env-var flakiness.
 pub fn loop_enabled(experimental: bool, env: Option<&str>) -> bool {
-    if parse_loop_off(env) {
-        return false;
-    }
-    let _ = experimental;
-    true
+    experimental || parse_loop_on(env)
 }
 
 /// Returns true when the design-agent loop should run for this turn.
 ///
-/// Default ON; the `OPENPENCIL_DESIGN_AGENT_LOOP` env var is the explicit
-/// opt-out back to the single-shot orchestrator (CLI providers never reach
-/// this gate — they stay on the orchestrator path in `launch_if_pending`).
+/// Default OFF (orchestrator); the loop is opt-in via the Settings experimental
+/// toggle or `OPENPENCIL_DESIGN_AGENT_LOOP=1|true|on`. (CLI providers never reach
+/// this gate — they stay on the orchestrator path in `launch_if_pending`.)
 pub(super) fn design_agent_loop_enabled(state: &op_editor_core::EditorState) -> bool {
     loop_enabled(
         state.editor_ui.agent_settings.experimental_features_enabled,
@@ -231,12 +229,12 @@ mod tests {
         );
     }
 
-    // ── loop_enabled OR-gate: 4 combinations ──────────────────────────────
+    // ── loop_enabled opt-in gate: default orchestrator, loop is opt-in ─────
     #[test]
-    fn loop_enabled_both_off_is_false() {
+    fn loop_enabled_both_off_is_orchestrator() {
         assert!(
-            loop_enabled(false, None),
-            "loop is the default now — no toggle, no env, still on"
+            !loop_enabled(false, None),
+            "no toggle, no env → default orchestrator (loop is opt-in until it grows scaffold chrome)"
         );
     }
 
@@ -244,25 +242,24 @@ mod tests {
     fn loop_enabled_experimental_on_is_true() {
         assert!(
             loop_enabled(true, None),
-            "experimental=true with no env var must yield true"
+            "the Settings experimental toggle opts into the loop"
         );
     }
 
     #[test]
     fn loop_enabled_env_on_is_true() {
-        assert!(
-            loop_enabled(false, Some("1")),
-            "experimental=false but env=1 must yield true"
-        );
+        assert!(loop_enabled(false, Some("1")), "env=1 opts into the loop");
+        assert!(loop_enabled(false, Some("true")));
+        assert!(loop_enabled(false, Some(" on ")));
     }
 
     #[test]
-    fn loop_enabled_env_opt_out_wins() {
-        assert!(
-            !loop_enabled(true, Some("0")),
-            "the explicit env opt-out returns the single-shot orchestrator"
-        );
+    fn loop_enabled_non_truthy_env_stays_orchestrator() {
+        assert!(!loop_enabled(false, Some("0")));
         assert!(!loop_enabled(false, Some("false")));
-        assert!(!loop_enabled(false, Some(" off ")));
+        assert!(!loop_enabled(false, Some("off")));
+        assert!(!loop_enabled(false, Some("garbage")));
+        // The experimental toggle opts in regardless of a non-truthy env value.
+        assert!(loop_enabled(true, Some("0")));
     }
 }
