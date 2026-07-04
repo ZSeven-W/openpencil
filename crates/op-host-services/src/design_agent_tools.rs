@@ -616,6 +616,18 @@ fn extract_from_schema_entry(entry: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn web_app_prompts_are_not_mobile_seeded() {
+        // A dashboard "web app" is a desktop product — it must not be
+        // seeded 390x844 (regression: the bare "app" word-match did).
+        assert!(!super::root_seed_prompt_is_mobile(
+            "Technical dashboard web app for a utilities company"
+        ));
+        assert!(!super::root_seed_prompt_is_mobile(
+            "Luxury webapp for managing barbershop clients"
+        ));
+    }
+
+    #[test]
     fn app_prompts_are_mobile_seeded() {
         assert!(super::root_seed_prompt_is_mobile(
             "Technical dashboard app for a utilities company"
