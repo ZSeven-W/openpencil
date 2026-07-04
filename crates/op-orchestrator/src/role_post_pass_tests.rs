@@ -102,10 +102,13 @@ fn button_transparent_fill_skipped() {
 }
 
 #[test]
-fn button_unresolved_ref_bg_skipped() {
-    // $color-accent doesn't resolve to a hex in the Rust context → skip.
+fn button_unresolved_non_accent_ref_bg_skipped() {
+    // A non-accent design token can't resolve to a hex here AND isn't a known
+    // saturated-accent family, so the pass can't pick a safe fg → skip. (An
+    // accent token like $color-accent now DOES flip children to white — see
+    // `accent_token_button_flips_dark_icon_to_white`.)
     let mut btn = json!({
-        "type":"frame","role":"button","fill":[{"type":"solid","color":"$color-accent"}],
+        "type":"frame","role":"button","fill":[{"type":"solid","color":"$color-surface-raised"}],
         "children":[{"type":"text","id":"t","content":"Go"}]
     });
     fix_button_foreground_contrast(&mut btn);
