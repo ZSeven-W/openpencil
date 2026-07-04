@@ -41,17 +41,18 @@ fn cursor_move_tracks_chat_footer_buttons() {
             "gpt-5",
             "GPT-5",
         ));
-    host.editor_state.chat.set_input_text("design a login page");
+    host.editor_state.chat.set_input_text("design");
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     let chat_rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    // Footer right cluster (#38/#42): ⚡ speed | 📎 attach | 🎨 palette | ↑ send,
-    // laid out right-to-left. The attach icon centres at `size.x - 88` (the old
-    // `-68` now lands on the 🎨 palette icon that was added to the cluster).
+    // Footer right cluster: ⚡ speed | 📎 attach | ↑ send, laid out
+    // right-to-left (the inert palette slot is gone). The attach icon
+    // centres at `size.x - 60` (send centre ≈ -30). The input text must
+    // stay single-line — a wrapped line lifts the whole footer band.
     let attach = Point2D::new(
-        chat_rect.origin.x + chat_rect.size.x - 88.0,
+        chat_rect.origin.x + chat_rect.size.x - 60.0,
         chat_rect.origin.y + chat_rect.size.y - 19.0,
     );
     let send = Point2D::new(
