@@ -7,7 +7,6 @@
 //! - `node_count == 0` —— 零节点失败,调用方应停止后续 subtask;
 //! - `node_count > 0`(`error` 可带软错误)—— 部分产出,继续后续。
 
-use crate::parse::parse_nodes;
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::prompt::build_subagent_prompt;
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, SubtaskOutcome};
@@ -25,9 +24,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 ///   8-skill set when the model is Basic tier.  Pass `false` for the
 ///   first attempt; pass `true` on the second attempt of the retry
 ///   ladder (Task C3).
-/// * `minimal_skills` — Strip the system prompt to only
-///   `schema`+`jsonl-format` (last-ditch fallback).  Pass `false` for
-///   the first two attempts; pass `true` on the third attempt (Task C3).
+/// * `minimal_skills` — Strip the skill set to only `schema`; the output
+///   protocol remains script-gen via `SCRIPT_FORMAT`. Pass `false` for the
+///   first two attempts; pass `true` on the third attempt (Task C3).
 #[allow(clippy::too_many_arguments)]
 pub async fn run_subtask(
     subtask: &Subtask,
@@ -164,41 +163,22 @@ pub(crate) async fn run_subtask_with_reveal_at(
         "subagent text collected"
     );
 
-    // Script-gen is THE protocol on the full first attempt; the reduced /
-    // minimal retry rungs teach raw JSONL, so parsing falls back to
-    // `parse_nodes` there (matching the prompt in build_subagent_prompt).
+    // Script-gen is THE protocol on every subagent rung. Reduced/minimal
+    // retries narrow the skill set only; they never switch to flat JSONL.
     // `program_state` carries any doc-root `state` script-gen's underlying
     // `run_program_to_forest` hoisted on the SCRATCH document it builds the
-    // forest against (see `program_gen`'s module doc) — the flat-JSONL rung
-    // has no such hoist, so it stays an empty schema there.
-    let script_on = !reduced_complexity && !minimal_skills;
-    let (mut nodes, program_state) = if script_on {
-        match crate::script_gen::parse_script(&text) {
-            Ok(n) => n,
-            Err(e) => {
-                tracing::warn!(
-                    subtask = %subtask.id,
-                    text_len = text.len(),
-                    thinking_len,
-                    raw = %text,
-                    "subagent script-gen parse failed"
-                );
-                return fail(e);
-            }
-        }
-    } else {
-        match parse_nodes(&text) {
-            Ok(n) => (n, jian_ops_schema::state::StateSchema::new()),
-            Err(e) => {
-                tracing::warn!(
-                    subtask = %subtask.id,
-                    text_len = text.len(),
-                    thinking_len,
-                    raw = %text,
-                    "subagent parse failed"
-                );
-                return fail(e.to_string());
-            }
+    // forest against (see `program_gen`'s module doc).
+    let (mut nodes, program_state) = match crate::script_gen::parse_script(&text) {
+        Ok(n) => n,
+        Err(e) => {
+            tracing::warn!(
+                subtask = %subtask.id,
+                text_len = text.len(),
+                thinking_len,
+                raw = %text,
+                "subagent script-gen parse failed"
+            );
+            return fail(e);
         }
     };
     if is_blank_container_forest(&nodes) {
@@ -762,15 +742,11 @@ mod tests {
         }
     }
 
-    // Raw flat/nested-children JSONL fixture — only the reduced-complexity
-    // retry rung parses this (script-gen is the default on the full attempt;
-    // see `run_subtask_reduced_complexity_falls_back_to_flat_jsonl` below).
-    const NODE_JSON: &str = r#"[{"type":"frame","id":"hero-1","name":"Card","x":0,"y":0,"width":1200,"height":200,"children":[{"type":"text","id":"hero-title","content":"Hero","fontSize":18}]}]"#;
-    // Script-gen equivalent of `NODE_JSON` — a single I(null, {...}) call whose
-    // node object nests its children inline (batch_design's insert accepts a
-    // whole subtree per call). Authored ids are dropped: the batch_design
-    // executor reassigns fresh ids to every inserted node regardless, so tests
-    // that use this constant must not assert on literal id strings.
+    // A single I(null, {...}) call whose node object nests its children inline
+    // (batch_design's insert accepts a whole subtree per call). Authored ids
+    // are dropped: the batch_design executor reassigns fresh ids to every
+    // inserted node regardless, so tests that use this constant must not assert
+    // on literal id strings.
     const NODE_SCRIPT: &str = r#"I(null, {"type":"frame","name":"Card","x":0,"y":0,"width":1200,"height":200,"children":[{"type":"text","content":"Hero","fontSize":18}]});"#;
 
     #[test]
@@ -1114,13 +1090,12 @@ mod tests {
         ));
     }
 
-    /// Reduced-complexity retry rung teaches raw JSONL, NOT script-gen — this is
-    /// a regression guard for the protocol collapse: `subagent::run_subtask`
-    /// must route parsing to `parse_nodes` there (matching `build_subagent_prompt`)
-    /// and the flat path must still build a forest end-to-end.
+    /// Reduced-complexity retry rung still uses script-gen; it narrows the
+    /// skill set only. The parser must therefore accept the same nested
+    /// `I(parent, node)` forest as the full attempt.
     #[test]
-    fn run_subtask_reduced_complexity_falls_back_to_flat_jsonl() {
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_JSON.into())]);
+    fn run_subtask_reduced_complexity_still_uses_script_gen_nested_forest() {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(NODE_SCRIPT.into())]);
         let mut sink = VecDocSink::new();
         let outcome = block_on(run_subtask(
             &subtask(),
@@ -1137,10 +1112,18 @@ mod tests {
         let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
             panic!("expected InsertSubtree, got {:?}", sink.applied.last());
         };
-        // The flat-JSONL path keeps the model-authored id verbatim (no
-        // batch_design remap), unlike script-gen — proving the two retry
-        // rungs still diverge as designed.
-        assert_eq!(nodes[0].id_str(), "hero-1");
+        assert_eq!(nodes.len(), 1);
+        let children = nodes[0].children().expect("script-gen frame has children");
+        assert_eq!(children.len(), 1);
+        assert!(
+            !nodes[0].id_str().is_empty(),
+            "script-gen must assign a fresh root id"
+        );
+        assert_ne!(
+            nodes[0].id_str(),
+            "hero-1",
+            "reduced retry must not use the retired flat-JSONL parser"
+        );
     }
 
     #[test]

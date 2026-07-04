@@ -116,7 +116,7 @@ mod tests {
     fn generation_format_emits_text_input_widgets() {
         // Phase 1: form fields must be generated as real `text_input`
         // nodes (interactive in preview), not `role=input` mockup frames.
-        // The jsonl-format skill's node-type list must mention text_input.
+        // The generation schema's node-type list must mention text_input.
         let mentions = get_skills_by_phase(Phase::Generation)
             .iter()
             .any(|s| s.content.contains("text_input"));

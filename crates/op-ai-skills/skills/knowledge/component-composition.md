@@ -56,30 +56,13 @@ const btnA = I(row, {"type":"ref","ref":"shadcn-btn-primary","descendants":{"sha
 const btnB = I(row, {"type":"ref","ref":"shadcn-btn-secondary","descendants":{"shadcn-btn-secondary-label":{"content":"Cancel"}}});
 ```
 
-## Fallback dialect — flat `_parent` JSONL (retry rungs only)
-
-script-gen is not always active: the reduced-complexity / minimal-skills retry
-rungs fall back to a flat, newline-delimited JSON protocol instead (one
-`{"_parent": ...}` node object per line, no script sandbox). If THAT is your
-active output protocol for this attempt, spell the ref the JSONL way: a ref is
-ONE line like any other node — give it an `id`, set its `_parent` to the
-container it belongs in, and `ref:"<componentId>"`. It needs no `children`;
-`descendants` works identically to the script-gen form. Never mix the two
-dialects in one output.
-
-```json
-{"_parent":"row","id":"btn-a","type":"ref","ref":"shadcn-btn-primary","descendants":{"shadcn-btn-primary-label":{"content":"Save"}}}
-{"_parent":"row","id":"btn-b","type":"ref","ref":"shadcn-btn-secondary","descendants":{"shadcn-btn-secondary-label":{"content":"Cancel"}}}
-```
-
 ## Rules
 
 - The `ref` value MUST be a component id from the AVAILABLE COMPONENTS list.
   Never invent an id; if nothing matches, build the element normally.
-- Match the dialect to your ACTIVE output protocol: script-gen's
-  `I(parent, {"type":"ref",...})` by default, the flat `{"_parent":...,
-  "type":"ref",...}` JSONL line only on a reduced-complexity/minimal-skills
-  retry rung. Never mix them in the same output.
+- Use script-gen's `I(parent, {"type":"ref",...})` form on every subagent
+  generation attempt. Reduced-complexity and minimal-skills retries narrow the
+  skill set only; they do not switch output protocol.
 - A `ref` node does NOT take its own visual props (fill / cornerRadius /
   padding) — those live on the master. Customize only via `descendants`.
 - Keys in `descendants` MUST be ids that exist inside the chosen master.

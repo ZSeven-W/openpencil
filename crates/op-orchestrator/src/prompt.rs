@@ -614,17 +614,12 @@ const COMPONENT_CATEGORY_ORDER: &[&str] = &[
 /// `component-composition` skill.
 ///
 /// `script_on` picks which of the two ref dialects the trailing instruction
-/// teaches — it MUST match the output protocol the rest of this prompt uses
-/// (the same `script_on` that selects `SCRIPT_FORMAT` vs `NODE_FORMAT` below):
-/// - `true` (script-gen, THE default protocol on the full first attempt) —
-///   a single `I(<containerBinding>, {"type":"ref", ...})` call. There is no
-///   hand-written `id` and no `_parent`: ids remap at parse, and a bare
-///   `{"_parent":...}` line is never recorded by the script sandbox (only
-///   `I(...)` calls are), so teaching the flat form here would make refs
-///   silently vanish under script-gen.
-/// - `false` (flat `_parent` JSONL — the reduced-complexity / minimal-skills
-///   retry rungs, matching `NODE_FORMAT`) — a single
-///   `{"_parent":...,"id":...,"type":"ref", ...}` line, as taught today.
+/// teaches. The subagent path always passes `true`; `false` is retained only
+/// for direct core callers/tests that still need the legacy NODE dialect.
+/// - `true` (script-gen) — a single
+///   `I(<containerBinding>, {"type":"ref", ...})` call.
+/// - `false` (legacy flat `_parent` JSONL) — a single
+///   `{"_parent":...,"id":...,"type":"ref", ...}` line.
 fn available_components_manifest(components: &ComponentLibrary, script_on: bool) -> Option<String> {
     if components.is_empty() {
         return None;
@@ -690,10 +685,9 @@ fn available_components_manifest(components: &ComponentLibrary, script_on: bool)
 ///   `elements` and other non-essential skills).  For Standard/Full
 ///   tier this is a no-op.  Port of the `reducedComplexity` param in
 ///   `executeSubAgent` (orchestrator-sub-agent.ts:349).
-/// * `minimal_skills` — When `true`, strips the system prompt down to
-///   only `schema` + `jsonl-format` (last-ditch fallback for models
-///   whose safety scanner times out on the full prompt).  Port of the
-///   `minimalSkills` param in `executeSubAgent` (lines 428-431).
+/// * `minimal_skills` — When `true`, strips the skill set down to only
+///   `schema` (last-ditch fallback for models whose safety scanner times out
+///   on the full prompt). The output protocol still comes from `SCRIPT_FORMAT`.
 /// * `components` — the document's reusable-component registry. When
 ///   non-empty it injects an AVAILABLE COMPONENTS manifest + raises the
 ///   `hasReusableComponents` flag (loads the `component-composition`
@@ -707,10 +701,9 @@ pub fn build_subagent_prompt(
     minimal_skills: bool,
     components: &ComponentLibrary,
 ) -> (CallRequest, SkillLoadReport) {
-    // Script-gen is THE protocol on the full first attempt, for every model —
-    // the reduced/minimal retry rungs teach raw JSONL instead (and
-    // `subagent::run_subtask` routes parsing to match).
-    let script_on = !reduced_complexity && !minimal_skills;
+    // Script-gen is THE subagent protocol on every rung. Retry flags narrow
+    // the skill set only; they never switch the output protocol.
+    let script_on = true;
     build_subagent_prompt_core(
         subtask,
         plan,
@@ -896,11 +889,10 @@ fn build_subagent_prompt_core(
             );
             (filtered, agent_ctx.report, filter_drops)
         };
-    // Script-gen REPLACES the raw-JSONL output format — carrying the
-    // `jsonl-format` skill alongside it feeds the model two contradictory
-    // output contracts (e2e showed glm then emitting a half-program/half-
-    // `_parent` blob with unclosed objects). Drop it so SCRIPT_FORMAT governs
-    // alone.
+    // Script-gen REPLACES the raw-JSONL output format — carrying a JSONL skill
+    // alongside it feeds the model two contradictory output contracts. Keep
+    // this guard even though the JSONL skills are no longer mounted by the
+    // generation registry.
     if script_on {
         filtered.retain(|s| {
             s.skill_name() != "jsonl-format" && s.skill_name() != "jsonl-format-simplified"
@@ -913,10 +905,9 @@ fn build_subagent_prompt_core(
         .collect::<Vec<_>>()
         .join("\n\n");
     system_prompt.push_str("\n\n");
-    // Flat `_parent` for ALL tiers — validated that Basic-tier models
-    // (MiniMax M2.7/M3 are Basic) emit clean `_parent` trees with it. The
-    // `jsonl-format` + `jsonl-format-simplified` skills both teach `_parent`,
-    // so this agrees with whichever skill the tier loads (no contradiction).
+    // The public subagent path always appends SCRIPT_FORMAT. The NODE_FORMAT
+    // branch is retained for direct core callers/tests that intentionally
+    // exercise the legacy dialect.
     system_prompt.push_str(if script_on {
         SCRIPT_FORMAT
     } else {
@@ -972,10 +963,9 @@ fn build_subagent_prompt_core(
         .map(|instruction| format!("{instruction}\n\n"))
         .unwrap_or_default();
 
-    // Two constraints differ by output protocol: script-gen has the model call
-    // `I(...)` to build a JS program with a system-assigned root binding; the
-    // raw-JSONL fallback (reduced/minimal retry rungs) has the model author
-    // its own root frame + ids.
+    // Two constraints differ by output protocol. The public subagent path uses
+    // the script-gen branch; the raw-JSONL branch is legacy-only for direct
+    // core callers.
     let (root_rule, nesting_rule, output_rule) = if script_on {
         (
             format!("Create EXACTLY ONE section root frame first: const sec = I(null, {{type:\"frame\", name:\"{}\", width:\"fill_container\", height:\"fit_content\", layout:\"vertical\"}}); build everything else by calling I(parent, {{...}}) with `sec` or a returned id as parent. NEVER set a fixed pixel height on the root.", subtask.label),
