@@ -265,6 +265,7 @@ impl LayerPanel {
             r.layers_rows_top,
             r.layers.offset,
             r.layers_view_h,
+            LAYER_ROW_HEIGHT,
             point.y,
         ) {
             let item = &self.items[index];
@@ -341,6 +342,7 @@ impl LayerPanel {
             r.pages_rows_top,
             r.pages.offset,
             r.pages_view_h,
+            PAGE_ROW_HEIGHT,
             point.y,
         ) {
             let page = &self.pages[index];
@@ -371,6 +373,7 @@ impl LayerPanel {
             r.layers_rows_top,
             r.layers.offset,
             r.layers_view_h,
+            LAYER_ROW_HEIGHT,
             point.y,
         ) {
             let item = &self.items[index];
@@ -507,7 +510,12 @@ impl Widget for LayerPanel {
             origin: Point2D::new(rect.origin.x, r.pages_rows_top),
             size: Point2D::new(rect.size.x, r.pages_view_h),
         });
-        for index in visible_row_range(self.pages.len(), r.pages.offset, r.pages_view_h) {
+        for index in visible_row_range(
+            self.pages.len(),
+            r.pages.offset,
+            r.pages_view_h,
+            PAGE_ROW_HEIGHT,
+        ) {
             let page = &self.pages[index];
             y = r.pages_rows_top - r.pages.offset + index as f32 * PAGE_ROW_HEIGHT;
             let row = Rect {
@@ -595,7 +603,12 @@ impl Widget for LayerPanel {
             origin: Point2D::new(rect.origin.x, r.layers_rows_top),
             size: Point2D::new(rect.size.x, r.layers_view_h),
         });
-        for index in visible_row_range(self.items.len(), r.layers.offset, r.layers_view_h) {
+        for index in visible_row_range(
+            self.items.len(),
+            r.layers.offset,
+            r.layers_view_h,
+            LAYER_ROW_HEIGHT,
+        ) {
             let item = &self.items[index];
             y = r.layers_rows_top - r.layers.offset + index as f32 * LAYER_ROW_HEIGHT;
             let row = Rect {
