@@ -49,8 +49,7 @@ const id = I(parent, { ...node... });   // inserts a node, RETURNS its new id (a
 
 - `parent` is `null` for a top-level root, or an id returned by an earlier `I(...)` call — a node is a child of X only if you call `I(X, {...})`.
 - Use REAL JavaScript — `const`/`let`, arrays of data, `for...of` / `.forEach` loops — to generate repeated structure (table rows, nav items, cards, list items) by looping over a data array instead of copy-pasting near-identical `I(...)` calls. PREFER a loop over hand-repeated calls.
-- `K(kitComponentId, parent, overrides)` is also bound inside a script: it records a kit instantiation and RETURNS the new id binding. Use it for standard UI controls from the built-in kit catalog below.
-- `C`, `U`, `D`, `M`, `R`, `G`, and `console` are bound inside a script but are harmless NO-OP stubs there — they do not copy, update, delete, move, replace, or fill anything, and `console.log`/`warn`/`error` are silently swallowed. `I(parent, obj)` and `K(kitComponentId, parent, overrides)` are the only calls that record operations inside a script.
+- `C`, `U`, `D`, `M`, `R`, `G`, and `console` are bound inside a script but are harmless NO-OP stubs there — they do not copy, update, delete, move, replace, or fill anything, and `console.log`/`warn`/`error` are silently swallowed. `I(parent, obj)` is the ONLY call with real effect inside a script.
 - Each node object starts with `type` (`"frame"`/`"text"`/`"rectangle"`/`"ellipse"`/`"path"`/`"icon_font"`) and uses camelCase props (`cornerRadius`, `fontSize`, `fontWeight`, `justifyContent`, `alignItems`, `clipContent`). Do NOT set `x`/`y` on children inside layout frames.
 
 Example:
@@ -88,7 +87,6 @@ One operation per line. Bindings let later lines reference nodes created earlier
 | Operation | Syntax | Effect |
 |-----------|--------|--------|
 | Insert | `name=I(parent, {...node...})` | Create a new node. `parent` is a node id, a binding from this batch, or `document`/`root`. |
-| Kit | `name=K("shadcn/btn-primary", parent, {overrides})` | Instantiate a built-in UI kit component under `parent`. Prefer this for standard buttons, inputs, cards, nav, badges, tables, and feedback components. |
 | Update | `U(idOrPath, {...updates...})` | Update fields on an existing node. |
 | Copy | `C(id, parent, {overrides})` | Copy a node to a new parent with optional overrides. Returns a **new** id. After a copy always reference the new id from the result — NEVER the old descendant ids. |
 | Replace | `R(idOrPath, {...node...})` | Replace a node in place. |
@@ -138,47 +136,6 @@ Any avatar, profile photo, client/user thumbnail, product image, hero, or logo s
 ### Reuse design-system components
 
 Prefer components found in `get_editor_state` components / retrieved via `batch_get` over rebuilding primitives. Use `$variable` references over hardcoded color hex values or numeric sizes.
-
-Prefer `K(...)` for standard controls before hand-drawing primitives. Kit ids use `starter/<id>` and `shadcn/<short-id>`; for shadcn omit the internal `shadcn-` prefix. Use `overrides.descendants` for precise child edits when you know the template child id; `label` or `text` sets the first text label.
-
-Built-in kit catalog:
-- `starter/btn-primary` Primary Button — simple CTA button.
-- `starter/input-text` Text Input — basic text field.
-- `starter/card-basic` Card — generic content surface.
-- `starter/nav-bar` Nav Bar — simple header navigation.
-- `starter/divider` Divider — horizontal separator.
-- `starter/badge` Badge — small status label.
-- `shadcn/btn-primary` Primary Button — main CTA/action.
-- `shadcn/btn-secondary` Secondary Button — alternate action.
-- `shadcn/btn-ghost` Ghost Button — low-emphasis text action.
-- `shadcn/btn-destructive` Destructive Button — danger/delete action.
-- `shadcn/input-text` Text Input — form text field.
-- `shadcn/input-textarea` Textarea — multiline input.
-- `shadcn/input-checkbox` Checkbox — boolean form control.
-- `shadcn/input-toggle` Toggle Switch — on/off setting.
-- `shadcn/input-radio` Radio Button — single-choice option.
-- `shadcn/card-basic` Basic Card — bordered content card.
-- `shadcn/card-stats` Stats Card — KPI/metric card.
-- `shadcn/card-image` Image Card — media card shell.
-- `shadcn/nav-bar` Navbar — top navigation/header.
-- `shadcn/tab-bar` Tab Bar — segmented navigation.
-- `shadcn/breadcrumb` Breadcrumb — path navigation.
-- `shadcn/alert-banner` Alert Banner — inline notification.
-- `shadcn/badge` Badge — tag/chip/status pill.
-- `shadcn/avatar` Avatar — user/profile mark.
-- `shadcn/divider` Divider — line separator.
-- `shadcn/btn-outline` Outline Button — bordered action.
-- `shadcn/btn-link` Link Button — inline link action.
-- `shadcn/input-select` Select — dropdown picker.
-- `shadcn/input-slider` Slider — range control.
-- `shadcn/dialog` Dialog — modal shell.
-- `shadcn/dropdown-menu` Dropdown Menu — menu/popover.
-- `shadcn/pagination` Pagination — pager controls.
-- `shadcn/toast` Toast — temporary notification.
-- `shadcn/progress` Progress — loading/progress bar.
-- `shadcn/skeleton` Skeleton — loading placeholder.
-- `shadcn/tooltip` Tooltip — short hover hint.
-- `shadcn/table` Table — data grid/table shell.
 
 ### Language consistency
 
