@@ -118,6 +118,27 @@ fn resolve_color_maybe_ref(color: &str) -> Option<String> {
     }
 }
 
+/// A design-system token that always binds to a saturated, mid-dark colour
+/// needing a WHITE foreground (accent / primary brand colour + the saturated
+/// state colours). `$color-warning` is deliberately excluded — it's often a
+/// light amber that reads better with a dark foreground. Matches with or
+/// without a trailing shade suffix (`$color-accent`, `$color-primary-600`).
+fn is_saturated_accent_token(color: &str) -> bool {
+    let t = color.trim().trim_start_matches('$').to_ascii_lowercase();
+    const ROOTS: &[&str] = &[
+        "color-accent",
+        "color-primary",
+        "color-danger",
+        "color-error",
+        "color-success",
+    ];
+    ROOTS.iter().any(|root| {
+        t == *root
+            || t.strip_prefix(root)
+                .is_some_and(|rest| rest.starts_with('-'))
+    })
+}
+
 /// |Δluminance| < 0.5 → too close, needs a contrast override (port of
 /// `needsLuminanceContrastOverride`).
 fn needs_luminance_contrast_override(fg: &str, bg: &str) -> bool {
@@ -194,11 +215,20 @@ fn fix_button_foreground_contrast(node: &mut Value) {
     let Some(bg_raw) = get_first_solid_color(node) else {
         return;
     };
-    let Some(bg) = resolve_color_maybe_ref(&bg_raw) else {
-        return;
-    };
-    let Some(lum) = hex_luminance(&bg) else {
-        return; // unparseable bg → can't pick safely, skip
+    // A brand-accent token (`$color-accent` / `$color-primary`) binds to a
+    // concrete hex only at render time, so `resolve_color_maybe_ref` can't
+    // read its luminance here and the pass used to bail — leaving the model's
+    // default-dark icon on an orange accent button (measured: a `sliders`
+    // icon at `#0F172A` on a `$color-accent` filter button). These tokens are
+    // always saturated colours that need a WHITE foreground, so treat the bg
+    // as dark and let the same override logic below flip the children.
+    let (bg, lum) = match resolve_color_maybe_ref(&bg_raw) {
+        Some(bg) => match hex_luminance(&bg) {
+            Some(lum) => (bg, lum),
+            None => return, // unparseable bg → can't pick safely, skip
+        },
+        None if is_saturated_accent_token(&bg_raw) => ("#EA580C".to_string(), 0.35),
+        None => return,
     };
 
     let fg = if lum < 0.5 { "#FFFFFF" } else { "#0F172A" };

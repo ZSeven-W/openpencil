@@ -17,6 +17,50 @@ fn button_dark_bg_gets_white_text() {
 }
 
 #[test]
+fn accent_token_button_flips_dark_icon_to_white() {
+    // Regression: a `$color-accent` (or `$color-primary`) button binds its bg
+    // hex only at render time, so the contrast pass could not read its
+    // luminance and left the model's default-dark icon on the orange accent.
+    let mut btn = json!({
+        "type":"frame","role":"icon-button",
+        "fill":[{"type":"solid","color":"$color-accent"}],
+        "children":[{"type":"icon_font","iconFontName":"sliders",
+            "fill":[{"type":"solid","color":"#0F172A"}]}]
+    });
+    fix_button_foreground_contrast(&mut btn);
+    assert_eq!(
+        btn["children"][0]["fill"],
+        json!([{"type":"solid","color":"#FFFFFF"}]),
+        "dark icon on an accent-token button must flip to white"
+    );
+
+    // An already-light icon on the accent stays put.
+    let mut ok = json!({
+        "type":"frame","role":"icon-button",
+        "fill":[{"type":"solid","color":"$color-primary"}],
+        "children":[{"type":"icon_font","fill":[{"type":"solid","color":"#FFFFFF"}]}]
+    });
+    fix_button_foreground_contrast(&mut ok);
+    assert_eq!(
+        ok["children"][0]["fill"],
+        json!([{"type":"solid","color":"#FFFFFF"}])
+    );
+
+    // A NON-accent token bg (surface) still can't be resolved → pass skips,
+    // no accidental white on a light button.
+    let mut surface = json!({
+        "type":"frame","role":"icon-button",
+        "fill":[{"type":"solid","color":"$color-surface"}],
+        "children":[{"type":"icon_font","fill":[{"type":"solid","color":"#0F172A"}]}]
+    });
+    fix_button_foreground_contrast(&mut surface);
+    assert_eq!(
+        surface["children"][0]["fill"],
+        json!([{"type":"solid","color":"#0F172A"}])
+    );
+}
+
+#[test]
 fn button_light_bg_gets_dark_text() {
     let mut btn = json!({
         "type":"frame","role":"button","fill":[{"type":"solid","color":"#FFFFFF"}],
