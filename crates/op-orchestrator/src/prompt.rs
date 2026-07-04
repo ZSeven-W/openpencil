@@ -56,8 +56,13 @@ ALL field names are camelCase: cornerRadius, fontSize, fontWeight, justifyConten
 alignItems, clipContent. Geometry fields are x, y, width, height. Never snake_case.
 Output ONLY the JSON lines."#;
 
-/// Script-gen 模式（THE default generation protocol on the full first
-/// attempt）的输出协议——完全对齐 Pencil:
+/// Script-gen 模式的输出协议——OUTPUT PROTOCOL matches Pencil's `batch_design`
+/// (a sandboxed JS script DSL). Honesty note (2026-07-04 audit): this aligns
+/// the PROTOCOL only; it runs inside the ORCHESTRATOR single-shot path (the
+/// fallback for CLI-agent providers), which has NO per-batch model feedback.
+/// Pencil's defining feedback loop lives in the sonar design-agent loop
+/// (`chat_agent_loop` + `design_agent_tools`), the builtin-provider default —
+/// not here.
 /// 模型写一段真 JavaScript（循环/数组/变量）调用全局 `I(parent, obj)`。引擎
 /// (rquickjs) 执行、`JSON.stringify` 序列化每个对象（=完美 JSON,无手写括号/引号
 /// 笔误),循环展开重复结构。`I` 返回新节点 id 字符串。
