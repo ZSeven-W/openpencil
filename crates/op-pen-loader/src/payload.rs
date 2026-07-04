@@ -161,6 +161,11 @@ pub struct NodePayload {
     /// Drop-shadow effects.
     #[serde(default)]
     pub effects: Vec<crate::effects::ShadowPayload>,
+    /// Gaussian layer-blur radius (doc px) when the node has a Figma
+    /// "Layer blur" effect. Kept separate from `effects` (which is
+    /// shadow-only) so the save format stays additive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer_blur: Option<f32>,
     /// Source URL (`data:image/...;base64,...` or file path) when the
     /// node is an `Image` — the canvas painter decodes the inline
     /// bytes and draws them with `RenderBackend::draw_image`. `None`

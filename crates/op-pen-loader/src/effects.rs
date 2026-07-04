@@ -21,21 +21,35 @@ pub struct ShadowPayload {
     pub inner: bool,
 }
 
-/// Serialize a node's `effects` into payload form.
+/// Serialize a node's drop-shadow `effects` into payload form. Blur
+/// effects are carried separately via [`layer_blur_from_effects`].
 pub fn effects_to_payload(effects: &[Effect]) -> Vec<ShadowPayload> {
     effects
         .iter()
-        .map(|e| {
-            let Effect::DropShadow(s) = e;
-            ShadowPayload {
+        .filter_map(|e| match e {
+            Effect::DropShadow(s) => Some(ShadowPayload {
                 offset_x: s.offset_x,
                 offset_y: s.offset_y,
                 blur: s.blur,
                 color: [s.color.r, s.color.g, s.color.b, s.color.a],
                 inner: s.inner,
-            }
+            }),
+            Effect::Blur(_) => None,
         })
         .collect()
+}
+
+/// Extract a canonical node's Gaussian layer-blur radius (Figma
+/// "Layer blur", `PenEffect::Blur`). Background blur is a separate
+/// (backdrop) effect and is not handled here.
+pub fn blur_from_canonical(node: &PenNode) -> Option<f32> {
+    canonical_node_effects(node)?
+        .iter()
+        .rev()
+        .find_map(|e| match e {
+            PenEffect::Blur(b) if b.radius > 0.0 => Some(b.radius),
+            _ => None,
+        })
 }
 
 /// Rebuild a node's `effects` from payload form.
@@ -49,6 +63,13 @@ pub fn effects_from_payload(payload: Vec<ShadowPayload>) -> Vec<Effect> {
 /// reference.
 pub fn effects_from_payload_ref(payload: &[ShadowPayload]) -> Vec<Effect> {
     payload.iter().map(shadow_payload_to_effect).collect()
+}
+
+/// Append an `Effect::Blur` for a node's `layer_blur` radius, if set.
+pub fn blur_effect_from_payload(layer_blur: Option<f32>) -> Option<Effect> {
+    layer_blur
+        .filter(|r| *r > 0.0)
+        .map(|radius| Effect::Blur(jian_scene::layout_scene::BlurEffect { radius }))
 }
 
 fn shadow_payload_to_effect(s: &ShadowPayload) -> Effect {
@@ -250,5 +271,54 @@ mod tests {
         let payload = effects_to_payload(&[]);
         assert!(payload.is_empty());
         assert!(effects_from_payload(payload).is_empty());
+    }
+
+    fn ellipse_with_blur(radius: f32) -> PenNode {
+        let json = format!(
+            r#"{{"type":"ellipse","id":"e1","width":10,"height":10,"effects":[{{"type":"blur","radius":{radius}}}]}}"#
+        );
+        serde_json::from_str(&json).expect("ellipse-with-blur JSON parses")
+    }
+
+    #[test]
+    fn canonical_layer_blur_extracts_radius() {
+        assert_eq!(blur_from_canonical(&ellipse_with_blur(40.0)), Some(40.0));
+    }
+
+    #[test]
+    fn zero_radius_blur_is_ignored() {
+        assert_eq!(blur_from_canonical(&ellipse_with_blur(0.0)), None);
+    }
+
+    #[test]
+    fn blur_payload_builds_scene_effect() {
+        match blur_effect_from_payload(Some(24.0)) {
+            Some(Effect::Blur(b)) => assert_eq!(b.radius, 24.0),
+            other => panic!("expected blur effect, got {other:?}"),
+        }
+        assert!(blur_effect_from_payload(None).is_none());
+        assert!(blur_effect_from_payload(Some(0.0)).is_none());
+    }
+
+    #[test]
+    fn effects_to_payload_drops_blur_but_keeps_shadow() {
+        use jian_scene::layout_scene::BlurEffect;
+        let effects = vec![
+            Effect::DropShadow(DropShadow {
+                offset_x: 1.0,
+                offset_y: 2.0,
+                blur: 3.0,
+                color: Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+                inner: false,
+            }),
+            Effect::Blur(BlurEffect { radius: 10.0 }),
+        ];
+        // Shadow survives; blur is carried elsewhere (layer_blur).
+        assert_eq!(effects_to_payload(&effects).len(), 1);
     }
 }
