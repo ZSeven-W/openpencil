@@ -254,20 +254,17 @@ tokio = { version = "1", default-features = false, features = [
 futures = { version = "0.3", default-features = false, features = ["std"] }
 
 # Native menu bar (`src/menu.rs`). winit owns the window but has no
-# menu primitive, so `muda` builds the NSMenu / Win32 menu and routes
-# selections through its global event channel. Gated to macOS /
-# Windows: `muda`'s Linux backend needs a GTK window, but this
-# binary's winit is built for the x11 / wayland backends (no GTK), so
-# Linux falls back to the in-canvas File menu. `default-features =
-# false` drops the Linux-only `gtk` / `libxdo` feature deps.
-[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
-muda = { version = "0.17", default-features = false }
-
+# menu primitive, so `muda` builds the NSMenu and routes selections
+# through its global event channel. macOS only — Windows and Linux
+# fall back to the in-canvas File menu. `default-features = false`
+# drops the Linux-only `gtk` / `libxdo` feature deps.
+#
 # macOS-only — set the running app's Dock icon + process name at
 # startup so the dev (non-bundled) binary shows "OpenPencil" + the
 # brand icon instead of the bare executable name. Pinned to the
 # objc2 0.2 line winit / casement already use.
 [target.'cfg(target_os = "macos")'.dependencies]
+muda = { version = "0.17", default-features = false }
 objc2 = "0.5"
 objc2-app-kit = { version = "0.2", default-features = false, features = [
   "std",

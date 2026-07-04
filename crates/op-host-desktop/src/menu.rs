@@ -1,17 +1,15 @@
-//! Native application menu bar.
+//! Native application menu bar (macOS only).
 //!
-//! winit owns the window but has no menu primitive, so the native
-//! menu bar is built with `muda` (the tao/tauri menu crate) and
-//! attached to the running NSApp (macOS) / window (Windows). Menu
-//! selections arrive on `muda`'s global event channel; [`poll`]
-//! drains them into a [`MenuAction`] the runner maps onto the same
-//! `WidgetHostNative` calls the keyboard shortcuts use.
+//! On macOS the native menu bar is built with `muda` and attached to
+//! the running NSApp. Menu selections arrive on `muda`'s global event
+//! channel; [`poll`] drains them into a [`MenuAction`] the runner maps
+//! onto the same `WidgetHostNative` calls the keyboard shortcuts use.
 //!
-//! Linux: `muda` needs a GTK window, but this build's winit is
-//! configured for the x11 / wayland backends (no GTK), so the menu
-//! is a no-op there — the in-canvas File menu covers Linux. The
-//! `muda` dependency is itself gated to macOS / Windows in
-//! `Cargo.toml`, so this module compiles to stubs elsewhere.
+//! Windows and Linux have no native menu — the in-canvas File menu is
+//! the primary menu surface. On Windows the window is borderless (custom
+//! chrome), and a native `muda` menu drawn inside the client area would
+//! flash during `drag_resize_window()` when the OS repaints the window.
+//! `muda` is gated to macOS in `Cargo.toml`; other platforms get stubs.
 
 /// A menu selection, decoupled from `muda` so the runner matches on
 /// a plain enum. Each variant maps onto an existing host action.
@@ -21,7 +19,7 @@
 /// variant is unconstructed by design. Silence `-D dead_code`
 /// there without weakening the lint on the platforms that actually
 /// build the menu.
-#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     New,
@@ -48,9 +46,9 @@ pub enum MenuAction {
 }
 
 // --------------------------------------------------------------------
-// macOS / Windows — the real `muda` backend.
+// macOS — the real `muda` backend.
 // --------------------------------------------------------------------
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 mod backend {
     use super::MenuAction;
     use muda::accelerator::{Accelerator, Code, Modifiers};
@@ -115,16 +113,8 @@ mod backend {
         _menu: Menu,
     }
 
-    /// Primary command modifier — Cmd on macOS, Ctrl on Windows.
     fn primary() -> Modifiers {
-        #[cfg(target_os = "macos")]
-        {
-            Modifiers::META
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            Modifiers::CONTROL
-        }
+        Modifiers::META
     }
 
     fn accel(code: Code) -> Accelerator {
@@ -142,8 +132,8 @@ mod backend {
 
     impl AppMenu {
         /// Build the menu and attach it to the running app / window.
-        /// macOS needs the NSApp to exist, Windows needs the window —
-        /// so this is called from `resumed`, after window creation.
+        /// Must be called from `resumed`, after window creation — macOS
+        /// needs the NSApp to exist.
         pub fn install(window: &winit::window::Window) -> Self {
             let menu = Menu::new();
 
@@ -151,7 +141,6 @@ mod backend {
             // conventional first submenu macOS labels with the app
             // name. Quit is custom-id'd so the runner drives the same
             // clean-shutdown path as the window-close button.
-            #[cfg(target_os = "macos")]
             {
                 let app_menu = Submenu::new("OpenPencil", true);
                 let _ = app_menu.append_items(&[
@@ -183,12 +172,6 @@ mod backend {
                     Some(accel_shift(Code::KeyP)),
                 ),
             ]);
-            // Windows has no app menu — Quit lives at the File-menu foot.
-            #[cfg(not(target_os = "macos"))]
-            {
-                let _ = file.append(&PredefinedMenuItem::separator());
-                let _ = file.append(&item(ID_QUIT, "Quit", Some(accel(Code::KeyQ))));
-            }
             let _ = menu.append(&file);
 
             // Edit menu — custom items routed to the host's own
@@ -213,16 +196,8 @@ mod backend {
 
             // View menu.
             let view = Submenu::new("View", true);
-            let fullscreen_accel = {
-                #[cfg(target_os = "macos")]
-                {
-                    Accelerator::new(Some(Modifiers::META | Modifiers::CONTROL), Code::KeyF)
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    Accelerator::new(None, Code::F11)
-                }
-            };
+            let fullscreen_accel =
+                Accelerator::new(Some(Modifiers::META | Modifiers::CONTROL), Code::KeyF);
             let _ = view.append(&item(
                 ID_FULLSCREEN,
                 "Toggle Full Screen",
@@ -244,41 +219,18 @@ mod backend {
             let _ = menu.append(&help);
 
             // Attach to the platform.
-            #[cfg(target_os = "macos")]
-            {
-                let _ = window; // not needed — macOS attaches to the NSApp
-                menu.init_for_nsapp();
-            }
-            #[cfg(target_os = "windows")]
-            {
-                if let Some(hwnd) = win32_hwnd(window) {
-                    // SAFETY: `hwnd` is the live handle of the window
-                    // winit just created; `muda` subclasses it to
-                    // route `WM_COMMAND` to the menu event channel.
-                    let _ = unsafe { menu.init_for_hwnd(hwnd) };
-                }
-            }
+            let _ = window; // not needed — macOS attaches to the NSApp
+            menu.init_for_nsapp();
 
             Self { _menu: menu }
         }
     }
 
-    #[cfg(target_os = "macos")]
     fn about_metadata() -> muda::AboutMetadata {
         muda::AboutMetadata {
             name: Some("OpenPencil".to_string()),
             version: Some(env!("CARGO_PKG_VERSION").to_string()),
             ..Default::default()
-        }
-    }
-
-    /// Extract the Win32 `HWND` from a winit window (rwh_06 handle).
-    #[cfg(target_os = "windows")]
-    fn win32_hwnd(window: &winit::window::Window) -> Option<isize> {
-        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        match window.window_handle().ok()?.as_raw() {
-            RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
-            _ => None,
         }
     }
 
@@ -337,10 +289,10 @@ mod backend {
 }
 
 // --------------------------------------------------------------------
-// Other targets (Linux) — no native menu; the in-canvas File menu
-// is the menu surface there.
+// Other targets (Windows / Linux) — no native menu; the in-canvas
+// File menu is the menu surface there.
 // --------------------------------------------------------------------
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(target_os = "macos"))]
 mod backend {
     use super::MenuAction;
 
