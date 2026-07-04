@@ -289,6 +289,13 @@ pub enum EditorCommand {
         variables: BTreeMap<String, VariableDefinition>,
         replace: bool,
     },
+    /// Merge variables and atomically record their code-to-design source.
+    UpsertVariables {
+        variables: BTreeMap<String, VariableDefinition>,
+        key: String,
+        source_path: Option<String>,
+        source_hash: Option<String>,
+    },
     /// Merge or replace the full document theme axes map.
     SetThemes {
         themes: BTreeMap<String, Vec<String>>,
@@ -310,6 +317,21 @@ pub enum EditorCommand {
     },
     /// Replace the document's persisted design.md spec.
     SetDesignMd { spec: Box<DesignMdSpec> },
+    /// Create or replace a component master and its conversion ledger entry.
+    UpsertComponent {
+        key: String,
+        name: String,
+        root: Box<PenNode>,
+        source_path: Option<String>,
+        source_hash: Option<String>,
+    },
+    /// Create or replace a route/screen frame and its conversion ledger entry.
+    UpsertScreen {
+        key: String,
+        root: Box<PenNode>,
+        source_path: Option<String>,
+        source_hash: Option<String>,
+    },
     /// Instantiate a registered component onto the active page.
     InstantiateComponent { component_id: NodeId },
     /// Promote an active-page Frame / Group / Rectangle to a component.

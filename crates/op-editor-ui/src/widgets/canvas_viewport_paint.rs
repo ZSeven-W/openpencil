@@ -17,7 +17,7 @@ use crate::layout_scene::{regular_polygon_points, SceneGradient, SceneNode};
 use crate::layout_scene::{Effect, NodeKind};
 use crate::widgets::canvas_viewport::EditCaret;
 use crate::widgets::canvas_viewport_image::paint_image_node;
-use crate::widgets::canvas_viewport_overlay::paint_fill_then_stroke;
+use crate::widgets::canvas_viewport_overlay::{align_stroke_rect, paint_fill_then_stroke};
 use crate::widgets::canvas_viewport_text::paint_text_node;
 use crate::widgets::canvas_viewport_widget::paint_widget_visual;
 use crate::widgets::PaintCx;
@@ -104,8 +104,9 @@ fn paint_ellipse(cx: &mut PaintCx<'_>, node: &SceneNode, world_rect: Rect, zoom:
             cx.backend.fill_oval(world_rect, fill);
         }
         if let Some(stroke) = node.stroke {
-            cx.backend
-                .stroke_oval(world_rect, stroke.color, stroke.width * zoom);
+            let w = stroke.width * zoom;
+            let (rect, _) = align_stroke_rect(world_rect, 0.0, w, stroke.align);
+            cx.backend.stroke_oval(rect, stroke.color, w);
         }
         return;
     }
@@ -768,3 +769,7 @@ mod tests;
 #[cfg(test)]
 #[path = "canvas_viewport_reveal_tests.rs"]
 mod reveal_tests;
+
+#[cfg(test)]
+#[path = "canvas_viewport_stroke_align_tests.rs"]
+mod stroke_align_tests;

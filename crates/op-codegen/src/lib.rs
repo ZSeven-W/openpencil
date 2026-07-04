@@ -426,6 +426,7 @@ mod tests {
             lifecycle: None,
             logic_modules: None,
             design_md: None,
+            conversion: None,
         }
     }
 

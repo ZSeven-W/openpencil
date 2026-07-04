@@ -24,6 +24,7 @@ pub fn frame_node(
         children,
         image_search_query: None,
         reusable,
+        screen: None,
         slot: None,
         state: None,
         bindings: None,

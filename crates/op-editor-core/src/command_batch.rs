@@ -84,9 +84,12 @@ fn batchable(cmd: &EditorCommand) -> bool {
         | C::DeleteVariable { .. }
         | C::RenameVariable { .. }
         | C::SetVariables { .. }
+        | C::UpsertVariables { .. }
         | C::SetThemes { .. }
         | C::MergeThemePreset { .. }
         | C::SetDesignMd { .. }
+        | C::UpsertComponent { .. }
+        | C::UpsertScreen { .. }
         | C::InstantiateComponent { .. }
         | C::CreateComponent { .. }
         | C::DeleteComponent { .. }

@@ -81,6 +81,8 @@ pub mod property_panel_stroke;
 #[cfg(test)]
 mod property_panel_stroke_tests;
 #[cfg(test)]
+mod property_panel_tab_interact_tests;
+#[cfg(test)]
 mod property_panel_test_support;
 #[cfg(test)]
 mod property_panel_tests;

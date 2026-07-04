@@ -327,6 +327,7 @@ fn empty_document() -> jian_ops_schema::PenDocument {
         lifecycle: None,
         logic_modules: None,
         design_md: None,
+        conversion: None,
     }
 }
 

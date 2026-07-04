@@ -7,11 +7,13 @@ use std::fs;
 use std::io::{self, Read};
 
 mod app_control_cli;
+mod cli_conversion;
 mod codegen_cli;
 mod figma_cli;
 mod mcp_http_cli;
 mod page_theme_cli;
 mod path_args;
+mod skill_export_cli;
 mod skill_install_cli;
 
 use mcp_http_cli::{
@@ -83,6 +85,9 @@ fn run(args: &[String]) -> Result<String, String> {
             host.as_deref(),
         )?,
         Command::StopMcp => app_control_cli::run_stop()?,
+        Command::SkillExport { name, out_dir } => {
+            skill_export_cli::run_export(&name, out_dir.as_deref())?
+        }
         Command::InstallSkill { target } => skill_install_cli::run_install(target.as_deref())?,
         Command::UninstallSkill { target } => skill_install_cli::run_uninstall(target.as_deref())?,
         Command::ToolsList => post(target_port, &tools_list_body())?,
@@ -125,6 +130,10 @@ enum Command {
         host: Option<String>,
     },
     StopMcp,
+    SkillExport {
+        name: String,
+        out_dir: Option<String>,
+    },
     InstallSkill {
         target: Option<String>,
     },
@@ -265,6 +274,14 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
             })
         }
         "stop" => Ok(Command::StopMcp),
+        "skill:export" => Ok(Command::SkillExport {
+            name: required_pos(
+                positionals,
+                1,
+                "Usage: op skill:export <skill-name> [--out .claude/skills]",
+            )?,
+            out_dir: flag_value(flags, "out"),
+        }),
         "install" => Ok(Command::InstallSkill {
             target: flag_value(flags, "target"),
         }),
@@ -297,6 +314,11 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "copy" => map_reparent("copy_node", positionals, flags),
         "replace" => map_replace(positionals, flags),
         "design" => map_design_like("batch_design", positionals.get(1), flags, true),
+        "design:upsert-vars"
+        | "design:upsert-component"
+        | "design:upsert-screen"
+        | "design:status"
+        | "design:lint" => cli_conversion::map_design_conversion(positionals, flags),
         "design:skeleton" => map_design_skeleton(positionals, flags),
         "design:content" => map_design_content(positionals, flags),
         "design:refine" => map_design_refine(flags),
@@ -750,6 +772,8 @@ fn version_json() -> String {
     format!(r#"{{"version":"{}"}}"#, env!("CARGO_PKG_VERSION"))
 }
 
+#[cfg(test)]
+mod cli_conversion_tests;
 #[cfg(test)]
 mod cli_design_tests;
 #[cfg(test)]

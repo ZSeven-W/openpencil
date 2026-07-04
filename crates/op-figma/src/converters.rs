@@ -8,7 +8,7 @@ use crate::common::{
     SKIPPED_TYPES,
 };
 use crate::figma_types::FigVec2;
-use crate::instance::{apply_instance_overrides, merge_symbol_props};
+use crate::instance::{apply_instance_overrides_cached, merge_symbol_props};
 use crate::kiwi::FigValue;
 use crate::mappers::{
     fig_fill_color, map_figma_effects, map_figma_fills, map_figma_layout, map_figma_stroke,
@@ -152,13 +152,12 @@ fn build_container(
 }
 
 /// Auto-layout flow order is ascending; the tree builder sorted
-/// descending, so preserve-mode reverses it back.
-fn order_children(
-    children: Vec<PenNode>,
-    has_auto_layout: bool,
-    ctx: &ConversionContext,
-) -> Vec<PenNode> {
-    if has_auto_layout && ctx.layout_mode == FigLayoutMode::Preserve && children.len() > 1 {
+/// descending (z-order), so auto-layout containers reverse back to
+/// flow order in BOTH modes — Preserve keeps authored geometry but
+/// downstream flex re-solves still read array order, and OpenPencil
+/// feeds the array straight to the layout engine.
+fn order_children(children: Vec<PenNode>, has_auto_layout: bool) -> Vec<PenNode> {
+    if has_auto_layout && children.len() > 1 {
         children.into_iter().rev().collect()
     } else {
         children
@@ -178,7 +177,7 @@ fn convert_frame(
         .map(|s| s != "NONE")
         .unwrap_or(false);
     let container = build_container(figma, parent_stack_mode, has_auto_layout, ctx);
-    let ordered = order_children(children, has_auto_layout, ctx);
+    let ordered = order_children(children, has_auto_layout);
     let base = common_props(figma, id);
     frame_node(
         base,
@@ -214,7 +213,7 @@ fn convert_component(
         .map(|s| s != "NONE")
         .unwrap_or(false);
     let container = build_container(figma, parent_stack_mode, has_auto_layout, ctx);
-    let ordered = order_children(children, has_auto_layout, ctx);
+    let ordered = order_children(children, has_auto_layout);
     let base = common_props(figma, id);
     frame_node(
         base,
@@ -294,11 +293,12 @@ fn convert_instance(
                     .map(|a| a.to_vec());
                 let derived = figma.get_array("derivedSymbolData").map(|a| a.to_vec());
                 let instance_size = figma.get("size").and_then(FigVec2::from_value);
-                let children = apply_instance_overrides(
+                let children = apply_instance_overrides_cached(
                     &symbol_node,
                     overrides.as_deref(),
                     derived.as_deref(),
                     instance_size,
+                    &mut ctx.instance_assignments,
                 );
                 let merged = merge_symbol_props(&tree.figma, &symbol_node.figma);
                 let synthetic = TreeNode {

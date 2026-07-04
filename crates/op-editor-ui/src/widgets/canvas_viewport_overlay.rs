@@ -2,7 +2,7 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
-use crate::layout_scene::{SceneGradient, SceneNode, SceneShader};
+use crate::layout_scene::{SceneGradient, SceneNode, SceneShader, SceneStrokeAlign};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -137,13 +137,49 @@ pub fn paint_fill_then_stroke(
             .filter(|sides| !stroke_sides_are_uniform(*sides))
         {
             paint_sided_rect_stroke(cx, world_rect, stroke.color, sides, zoom);
-        } else if use_round {
-            cx.backend
-                .stroke_round_rect(world_rect, r, stroke.color, stroke.width * zoom);
         } else {
-            cx.backend
-                .stroke_rect(world_rect, stroke.color, stroke.width * zoom);
+            let w = stroke.width * zoom;
+            let (rect, r) = align_stroke_rect(world_rect, r, w, stroke.align);
+            if use_round {
+                cx.backend.stroke_round_rect(rect, r, stroke.color, w);
+            } else {
+                cx.backend.stroke_rect(rect, stroke.color, w);
+            }
         }
+    }
+}
+
+/// Backends stroke centered on the rect path; INSIDE / OUTSIDE
+/// alignment shifts the path by half a width so the painted band
+/// lands inside / outside the node edge (Figma defaults to INSIDE).
+/// The corner radius follows the shifted path.
+pub fn align_stroke_rect(
+    rect: Rect,
+    radius: f32,
+    width: f32,
+    align: SceneStrokeAlign,
+) -> (Rect, f32) {
+    let half = width / 2.0;
+    match align {
+        SceneStrokeAlign::Center => (rect, radius),
+        SceneStrokeAlign::Inside => (
+            Rect::xywh(
+                rect.origin.x + half,
+                rect.origin.y + half,
+                (rect.size.x - width).max(0.0),
+                (rect.size.y - width).max(0.0),
+            ),
+            (radius - half).max(0.0),
+        ),
+        SceneStrokeAlign::Outside => (
+            Rect::xywh(
+                rect.origin.x - half,
+                rect.origin.y - half,
+                rect.size.x + width,
+                rect.size.y + width,
+            ),
+            if radius > 0.0 { radius + half } else { 0.0 },
+        ),
     }
 }
 

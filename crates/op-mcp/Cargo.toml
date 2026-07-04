@@ -12,7 +12,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
-debug-tools = ["dep:op-design-lint"]
+debug-tools = []
 # Native-only QuickJS script→program expansion for batch_design + the
 # orchestrator. Never enabled by wasm consumers (bundled C engine).
 script = ["dep:rquickjs", "dep:tracing"]
@@ -21,7 +21,7 @@ script = ["dep:rquickjs", "dep:tracing"]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 op-ai-skills = { path = "../op-ai-skills" }
-op-design-lint = { path = "../op-design-lint", optional = true }
+op-design-lint = { path = "../op-design-lint" }
 op-editor-core = { path = "../op-editor-core" }
 op-pen-loader = { path = "../op-pen-loader" }
 regex = "1"

@@ -125,6 +125,7 @@ fn kit_to_persisted(kit: &UIKit) -> PersistedKit {
             lifecycle: None,
             logic_modules: None,
             design_md: None,
+            conversion: None,
         },
         components: kit
             .components
@@ -286,6 +287,7 @@ mod tests {
             lifecycle: None,
             logic_modules: None,
             design_md: None,
+            conversion: None,
         };
         import_kit_from_document(&doc, "imp-1".to_string()).expect("kit")
     }

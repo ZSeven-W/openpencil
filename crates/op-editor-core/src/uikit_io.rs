@@ -166,6 +166,7 @@ pub fn build_kit_document(
         lifecycle: None,
         logic_modules: None,
         design_md: None,
+        conversion: None,
     };
 
     // Copy referenced variables (TS export-side `collectNodeRefs` —
@@ -476,6 +477,7 @@ mod tests {
             lifecycle: None,
             logic_modules: None,
             design_md: None,
+            conversion: None,
         }
     }
 

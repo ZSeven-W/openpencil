@@ -651,6 +651,16 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.enter_preview();
                 self.editor_state.editor_ui.preview_warnings = session.warnings().to_vec();
                 self.preview = Some(session);
+                // APP MODE: center the viewport on the entry screen (a
+                // workbench-mode session has no screen rect, so this is
+                // a no-op there).
+                if let Some(rect) = self
+                    .preview
+                    .as_ref()
+                    .and_then(|p| p.current_screen_scene_rect())
+                {
+                    self.center_canvas_on(rect, canvas_size.0, canvas_size.1);
+                }
                 self.mark_dirty();
                 true
             }
@@ -672,6 +682,21 @@ impl WidgetHostNative {
         self.preview_press_active = false;
         self.preview_last_doc = None;
         self.editor_state.editor_ui.exit_preview();
+        self.mark_dirty();
+    }
+
+    /// Center the canvas viewport on a scene-space `rect`, keeping zoom
+    /// unchanged. Used by APP MODE preview to keep the mounted screen
+    /// framed on entry and after a screen-switch reconcile. `viewport_w`
+    /// / `viewport_h` are the values the paint path already threads
+    /// (the host has no cached viewport-size field of its own —
+    /// `last_viewport_w/h` is refreshed only on press, so it can be
+    /// stale for a frame at enter time).
+    fn center_canvas_on(&mut self, rect: op_editor_ui::Rect, viewport_w: f32, viewport_h: f32) {
+        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let vp = &mut self.editor_state.viewport;
+        vp.pan_x = cw / 2.0 - (rect.origin.x + rect.size.x / 2.0) * vp.zoom;
+        vp.pan_y = ch / 2.0 - (rect.origin.y + rect.size.y / 2.0) * vp.zoom;
         self.mark_dirty();
     }
 

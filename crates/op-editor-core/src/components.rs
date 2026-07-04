@@ -11,6 +11,7 @@ use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers;
+use jian_ops_schema::conversion::ConversionKind;
 use jian_ops_schema::node::PenNode;
 
 /// One reusable design fragment. `root` is the canonical subtree that
@@ -125,8 +126,66 @@ impl ComponentLibrary {
         for child in &doc.children {
             walk(child, &mut lib);
         }
+        add_conversion_components(doc, &mut lib);
         lib
     }
+}
+
+fn add_conversion_components(doc: &jian_ops_schema::PenDocument, lib: &mut ComponentLibrary) {
+    let Some(spec) = doc.conversion.as_ref() else {
+        return;
+    };
+    for entry in &spec.entries {
+        if entry.kind != ConversionKind::Component {
+            continue;
+        }
+        let Some(node_id) = entry.node_id.as_deref().filter(|id| !id.is_empty()) else {
+            continue;
+        };
+        let Some(root) = find_node_in_document(doc, node_id) else {
+            continue;
+        };
+        if !is_component_root(root) {
+            continue;
+        }
+        let name = root
+            .base()
+            .name
+            .clone()
+            .unwrap_or_else(|| entry.key.clone());
+        lib.insert(Component {
+            id: NodeId::new(node_id),
+            name,
+            root: root.clone(),
+        });
+    }
+}
+
+fn find_node_in_document<'a>(
+    doc: &'a jian_ops_schema::PenDocument,
+    node_id: &str,
+) -> Option<&'a PenNode> {
+    fn walk<'a>(nodes: &'a [PenNode], node_id: &str) -> Option<&'a PenNode> {
+        for node in nodes {
+            if node.id_str() == node_id {
+                return Some(node);
+            }
+            if let Some(children) = node.children() {
+                if let Some(hit) = walk(children, node_id) {
+                    return Some(hit);
+                }
+            }
+        }
+        None
+    }
+    if let Some(pages) = doc.pages.as_ref() {
+        for page in pages {
+            if let Some(hit) = walk(&page.children, node_id) {
+                return Some(hit);
+            }
+        }
+    }
+    walk(&doc.children, node_id)
 }
 
 fn is_component_root(node: &PenNode) -> bool {
@@ -391,6 +450,7 @@ mod tests {
             lifecycle: None,
             logic_modules: None,
             design_md: None,
+            conversion: None,
         };
         if let PenNode::Frame(f) = &mut doc.children[0] {
             f.reusable = Some(true);

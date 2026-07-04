@@ -45,6 +45,7 @@ pub use types::{
 /// Supported topics (aliases in parens):
 /// - `"web-app"` (`webapp`) — product principles + web-app depth laws + design craft
 /// - `"mobile"` (`mobile-app`) — the mobile-app three-section architecture
+/// - `"code-to-design"` — agent workflow for converting frontend codebases
 /// - `"landing-page"` (`landing`) — landing-page domain + design craft
 /// - `"dashboard"` (`table`) — dashboard structure + product principles
 /// - `"slides"` (`deck`, `presentation`) — slide layout contracts
@@ -71,6 +72,7 @@ pub fn guideline_for(topic: &str) -> Option<String> {
     match topic {
         "web-app" | "webapp" => compose(&["product-principles", "web-app", "design-principles"]),
         "mobile" | "mobile-app" => compose(&["mobile-app"]),
+        "code-to-design" => compose(&["code-to-design"]),
         "landing-page" | "landing" => compose(&["landing-page", "design-principles"]),
         "dashboard" | "table" => compose(&["dashboard", "product-principles"]),
         "slides" | "deck" | "presentation" => compose(&["slides"]),
@@ -154,6 +156,44 @@ mod tests {
             "mobile guideline must contain the three-section architecture content"
         );
         assert!(!content.is_empty());
+    }
+
+    #[test]
+    fn code_to_design_guideline_resolves() {
+        let content = guideline_for("code-to-design").expect("code-to-design guideline present");
+        for must in [
+            "Five-step",
+            "upsert_variables",
+            "upsert_component",
+            "upsert_screen",
+            "conversion_status",
+            "lint_document",
+            "get_screenshot",
+        ] {
+            assert!(content.contains(must), "guideline missing: {must}");
+        }
+    }
+
+    #[test]
+    fn code_to_design_component_example_uses_valid_pen_node_json() {
+        let content = guideline_for("code-to-design").expect("code-to-design guideline present");
+        let marker = "{\n  \"key\": \"src/components/Button.tsx#Button\"";
+        let start = content
+            .find(marker)
+            .expect("component example JSON block must exist");
+        let end = content[start..]
+            .find("\n```")
+            .map(|offset| start + offset)
+            .expect("component example JSON block must close");
+        let example: serde_json::Value =
+            serde_json::from_str(&content[start..end]).expect("component example parses as JSON");
+        let node = example
+            .get("node_json")
+            .cloned()
+            .expect("component example includes node_json");
+
+        serde_json::from_value::<jian_ops_schema::node::PenNode>(node)
+            .expect("component example node_json must deserialize as a PenNode");
     }
 
     #[test]

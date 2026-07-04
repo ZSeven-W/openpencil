@@ -17,3 +17,4 @@ include_dir = "0.7"
 # every role string jian's promote table honours, so the doc and the
 # table can never silently drift apart.
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+serde_json = { workspace = true }

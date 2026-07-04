@@ -1,6 +1,7 @@
 use super::*;
 use crate::layout_scene::{
     LayoutScene, SceneAnchor, SceneFillType, SceneNode, ScenePage, ScenePointType, SceneStroke,
+    SceneStrokeAlign,
 };
 use crate::{Color, Point2D, Rect, TextLayout};
 use std::collections::HashMap;
@@ -129,6 +130,7 @@ fn sample_scene() -> LayoutScene {
         color: Color::WHITE,
         width: 1.0,
         sides: None,
+        align: SceneStrokeAlign::Center,
     });
     frame.fill_type = SceneFillType::Solid;
     let mut button = leaf(

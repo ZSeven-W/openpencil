@@ -36,6 +36,7 @@ fn frame(id: &str, children: Vec<PenNode>) -> PenNode {
         children: Some(children),
         image_search_query: None,
         reusable: None,
+        screen: None,
         slot: None,
         state: None,
         bindings: None,

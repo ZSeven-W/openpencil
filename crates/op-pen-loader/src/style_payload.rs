@@ -4,7 +4,7 @@ use jian_ops_schema::node::base::PenNodeBase;
 use jian_ops_schema::node::container::CornerRadius;
 use jian_ops_schema::node::{ImageFitMode, ImageNode};
 use jian_ops_schema::style::{
-    ImageFillMode, PenFill, PenStroke, ShaderUniformValue, StrokeThickness,
+    ImageFillMode, PenFill, PenStroke, ShaderUniformValue, StrokeAlign, StrokeThickness,
 };
 
 use crate::payload::{
@@ -410,10 +410,16 @@ pub(crate) fn stroke_to_payload(s: Option<&PenStroke>) -> Option<StrokePayload> 
         }
     };
     let color = first_solid_color(s.fill.as_deref()).unwrap_or([0.0, 0.0, 0.0, 1.0]);
+    let align = match s.align {
+        Some(StrokeAlign::Inside) => -1,
+        Some(StrokeAlign::Outside) => 1,
+        Some(StrokeAlign::Center) | None => 0,
+    };
     Some(StrokePayload {
         color,
         width,
         sides,
+        align,
     })
 }
 
