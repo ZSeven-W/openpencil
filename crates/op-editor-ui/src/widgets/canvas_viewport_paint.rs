@@ -545,6 +545,22 @@ fn paint_node_inner<'a>(
             } else {
                 paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
             }
+            // A `rectangle` is a CONTAINER in the canonical schema (it
+            // carries `clipContent` like Frame / Group), so models nest
+            // content inside one — e.g. an image-area rectangle wrapping
+            // the destination photo. Recurse into its children after its
+            // own fill, honouring clip; without this every child of a
+            // rectangle (nested images, labels, badges) vanished behind
+            // the rectangle's fill (measured: a travel page's 7 photos
+            // all rendered as blank cards).
+            let clipped = push_clip_content(cx, node, world_rect, zoom);
+            for child in node.children.iter().rev() {
+                let child_hover = paint_node_inner(cx, child, options);
+                hits.merge_missing(child_hover);
+            }
+            if clipped {
+                cx.backend.restore();
+            }
         }
         NodeKind::Ellipse => {
             if let Some(src) = node.image_src.as_deref() {
