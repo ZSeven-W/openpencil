@@ -4,9 +4,8 @@
 //! (`compactSubAgentSkills` + the `retryAllowed` set).
 //!
 //! Two filtering modes:
-//! - **`minimal_skills`** — keep only `schema` + `jsonl-format` (the
-//!   bare-minimum kernel for models whose safety scanner times out on
-//!   a full-size system prompt).
+//! - **`minimal_skills`** — keep only `schema` (the bare-minimum skill set for
+//!   models whose safety scanner times out on a full-size system prompt).
 //! - **`reduced_complexity` + `ModelTier::Basic`** — keep the retry
 //!   `retryAllowed` set (drops `elements` and all non-essential skills
 //!   so the retry has the smallest viable prompt).
@@ -41,7 +40,7 @@ use crate::model_profile::ModelTier;
 ///   `noStyleGuideMatch` case would inject `design-system`'s conflicting
 ///   "output ONLY a JSON token object" header alongside `style-defaults`
 ///   (Codex review 2026-06-06).
-/// * `minimal_skills`         — When `true`, keep only `schema` + `jsonl-format`.
+/// * `minimal_skills`         — When `true`, keep only `schema`.
 /// * `reduced_complexity`     — When `true` AND `tier == Basic`, narrow to the
 ///   `retryAllowed` set (excludes `elements`).
 pub fn apply_skill_filter<T: SkillNamed>(
@@ -58,15 +57,11 @@ pub fn apply_skill_filter<T: SkillNamed>(
     let before: Vec<String> = skills.iter().map(|s| s.skill_name().to_string()).collect();
 
     let next = if minimal_skills {
-        // Last-ditch fallback: only the schema + jsonl-format kernel.
-        // Verbatim port of orchestrator-sub-agent.ts:428-431 — exactly
-        // two skill names, `jsonl-format-simplified` is NOT kept.
+        // Last-ditch fallback: only the schema. Prompt assembly appends
+        // SCRIPT_FORMAT separately, so the output protocol remains script-gen.
         skills
             .into_iter()
-            .filter(|s| {
-                let n = s.skill_name();
-                n == "schema" || n == "jsonl-format"
-            })
+            .filter(|s| s.skill_name() == "schema")
             .collect()
     } else {
         compact_subagent_skills(
@@ -88,27 +83,18 @@ pub fn apply_skill_filter<T: SkillNamed>(
     };
 
     let kept: std::collections::HashSet<&str> = next.iter().map(|s| s.skill_name()).collect();
-    let jsonl_simplified_kept = kept.contains("jsonl-format-simplified");
     let dropped: Vec<(String, DropReason)> = before
         .into_iter()
         .filter(|n| !kept.contains(n.as_str()))
-        .map(|n| {
-            // verbose jsonl-format dropped while simplified survives = dedup, not tier.
-            let reason = if n == "jsonl-format" && jsonl_simplified_kept {
-                DropReason::Deduped
-            } else {
-                base_reason
-            };
-            (n, reason)
-        })
+        .map(|n| (n, base_reason))
         .collect();
 
     (next, dropped)
 }
 
 /// Port of `compactSubAgentSkills` (orchestrator-sub-agent-compact.ts:4-76):
-/// a content-aware base filter for ALL tiers, then a `jsonl-format` dedup,
-/// then a Basic-tier allow-set (further narrowed on reduced-complexity).
+/// a content-aware base filter for ALL tiers, then a Basic-tier allow-set
+/// (further narrowed on reduced-complexity).
 fn compact_subagent_skills<T: SkillNamed>(
     skills: Vec<T>,
     tier: ModelTier,
@@ -146,14 +132,12 @@ fn compact_subagent_skills<T: SkillNamed>(
         })
         .collect();
 
-    // When the simplified JSONL format is present, drop the verbose one so a
-    // Basic-tier model doesn't carry both (orchestrator-sub-agent-compact.ts:24-28).
-    let has_simplified = next
-        .iter()
-        .any(|s| s.skill_name() == "jsonl-format-simplified");
-    if has_simplified {
-        next.retain(|s| s.skill_name() != "jsonl-format");
-    }
+    // The subagent output protocol is always script-gen; never carry the
+    // retired flat-JSONL generation skills.
+    next.retain(|s| {
+        let name = s.skill_name();
+        name != "jsonl-format" && name != "jsonl-format-simplified"
+    });
 
     if tier == ModelTier::Basic {
         // Basic-tier allow-set (orchestrator-sub-agent-compact.ts:31-52).
@@ -162,8 +146,6 @@ fn compact_subagent_skills<T: SkillNamed>(
         // in that case and required when the flag is on.
         const ALLOWED: &[&str] = &[
             "schema",
-            "jsonl-format-simplified",
-            "jsonl-format",
             // Manifest output protocol — gated on `hasManifest` at the
             // resolve layer; a no-op when the flag is off, required when
             // on (same pattern as `elements` below).
@@ -205,7 +187,6 @@ fn compact_subagent_skills<T: SkillNamed>(
             // `elements` deliberately OMITTED — the retry wants the smallest prompt.
             const RETRY_ALLOWED: &[&str] = &[
                 "schema",
-                "jsonl-format-simplified",
                 "layout",
                 "text-rules",
                 "mobile-app",
@@ -296,7 +277,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn minimal_skills_keeps_only_schema_and_jsonl_format() {
+    fn minimal_skills_keeps_only_schema() {
         let input = skills(&[
             "schema",
             "jsonl-format",
@@ -306,15 +287,18 @@ mod tests {
             "design-md",
         ]);
         let out = filter(input, ModelTier::Full, true, false);
-        assert_eq!(names(&out), vec!["schema", "jsonl-format"]);
+        assert_eq!(names(&out), vec!["schema"]);
     }
 
     #[test]
-    fn minimal_skills_drops_jsonl_format_simplified() {
-        // The TS minimal_skills filter (orchestrator-sub-agent.ts:428-431)
-        // keeps exactly `schema` + `jsonl-format` — `jsonl-format-simplified`
-        // is NOT in the allow-set, so it is dropped.
-        let input = skills(&["schema", "jsonl-format-simplified", "layout", "elements"]);
+    fn minimal_skills_drops_jsonl_format_skills() {
+        let input = skills(&[
+            "schema",
+            "jsonl-format",
+            "jsonl-format-simplified",
+            "layout",
+            "elements",
+        ]);
         let out = filter(input, ModelTier::Basic, true, false);
         assert_eq!(names(&out), vec!["schema"]);
     }
@@ -324,11 +308,11 @@ mod tests {
         // minimal_skills takes precedence (early return, reduced ignored).
         let input = skills(&["schema", "jsonl-format", "layout", "mobile-app"]);
         let out = filter(input, ModelTier::Basic, true, true);
-        assert_eq!(names(&out), vec!["schema", "jsonl-format"]);
+        assert_eq!(names(&out), vec!["schema"]);
     }
 
     // -----------------------------------------------------------------------
-    // base filter (all tiers) + jsonl dedup
+    // base filter (all tiers)
     // -----------------------------------------------------------------------
 
     #[test]
@@ -430,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn jsonl_dedup_drops_verbose_when_simplified_present() {
+    fn all_script_gen_filter_drops_jsonl_format_skills() {
         let input = skills(&[
             "schema",
             "jsonl-format",
@@ -440,9 +424,14 @@ mod tests {
         let out = filter(input, ModelTier::Full, false, false);
         assert!(
             !names(&out).contains(&"jsonl-format"),
-            "verbose jsonl-format dropped when simplified present"
+            "verbose jsonl-format must not be mounted in generation prompts"
         );
-        assert!(names(&out).contains(&"jsonl-format-simplified"));
+        assert!(
+            !names(&out).contains(&"jsonl-format-simplified"),
+            "simplified jsonl-format must not be mounted in generation prompts"
+        );
+        assert!(names(&out).contains(&"schema"));
+        assert!(names(&out).contains(&"layout"));
     }
 
     // -----------------------------------------------------------------------
@@ -464,10 +453,10 @@ mod tests {
         let out = filter(input, ModelTier::Basic, false, false);
         let got = names(&out);
         assert!(!got.contains(&"examples"));
+        assert!(!got.contains(&"jsonl-format-simplified"));
         assert!(got.contains(&"schema"));
         assert!(got.contains(&"layout"));
         assert!(got.contains(&"cjk-typography"));
-        assert!(got.contains(&"jsonl-format-simplified"));
     }
 
     #[test]
@@ -539,7 +528,6 @@ mod tests {
         // All retryAllowed skills that were in input should be present.
         for expected in &[
             "schema",
-            "jsonl-format-simplified",
             "layout",
             "text-rules",
             "mobile-app",
@@ -553,7 +541,7 @@ mod tests {
                 "'{expected}' should be in retryAllowed output"
             );
         }
-        assert_eq!(got.len(), 9, "exactly 9 skills in retryAllowed output");
+        assert_eq!(got.len(), 8, "exactly 8 skills in retryAllowed output");
     }
 
     #[test]
@@ -562,8 +550,8 @@ mod tests {
         let out = filter(input, ModelTier::Basic, false, true);
         let got = names(&out);
         assert!(!got.contains(&"elements"));
+        assert!(!got.contains(&"jsonl-format-simplified"));
         assert!(got.contains(&"schema"));
-        assert!(got.contains(&"jsonl-format-simplified"));
         assert!(got.contains(&"layout"));
     }
 
@@ -623,9 +611,10 @@ mod tests {
     fn apply_skill_filter_reports_minimal_mode_drops() {
         let input = skills(&["schema", "jsonl-format", "layout", "text-rules"]);
         let (kept, dropped) = apply_skill_filter(input, ModelTier::Full, false, false, true, false);
-        assert_eq!(names(&kept), vec!["schema", "jsonl-format"]);
-        // layout + text-rules must be reported as MinimalMode drops.
+        assert_eq!(names(&kept), vec!["schema"]);
+        // jsonl-format + layout + text-rules must be reported as MinimalMode drops.
         let dn: Vec<&str> = dropped.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(dn.contains(&"jsonl-format"));
         assert!(dn.contains(&"layout") && dn.contains(&"text-rules"));
         assert!(dropped
             .iter()
@@ -633,8 +622,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_skill_filter_reports_deduped_jsonl_format() {
-        // When jsonl-format-simplified survives, verbose jsonl-format is Deduped.
+    fn apply_skill_filter_reports_jsonl_format_drops() {
         let input = skills(&[
             "schema",
             "jsonl-format",
@@ -643,14 +631,11 @@ mod tests {
         ]);
         let (kept, dropped) =
             apply_skill_filter(input, ModelTier::Full, false, false, false, false);
-        assert!(names(&kept).contains(&"jsonl-format-simplified"));
+        assert!(!names(&kept).contains(&"jsonl-format-simplified"));
         assert!(!names(&kept).contains(&"jsonl-format"));
-        let deduped: Vec<&str> = dropped
-            .iter()
-            .filter(|(_, r)| matches!(r, op_ai_skills::DropReason::Deduped))
-            .map(|(n, _)| n.as_str())
-            .collect();
-        assert!(deduped.contains(&"jsonl-format"));
+        let dn: Vec<&str> = dropped.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(dn.contains(&"jsonl-format"));
+        assert!(dn.contains(&"jsonl-format-simplified"));
     }
 
     #[test]

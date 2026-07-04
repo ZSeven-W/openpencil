@@ -143,10 +143,10 @@ fn subagent_prompt_carries_subtask_and_script_format() {
     );
 }
 
-/// The reduced-complexity retry rung falls back to flat `_parent` JSONL
-/// (NODE_FORMAT) — matching what `subagent::run_subtask` parses there.
+/// The reduced-complexity retry rung keeps script-gen; only its skill set is
+/// narrowed.
 #[test]
-fn subagent_prompt_reduced_complexity_carries_node_format() {
+fn subagent_prompt_reduced_complexity_carries_script_format() {
     let st = Subtask {
         id: "hero".into(),
         label: "Hero".into(),
@@ -163,8 +163,13 @@ fn subagent_prompt_reduced_complexity_carries_node_format() {
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), true, false);
     assert!(cr.user_prompt.contains("Hero"));
-    assert!(cr.user_prompt.contains("hero-"));
-    assert!(cr.system_prompt.contains("PenNode"));
+    assert!(!cr.user_prompt.contains("IDs prefix=\"hero-\""));
+    assert!(cr
+        .system_prompt
+        .contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"));
+    assert!(!cr.system_prompt.contains(
+        "Respond with THIS section's canonical PenNode objects in the FLAT _parent format"
+    ));
 }
 
 #[test]
@@ -218,8 +223,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
     // wording and script-gen's `width:"fill_container"` JS-object wording —
     // the root-frame AUTHORING convention itself (`Root frame: id="..."` vs
     // `const sec = I(null, ...)`) is protocol-specific and covered by the
-    // dedicated `subagent_prompt_carries_subtask_and_script_format` /
-    // `subagent_prompt_reduced_complexity_carries_node_format` tests.
+    // dedicated `subagent_prompt_carries_subtask_and_script_format` tests.
     for required in required.split('|') {
         assert!(
             cr.system_prompt.contains(required) || cr.user_prompt.contains(required),
@@ -229,7 +233,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
 }
 
 #[test]
-fn subagent_prompt_minimal_skills_only_has_schema_and_jsonl() {
+fn subagent_prompt_minimal_skills_has_schema_and_script_format() {
     let st = Subtask {
         id: "hero".into(),
         label: "Hero".into(),
@@ -244,13 +248,19 @@ fn subagent_prompt_minimal_skills_only_has_schema_and_jsonl() {
         generated_root_id: None,
         existing_section_labels: None,
     };
-    // minimal_skills=true: the system prompt should contain "schema" skill
-    // content and "jsonl-format" skill content, but NOT layout/text-rules etc.
+    // minimal_skills=true: the system prompt should contain schema skill
+    // content plus the script-gen protocol suffix, but NOT layout/text-rules
+    // or the retired jsonl-format skill.
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, true);
-    // schema and jsonl-format skills should appear (they always exist)
     assert!(
-        cr.system_prompt.contains("PenNode"),
-        "NODE_FORMAT suffix should still be appended"
+        cr.system_prompt
+            .contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
+        "minimal_skills prompt should still append SCRIPT_FORMAT"
+    );
+    assert!(
+        !cr.system_prompt
+            .contains("CRITICAL — OUTPUT FORMAT: Emit raw JSONL only"),
+        "minimal_skills prompt must not mount jsonl-format"
     );
     // The system_prompt should be considerably shorter than a full-skill prompt
     let (full_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -297,12 +307,9 @@ fn subagent_prompt_reduced_complexity_basic_is_shorter_than_full() {
     );
 }
 
-/// Before the Task 4 protocol collapse, `reduced_complexity` only drove
-/// tier-gated SKILL narrowing (a no-op for Full tier). It now ALSO selects
-/// the output protocol (script-gen on the full attempt, flat JSONL on the
-/// reduced rung) for EVERY tier — so holding `script_on` fixed via the core
-/// fn isolates the still-true "Full tier skill narrowing is a no-op"
-/// invariant from that new, tier-independent protocol switch.
+/// `reduced_complexity` only drives tier-gated SKILL narrowing. Holding
+/// `script_on` fixed via the core fn isolates the still-true "Full tier skill
+/// narrowing is a no-op" invariant.
 #[test]
 fn subagent_prompt_reduced_complexity_full_tier_skill_filtering_is_noop() {
     let st = Subtask {
@@ -348,12 +355,11 @@ fn subagent_prompt_reduced_complexity_full_tier_skill_filtering_is_noop() {
     );
 }
 
-/// The new, tier-independent half of the same invariant: with `script_on`
-/// left to its normal `reduced_complexity`-derived value, the full attempt
-/// and the reduced rung now legitimately differ — even on Full tier — because
-/// `reduced_complexity` also flips the output protocol.
+/// Public prompt construction keeps script-gen even when `reduced_complexity`
+/// is enabled; on Full tier the skill set is also unchanged, so the prompt is
+/// byte-for-byte equal to the full attempt.
 #[test]
-fn subagent_prompt_reduced_complexity_flips_protocol_even_on_full_tier() {
+fn subagent_prompt_reduced_complexity_keeps_script_gen_even_on_full_tier() {
     let st = Subtask {
         id: "hero".into(),
         label: "Hero".into(),
@@ -378,24 +384,31 @@ fn subagent_prompt_reduced_complexity_flips_protocol_even_on_full_tier() {
     );
     assert!(
         reduced_cr.system_prompt.contains("PenNode"),
-        "reduced rung falls back to flat JSONL even on Full tier"
+        "schema skill should still describe PenNode"
     );
-    assert_ne!(full_cr.system_prompt, reduced_cr.system_prompt);
+    assert!(
+        reduced_cr
+            .system_prompt
+            .contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
+        "reduced rung must stay on script-gen"
+    );
+    assert!(
+        !reduced_cr.system_prompt.contains(
+            "Respond with THIS section's canonical PenNode objects in the FLAT _parent format"
+        ),
+        "reduced rung must not append NODE_FORMAT"
+    );
+    assert_eq!(full_cr.system_prompt, reduced_cr.system_prompt);
 }
 
-/// Regression guard for the flag-passing fix: a Basic-tier model must load
-/// `jsonl-format-simplified` (gated by the `isBasicTier` flag) and drop the
-/// verbose `jsonl-format`, while a Full-tier model keeps the verbose one.
-/// Before the fix, `resolve_generation_skills` passed empty flags, so the
-/// simplified skill could NEVER load for the weak models it targets.
+/// Regression guard for retiring the flat JSONL generation protocol: Basic
+/// reduced-complexity retries still narrow the skill set, but the subagent
+/// prompt must not mount either JSONL output-format skill.
 #[test]
-fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
-    // Verbose-only marker (lives solely in jsonl-format.md) and simplified-only
-    // marker (the parenthesized rectangle arg list lives solely in
-    // jsonl-format-simplified.md). Both `jsonl-format` skills are dropped
-    // outright on the script-gen full attempt (SCRIPT_FORMAT governs the
-    // output contract alone), so this exercises the reduced-complexity JSONL
-    // rung, where the tier-based swap is actually live.
+fn subagent_prompt_basic_tier_reduced_retry_drops_jsonl_format_skills() {
+    // Historical JSONL-only markers. The files are no longer mounted in the
+    // generation corpus, and this reduced retry should not reintroduce their
+    // wording through any compact-skill path.
     const VERBOSE_ONLY: &str = "imageSearchQuery MUST be UNIQUE";
     const SIMPLIFIED_ONLY: &str = "rectangle (width,height,cornerRadius,fill)";
 
@@ -409,7 +422,7 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
         validation_enabled: true,
         visual_ref_enabled: false,
     };
-    let (basic_cr, _) = bsp(
+    let (basic_cr, basic_report) = bsp(
         &subtask(),
         &plan(),
         &basic_req,
@@ -417,24 +430,33 @@ fn subagent_prompt_basic_tier_swaps_in_simplified_format_skill() {
         true,
         false,
     );
-    // req() is model "claude" → Full tier.
-    let (full_cr, _) = bsp(&subtask(), &plan(), &req(), AbortFlag::new(), true, false);
+    let included: Vec<&str> = basic_report
+        .included
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .collect();
 
     assert!(
-        basic_cr.system_prompt.contains(SIMPLIFIED_ONLY),
-        "Basic tier must load jsonl-format-simplified"
+        !included.contains(&"jsonl-format-simplified"),
+        "Basic reduced retry must not mount jsonl-format-simplified"
+    );
+    assert!(
+        !included.contains(&"jsonl-format"),
+        "Basic reduced retry must not mount jsonl-format"
+    );
+    assert!(
+        !basic_cr.system_prompt.contains(SIMPLIFIED_ONLY),
+        "Basic reduced retry must not carry simplified JSONL wording"
     );
     assert!(
         !basic_cr.system_prompt.contains(VERBOSE_ONLY),
-        "Basic tier must NOT carry the verbose jsonl-format (deduped by simplified)"
+        "Basic reduced retry must not carry verbose JSONL wording"
     );
     assert!(
-        full_cr.system_prompt.contains(VERBOSE_ONLY),
-        "Full tier must keep the verbose jsonl-format"
-    );
-    assert!(
-        !full_cr.system_prompt.contains(SIMPLIFIED_ONLY),
-        "Full tier must NOT load jsonl-format-simplified (isBasicTier is false)"
+        basic_cr
+            .system_prompt
+            .contains("OUTPUT PROTOCOL: JAVASCRIPT PROGRAM"),
+        "Basic reduced retry must still append SCRIPT_FORMAT"
     );
 }
 
@@ -1251,9 +1273,8 @@ fn large_component_library_is_capped() {
 
 /// Regression guard for the protocol-mismatch stop-gate: the AVAILABLE
 /// COMPONENTS manifest's trailing ref-syntax example must match whichever
-/// output protocol governs the REST of this prompt — script-gen (`I(...)`
-/// calls) on the full attempt, flat `_parent` JSONL on the
-/// reduced-complexity retry rung. Teaching the wrong dialect makes every
+/// output protocol governs the REST of this prompt. The subagent path is now
+/// script-gen on every retry rung. Teaching the wrong dialect makes every
 /// `ref` silently vanish: a bare `{"_parent":...}` line is never recorded by
 /// the script sandbox (only `I(...)` calls are), so under script-gen the
 /// old always-flat instruction taught the model a no-op.
@@ -1290,8 +1311,8 @@ fn components_manifest_instruction_matches_active_protocol() {
          — a bare {{\"_parent\":...}} line is never recorded by the script sandbox:\n{script_sys}"
     );
 
-    // (b) Reduced-complexity retry rung: falls back to flat `_parent` JSONL.
-    // The manifest must teach the `_parent` ref line.
+    // (b) Reduced-complexity retry rung: still script-gen. The manifest must
+    // teach the `I(...)` ref call and must not teach the `_parent` ref line.
     let (flat_cr, _) = build_subagent_prompt(
         &subtask(),
         &plan(),
@@ -1303,8 +1324,12 @@ fn components_manifest_instruction_matches_active_protocol() {
     );
     let flat_sys = &flat_cr.system_prompt;
     assert!(
-        flat_sys.contains("\"_parent\":\"<container-id>\""),
-        "reduced-complexity manifest must teach the flat _parent ref line:\n{flat_sys}"
+        flat_sys.contains("I(<containerBinding>, {\"type\":\"ref\""),
+        "reduced-complexity manifest must keep the script-gen ref call:\n{flat_sys}"
+    );
+    assert!(
+        !flat_sys.contains("\"_parent\":\"<container-id>\""),
+        "reduced-complexity manifest must not teach the flat _parent ref line:\n{flat_sys}"
     );
 }
 
@@ -1423,23 +1448,22 @@ fn basic_tier_components_prompt_keeps_both_manifest_and_teaching() {
     );
 }
 
-/// Regression guard for the BUDGET-drop bug — the non-mobile dashboard path.
+/// Regression guard for the non-mobile Basic dashboard component path.
 ///
 /// The earlier `basic_tier_components_prompt_keeps_both_*` test covers the
 /// MOBILE path (9200-token budget with headroom), which only ever exercised the
-/// TIER allow-set drop. The real loss in production is on the NON-MOBILE,
-/// Basic-tier dashboard path: `budget_max = 5200`, base skills alone consume
-/// ~3900, so the flag-gated `component-composition` skill (~1200 tok) does NOT
-/// fit and was dropped with `DropReason::BudgetExhausted` — the model got the
-/// AVAILABLE COMPONENTS list but no `ref` + `descendants` teaching and emitted 0
-/// instances (`("component-composition","budget")` ×4 subtasks across runs).
+/// TIER allow-set drop. The non-mobile Basic path still runs under the smaller
+/// `budget_max = 5200`, where optional dashboard/depth skills can be
+/// budget-dropped. With a component library loaded, the model must still get
+/// both halves of the component contract: the AVAILABLE COMPONENTS list and the
+/// `component-composition` teaching.
 ///
 /// The force-include pin (prompt.rs: `pinned_skills` when `has_reusable_components`,
-/// threaded into `trim_by_budget_pinned`) keeps it budget-exempt. This test
-/// reproduces the EXACT scenario that dropped it (wide plan ⇒ 5200 budget, a
-/// library present, budget already exhausted) and asserts the teaching survives.
+/// threaded into `trim_by_budget_pinned`) keeps it budget-exempt in tighter
+/// prompts. This test covers the current wide-plan Basic path after retiring
+/// the JSONL skills that used to consume part of the budget.
 #[test]
-fn tight_budget_dashboard_force_includes_component_composition() {
+fn tight_budget_dashboard_keeps_component_composition() {
     // Basic tier is the path that overrides the budget down to 5200 when the
     // plan is NOT a mobile full screen (the bug surface).
     assert_eq!(
@@ -1449,7 +1473,7 @@ fn tight_budget_dashboard_force_includes_component_composition() {
     );
 
     // A wide (non-mobile) dashboard plan → is_mobile_full_screen = false →
-    // budget_override = Some(5200), the exact tight path that budget-dropped it.
+    // budget_override = Some(5200), the tight path for Basic models.
     let basic_req = DesignRequest {
         prompt: "Design a 1280x800 analytics dashboard with metric cards, \
                  a chart panel, and a data table using the available components"
@@ -1476,11 +1500,9 @@ fn tight_budget_dashboard_force_includes_component_composition() {
     };
 
     let lib = library_with(5);
-    // Drive the core with script_on forced OFF so this exercises the
-    // FLAT-JSONL tight-budget path the test is about — deterministically,
-    // regardless of the model's default protocol. (script-gen is THE default
-    // on the full attempt and drops the jsonl-format skill, freeing budget;
-    // that would un-exhaust the 5200 budget and void the pin scenario.)
+    // Drive the core with script_on forced OFF so this still exercises the
+    // legacy NODE-dialect branch deterministically. Public subagent prompts do
+    // not call this branch.
     let (cr, report) = build_subagent_prompt_core(
         &dash_subtask,
         &dash_plan,
@@ -1493,18 +1515,17 @@ fn tight_budget_dashboard_force_includes_component_composition() {
     );
     let sys = &cr.system_prompt;
 
-    // (0) Prove this is the TIGHT path: the 5200 budget is genuinely exhausted —
-    // budget_used >= budget_max — so the survival of component-composition can
-    // ONLY be the force-include pin, not leftover headroom. (Before the fix this
-    // same exhaustion is what dropped it with DropReason::BudgetExhausted.)
+    // (0) Prove this is the non-mobile Basic tight path.
     assert_eq!(
         report.budget_max, 5200,
         "non-mobile Basic must use the 5200 budget"
     );
     assert!(
-        report.budget_used >= report.budget_max,
-        "fixture must EXHAUST the budget so the pin is the only thing keeping the \
-         skill (the bug dropped it here); report={report:?}"
+        report
+            .dropped
+            .iter()
+            .any(|s| matches!(s.reason, op_ai_skills::DropReason::BudgetExhausted)),
+        "fixture must still exercise budget pressure; report={report:?}"
     );
 
     // (1) The component-composition TEACHING skill survived the tight budget.

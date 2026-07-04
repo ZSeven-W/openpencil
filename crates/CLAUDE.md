@@ -467,11 +467,11 @@ By category:
   memory / 2 s wall-clock / 4096 recorded-line / 256 KiB source-size
   limits) whose only effect is calling `I(parent, node)` to emit the
   same program. The orchestrator's subagents share this exact runner:
-  script-gen (a real JS program driving `I(...)`) is THE default
-  generation protocol on every model's full first attempt; the
-  reduced-complexity / minimal-skills retry rungs fall back to a flat
-  newline-delimited JSON protocol instead (one `{"_parent": ...}`
-  node object per line, no script sandbox), parsed by `parse_nodes`.
+  script-gen (a real JS program driving `I(...)`) is THE generation
+  protocol on every subagent rung. The reduced-complexity /
+  minimal-skills retry rungs only narrow the loaded skill set; they do
+  not switch output protocol. `parse_nodes` remains available for the
+  separate modify/chat paths that still consume flat node JSON.
 
 Read tools snapshot `Document` state at registration time. Write tools stay `&self`: they validate args and return `ToolOutcome::OkWithCommand(result, command)` for the host to apply via `Document::apply_mcp_command(command)`. The apply path follows pre-validate-then-mutate discipline (id space, target existence, geometry, hex, container-children consent) so a bad arg never leaves the document half-mutated.
 
