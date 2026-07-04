@@ -81,6 +81,90 @@ pub fn seed_assignments_from_instances(
     }
     collect(root, &mut pool);
 
+    // Geometry seeding: an instance whose single-segment entries carry
+    // BOTH a size and a transform proves the shared pk -> node mapping
+    // for its whole symbol — instances of the same SYMBOL share one
+    // virtual-ID space, so a sibling with rich derived data resolves
+    // pks that a sparsely-overridden instance could only walk-guess.
+    // pk, lid, geometry-bearing entry, same-pk override entry (its
+    // fill hint is the tie-breaker between geometry near-ties).
+    type GeomEntry = (String, f64, FigValue, Option<FigValue>);
+    type GeomSeeds = Vec<(String, Option<FigVec2>, Vec<GeomEntry>)>;
+    let mut geom_seeds: GeomSeeds = Vec::new();
+
+    fn collect_geom(node: &TreeNode, out: &mut GeomSeeds) {
+        let figma = &node.figma;
+        if figma.get_str("type") == Some("INSTANCE") {
+            if let Some(sym_guid) = figma
+                .get("symbolData")
+                .and_then(|s| s.get("symbolID"))
+                .and_then(|g| {
+                    Some(format!(
+                        "{}:{}",
+                        g.get_f64("sessionID")? as u64,
+                        g.get_f64("localID")? as u64
+                    ))
+                })
+            {
+                let single_pk = |entry: &FigValue| -> Option<String> {
+                    let guids = entry.get("guidPath").and_then(|p| p.get_array("guids"))?;
+                    if guids.len() != 1 {
+                        return None;
+                    }
+                    guids.first().and_then(guid_to_string)
+                };
+                let overrides = figma
+                    .get("symbolData")
+                    .and_then(|s| s.get_array("symbolOverrides"));
+                let override_for = |pk: &str| -> Option<FigValue> {
+                    overrides?
+                        .iter()
+                        .find(|e| single_pk(e).as_deref() == Some(pk))
+                        .cloned()
+                };
+                let mut entries: Vec<GeomEntry> = Vec::new();
+                let mut take = |entry: &FigValue| {
+                    let Some(pk) = single_pk(entry) else {
+                        return;
+                    };
+                    let has_geom = entry.get("size").is_some()
+                        && entry
+                            .get("transform")
+                            .map(|t| t.get_f64("m02").is_some() && t.get_f64("m12").is_some())
+                            .unwrap_or(false);
+                    if !has_geom || entries.iter().any(|(p, _, _, _)| *p == pk) {
+                        return;
+                    }
+                    let lid = pk
+                        .split(':')
+                        .nth(1)
+                        .and_then(|s| s.parse::<f64>().ok())
+                        .unwrap_or(0.0);
+                    let ov = override_for(&pk);
+                    entries.push((pk, lid, entry.clone(), ov));
+                };
+                if let Some(ov) = overrides {
+                    for e in ov {
+                        take(e);
+                    }
+                }
+                if let Some(dv) = figma.get_array("derivedSymbolData") {
+                    for e in dv {
+                        take(e);
+                    }
+                }
+                if !entries.is_empty() {
+                    let inst_size = figma.get("size").and_then(FigVec2::from_value);
+                    out.push((sym_guid, inst_size, entries));
+                }
+            }
+        }
+        for c in &node.children {
+            collect_geom(c, out);
+        }
+    }
+    collect_geom(root, &mut geom_seeds);
+
     for (sym_guid, per_pk) in &pool {
         let Some(symbol) = symbol_tree.get(sym_guid) else {
             continue;
@@ -106,6 +190,46 @@ pub fn seed_assignments_from_instances(
             // First seeding wins — the clipboard path seeds the whole
             // tree first and then per top-node; a later, narrower pool
             // must not overwrite the global pooled assignment.
+            cache.entry(format!("{sym_guid}|{pk}")).or_insert(ng);
+        }
+    }
+
+    for (sym_guid, inst_size, entries) in &geom_seeds {
+        let Some(symbol) = symbol_tree.get(sym_guid) else {
+            continue;
+        };
+        let mut flat: Vec<&TreeNode> = Vec::new();
+        flatten_dfs(symbol, &mut flat);
+        if flat.len() < 2 {
+            continue;
+        }
+        let candidates: Vec<&TreeNode> = flat[1..].to_vec();
+        let base = entries
+            .iter()
+            .map(|(_, lid, _, _)| *lid)
+            .fold(f64::INFINITY, f64::min);
+        let ventries: Vec<fingerprint::VirtualEntry> = entries
+            .iter()
+            .map(|(pk, lid, e, ov)| fingerprint::VirtualEntry {
+                pk: pk.clone(),
+                rel_idx: lid - base,
+                derived: Some(e),
+                overrides: ov.as_ref(),
+            })
+            .collect();
+        let ratios = match (
+            *inst_size,
+            symbol.figma.get("size").and_then(FigVec2::from_value),
+        ) {
+            (Some(i), Some(sym)) if sym.x > 0.0 && sym.y > 0.0 => (i.x / sym.x, i.y / sym.y),
+            _ => (1.0, 1.0),
+        };
+        let Some(assigned) = fingerprint::assign(&ventries, &candidates, ratios) else {
+            continue;
+        };
+        for (pk, ng) in assigned {
+            // Pooled text pins (above) win collisions — they carry
+            // cross-instance evidence; geometry is per-instance.
             cache.entry(format!("{sym_guid}|{pk}")).or_insert(ng);
         }
     }
