@@ -137,11 +137,15 @@ impl FontStore {
         let italic = matches!(meta.style, FontStyleKind::Italic);
         let mut index = self.load_index();
         // Replace any prior entry for the same face (last-import-wins, matching
-        // the in-memory registry), pruning its now-orphaned file.
+        // the in-memory registry). COLLECT the superseded files but do NOT
+        // delete them yet: deleting before the new index is durably saved
+        // would lose the previous font if `save_index` then failed, leaving
+        // the on-disk index pointing at a file we already removed.
+        let mut superseded: Vec<String> = Vec::new();
         index.fonts.retain(|e| {
             let same = e.family == meta.family && e.italic == italic && e.weight == meta.weight;
             if same && e.file != file {
-                let _ = std::fs::remove_file(self.dir.join(&e.file));
+                superseded.push(e.file.clone());
             }
             !same
         });
@@ -154,6 +158,12 @@ impl FontStore {
         });
         self.save_index(&index)
             .map_err(|e| format!("write font index: {e}"))?;
+
+        // The new index is durable — only now is it safe to prune the files
+        // it no longer references.
+        for old in superseded {
+            let _ = std::fs::remove_file(self.dir.join(&old));
+        }
 
         // Persistence is durable — now commit the live registration. This
         // re-parses the same bytes, so it cannot fail after `parse_*` above
@@ -337,5 +347,57 @@ mod tests {
             0,
             "a failed persist must NOT leave the font registered in the live registry"
         );
+    }
+
+    #[test]
+    fn replacement_import_prunes_the_old_file_only_after_saving_the_index() {
+        let root = TempRoot::new();
+        let store = FontStore::at(&root.0);
+        jian_skia::remove_imported_font(FAMILY2);
+
+        // Learn FONT2's real face key so the seeded "old" entry collides on
+        // (family, style, weight) and is treated as the replacement target.
+        let meta = jian_skia::parse_imported_font_meta(FONT2).expect("FONT2 parses");
+        let italic = matches!(meta.style, FontStyleKind::Italic);
+
+        // Seed a pre-existing persisted face pointing at a DIFFERENT file.
+        let fonts_dir = root.0.join(FONTS_SUBDIR);
+        std::fs::create_dir_all(&fonts_dir).unwrap();
+        let old_file = "oldface.ttf";
+        std::fs::write(fonts_dir.join(old_file), b"stale").unwrap();
+        store
+            .save_index(&FontIndex {
+                fonts: vec![FontIndexEntry {
+                    family: meta.family.clone(),
+                    italic,
+                    weight: meta.weight,
+                    hash: 1,
+                    file: old_file.to_string(),
+                }],
+            })
+            .unwrap();
+
+        // Import the real font — a replacement of that face.
+        let blob = store.import(FONT2.to_vec()).expect("replacement import");
+
+        assert!(
+            !fonts_dir.join(old_file).exists(),
+            "superseded file pruned after the index was saved"
+        );
+        assert!(
+            fonts_dir.join(format!("{:016x}.ttf", blob.hash)).exists(),
+            "new face file written"
+        );
+        assert_eq!(store.load_index().fonts.len(), 1, "index holds one face");
+        assert_eq!(
+            jian_skia::list_families()
+                .iter()
+                .filter(|m| m.family == FAMILY2)
+                .count(),
+            1,
+            "exactly one live face for the replaced family"
+        );
+
+        jian_skia::remove_imported_font(FAMILY2);
     }
 }
