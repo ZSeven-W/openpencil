@@ -253,13 +253,24 @@ pub(crate) async fn run_subtask_with_reveal_at(
     normalize_section_roots_for_parent_layout(&mut nodes);
     let self_check = crate::orchestration_self_check::check_generated_nodes(&nodes, canvas_width);
     if self_check.has_fatal() {
-        let message = self_check.failure_message();
-        tracing::warn!(
-            subtask = %subtask.id,
-            issues = %message,
-            "subagent self-check rejected generated nodes"
-        );
-        return fail(format!("self-check failed: {message}"));
+        let fixed =
+            crate::orchestration_self_check::auto_fix_fixable_issues(&mut nodes, canvas_width);
+        let recheck = crate::orchestration_self_check::check_generated_nodes(&nodes, canvas_width);
+        if recheck.has_fatal() {
+            let message = recheck.failure_message();
+            tracing::warn!(
+                subtask = %subtask.id,
+                issues = %message,
+                "subagent self-check rejected generated nodes (unfixable after auto-fix)"
+            );
+            return fail(format!("self-check failed: {message}"));
+        }
+        if fixed {
+            tracing::info!(
+                subtask = %subtask.id,
+                "subagent self-check auto-fixed product-row overflow (fixed-width cards -> fill_container)"
+            );
+        }
     }
     let node_count = nodes.len();
 
@@ -1301,7 +1312,7 @@ mod tests {
     }
 
     #[test]
-    fn run_subtask_rejects_self_check_fatal_product_overflow() {
+    fn run_subtask_auto_fixes_self_check_product_overflow() {
         let mut mobile_plan = plan();
         mobile_plan.root_frame.width = 390.0;
         mobile_plan.root_frame.height = 844.0;
@@ -1317,10 +1328,6 @@ mod tests {
                     {"type":"image","width":170,"height":120,"imageSearchQuery":"burger plate"},
                     {"type":"text","content":"Smash Deluxe"}
                   ]},
-                  {"type":"frame","role":"card","width":170,"height":220,"children":[
-                    {"type":"image","width":170,"height":120,"imageSearchQuery":"salmon bowl"},
-                    {"type":"text","content":"Poke Salmon Bowl"}
-                  ]}
                 ]}
               ]
             });"#
@@ -1339,19 +1346,21 @@ mod tests {
             false,
         ));
 
-        assert_eq!(outcome.node_count, 0);
-        assert!(
-            outcome
-                .error
-                .as_deref()
-                .unwrap_or_default()
-                .contains("mobile-product-row-overflow"),
-            "{:?}",
-            outcome.error
+        assert!(outcome.error.is_none(), "{:?}", outcome.error);
+        assert_eq!(outcome.node_count, 1);
+        let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+            panic!("expected InsertSubtree");
+        };
+        let fixed_json = serde_json::to_value(nodes).expect("serialize nodes");
+        let row = &fixed_json[0]["children"][0];
+        assert_eq!(row["gap"].as_f64(), Some(12.0));
+        assert_eq!(
+            row["children"][0]["width"],
+            serde_json::json!("fill_container")
         );
-        assert!(
-            sink.applied.is_empty(),
-            "fatal self-check should reject before InsertSubtree"
+        assert_eq!(
+            row["children"][1]["width"],
+            serde_json::json!("fill_container")
         );
     }
 

@@ -60,6 +60,24 @@ pub(crate) fn check_value_forest(value: &Value, canvas_width: f64) -> SelfCheckR
     report
 }
 
+pub fn auto_fix_fixable_issues(nodes: &mut [PenNode], canvas_width: f64) -> bool {
+    let mut value = serde_json::to_value(&*nodes).unwrap_or(Value::Null);
+    if !auto_fix_value_forest(&mut value, canvas_width) {
+        return false;
+    }
+
+    let Ok(fixed_nodes) = serde_json::from_value::<Vec<PenNode>>(value) else {
+        return false;
+    };
+    if fixed_nodes.len() != nodes.len() {
+        return false;
+    }
+    for (node, fixed_node) in nodes.iter_mut().zip(fixed_nodes) {
+        *node = fixed_node;
+    }
+    true
+}
+
 fn check_node(node: &Value, canvas_width: f64, report: &mut SelfCheckReport) {
     if is_mobile_product_row_overflow(node, canvas_width) {
         report.issues.push(SelfCheckIssue {
@@ -99,11 +117,63 @@ fn check_node(node: &Value, canvas_width: f64, report: &mut SelfCheckReport) {
     }
 }
 
+fn auto_fix_value_forest(value: &mut Value, canvas_width: f64) -> bool {
+    match value {
+        Value::Array(nodes) => {
+            let mut changed = false;
+            for node in nodes {
+                changed |= auto_fix_node(node, canvas_width);
+            }
+            changed
+        }
+        Value::Object(_) => auto_fix_node(value, canvas_width),
+        _ => false,
+    }
+}
+
+fn auto_fix_node(node: &mut Value, canvas_width: f64) -> bool {
+    let mut changed = false;
+    if is_mobile_product_row_overflow(node, canvas_width) {
+        changed |= auto_fix_product_row_overflow(node);
+    }
+
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            changed |= auto_fix_node(child, canvas_width);
+        }
+    }
+    changed
+}
+
+fn auto_fix_product_row_overflow(node: &mut Value) -> bool {
+    let mut changed = false;
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            if is_product_card_child(child) && numeric_prop(child, "width").is_some() {
+                child["width"] = Value::String("fill_container".into());
+                changed = true;
+            }
+        }
+    }
+
+    if numeric_prop(node, "gap")
+        .map(|gap| gap > 12.0)
+        .unwrap_or(true)
+    {
+        node["gap"] = Value::from(12);
+        changed = true;
+    }
+    changed
+}
+
 fn is_mobile_product_row_overflow(node: &Value, canvas_width: f64) -> bool {
     if canvas_width > 480.0
         || string_prop(node, "type") != Some("frame")
         || string_prop(node, "layout") != Some("horizontal")
     {
+        return false;
+    }
+    if node.get("clipContent").and_then(Value::as_bool) == Some(true) {
         return false;
     }
     let Some(children) = children(node) else {
@@ -432,6 +502,75 @@ mod tests {
                 .failure_message()
                 .contains("mobile-product-row-overflow"),
             "{report:?}"
+        );
+    }
+
+    #[test]
+    fn clipping_scroll_row_is_not_flagged_as_overflow() {
+        let nodes = json!([{
+            "type": "frame", "id": "popular-scroll", "name": "Popular Scroll",
+            "width": "fill_container", "height": "fit_content",
+            "layout": "horizontal", "clipContent": true, "gap": 16,
+            "children": [
+                {"type": "frame", "id": "card-1", "role": "card", "width": 144, "height": 212,
+                 "children": [{"type": "image", "id": "img-1", "src": "", "width": 144, "height": 112}, {"type": "text", "id": "t1", "content": "Alpha"}]},
+                {"type": "frame", "id": "card-2", "role": "card", "width": 144, "height": 212,
+                 "children": [{"type": "image", "id": "img-2", "src": "", "width": 144, "height": 112}, {"type": "text", "id": "t2", "content": "Beta"}]},
+                {"type": "frame", "id": "card-3", "role": "card", "width": 144, "height": 212,
+                 "children": [{"type": "image", "id": "img-3", "src": "", "width": 144, "height": 112}, {"type": "text", "id": "t3", "content": "Gamma"}]},
+                {"type": "frame", "id": "card-4", "role": "card", "width": 144, "height": 212,
+                 "children": [{"type": "image", "id": "img-4", "src": "", "width": 144, "height": 112}, {"type": "text", "id": "t4", "content": "Delta"}]}
+            ]
+        }]);
+
+        assert!(!is_mobile_product_row_overflow(&nodes[0], 375.0));
+        let parsed: Vec<PenNode> = serde_json::from_value(nodes).expect("parse nodes");
+        let report = check_generated_nodes(&parsed, 375.0);
+        assert!(
+            !report.has_fatal(),
+            "clipped scroll row should pass: {report:?}"
+        );
+    }
+
+    #[test]
+    fn auto_fixes_mobile_product_row_overflow() {
+        let mut nodes: Vec<PenNode> = serde_json::from_value(json!([
+            {
+                "type": "frame",
+                "id": "popular",
+                "name": "Popular Now",
+                "width": "fill_container",
+                "height": "fit_content",
+                "layout": "horizontal",
+                "gap": 20,
+                "children": [
+                    {"type": "frame", "id": "card-1", "role": "card", "width": 170, "height": 220,
+                     "children": [{"type": "image", "id": "img-1", "src": "", "width": 170, "height": 120}, {"type": "text", "id": "t1", "content": "Truffle Carbonara"}]},
+                    {"type": "frame", "id": "card-2", "role": "card", "width": 170, "height": 220,
+                     "children": [{"type": "image", "id": "img-2", "src": "", "width": 170, "height": 120}, {"type": "text", "id": "t2", "content": "Smash Deluxe"}]}
+                ]
+            }
+        ]))
+        .expect("parse nodes");
+
+        let before = check_generated_nodes(&nodes, 390.0);
+        assert!(
+            before.has_fatal(),
+            "fixed-width mobile product row should fail before auto-fix"
+        );
+
+        let fixed = auto_fix_fixable_issues(&mut nodes, 390.0);
+
+        assert!(fixed, "overflowing product row should be auto-fixed");
+        let fixed_json = serde_json::to_value(&nodes).expect("serialize nodes");
+        let row = &fixed_json[0];
+        assert_eq!(row["gap"].as_f64(), Some(12.0));
+        assert_eq!(row["children"][0]["width"], json!("fill_container"));
+        assert_eq!(row["children"][1]["width"], json!("fill_container"));
+        let after = check_generated_nodes(&nodes, 390.0);
+        assert!(
+            !after.has_fatal(),
+            "auto-fixed product row should pass: {after:?}"
         );
     }
 
