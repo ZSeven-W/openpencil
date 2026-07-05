@@ -9,7 +9,34 @@ use winit::window::Fullscreen;
 
 use crate::{menu, persistence, update_check, DesktopApp};
 
+/// File-menu label for a recent path — the file name, falling back to the
+/// full path when it has no final component.
+fn recent_menu_label(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| path.to_string())
+}
+
 impl DesktopApp {
+    /// Rebuild the native File ▸ Open Recent submenu from the host's current
+    /// recent-file list (file names, newest first). No-op off macOS.
+    pub(crate) fn refresh_recent_menu(&self) {
+        let Some(menu) = self.app_menu.as_ref() else {
+            return;
+        };
+        let labels: Vec<String> = self
+            .host
+            .editor_state()
+            .editor_ui
+            .recent_files
+            .iter()
+            .map(|r| recent_menu_label(&r.path))
+            .collect();
+        menu.set_recent_files(&labels);
+    }
+
     /// Dispatch a native-menu selection onto the matching host action —
     /// the same calls the keyboard shortcuts make.
     pub(crate) fn handle_menu_action(
@@ -41,6 +68,18 @@ impl DesktopApp {
                     self.mark_document_saved();
                 }
                 ok
+            }
+            A::OpenRecent(i) => {
+                let opened = persistence::run_action(
+                    op_editor_core::editor_ui_state::FileAction::OpenRecent(i),
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                ) == op_host_services::doc_io::ActionOutcome::Saved;
+                if opened {
+                    self.mark_document_saved();
+                }
+                opened
             }
             A::Save => {
                 self.host.commit_variable_row_focus_if_any_pub();
