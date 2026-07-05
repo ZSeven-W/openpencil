@@ -202,6 +202,22 @@ impl WidgetHostNative {
                 }
                 self.close_font_picker();
             }
+            A::ImportFont => {
+                // Raise a pending request; the desktop host drains it,
+                // opens the native font-file dialog, and registers the
+                // chosen file (FontStore lives desktop-side). Keep the
+                // picker open so the newly imported family appears.
+                self.editor_state.editor_ui.pending_font_import = true;
+                self.mark_dirty();
+            }
+            A::RemoveImportedFont(index) => {
+                // Resolve the family against the SAME entries list, then
+                // hand it to the desktop host to drop from FontStore.
+                if let Some(family) = self.font_picker_family_at(index) {
+                    self.editor_state.editor_ui.pending_font_remove = Some(family);
+                    self.mark_dirty();
+                }
+            }
             A::ToggleImageSearchPopover => {
                 self.toggle_image_search_popover();
             }

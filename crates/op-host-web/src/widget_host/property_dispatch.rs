@@ -415,6 +415,7 @@ impl WidgetHost {
                 let family = {
                     let ui = &self.editor_state.editor_ui;
                     op_editor_ui::widgets::property_panel_typography::font_picker_entries(
+                        &ui.imported_font_families,
                         &ui.system_font_families,
                         &ui.font_picker_search,
                     )
@@ -436,6 +437,10 @@ impl WidgetHost {
                 }
                 self.editor_state.editor_ui.close_font_picker();
             }
+            // Font import / removal are desktop-only until Phase 4 wires
+            // the browser file input + WASM registry path. No-op on web
+            // (the picker keeps the empty Imported group + inert rows).
+            A::ImportFont | A::RemoveImportedFont(_) => {}
             A::ToggleFontWeightPicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.font_weight_picker_open = !ui.font_weight_picker_open;

@@ -715,6 +715,7 @@ fn font_family_picker_rows_are_clickable() {
         rect,
         panel.visible_sections_for_test(),
         &entries,
+        panel.font_import_supported,
         0.0,
     )
     .expect("picker layout");
