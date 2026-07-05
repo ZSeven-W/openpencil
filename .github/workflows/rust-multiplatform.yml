@@ -114,19 +114,18 @@ jobs:
         # EGL/Mesa stack they soft-skip (INCONCLUSIVE eprintln); set
         # STEP1A_REQUIRE_GPU=1 on a known-good GPU runner to fail hard.
         run: cargo test --workspace --target ${{ matrix.target }}
-      - name: Test (host, macOS / Windows)
-        if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
-        run: cargo test --workspace --exclude op-host-native --exclude op-host-desktop --target ${{ matrix.target }}
-      - name: Test skia host crates (macOS / Windows, serialized)
-        if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
-        # op-host-native (+ op-host-desktop) build native NativeBackends whose
-        # skia FontMgr (DirectWrite) segfaults across parallel test-worker
-        # threads on the Windows runner (STATUS_ACCESS_VIOLATION). Run
-        # single-threaded (matches rust-check.yml). A SEPARATE step — not a
-        # second line in the step above — because Windows runs multi-line
-        # run: blocks under PowerShell, which only fails on the LAST command's
-        # exit code and would mask a failure in the workspace test above.
-        run: cargo test -p op-host-native -p op-host-desktop --target ${{ matrix.target }} -- --test-threads=1
+      - name: Test (host, macOS — parallel)
+        if: matrix.cross == false && matrix.check_only != true && runner.os == 'macOS'
+        run: cargo test --workspace --target ${{ matrix.target }}
+      # Windows runs the whole workspace single-threaded: many crates' tests
+      # trigger a skia FontMgr (DirectWrite) via NativeBackend / SkiaMeasure,
+      # and concurrent DirectWrite init across a test binary's parallel worker
+      # threads segfaults (STATUS_ACCESS_VIOLATION). --test-threads=1 serializes
+      # each binary; cross-binary (separate-process) concurrency is safe, so
+      # one flag covers every skia-touching crate. Matches rust-check.yml.
+      - name: Test (host, Windows — serialized skia/DirectWrite)
+        if: matrix.cross == false && matrix.check_only != true && runner.os == 'Windows'
+        run: cargo test --workspace --target ${{ matrix.target }} -- --test-threads=1
       # Desktop binary artifact upload is intentionally not wired here yet.
       # The real desktop binary lives in the `op-host-desktop` crate; a
       # build + upload step can be added once release packaging is finalized.
