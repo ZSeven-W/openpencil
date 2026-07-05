@@ -83,6 +83,23 @@ impl PropertyPanel {
         )
     }
 
+    /// Whether `point` is over the picker's bottom "Import font…"
+    /// (`ImportAction`) row (host import-row hover tracking).
+    pub fn font_picker_import_action_at(&self, panel_rect: Rect, point: Point2D) -> bool {
+        if self.is_multi || !self.font_picker.open || !self.font_import_supported {
+            return false;
+        }
+        let entries = self.font_picker_entries();
+        property_panel_typography::font_picker_import_action_at(
+            self.scrolled_rect(panel_rect),
+            self.visible_sections(),
+            &entries,
+            self.font_import_supported,
+            &self.font_picker,
+            point,
+        )
+    }
+
     /// Max scroll of the font-picker list (host wheel handler clamp).
     pub fn font_picker_max_scroll(&self, panel_rect: Rect) -> f32 {
         let entries = self.font_picker_entries();

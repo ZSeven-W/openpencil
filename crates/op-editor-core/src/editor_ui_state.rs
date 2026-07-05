@@ -1051,6 +1051,11 @@ pub struct EditorUiState {
     pub image_fill_popover_open: bool,
     /// Text font-family picker select state.
     pub font_picker: jian_widgets::components::select::SelectState,
+    /// Whether the cursor is over the picker's bottom "Import font…"
+    /// (`ImportAction`) row — drives its hover wash, like `font_picker.hover`
+    /// does for entry rows. The host tracks it on cursor-move when the picker
+    /// is open; reset whenever `font_picker.hover` is (close / search edit).
+    pub font_picker_import_hover: bool,
     /// Live type-ahead filter for the font-family picker (TS
     /// FontPicker search input).
     pub font_picker_search: String,
@@ -1359,6 +1364,7 @@ impl Default for EditorUiState {
             property_color_variable_picker_open: None,
             image_fill_popover_open: false,
             font_picker: jian_widgets::components::select::SelectState::default(),
+            font_picker_import_hover: false,
             font_picker_search: String::new(),
             system_font_families: std::sync::Arc::new(Vec::new()),
             imported_font_families: std::sync::Arc::new(Vec::new()),
@@ -1567,6 +1573,7 @@ impl EditorUiState {
         self.font_picker.hover = None;
         self.font_picker.pressed = None;
         self.font_picker.scroll.offset = 0.0;
+        self.font_picker_import_hover = false;
         self.font_picker_search.clear();
         changed
     }
