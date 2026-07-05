@@ -71,7 +71,12 @@ jobs:
       # EGL, so STEP1A_REQUIRE_GPU is left unset: the op-host-native GPU
       # smoke (memory_loop) self-uses the raster fallback instead of
       # hard-failing on EGL init. Real-GPU coverage runs on dev machines.
-      - run: cargo test --workspace
+      - run: cargo test --workspace --exclude op-host-desktop
+      # op-host-desktop's tests construct native `NativeBackend`s (skia /
+      # DirectWrite fonts). Running them across cargo's parallel test-worker
+      # threads segfaults on the Windows runner (STATUS_ACCESS_VIOLATION);
+      # serialize this crate's tests. macOS / Linux are unaffected either way.
+      - run: cargo test -p op-host-desktop -- --test-threads=1
       - name: Run CanvasKit web host tests
         run: cargo test -p op-host-web --features canvaskit
       - run: cargo clippy --workspace --all-targets -- -D warnings
