@@ -339,6 +339,17 @@ impl WidgetHost {
             self.doc_sync_dirty = true;
         }
     }
+
+    /// Force the next `refresh_layout_scene` to rebuild the layout scene even
+    /// though the document is unchanged. A font import / removal / restore
+    /// changes text metrics (and which family renders) without touching the
+    /// doc/page/theme, and the web build has no `jian_skia` font-generation
+    /// signal for the scene cache to detect it (the native host watches that
+    /// generation instead). So the font paths call this to avoid a stale scene.
+    #[cfg(feature = "canvaskit")]
+    pub fn invalidate_layout_scene(&mut self) {
+        self.scene_cache.invalidate();
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

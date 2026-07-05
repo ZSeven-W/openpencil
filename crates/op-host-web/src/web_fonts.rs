@@ -458,6 +458,10 @@ fn refresh_imported_font_snapshot<C: RepaintContext + 'static>(inner: &InnerRc<C
         .editor_ui
         .imported_font_families = Arc::new(families);
     b.host_mut().mark_editor_state_dirty();
+    // A font change alters text metrics/rendering without touching the doc, and
+    // the web scene cache has no font-generation signal — force a rebuild so the
+    // layout scene isn't left stale (measured/shaped against the old fonts).
+    b.host_mut().invalidate_layout_scene();
     let _ = b.repaint();
 }
 
