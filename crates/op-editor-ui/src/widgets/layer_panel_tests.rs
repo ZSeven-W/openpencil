@@ -177,7 +177,8 @@ fn first_layer_lock_top_left(panel: &LayerPanel, rect: Rect) -> Point2D {
 
 #[test]
 fn selected_visible_unlocked_layer_does_not_expose_trailing_actions_without_hover() {
-    let state = EditorState::starter();
+    let mut state = EditorState::starter();
+    state.set_single_selection(NodeId::new("n10"));
     let panel = LayerPanel::from_editor(&state);
     assert!(panel.items[0].selected);
     assert!(!panel.items[0].hovered);

@@ -93,8 +93,10 @@ fn ime_commit_without_any_focused_input_is_a_no_op() {
 #[test]
 fn paste_text_routes_to_focused_rename() {
     let mut host = WidgetHost::new();
-    // The starter document selects the blank starter frame; begin an
-    // inline rename on it like a layer-row double-click would.
+    // Begin an inline rename on the blank starter frame like a
+    // layer-row double-click would.
+    host.editor_state
+        .set_single_selection(op_editor_core::NodeId::new("n10"));
     let id = host.editor_state.selection.anchor.clone();
     assert!(host.editor_state.start_rename_layer(id));
     // Select-all so the paste replaces the seeded name deterministically.
