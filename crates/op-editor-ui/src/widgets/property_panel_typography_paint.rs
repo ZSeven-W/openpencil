@@ -26,6 +26,7 @@ pub fn paint_font_picker(
     allow_import: bool,
     search: &str,
     state: &SelectState,
+    import_hover: bool,
     active_family: &str,
     now_ms: u64,
 ) {
@@ -152,6 +153,16 @@ pub fn paint_font_picker(
                 );
             }
             FontPickerRow::ImportAction => {
+                // Hover wash inset like the Entry arm so the row reads
+                // identically to entry hover (painted BELOW the hairline
+                // + icon + label).
+                if import_hover {
+                    let row_rect = Rect {
+                        origin: Point2D::new(rect.origin.x + 2.0, rect.origin.y + 2.0),
+                        size: Point2D::new(rect.size.x - 4.0, rect.size.y - 4.0),
+                    };
+                    paint_button_feedback_wash(cx.backend, theme, row_rect, 5.0, true, false);
+                }
                 // Top hairline separating the action from the list.
                 cx.backend.fill_rect(
                     Rect {

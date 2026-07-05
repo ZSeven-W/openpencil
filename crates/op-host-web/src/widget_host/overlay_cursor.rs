@@ -358,6 +358,28 @@ impl WidgetHost {
                 }
             }
         }
+        if self.editor_state.editor_ui.effect_add_picker_open {
+            use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+            self.refresh_layout_scene();
+            if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+                let property_rect = op_editor_ui::Rect {
+                    origin: Point2D::new(
+                        self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
+                        TOP_BAR_HEIGHT,
+                    ),
+                    size: Point2D::new(
+                        self.editor_state.editor_ui.property_panel_width,
+                        (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
+                    ),
+                };
+                let new_hover = panel.effect_add_menu_row_at(property_rect, Point2D::new(x, y));
+                if new_hover != self.editor_state.editor_ui.effect_add_menu_hover {
+                    self.editor_state.editor_ui.effect_add_menu_hover = new_hover;
+                    self.mark_dirty();
+                    return true;
+                }
+            }
+        }
         false
     }
 

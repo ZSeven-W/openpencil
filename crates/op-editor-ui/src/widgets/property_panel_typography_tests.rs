@@ -432,6 +432,7 @@ fn pressed_font_picker_entry_uses_shared_select_feedback() {
         ALLOW_IMPORT,
         "",
         &state,
+        false,
         "Not A Listed Font",
         0,
     );
@@ -442,4 +443,62 @@ fn pressed_font_picker_entry_uses_shared_select_feedback() {
         }),
         "pressed font-picker entry should paint the shared pressed feedback token"
     );
+}
+
+#[test]
+fn import_action_at_returns_true_over_the_import_row() {
+    // The bottom "Import font…" row is hoverable (BUG 2): a point at its
+    // centre resolves to `true`, while a point on a plain entry does not.
+    // A narrow search keeps the list short so the import row (bottom of
+    // content) stays inside the viewport at scroll 0.
+    let entries = font_picker_entries(&[], &[], "playfair");
+    let layout =
+        font_picker_layout(panel_rect(), visible_text(), &entries, ALLOW_IMPORT, 0.0).unwrap();
+    let (_, import_rect) = layout
+        .rows
+        .iter()
+        .find(|(r, _)| matches!(r, FontPickerRow::ImportAction))
+        .expect("import action always present");
+    let import_centre = Point2D::new(
+        import_rect.origin.x + import_rect.size.x / 2.0,
+        import_rect.origin.y + import_rect.size.y / 2.0,
+    );
+    assert!(
+        font_picker_import_action_at(
+            panel_rect(),
+            visible_text(),
+            &entries,
+            ALLOW_IMPORT,
+            &open_state(0.0),
+            import_centre
+        ),
+        "cursor over the Import row must report an import hover"
+    );
+    // A plain entry row must NOT read as the import row.
+    let (_, entry_rect) = layout
+        .rows
+        .iter()
+        .find(|(r, _)| matches!(r, FontPickerRow::Entry(_)))
+        .expect("at least one entry");
+    let entry_centre = Point2D::new(
+        entry_rect.origin.x + entry_rect.size.x / 2.0,
+        entry_rect.origin.y + entry_rect.size.y / 2.0,
+    );
+    assert!(!font_picker_import_action_at(
+        panel_rect(),
+        visible_text(),
+        &entries,
+        ALLOW_IMPORT,
+        &open_state(0.0),
+        entry_centre
+    ));
+    // Web host (no import capability) never reports an import hover.
+    assert!(!font_picker_import_action_at(
+        panel_rect(),
+        visible_text(),
+        &entries,
+        false,
+        &open_state(0.0),
+        import_centre
+    ));
 }
