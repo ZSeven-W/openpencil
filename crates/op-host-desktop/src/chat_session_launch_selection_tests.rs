@@ -35,6 +35,39 @@ fn state_with_selected_card() -> EditorState {
     state
 }
 
+fn state_with_selected_header() -> EditorState {
+    let mut state = EditorState::new();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(frame(
+        "screen",
+        "Client Dashboard",
+        vec![frame("header", "Header", Vec::new())],
+    ));
+    state.set_single_selection(op_editor_core::NodeId::new("header"));
+    state
+}
+
+#[test]
+fn blank_starter_canvas_never_launches_modify() {
+    let state = EditorState::starter();
+
+    assert!(!state.selection.is_empty(), "starter frame is selected");
+    assert!(
+        !should_launch_direct_modify(&state, "Luxury webapp for managing barbershop clients"),
+        "fresh blank starter canvas has no real target to modify"
+    );
+}
+
+#[test]
+fn real_content_modify_request_still_launches_modify() {
+    let state = state_with_selected_header();
+
+    assert!(
+        should_launch_direct_modify(&state, "change the header color to blue"),
+        "selected real content + clear edit request should still update in place"
+    );
+}
+
 #[test]
 fn selection_with_keywordless_instruction_launches_direct_modify() {
     let state = state_with_selected_card();

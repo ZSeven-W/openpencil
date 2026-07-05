@@ -234,6 +234,16 @@ pub fn launch_if_pending(
 }
 
 fn should_launch_direct_modify(state: &EditorState, user_text: &str) -> bool {
+    // A pristine "from-scratch" canvas holds only the blank starter frame:
+    // there is nothing real to modify, so ANY design request on it is a NEW
+    // design, never a modify — even when the starter frame is selected and the
+    // prompt is a bare noun phrase the new-screen gates don't recognize
+    // (measured: "Luxury webapp for managing barbershop clients" on a fresh
+    // canvas fell into run_modify_turn → glm flat-nodes → empty `"`). This is
+    // the desktop parity of web_chat_standard's `page_children_empty => New`.
+    if active_page_is_blank_starter_frame(state) {
+        return false;
+    }
     // A whole-screen draw request ("继续画一下 search 页面") must reach the
     // design pipeline's new-frame route, never get hijacked into editing the
     // existing frame in place — even when it also trips the modify classifier.
