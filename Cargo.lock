@@ -3342,6 +3342,7 @@ dependencies = [
  "op-pen-loader",
  "serde",
  "serde_json",
+ "ttf-parser",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

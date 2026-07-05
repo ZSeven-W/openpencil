@@ -437,10 +437,32 @@ impl WidgetHost {
                 }
                 self.editor_state.editor_ui.close_font_picker();
             }
-            // Font import / removal are desktop-only until Phase 4 wires
-            // the browser file input + WASM registry path. No-op on web
-            // (the picker keeps the empty Imported group + inert rows).
-            A::ImportFont | A::RemoveImportedFont(_) => {}
+            A::ImportFont => {
+                // Raise a pending request; `web_fonts::drain_font_requests`
+                // (post-press / mount) opens the hidden file input, reads the
+                // chosen `.ttf` / `.otf`, registers it through the CanvasKit
+                // family registry, and persists it to IndexedDB. Keep the
+                // picker open so the new family appears once it lands.
+                self.editor_state.editor_ui.pending_font_import = true;
+            }
+            A::RemoveImportedFont(index) => {
+                // Resolve the family against the SAME entries list the picker
+                // painted / hit-tested, then hand it to the drain to drop from
+                // the CanvasKit registry + IndexedDB (mirrors the native arm).
+                let family = {
+                    let ui = &self.editor_state.editor_ui;
+                    op_editor_ui::widgets::property_panel_typography::font_picker_entries(
+                        &ui.imported_font_families,
+                        &ui.system_font_families,
+                        &ui.font_picker_search,
+                    )
+                    .get(index)
+                    .map(|e| e.family.to_string())
+                };
+                if let Some(family) = family {
+                    self.editor_state.editor_ui.pending_font_remove = Some(family);
+                }
+            }
             A::ToggleFontWeightPicker => {
                 let ui = &mut self.editor_state.editor_ui;
                 ui.font_weight_picker_open = !ui.font_weight_picker_open;

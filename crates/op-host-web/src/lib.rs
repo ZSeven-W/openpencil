@@ -81,6 +81,13 @@ mod web_settings;
 mod web_clipboard;
 #[cfg(feature = "canvaskit")]
 mod web_fonts;
+// IndexedDB persistence for user-imported fonts (Phase 4).
+#[cfg(feature = "canvaskit")]
+mod font_store_idb;
+// Pure-Rust font-family extraction for imported fonts (the vendored CanvasKit
+// build has no family-name introspection).
+#[cfg(feature = "canvaskit")]
+mod font_meta;
 
 #[cfg(not(feature = "canvaskit"))]
 use wasm_bindgen::prelude::*;

@@ -11,6 +11,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::repaint_ctx::RepaintContext;
 use jian_ops_schema::node::{PenNode, TextContent};
@@ -113,6 +114,8 @@ pub(crate) fn drain_font_requests<C: RepaintContext + 'static>(inner: &InnerRc<C
         start_system_font_query(inner);
     }
     load_used_system_fonts(inner);
+    drain_font_import_request(inner);
+    drain_font_remove_request(inner);
 }
 
 fn should_query_system_fonts<C: RepaintContext + 'static>(inner: &InnerRc<C>) -> bool {
@@ -388,6 +391,181 @@ fn is_bundled_family(family: &str) -> bool {
     BUNDLED_FONT_FAMILIES
         .iter()
         .any(|bundled| bundled.eq_ignore_ascii_case(family))
+}
+
+// ---------------------------------------------------------------------
+// User font import / removal (Phase 4) — the web counterpart of the
+// desktop `font_import_host`. `ImportFont` / `RemoveImportedFont` raise
+// pending flags (mirrors native); this drain performs the browser IO:
+// hidden file input → FileReader → CanvasKit family registry → IndexedDB.
+// ---------------------------------------------------------------------
+
+/// File-picker accept filter for imported fonts (matches the desktop's
+/// `.ttf` / `.otf` rfd filter).
+const FONT_ACCEPT: &str = ".ttf,.otf,font/ttf,font/otf";
+
+/// Reject fonts larger than this before/after read — same 16 MiB ceiling
+/// the desktop `FontStore` enforces (a CJK / variable font can reach a few
+/// MiB; 16 MiB is a generous cap that still rejects a mis-picked huge file).
+const MAX_FONT_BYTES: usize = 16 * 1024 * 1024;
+
+/// Re-register every persisted imported font from IndexedDB at mount, then
+/// refresh the picker snapshot + repaint. Per spec §C5: if the async read
+/// resolves before the first paint completes the family is registered in time;
+/// otherwise the repaint here re-paints any on-screen text with the newly
+/// available typeface (a one-frame fallback flash is acceptable).
+pub(crate) fn load_imported_fonts_at_mount<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let inner = inner.clone();
+    crate::font_store_idb::load_all(Box::new(move |fonts| {
+        if fonts.is_empty() {
+            return;
+        }
+        {
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
+            // Don't clobber a font the user imported/changed this session before
+            // the async IndexedDB read resolved: only register persisted
+            // families not already present. (A family the user REMOVED in that
+            // same pre-load window can still be re-added — a rare, self-
+            // correcting race the user resolves by removing it again.)
+            let present: std::collections::HashSet<String> = b
+                .imported_family_list()
+                .iter()
+                .map(|f| crate::font_store_idb::primary_key(f))
+                .collect();
+            for (family, bytes) in &fonts {
+                let key = crate::font_store_idb::primary_key(family);
+                if key.is_empty() || present.contains(&key) {
+                    continue;
+                }
+                b.register_imported_font(family, bytes);
+            }
+        }
+        refresh_imported_font_snapshot(&inner);
+    }));
+}
+
+/// Mirror the CanvasKit imported-font registry into the editor-state snapshot
+/// the picker reads (`imported_font_families`), mark dirty, and repaint.
+fn refresh_imported_font_snapshot<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let Ok(mut b) = inner.try_borrow_mut() else {
+        return;
+    };
+    let families = b.imported_family_list();
+    b.host_mut()
+        .editor_state_mut()
+        .editor_ui
+        .imported_font_families = Arc::new(families);
+    b.host_mut().mark_editor_state_dirty();
+    let _ = b.repaint();
+}
+
+/// Drain a pending `ImportFont`: open the hidden file input, read the chosen
+/// font's bytes, register it (extracting its family), persist to IndexedDB, and
+/// refresh the picker snapshot. All steps are non-fatal — a cancel / oversize /
+/// parse failure logs and leaves the editor untouched.
+fn drain_font_import_request<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let requested = {
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
+        std::mem::take(
+            &mut b
+                .host_mut()
+                .editor_state_mut()
+                .editor_ui
+                .pending_font_import,
+        )
+    };
+    if !requested {
+        return;
+    }
+    let inner = inner.clone();
+    crate::dom_io::open_file_picker(
+        FONT_ACCEPT,
+        Box::new(move |file| {
+            // Reject an oversize file by `File.size` before reading it into
+            // memory (the post-read cap is the backstop).
+            if file.size() as usize > MAX_FONT_BYTES {
+                console_warn_font(&format!(
+                    "import rejected: font is too large ({:.1} MiB; max {} MiB)",
+                    file.size() / (1024.0 * 1024.0),
+                    MAX_FONT_BYTES / (1024 * 1024)
+                ));
+                return;
+            }
+            let inner = inner.clone();
+            crate::dom_io::read_file(
+                file,
+                crate::dom_io::ReadMode::Bytes,
+                Box::new(move |value| {
+                    let Some(bytes) = crate::dom_io::js_bytes(&value) else {
+                        console_warn_font("import failed: could not read the font file");
+                        return;
+                    };
+                    if bytes.len() > MAX_FONT_BYTES {
+                        console_warn_font("import rejected: font exceeds the 16 MiB cap");
+                        return;
+                    }
+                    import_font_bytes(&inner, bytes);
+                }),
+            );
+        }),
+    );
+}
+
+/// Register imported font bytes: extract the family via CanvasKit, persist to
+/// IndexedDB, and refresh the snapshot. A parse failure (no family name) logs
+/// and does nothing else.
+fn import_font_bytes<C: RepaintContext + 'static>(inner: &InnerRc<C>, bytes: Vec<u8>) {
+    let family = {
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
+        b.register_imported_font_from_bytes(&bytes)
+    };
+    let Some(family) = family else {
+        console_warn_font("import rejected: could not parse the font (no family name)");
+        return;
+    };
+    // Persist (non-blocking) then reflect the new family in the picker.
+    crate::font_store_idb::put_font(
+        &crate::font_store_idb::primary_key(&family),
+        &family,
+        &bytes,
+    );
+    refresh_imported_font_snapshot(inner);
+}
+
+/// Drain a pending `RemoveImportedFont`: drop the family from the CanvasKit
+/// registry + IndexedDB, then refresh the snapshot.
+fn drain_font_remove_request<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let family = {
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
+        b.host_mut()
+            .editor_state_mut()
+            .editor_ui
+            .pending_font_remove
+            .take()
+    };
+    let Some(family) = family else {
+        return;
+    };
+    {
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
+        b.remove_imported_font(&family);
+    }
+    crate::font_store_idb::delete_font(&crate::font_store_idb::primary_key(&family));
+    refresh_imported_font_snapshot(inner);
+}
+
+fn console_warn_font(msg: &str) {
+    web_sys::console::warn_1(&JsValue::from_str(&format!("[font-import] {msg}")));
 }
 
 #[cfg(test)]
