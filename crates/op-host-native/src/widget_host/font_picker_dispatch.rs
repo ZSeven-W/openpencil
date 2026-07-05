@@ -29,13 +29,43 @@ impl WidgetHostNative {
         self.editor_state.editor_ui.system_fonts_loaded = true;
     }
 
-    /// Resolve a `SetFontFamilyIndex` against the SAME entries list
-    /// the panel painted / hit-tested (system list + live search).
+    /// Resolve a `SetFontFamilyIndex` / `RemoveImportedFont` against
+    /// the SAME entries list the panel painted / hit-tested (imported
+    /// + system lists + live search).
     pub(in crate::widget_host) fn font_picker_family_at(&self, index: usize) -> Option<String> {
         let ui = &self.editor_state.editor_ui;
-        font_picker_entries(&ui.system_font_families, &ui.font_picker_search)
-            .get(index)
-            .map(|e| e.family.to_string())
+        font_picker_entries(
+            &ui.imported_font_families,
+            &ui.system_font_families,
+            &ui.font_picker_search,
+        )
+        .get(index)
+        .map(|e| e.family.to_string())
+    }
+
+    /// Rebuild the imported-font snapshot from the live `jian-skia`
+    /// registry (call after an import / remove lands). Threads the
+    /// families into `editor_ui` exactly like `system_font_families`;
+    /// the picker paints them in the Imported group.
+    pub fn refresh_imported_fonts(&mut self) {
+        let families: Vec<String> = jian_skia::list_families()
+            .into_iter()
+            .map(|m| m.family)
+            .collect();
+        self.editor_state.editor_ui.imported_font_families = std::sync::Arc::new(families);
+        self.mark_dirty();
+    }
+
+    /// Drain the pending `ImportFont` request (raised by the picker's
+    /// Import row). The desktop host opens the native file dialog.
+    pub fn take_font_import_request(&mut self) -> bool {
+        std::mem::take(&mut self.editor_state.editor_ui.pending_font_import)
+    }
+
+    /// Drain the pending `RemoveImportedFont` request, yielding the
+    /// resolved family the desktop host removes from `FontStore`.
+    pub fn take_font_remove_request(&mut self) -> Option<String> {
+        self.editor_state.editor_ui.pending_font_remove.take()
     }
 
     /// Close the picker and drop its transient search / scroll state.
@@ -148,7 +178,13 @@ impl WidgetHostNative {
             let rect = self.property_rect(viewport_width, viewport_height);
             let point = Point2D::new(x, y);
             if let Some(action) = panel.hit_test_action(rect, point) {
-                if matches!(action, A::SetFontFamilyIndex(_) | A::ToggleFontFamilyPicker) {
+                if matches!(
+                    action,
+                    A::SetFontFamilyIndex(_)
+                        | A::ToggleFontFamilyPicker
+                        | A::ImportFont
+                        | A::RemoveImportedFont(_)
+                ) {
                     self.apply_property_action(action);
                     return true;
                 }

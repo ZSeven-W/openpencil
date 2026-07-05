@@ -28,6 +28,7 @@ mod design_loop_indicator;
 mod design_md_host;
 mod design_session;
 mod figma_import_session;
+mod font_import_host;
 mod fonts;
 mod frame;
 mod git_host;
@@ -301,7 +302,16 @@ impl DesktopApp {
             kit_persistence::load(host.editor_state_mut());
             // #20: saved theme presets (`theme-presets.json`).
             theme_preset_host::load(host.editor_state_mut());
+            // Seed the font picker's imported-family snapshot from the
+            // registry that `fonts::FontStore::rescan_and_register`
+            // repopulated in `main`, so restored fonts show at once.
+            host.refresh_imported_fonts();
         }
+        // Desktop is the host that drains the import / remove requests,
+        // so it advertises the capability (unconditionally, incl. tests)
+        // — the picker paints the Import row + imported group here, and
+        // web leaves the default `false` so those controls stay hidden.
+        host.editor_state_mut().editor_ui.font_import_supported = true;
         let kit_browser_open_persisted = Some(host.editor_state().editor_ui.component_browser_open);
         if fit_blank_frame {
             host.fit_content_to_viewport(INITIAL_VIEWPORT_W, INITIAL_VIEWPORT_H);

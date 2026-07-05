@@ -587,7 +587,13 @@ impl WidgetHost {
                 };
                 let point = Point2D::new(x, y);
                 if let Some(action) = panel.hit_test_action(property_rect, point) {
-                    if matches!(action, A::SetFontFamilyIndex(_) | A::ToggleFontFamilyPicker) {
+                    if matches!(
+                        action,
+                        A::SetFontFamilyIndex(_)
+                            | A::ToggleFontFamilyPicker
+                            | A::ImportFont
+                            | A::RemoveImportedFont(_)
+                    ) {
                         self.apply_property_action(action);
                         return true;
                     }

@@ -297,9 +297,19 @@ pub enum PropertyPanelAction {
     ToggleFontFamilyPicker,
     /// User clicked a row in the font-family picker. The index is
     /// into `property_panel_typography::font_picker_entries(...)`
-    /// built from the SAME (system list, search) inputs — the host
-    /// re-derives the list to resolve the family string.
+    /// built from the SAME (imported list, system list, search)
+    /// inputs — the host re-derives the list to resolve the family
+    /// string.
     SetFontFamilyIndex(usize),
+    /// User clicked the picker's bottom "Import font…" row — host
+    /// opens a native font-file dialog (desktop) and registers the
+    /// chosen file. No-op on web until Phase 4 wires a file input.
+    ImportFont,
+    /// User clicked the inline remove-x on an imported font entry.
+    /// The index is into the SAME `font_picker_entries(...)` list —
+    /// the host resolves the family and drops it from the registry +
+    /// disk store. No-op on web until Phase 4.
+    RemoveImportedFont(usize),
     /// User clicked the image section's Search button — host toggles
     /// `editor_ui.image_panel.search_open` (and seeds the query from
     /// `imageSearchQuery ?? name`, TS `initialQuery`).

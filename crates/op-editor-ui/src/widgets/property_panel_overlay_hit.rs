@@ -44,6 +44,7 @@ impl PropertyPanel {
     /// `SetFontFamilyIndex` against this same list.
     pub fn font_picker_entries(&self) -> Vec<property_panel_typography::FontPickerEntry<'_>> {
         property_panel_typography::font_picker_entries(
+            &self.imported_font_families,
             &self.system_font_families,
             &self.font_picker_search,
         )
@@ -61,6 +62,7 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &entries,
+            self.font_import_supported,
             point,
         )
     }
@@ -75,6 +77,7 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &entries,
+            self.font_import_supported,
             &self.font_picker,
             point,
         )
@@ -87,6 +90,7 @@ impl PropertyPanel {
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &entries,
+            self.font_import_supported,
         )
     }
 

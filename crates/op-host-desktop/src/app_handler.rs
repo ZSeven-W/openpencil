@@ -1038,6 +1038,12 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 if crate::theme_preset_host::drain_preset_io(&mut self.host) {
                     self.request_redraw(true);
                 }
+                // Font import / removal raised by the property-panel
+                // font picker — open the rfd dialog / run FontStore IO,
+                // then refresh the picker's imported-family snapshot.
+                if crate::font_import_host::drain_font_requests(&mut self.host) {
+                    self.request_redraw(true);
+                }
                 if let Some(action) = self
                     .host
                     .editor_state_mut()
