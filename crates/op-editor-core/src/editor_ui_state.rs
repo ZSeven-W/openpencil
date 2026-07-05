@@ -1054,9 +1054,27 @@ pub struct EditorUiState {
     /// the bundled set). Empty until a host enumerates; the picker
     /// then falls back to the TS `FALLBACK_SYSTEM_FONTS` list.
     pub system_font_families: std::sync::Arc<Vec<String>>,
+    /// User-imported font families (from the host `FontStore` /
+    /// `jian-skia` registry). Threaded in by the host exactly like
+    /// `system_font_families`; the picker paints these first, above
+    /// the bundled + system groups. The host refreshes this whenever
+    /// the imported-font generation changes (import / remove), so no
+    /// separate "loaded" flag is needed.
+    pub imported_font_families: std::sync::Arc<Vec<String>>,
+    /// Whether this host can import / remove user fonts. Only the
+    /// desktop host drains the import/remove requests, so it sets this
+    /// `true`; web leaves it `false` and the picker omits the Import
+    /// row + imported group entirely (no dead controls).
+    pub font_import_supported: bool,
     /// Whether a host already ran font enumeration (so an empty list
     /// is "machine has none" rather than "not loaded yet").
     pub system_fonts_loaded: bool,
+    /// Raised by `PropertyPanelAction::ImportFont` — the desktop host
+    /// drains it to open a native font-file dialog + `FontStore::import`.
+    pub pending_font_import: bool,
+    /// Raised by `PropertyPanelAction::RemoveImportedFont` — carries the
+    /// resolved family; the desktop host drains it to `FontStore::remove`.
+    pub pending_font_remove: Option<String>,
     /// Image-node section Search / Generate popover state.
     pub image_panel: crate::image_panel_state::ImagePanelState,
     /// Whether the typography font-weight dropdown is open.
@@ -1338,7 +1356,11 @@ impl Default for EditorUiState {
             font_picker: jian_widgets::components::select::SelectState::default(),
             font_picker_search: String::new(),
             system_font_families: std::sync::Arc::new(Vec::new()),
+            imported_font_families: std::sync::Arc::new(Vec::new()),
+            font_import_supported: false,
             system_fonts_loaded: false,
+            pending_font_import: false,
+            pending_font_remove: None,
             image_panel: crate::image_panel_state::ImagePanelState::default(),
             font_weight_picker_open: false,
             font_weight_picker_hover: None,

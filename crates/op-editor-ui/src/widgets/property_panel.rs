@@ -169,6 +169,12 @@ pub struct PropertyPanel {
     /// (see `property_panel_typography`).
     pub font_picker_search: String,
     pub system_font_families: std::sync::Arc<Vec<String>>,
+    /// User-imported font families (see `editor_ui.imported_font_families`).
+    /// The picker paints these first, above bundled + system.
+    pub imported_font_families: std::sync::Arc<Vec<String>>,
+    /// Whether the host supports font import (desktop true / web false) —
+    /// gates the picker's Import row so web shows no dead control.
+    pub font_import_supported: bool,
     /// Image-node Search / Generate popover state (cloned from
     /// `editor_ui.image_panel`; result thumbs are `Arc`s so this
     /// per-frame clone stays cheap).
@@ -446,6 +452,8 @@ impl PropertyPanel {
             font_picker: ui.font_picker.clone(),
             font_picker_search: ui.font_picker_search.clone(),
             system_font_families: ui.system_font_families.clone(),
+            imported_font_families: ui.imported_font_families.clone(),
+            font_import_supported: ui.font_import_supported,
             image_panel: ui.image_panel.clone(),
             image_panel_view: None,
             image_gen_profile: crate::widgets::property_panel_image_assets::image_gen_profile_view(
@@ -700,6 +708,7 @@ impl PropertyPanel {
                 self.scrolled_rect(panel_rect),
                 self.visible_sections(),
                 &entries,
+                self.font_import_supported,
                 &self.font_picker,
                 point,
             ) {
@@ -1319,6 +1328,7 @@ impl Widget for PropertyPanel {
                     self.visible_sections(),
                     self.locale,
                     &entries,
+                    self.font_import_supported,
                     &self.font_picker_search,
                     &self.font_picker,
                     &text.font_family,

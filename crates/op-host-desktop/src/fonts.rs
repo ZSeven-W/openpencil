@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 /// Reject absurd font files early. A normal face is well under 1 MiB; a large
 /// CJK / variable font can reach a few MiB, so 16 MiB is a generous ceiling
 /// that still bounds disk + parse cost and a hostile input.
-const MAX_FONT_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_FONT_BYTES: usize = 16 * 1024 * 1024;
 
 const FONTS_SUBDIR: &str = "fonts";
 const INDEX_FILE: &str = "fonts/index.json";
