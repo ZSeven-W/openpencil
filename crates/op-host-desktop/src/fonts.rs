@@ -106,9 +106,16 @@ impl FontStore {
         }
     }
 
-    /// Validate, register, and persist a font file. Returns the registered
+    /// Validate, persist, then register a font file. Returns the registered
     /// blob on success. Rejects oversize / unparseable input without touching
-    /// disk (parse happens in `register_imported_font`).
+    /// disk.
+    ///
+    /// Persistence happens BEFORE the live registration: the bytes are parsed
+    /// (no registry mutation) to learn the file/index key, written to disk,
+    /// and only then committed to the process-global registry. Registering
+    /// first would leave a live-but-unpersisted font — visible + rendered
+    /// this session but gone on restart — if a disk write then failed while
+    /// the caller reported the import as failed.
     pub fn import(&self, bytes: Vec<u8>) -> Result<jian_skia::FontBlob, String> {
         if bytes.len() > MAX_FONT_BYTES {
             return Err(format!(
@@ -117,36 +124,41 @@ impl FontStore {
                 MAX_FONT_BYTES / (1024 * 1024)
             ));
         }
-        // Register first: this validates the bytes AND yields the
+        // Parse WITHOUT registering — validates the bytes and yields the
         // family/style/weight/hash the on-disk entry is keyed on.
-        let blob = jian_skia::register_imported_font(bytes.clone())?;
+        let meta = jian_skia::parse_imported_font_meta(&bytes)
+            .ok_or_else(|| "not a valid ttf/otf font file".to_string())?;
 
-        let file = format!("{:016x}.ttf", blob.hash);
+        let file = format!("{:016x}.ttf", meta.hash);
         std::fs::create_dir_all(&self.dir).map_err(|e| format!("create fonts dir: {e}"))?;
         std::fs::write(self.dir.join(&file), &bytes)
             .map_err(|e| format!("write font file: {e}"))?;
 
-        let italic = matches!(blob.style, FontStyleKind::Italic);
+        let italic = matches!(meta.style, FontStyleKind::Italic);
         let mut index = self.load_index();
         // Replace any prior entry for the same face (last-import-wins, matching
         // the in-memory registry), pruning its now-orphaned file.
         index.fonts.retain(|e| {
-            let same = e.family == blob.family && e.italic == italic && e.weight == blob.weight;
+            let same = e.family == meta.family && e.italic == italic && e.weight == meta.weight;
             if same && e.file != file {
                 let _ = std::fs::remove_file(self.dir.join(&e.file));
             }
             !same
         });
         index.fonts.push(FontIndexEntry {
-            family: blob.family.clone(),
+            family: meta.family.clone(),
             italic,
-            weight: blob.weight,
-            hash: blob.hash,
+            weight: meta.weight,
+            hash: meta.hash,
             file,
         });
         self.save_index(&index)
             .map_err(|e| format!("write font index: {e}"))?;
-        Ok(blob)
+
+        // Persistence is durable — now commit the live registration. This
+        // re-parses the same bytes, so it cannot fail after `parse_*` above
+        // succeeded, but propagate any error rather than unwrap.
+        jian_skia::register_imported_font(bytes).map_err(|e| format!("register font: {e}"))
     }
 
     /// Remove every imported face of `family` from the live registry and disk.
@@ -180,6 +192,11 @@ mod tests {
     // tests (different test binary anyway) and unlikely to be system-installed.
     const FONT: &[u8] = include_bytes!("../assets/fonts/InstrumentSerif-Regular.ttf");
     const FAMILY: &str = "Instrument Serif";
+
+    // A second distinct family for the failed-persist test, so it can't race
+    // the round-trip test's family in the shared process-global registry.
+    const FONT2: &[u8] = include_bytes!("../assets/fonts/Outfit-VF.ttf");
+    const FAMILY2: &str = "Outfit";
 
     static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -284,6 +301,41 @@ mod tests {
         assert!(
             !root.0.join(INDEX_FILE).exists(),
             "a rejected import must not create the index"
+        );
+    }
+
+    #[test]
+    fn failed_persist_does_not_leak_into_the_live_registry() {
+        // Root is a FILE, not a directory, so `create_dir_all(root/fonts)`
+        // fails and the import errors AFTER parse but BEFORE the live
+        // registration — proving persistence precedes registration.
+        let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+        let file_root =
+            std::env::temp_dir().join(format!("op-fonts-notadir-{}-{seq}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&file_root);
+        std::fs::write(&file_root, b"x").unwrap();
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(file_root.clone());
+
+        jian_skia::remove_imported_font(FAMILY2); // clean slate in the shared registry
+
+        let store = FontStore::at(&file_root);
+        assert!(
+            store.import(FONT2.to_vec()).is_err(),
+            "import into a file-rooted store must fail at the disk write"
+        );
+        assert_eq!(
+            jian_skia::list_families()
+                .iter()
+                .filter(|m| m.family == FAMILY2)
+                .count(),
+            0,
+            "a failed persist must NOT leave the font registered in the live registry"
         );
     }
 }
