@@ -94,7 +94,14 @@ pub(crate) fn effect_add_menu_row_rects(menu: Rect) -> Vec<(PropertyPanelAction,
 
 /// Paint the Effects "+" add-menu popover (Drop Shadow / Layer Blur)
 /// anchored to `add_rect`. Caller gates this on the picker being open.
-pub(crate) fn paint_effect_add_menu(cx: &mut PaintCx<'_>, theme: &Theme, add_rect: Rect) {
+/// `hover` is the row index under the cursor (`None` = none), highlighted
+/// with the same `muted` row wash the other property-panel dropdowns use.
+pub(crate) fn paint_effect_add_menu(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    add_rect: Rect,
+    hover: Option<usize>,
+) {
     let menu = effect_add_menu_rect(add_rect);
     cx.backend
         .fill_round_rect(menu, INPUT_RADIUS, theme.popover);
@@ -102,6 +109,13 @@ pub(crate) fn paint_effect_add_menu(cx: &mut PaintCx<'_>, theme: &Theme, add_rec
         .stroke_round_rect(menu, INPUT_RADIUS, theme.border, 1.0);
     for (i, (_, label)) in EFFECT_ADD_MENU_ROWS.iter().enumerate() {
         let ry = menu.origin.y + 4.0 + i as f32 * EFFECT_ADD_MENU_ROW_H;
+        if hover == Some(i) {
+            let row = Rect {
+                origin: Point2D::new(menu.origin.x + 4.0, ry),
+                size: Point2D::new(menu.size.x - 8.0, EFFECT_ADD_MENU_ROW_H),
+            };
+            cx.backend.fill_round_rect(row, 6.0, theme.muted);
+        }
         let text = TextLayout::single_run(
             label,
             "system-ui",

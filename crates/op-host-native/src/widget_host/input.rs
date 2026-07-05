@@ -792,6 +792,12 @@ impl WidgetHostNative {
         {
             return true;
         }
+        // Effects "+" add-menu row hover (no-op when closed).
+        if !over_topmost
+            && self.update_effect_add_menu_hover(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return true;
+        }
         // Padding-mode gear popover row hover (no-op when closed).
         if self.update_padding_mode_popover_hover(x, y) {
             return true;
