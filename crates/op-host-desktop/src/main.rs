@@ -28,6 +28,7 @@ mod design_loop_indicator;
 mod design_md_host;
 mod design_session;
 mod figma_import_session;
+mod fonts;
 mod frame;
 mod git_host;
 mod git_jobs;
@@ -988,6 +989,13 @@ fn main() {
     // referencing them resolve the right glyphs + metrics without a
     // system font install.
     bundled_fonts::register();
+    // Re-register user-imported fonts so an imported family survives a restart
+    // (applies to the editor canvas AND headless render/export via the shared
+    // resolver). Best-effort: a bad file or missing HOME must not block launch.
+    match fonts::FontStore::user() {
+        Ok(store) => store.rescan_and_register(),
+        Err(err) => eprintln!("[fonts] skipping imported-font rescan: {err}"),
+    }
     init_tracing();
     // `--mcp` / `--mcp-http` swap the GUI for an MCP server mode;
     // when one of those ran, exit instead of opening a window.

@@ -66,6 +66,12 @@ pub fn run_cli_if_requested() -> bool {
     // pass so `fit_content` heights and glyphs match Pencil even when the
     // family isn't installed system-wide.
     crate::bundled_fonts::register();
+    // Imported fonts too, so headless render-shots / export match the editor
+    // canvas for any family the user imported. Best-effort.
+    match crate::fonts::FontStore::user() {
+        Ok(store) => store.rescan_and_register(),
+        Err(err) => eprintln!("render-shots: skipping imported-font rescan: {err}"),
+    }
     let state = op_editor_core::EditorState::from_document(loaded.value);
     let scene = op_pen_loader::editor_state_to_layout_scene(&state);
 
