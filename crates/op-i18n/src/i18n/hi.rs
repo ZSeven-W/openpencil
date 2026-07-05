@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "फ़ॉन्ट खोजें…",
         "text.font.bundled" => "बंडल",
         "text.font.system" => "सिस्टम",
+        "text.font.imported" => "आयातित",
+        "text.font.importAction" => "फ़ॉन्ट आयात करें…",
         "text.font.loading" => "फ़ॉन्ट लोड हो रहे हैं…",
         "text.font.noResults" => "कोई फ़ॉन्ट नहीं मिला",
         "textLayout.title" => "लेआउट",

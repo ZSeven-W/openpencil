@@ -185,6 +185,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "搜索字体…",
         "text.font.bundled" => "内置字体",
         "text.font.system" => "系统字体",
+        "text.font.imported" => "已导入",
+        "text.font.importAction" => "导入字体…",
         "text.font.loading" => "加载字体中…",
         "text.font.noResults" => "未找到字体",
         "textLayout.title" => "布局",

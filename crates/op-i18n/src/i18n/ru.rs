@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "Поиск шрифтов…",
         "text.font.bundled" => "Встроенные",
         "text.font.system" => "Системные",
+        "text.font.imported" => "Импортированные",
+        "text.font.importAction" => "Импортировать шрифт…",
         "text.font.loading" => "Загрузка шрифтов…",
         "text.font.noResults" => "Шрифты не найдены",
         "textLayout.title" => "Раскладка",

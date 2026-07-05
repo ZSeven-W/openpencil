@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "Rechercher des polices…",
         "text.font.bundled" => "Incluses",
         "text.font.system" => "Système",
+        "text.font.imported" => "Importées",
+        "text.font.importAction" => "Importer une police…",
         "text.font.loading" => "Chargement des polices…",
         "text.font.noResults" => "Aucune police trouvée",
         "textLayout.title" => "Mise en page",

@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "Yazı tipi ara…",
         "text.font.bundled" => "Dahili",
         "text.font.system" => "Sistem",
+        "text.font.imported" => "İçe aktarılan",
+        "text.font.importAction" => "Yazı tipi içe aktar…",
         "text.font.loading" => "Yazı tipleri yükleniyor…",
         "text.font.noResults" => "Yazı tipi bulunamadı",
         "textLayout.title" => "Düzen",
