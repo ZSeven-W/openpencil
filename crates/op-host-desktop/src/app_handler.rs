@@ -41,24 +41,19 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // Native-menu selections arrive on `muda`'s global channel.
         // A menu click wakes the event loop, so draining here — at
         // the top of each loop iteration — picks them up promptly.
-        let mut had_menu_action = false;
         while let Some(action) = menu::poll() {
             self.handle_menu_action(action, event_loop);
-            had_menu_action = true;
         }
         // macOS open-documents Apple event — a Finder double-click /
         // `open file` / Dock drop on the already-running app. The
         // AppKit event wakes the loop, so draining here is prompt.
-        let opened_files = self.drain_opened_files();
-        if opened_files {
+        if self.drain_opened_files() {
             self.request_redraw(true);
         }
-        // Any of the above may have changed the recent-file list
-        // (open / open-recent / save / new / Finder open) — keep the
-        // native File ▸ Open Recent submenu in sync.
-        if had_menu_action || opened_files {
-            self.refresh_recent_menu();
-        }
+        // Keep the native File ▸ Open Recent submenu in sync with the recent
+        // list every iteration — cheap (rebuilds only on change) and catches
+        // in-canvas File-menu opens/saves that never reach `handle_menu_action`.
+        self.refresh_recent_menu();
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
