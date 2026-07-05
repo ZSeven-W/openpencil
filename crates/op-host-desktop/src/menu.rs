@@ -24,6 +24,10 @@
 pub enum MenuAction {
     New,
     Open,
+    /// Open the recent-file at this index into `editor_ui.recent_files`
+    /// (the File ▸ Open Recent submenu is rebuilt in sync with that list,
+    /// so the index is valid at click time).
+    OpenRecent(usize),
     Save,
     SaveAs,
     Export,
@@ -78,9 +82,17 @@ mod backend {
     const ID_QUIT: &str = "quit";
     const ID_CHECK_UPDATES: &str = "check-updates";
     const ID_GITHUB: &str = "github";
+    /// Prefix for File ▸ Open Recent items — the suffix is the index into
+    /// `editor_ui.recent_files` (e.g. `recent:0`). The disabled empty-state
+    /// item uses [`ID_RECENT_NONE`] and maps to no action.
+    const ID_OPEN_RECENT_PREFIX: &str = "recent:";
+    const ID_RECENT_NONE: &str = "recent-none";
 
     /// Map a `muda` menu-item id string onto a [`MenuAction`].
     fn action_for_id(id: &str) -> Option<MenuAction> {
+        if let Some(index) = id.strip_prefix(ID_OPEN_RECENT_PREFIX) {
+            return index.parse::<usize>().ok().map(MenuAction::OpenRecent);
+        }
         Some(match id {
             ID_NEW => MenuAction::New,
             ID_OPEN => MenuAction::Open,
@@ -108,9 +120,12 @@ mod backend {
     }
 
     /// Owns the `muda` `Menu`. Kept alive for the process lifetime —
-    /// dropping it would tear the native menu down.
+    /// dropping it would tear the native menu down. `recent_submenu` is
+    /// held so File ▸ Open Recent can be rebuilt as the recent-file list
+    /// changes ([`AppMenu::set_recent_files`]).
     pub struct AppMenu {
         _menu: Menu,
+        recent_submenu: Submenu,
     }
 
     fn primary() -> Modifiers {
@@ -157,11 +172,15 @@ mod backend {
                 let _ = menu.append(&app_menu);
             }
 
-            // File menu.
+            // File menu. The Open Recent submenu is populated later via
+            // `set_recent_files` (empty at build time → a disabled
+            // placeholder until the runner seeds it from the recent list).
+            let recent_submenu = Submenu::new("Open Recent", true);
             let file = Submenu::new("File", true);
             let _ = file.append_items(&[
                 &item(ID_NEW, "New", Some(accel(Code::KeyN))),
                 &item(ID_OPEN, "Open\u{2026}", Some(accel(Code::KeyO))),
+                &recent_submenu,
                 &PredefinedMenuItem::separator(),
                 &item(ID_SAVE, "Save", Some(accel(Code::KeyS))),
                 &item(ID_SAVE_AS, "Save As\u{2026}", Some(accel_shift(Code::KeyS))),
@@ -222,7 +241,30 @@ mod backend {
             let _ = window; // not needed — macOS attaches to the NSApp
             menu.init_for_nsapp();
 
-            Self { _menu: menu }
+            let this = Self {
+                _menu: menu,
+                recent_submenu,
+            };
+            this.set_recent_files(&[]); // seed the disabled placeholder
+            this
+        }
+
+        /// Rebuild the File ▸ Open Recent submenu from `labels` (newest
+        /// first). Item `i` gets id `recent:i`, matching the runner's
+        /// `FileAction::OpenRecent(i)`; an empty list shows one disabled
+        /// "No Recent Documents" row. Call whenever `recent_files` changes.
+        pub fn set_recent_files(&self, labels: &[String]) {
+            while self.recent_submenu.remove_at(0).is_some() {}
+            if labels.is_empty() {
+                let none = MenuItem::with_id(ID_RECENT_NONE, "No Recent Documents", false, None);
+                let _ = self.recent_submenu.append(&none);
+                return;
+            }
+            for (i, label) in labels.iter().enumerate() {
+                let entry =
+                    MenuItem::with_id(format!("{ID_OPEN_RECENT_PREFIX}{i}"), label, true, None);
+                let _ = self.recent_submenu.append(&entry);
+            }
         }
     }
 
@@ -285,6 +327,16 @@ mod backend {
             assert!(action_for_id("predefined-separator").is_none());
             assert!(action_for_id("").is_none());
         }
+
+        #[test]
+        fn recent_ids_map_to_open_recent() {
+            assert_eq!(action_for_id("recent:0"), Some(MenuAction::OpenRecent(0)));
+            assert_eq!(action_for_id("recent:9"), Some(MenuAction::OpenRecent(9)));
+            // The disabled placeholder + malformed suffixes map to nothing.
+            assert!(action_for_id(ID_RECENT_NONE).is_none());
+            assert!(action_for_id("recent:").is_none());
+            assert!(action_for_id("recent:x").is_none());
+        }
     }
 }
 
@@ -302,6 +354,9 @@ mod backend {
         pub fn install(_window: &winit::window::Window) -> Self {
             Self
         }
+
+        /// No native menu off macOS — the in-canvas File menu shows recents.
+        pub fn set_recent_files(&self, _labels: &[String]) {}
     }
 
     pub fn poll() -> Option<MenuAction> {
