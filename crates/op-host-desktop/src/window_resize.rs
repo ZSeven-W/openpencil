@@ -72,10 +72,22 @@ mod tests {
     fn interior_point_is_not_a_resize() {
         assert_eq!(window_resize_direction(W / 2.0, H / 2.0, W, H), None);
         // Just inside the band on every side.
-        assert_eq!(window_resize_direction(RESIZE_BORDER + 1.0, H / 2.0, W, H), None);
-        assert_eq!(window_resize_direction(W - RESIZE_BORDER - 1.0, H / 2.0, W, H), None);
-        assert_eq!(window_resize_direction(W / 2.0, RESIZE_BORDER + 1.0, W, H), None);
-        assert_eq!(window_resize_direction(W / 2.0, H - RESIZE_BORDER - 1.0, W, H), None);
+        assert_eq!(
+            window_resize_direction(RESIZE_BORDER + 1.0, H / 2.0, W, H),
+            None
+        );
+        assert_eq!(
+            window_resize_direction(W - RESIZE_BORDER - 1.0, H / 2.0, W, H),
+            None
+        );
+        assert_eq!(
+            window_resize_direction(W / 2.0, RESIZE_BORDER + 1.0, W, H),
+            None
+        );
+        assert_eq!(
+            window_resize_direction(W / 2.0, H - RESIZE_BORDER - 1.0, W, H),
+            None
+        );
     }
 
     #[test]
@@ -97,8 +109,14 @@ mod tests {
     #[test]
     fn band_boundary_is_inclusive() {
         // Exactly `RESIZE_BORDER` from the edge still counts as the edge.
-        assert_eq!(window_resize_direction(RESIZE_BORDER, H / 2.0, W, H), Some(West));
-        assert_eq!(window_resize_direction(W - RESIZE_BORDER, H / 2.0, W, H), Some(East));
+        assert_eq!(
+            window_resize_direction(RESIZE_BORDER, H / 2.0, W, H),
+            Some(West)
+        );
+        assert_eq!(
+            window_resize_direction(W - RESIZE_BORDER, H / 2.0, W, H),
+            Some(East)
+        );
     }
 
     #[test]
@@ -107,6 +125,9 @@ mod tests {
         assert_eq!(window_resize_direction(W + 1.0, H / 2.0, W, H), None);
         assert_eq!(window_resize_direction(W / 2.0, -1.0, W, H), None);
         // A window narrower than both bands combined never reports an edge.
-        assert_eq!(window_resize_direction_with_border(1.0, 1.0, 8.0, 8.0, 6.0), None);
+        assert_eq!(
+            window_resize_direction_with_border(1.0, 1.0, 8.0, 8.0, 6.0),
+            None
+        );
     }
 }
