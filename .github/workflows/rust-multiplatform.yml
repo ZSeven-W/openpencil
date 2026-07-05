@@ -116,7 +116,13 @@ jobs:
         run: cargo test --workspace --target ${{ matrix.target }}
       - name: Test (host, macOS / Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
-        run: cargo test --workspace --target ${{ matrix.target }}
+        # op-host-desktop's tests build native NativeBackends (skia /
+        # DirectWrite fonts); across cargo's parallel test-worker threads this
+        # segfaults on the Windows runner (STATUS_ACCESS_VIOLATION). Split it
+        # out and serialize with --test-threads=1 (matches rust-check.yml).
+        run: |
+          cargo test --workspace --exclude op-host-desktop --target ${{ matrix.target }}
+          cargo test -p op-host-desktop --target ${{ matrix.target }} -- --test-threads=1
       # Desktop binary artifact upload is intentionally not wired here yet.
       # The real desktop binary lives in the `op-host-desktop` crate; a
       # build + upload step can be added once release packaging is finalized.
