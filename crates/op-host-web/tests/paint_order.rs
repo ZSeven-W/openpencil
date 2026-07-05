@@ -160,20 +160,24 @@ fn canvaskit_browser_text_fallback_does_not_require_canvas_paint() {
         );
     }
 
-    let draw_text = source
-        .find("drawText(t, x, y, sz, weight, italic, r, g, b, a)")
-        .expect("drawText bridge exists");
-    let fallback_fast_path = source[draw_text..]
+    // The browser/system-font fallback fast path (which returns before any
+    // CanvasKit Paint is allocated) lives in the shared `drawScriptRun`
+    // helper that `drawText` — and the uncovered segments of a family-aware
+    // run — delegate to.
+    let script_run = source
+        .find("const drawScriptRun = (t, x, y, sz, weight, italic, r, g, b, a) =>")
+        .expect("drawScriptRun helper exists");
+    let fallback_fast_path = source[script_run..]
         .find("if (allSegmentsUseBrowserTextFallback(segs))")
         .expect("browser text fast path exists")
-        + draw_text;
-    let fill_paint = source[draw_text..]
+        + script_run;
+    let fill_paint = source[script_run..]
         .find("const p = fillPaint(r, g, b, a);")
         .expect("CanvasKit paint fallback exists")
-        + draw_text;
+        + script_run;
     assert!(
         fallback_fast_path < fill_paint,
-        "drawText must take the browser/system font path before allocating CanvasKit Paint"
+        "drawScriptRun must take the browser/system font path before allocating CanvasKit Paint"
     );
 }
 
