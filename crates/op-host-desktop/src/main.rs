@@ -220,6 +220,12 @@ struct DesktopApp {
     /// `None` until `resumed` builds it (and always `None` on Linux,
     /// where there is no native menu).
     app_menu: Option<menu::AppMenu>,
+    /// Labels currently shown in the native File ▸ Open Recent submenu.
+    /// Compared against the live recent list each loop iteration so the
+    /// submenu is rebuilt only when it actually changed — and stays current
+    /// regardless of whether the change came from the native menu, the
+    /// in-canvas File menu, or a Finder open.
+    recent_menu_labels: Vec<String>,
     /// Background auto-update probe — checks the GitHub releases API
     /// on a worker thread; its result is drained into
     /// `editor_ui.update_status` on a later frame.
@@ -384,6 +390,7 @@ impl DesktopApp {
             acp_agent_connect_job: None,
             initial_file,
             app_menu: None,
+            recent_menu_labels: Vec::new(),
             update_probe,
             update_prompt_shown: false,
             win_pos: None,
