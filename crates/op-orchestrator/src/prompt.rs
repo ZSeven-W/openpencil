@@ -16,11 +16,13 @@ use crate::design_md_policy::build_design_md_style_policy;
 use crate::design_type::{detect_design_type, DesignType};
 use crate::model_profile::{resolve_model_profile, ModelTier};
 use crate::plan::{OrchestratorPlan, Subtask};
+use crate::resolved_style_prompt::build_resolved_style_instruction_for_plan;
 use crate::style_guide_context::build_planning_style_guide_context;
 use crate::timeouts::{
     apply_profile_to_timeouts, builtin_planning_timeouts, orchestrator_timeouts, sub_agent_timeouts,
 };
 use crate::types::{AbortFlag, CallRequest, DesignRequest, PlanningMode, PlanningPrompt};
+use op_ai_skills::resolve_style::{resolve_style, ResolveOutcome};
 use op_ai_skills::style_guide::{
     extract_style_guide_values, select_style_guide, style_guide_registry, SelectOptions,
 };
@@ -471,6 +473,60 @@ fn build_style_guide_instruction(
     Some(lines.join("\n"))
 }
 
+pub fn build_resolved_style_instruction(
+    name: &str,
+    params: &op_ai_skills::resolve_style::StyleParams,
+) -> Option<String> {
+    let guide = match resolve_style(name, params) {
+        ResolveOutcome::Hit(guide) => guide,
+        ResolveOutcome::Miss { .. } => return None,
+    };
+    let tokens = &guide.tokens;
+
+    let mut lines = vec![
+        format!(
+            "RESOLVED STYLE REFERENCE ({} / {})",
+            name.trim(),
+            params.color_palette.trim()
+        ),
+        "Bake these reference values directly into node fills, text colors, borders, radii, and font fields. Do NOT create document variables. Do NOT call set_variables.".to_string(),
+    ];
+    push_resolved_string_tokens(&mut lines, "surface", &tokens.surface);
+    push_resolved_string_tokens(&mut lines, "foreground", &tokens.foreground);
+    push_resolved_string_tokens(&mut lines, "accent", &tokens.accent);
+    push_resolved_string_tokens(&mut lines, "border", &tokens.border);
+    for (role, value) in &tokens.rounded {
+        lines.push(format!("rounded.{role}={}px", format_design_number(*value)));
+    }
+    lines.push(format!(
+        "typography: headings={}, body={}, captions={}, data={}",
+        tokens.typography.headings,
+        tokens.typography.body,
+        tokens.typography.captions,
+        tokens.typography.data
+    ));
+    for (role, value) in &tokens.on {
+        let role = if role.starts_with("on-") {
+            role.to_string()
+        } else {
+            format!("on-{role}")
+        };
+        lines.push(format!("{role}={value}"));
+    }
+
+    Some(lines.join("\n"))
+}
+
+fn push_resolved_string_tokens(
+    lines: &mut Vec<String>,
+    prefix: &str,
+    values: &std::collections::BTreeMap<String, String>,
+) {
+    for (role, value) in values {
+        lines.push(format!("{prefix}.{role}={value}"));
+    }
+}
+
 fn resolve_generation_skills_after_prompt_filter(
     intent: &str,
     opts: &ResolveOptions,
@@ -798,13 +854,16 @@ fn build_subagent_prompt_core(
     // generic `design-system` skill.
     let style_guide_instruction =
         build_style_guide_instruction(plan.style_guide_name.as_deref(), tier);
+    let resolved_style_instruction = build_resolved_style_instruction_for_plan(plan);
     // `design-system` is dropped when ANOTHER styling source already covers it:
     // the `design-md` skill (`has_design_md`), the `style-defaults` skill (loads
-    // on `noStyleGuideMatch`), OR the style-guide instruction block just built.
+    // on `noStyleGuideMatch`), OR a style instruction block just built.
     // Keeping it alongside any of those would inject design-system's conflicting
     // "output ONLY a JSON token object" header redundantly (Codex review).
-    let design_system_covered =
-        has_design_md || no_style_guide_match || style_guide_instruction.is_some();
+    let design_system_covered = has_design_md
+        || no_style_guide_match
+        || style_guide_instruction.is_some()
+        || resolved_style_instruction.is_some();
     let explicit_tokens = extract_explicit_design_tokens(&req.prompt);
     let explicit_token_instruction = explicit_design_token_instruction(explicit_tokens);
 
@@ -923,6 +982,10 @@ fn build_subagent_prompt_core(
     if let Some(sg) = &style_guide_instruction {
         system_prompt.push_str("\n\n");
         system_prompt.push_str(sg);
+    }
+    if let Some(resolved) = &resolved_style_instruction {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(resolved);
     }
     if let Some(instruction) = &explicit_token_instruction {
         system_prompt.push_str("\n\n");
@@ -1057,8 +1120,10 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 
     // Assemble the per-subtask skill-load report from the FINAL skill set
     // (post tier/dedup filtering). `budget_max` reflects the tier budget
-    // override (None == Full tier's 8000 default).
-    let budget_max = budget_override.unwrap_or(8000);
+    // override. Full-tier defaults to 12000 because image-rich data-list
+    // sections (restaurants/products with ratings/prices) overflowed 8000
+    // tokens and truncated their scripts to zero generated nodes.
+    let budget_max = budget_override.unwrap_or(12000);
     let included: Vec<SkillLoadEntry> = filtered
         .iter()
         .map(|s| SkillLoadEntry {

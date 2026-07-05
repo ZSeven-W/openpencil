@@ -19,11 +19,13 @@
 use include_dir::{include_dir, Dir};
 
 pub mod budget;
+pub mod color;
 pub mod compose;
 pub mod frontmatter;
 pub mod loader;
 pub mod memory;
 pub mod resolve;
+pub mod resolve_style;
 pub mod resolver;
 pub mod style_guide;
 pub mod types;
@@ -103,6 +105,10 @@ pub fn design_agent_system_prompt() -> &'static str {
 /// markdown plus the `style-guides/` subtree. Parsed into the skill
 /// registry on first access (see [`loader`]).
 pub static SKILLS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/skills");
+
+/// The embedded P2 style catalog. This is deliberately separate from
+/// [`SKILLS`] so catalog entries cannot be parsed as phase skills.
+pub static STYLE_CATALOG: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/style_catalog");
 
 /// Recursively count `.md` files in an embedded directory.
 #[cfg(test)]
@@ -325,6 +331,40 @@ mod tests {
         assert!(
             prompt.contains("label"),
             "must describe label in nav tab rule"
+        );
+    }
+
+    #[test]
+    fn design_agent_prompt_mentions_style_fetch() {
+        let prompt = design_agent_system_prompt();
+        assert!(
+            prompt.contains("get_guidelines(category:\"style\""),
+            "design-agent prompt must tell the loop to fetch a style guideline"
+        );
+        assert!(
+            prompt.contains("colorPalette:\""),
+            "design-agent prompt must show the flat colorPalette style param"
+        );
+    }
+
+    #[test]
+    fn design_agent_prompt_says_bake_not_variables() {
+        let prompt = design_agent_system_prompt();
+        assert!(
+            prompt.contains("Treat the returned TokenMap as reference values only"),
+            "design-agent prompt must frame TokenMap values as references"
+        );
+        assert!(
+            prompt.contains("BAKE concrete values"),
+            "design-agent prompt must require baking concrete values into nodes"
+        );
+        assert!(
+            prompt.contains("Do NOT create document variables"),
+            "design-agent prompt must prohibit creating document variables"
+        );
+        assert!(
+            prompt.contains("Do NOT call `set_variables`"),
+            "design-agent prompt must prohibit set_variables"
         );
     }
 }
