@@ -39,6 +39,11 @@ struct BuiltInputs {
     preserve_authored_geometry: bool,
     active_page_index: usize,
     var_table: VariableTable,
+    /// Font-registry generation the scene was laid out against. A runtime
+    /// font import/removal advances it without touching the document, so it
+    /// must gate the rebuild — otherwise an already-open document keeps its
+    /// stale (fallback-font) layout after an import.
+    font_generation: u64,
 }
 
 impl SceneBuildCache {
@@ -61,10 +66,12 @@ impl SceneBuildCache {
         // Proportional to variable count, not node count, so cheap to rebuild
         // per refresh purely for the comparison.
         let var_table = crate::editor_state_var_table(state);
+        let font_generation = crate::current_font_generation();
         if let Some(last) = &self.last {
             // Cheapest comparisons first; the O(nodes) document compare last.
             if last.active_page_index == active_page_index
                 && last.preserve_authored_geometry == preserve_authored_geometry
+                && last.font_generation == font_generation
                 && last.var_table == var_table
                 && last.doc == state.doc
             {
@@ -77,6 +84,7 @@ impl SceneBuildCache {
             preserve_authored_geometry,
             active_page_index,
             var_table,
+            font_generation,
         });
         Some(scene)
     }

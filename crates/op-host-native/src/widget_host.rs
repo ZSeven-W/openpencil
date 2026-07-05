@@ -75,6 +75,8 @@ mod design_md_press;
 mod design_md_press_tests;
 #[cfg(test)]
 mod figma_import_tests;
+#[cfg(test)]
+mod font_generation_scene_tests;
 mod font_picker_dispatch;
 mod geometry;
 mod geometry_settings_hover;
@@ -187,6 +189,12 @@ pub struct WidgetHostNative {
     /// rebuild of `layout_scene` — `refresh_layout_scene()` rebuilds
     /// + clears the flag, so a sequence of mutations re-derives once.
     pub(in crate::widget_host) editor_state_dirty: bool,
+    /// The `jian_skia` font-registry generation the current `layout_scene`
+    /// was built against. A runtime font import/removal bumps that
+    /// generation WITHOUT dirtying `editor_state`, so `refresh_layout_scene`
+    /// watches this to force a rebuild — otherwise an already-open document
+    /// keeps its stale fallback-font layout until an unrelated dirty event.
+    pub(in crate::widget_host) layout_scene_font_generation: u64,
     pub(in crate::widget_host) theme: Theme,
     /// Active canvas pan-drag state — left-button press → motion
     /// → release.
@@ -559,6 +567,13 @@ impl WidgetHostNative {
         // A fresh launch opens with a single empty starter Frame —
         // see `EditorState::starter`.
         let editor_state = op_editor_core::EditorState::starter();
+        // Read the font generation BEFORE building the initial scene. An
+        // import landing during construction then leaves this stale-low, so
+        // the next `refresh_layout_scene` rebuilds — reading it AFTER the
+        // build would record the new generation against the pre-import scene
+        // and skip the rebuild until an unrelated dirty event (same race we
+        // fixed in `FontResolver` / `SkiaMeasure`).
+        let layout_scene_font_generation = jian_skia::font_generation();
         // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
@@ -567,6 +582,7 @@ impl WidgetHostNative {
             layout_scene,
             scene_cache: op_pen_loader::SceneBuildCache::new(),
             editor_state_dirty: false,
+            layout_scene_font_generation,
             theme: Theme::dark(),
             drag: None,
             space_pan: false,
@@ -961,15 +977,24 @@ impl WidgetHostNative {
     /// when the scene is already current. The input hit-test + the
     /// paint pass both call this before reading `layout_scene`.
     pub(in crate::widget_host) fn refresh_layout_scene(&mut self) {
-        if self.editor_state_dirty {
-            // Only re-derive when the scene inputs (doc / theme / active page)
-            // actually changed — most `editor_state_dirty` marks (hover, scroll,
-            // selection, caret drafts, chat streaming) leave them identical, and
-            // the scene carries no editor state, so the rebuild would be a no-op.
+        // A runtime font import/removal advances the font-registry generation
+        // without dirtying `editor_state`, so watch it directly — otherwise
+        // the early-out below skips the rebuild and the open document keeps
+        // its stale fallback-font layout. Reuses the same generation the
+        // scene cache measures against, so the two stay consistent.
+        let font_generation = jian_skia::font_generation();
+        let font_changed = font_generation != self.layout_scene_font_generation;
+        if self.editor_state_dirty || font_changed {
+            // Only re-derive when the scene inputs (doc / theme / active page /
+            // font generation) actually changed — most `editor_state_dirty`
+            // marks (hover, scroll, selection, caret drafts, chat streaming)
+            // leave them identical, and the scene carries no editor state, so
+            // the rebuild would be a no-op.
             if let Some(scene) = self.scene_cache.maybe_rebuild(&self.editor_state) {
                 self.layout_scene = scene;
             }
             self.editor_state_dirty = false;
+            self.layout_scene_font_generation = font_generation;
         }
     }
 
