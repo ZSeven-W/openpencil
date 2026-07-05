@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "Cari font…",
         "text.font.bundled" => "Bawaan",
         "text.font.system" => "Sistem",
+        "text.font.imported" => "Diimpor",
+        "text.font.importAction" => "Impor font…",
         "text.font.loading" => "Memuat font…",
         "text.font.noResults" => "Font tidak ditemukan",
         "textLayout.title" => "Tata Letak",

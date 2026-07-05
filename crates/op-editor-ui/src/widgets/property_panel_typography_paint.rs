@@ -14,13 +14,6 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use jian_widgets::components::select::SelectState;
 
-/// English fallback labels for the two imported-font affordances. The
-/// existing group labels localize via `op_i18n`, but these keys are not
-/// yet in the locale tables (Phase-later i18n); literals keep the flow
-/// shippable without polluting all 15 tables with untranslated text.
-const IMPORTED_GROUP_LABEL: &str = "Imported";
-const IMPORT_ACTION_LABEL: &str = "Import font…";
-
 /// Paint the dropdown (call as a late overlay, after the sections).
 #[allow(clippy::too_many_arguments)]
 pub fn paint_font_picker(
@@ -108,7 +101,9 @@ pub fn paint_font_picker(
             | FontPickerRow::GroupBundled
             | FontPickerRow::GroupSystem => {
                 let label_str = match row {
-                    FontPickerRow::GroupImported => IMPORTED_GROUP_LABEL,
+                    FontPickerRow::GroupImported => {
+                        op_i18n::translate(locale, "text.font.imported")
+                    }
                     FontPickerRow::GroupBundled => op_i18n::translate(locale, "text.font.bundled"),
                     _ => op_i18n::translate(locale, "text.font.system"),
                 };
@@ -177,7 +172,7 @@ pub fn paint_font_picker(
                     1.6,
                 );
                 let label = TextLayout::single_run(
-                    IMPORT_ACTION_LABEL,
+                    op_i18n::translate(locale, "text.font.importAction"),
                     "system-ui",
                     11.0,
                     (theme.foreground).to_jian(),

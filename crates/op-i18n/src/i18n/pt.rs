@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "Pesquisar fontes…",
         "text.font.bundled" => "Incluídas",
         "text.font.system" => "Sistema",
+        "text.font.imported" => "Importadas",
+        "text.font.importAction" => "Importar fonte…",
         "text.font.loading" => "Carregando fontes…",
         "text.font.noResults" => "Nenhuma fonte encontrada",
         "textLayout.title" => "Layout",
