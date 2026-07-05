@@ -15,6 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use jian_ops_schema::node::container::LayoutMode;
 use jian_ops_schema::node::{ContainerProps, PenNode, TextContent};
+use jian_ops_schema::style::PenFill;
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
@@ -145,15 +146,23 @@ pub fn execute_design_tool_with_root_seed_guard(
         // repairs them in-process, instead of piling defects up for the loop-end
         // finalize. Deterministic analogue of Pencil's per-batch
         // snapshot_layout feedback.
-        let issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
-        if !issues.is_empty() || root_seed_hint.is_some() {
+        let layout_issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
+        let contrast_issues = scan_contrast_issues(state.active_children());
+        if !layout_issues.is_empty() || !contrast_issues.is_empty() || root_seed_hint.is_some() {
             if let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&result.content) {
                 if let Some(obj) = envelope.as_object_mut() {
-                    if !issues.is_empty() {
-                        obj.insert("layoutIssues".into(), serde_json::json!(issues));
+                    if !layout_issues.is_empty() {
+                        obj.insert("layoutIssues".into(), serde_json::json!(layout_issues));
+                    }
+                    if !contrast_issues.is_empty() {
+                        obj.insert(
+                            "contrastHint".into(),
+                            serde_json::json!(contrast_hint(contrast_issues.len())),
+                        );
+                        obj.insert("contrastIssues".into(), serde_json::json!(contrast_issues));
                     }
                     let mut hints = Vec::new();
-                    if !issues.is_empty() {
+                    if !layout_issues.is_empty() {
                         hints.push(
                             "The resolved layout has the issues above. Fix them with a follow-up batch_design before building the next section."
                                 .to_string(),
@@ -581,6 +590,127 @@ fn node_is_named_structure(node: &PenNode) -> bool {
         || base.name.as_deref().is_some_and(|name| !name.is_empty())
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+struct ContrastIssue {
+    #[serde(rename = "nodeId")]
+    node_id: String,
+    #[serde(rename = "nodeName")]
+    node_name: Option<String>,
+    fg: String,
+    bg: String,
+    ratio: f64,
+    target: f64,
+}
+
+const CONTRAST_AA_TARGET: f64 = 4.5;
+
+fn scan_contrast_issues(nodes: &[PenNode]) -> Vec<ContrastIssue> {
+    let mut candidates = Vec::new();
+    let mut bg_stack = Vec::new();
+    for node in nodes {
+        collect_contrast_candidates(node, &mut bg_stack, &mut candidates);
+    }
+
+    let pairs: Vec<(String, String, f64)> = candidates
+        .iter()
+        .map(|candidate| (candidate.fg.clone(), candidate.bg.clone(), candidate.target))
+        .collect();
+    let report = op_ai_skills::color::contrast::scan_pairs(&pairs);
+    let mut violations = report.violations.into_iter().peekable();
+    let mut issues = Vec::new();
+    for candidate in candidates {
+        let Some(violation) = violations.peek() else {
+            break;
+        };
+        if violation.fg == candidate.fg
+            && violation.bg == candidate.bg
+            && (violation.target - candidate.target).abs() < f64::EPSILON
+        {
+            let violation = violations.next().expect("peeked violation");
+            issues.push(ContrastIssue {
+                node_id: candidate.node_id,
+                node_name: candidate.node_name,
+                fg: violation.fg,
+                bg: violation.bg,
+                ratio: violation.ratio,
+                target: violation.target,
+            });
+        }
+    }
+    issues
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ContrastCandidate {
+    node_id: String,
+    node_name: Option<String>,
+    fg: String,
+    bg: String,
+    target: f64,
+}
+
+fn collect_contrast_candidates(
+    node: &PenNode,
+    bg_stack: &mut Vec<String>,
+    out: &mut Vec<ContrastCandidate>,
+) {
+    let pushed_bg = container_background_hex(node);
+    if let Some(bg) = pushed_bg.as_ref() {
+        bg_stack.push(bg.clone());
+    }
+
+    if let PenNode::Text(text) = node {
+        if let (Some(fg), Some(bg)) = (first_solid_hex(&text.fill), bg_stack.last()) {
+            out.push(ContrastCandidate {
+                node_id: text.base.id.clone(),
+                node_name: text.base.name.clone(),
+                fg,
+                bg: bg.clone(),
+                target: CONTRAST_AA_TARGET,
+            });
+        }
+    }
+
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_contrast_candidates(child, bg_stack, out);
+        }
+    }
+
+    if pushed_bg.is_some() {
+        bg_stack.pop();
+    }
+}
+
+fn container_background_hex(node: &PenNode) -> Option<String> {
+    match node {
+        PenNode::Frame(n) => first_solid_hex(&n.container.fill),
+        PenNode::Group(n) => first_solid_hex(&n.container.fill),
+        PenNode::Rectangle(n) => first_solid_hex(&n.container.fill),
+        PenNode::Tabs(n) => first_solid_hex(&n.fill),
+        _ => None,
+    }
+}
+
+fn first_solid_hex(fill: &Option<Vec<PenFill>>) -> Option<String> {
+    fill.as_ref()?.iter().find_map(|fill| match fill {
+        PenFill::Solid(body) => concrete_hex(&body.color),
+        _ => None,
+    })
+}
+
+fn concrete_hex(color: &str) -> Option<String> {
+    let color = color.trim();
+    let hex = color.strip_prefix('#')?;
+    (hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then(|| color.to_string())
+}
+
+fn contrast_hint(issue_count: usize) -> String {
+    format!(
+        "{issue_count} text/background pairs below AA ({CONTRAST_AA_TARGET}:1); use a darker foreground or the on-<role> color."
+    )
+}
+
 fn reveal_now_millis() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -806,6 +936,78 @@ mod tests {
         assert!(
             v.get("layoutIssues").is_none(),
             "clean layout must not attach issues: {}",
+            result.content
+        );
+    }
+
+    #[test]
+    fn contrast_scanner_flags_bad_pair() {
+        let bad_root: PenNode = serde_json::from_value(serde_json::json!({
+            "type": "frame",
+            "id": "root",
+            "name": "Card",
+            "fill": [{ "type": "solid", "color": "#888888" }],
+            "children": [{
+                "type": "text",
+                "id": "title",
+                "name": "Title",
+                "content": "Low contrast",
+                "fill": [{ "type": "solid", "color": "#777777" }]
+            }]
+        }))
+        .unwrap();
+        let issues = scan_contrast_issues(&[bad_root]);
+        assert_eq!(issues.len(), 1, "exactly one bad text/background pair");
+        assert_eq!(issues[0].node_id, "title");
+        assert_eq!(issues[0].node_name.as_deref(), Some("Title"));
+        assert_eq!(issues[0].fg, "#777777");
+        assert_eq!(issues[0].bg, "#888888");
+        assert_eq!(issues[0].target, 4.5);
+        assert!(issues[0].ratio < issues[0].target);
+
+        let passing_root: PenNode = serde_json::from_value(serde_json::json!({
+            "type": "frame",
+            "id": "root",
+            "name": "Card",
+            "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+            "children": [{
+                "type": "text",
+                "id": "title",
+                "name": "Title",
+                "content": "Readable",
+                "fill": [{ "type": "solid", "color": "#111111" }]
+            }]
+        }))
+        .unwrap();
+        assert!(scan_contrast_issues(&[passing_root]).is_empty());
+    }
+
+    #[test]
+    fn batch_design_result_carries_contrast_issues() {
+        let mut state = EditorState::new();
+        let (result, mutated) = execute_design_tool(
+            &mut state,
+            "batch_design",
+            r##"{"operations":"root=I(null,{type:'frame',name:'Card',width:320,height:120,fill:[{type:'solid',color:'#888888'}],children:[{type:'text',name:'Title',content:'Low contrast',fill:[{type:'solid',color:'#777777'}]}]})"}"##,
+        );
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+
+        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let issues = v["contrastIssues"]
+            .as_array()
+            .expect("contrastIssues attached");
+        assert!(!issues.is_empty(), "bad contrast pair reported");
+        assert_eq!(issues[0]["nodeName"], "Title");
+        assert_eq!(issues[0]["fg"], "#777777");
+        assert_eq!(issues[0]["bg"], "#888888");
+        assert!(issues[0]["ratio"].as_f64().unwrap() < issues[0]["target"].as_f64().unwrap());
+        assert!(
+            v["contrastHint"]
+                .as_str()
+                .unwrap_or("")
+                .contains("text/background pairs below AA"),
+            "actionable contrast hint attached: {}",
             result.content
         );
     }

@@ -25,6 +25,7 @@ pub mod plan;
 pub mod plan_normalize;
 pub mod plan_repair;
 pub mod program_gen;
+mod resolved_style_prompt;
 pub mod retry;
 pub mod script_gen;
 pub mod semantic_palette;
@@ -68,6 +69,8 @@ pub mod tree_heuristics;
 
 #[cfg(test)]
 mod geometry_chip_tests;
+#[cfg(test)]
+mod prompt_resolved_style_tests;
 #[cfg(test)]
 mod radial_stub_tests;
 #[cfg(test)]
