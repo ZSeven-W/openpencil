@@ -116,17 +116,17 @@ jobs:
         run: cargo test --workspace --target ${{ matrix.target }}
       - name: Test (host, macOS / Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
-        run: cargo test --workspace --exclude op-host-desktop --target ${{ matrix.target }}
-      - name: Test op-host-desktop (host, macOS / Windows, serialized)
+        run: cargo test --workspace --exclude op-host-native --exclude op-host-desktop --target ${{ matrix.target }}
+      - name: Test skia host crates (macOS / Windows, serialized)
         if: matrix.cross == false && matrix.check_only != true && runner.os != 'Linux'
-        # op-host-desktop's tests build native NativeBackends (skia /
-        # DirectWrite fonts); across cargo's parallel test-worker threads this
-        # segfaults on the Windows runner (STATUS_ACCESS_VIOLATION). Run
+        # op-host-native (+ op-host-desktop) build native NativeBackends whose
+        # skia FontMgr (DirectWrite) segfaults across parallel test-worker
+        # threads on the Windows runner (STATUS_ACCESS_VIOLATION). Run
         # single-threaded (matches rust-check.yml). A SEPARATE step — not a
         # second line in the step above — because Windows runs multi-line
         # run: blocks under PowerShell, which only fails on the LAST command's
         # exit code and would mask a failure in the workspace test above.
-        run: cargo test -p op-host-desktop --target ${{ matrix.target }} -- --test-threads=1
+        run: cargo test -p op-host-native -p op-host-desktop --target ${{ matrix.target }} -- --test-threads=1
       # Desktop binary artifact upload is intentionally not wired here yet.
       # The real desktop binary lives in the `op-host-desktop` crate; a
       # build + upload step can be added once release packaging is finalized.
