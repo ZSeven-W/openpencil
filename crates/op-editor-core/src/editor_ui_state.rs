@@ -1040,6 +1040,10 @@ pub struct EditorUiState {
     /// Whether the Effects section's "+" add-menu (Drop Shadow / Layer
     /// Blur choice) is open. `false` = closed.
     pub effect_add_picker_open: bool,
+    /// Row index hovered in the Effects add-menu (`None` = none), so the
+    /// popover highlights the row under the cursor like the other
+    /// property-panel dropdowns.
+    pub effect_add_menu_hover: Option<usize>,
     /// Fill/stroke colour-variable dropdown currently open in the
     /// PropertyPanel; `None` means closed.
     pub property_color_variable_picker_open: Option<crate::ui_draft::ColorTarget>,
@@ -1351,6 +1355,7 @@ impl Default for EditorUiState {
             fill_type_picker: jian_widgets::components::select::SelectState::default(),
             fill_type_picker_index: 0,
             effect_add_picker_open: false,
+            effect_add_menu_hover: None,
             property_color_variable_picker_open: None,
             image_fill_popover_open: false,
             font_picker: jian_widgets::components::select::SelectState::default(),
@@ -1478,6 +1483,7 @@ impl EditorUiState {
     /// Toggle the Effects "+" add-menu (Drop Shadow / Layer Blur).
     pub fn toggle_effect_add_picker(&mut self) {
         self.effect_add_picker_open = !self.effect_add_picker_open;
+        self.effect_add_menu_hover = None;
     }
 
     /// Close the Effects add-menu. Returns true when it was open (so
@@ -1485,6 +1491,7 @@ impl EditorUiState {
     pub fn close_effect_add_picker(&mut self) -> bool {
         let was = self.effect_add_picker_open;
         self.effect_add_picker_open = false;
+        self.effect_add_menu_hover = None;
         was
     }
 

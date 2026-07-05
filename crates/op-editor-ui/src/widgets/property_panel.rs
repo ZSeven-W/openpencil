@@ -217,6 +217,9 @@ pub struct PropertyPanel {
     /// Row index the cursor is over in the open Export select
     /// popup — `None` when no popup is open or no row is hovered.
     pub export_picker_hover: Option<usize>,
+    /// Row index the cursor is over in the open Effects "+" add-menu
+    /// (`None` when closed or no row hovered) — drives the row highlight.
+    pub effect_add_menu_hover: Option<usize>,
     /// Vertical scroll offset (px, ≥ 0) — paint + hit-test shift the
     /// section content up by this so a tall inspector stays usable.
     pub scroll: f32,
@@ -492,6 +495,7 @@ impl PropertyPanel {
             export_scale_picker_open: ui.export_scale_picker_open,
             export_format_picker_open: ui.export_format_picker_open,
             export_picker_hover: ui.export_picker_hover,
+            effect_add_menu_hover: ui.effect_add_menu_hover,
             scroll: ui.property_panel_scroll.offset.max(0.0),
             locale: ui.locale,
             // Inert in the multi-select aggregate view.
@@ -552,6 +556,16 @@ impl PropertyPanel {
         } else {
             EffectAddMenuHit::Outside
         }
+    }
+
+    /// Row index under `point` in the open Effects add-menu — drives the
+    /// hover highlight (mirrors [`Self::export_picker_row_at`]).
+    pub fn effect_add_menu_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        let add_rect = self.effect_add_button_rect(self.scrolled_rect(panel_rect))?;
+        let menu = crate::widgets::property_panel_effects::effect_add_menu_rect(add_rect);
+        crate::widgets::property_panel_effects::effect_add_menu_row_rects(menu)
+            .into_iter()
+            .position(|(_, row)| row.contains(point))
     }
 
     /// The Effects section "+" button rect — `scrolled` is the already
@@ -1288,6 +1302,7 @@ impl Widget for PropertyPanel {
                     cx,
                     &self.theme,
                     add_rect,
+                    self.effect_add_menu_hover,
                 );
             }
         }
