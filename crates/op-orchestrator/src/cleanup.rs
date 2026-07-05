@@ -11,7 +11,7 @@ use crate::cleanup_typography::repair_overbold_text_hierarchy;
 use crate::plan::OrchestratorPlan;
 use crate::types::DocSink;
 use jian_ops_schema::node::{
-    container::{ContainerProps, LayoutMode, Padding},
+    container::{ContainerProps, JustifyContent, LayoutMode, Padding},
     PenNode,
 };
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
@@ -95,6 +95,18 @@ pub(crate) fn remove_duplicate_bottom_nav_sections_for_all_roots(sink: &mut dyn 
         .collect();
     for root_id in root_ids {
         remove_duplicate_bottom_nav_sections(sink, &root_id);
+    }
+}
+
+pub(crate) fn distribute_bottom_nav_tabs_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        distribute_bottom_nav_tabs(sink, &root_id);
     }
 }
 
@@ -268,6 +280,116 @@ fn remove_duplicate_bottom_nav_sections(sink: &mut dyn DocSink, root_id: &str) {
             node_id: id,
             page_id: None,
         });
+    }
+}
+
+fn distribute_bottom_nav_tabs(sink: &mut dyn DocSink, root_id: &str) {
+    let repairs: Vec<BottomNavTabDistributionRepair> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        let mut repairs = Vec::new();
+        collect_bottom_nav_tab_distribution_repairs(root, &mut repairs);
+        repairs
+    };
+
+    for repair in repairs {
+        for tab_id in repair.tabs_to_fill {
+            sink.apply(EditorCommand::SetNodeLayoutProp {
+                node_id: tab_id,
+                property: "width".to_string(),
+                value: LayoutPropValue::Keyword("fill_container".to_string()),
+            });
+        }
+        if repair.set_row_justify {
+            sink.apply(EditorCommand::SetNodeLayoutProp {
+                node_id: repair.row_id,
+                property: "justifyContent".to_string(),
+                value: LayoutPropValue::Keyword("space_between".to_string()),
+            });
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct BottomNavTabDistributionRepair {
+    row_id: NodeId,
+    tabs_to_fill: Vec<NodeId>,
+    set_row_justify: bool,
+}
+
+fn collect_bottom_nav_tab_distribution_repairs(
+    node: &PenNode,
+    repairs: &mut Vec<BottomNavTabDistributionRepair>,
+) {
+    if let Some(repair) = bottom_nav_tab_distribution_repair(node) {
+        repairs.push(repair);
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_bottom_nav_tab_distribution_repairs(child, repairs);
+        }
+    }
+}
+
+fn bottom_nav_tab_distribution_repair(node: &PenNode) -> Option<BottomNavTabDistributionRepair> {
+    let props = frame_container_props(node)?;
+    if props.layout.as_ref() != Some(&LayoutMode::Horizontal) {
+        return None;
+    }
+    let children = node.children()?;
+    if children.len() < 3 || !children.iter().all(is_vertical_icon_label_tab_frame) {
+        return None;
+    }
+
+    let tabs_to_fill = children
+        .iter()
+        .filter_map(|child| {
+            let child_props = frame_container_props(child)?;
+            (!width_is_fill_container(child_props)).then(|| NodeId::new(child.id_str().to_string()))
+        })
+        .collect::<Vec<_>>();
+    let set_row_justify = !matches!(
+        props.justify_content.as_ref(),
+        Some(JustifyContent::SpaceBetween) | Some(JustifyContent::SpaceAround)
+    );
+
+    (!tabs_to_fill.is_empty() || set_row_justify).then(|| BottomNavTabDistributionRepair {
+        row_id: NodeId::new(node.id_str().to_string()),
+        tabs_to_fill,
+        set_row_justify,
+    })
+}
+
+fn is_vertical_icon_label_tab_frame(node: &PenNode) -> bool {
+    let Some(props) = frame_container_props(node) else {
+        return false;
+    };
+    if props.layout.as_ref() != Some(&LayoutMode::Vertical) {
+        return false;
+    }
+    let mut has_icon = false;
+    let mut has_text = false;
+    collect_icon_label_descendants(node, &mut has_icon, &mut has_text);
+    has_icon && has_text
+}
+
+fn collect_icon_label_descendants(node: &PenNode, has_icon: &mut bool, has_text: &mut bool) {
+    if *has_icon && *has_text {
+        return;
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            match child {
+                PenNode::IconFont(_) => *has_icon = true,
+                PenNode::Text(_) => *has_text = true,
+                _ => {}
+            }
+            collect_icon_label_descendants(child, has_icon, has_text);
+            if *has_icon && *has_text {
+                return;
+            }
+        }
     }
 }
 
@@ -1341,6 +1463,7 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
 
         remove_duplicate_status_bars(sink, rid);
         remove_duplicate_bottom_nav_sections(sink, rid);
+        distribute_bottom_nav_tabs(sink, rid);
         collapse_nested_horizontal_padding(sink, rid);
         expand_absolute_container_to_children(sink, rid);
         pad_clipping_horizontal_row_for_stroke(sink, rid);
@@ -1495,6 +1618,10 @@ mod tests_mobile_chrome;
 #[cfg(test)]
 #[path = "cleanup_mobile_bottom_nav_dedup_tests.rs"]
 mod tests_mobile_bottom_nav_dedup;
+
+#[cfg(test)]
+#[path = "cleanup_bottom_nav_tests.rs"]
+mod tests_bottom_nav;
 
 #[cfg(test)]
 #[path = "cleanup_nested_horizontal_padding_tests.rs"]
