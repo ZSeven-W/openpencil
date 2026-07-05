@@ -51,10 +51,10 @@ fn state_with_selected_header() -> EditorState {
 fn blank_starter_canvas_never_launches_modify() {
     let state = EditorState::starter();
 
-    assert!(!state.selection.is_empty(), "starter frame is selected");
+    assert!(state.selection.is_empty(), "fresh starter has no selection");
     assert!(
         !should_launch_direct_modify(&state, "Luxury webapp for managing barbershop clients"),
-        "fresh blank starter canvas has no real target to modify"
+        "fresh blank starter canvas has no selected target or real content to modify"
     );
 }
 

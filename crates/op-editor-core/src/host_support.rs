@@ -66,8 +66,7 @@ impl EditorState {
 
     /// Build the document a fresh launch opens with — a single empty
     /// starter Frame `n10` matching the TypeScript app's blank
-    /// document geometry, selected so the user can immediately resize
-    /// / move it or drop nodes inside. No demo decoration.
+    /// document geometry. No default selection and no demo decoration.
     pub fn starter() -> Self {
         let src = r##"{
             "version": "0.8.0",
@@ -81,9 +80,7 @@ impl EditorState {
         let doc = jian_ops_schema::load_str(src)
             .expect("EditorState::starter() fixture parses")
             .value;
-        let mut state = Self::from_document(doc);
-        state.set_single_selection(NodeId::new("n10"));
-        state
+        Self::from_document(doc)
     }
 
     /// Spawn a fresh leaf node for the active shape / frame / text /
@@ -625,14 +622,14 @@ mod tests {
     }
 
     #[test]
-    fn starter_is_a_single_empty_frame_with_it_selected() {
+    fn starter_is_a_single_empty_frame_with_nothing_selected() {
         let s = EditorState::starter();
         // Exactly one top-level node — the starter Frame. The
         // `max_node_id() == 10` check proves no demo children:
         // the n11..n14 sample tree would lift it to 14.
         assert_eq!(s.doc.children.len(), 1);
         assert_eq!(s.max_node_id(), 10);
-        assert_eq!(s.selection.anchor, NodeId::new("n10"));
+        assert!(s.selection.is_empty());
         let frame = match &s.doc.children[0] {
             jian_ops_schema::node::PenNode::Frame(frame) => frame,
             other => panic!("starter should be a frame, got {:?}", other),
