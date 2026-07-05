@@ -11,14 +11,14 @@ use crate::cleanup_typography::repair_overbold_text_hierarchy;
 use crate::plan::OrchestratorPlan;
 use crate::types::DocSink;
 use jian_ops_schema::node::{
-    container::{ContainerProps, Padding},
+    container::{ContainerProps, LayoutMode, Padding},
     PenNode,
 };
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::PenEffect;
 use op_editor_core::{
-    first_fill_type, first_solid_fill_hex, EditorCommand, EditorState, FillType, LayoutPropValue,
-    NodeId, PenNodeExt,
+    fills::node_stroke_width, first_fill_type, first_solid_fill_hex, EditorCommand, EditorState,
+    FillType, LayoutPropValue, NodeId, PenNodeExt,
 };
 
 #[path = "cleanup_desktop_dashboard.rs"]
@@ -110,6 +110,126 @@ pub(crate) fn collapse_nested_horizontal_padding_for_all_roots(sink: &mut dyn Do
     }
 }
 
+pub(crate) fn expand_absolute_container_to_children_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        expand_absolute_container_to_children(sink, &root_id);
+    }
+}
+
+pub(crate) fn pad_clipping_horizontal_row_for_stroke_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        pad_clipping_horizontal_row_for_stroke(sink, &root_id);
+    }
+}
+
+pub(crate) fn collapse_fill_container_content_sections_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        collapse_fill_container_content_sections(sink, &root_id);
+    }
+}
+
+pub(crate) fn equalize_horizontal_card_heights_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        equalize_horizontal_card_heights(sink, &root_id);
+    }
+}
+
+fn pad_clipping_horizontal_row_for_stroke(sink: &mut dyn DocSink, root_id: &str) {
+    let repairs: Vec<ClipRowStrokePaddingRepair> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        let mut repairs = Vec::new();
+        collect_clip_row_stroke_padding_repairs(root, &mut repairs);
+        repairs
+    };
+
+    for repair in repairs {
+        sink.apply(EditorCommand::SetNodeLayoutProp {
+            node_id: repair.node_id,
+            property: "padding".to_string(),
+            value: LayoutPropValue::NumberArray(vec![
+                repair.padding[0],
+                repair.padding[1],
+                repair.padding[2],
+                repair.padding[3],
+            ]),
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ClipRowStrokePaddingRepair {
+    node_id: NodeId,
+    padding: [f64; 4],
+}
+
+fn collect_clip_row_stroke_padding_repairs(
+    node: &PenNode,
+    repairs: &mut Vec<ClipRowStrokePaddingRepair>,
+) {
+    if let Some(repair) = clip_row_stroke_padding_repair(node) {
+        repairs.push(repair);
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_clip_row_stroke_padding_repairs(child, repairs);
+        }
+    }
+}
+
+fn clip_row_stroke_padding_repair(node: &PenNode) -> Option<ClipRowStrokePaddingRepair> {
+    let props = frame_container_props(node)?;
+    if props.layout.as_ref() != Some(&LayoutMode::Horizontal) || props.clip_content != Some(true) {
+        return None;
+    }
+    let max_stroke = node
+        .children()?
+        .iter()
+        .filter_map(node_stroke_width)
+        .max_by(f64::total_cmp)?;
+    let mut padding = props
+        .padding
+        .as_ref()
+        .map(padding_sides)
+        .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+    let stroke_padding = max_stroke.ceil();
+    if padding.iter().all(|side| *side >= stroke_padding) {
+        return None;
+    }
+    for side in &mut padding {
+        *side = side.max(stroke_padding);
+    }
+    Some(ClipRowStrokePaddingRepair {
+        node_id: NodeId::new(node.id_str().to_string()),
+        padding,
+    })
+}
+
 /// Mobile root-level bottom-nav dedupe. Weak-model Chinese prompts can produce
 /// both a localized bottom nav section and an English normalized bottom nav.
 /// Keep the bottom-most/last top-level nav and remove earlier duplicates.
@@ -149,6 +269,211 @@ fn remove_duplicate_bottom_nav_sections(sink: &mut dyn DocSink, root_id: &str) {
             page_id: None,
         });
     }
+}
+
+/// Fixed-height vertical mobile artboards must keep direct content sections
+/// content-driven; fill-height direct children can consume all leftover space
+/// when a sibling subtask emits zero nodes.
+fn collapse_fill_container_content_sections(sink: &mut dyn DocSink, root_id: &str) {
+    let repairs: Vec<NodeId> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        if !is_fixed_height_vertical_root(root) {
+            return;
+        }
+        let Some(children) = root.children() else {
+            return;
+        };
+        children
+            .iter()
+            .filter(|child| is_fill_height_content_frame(child))
+            .map(|child| NodeId::new(child.id_str().to_string()))
+            .collect()
+    };
+
+    for node_id in repairs {
+        sink.apply(EditorCommand::SetNodeLayoutProp {
+            node_id,
+            property: "height".to_string(),
+            value: LayoutPropValue::Keyword("fit_content".to_string()),
+        });
+    }
+}
+
+fn is_fixed_height_vertical_root(root: &PenNode) -> bool {
+    let Some(props) = frame_container_props(root) else {
+        return false;
+    };
+    props
+        .layout
+        .as_ref()
+        .is_some_and(|layout| layout == &LayoutMode::Vertical)
+        && matches!(props.height.as_ref(), Some(SizingBehavior::Number(_)))
+}
+
+fn is_fill_height_content_frame(node: &PenNode) -> bool {
+    let Some(props) = frame_container_props(node) else {
+        return false;
+    };
+    matches!(
+        props.height.as_ref(),
+        Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))
+    ) && node
+        .children()
+        .map(|children| !children.is_empty())
+        .unwrap_or(false)
+}
+
+fn equalize_horizontal_card_heights(sink: &mut dyn DocSink, root_id: &str) {
+    let repairs: Vec<CardHeightRepair> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        let mut repairs = Vec::new();
+        collect_horizontal_card_height_repairs(root, &mut repairs);
+        repairs
+    };
+
+    for repair in repairs {
+        sink.apply(EditorCommand::SetNodeLayoutProp {
+            node_id: repair.card_id,
+            property: "height".to_string(),
+            value: LayoutPropValue::Keyword("fill_container".to_string()),
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CardHeightRepair {
+    card_id: NodeId,
+}
+
+fn collect_horizontal_card_height_repairs(node: &PenNode, repairs: &mut Vec<CardHeightRepair>) {
+    if let Some(card_repairs) = horizontal_card_height_repairs(node) {
+        repairs.extend(card_repairs);
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_horizontal_card_height_repairs(child, repairs);
+        }
+    }
+}
+
+fn horizontal_card_height_repairs(node: &PenNode) -> Option<Vec<CardHeightRepair>> {
+    let props = frame_container_props(node)?;
+    if props.layout.as_ref() != Some(&LayoutMode::Horizontal) {
+        return None;
+    }
+
+    let mut cards = Vec::new();
+    for child in node.children()? {
+        let Some(child_props) = frame_container_props(child) else {
+            continue;
+        };
+        if child
+            .children()
+            .map(|children| children.is_empty())
+            .unwrap_or(true)
+        {
+            continue;
+        }
+        if !width_is_fill_container(child_props) {
+            return None;
+        }
+        if matches!(
+            child_props.height.as_ref(),
+            Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
+        ) {
+            cards.push(child);
+        }
+    }
+
+    (cards.len() >= 2).then(|| {
+        cards
+            .into_iter()
+            .map(|card| CardHeightRepair {
+                card_id: NodeId::new(card.id_str().to_string()),
+            })
+            .collect()
+    })
+}
+
+fn expand_absolute_container_to_children(sink: &mut dyn DocSink, root_id: &str) {
+    let repairs: Vec<AbsoluteContainerRepair> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        let mut repairs = Vec::new();
+        collect_absolute_container_repairs(root, &mut repairs);
+        repairs
+    };
+
+    for repair in repairs {
+        sink.apply(EditorCommand::UpdateNode {
+            node_id: repair.node_id,
+            x: None,
+            y: None,
+            width: None,
+            height: Some(repair.height.ceil() as i32),
+            name: None,
+            fill_hex: None,
+            page_id: None,
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
+struct AbsoluteContainerRepair {
+    node_id: NodeId,
+    height: f64,
+}
+
+fn collect_absolute_container_repairs(node: &PenNode, repairs: &mut Vec<AbsoluteContainerRepair>) {
+    if let Some(repair) = absolute_container_repair(node) {
+        repairs.push(repair);
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_absolute_container_repairs(child, repairs);
+        }
+    }
+}
+
+fn absolute_container_repair(node: &PenNode) -> Option<AbsoluteContainerRepair> {
+    let props = frame_container_props(node)?;
+    if props.layout.as_ref() != Some(&LayoutMode::None)
+        || !matches!(
+            props.height.as_ref(),
+            Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
+        )
+    {
+        return None;
+    }
+
+    let children = node.children()?;
+    if !children
+        .iter()
+        .any(|child| matches!(child, PenNode::Image(_)))
+    {
+        return None;
+    }
+
+    let height = children
+        .iter()
+        .filter_map(|child| {
+            if !matches!(child, PenNode::Image(_)) {
+                return None;
+            }
+            child
+                .height_px()
+                .map(|height| child.base().y.unwrap_or(0.0) + height)
+        })
+        .max_by(f64::total_cmp)?;
+    (height > 0.0).then(|| AbsoluteContainerRepair {
+        node_id: NodeId::new(node.id_str().to_string()),
+        height,
+    })
 }
 
 /// Collapse `section > transparent fill-width wrapper` double horizontal
@@ -1017,6 +1342,10 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         remove_duplicate_status_bars(sink, rid);
         remove_duplicate_bottom_nav_sections(sink, rid);
         collapse_nested_horizontal_padding(sink, rid);
+        expand_absolute_container_to_children(sink, rid);
+        pad_clipping_horizontal_row_for_stroke(sink, rid);
+        equalize_horizontal_card_heights(sink, rid);
+        collapse_fill_container_content_sections(sink, rid);
         repair_light_mobile_nav_surfaces(sink, rid);
         repair_mobile_content_sections(sink, rid);
         cleanup_mobile_chrome::repair_mobile_structural_chrome(sink, rid);
@@ -1170,6 +1499,22 @@ mod tests_mobile_bottom_nav_dedup;
 #[cfg(test)]
 #[path = "cleanup_nested_horizontal_padding_tests.rs"]
 mod tests_nested_horizontal_padding;
+
+#[cfg(test)]
+#[path = "cleanup_absolute_container_tests.rs"]
+mod tests_absolute_container;
+
+#[cfg(test)]
+#[path = "cleanup_fill_container_content_tests.rs"]
+mod tests_fill_container_content;
+
+#[cfg(test)]
+#[path = "cleanup_clip_row_stroke_tests.rs"]
+mod tests_clip_row_stroke;
+
+#[cfg(test)]
+#[path = "cleanup_card_height_equalize_tests.rs"]
+mod tests_card_height_equalize;
 
 #[cfg(test)]
 #[path = "cleanup_desktop_dashboard_tests.rs"]
