@@ -35,6 +35,12 @@ export async function opCkInit(canvasId) {
 
   const systemTypefaces = [];
   const systemTypefaceKeys = new Set();
+  // User-imported font faces, keyed by normalized family name -> { tf, family }.
+  // A named family is a deliberate single-typeface choice (mirrors how native
+  // resolves a named family via FontMgr before any script fallback), so
+  // imported text shapes the WHOLE run with one typeface instead of
+  // re-segmenting by script.
+  const importedTypefaces = new Map();
   const coverageCache = new Map();
   const browserTextCanvas = document.createElement('canvas');
   const browserTextCtx = browserTextCanvas.getContext('2d', { willReadFrequently: true });
@@ -231,6 +237,101 @@ export async function opCkInit(canvasId) {
   };
   const tfFor = (t, emojiRun) => systemTypefaceFor(t, emojiRun) || CK.Typeface.GetDefault();
   const runWidth = (f, s) => { const ids = f.getGlyphIDs(s); return f.getGlyphWidths(ids).reduce((a, v) => a + v, 0); };
+  // Normalize a CSS font stack to an imported-family key, mirroring jian-skia
+  // `primary_font_family`: first family before a comma, quotes stripped;
+  // empty / generic keywords resolve to no imported family.
+  const GENERIC_FAMILIES = new Set(['system-ui', 'sans-serif', 'serif', 'monospace', '-apple-system']);
+  const primaryFamilyKey = (family) => {
+    const first = String(family || '').split(',')[0].trim().replace(/^["']|["']$/g, '').trim();
+    if (!first) return '';
+    const key = first.toLowerCase();
+    return GENERIC_FAMILIES.has(key) ? '' : key;
+  };
+  // Resolve the imported typeface for a family stack (null when unregistered).
+  const familyTypeface = (family) => {
+    const key = primaryFamilyKey(family);
+    if (!key) return null;
+    const entry = importedTypefaces.get(key);
+    return entry ? entry.tf : null;
+  };
+  // Shared "typeface + font for (family, sz)" so the family-aware draw and
+  // measure paths build the SAME CK.Font and agree to sub-pixel. Caller deletes.
+  const importedFamilyFont = (tf, sz, italic) => {
+    const f = new CK.Font(tf, sz);
+    if (italic) f.setSkewX(-0.25);
+    return f;
+  };
+  // Split a run into maximal {text, imported} segments by whether the imported
+  // typeface has a glyph for each char (glyph id 0 = .notdef = uncovered). This
+  // is per-CHARACTER, so a mixed run keeps the imported face for the chars it
+  // covers and falls back (system/CJK/emoji) only for the rest — matching how
+  // native resolves a named family per character, instead of dropping the
+  // imported family for the whole run. `getGlyphIDs` returns one id per
+  // codepoint, so it aligns with the codepoint iteration; if the counts don't
+  // line up we conservatively treat the whole run as uncovered.
+  const importedCoverageSegments = (tf, sz, t) => {
+    const cps = Array.from(t);
+    if (cps.length === 0) return [];
+    const f = new CK.Font(tf, sz);
+    let ids = null;
+    try {
+      ids = f.getGlyphIDs(t);
+    } catch (e) {
+      ids = null;
+    }
+    f.delete();
+    if (!ids || ids.length !== cps.length) return [{ text: t, imported: false }];
+    const out = [];
+    let cur = '';
+    let curImported = null;
+    for (let i = 0; i < cps.length; i++) {
+      const imp = ids[i] !== 0;
+      if (curImported === null) {
+        curImported = imp;
+        cur = cps[i];
+      } else if (imp === curImported) {
+        cur += cps[i];
+      } else {
+        out.push({ text: cur, imported: curImported });
+        cur = cps[i];
+        curImported = imp;
+      }
+    }
+    if (cur) out.push({ text: cur, imported: curImported });
+    return out;
+  };
+  // Draw a run via the script-segmented fallback (system / CJK / emoji /
+  // browser-canvas), returning the advance consumed. Shared by the
+  // family-blind path and the uncovered segments of a family-aware run, so the
+  // two stay identical. Mirrors `measureTextStyled` advance-for-advance.
+  const drawScriptRun = (t, x, y, sz, weight, italic, r, g, b, a) => {
+    const segs = segments(t);
+    if (segs.length === 0) return 0;
+    if (allSegmentsUseBrowserTextFallback(segs)) {
+      let cx = x;
+      for (const seg of segs) cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
+      return cx - x;
+    }
+    const p = fillPaint(r, g, b, a);
+    if (weight >= 600 && isPaintStyle(CK.PaintStyle.StrokeAndFill)) {
+      setPaintStyle(p, CK.PaintStyle.StrokeAndFill);
+      p.setStrokeWidth(sz * 0.06);
+    }
+    let cx = x;
+    for (const seg of segs) {
+      if (shouldUseBrowserTextFallback(seg.text, seg.emoji)) {
+        cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
+        continue;
+      }
+      const f = new CK.Font(tfFor(seg.text, seg.emoji), sz);
+      if (italic && !seg.emoji) f.setSkewX(-0.25);
+      canvas.drawText(seg.text, cx, y, p, f);
+      cx += runWidth(f, seg.text);
+      f.delete();
+    }
+    p.delete();
+    return cx - x;
+  };
   const pathIsFinite = (bounds) => bounds && bounds.length >= 4 && bounds.every((v) => Number.isFinite(v));
   const fitPathToRect = (path, x, y, w, h) => {
     if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
@@ -389,14 +490,17 @@ export async function opCkInit(canvasId) {
       offsetPath.delete(); path.delete();
     },
 
-    drawText(t, x, y, sz, weight, italic, r, g, b, a) {
-      const segs = segments(t);
-      if (segs.length === 0) return;
-      if (allSegmentsUseBrowserTextFallback(segs)) {
-        let cx = x;
-        for (const seg of segs) {
-          cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
-        }
+    drawText(t, family, x, y, sz, weight, italic, r, g, b, a) {
+      if (!t) return;
+      // Per-CHARACTER family resolution: chars the imported face covers draw
+      // with it; the rest fall to the script-segmented path — so a mixed run
+      // keeps the imported family where it applies and never renders tofu,
+      // matching native. Draw + measure split on the SAME importedCoverage
+      // segments and share drawScriptRun/importedFamilyFont, so advances agree.
+      const importedTf = familyTypeface(family);
+      const covSegs = importedTf ? importedCoverageSegments(importedTf, sz, t) : null;
+      if (!covSegs || (covSegs.length === 1 && !covSegs[0].imported)) {
+        drawScriptRun(t, x, y, sz, weight, italic, r, g, b, a);
         return;
       }
       const p = fillPaint(r, g, b, a);
@@ -405,21 +509,40 @@ export async function opCkInit(canvasId) {
         p.setStrokeWidth(sz * 0.06);
       }
       let cx = x;
-      for (const seg of segs) {
-        if (shouldUseBrowserTextFallback(seg.text, seg.emoji)) {
-          cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
-          continue;
+      for (const seg of covSegs) {
+        if (seg.imported) {
+          const f = importedFamilyFont(importedTf, sz, italic);
+          canvas.drawText(seg.text, cx, y, p, f);
+          cx += runWidth(f, seg.text);
+          f.delete();
+        } else {
+          cx += drawScriptRun(seg.text, cx, y, sz, weight, italic, r, g, b, a);
         }
-        const f = new CK.Font(tfFor(seg.text, seg.emoji), sz);
-        if (italic && !seg.emoji) f.setSkewX(-0.25);
-        canvas.drawText(seg.text, cx, y, p, f);
-        cx += runWidth(f, seg.text);
-        f.delete();
       }
       p.delete();
     },
     measureText(t, sz) {
       return this.measureTextStyled(t, sz, 400, false);
+    },
+    measureTextFamilyStyled(t, family, sz, weight, italic) {
+      const importedTf = familyTypeface(family);
+      const covSegs = importedTf ? importedCoverageSegments(importedTf, sz, t) : null;
+      if (!covSegs || (covSegs.length === 1 && !covSegs[0].imported)) {
+        // No imported family (or it covers nothing): the family-blind
+        // script-segmented measure — the SAME path drawText falls to.
+        return this.measureTextStyled(t, sz, weight, italic);
+      }
+      let w = 0;
+      for (const seg of covSegs) {
+        if (seg.imported) {
+          const f = importedFamilyFont(importedTf, sz, italic);
+          w += runWidth(f, seg.text);
+          f.delete();
+        } else {
+          w += this.measureTextStyled(seg.text, sz, weight, italic);
+        }
+      }
+      return w;
     },
     measureTextStyled(t, sz, weight, italic) {
       let w = 0;
@@ -451,6 +574,39 @@ export async function opCkInit(canvasId) {
       });
       coverageCache.clear();
       return true;
+    },
+    registerImportedFont(family, bytes) {
+      const key = primaryFamilyKey(family);
+      if (!key) return false;
+      const tf = CK.Typeface.MakeFreeTypeFaceFromData(copyBytes(bytes));
+      if (!tf) return false;
+      // Replace any prior face under the same key, freeing its wasm-heap tf.
+      const prev = importedTypefaces.get(key);
+      if (prev && prev.tf && prev.tf.delete) prev.tf.delete();
+      importedTypefaces.set(key, { tf, family: String(family || '') });
+      coverageCache.clear();
+      return true;
+    },
+    // (Fresh browser imports parse the family name in Rust via `ttf-parser` —
+    // the vendored CanvasKit build exposes no family-name API — then register
+    // through `registerImportedFont` above with the known family.)
+    // The display names of every registered imported family, so the Rust snapshot
+    // (which doesn't own the registry on web) can mirror the picker's Imported
+    // group after every add / remove and at mount.
+    importedFamilyList() {
+      const out = [];
+      for (const entry of importedTypefaces.values()) {
+        if (entry && entry.family) out.push(entry.family);
+      }
+      return out;
+    },
+    removeImportedFont(family) {
+      const key = primaryFamilyKey(family);
+      if (!key) return;
+      const entry = importedTypefaces.get(key);
+      if (!entry) return;
+      if (entry.tf && entry.tf.delete) entry.tf.delete();
+      importedTypefaces.delete(key);
     },
 
     clipRect(x, y, w, h) { canvas.clipRect(CK.LTRBRect(x, y, x + w, y + h), CK.ClipOp.Intersect, true); },

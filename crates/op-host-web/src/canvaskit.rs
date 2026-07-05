@@ -200,6 +200,7 @@ extern "C" {
     fn draw_text(
         this: &OpCk,
         t: &str,
+        family: &str,
         x: f32,
         y: f32,
         sz: f32,
@@ -214,8 +215,34 @@ extern "C" {
     fn measure_text(this: &OpCk, t: &str, sz: f32) -> f32;
     #[wasm_bindgen(method, js_name = measureTextStyled)]
     fn measure_text_styled(this: &OpCk, t: &str, sz: f32, weight: i32, italic: bool) -> f32;
+    /// Family-aware measure: when `family` resolves to a registered imported
+    /// font the whole run is measured with that single typeface, so the caret /
+    /// layout geometry agrees to sub-pixel with what `drawText` paints for the
+    /// same (text, family, sz, weight, italic). Empty `family` = family-blind.
+    #[wasm_bindgen(method, js_name = measureTextFamilyStyled)]
+    fn measure_text_family_styled(
+        this: &OpCk,
+        t: &str,
+        family: &str,
+        sz: f32,
+        weight: i32,
+        italic: bool,
+    ) -> f32;
     #[wasm_bindgen(method, js_name = registerSystemFont)]
     fn register_system_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
+    /// Register a user-imported font face; the family becomes selectable by
+    /// name in `drawText` / `measureTextFamilyStyled`. Replaces any prior face
+    /// under the same (case-insensitive) family key. Returns `false` on parse
+    /// failure.
+    #[wasm_bindgen(method, js_name = registerImportedFont)]
+    fn register_imported_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
+    /// Display names of every registered imported family — mirrors the JS
+    /// registry into the Rust snapshot after add / remove and at mount.
+    #[wasm_bindgen(method, js_name = importedFamilyList)]
+    fn imported_family_list(this: &OpCk) -> Vec<String>;
+    /// Drop a previously imported font face by family name (no-op if absent).
+    #[wasm_bindgen(method, js_name = removeImportedFont)]
+    fn remove_imported_font(this: &OpCk, family: &str);
     #[wasm_bindgen(method, js_name = clipRect)]
     fn clip_rect(this: &OpCk, x: f32, y: f32, w: f32, h: f32);
     #[wasm_bindgen(method, js_name = clipRoundRect)]
@@ -289,6 +316,31 @@ impl CanvasKitBackend {
         let pw = ((self.logical_w as f32) * self.dpr).round() as u32;
         let ph = ((self.logical_h as f32) * self.dpr).round() as u32;
         self.ck.resize(pw.max(1), ph.max(1));
+    }
+    /// Register a user-imported font face (mirrors `register_system_font` but
+    /// for the family-selectable imported registry). Returns `true` when the
+    /// face parsed and is now selectable by `family`.
+    pub fn register_imported_font(&mut self, family: &str, bytes: &[u8]) -> bool {
+        self.ck.register_imported_font(family, bytes)
+    }
+    /// Register a font whose family is unknown (a fresh browser import). Returns
+    /// the extracted family display name, or `None` on parse failure / no
+    /// family name (the CanvasKit side returns an empty string).
+    pub fn register_imported_font_from_bytes(&mut self, bytes: &[u8]) -> Option<String> {
+        // The vendored CanvasKit build can't report a typeface's family name,
+        // so parse it in Rust, then register through the family-known FFI.
+        let family = crate::font_meta::parse_family(bytes)?;
+        self.ck
+            .register_imported_font(&family, bytes)
+            .then_some(family)
+    }
+    /// Display names of every registered imported family.
+    pub fn imported_family_list(&self) -> Vec<String> {
+        self.ck.imported_family_list()
+    }
+    /// Drop a previously imported font face by family name.
+    pub fn remove_imported_font(&mut self, family: &str) {
+        self.ck.remove_imported_font(family);
     }
 }
 
@@ -542,6 +594,7 @@ impl RenderBackend for CanvasKitBackend {
             let c = run.color;
             self.ck.draw_text(
                 run.content.as_str(),
+                run.font_family.as_str(),
                 x,
                 y,
                 run.font_size,
@@ -570,6 +623,21 @@ impl RenderBackend for CanvasKitBackend {
     ) -> f32 {
         self.ck
             .measure_text_styled(text, font_size, weight as i32, italic)
+    }
+    /// Family-aware measure so an editable field's caret / selection geometry
+    /// lines up with the glyphs `draw_text` paints for a named imported family.
+    /// Forwards to the JS `measureTextFamilyStyled`, which shares the exact
+    /// typeface + font sizing the family-aware `drawText` path uses.
+    fn measure_text_family_styled(
+        &mut self,
+        text: &str,
+        font_size: f32,
+        family: &str,
+        weight: u16,
+        italic: bool,
+    ) -> f32 {
+        self.ck
+            .measure_text_family_styled(text, family, font_size, i32::from(weight), italic)
     }
 
     fn clip_rect(&mut self, rect: Rect) {
@@ -737,6 +805,18 @@ impl crate::repaint_ctx::RepaintContext for CkInner {
     fn register_system_font(&mut self, family: &str, bytes: &[u8]) -> bool {
         self.backend.ck.register_system_font(family, bytes)
     }
+    fn register_imported_font(&mut self, family: &str, bytes: &[u8]) -> bool {
+        self.backend.register_imported_font(family, bytes)
+    }
+    fn register_imported_font_from_bytes(&mut self, bytes: &[u8]) -> Option<String> {
+        self.backend.register_imported_font_from_bytes(bytes)
+    }
+    fn imported_family_list(&self) -> Vec<String> {
+        self.backend.imported_family_list()
+    }
+    fn remove_imported_font(&mut self, family: &str) {
+        self.backend.remove_imported_font(family);
+    }
     fn repaint(&mut self) -> Result<(), JsValue> {
         // CanvasKit present is infallible (GPU flush, no pixel round-trip).
         CkInner::repaint(self);
@@ -822,6 +902,10 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     {
         let mut b = inner.borrow_mut();
         let _ = b.resize_to_window(&window)?;
+        // The CanvasKit backend accepts runtime font bytes, so the browser
+        // shell supports user font import — flip the flag the shared picker
+        // reads to paint the Imported group + "Import font…" row (#Phase 4).
+        b.host.editor_state_mut().editor_ui.font_import_supported = true;
         // First frame paints synchronously so the shell is visible immediately
         // (no one-frame blank). Subsequent input-driven repaints coalesce
         // through the rAF installed below.
@@ -843,6 +927,9 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         }));
     }
     crate::web_fonts::drain_font_requests(&inner);
+    // Re-register any user-imported fonts persisted in IndexedDB (async; repaints
+    // when the read lands so their text re-shapes with the imported typeface).
+    crate::web_fonts::load_imported_fonts_at_mount(&inner);
 
     // Populate the chat model picker from the daemon's `/api/ai/models`
     // catalog (best-effort; async, repaints when the response lands).
@@ -1288,6 +1375,7 @@ pub async fn ck_smoke(canvas_id: String) -> Result<(), JsValue> {
     );
     be.ck.draw_text(
         "OpenPencil Rust -> CanvasKit GPU",
+        "",
         20.0,
         40.0,
         28.0,
