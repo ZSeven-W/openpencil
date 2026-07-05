@@ -20,9 +20,13 @@ fn recent_menu_label(path: &str) -> String {
 }
 
 impl DesktopApp {
-    /// Rebuild the native File ▸ Open Recent submenu from the host's current
-    /// recent-file list (file names, newest first). No-op off macOS.
-    pub(crate) fn refresh_recent_menu(&self) {
+    /// Sync the native File ▸ Open Recent submenu with the host's current
+    /// recent-file list (file names, newest first). Cheap to call every loop
+    /// iteration: the muda submenu is rebuilt only when the labels actually
+    /// changed, so it stays current no matter which path (native menu,
+    /// in-canvas File menu, or Finder open) touched the recent list. No-op
+    /// off macOS.
+    pub(crate) fn refresh_recent_menu(&mut self) {
         let Some(menu) = self.app_menu.as_ref() else {
             return;
         };
@@ -34,7 +38,11 @@ impl DesktopApp {
             .iter()
             .map(|r| recent_menu_label(&r.path))
             .collect();
+        if labels == self.recent_menu_labels {
+            return;
+        }
         menu.set_recent_files(&labels);
+        self.recent_menu_labels = labels;
     }
 
     /// Dispatch a native-menu selection onto the matching host action —
