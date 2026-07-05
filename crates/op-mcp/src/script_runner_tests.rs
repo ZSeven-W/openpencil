@@ -254,3 +254,41 @@ I(null, {type: "text", content: "Hi"});"#,
     assert!(lines[1].starts_with("b1=I(null, "));
     assert!(lines[1].contains(r#""content":"Hi""#));
 }
+
+#[test]
+fn balances_glm_missing_outer_brace() {
+    let broken = r##"const btnProfile = I(null, {type:"frame", name:"Profile Button", width:44, height:44, cornerRadius:12, fill:[{type:"solid", color:"#FFFFFF"}], stroke:{thickness:1, fill:[{type:"solid", color:"#EAD8C8"}]});"##;
+
+    let repaired = balance_brackets(broken);
+
+    assert!(repaired.ends_with(r##""#EAD8C8"}]}});"##));
+    assert_eq!(repaired.matches('{').count(), repaired.matches('}').count());
+    let program = eval_to_program(&repaired).expect("balanced GLM script evals");
+    assert!(program.contains(r#""name":"Profile Button""#));
+}
+
+#[test]
+fn wellformed_script_unchanged() {
+    let script = r##"const root = I(null, {type:"frame", stroke:{thickness:1, fill:[{type:"solid", color:"#EAD8C8"}]}});
+I(root, {type:"text", content:"Ready"});"##;
+
+    assert_eq!(balance_brackets(script), script);
+}
+
+#[test]
+fn brackets_inside_strings_not_counted() {
+    let script = r##"I(null, {type:"text", content:"a) b}", name:'keep ] here', note:`literal { bracket`});"##;
+
+    assert_eq!(balance_brackets(script), script);
+}
+
+#[test]
+fn glm_missing_outer_brace_repairs_on_eval_failure() {
+    let broken = r##"const btnProfile = I(null, {type:"frame", name:"Profile Button", width:44, height:44, cornerRadius:12, fill:[{type:"solid", color:"#FFFFFF"}], stroke:{thickness:1, fill:[{type:"solid", color:"#EAD8C8"}]});"##;
+
+    let program = run_script_to_program(broken).expect("runner retries with bracket repair");
+
+    let lines: Vec<&str> = program.lines().collect();
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].contains(r#""name":"Profile Button""#));
+}

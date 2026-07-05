@@ -61,25 +61,43 @@ pub fn run_script_to_program(text: &str) -> Result<String, String> {
     }
     let program = match eval_to_program(&script) {
         Ok(p) => p,
-        Err(first_err) => match repair_truncated_script(&script) {
-            Some(repaired) => match eval_to_program(&repaired) {
-                Ok(p) => {
-                    tracing::warn!(
-                        original_len = script.len(),
-                        repaired_len = repaired.len(),
-                        "script failed as-is; truncation repair salvaged a runnable prefix"
-                    );
-                    p
-                }
-                Err(_) => return Err(first_err),
-            },
-            None => return Err(first_err),
-        },
+        Err(first_err) => eval_after_initial_failure(&script, first_err)?,
     };
     if program.trim().is_empty() {
         return Err("script emitted no I(...) operations".into());
     }
     Ok(program)
+}
+
+fn eval_after_initial_failure(script: &str, first_err: String) -> Result<String, String> {
+    // GLM-5.2 commonly drops the outer `}` when `stroke:{...}` is the final
+    // property of an I() object, so QuickJS reaches `)` with `{` still open.
+    let balanced = balance_brackets(script);
+    if balanced != script {
+        if let Ok(p) = eval_to_program(&balanced) {
+            tracing::warn!(
+                original_len = script.len(),
+                repaired_len = balanced.len(),
+                "script failed as-is; bracket balance repair recovered a runnable source"
+            );
+            return Ok(p);
+        }
+    }
+
+    match repair_truncated_script(script) {
+        Some(repaired) => match eval_to_program(&repaired) {
+            Ok(p) => {
+                tracing::warn!(
+                    original_len = script.len(),
+                    repaired_len = repaired.len(),
+                    "script failed as-is; truncation repair salvaged a runnable prefix"
+                );
+                Ok(p)
+            }
+            Err(_) => Err(first_err),
+        },
+        None => Err(first_err),
+    }
 }
 
 /// Eval in a fresh limited QuickJS context. Ok(program) on success OR on a
@@ -177,6 +195,90 @@ fn push_recorded_line(
         }
     }
     bind
+}
+
+fn balance_brackets(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let mut stack: Vec<char> = Vec::new();
+    let mut chars = src.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' | '\'' | '`' => {
+                out.push(ch);
+                let quote = ch;
+                let mut escaped = false;
+                for next in chars.by_ref() {
+                    out.push(next);
+                    if escaped {
+                        escaped = false;
+                    } else if next == '\\' {
+                        escaped = true;
+                    } else if next == quote {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                out.push(ch);
+                if let Some(next) = chars.next() {
+                    out.push(next);
+                }
+                for next in chars.by_ref() {
+                    out.push(next);
+                    if next == '\n' {
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                out.push(ch);
+                if let Some(next) = chars.next() {
+                    out.push(next);
+                }
+                let mut prev = '\0';
+                for next in chars.by_ref() {
+                    out.push(next);
+                    if prev == '*' && next == '/' {
+                        break;
+                    }
+                    prev = next;
+                }
+            }
+            '(' | '[' | '{' => {
+                stack.push(ch);
+                out.push(ch);
+            }
+            ')' | ']' | '}' => {
+                while let Some(&open) = stack.last() {
+                    if closer_for(open) == ch {
+                        break;
+                    }
+                    out.push(closer_for(open));
+                    stack.pop();
+                }
+                if stack.last().is_some_and(|&open| closer_for(open) == ch) {
+                    stack.pop();
+                }
+                out.push(ch);
+            }
+            _ => out.push(ch),
+        }
+    }
+
+    while let Some(open) = stack.pop() {
+        out.push(closer_for(open));
+    }
+    out
+}
+
+fn closer_for(open: char) -> char {
+    match open {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        _ => unreachable!("stack only contains bracket openers"),
+    }
 }
 
 /// Best-effort repair for a model-truncated script: cut back to the last
