@@ -296,6 +296,11 @@ fn request_font_bytes<C: RepaintContext + 'static>(inner: &InnerRc<C>, family: S
             mark_font_load_finished(&key_bytes, ok);
             if ok {
                 b.host_mut().mark_editor_state_dirty();
+                // A newly-registered system-font face changes text metrics
+                // without touching the doc; the web scene cache has no
+                // font-generation signal, so force the rebuild or the layout
+                // scene stays shaped/measured against the fallback glyphs.
+                b.host_mut().invalidate_layout_scene();
                 let _ = b.repaint();
             }
         });
