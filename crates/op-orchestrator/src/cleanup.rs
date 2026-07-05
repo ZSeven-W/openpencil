@@ -10,7 +10,11 @@ use crate::cleanup_layout::root_content_height;
 use crate::cleanup_typography::repair_overbold_text_hierarchy;
 use crate::plan::OrchestratorPlan;
 use crate::types::DocSink;
-use jian_ops_schema::node::{container::Padding, PenNode};
+use jian_ops_schema::node::{
+    container::{ContainerProps, Padding},
+    PenNode,
+};
+use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::PenEffect;
 use op_editor_core::{
     first_fill_type, first_solid_fill_hex, EditorCommand, EditorState, FillType, LayoutPropValue,
@@ -94,6 +98,18 @@ pub(crate) fn remove_duplicate_bottom_nav_sections_for_all_roots(sink: &mut dyn 
     }
 }
 
+pub(crate) fn collapse_nested_horizontal_padding_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        collapse_nested_horizontal_padding(sink, &root_id);
+    }
+}
+
 /// Mobile root-level bottom-nav dedupe. Weak-model Chinese prompts can produce
 /// both a localized bottom nav section and an English normalized bottom nav.
 /// Keep the bottom-most/last top-level nav and remove earlier duplicates.
@@ -132,6 +148,118 @@ fn remove_duplicate_bottom_nav_sections(sink: &mut dyn DocSink, root_id: &str) {
             node_id: id,
             page_id: None,
         });
+    }
+}
+
+/// Collapse `section > transparent fill-width wrapper` double horizontal
+/// padding while preserving all vertical padding.
+fn collapse_nested_horizontal_padding(sink: &mut dyn DocSink, root_id: &str) {
+    let repairs: Vec<NestedHorizontalPaddingRepair> = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        let mut repairs = Vec::new();
+        collect_nested_horizontal_padding_repairs(root, &mut repairs);
+        repairs
+    };
+
+    for repair in repairs {
+        sink.apply(EditorCommand::SetNodeLayoutProp {
+            node_id: repair.wrapper_id,
+            property: "padding".to_string(),
+            value: LayoutPropValue::NumberArray(vec![
+                repair.wrapper_padding[0],
+                0.0,
+                repair.wrapper_padding[2],
+                0.0,
+            ]),
+        });
+    }
+}
+
+#[derive(Debug, Clone)]
+struct NestedHorizontalPaddingRepair {
+    wrapper_id: NodeId,
+    wrapper_padding: [f64; 4],
+}
+
+fn collect_nested_horizontal_padding_repairs(
+    node: &PenNode,
+    repairs: &mut Vec<NestedHorizontalPaddingRepair>,
+) {
+    let collapsed_wrapper_id = nested_horizontal_padding_repair(node).map(|repair| {
+        let id = repair.wrapper_id.to_string();
+        repairs.push(repair);
+        id
+    });
+
+    if let Some(children) = node.children() {
+        for child in children {
+            if collapsed_wrapper_id.as_deref() == Some(child.id_str()) {
+                continue;
+            }
+            collect_nested_horizontal_padding_repairs(child, repairs);
+        }
+    }
+}
+
+fn nested_horizontal_padding_repair(node: &PenNode) -> Option<NestedHorizontalPaddingRepair> {
+    equal_positive_horizontal_frame_padding(node)?;
+    let children = node.children()?;
+    let [wrapper] = children.as_slice() else {
+        return None;
+    };
+    if !is_transparent_fill_width_wrapper_frame(wrapper) {
+        return None;
+    }
+    let wrapper_padding = equal_positive_horizontal_frame_padding(wrapper)?;
+    Some(NestedHorizontalPaddingRepair {
+        wrapper_id: NodeId::new(wrapper.id_str().to_string()),
+        wrapper_padding,
+    })
+}
+
+fn equal_positive_horizontal_frame_padding(node: &PenNode) -> Option<[f64; 4]> {
+    let padding = frame_container_props(node)?.padding.as_ref()?;
+    let sides = padding_sides(padding);
+    if sides[1] > 0.0 && (sides[1] - sides[3]).abs() <= f64::EPSILON {
+        Some(sides)
+    } else {
+        None
+    }
+}
+
+fn is_transparent_fill_width_wrapper_frame(node: &PenNode) -> bool {
+    let Some(props) = frame_container_props(node) else {
+        return false;
+    };
+    width_is_fill_container(props)
+        && props.fill.as_ref().map(Vec::is_empty).unwrap_or(true)
+        && props.stroke.is_none()
+        && props.effects.as_ref().map(Vec::is_empty).unwrap_or(true)
+        && props.clip_content != Some(true)
+}
+
+fn frame_container_props(node: &PenNode) -> Option<&ContainerProps> {
+    match node {
+        PenNode::Frame(n) => Some(&n.container),
+        _ => None,
+    }
+}
+
+fn width_is_fill_container(props: &ContainerProps) -> bool {
+    matches!(
+        props.width.as_ref(),
+        Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))
+    )
+}
+
+fn padding_sides(padding: &Padding) -> [f64; 4] {
+    match padding {
+        Padding::Uniform(v) => [*v, *v, *v, *v],
+        Padding::XY([y, x]) => [*y, *x, *y, *x],
+        Padding::LtrB(values) => *values,
+        Padding::Expression(_) => [0.0, 0.0, 0.0, 0.0],
     }
 }
 
@@ -888,6 +1016,7 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
 
         remove_duplicate_status_bars(sink, rid);
         remove_duplicate_bottom_nav_sections(sink, rid);
+        collapse_nested_horizontal_padding(sink, rid);
         repair_light_mobile_nav_surfaces(sink, rid);
         repair_mobile_content_sections(sink, rid);
         cleanup_mobile_chrome::repair_mobile_structural_chrome(sink, rid);
@@ -1037,6 +1166,10 @@ mod tests_mobile_chrome;
 #[cfg(test)]
 #[path = "cleanup_mobile_bottom_nav_dedup_tests.rs"]
 mod tests_mobile_bottom_nav_dedup;
+
+#[cfg(test)]
+#[path = "cleanup_nested_horizontal_padding_tests.rs"]
+mod tests_nested_horizontal_padding;
 
 #[cfg(test)]
 #[path = "cleanup_desktop_dashboard_tests.rs"]
