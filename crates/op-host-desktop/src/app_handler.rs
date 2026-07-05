@@ -846,6 +846,26 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     self.viewport_height,
                 );
                 if let Some(window) = self.window.as_ref() {
+                    // Borderless (Windows / Linux) windows have no OS-provided
+                    // edge-resize band — synthesize a resize cursor over the
+                    // outer ring, ahead of every panel / canvas hint. macOS keeps
+                    // its native decorations, so it's left untouched.
+                    #[cfg(not(target_os = "macos"))]
+                    if !self.host.is_dragging_node() && !window.is_maximized() {
+                        let vw = window.inner_size().width as f32 / self.dpi;
+                        let vh = window.inner_size().height as f32 / self.dpi;
+                        if let Some(dir) = crate::window_resize::window_resize_direction(
+                            self.cursor_x,
+                            self.cursor_y,
+                            vw,
+                            vh,
+                        ) {
+                            window.set_cursor(winit::window::CursorIcon::from(dir));
+                            self.pending_cursor_move = Some((self.cursor_x, self.cursor_y));
+                            self.request_redraw(false);
+                            return;
+                        }
+                    }
                     if self.host.is_dragging_node() {
                         window.set_cursor(winit::window::CursorIcon::Move);
                     } else if over_layer_panel {
@@ -904,6 +924,25 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // Drain queued cursor move so hover state is current before press lands.
                 if self.drain_pending_cursor_move() {
                     self.redraw_dirty = true;
+                }
+                // Borderless-window edge resize (Windows / Linux). A press on the
+                // outer ring hands the drag to the OS, ahead of the TopBar
+                // window-drag and every app hit-test. macOS keeps native edges.
+                #[cfg(not(target_os = "macos"))]
+                if let Some(w) = self.window.as_ref() {
+                    if !w.is_maximized() {
+                        let vw = w.inner_size().width as f32 / self.dpi;
+                        let vh = w.inner_size().height as f32 / self.dpi;
+                        if let Some(dir) = crate::window_resize::window_resize_direction(
+                            self.cursor_x,
+                            self.cursor_y,
+                            vw,
+                            vh,
+                        ) {
+                            let _ = w.drag_resize_window(dir);
+                            return;
+                        }
+                    }
                 }
                 // Custom window chrome — the native title bar is
                 // hidden, so a press on the TopBar's window-control
