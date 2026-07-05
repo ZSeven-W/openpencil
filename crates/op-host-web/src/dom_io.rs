@@ -1011,7 +1011,7 @@ pub(crate) fn read_file(file: web_sys::File, mode: ReadMode, on_done: Box<dyn Fn
 }
 
 /// Extract a byte vec from a `FileReader.result` ArrayBuffer.
-fn js_bytes(value: &JsValue) -> Option<Vec<u8>> {
+pub(crate) fn js_bytes(value: &JsValue) -> Option<Vec<u8>> {
     let buf = value.clone().dyn_into::<js_sys::ArrayBuffer>().ok()?;
     Some(js_sys::Uint8Array::new(&buf).to_vec())
 }

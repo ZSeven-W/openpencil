@@ -24,6 +24,21 @@ pub(crate) trait RepaintContext {
     /// face was registered. Backends that cannot accept runtime font bytes may
     /// return `false`.
     fn register_system_font(&mut self, family: &str, bytes: &[u8]) -> bool;
+    /// Register a user-imported font face so canvas text can shape against it
+    /// by family name. Returns `true` when the face was registered; backends
+    /// that cannot accept runtime font bytes may return `false`.
+    fn register_imported_font(&mut self, family: &str, bytes: &[u8]) -> bool;
+    /// Register a user-imported font whose family is unknown (a fresh file
+    /// import). The backend parses the bytes, extracts the family display name,
+    /// and returns it (`None` on parse failure / no family name). Used only by
+    /// the import file-picker path; `register_imported_font` re-registers a
+    /// known family from IndexedDB.
+    fn register_imported_font_from_bytes(&mut self, bytes: &[u8]) -> Option<String>;
+    /// Display names of every registered imported family — the web snapshot
+    /// source (Rust doesn't own the registry on web).
+    fn imported_family_list(&self) -> Vec<String>;
+    /// Drop a previously imported font face by family name (no-op if absent).
+    fn remove_imported_font(&mut self, family: &str);
     /// Re-paint through the owning backend. Returns the present error if the
     /// backend's present step failed (the CanvasKit path is infallible and
     /// always returns `Ok`).

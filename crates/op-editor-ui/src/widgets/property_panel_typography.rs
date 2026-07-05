@@ -221,8 +221,9 @@ pub fn font_picker_layout(
         cy += NO_RESULTS_H;
     }
     // The Import action sits at the bottom of the content, visible
-    // regardless of the search filter — but only when the host can
-    // actually import (desktop). Web omits it so there is no dead row.
+    // regardless of the search filter — but only when the host can actually
+    // import (desktop rfd dialog + web file-input both set the capability). A
+    // host that can't import omits it so there is no dead row.
     if allow_import {
         content.push((FontPickerRow::ImportAction, cy, IMPORT_ACTION_H));
         cy += IMPORT_ACTION_H;

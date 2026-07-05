@@ -12,6 +12,11 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# Pure-Rust font metadata parser — the vendored CanvasKit build exposes no
+# family-name introspection (no Typeface.getFamilyName / FontMgr family APIs),
+# so an imported font's family is extracted here (wasm-safe, unit-testable)
+# rather than in JS. See `font_meta`.
+ttf-parser = "0.25"
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # theme / layout scene / scene vars / render-backend / gesture types
 # all resolve through the op-editor-ui crate.
@@ -96,6 +101,15 @@ features = [
   "HtmlCanvasElement",
   "HtmlElement",
   "HtmlInputElement",
+  # IndexedDB persistence for user-imported fonts (Phase 4, font_store_idb).
+  # Compile-time binding toggles only — the `web` stub baseline stays green.
+  "IdbDatabase",
+  "IdbFactory",
+  "IdbObjectStore",
+  "IdbOpenDbRequest",
+  "IdbRequest",
+  "IdbTransaction",
+  "IdbTransactionMode",
   "ImageData",
   "KeyboardEvent",
   # `daemon_base` derives the daemon origin from `window.location`.

@@ -42,6 +42,20 @@ impl RepaintContext for TestRepaintContext {
         false
     }
 
+    fn register_imported_font(&mut self, _family: &str, _bytes: &[u8]) -> bool {
+        false
+    }
+
+    fn register_imported_font_from_bytes(&mut self, _bytes: &[u8]) -> Option<String> {
+        None
+    }
+
+    fn imported_family_list(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn remove_imported_font(&mut self, _family: &str) {}
+
     fn repaint(&mut self) -> Result<(), JsValue> {
         self.repaint_count += 1;
         Ok(())
