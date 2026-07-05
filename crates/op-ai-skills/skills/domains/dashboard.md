@@ -26,7 +26,12 @@ METRIC ROW:
 
 CHARTS:
 
-- Card with header (title left + period/filter control right) then plot area. The plot is a placeholder: a frame with a DASHED border and a faint axis hint or label — NOT a solid saturated color block (that reads as a generic AI fill). Charts row = 2 equal columns, gap=24. One insight per chart.
+- Card with header (title left + period/filter control right) then plot area. Charts row = 2 equal columns, gap=24. One insight per chart.
+- Plot area = SIMPLE REAL BAR CHART by default, NOT an empty placeholder. Draw it with flex so bars auto-distribute and share a baseline — NEVER use layout="none" or manual x/y for bars (the model mis-computes those and the chart collapses).
+- Plot container: frame, layout="horizontal", alignItems="end", justifyContent="space_between" OR gap=8-12, height=120-160, width="fill_container".
+- Bars: 7-12 periods. Each bar is a frame/rect with width="fill_container" (equal) OR fixed 10-18, VALUE-PROPORTIONAL height (vary values e.g. 48/72/60/96/84/120/68); never all equal, never all fill. Top-only cornerRadius≈4; peak bar uses accent, the rest use muted surface.
+- Under bars: x-axis label row aligned to bars; month/day abbreviations, 11px muted.
+- Keep charts as bar charts unless explicitly asked otherwise. If using line/area, still avoid absolute positioning; flex bars are the default.
 - DONUT / RING anatomy (arc ellipses): ALL arc segments + the center label live in ONE wrapper frame with layout="none" and explicit x/y so they stack CONCENTRICALLY — arc ellipses left in a flex row lay out side by side and the donut falls apart. Wrapper = square (size = outer diameter); each arc x/y = (wrapper - arc)/2; track arc before progress arc. Center value text is centered the same way.
 - Legend rows: dot(8) + label + value with gap 6-8 between label and value — never butt "Solar" against "44%".
 - Chart tooltip (the floating value callout): a SURFACE — fill $color-surface + hairline stroke + cornerRadius 6 + padding [8,10]; a fill-less tooltip paints bare text over the plot lines.
