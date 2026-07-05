@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "Tìm phông chữ…",
         "text.font.bundled" => "Đi kèm",
         "text.font.system" => "Hệ thống",
+        "text.font.imported" => "Đã nhập",
+        "text.font.importAction" => "Nhập phông chữ…",
         "text.font.loading" => "Đang tải phông chữ…",
         "text.font.noResults" => "Không tìm thấy phông chữ",
         "textLayout.title" => "Bố cục",

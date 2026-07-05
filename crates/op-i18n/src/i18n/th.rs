@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "ค้นหาฟอนต์…",
         "text.font.bundled" => "แบบรวม",
         "text.font.system" => "ระบบ",
+        "text.font.imported" => "นำเข้าแล้ว",
+        "text.font.importAction" => "นำเข้าฟอนต์…",
         "text.font.loading" => "กำลังโหลดฟอนต์…",
         "text.font.noResults" => "ไม่พบฟอนต์",
         "textLayout.title" => "เลย์เอาต์",

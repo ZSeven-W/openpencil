@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "글꼴 검색…",
         "text.font.bundled" => "번들",
         "text.font.system" => "시스템",
+        "text.font.imported" => "가져온 글꼴",
+        "text.font.importAction" => "글꼴 가져오기…",
         "text.font.loading" => "글꼴 로드 중…",
         "text.font.noResults" => "글꼴을 찾을 수 없습니다",
         "textLayout.title" => "레이아웃",

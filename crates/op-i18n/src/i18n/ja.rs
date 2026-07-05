@@ -183,6 +183,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "text.font.search" => "フォントを検索…",
         "text.font.bundled" => "バンドル",
         "text.font.system" => "システム",
+        "text.font.imported" => "インポート済み",
+        "text.font.importAction" => "フォントをインポート…",
         "text.font.loading" => "フォントを読み込み中…",
         "text.font.noResults" => "フォントが見つかりません",
         "textLayout.title" => "レイアウト",
