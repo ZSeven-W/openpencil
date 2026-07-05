@@ -6,7 +6,8 @@
 //! streaming endpoints and converts SSE payloads into `ChatDelta`s.
 
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use op_ai::chat_provider::{
@@ -31,6 +32,13 @@ pub const DESIGN_LOOP_MAX_TURNS: usize = 28;
 /// tokens. 6144 keeps section batches complete without encouraging the model to
 /// emit a whole screen in one turn.
 pub const DESIGN_LOOP_MAX_OUTPUT_TOKENS: u32 = 6_144;
+
+const BUILTIN_HTTP_DEFAULT_MIN_GAP: Duration = Duration::from_millis(350);
+const BUILTIN_HTTP_MAX_RETRIES: u32 = 3;
+const RETRY_AFTER_MAX: Duration = Duration::from_secs(30);
+const BACKOFF_MAX: Duration = Duration::from_secs(8);
+
+static BUILTIN_HTTP_LAST_REQUEST: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct ConfiguredBuiltinProvider {
@@ -267,6 +275,96 @@ pub(crate) fn is_glm_model(model: &str) -> bool {
     model.to_ascii_lowercase().contains("glm")
 }
 
+fn builtin_http_min_gap() -> Duration {
+    std::env::var("OPENPENCIL_BUILTIN_HTTP_MIN_GAP_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(BUILTIN_HTTP_DEFAULT_MIN_GAP)
+}
+
+fn throttle_wait(last: Option<Instant>, now: Instant, min_gap: Duration) -> Duration {
+    last.and_then(|last| last.checked_add(min_gap))
+        .map(|next_allowed| next_allowed.saturating_duration_since(now))
+        .unwrap_or(Duration::ZERO)
+}
+
+async fn throttle_builtin_http_request() {
+    let min_gap = builtin_http_min_gap();
+    if min_gap.is_zero() {
+        return;
+    }
+
+    let wait = {
+        let last_request = BUILTIN_HTTP_LAST_REQUEST.get_or_init(|| Mutex::new(None));
+        let mut last = last_request
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let now = Instant::now();
+        let wait = throttle_wait(*last, now, min_gap);
+        *last = now.checked_add(wait);
+        wait
+    };
+
+    if !wait.is_zero() {
+        tokio::time::sleep(wait).await;
+    }
+}
+
+fn is_retryable_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+        || status == reqwest::StatusCode::from_u16(529).expect("529 is a valid HTTP status")
+}
+
+fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let seconds = headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .parse::<u64>()
+        .ok()?;
+    Some(Duration::from_secs(seconds).min(RETRY_AFTER_MAX))
+}
+
+fn backoff_delay(attempt: u32) -> Duration {
+    let delay = 1_u64.checked_shl(attempt).unwrap_or(u64::MAX);
+    Duration::from_secs(delay).min(BACKOFF_MAX)
+}
+
+async fn send_with_backoff(
+    label: &str,
+    url: &str,
+    build: impl Fn() -> reqwest::RequestBuilder,
+) -> Result<reqwest::Response, String> {
+    for attempt in 0..=BUILTIN_HTTP_MAX_RETRIES {
+        throttle_builtin_http_request().await;
+        match build().send().await {
+            Ok(resp) if resp.status().is_success() => return Ok(resp),
+            Ok(resp) => {
+                let status = resp.status();
+                if is_retryable_status(status) && attempt < BUILTIN_HTTP_MAX_RETRIES {
+                    let delay =
+                        parse_retry_after(resp.headers()).unwrap_or_else(|| backoff_delay(attempt));
+                    drop(resp);
+                    tokio::time::sleep(delay).await;
+                    continue;
+                }
+                let body = resp.text().await.unwrap_or_default();
+                return Err(format!("{label} http {status}: {}", body.trim()));
+            }
+            Err(e) => {
+                if attempt < BUILTIN_HTTP_MAX_RETRIES {
+                    tokio::time::sleep(backoff_delay(attempt)).await;
+                    continue;
+                }
+                return Err(format!("{label} POST {url}: {e}"));
+            }
+        }
+    }
+    unreachable!("backoff loop always returns before exhausting range")
+}
+
 async fn run_openai_chat(
     provider: ConfiguredBuiltinProvider,
     system_prompt: String,
@@ -310,14 +408,13 @@ async fn run_openai_chat(
             obj.insert("thinking".into(), json!({ "type": "disabled" }));
         }
     }
-    let resp = builtin_http_client()
-        .post(&url)
-        .bearer_auth(&provider.api_key)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("openai-compatible POST {url}: {e}"))?;
-    let resp = ensure_success(resp, "openai-compatible").await?;
+    let resp = send_with_backoff("openai-compatible", &url, || {
+        builtin_http_client()
+            .post(&url)
+            .bearer_auth(&provider.api_key)
+            .json(&body)
+    })
+    .await?;
     pump_sse_response(resp, tx, parse_openai_sse_data).await
 }
 
@@ -364,15 +461,14 @@ async fn run_anthropic_chat(
             .expect("anthropic request body is object")
             .insert("system".into(), json!(system_prompt));
     }
-    let resp = builtin_http_client()
-        .post(&url)
-        .header("x-api-key", &provider.api_key)
-        .header("anthropic-version", "2023-06-01")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("anthropic POST {url}: {e}"))?;
-    let resp = ensure_success(resp, "anthropic").await?;
+    let resp = send_with_backoff("anthropic", &url, || {
+        builtin_http_client()
+            .post(&url)
+            .header("x-api-key", &provider.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&body)
+    })
+    .await?;
     pump_sse_response(resp, tx, parse_anthropic_sse_data).await
 }
 
@@ -643,6 +739,77 @@ mod tests {
         assert!(!is_minimax_model("deepseek-v4-pro"));
         assert!(!is_minimax_model("qwen3-coder-plus"));
         assert!(!is_minimax_model("ark-code-latest"));
+    }
+
+    #[test]
+    fn is_retryable_status_flags_provider_rate_limit_and_overload() {
+        assert!(is_retryable_status(reqwest::StatusCode::TOO_MANY_REQUESTS));
+        assert!(is_retryable_status(
+            reqwest::StatusCode::SERVICE_UNAVAILABLE
+        ));
+        assert!(is_retryable_status(
+            reqwest::StatusCode::from_u16(529).expect("status 529")
+        ));
+
+        assert!(!is_retryable_status(reqwest::StatusCode::OK));
+        assert!(!is_retryable_status(reqwest::StatusCode::BAD_REQUEST));
+        assert!(!is_retryable_status(reqwest::StatusCode::UNAUTHORIZED));
+        assert!(!is_retryable_status(reqwest::StatusCode::NOT_FOUND));
+        assert!(!is_retryable_status(
+            reqwest::StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS
+        ));
+    }
+
+    #[test]
+    fn parse_retry_after_accepts_integer_seconds_and_caps_large_values() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        assert_eq!(parse_retry_after(&headers), None);
+
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            reqwest::header::HeaderValue::from_static("3"),
+        );
+        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(3)));
+
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            reqwest::header::HeaderValue::from_static("0"),
+        );
+        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(0)));
+
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            reqwest::header::HeaderValue::from_static("abc"),
+        );
+        assert_eq!(parse_retry_after(&headers), None);
+
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            reqwest::header::HeaderValue::from_static("3600"),
+        );
+        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(30)));
+    }
+
+    #[test]
+    fn backoff_delay_exponentially_increases_and_caps() {
+        assert_eq!(backoff_delay(0), Duration::from_secs(1));
+        assert_eq!(backoff_delay(1), Duration::from_secs(2));
+        assert_eq!(backoff_delay(2), Duration::from_secs(4));
+        assert_eq!(backoff_delay(3), Duration::from_secs(8));
+        assert_eq!(backoff_delay(99), Duration::from_secs(8));
+    }
+
+    #[test]
+    fn throttle_wait_respects_reserved_last_request_slot() {
+        let now = std::time::Instant::now();
+        let min_gap = Duration::from_millis(350);
+
+        assert_eq!(throttle_wait(None, now, min_gap), Duration::ZERO);
+        assert_eq!(throttle_wait(Some(now), now, min_gap), min_gap);
+        assert_eq!(
+            throttle_wait(Some(now - Duration::from_millis(400)), now, min_gap),
+            Duration::ZERO
+        );
     }
 
     #[test]
