@@ -27,6 +27,11 @@ select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_
 - Call `get_guidelines(topic)` using `"web-app"` or `"mobile"` for product-design principles that apply to the screen you are editing.
 - Do NOT pull a full style guide when you are adjusting an existing composition.
 
+**Visual style for new or refreshed work:**
+- Early in the loop, also fetch one visual style with `get_guidelines(category:"style", name:"Atlas Grid", colorPalette:"Alloy Blue", roundness:"medium", elevation:"low", headings:"Inter", body:"Inter", captions:"Inter", data:"IBM Plex Mono")`; choose styles like Atlas Grid, Beacon Landing, or Console Board and palettes like Alloy Blue or Amber Field.
+- Treat the returned TokenMap as reference values only.
+- BAKE concrete values (fills, text colors, radius, font) from the style directly into nodes. Do NOT create document variables from the style, and Do NOT call `set_variables` for it — the style is reference guidance, not document state. (You may still reuse the document's own existing `$variables` per Step 4.)
+
 ### Step 4 — Read design variables
 
 Call `get_variables` to see the existing design variables and themes. Reuse them by using `$variable` references in node properties instead of hardcoding color values or sizes.

@@ -732,7 +732,7 @@ mod tests {
             included: vec![brief],
             dropped: vec![("examples".into(), "budget".into())],
             budget_used: 5200,
-            budget_max: 8000,
+            budget_max: 12000,
         };
         let retry = Progress::SubtaskRetry {
             id: "header".into(),
@@ -802,7 +802,7 @@ mod tests {
                 reason: DropReason::BudgetExhausted,
             }],
             budget_used: 5200,
-            budget_max: 8000,
+            budget_max: 12000,
         };
         let (briefs, drops, used, max) = report_to_progress_parts(&report);
         assert_eq!(briefs.len(), 1);
@@ -811,7 +811,7 @@ mod tests {
         assert!(briefs[0].truncated);
         assert_eq!(drops, vec![("examples".to_string(), "budget".to_string())]);
         assert_eq!(used, 5200);
-        assert_eq!(max, 8000);
+        assert_eq!(max, 12000);
     }
 
     /// All 7 `DropReason` variants map to distinct, non-empty display strings.
