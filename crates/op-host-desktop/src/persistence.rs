@@ -109,6 +109,7 @@ fn load_into_host(host: &mut WidgetHostNative, path: &std::path::Path) -> Result
     let mut state = load_editor_state(path, locale)?;
     preserve_app_preferences(host.editor_state(), &mut state);
     set_file_name_display(&mut state, Some(path));
+    state.clear_selection();
     let bb = active_page_bbox(&state);
     eprintln!(
         "[open] {} top-level nodes; content bbox {:?}",
@@ -440,10 +441,7 @@ mod tests {
         assert_eq!(outcome, ActionOutcome::Saved);
         assert!(current_path.is_none());
         assert_eq!(host.editor_state().doc.children.len(), 1);
-        assert_eq!(
-            host.editor_state().selection.anchor,
-            op_editor_core::NodeId::new("n10")
-        );
+        assert!(host.editor_state().selection.is_empty());
         let frame = match &host.editor_state().doc.children[0] {
             jian_ops_schema::node::PenNode::Frame(frame) => frame,
             other => panic!(
@@ -462,9 +460,9 @@ mod tests {
             Some(jian_ops_schema::sizing::SizingBehavior::Number(800.0))
         ));
         let v = host.editor_state().viewport;
-        assert!((v.zoom - 0.68).abs() < 1e-3, "zoom {}", v.zoom);
+        assert!((v.zoom - 0.8933333).abs() < 1e-3, "zoom {}", v.zoom);
         assert!((v.pan_x - 64.0).abs() < 1e-2, "pan_x {}", v.pan_x);
-        assert!((v.pan_y - 158.0).abs() < 1e-2, "pan_y {}", v.pan_y);
+        assert!((v.pan_y - 72.66669).abs() < 1e-2, "pan_y {}", v.pan_y);
     }
 
     #[test]
@@ -551,6 +549,27 @@ mod tests {
             .available_models
             .iter()
             .any(|m| m.builtin_provider_id.as_deref() == Some(builtin_id.as_str())));
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(sidecar_path(&path));
+    }
+
+    #[test]
+    fn opening_document_leaves_nothing_selected() {
+        let mut host = WidgetHostNative::new();
+        host.editor_state_mut()
+            .set_single_selection(op_editor_core::NodeId::new("n10"));
+
+        let mut state_to_open = EditorState::starter();
+        state_to_open.set_single_selection(op_editor_core::NodeId::new("n10"));
+        let path = temp_op_path("open-clears-selection");
+        save_to_path(&state_to_open, &path).expect("save succeeds");
+        let mut current_path = None;
+
+        assert!(open_path(&mut host, path.clone(), &mut current_path, None));
+
+        assert!(host.editor_state().selection.is_empty());
+        assert_eq!(host.editor_state().doc.children.len(), 1);
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(sidecar_path(&path));

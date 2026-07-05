@@ -414,11 +414,11 @@ fn incremental_drag_then_doc_restored_to_cached_value_rebuilds_the_scene() {
 
 #[test]
 fn host_carries_editor_state_as_source_of_truth() {
-    // A fresh host opens with the demo sample seeded onto
+    // A fresh host opens with the blank starter document seeded onto
     // `EditorState` — the host's single source of truth.
     let host = WidgetHostNative::new();
     assert!(!host.editor_state().doc.children.is_empty());
-    assert!(!host.editor_state().selection.is_empty());
+    assert!(host.editor_state().selection.is_empty());
 }
 
 #[test]
