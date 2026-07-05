@@ -409,6 +409,40 @@ pub fn font_picker_entry_index_at(
     }
 }
 
+/// Whether `point` is over the bottom "Import font…" (`ImportAction`)
+/// row of the open picker — drives the import-row hover wash. Only
+/// meaningful while the picker is open and `allow_import` is set; the
+/// point must be inside the list viewport (same clip the other hit
+/// fns respect).
+pub fn font_picker_import_action_at(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    entries: &[FontPickerEntry<'_>],
+    allow_import: bool,
+    state: &SelectState,
+    point: Point2D,
+) -> bool {
+    if !state.open || !allow_import {
+        return false;
+    }
+    let Some(layout) = font_picker_layout(
+        panel_rect,
+        visible,
+        entries,
+        allow_import,
+        state.scroll.offset,
+    ) else {
+        return false;
+    };
+    if !(layout.viewport).contains(point) {
+        return false;
+    }
+    layout
+        .rows
+        .iter()
+        .any(|(row, rect)| matches!(row, FontPickerRow::ImportAction) && (*rect).contains(point))
+}
+
 /// Max scroll for the host's wheel handler.
 pub fn font_picker_max_scroll(
     panel_rect: Rect,

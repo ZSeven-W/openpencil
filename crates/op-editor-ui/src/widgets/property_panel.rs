@@ -175,6 +175,9 @@ pub struct PropertyPanel {
     /// Whether the host supports font import (desktop true / web false) —
     /// gates the picker's Import row so web shows no dead control.
     pub font_import_supported: bool,
+    /// Whether the cursor is over the picker's "Import font…" row —
+    /// drives that row's hover wash (host tracks it on cursor-move).
+    pub font_picker_import_hover: bool,
     /// Image-node Search / Generate popover state (cloned from
     /// `editor_ui.image_panel`; result thumbs are `Arc`s so this
     /// per-frame clone stays cheap).
@@ -457,6 +460,7 @@ impl PropertyPanel {
             system_font_families: ui.system_font_families.clone(),
             imported_font_families: ui.imported_font_families.clone(),
             font_import_supported: ui.font_import_supported,
+            font_picker_import_hover: ui.font_picker_import_hover,
             image_panel: ui.image_panel.clone(),
             image_panel_view: None,
             image_gen_profile: crate::widgets::property_panel_image_assets::image_gen_profile_view(
@@ -1346,6 +1350,7 @@ impl Widget for PropertyPanel {
                     self.font_import_supported,
                     &self.font_picker_search,
                     &self.font_picker,
+                    self.font_picker_import_hover,
                     &text.font_family,
                     self.now_ms,
                 );

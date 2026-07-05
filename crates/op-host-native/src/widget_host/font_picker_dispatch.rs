@@ -84,6 +84,7 @@ impl WidgetHostNative {
         // A narrower list invalidates the old scroll / hover.
         ui.font_picker.scroll.offset = 0.0;
         ui.font_picker.hover = None;
+        ui.font_picker_import_hover = false;
         self.mark_dirty();
         true
     }
@@ -99,30 +100,68 @@ impl WidgetHostNative {
         if ui.font_picker_search.pop().is_some() {
             ui.font_picker.scroll.offset = 0.0;
             ui.font_picker.hover = None;
+            ui.font_picker_import_hover = false;
             self.mark_dirty();
         }
         true
     }
 
-    /// Track the picker row under the cursor (hover wash). Returns
-    /// `true` when the hovered entry changed.
+    /// Track the picker row under the cursor (entry + import-row hover
+    /// washes). The picker is a floating overlay, so while the cursor is
+    /// over the popup this CONSUMES the move (returns `true`) — otherwise
+    /// the caller falls through to the canvas / layer hovers behind the
+    /// popup and lets a node highlight bleed through (穿透). When the
+    /// pointer is genuinely outside the popup, the picker's own hovers are
+    /// cleared and this returns `false` so lower layers run normally.
     pub(in crate::widget_host) fn update_font_picker_hover(&mut self, x: f32, y: f32) -> bool {
         if !self.editor_state.editor_ui.font_picker.open {
             return false;
         }
         self.refresh_layout_scene();
-        let new_hover = PropertyPanel::for_selection(&self.editor_state).and_then(|panel| {
-            panel.font_picker_entry_index_at(
-                self.property_rect(self.last_viewport_w, self.last_viewport_h),
-                Point2D::new(x, y),
-            )
+        let property_rect = self.property_rect(self.last_viewport_w, self.last_viewport_h);
+        let point = Point2D::new(x, y);
+        // Resolve over-popup + both hovers up front so the panel's
+        // immutable borrow is released before we mutate the host.
+        let resolved = PropertyPanel::for_selection(&self.editor_state).map(|panel| {
+            let over_popup = panel.font_picker_contains(property_rect, point);
+            if over_popup {
+                (
+                    true,
+                    panel.font_picker_entry_index_at(property_rect, point),
+                    panel.font_picker_import_action_at(property_rect, point),
+                )
+            } else {
+                (false, None, false)
+            }
         });
-        if new_hover != self.editor_state.editor_ui.font_picker.hover {
-            self.editor_state.editor_ui.font_picker.hover = new_hover;
-            self.mark_dirty();
-            return true;
+        let (over_popup, entry_hover, import_hover) = resolved.unwrap_or((false, None, false));
+
+        let ui = &mut self.editor_state.editor_ui;
+        let mut changed = false;
+        if ui.font_picker.hover != entry_hover {
+            ui.font_picker.hover = entry_hover;
+            changed = true;
         }
-        false
+        if ui.font_picker_import_hover != import_hover {
+            ui.font_picker_import_hover = import_hover;
+            changed = true;
+        }
+        if over_popup {
+            // Drop any stale canvas / layer hover sitting behind the popup
+            // so it can't highlight through, then consume the move.
+            let cleared = self.clear_lower_overlay_hover();
+            if changed && !cleared {
+                self.mark_dirty();
+            }
+            true
+        } else {
+            // Pointer left the popup — clear the picker's own hovers and
+            // let the caller run the lower hover layers.
+            if changed {
+                self.mark_dirty();
+            }
+            false
+        }
     }
 
     /// Wheel over the open picker scrolls its list viewport instead
@@ -153,6 +192,7 @@ impl WidgetHostNative {
         if next != ui.font_picker.scroll.offset {
             ui.font_picker.scroll.offset = next;
             ui.font_picker.hover = None;
+            ui.font_picker_import_hover = false;
             self.mark_dirty();
         }
         true
