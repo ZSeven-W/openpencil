@@ -344,6 +344,67 @@ fn fix_button_foreground_contrast(node: &mut Value) {
     }
 }
 
+// ── fixContainerTextContrast ────────────────────────────────────────────────
+
+fn fix_container_text_contrast(node: &mut Value) {
+    if matches!(role_of(node), Some("button") | Some("icon-button")) {
+        return;
+    }
+    fix_container_text_contrast_for_current(node);
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            fix_container_text_contrast(child);
+        }
+    }
+}
+
+fn fix_container_text_contrast_for_current(node: &mut Value) {
+    if node.get("type").and_then(Value::as_str) != Some("frame") {
+        return;
+    }
+    if !has_visible_fill(node) {
+        return;
+    }
+    let Some(bg_raw) = get_first_solid_color(node) else {
+        return;
+    };
+    let Some(bg) = resolve_color_maybe_ref(&bg_raw) else {
+        return;
+    };
+    if hex_luminance(&bg).is_none() {
+        return;
+    }
+
+    let fg_fill = solid_fill(preferred_foreground_for_bg(&bg));
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            fix_descendant_text_contrast(child, &bg, &fg_fill);
+        }
+    }
+}
+
+fn fix_descendant_text_contrast(node: &mut Value, bg: &str, fg_fill: &Value) {
+    if node.get("type").and_then(Value::as_str) == Some("text") {
+        let existing =
+            get_first_solid_color(node).and_then(|color| resolve_color_maybe_ref(&color));
+        if existing
+            .as_deref()
+            .is_some_and(|fg| needs_luminance_contrast_override(fg, bg))
+        {
+            node["fill"] = fg_fill.clone();
+        }
+        return;
+    }
+    if matches!(role_of(node), Some("button") | Some("icon-button")) {
+        return;
+    }
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children {
+            fix_descendant_text_contrast(child, bg, fg_fill);
+        }
+    }
+}
+
 // ── fixSectionAlternation ────────────────────────────────────────────────────
 
 const SECTION_ROLES: &[&str] = &["section", "hero", "cta-section", "stats-section", "footer"];
@@ -1815,6 +1876,7 @@ fn post_pass_value(node: &mut Value, parent_fill: Option<Value>, canvas_width: f
     fix_button_foreground_contrast(node);
     fix_section_alternation(node);
     fix_orphan_container_contrast(node, parent_fill.as_ref());
+    fix_container_text_contrast(node);
     fix_input_sibling_consistency(node);
 
     // Recurse — children see THIS node's (possibly just-set) fill as their
@@ -2094,6 +2156,93 @@ mod saturated_fill_contrast_tests {
         assert_eq!(
             button["children"][0]["fill"],
             json!([{"type": "solid", "color": "#0F172A"}])
+        );
+    }
+
+    #[test]
+    fn light_text_on_light_chip_bg_gets_dark_foreground() {
+        let bg = "#F5F1EA";
+        let mut chip = json!({
+            "type": "frame",
+            "role": "badge",
+            "fill": [{"type": "solid", "color": bg}],
+            "children": [{
+                "type": "text",
+                "content": "May 15",
+                "fill": [{"type": "solid", "color": "#EDE6DC"}]
+            }]
+        });
+
+        fix_container_text_contrast(&mut chip);
+
+        let preferred = preferred_foreground_for_bg(bg);
+        assert_eq!(
+            chip["children"][0]["fill"],
+            json!([{"type": "solid", "color": preferred}])
+        );
+        assert!(!needs_luminance_contrast_override(preferred, bg));
+    }
+
+    #[test]
+    fn well_contrasting_text_untouched() {
+        let mut card = json!({
+            "type": "frame",
+            "role": "card",
+            "fill": [{"type": "solid", "color": "#F5F1EA"}],
+            "children": [{
+                "type": "text",
+                "content": "May 15",
+                "fill": [{"type": "solid", "color": "#21140F"}]
+            }]
+        });
+
+        fix_container_text_contrast(&mut card);
+
+        assert_eq!(
+            card["children"][0]["fill"],
+            json!([{"type": "solid", "color": "#21140F"}])
+        );
+    }
+
+    #[test]
+    fn button_still_handled_by_existing_pass_not_double() {
+        let mut button = json!({
+            "type": "frame",
+            "role": "button",
+            "fill": [{"type": "solid", "color": "#F5F1EA"}],
+            "children": [{
+                "type": "text",
+                "content": "May 15",
+                "fill": [{"type": "solid", "color": "#EDE6DC"}]
+            }]
+        });
+
+        fix_container_text_contrast(&mut button);
+
+        assert_eq!(
+            button["children"][0]["fill"],
+            json!([{"type": "solid", "color": "#EDE6DC"}])
+        );
+    }
+
+    #[test]
+    fn no_solid_bg_container_skipped() {
+        let mut chip = json!({
+            "type": "frame",
+            "role": "badge",
+            "fill": [{"type": "solid", "color": "transparent"}],
+            "children": [{
+                "type": "text",
+                "content": "May 15",
+                "fill": [{"type": "solid", "color": "#EDE6DC"}]
+            }]
+        });
+
+        fix_container_text_contrast(&mut chip);
+
+        assert_eq!(
+            chip["children"][0]["fill"],
+            json!([{"type": "solid", "color": "#EDE6DC"}])
         );
     }
 }
