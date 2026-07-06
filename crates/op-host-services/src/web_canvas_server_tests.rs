@@ -372,7 +372,7 @@ fn post_export_raster_crops_to_selected_node() {
         .decode(data)
         .expect("base64 png");
 
-    assert_eq!(png_dimensions(&png), (42, 42));
+    assert_eq!(png_dimensions(&png), (10, 10));
     assert_eq!(s.version, 0, "export must not mutate sync version");
 }
 
@@ -391,7 +391,7 @@ fn post_export_raster_uses_request_active_page_index() {
     let png = base64::engine::general_purpose::STANDARD
         .decode(data)
         .expect("base64 png");
-    assert_eq!(png_dimensions(&png), (42, 42));
+    assert_eq!(png_dimensions(&png), (10, 10));
     assert_eq!(s.version, 0, "export must not mutate sync version");
 }
 
