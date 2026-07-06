@@ -174,10 +174,15 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
         experimental_features_enabled: Some(eui.agent_settings.experimental_features_enabled),
         connected: Some(eui.agent_settings.connected),
+        // Skip auto-imported (e.g. Zode) agents: their source file is the
+        // single source of truth and they're re-imported every launch, so
+        // persisting them would silently duplicate the source's API keys
+        // into this settings.json.
         builtin_agents: Some(
             eui.agent_settings
                 .builtin_agents
                 .iter()
+                .filter(|agent| !eui.agent_settings.imported_agent_ids.contains(&agent.id))
                 .map(builtin_agent_to_payload)
                 .collect(),
         ),
@@ -507,14 +512,19 @@ pub fn load(state: &mut EditorState) {
     if let Some(detected) = detect_system_locale() {
         state.editor_ui.locale = detected;
     }
-    let Some(path) = settings_path() else { return };
-    let Ok(bytes) = std::fs::read(&path) else {
-        return;
-    };
-    let Ok(payload) = serde_json::from_slice::<SettingsPayload>(&bytes) else {
-        return;
-    };
-    apply_payload(state, payload);
+    if let Some(path) = settings_path() {
+        if let Ok(bytes) = std::fs::read(&path) {
+            if let Ok(payload) = serde_json::from_slice::<SettingsPayload>(&bytes) {
+                apply_payload(state, payload);
+            }
+        }
+    }
+    // Merge any Zode CLI providers (`~/.zode/config.json`) as built-in
+    // custom models. Runs AFTER the persisted agents load so the
+    // backend-dedupe sees them; best-effort and a no-op when Zode isn't
+    // configured. Must not be skipped by a missing OpenPencil settings
+    // file, so it sits outside the load above.
+    crate::zode_import::import_zode_builtin_agents(state);
 }
 
 /// Read the host OS's preferred locale (env-var driven, no extra

@@ -10,7 +10,7 @@
 //! model's backing-agent discriminator) and is re-exported here so
 //! both the chat layer and the settings layer share one definition.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS,
@@ -416,6 +416,13 @@ pub struct AgentSettings {
     pub builtin_preset_menu_scroll: jian_core::scroll::ScrollState,
     pub builtin_preset_menu_hover: Option<BuiltinAgentPresetKey>,
     pub next_builtin_agent_id: u64,
+    /// Ids of `builtin_agents` that were auto-imported from an external
+    /// CLI config (e.g. Zode's `~/.zode/config.json`). Runtime-only —
+    /// NOT persisted. These agents are re-derived from their source file
+    /// on every launch, so persisting them would silently duplicate the
+    /// source's API keys into OpenPencil's own settings.json; the host's
+    /// save path skips any agent whose id is in this set.
+    pub imported_agent_ids: BTreeSet<String>,
     pub acp_agents: Vec<AcpAgentConfig>,
     pub acp_agent_draft: Option<AcpAgentConfig>,
     pub next_acp_agent_id: u64,
@@ -478,6 +485,7 @@ impl Default for AgentSettings {
             builtin_preset_menu_scroll: Default::default(),
             builtin_preset_menu_hover: None,
             next_builtin_agent_id: 1,
+            imported_agent_ids: BTreeSet::new(),
             acp_agents: Vec::new(),
             acp_agent_draft: None,
             next_acp_agent_id: 1,
