@@ -3,6 +3,7 @@
 
 use super::*;
 use op_host_services::mcp_serve::tool_text;
+use winit::keyboard::{Key, NamedKey};
 
 #[test]
 fn cursor_only_redraw_without_visible_state_change_skips_present() {
@@ -34,6 +35,25 @@ fn cursor_redraw_still_paints_when_layer_hover_changes() {
     ));
 
     assert!(app.prepare_redraw());
+}
+
+#[test]
+fn panel_resize_drag_continues_inside_left_layer_panel() {
+    let mut app = DesktopApp::new(None);
+    let start_width = app.host.editor_state().editor_ui.layer_panel_width;
+    let y = op_editor_ui::widgets::TOP_BAR_HEIGHT + 140.0;
+    assert!(app
+        .host
+        .apply_press(start_width, y, app.viewport_width, app.viewport_height));
+    assert!(app.host.is_resizing_panel());
+
+    app.pending_cursor_move = Some((start_width - 72.0, y));
+
+    assert!(app.drain_pending_cursor_move());
+    assert!(
+        app.host.editor_state().editor_ui.layer_panel_width < start_width,
+        "in-flight panel resize must keep receiving cursor moves after the cursor enters the left panel"
+    );
 }
 
 #[test]
@@ -85,6 +105,48 @@ fn selected_count_chip_clear_click_clears_canvas_selection() {
         .host
         .apply_click(clear_point.x, clear_point.y, 1200.0, 800.0));
     assert!(app.host.editor_state().selection.set.is_empty());
+}
+
+#[test]
+fn chat_input_arrows_move_caret_before_insert() {
+    let mut app = DesktopApp::new(None);
+    app.host.editor_state_mut().chat.focused = true;
+    app.host.editor_state_mut().chat.set_input_text("abcd");
+
+    app.handle_key_pressed(&Key::Named(NamedKey::ArrowLeft), None);
+    app.handle_key_pressed(&Key::Named(NamedKey::ArrowLeft), None);
+
+    assert_eq!(app.host.editor_state().chat.input_caret(), 2);
+    assert!(app.host.apply_text('X'));
+    assert_eq!(app.host.editor_state().chat.input.text(), "abXcd");
+    assert_eq!(app.host.editor_state().chat.input_caret(), 3);
+}
+
+#[test]
+fn chat_ime_anchor_tracks_input_caret() {
+    let mut app = DesktopApp::new(None);
+    app.host.editor_state_mut().chat.focused = true;
+    app.host.editor_state_mut().chat.set_input_text("abcd");
+    app.host.editor_state_mut().chat.set_input_caret(0, 0);
+    let start = app
+        .host
+        .ime_anchor_rect(1200.0, 800.0)
+        .expect("chat focus should yield ime anchor");
+
+    app.host.editor_state_mut().chat.set_input_caret(3, 0);
+    let after_three = app
+        .host
+        .ime_anchor_rect(1200.0, 800.0)
+        .expect("chat focus should yield ime anchor");
+
+    assert!(
+        after_three.origin.x > start.origin.x + 12.0,
+        "expected IME anchor to move with caret: start={start:?}, after={after_three:?}"
+    );
+    assert!(
+        after_three.size.x <= 4.0,
+        "IME anchor should describe the caret, not the whole input: {after_three:?}"
+    );
 }
 
 #[test]

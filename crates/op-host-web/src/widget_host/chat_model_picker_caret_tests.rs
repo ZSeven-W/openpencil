@@ -39,6 +39,25 @@ fn chat_model_picker_arrows_move_caret_for_insert_and_backspace() {
 }
 
 #[test]
+fn chat_input_arrows_move_caret_for_insert_and_backspace() {
+    let mut host = WidgetHost::new();
+    host.editor_state.chat.focused = true;
+    host.editor_state.chat.set_input_text("abcd");
+
+    assert!(host.apply_chat_input_caret(false));
+    assert!(host.apply_chat_input_caret(false));
+    assert_eq!(host.editor_state.chat.input_caret(), 2);
+
+    assert!(host.apply_text('X'));
+    assert_eq!(host.editor_state.chat.input.text(), "abXcd");
+    assert_eq!(host.editor_state.chat.input_caret(), 3);
+
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state.chat.input.text(), "abcd");
+    assert_eq!(host.editor_state.chat.input_caret(), 2);
+}
+
+#[test]
 fn chat_model_picker_clear_button_empties_search() {
     let mut host = WidgetHost::new();
     host.set_now_ms(456);

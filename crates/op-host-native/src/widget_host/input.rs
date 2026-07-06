@@ -191,6 +191,18 @@ impl WidgetHostNative {
             return Some(false);
         }
         if !drag.moved {
+            let option_source_ids: Vec<op_editor_core::NodeId> =
+                self.editor_state.selection.set.to_vec();
+            if self.alt_held
+                && !option_source_ids.is_empty()
+                && self
+                    .editor_state
+                    .duplicate_selected(&mut self.next_node_id, 0.0)
+                    .is_some()
+            {
+                self.option_drag_source_ids = option_source_ids;
+                self.mark_dirty();
+            }
             if let Some(d) = self.node_drag.as_mut() {
                 d.moved = true;
             }
@@ -262,6 +274,9 @@ impl WidgetHostNative {
                 if snap_dy != 0.0 {
                     drag.last_screen_y = prev_screen_y;
                 }
+            }
+            if let Some(drag) = self.node_drag {
+                self.update_node_drag_preview(&drag);
             }
             return Some(true);
         }
@@ -1380,7 +1395,9 @@ impl WidgetHostNative {
             // Drag ended — drop the transient smart-guide lines, then
             // run the drop policy (auto-layout reorder / reparent).
             self.editor_state.editor_ui.active_guides.clear();
+            self.editor_state.editor_ui.canvas_drop_indicator = None;
             let _ = self.commit_node_drag(&drag);
+            self.option_drag_source_ids.clear();
             self.mark_dirty();
             return true;
         }
@@ -1491,6 +1508,7 @@ impl WidgetHostNative {
             // run the drop policy (auto-layout reorder / reparent).
             self.editor_state.editor_ui.active_guides.clear();
             let _ = self.commit_node_drag(&drag);
+            self.option_drag_source_ids.clear();
             self.mark_dirty();
             return true;
         }

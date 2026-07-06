@@ -244,6 +244,10 @@ pub struct WidgetHost {
     /// selection live on cursor move, then end the transient state on
     /// release.
     pub(in crate::widget_host) node_drag: Option<node_drag::NodeDragState>,
+    /// Original selected ids for an active Option-drag clone move.
+    /// Drop hit-testing skips these so a fresh clone does not
+    /// immediately reparent back into the source it overlaps.
+    pub(in crate::widget_host) option_drag_source_ids: Vec<op_editor_core::NodeId>,
     /// Counter for minting fresh `NodeId`s when the user duplicates
     /// a node. Bumped past the highest sample id so new + sample
     /// nodes never collide on the same key. Matches the native
@@ -254,6 +258,9 @@ pub struct WidgetHost {
     /// can branch on shift+click for multi-select. Matches the
     /// native host's `shift_held` flag.
     pub(in crate::widget_host) shift_held: bool,
+    /// Whether Alt/Option is currently held. Node dragging uses this
+    /// to duplicate the current selection before moving it.
+    pub(in crate::widget_host) alt_held: bool,
     /// Host clock in ms — set by `lib.rs` on each event from
     /// `performance.now()`. Used for double-click detection.
     pub(in crate::widget_host) now_ms: u64,
@@ -472,8 +479,10 @@ impl WidgetHost {
             variables_resize: None,
             handle_drag: None,
             node_drag: None,
+            option_drag_source_ids: Vec::new(),
             next_node_id: 100,
             shift_held: false,
+            alt_held: false,
             now_ms: 0,
             wall_now_secs: 0,
             last_viewport_w: 0.0,
@@ -487,6 +496,10 @@ impl WidgetHost {
     /// and calls this just before dispatch.
     pub fn set_modifier_shift(&mut self, held: bool) {
         self.shift_held = held;
+    }
+
+    pub fn set_modifier_alt(&mut self, held: bool) {
+        self.alt_held = held;
     }
 
     pub fn set_space_pan(&mut self, held: bool) {

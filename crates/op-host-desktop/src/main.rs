@@ -883,12 +883,17 @@ impl DesktopApp {
                 let eui = &self.host.editor_state().editor_ui;
                 eui.file_menu_open || eui.locale_picker.open || eui.shape_picker.open
             };
-            let cursor_changed =
-                if over_layer_panel && !self.host.layer_drag_in_progress() && !overlay_open {
-                    false
-                } else {
-                    self.host.apply_cursor_move(cx, cy)
-                };
+            // Side-panel resize starts on the gutter but must keep receiving
+            // cursor moves after the pointer crosses back into the layer rail.
+            let cursor_changed = if over_layer_panel
+                && !self.host.layer_drag_in_progress()
+                && !self.host.is_resizing_panel()
+                && !overlay_open
+            {
+                false
+            } else {
+                self.host.apply_cursor_move(cx, cy)
+            };
             hover_changed || cursor_changed
         } else {
             false

@@ -7,14 +7,19 @@ const VW: f32 = 1200.0;
 const VH: f32 = 800.0;
 
 fn seed(host: &mut WidgetHost) {
-    let doc = jian_ops_schema::load_str(
+    seed_json(
+        host,
         r##"{"version":"0.8.0","children":[
           {"type":"rectangle","id":"box","name":"Box","x":100,"y":100,"width":120,"height":80,
            "fill":[{"type":"solid","color":"#2563EB"}]}
         ]}"##,
-    )
-    .expect("fixture JSON parses")
-    .value;
+    );
+}
+
+fn seed_json(host: &mut WidgetHost, json: &str) {
+    let doc = jian_ops_schema::load_str(json)
+        .expect("fixture JSON parses")
+        .value;
     host.editor_state = op_editor_core::EditorState::from_document(doc);
     host.editor_state.tool = Tool::Select;
     host.editor_state_dirty = true;
@@ -70,6 +75,60 @@ fn select_tool_dragging_selected_node_moves_it_without_resizing() {
 }
 
 #[test]
+fn option_dragging_selected_node_duplicates_and_moves_the_clone() {
+    let mut host = WidgetHost::new();
+    seed(&mut host);
+
+    host.set_modifier_alt(true);
+    let press = screen(&host, 160.0, 140.0);
+    let move_to = screen(&host, 200.0, 165.0);
+
+    assert!(host.apply_press(press.x, press.y, VW, VH));
+    assert_eq!(host.editor_state.selection.anchor, NodeId::new("box"));
+    assert!(host.apply_cursor_move(move_to.x, move_to.y));
+    assert_eq!(host.editor_state.active_children().len(), 2);
+    assert!(host.apply_release_with_viewport(VW, VH));
+
+    let children = host.editor_state.active_children();
+    assert_eq!(children.len(), 2);
+    let original = find_node(children, &NodeId::new("box")).expect("original remains");
+    assert_eq!(own_bounds(original).x, 100.0);
+    assert_eq!(own_bounds(original).y, 100.0);
+
+    let clone_id = host.editor_state.selection.anchor.clone();
+    assert_ne!(clone_id, NodeId::new("box"));
+    let clone = find_node(children, &clone_id).expect("clone selected");
+    let clone_bounds = own_bounds(clone);
+    assert_eq!(clone_bounds.x, 140.0);
+    assert_eq!(clone_bounds.y, 125.0);
+    assert_eq!(clone_bounds.w, 120.0);
+    assert_eq!(clone_bounds.h, 80.0);
+}
+
+#[test]
+fn arrow_nudge_reorders_selected_child_on_layout_axis() {
+    let mut host = WidgetHost::new();
+    seed_json(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{
+          "type":"frame","id":"stack","name":"Stack","x":400,"y":60,"width":200,"height":300,
+          "layout":"vertical","gap":8,
+          "children":[
+            {"type":"rectangle","id":"a","name":"A","width":80,"height":40},
+            {"type":"rectangle","id":"b","name":"B","width":80,"height":40},
+            {"type":"rectangle","id":"c","name":"C","width":80,"height":40}
+          ]}
+        ]}"#,
+    );
+    host.editor_state.set_single_selection(NodeId::new("b"));
+
+    assert!(host.apply_nudge(0.0, 1.0));
+
+    assert_eq!(child_order(&host, "stack"), vec!["a", "c", "b"]);
+    assert_eq!(host.editor_state.selection.anchor, NodeId::new("b"));
+}
+
+#[test]
 fn select_tool_dragging_flex_child_reorders_on_release_like_native() {
     let mut host = WidgetHost::new();
     let doc = jian_ops_schema::load_str(
@@ -96,6 +155,14 @@ fn select_tool_dragging_flex_child_reorders_on_release_like_native() {
 
     let move_to = screen(&host, 440.0, 160.0);
     assert!(host.apply_cursor_move(move_to.x, move_to.y));
+    let preview = host
+        .editor_state
+        .editor_ui
+        .canvas_drop_indicator
+        .as_ref()
+        .expect("dragging a flex child paints a drop preview");
+    assert!(preview.target.is_some());
+    assert!(preview.insertion.is_some());
 
     let a = find_node(host.editor_state.active_children(), &NodeId::new("a")).expect("a present");
     assert_eq!(
@@ -105,8 +172,158 @@ fn select_tool_dragging_flex_child_reorders_on_release_like_native() {
     );
 
     assert!(host.apply_release_with_viewport(VW, VH));
+    assert!(host.editor_state.editor_ui.canvas_drop_indicator.is_none());
 
     assert_eq!(child_order(&host, "stack"), vec!["b", "a", "c"]);
+}
+
+#[test]
+fn select_tool_dragging_flex_child_to_blank_canvas_makes_root_at_dropped_position() {
+    let mut host = WidgetHost::new();
+    seed_json(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{
+          "type":"frame","id":"stack","name":"Stack","x":400,"y":60,"width":200,"height":300,
+          "layout":"vertical","gap":8,
+          "children":[
+            {"type":"rectangle","id":"a","name":"A","width":80,"height":40},
+            {"type":"rectangle","id":"b","name":"B","width":80,"height":40},
+            {"type":"rectangle","id":"c","name":"C","width":80,"height":40}
+          ]}
+        ]}"#,
+    );
+    host.editor_state.editor_ui.entered_container = Some(NodeId::new("stack"));
+
+    let press = screen(&host, 440.0, 80.0);
+    assert!(host.apply_press(press.x, press.y, VW, VH));
+    assert_eq!(host.editor_state.selection.anchor, NodeId::new("a"));
+    let move_to = screen(&host, 760.0, 80.0);
+    assert!(host.apply_cursor_move(move_to.x, move_to.y));
+    let preview = host
+        .editor_state
+        .editor_ui
+        .canvas_drop_indicator
+        .as_ref()
+        .expect("drag out paints a root-drop ghost");
+    assert!(preview.target.is_none());
+    assert!(preview.insertion.is_none());
+    assert!((preview.ghost.x - 720.0).abs() < 1.0);
+    assert!((preview.ghost.y - 60.0).abs() < 1.0);
+    assert!(host.apply_release_with_viewport(VW, VH));
+    assert!(host.editor_state.editor_ui.canvas_drop_indicator.is_none());
+
+    let children = host.editor_state.active_children();
+    assert_eq!(children[0].id_str(), "a");
+    let moved = find_node(children, &NodeId::new("a")).unwrap();
+    assert!((moved.base().x.unwrap_or(0.0) - 720.0).abs() < 1.0);
+    assert!((moved.base().y.unwrap_or(0.0) - 60.0).abs() < 1.0);
+    assert_eq!(child_order(&host, "stack"), vec!["b", "c"]);
+}
+
+#[test]
+fn select_tool_dragging_fill_sized_child_to_blank_canvas_freezes_resolved_size() {
+    let mut host = WidgetHost::new();
+    seed_json(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{
+          "type":"frame","id":"screen","name":"Screen","x":400,"y":60,"width":360,"height":220,
+          "layout":"vertical","gap":8,
+          "children":[
+            {"type":"rectangle","id":"box","name":"Box","width":"fill_container","height":72}
+          ]}
+        ]}"#,
+    );
+    host.editor_state.editor_ui.entered_container = Some(NodeId::new("screen"));
+
+    let press = screen(&host, 420.0, 80.0);
+    assert!(host.apply_press(press.x, press.y, VW, VH));
+    assert_eq!(host.editor_state.selection.anchor, NodeId::new("box"));
+    let move_to = screen(&host, 840.0, 80.0);
+    assert!(host.apply_cursor_move(move_to.x, move_to.y));
+    let preview = host
+        .editor_state
+        .editor_ui
+        .canvas_drop_indicator
+        .as_ref()
+        .expect("drag out paints a root-drop ghost");
+    let expected_w = preview.ghost.w;
+    let expected_h = preview.ghost.h;
+    assert!(preview.target.is_none());
+
+    assert!(host.apply_release_with_viewport(VW, VH));
+
+    let moved = find_node(host.editor_state.active_children(), &NodeId::new("box")).unwrap();
+    assert!(
+        (moved.width_px().unwrap_or(0.0) - expected_w).abs() < 1.0,
+        "root width should freeze to dragged width {expected_w}, got {:?}",
+        moved.width_px()
+    );
+    assert!(
+        (moved.height_px().unwrap_or(0.0) - expected_h).abs() < 1.0,
+        "root height should freeze to dragged height {expected_h}, got {:?}",
+        moved.height_px()
+    );
+}
+
+#[test]
+fn select_tool_dragging_child_into_sibling_frame_reparents_like_native() {
+    let mut host = WidgetHost::new();
+    seed_json(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"frame","id":"src","name":"Source","x":400,"y":60,"width":200,"height":120,
+           "children":[
+             {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
+           ]},
+          {"type":"frame","id":"target","name":"Target","x":700,"y":60,"width":220,"height":160,
+           "children":[]}
+        ]}"#,
+    );
+    host.editor_state.editor_ui.entered_container = Some(NodeId::new("src"));
+
+    let press = screen(&host, 445.0, 105.0);
+    assert!(host.apply_press(press.x, press.y, VW, VH));
+    assert_eq!(host.editor_state.selection.anchor, NodeId::new("box"));
+    let move_to = screen(&host, 760.0, 100.0);
+    assert!(host.apply_cursor_move(move_to.x, move_to.y));
+    assert!(host.apply_release_with_viewport(VW, VH));
+
+    let src = find_node(host.editor_state.active_children(), &NodeId::new("src")).unwrap();
+    assert!(src.children().unwrap().is_empty());
+    let target = find_node(host.editor_state.active_children(), &NodeId::new("target")).unwrap();
+    let moved = &target.children().unwrap()[0];
+    assert_eq!(moved.id_str(), "box");
+    assert!((moved.base().x.unwrap_or(0.0) - 35.0).abs() < 1.0);
+    assert!((moved.base().y.unwrap_or(0.0) - 15.0).abs() < 1.0);
+}
+
+#[test]
+fn select_tool_dragging_child_to_blank_canvas_makes_it_page_root_like_native() {
+    let mut host = WidgetHost::new();
+    seed_json(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"frame","id":"card","name":"Card","x":400,"y":60,"width":200,"height":100,
+           "children":[
+             {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
+           ]}
+        ]}"#,
+    );
+    host.editor_state.editor_ui.entered_container = Some(NodeId::new("card"));
+
+    let press = screen(&host, 440.0, 100.0);
+    assert!(host.apply_press(press.x, press.y, VW, VH));
+    let move_to = screen(&host, 840.0, 100.0);
+    assert!(host.apply_cursor_move(move_to.x, move_to.y));
+    assert!(host.apply_release_with_viewport(VW, VH));
+
+    let children = host.editor_state.active_children();
+    assert_eq!(children[0].id_str(), "box");
+    let card = find_node(children, &NodeId::new("card")).unwrap();
+    assert!(card.children().unwrap().is_empty());
+    let moved = find_node(children, &NodeId::new("box")).unwrap();
+    assert!((moved.base().x.unwrap_or(0.0) - 820.0).abs() < 1.0);
+    assert!((moved.base().y.unwrap_or(0.0) - 80.0).abs() < 1.0);
 }
 
 #[test]
