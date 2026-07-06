@@ -300,6 +300,8 @@ pub struct CanvasViewport<'a> {
     pub(super) selected: String,
     /// Full selection set (scene-space string ids).
     pub(super) selected_set: Vec<String>,
+    /// Pencil-style selected element/count label painted near the overlay.
+    pub(super) selection_label: Option<String>,
     /// Active canvas tool — gates the per-anchor Path handles.
     pub(super) tool: op_editor_core::Tool,
     /// Pen-tool draft: the in-progress path id + last cursor doc
@@ -312,6 +314,8 @@ pub struct CanvasViewport<'a> {
     /// Smart-guide alignment lines to paint during a node drag —
     /// doc-space, computed by the host's `align_guides` pass.
     pub(super) active_guides: Vec<op_editor_core::align_guides::AlignmentGuide>,
+    /// Drop-target preview during canvas node dragging.
+    pub(super) drop_indicator: Option<op_editor_core::editor_ui_state::CanvasDropIndicator>,
     /// Text node being edited (scene-space string id) and its shared
     /// draft/caret/selection state.
     pub(super) text_editing: Option<String>,
@@ -357,6 +361,7 @@ impl<'a> CanvasViewport<'a> {
                 .iter()
                 .map(|id| id.as_str().to_string())
                 .collect(),
+            selection_label: selection_size_label(state, scene),
             tool: state.tool,
             pen_in_progress: state
                 .ui
@@ -366,6 +371,7 @@ impl<'a> CanvasViewport<'a> {
             pen_cursor_doc: state.ui.pen_cursor_doc.map(|p| Point2D::new(p.x, p.y)),
             pen_dragging_handle: state.ui.pen_dragging_handle,
             active_guides: state.editor_ui.active_guides.clone(),
+            drop_indicator: state.editor_ui.canvas_drop_indicator.clone(),
             text_editing: state
                 .ui
                 .text_editing
@@ -404,11 +410,13 @@ impl<'a> CanvasViewport<'a> {
             scene,
             selected: String::new(),
             selected_set: Vec::new(),
+            selection_label: None,
             tool: op_editor_core::Tool::Select,
             pen_in_progress: None,
             pen_cursor_doc: None,
             pen_dragging_handle: false,
             active_guides: Vec::new(),
+            drop_indicator: None,
             text_editing: None,
             text_edit_input: Default::default(),
             canvas_background,
@@ -417,6 +425,22 @@ impl<'a> CanvasViewport<'a> {
             hovered: None,
             frame_labels: Vec::new(),
         }
+    }
+
+    pub fn frame_label_at_point(&self, rect: Rect, point: Point2D) -> Option<String> {
+        let page = self.scene.active_page()?;
+        let viewport_origin = Point2D::new(
+            rect.origin.x + self.viewport.pan_x,
+            rect.origin.y + self.viewport.pan_y,
+        );
+        super::canvas_frame_labels::frame_label_at_point(
+            &page.children,
+            &self.frame_labels,
+            viewport_origin,
+            &self.viewport,
+            rect,
+            point,
+        )
     }
 }
 
@@ -427,6 +451,7 @@ impl<'a> CanvasViewport<'a> {
 /// instance tint.
 fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
     use op_editor_core::PenNodeExt;
+    let theme = theme_for(&state.editor_ui);
     const FRAME_LABEL: Color = Color {
         r: 0.6,
         g: 0.6,
@@ -454,15 +479,61 @@ fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
             if name.is_empty() {
                 return None;
             }
-            let color = match node {
-                PenNode::Frame(f) if f.reusable == Some(true) => COMPONENT,
-                PenNode::Frame(_) => FRAME_LABEL,
-                PenNode::Ref(_) => INSTANCE,
-                _ => return None,
+            let id = op_editor_core::NodeId::new(node.base().id.clone());
+            let color = if state.selection.contains(&id) {
+                theme.primary
+            } else {
+                match node {
+                    PenNode::Frame(f) if f.reusable == Some(true) => COMPONENT,
+                    PenNode::Frame(_) => FRAME_LABEL,
+                    PenNode::Ref(_) => INSTANCE,
+                    _ => return None,
+                }
             };
             Some((node.base().id.clone(), name, color))
         })
         .collect()
+}
+
+fn selection_size_label(state: &EditorState, scene: &LayoutScene) -> Option<String> {
+    if state.selection_count() == 0 {
+        return None;
+    }
+    let page = scene.active_page()?;
+    let mut union: Option<Rect> = None;
+    for id in &state.selection.set {
+        if !id.is_real() {
+            continue;
+        }
+        let Some(node) = page.find(id.as_str()) else {
+            continue;
+        };
+        union = match union {
+            Some(rect) => Some(union_rects(rect, node.aggregate_bounds())),
+            None => Some(node.aggregate_bounds()),
+        };
+    }
+    let rect: Rect = union?;
+    if rect.size.x <= 0.0 || rect.size.y <= 0.0 {
+        return None;
+    }
+    Some(format_dimension_label(rect.size.x, rect.size.y))
+}
+
+fn format_dimension_label(width: f32, height: f32) -> String {
+    format!(
+        "{} × {}",
+        width.round().max(0.0) as i32,
+        height.round().max(0.0) as i32
+    )
+}
+
+fn union_rects(a: Rect, b: Rect) -> Rect {
+    let min_x = a.origin.x.min(b.origin.x);
+    let min_y = a.origin.y.min(b.origin.y);
+    let max_x = (a.origin.x + a.size.x).max(b.origin.x + b.size.x);
+    let max_y = (a.origin.y + a.size.y).max(b.origin.y + b.size.y);
+    Rect::xywh(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
 impl<'a> Widget for CanvasViewport<'a> {
@@ -498,6 +569,10 @@ impl<'a> Widget for CanvasViewport<'a> {
         } else {
             None
         };
+        let selected_root_frame_label = show_handles
+            && self.scene.active_page().is_some_and(|page| {
+                single_selected_id.is_some_and(|id| page.children.iter().any(|node| node.id == id))
+            });
         let mut paint_hits = super::canvas_viewport_paint::PaintNodeHits::default();
 
         // 3. Walk the active page; clip enforces widget bounds.
@@ -561,6 +636,11 @@ impl<'a> Widget for CanvasViewport<'a> {
                 cx,
                 &page.children,
                 &self.frame_labels,
+                if selected_root_frame_label {
+                    &[]
+                } else {
+                    &self.selected_set
+                },
                 viewport_origin,
                 viewport,
                 rect,
@@ -592,6 +672,13 @@ impl<'a> Widget for CanvasViewport<'a> {
             }
         }
 
+        // 3b. Drag/drop preview — transient target highlight, ghost
+        // bounds, and flex insertion line. It is painted over nodes
+        // but below the final selection handles.
+        if let Some(indicator) = self.drop_indicator.as_ref() {
+            paint_drop_indicator(cx, rect, viewport, &self.theme, indicator);
+        }
+
         // 4. Selection overlay — outlines + handles (single-select only).
         let active_page = self.scene.active_page();
         let single_selected_node = if show_handles {
@@ -611,6 +698,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                 now_ms: self.now_ms,
                 canvas_rect: rect,
                 viewport,
+                selection_label: self.selection_label.as_deref(),
             };
             if let Some(node) = single_selected_node {
                 super::canvas_selection_overlay::paint_selected_node(
@@ -710,6 +798,47 @@ pub(crate) fn reveal_schedule_for_paint<'a>(
         starts: reveals,
         now_ms,
     })
+}
+
+fn paint_drop_indicator(
+    cx: &mut PaintCx<'_>,
+    canvas_rect: Rect,
+    viewport: &DocViewport,
+    theme: &Theme,
+    indicator: &op_editor_core::editor_ui_state::CanvasDropIndicator,
+) {
+    let to_screen_rect = |r: op_editor_core::editor_ui_state::CanvasOverlayRect| {
+        Rect::xywh(
+            canvas_rect.origin.x + viewport.pan_x + r.x as f32 * viewport.zoom,
+            canvas_rect.origin.y + viewport.pan_y + r.y as f32 * viewport.zoom,
+            r.w as f32 * viewport.zoom,
+            r.h as f32 * viewport.zoom,
+        )
+    };
+    let primary = theme.primary;
+    if let Some(target) = indicator.target {
+        let rect = to_screen_rect(target);
+        let fill = Color { a: 0.08, ..primary };
+        let stroke = Color { a: 0.45, ..primary };
+        cx.backend.fill_rect(rect, fill);
+        cx.backend.stroke_rect(rect, stroke, 1.0);
+    }
+    let ghost = to_screen_rect(indicator.ghost);
+    let ghost_fill = Color { a: 0.10, ..primary };
+    let ghost_stroke = Color { a: 0.85, ..primary };
+    cx.backend.fill_rect(ghost, ghost_fill);
+    paint_dashed_rect(cx, ghost, ghost_stroke, 1.25);
+    if let Some(line) = indicator.insertion {
+        let from = Point2D::new(
+            canvas_rect.origin.x + viewport.pan_x + line.x1 as f32 * viewport.zoom,
+            canvas_rect.origin.y + viewport.pan_y + line.y1 as f32 * viewport.zoom,
+        );
+        let to = Point2D::new(
+            canvas_rect.origin.x + viewport.pan_x + line.x2 as f32 * viewport.zoom,
+            canvas_rect.origin.y + viewport.pan_y + line.y2 as f32 * viewport.zoom,
+        );
+        cx.backend.stroke_line(from, to, primary, 2.0);
+    }
 }
 
 /// Stroke a dashed rectangle as 4 dashed edges (4 px on / 4 px off,

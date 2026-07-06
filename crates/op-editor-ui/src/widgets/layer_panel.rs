@@ -241,6 +241,31 @@ impl LayerPanel {
             layers: self.layers_scroll,
         })
     }
+
+    /// Return the layer-list scroll offset that keeps `node_id`'s
+    /// row visible inside the clipped Layers viewport.
+    pub fn layers_offset_revealing(&self, rect: Rect, node_id: &NodeId) -> Option<f32> {
+        let index = self
+            .items
+            .iter()
+            .position(|item| &item.node_id == node_id)?;
+        let r = self.regions(rect);
+        if r.layers_view_h <= 0.0 {
+            return None;
+        }
+        let row_top = index as f32 * LAYER_ROW_HEIGHT;
+        let row_bottom = row_top + LAYER_ROW_HEIGHT;
+        let view_top = r.layers.offset;
+        let view_bottom = view_top + r.layers_view_h;
+        let next = if row_top < view_top {
+            row_top
+        } else if row_bottom > view_bottom {
+            row_bottom - r.layers_view_h
+        } else {
+            view_top
+        };
+        Some(next.clamp(0.0, r.layers.max_offset))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

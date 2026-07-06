@@ -76,6 +76,23 @@ fn set_display_name(host: &mut WidgetHostNative, path: Option<&std::path::Path>)
     set_file_name_display(host.editor_state_mut(), path);
 }
 
+fn viewport_size_for_window(window: Option<&winit::window::Window>) -> (f32, f32) {
+    window
+        .map(|w| {
+            let size = w.inner_size();
+            let scale = w.scale_factor() as f32;
+            (size.width as f32 / scale, size.height as f32 / scale)
+        })
+        .unwrap_or((super::INITIAL_VIEWPORT_W, super::INITIAL_VIEWPORT_H))
+}
+
+fn fit_loaded_document(host: &mut WidgetHostNative, window: Option<&winit::window::Window>) {
+    let (vw, vh) = viewport_size_for_window(window);
+    host.fit_content_to_viewport(vw, vh);
+    host.editor_state_mut().mark_saved_revision();
+    host.mark_editor_state_dirty();
+}
+
 /// Cmd+Shift+S — always pop the Save dialog.
 pub fn handle_save_as(
     host: &mut WidgetHostNative,
@@ -141,6 +158,7 @@ pub fn handle_open(
     };
     match load_into_host(host, &path) {
         Ok(()) => {
+            fit_loaded_document(host, window);
             crate::settings_io::touch_recent(host, &path);
             *current_path = Some(path);
             refresh_title(current_path, window);
@@ -168,6 +186,7 @@ pub fn open_path(
 ) -> bool {
     match load_into_host(host, &path) {
         Ok(()) => {
+            fit_loaded_document(host, window);
             crate::settings_io::touch_recent(host, &path);
             *current_path = Some(path);
             refresh_title(current_path, window);
@@ -197,13 +216,7 @@ pub fn run_action(
             let mut state = EditorState::starter();
             preserve_app_preferences(host.editor_state(), &mut state);
             *host.editor_state_mut() = state;
-            let (vw, vh) = window
-                .map(|w| {
-                    let size = w.inner_size();
-                    let scale = w.scale_factor() as f32;
-                    (size.width as f32 / scale, size.height as f32 / scale)
-                })
-                .unwrap_or((super::INITIAL_VIEWPORT_W, super::INITIAL_VIEWPORT_H));
+            let (vw, vh) = viewport_size_for_window(window);
             host.fit_content_to_viewport(vw, vh);
             host.editor_state_mut().mark_saved_revision();
             host.mark_editor_state_dirty();
@@ -290,6 +303,7 @@ pub fn run_action(
             let path = std::path::PathBuf::from(&entry.path);
             match load_into_host(host, &path) {
                 Ok(()) => {
+                    fit_loaded_document(host, window);
                     crate::settings_io::touch_recent(host, &path);
                     *current_path = Some(path);
                     refresh_title(current_path, window);
@@ -570,6 +584,54 @@ mod tests {
 
         assert!(host.editor_state().selection.is_empty());
         assert_eq!(host.editor_state().doc.children.len(), 1);
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(sidecar_path(&path));
+    }
+
+    #[test]
+    fn opening_document_fits_and_centers_multiple_root_nodes() {
+        let mut host = WidgetHostNative::new();
+        let doc = jian_ops_schema::load_str(
+            r#"{
+              "version":"0.8.0",
+              "children":[
+                {"type":"frame","id":"left","name":"Left","x":900,"y":120,"width":240,"height":320},
+                {"type":"frame","id":"right","name":"Right","x":1320,"y":220,"width":260,"height":280}
+              ]
+            }"#,
+        )
+        .expect("fixture JSON parses")
+        .value;
+        let state_to_open = EditorState::from_document(doc);
+        let path = temp_op_path("open-centers-multi-root");
+        save_to_path(&state_to_open, &path).expect("save succeeds");
+        let mut current_path = None;
+
+        assert!(open_path(&mut host, path.clone(), &mut current_path, None));
+
+        let (min_x, min_y, max_x, max_y) =
+            active_page_bbox(host.editor_state()).expect("opened content has bounds");
+        let content_center_x = ((min_x + max_x) / 2.0) as f32;
+        let content_center_y = ((min_y + max_y) / 2.0) as f32;
+        let (canvas_w, canvas_h) = op_host_services::design_session::design_canvas_size(
+            host.editor_state(),
+            super::super::INITIAL_VIEWPORT_W,
+            super::super::INITIAL_VIEWPORT_H,
+        );
+        let screen_center_x = host.editor_state().viewport.pan_x
+            + content_center_x * host.editor_state().viewport.zoom;
+        let screen_center_y = host.editor_state().viewport.pan_y
+            + content_center_y * host.editor_state().viewport.zoom;
+
+        assert!(
+            (screen_center_x - canvas_w / 2.0).abs() < 0.5,
+            "opened content should be horizontally centered: screen_center_x={screen_center_x}, canvas_w={canvas_w}"
+        );
+        assert!(
+            (screen_center_y - canvas_h / 2.0).abs() < 0.5,
+            "opened content should be vertically centered: screen_center_y={screen_center_y}, canvas_h={canvas_h}"
+        );
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(sidecar_path(&path));

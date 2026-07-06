@@ -180,6 +180,48 @@ pub struct CommitDiffSummary {
     pub patches: Vec<CommitDiffPatch>,
 }
 
+/// Document-space rectangle used by transient canvas overlays.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CanvasOverlayRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+impl CanvasOverlayRect {
+    pub fn new(x: f64, y: f64, w: f64, h: f64) -> Self {
+        Self { x, y, w, h }
+    }
+}
+
+/// Document-space line segment used by transient canvas overlays.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CanvasOverlayLine {
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+}
+
+impl CanvasOverlayLine {
+    pub fn new(x1: f64, y1: f64, x2: f64, y2: f64) -> Self {
+        Self { x1, y1, x2, y2 }
+    }
+}
+
+/// Drag-time drop preview for canvas node dragging. View-only,
+/// transient, and excluded from history/file persistence.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CanvasDropIndicator {
+    /// Dropped bounds of the dragged node, in document space.
+    pub ghost: CanvasOverlayRect,
+    /// Target container bounds, when the cursor is inside one.
+    pub target: Option<CanvasOverlayRect>,
+    /// Flex insertion line, when the target container auto-layouts.
+    pub insertion: Option<CanvasOverlayLine>,
+}
+
 /// Lazy state of the expanded commit's inline diff (TS `DiffState`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommitDiffView {
@@ -1180,6 +1222,10 @@ pub struct EditorUiState {
     /// drag release. View-only transient state: never serialized,
     /// never part of the undo snapshot.
     pub active_guides: Vec<crate::align_guides::AlignmentGuide>,
+    /// Drop-target preview painted during canvas node dragging.
+    /// View-only transient state: never serialized, never part of
+    /// the undo snapshot.
+    pub canvas_drop_indicator: Option<CanvasDropIndicator>,
 
     // --- Auto-update ------------------------------------------------
     /// Latest result of the desktop host's background update probe.
@@ -1406,6 +1452,7 @@ impl Default for EditorUiState {
             last_canvas_click: None,
             last_variable_name_click: None,
             active_guides: Vec::new(),
+            canvas_drop_indicator: None,
             update_status: UpdateStatus::Idle,
             git_panel: GitPanelState::default(),
             design_md_panel_open: false,
