@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+fn imported_agents_are_excluded_from_persistence() {
+    // A user-entered agent must persist; an auto-imported (e.g. Zode)
+    // agent must NOT, so its API key never lands in settings.json.
+    let mut state = EditorState::new();
+    let manual = state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("Manual", "manual-key", "m1");
+    let imported = state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("Imported", "zode-key", "m2");
+    state
+        .editor_ui
+        .agent_settings
+        .imported_agent_ids
+        .insert(imported.clone());
+
+    let payload = to_payload(&state);
+    let persisted = payload.builtin_agents.unwrap();
+    let ids: Vec<_> = persisted.iter().map(|a| a.id.clone()).collect();
+    assert!(ids.contains(&manual), "user-entered agent should persist");
+    assert!(
+        !ids.contains(&imported),
+        "imported agent (and its key) must not be persisted"
+    );
+    assert!(
+        persisted.iter().all(|a| a.api_key != "zode-key"),
+        "imported API key must never reach settings.json"
+    );
+}
+
+#[test]
 fn connected_state_round_trips_through_payload() {
     // Connect Claude (0) + Gemini (4), leave the rest off.
     let mut src = EditorState::new();
