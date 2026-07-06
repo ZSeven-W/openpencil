@@ -5,6 +5,7 @@ use op_editor_core::drag_mutators::{
 };
 use op_editor_core::editor_ui_state::{CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect};
 use op_editor_core::{NodeId, PenNodeExt};
+use op_editor_ui::widgets::CanvasNodeDragOverlay;
 use op_editor_ui::{Point2D, Rect};
 
 const NODE_DRAG_THRESHOLD_PX: f32 = 2.0;
@@ -32,6 +33,7 @@ pub(in crate::widget_host) struct NodeDragState {
     pub(in crate::widget_host) moved: bool,
     pub(in crate::widget_host) total_dx: f64,
     pub(in crate::widget_host) total_dy: f64,
+    pub(in crate::widget_host) overlay_bounds: Option<Rect>,
 }
 
 impl WidgetHost {
@@ -46,6 +48,7 @@ impl WidgetHost {
             moved: false,
             total_dx: 0.0,
             total_dy: 0.0,
+            overlay_bounds: None,
         });
     }
 
@@ -61,6 +64,9 @@ impl WidgetHost {
         {
             return Some(false);
         }
+        let zoom = self.editor_state.viewport.zoom.max(0.0001);
+        let total_dx = ((x - drag.press_screen_x) / zoom) as f64;
+        let total_dy = ((y - drag.press_screen_y) / zoom) as f64;
         if !drag.moved {
             let option_source_ids: Vec<NodeId> = self.editor_state.selection.set.to_vec();
             if self.alt_held
@@ -71,6 +77,9 @@ impl WidgetHost {
                     .is_some()
             {
                 self.option_drag_source_ids = option_source_ids;
+                let _ = self
+                    .editor_state
+                    .move_selected_in_layout_direction(total_dx, total_dy);
                 self.mark_dirty();
             }
             if let Some(d) = self.node_drag.as_mut() {
@@ -78,10 +87,9 @@ impl WidgetHost {
             }
         }
 
-        let zoom = self.editor_state.viewport.zoom.max(0.0001);
         if let Some(d) = self.node_drag.as_mut() {
-            d.total_dx = ((x - d.press_screen_x) / zoom) as f64;
-            d.total_dy = ((y - d.press_screen_y) / zoom) as f64;
+            d.total_dx = total_dx;
+            d.total_dy = total_dy;
         }
         let dx = (x - drag.last_screen_x) / zoom;
         let dy = (y - drag.last_screen_y) / zoom;
@@ -134,7 +142,7 @@ impl WidgetHost {
             self.editor_state.editor_ui.active_guides.clear();
         }
         if let Some(drag) = self.node_drag {
-            self.update_node_drag_preview(&drag);
+            self.apply_live_node_drag_preview(&drag);
         }
         Some(true)
     }
@@ -143,11 +151,37 @@ impl WidgetHost {
         let Some(drag) = self.node_drag.take() else {
             return false;
         };
+        self.refresh_layout_scene();
+        let before_scene = self.layout_scene.clone();
+        let release_overlay = (self.editor_state.selection_count() == 1)
+            .then(|| {
+                drag.overlay_bounds
+                    .map(|bounds| (self.editor_state.selection.anchor.clone(), bounds))
+            })
+            .flatten();
+        let should_commit_drop = self
+            .editor_state
+            .editor_ui
+            .canvas_drop_indicator
+            .as_ref()
+            .map(|indicator| indicator.target.is_some())
+            .unwrap_or(false)
+            || self.editor_state.selection_count() != 1;
         self.editor_state.editor_ui.active_guides.clear();
         self.editor_state.editor_ui.canvas_drop_indicator = None;
-        let _ = self.commit_node_drag(&drag);
+        if should_commit_drop {
+            let _ = self.commit_node_drag(&drag);
+        }
         self.option_drag_source_ids.clear();
         self.mark_dirty();
+        if should_commit_drop {
+            self.start_layout_transition_from_scene(before_scene);
+        } else {
+            self.refresh_layout_scene();
+            if let Some((node_id, bounds)) = release_overlay {
+                self.start_layout_transition_from_bounds(&node_id, bounds);
+            }
+        }
         true
     }
 
@@ -181,6 +215,74 @@ impl WidgetHost {
         if self.editor_state.editor_ui.canvas_drop_indicator != next {
             self.editor_state.editor_ui.canvas_drop_indicator = next;
         }
+    }
+
+    fn apply_live_node_drag_preview(&mut self, drag: &NodeDragState) {
+        if self.editor_state.selection_count() != 1 {
+            self.update_node_drag_preview(drag);
+            return;
+        }
+        self.refresh_layout_scene();
+        let id = self.editor_state.selection.anchor.clone();
+        let Some(plan) = self.plan_drag_commit(&id, drag) else {
+            self.editor_state.editor_ui.canvas_drop_indicator = None;
+            return;
+        };
+        let before_scene = self.layout_scene.clone();
+        let current_parent = parent_of(self.editor_state.active_children(), &id);
+        let bounds = plan.dropped_bounds;
+        let mut indicator = None;
+        let mut mutated = false;
+        let mut overlay_bounds = None;
+        if let Some(target) = plan.target.clone() {
+            match &target {
+                DragDropTarget::Container { parent_id, .. }
+                    if current_parent.as_ref() == Some(parent_id) =>
+                {
+                    overlay_bounds = Some(bounds);
+                    mutated |= self.apply_drag_commit(&id, plan);
+                }
+                DragDropTarget::PageRoot { .. } if current_parent.is_some() => {
+                    mutated |= self.apply_drag_commit(&id, plan);
+                }
+                DragDropTarget::Container { .. } if current_parent.is_some() => {
+                    mutated |= self.editor_state.move_node_to_drop_target(
+                        &id,
+                        DragDropTarget::PageRoot { index: 0 },
+                        bounds.origin.x as f64,
+                        bounds.origin.y as f64,
+                        bounds.size.x as f64,
+                        bounds.size.y as f64,
+                    );
+                    indicator = plan.indicator;
+                }
+                _ => {
+                    indicator = plan.indicator;
+                }
+            }
+        }
+        if mutated {
+            self.mark_dirty();
+            self.start_layout_transition_from_scene_excluding(before_scene, &id);
+        }
+        if self.editor_state.editor_ui.canvas_drop_indicator != indicator {
+            self.editor_state.editor_ui.canvas_drop_indicator = indicator;
+        }
+        if let Some(active_drag) = self.node_drag.as_mut() {
+            active_drag.overlay_bounds = overlay_bounds;
+        }
+    }
+
+    pub(in crate::widget_host) fn node_drag_overlay_for_paint(
+        &self,
+    ) -> Option<CanvasNodeDragOverlay> {
+        let drag = self.node_drag?;
+        let overlay_bounds = drag.overlay_bounds?;
+        let node_id = self.editor_state.selection.anchor.clone();
+        Some(CanvasNodeDragOverlay {
+            node_id: node_id.as_str().to_string(),
+            target_origin_doc: overlay_bounds.origin,
+        })
     }
 
     fn plan_drag_commit(&self, id: &NodeId, drag: &NodeDragState) -> Option<DragCommitPlan> {

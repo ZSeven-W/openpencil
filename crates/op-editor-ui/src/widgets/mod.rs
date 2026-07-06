@@ -109,6 +109,7 @@ mod canvas_agent_cursor;
 #[cfg(test)]
 mod canvas_agent_cursor_tests;
 mod canvas_frame_labels;
+pub mod canvas_layout_transition;
 mod canvas_path_overlay;
 mod canvas_selection_overlay;
 pub mod canvas_text_edit;
@@ -249,9 +250,10 @@ pub use layer_panel::{LayerItem, LayerPanel};
 pub use property_panel::{EffectAddMenuHit, FontWeightChoice, PropertyPanel, PropertyPanelAction};
 pub use toolbar::Toolbar;
 
+pub use canvas_layout_transition::{CanvasLayoutTransition, CANVAS_LAYOUT_TRANSITION_MS};
 pub use canvas_viewport::{
     arc_handle_positions, path_handle_positions, rotate_point, rotation_corner_at_point,
-    selection_handle_at_point, ArcHandle, CanvasViewport, SelectionHandle,
+    selection_handle_at_point, ArcHandle, CanvasNodeDragOverlay, CanvasViewport, SelectionHandle,
 };
 pub use canvas_viewport_paint::paint_scene_page;
 pub use canvas_viewport_widget::widget_text_inset_left;

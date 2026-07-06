@@ -266,6 +266,7 @@ struct PaintNodeOptions<'a> {
     hovered: Option<&'a str>,
     selected: Option<&'a str>,
     pen: Option<&'a str>,
+    hidden: Option<&'a str>,
 }
 
 #[derive(Default)]
@@ -345,6 +346,35 @@ pub(crate) fn paint_node_with_options<'a>(
     selected: Option<&'a str>,
     pen: Option<&'a str>,
 ) -> PaintNodeHits<'a> {
+    paint_node_with_options_hiding(
+        cx,
+        node,
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        reveals,
+        hovered,
+        selected,
+        pen,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn paint_node_with_options_hiding<'a>(
+    cx: &mut PaintCx<'_>,
+    node: &'a SceneNode,
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: Option<RevealSchedule<'a>>,
+    hovered: Option<&'a str>,
+    selected: Option<&'a str>,
+    pen: Option<&'a str>,
+    hidden: Option<&'a str>,
+) -> PaintNodeHits<'a> {
     let options = PaintNodeOptions {
         viewport_origin,
         zoom,
@@ -354,6 +384,7 @@ pub(crate) fn paint_node_with_options<'a>(
         hovered,
         selected,
         pen,
+        hidden,
     };
     paint_node_inner(cx, node, &options)
 }
@@ -402,6 +433,9 @@ fn paint_node_inner<'a>(
     node: &'a SceneNode,
     options: &PaintNodeOptions<'_>,
 ) -> PaintNodeHits<'a> {
+    if options.hidden == Some(node.id.as_str()) {
+        return PaintNodeHits::default();
+    }
     let viewport_origin = options.viewport_origin;
     let zoom = options.zoom;
     let edit_caret = &options.edit_caret;

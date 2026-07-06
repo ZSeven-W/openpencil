@@ -180,6 +180,10 @@ pub struct WidgetHostNative {
     /// the host's canvas hit-test queries. Rebuilt lazily by
     /// `refresh_layout_scene()` whenever `editor_state_dirty` is set.
     pub(in crate::widget_host) layout_scene: op_editor_ui::layout_scene::LayoutScene,
+    /// Paint-only interpolation from the previous layout scene to the
+    /// current one. Used by canvas node drag/reorder previews.
+    pub(in crate::widget_host) layout_transition:
+        Option<op_editor_ui::widgets::CanvasLayoutTransition>,
     /// Skips the `layout_scene` rebuild when the document / active theme /
     /// active page are unchanged. `editor_state_dirty` fires on nearly every
     /// interaction (hover, scroll, selection, caret drafts, chat streaming),
@@ -371,6 +375,10 @@ pub(in crate::widget_host) struct NodeDragState {
     /// to their scene bounds to find the dropped position.
     pub(in crate::widget_host) total_dx: f64,
     pub(in crate::widget_host) total_dy: f64,
+    /// Cursor-following resolved bounds for same-container flex
+    /// drags. Paint hides the in-flow selected node and draws a
+    /// floating copy at these bounds.
+    pub(in crate::widget_host) overlay_bounds: Option<Rect>,
 }
 
 /// Active handle-drag — captures the press cursor anchor + the
@@ -587,6 +595,7 @@ impl WidgetHostNative {
         Self {
             editor_state,
             layout_scene,
+            layout_transition: None,
             scene_cache: op_pen_loader::SceneBuildCache::new(),
             editor_state_dirty: false,
             layout_scene_font_generation,
@@ -1011,6 +1020,43 @@ impl WidgetHostNative {
         }
     }
 
+    pub(in crate::widget_host) fn start_layout_transition_from_scene(
+        &mut self,
+        before: op_editor_ui::layout_scene::LayoutScene,
+    ) {
+        self.refresh_layout_scene();
+        self.layout_transition = op_editor_ui::widgets::CanvasLayoutTransition::between(
+            &before,
+            &self.layout_scene,
+            self.now_ms,
+        );
+    }
+
+    pub(in crate::widget_host) fn start_layout_transition_from_scene_excluding(
+        &mut self,
+        before: op_editor_ui::layout_scene::LayoutScene,
+        excluded_id: &op_editor_core::NodeId,
+    ) {
+        self.refresh_layout_scene();
+        self.layout_transition = op_editor_ui::widgets::CanvasLayoutTransition::between_excluding(
+            &before,
+            &self.layout_scene,
+            self.now_ms,
+            Some(excluded_id.as_str()),
+        );
+    }
+
+    pub(in crate::widget_host) fn start_layout_transition_from_bounds(
+        &mut self,
+        node_id: &op_editor_core::NodeId,
+        bounds: Rect,
+    ) {
+        let mut starts = std::collections::HashMap::new();
+        starts.insert(node_id.as_str().to_string(), bounds);
+        self.layout_transition =
+            op_editor_ui::widgets::CanvasLayoutTransition::from_start_bounds(starts, self.now_ms);
+    }
+
     /// The layout-resolved render scene for the live `EditorState`.
     /// Rebuilt on demand when the state changed since the last
     /// derive. The `CanvasViewport` paint + the host's canvas
@@ -1214,6 +1260,11 @@ impl WidgetHostNative {
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
         let mut next = op_editor_core::agent_indicators::next_reveal_deadline_ms(self.now_ms);
+        if let Some(transition) = self.layout_transition.as_ref() {
+            if let Some(deadline) = transition.next_deadline_ms(self.now_ms) {
+                next = Some(next.map_or(deadline, |current| current.min(deadline)));
+            }
+        }
         // While previewing, keep the loop ticking (~30 fps) so the live
         // runtime's caret blink + any time-driven widget state animates.
         if self.preview.is_some() {

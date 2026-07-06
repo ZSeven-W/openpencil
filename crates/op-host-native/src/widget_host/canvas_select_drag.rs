@@ -14,6 +14,7 @@ use op_editor_core::drag_mutators::{
 };
 use op_editor_core::editor_ui_state::{CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect};
 use op_editor_core::{NodeId, PenNodeExt};
+use op_editor_ui::widgets::CanvasNodeDragOverlay;
 use op_editor_ui::{Point2D, Rect};
 
 /// Read-phase summary of one dragged node — collected before any
@@ -86,6 +87,7 @@ impl WidgetHostNative {
             moved: false,
             total_dx: 0.0,
             total_dy: 0.0,
+            overlay_bounds: None,
         };
         self.option_drag_source_ids.clear();
         if self.shift_held {
@@ -171,6 +173,74 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.canvas_drop_indicator != next {
             self.editor_state.editor_ui.canvas_drop_indicator = next;
         }
+    }
+
+    pub(in crate::widget_host) fn apply_live_node_drag_preview(&mut self, drag: &NodeDragState) {
+        if self.editor_state.selection_count() != 1 {
+            self.update_node_drag_preview(drag);
+            return;
+        }
+        self.refresh_layout_scene();
+        let id = self.editor_state.selection.anchor.clone();
+        let Some(plan) = self.plan_drag_commit(&id, drag) else {
+            self.editor_state.editor_ui.canvas_drop_indicator = None;
+            return;
+        };
+        let before_scene = self.layout_scene.clone();
+        let current_parent = parent_of(self.editor_state.active_children(), &id);
+        let bounds = plan.dropped_bounds;
+        let mut indicator = None;
+        let mut mutated = false;
+        let mut overlay_bounds = None;
+        if let Some(target) = plan.target.clone() {
+            match &target {
+                DragDropTarget::Container { parent_id, .. }
+                    if current_parent.as_ref() == Some(parent_id) =>
+                {
+                    overlay_bounds = Some(bounds);
+                    mutated |= self.apply_drag_commit(&id, plan);
+                }
+                DragDropTarget::PageRoot { .. } if current_parent.is_some() => {
+                    mutated |= self.apply_drag_commit(&id, plan);
+                }
+                DragDropTarget::Container { .. } if current_parent.is_some() => {
+                    mutated |= self.editor_state.move_node_to_drop_target(
+                        &id,
+                        DragDropTarget::PageRoot { index: 0 },
+                        bounds.origin.x as f64,
+                        bounds.origin.y as f64,
+                        bounds.size.x as f64,
+                        bounds.size.y as f64,
+                    );
+                    indicator = plan.indicator;
+                }
+                _ => {
+                    indicator = plan.indicator;
+                }
+            }
+        }
+        if mutated {
+            self.mark_dirty();
+            self.start_layout_transition_from_scene_excluding(before_scene, &id);
+        }
+        if self.editor_state.editor_ui.canvas_drop_indicator != indicator {
+            self.editor_state.editor_ui.canvas_drop_indicator = indicator;
+        }
+        if let Some(active_drag) = self.node_drag.as_mut() {
+            active_drag.overlay_bounds = overlay_bounds;
+        }
+    }
+
+    pub(in crate::widget_host) fn node_drag_overlay_for_paint(
+        &self,
+    ) -> Option<CanvasNodeDragOverlay> {
+        let drag = self.node_drag?;
+        let overlay_bounds = drag.overlay_bounds?;
+        let node_id = self.editor_state.selection.anchor.clone();
+        Some(CanvasNodeDragOverlay {
+            node_id: node_id.as_str().to_string(),
+            target_origin_doc: overlay_bounds.origin,
+        })
     }
 
     /// Node-drag release commit: a node dropped into another container

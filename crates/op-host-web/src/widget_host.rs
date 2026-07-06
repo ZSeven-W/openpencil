@@ -176,6 +176,10 @@ pub struct WidgetHost {
     /// the host's canvas hit-test queries. Rebuilt lazily by
     /// `refresh_layout_scene()` whenever `editor_state_dirty` is set.
     pub(in crate::widget_host) layout_scene: op_editor_ui::layout_scene::LayoutScene,
+    /// Paint-only interpolation from the previous layout scene to the
+    /// current one. Used by canvas node drag/reorder previews.
+    pub(in crate::widget_host) layout_transition:
+        Option<op_editor_ui::widgets::CanvasLayoutTransition>,
     /// Skips the `layout_scene` rebuild when the document / active theme /
     /// active page are unchanged. `editor_state_dirty` fires on nearly every
     /// interaction (hover, scroll, selection, caret drafts, and per-frame chat /
@@ -301,11 +305,22 @@ impl WidgetHost {
     #[allow(dead_code)]
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
         let mut next = op_editor_core::agent_indicators::next_reveal_deadline_ms(self.now_ms);
+        if let Some(transition) = self.layout_transition.as_ref() {
+            if let Some(deadline) = transition.next_deadline_ms(self.now_ms) {
+                next = Some(next.map_or(deadline, |current| current.min(deadline)));
+            }
+        }
         if let Some(input) = self.editor_state.active_text_input() {
             let deadline = input.next_blink_flip_ms(self.now_ms);
             next = Some(next.map_or(deadline, |current| current.min(deadline)));
         }
         next
+    }
+
+    pub fn layout_transition_active(&self) -> bool {
+        self.layout_transition
+            .as_ref()
+            .is_some_and(|transition| transition.is_active(self.now_ms))
     }
 
     /// Borrow the canonical-model editor state — the host's single source of
@@ -457,6 +472,7 @@ impl WidgetHost {
         Self {
             editor_state,
             layout_scene,
+            layout_transition: None,
             scene_cache: op_pen_loader::SceneBuildCache::new(),
             editor_state_dirty: false,
             #[cfg(feature = "canvaskit")]
@@ -529,6 +545,43 @@ impl WidgetHost {
             }
             self.editor_state_dirty = false;
         }
+    }
+
+    pub(in crate::widget_host) fn start_layout_transition_from_scene(
+        &mut self,
+        before: op_editor_ui::layout_scene::LayoutScene,
+    ) {
+        self.refresh_layout_scene();
+        self.layout_transition = op_editor_ui::widgets::CanvasLayoutTransition::between(
+            &before,
+            &self.layout_scene,
+            self.now_ms,
+        );
+    }
+
+    pub(in crate::widget_host) fn start_layout_transition_from_scene_excluding(
+        &mut self,
+        before: op_editor_ui::layout_scene::LayoutScene,
+        excluded_id: &op_editor_core::NodeId,
+    ) {
+        self.refresh_layout_scene();
+        self.layout_transition = op_editor_ui::widgets::CanvasLayoutTransition::between_excluding(
+            &before,
+            &self.layout_scene,
+            self.now_ms,
+            Some(excluded_id.as_str()),
+        );
+    }
+
+    pub(in crate::widget_host) fn start_layout_transition_from_bounds(
+        &mut self,
+        node_id: &op_editor_core::NodeId,
+        bounds: Rect,
+    ) {
+        let mut starts = std::collections::HashMap::new();
+        starts.insert(node_id.as_str().to_string(), bounds);
+        self.layout_transition =
+            op_editor_ui::widgets::CanvasLayoutTransition::from_start_bounds(starts, self.now_ms);
     }
 
     /// Mark `editor_state` as mutated so the next `refresh_layout_scene()`
