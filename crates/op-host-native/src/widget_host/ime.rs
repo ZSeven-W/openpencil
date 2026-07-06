@@ -10,7 +10,7 @@
 //! - `apply_ime_commit` clears the preedit and lands the committed
 //!   string through `apply_text` char-by-char, so every focus branch
 //!   + per-field filter (numeric / hex drafts) applies unchanged.
-//! - `ime_anchor_rect` resolves the focused input's screen rect for
+//! - `ime_anchor_rect` resolves the focused input's caret rect for
 //!   `set_ime_cursor_area`. v1 coverage: the chat input (precise).
 
 use op_editor_ui::Rect;
@@ -87,8 +87,8 @@ impl WidgetHostNative {
         consumed
     }
 
-    /// Focused-input rect for candidate-window anchoring. v1: chat
-    /// input only; `None` = fallback.
+    /// Focused-input caret rect for candidate-window anchoring. v1:
+    /// chat input only; `None` = fallback.
     pub fn ime_anchor_rect(&mut self, viewport_w: f32, viewport_h: f32) -> Option<Rect> {
         if self.editor_state.chat.focused {
             let chat_rect = self.ai_chat_rect(viewport_w, viewport_h)?;
@@ -96,7 +96,7 @@ impl WidgetHostNative {
                 &self.editor_state,
                 self.now_ms,
             );
-            return Some(chat.input_rect(chat_rect));
+            return Some(chat.input_caret_rect(chat_rect));
         }
         None
     }
@@ -190,5 +190,30 @@ mod tests {
         assert!(h.ime_anchor_rect(1200.0, 800.0).is_some());
         h.editor_state_mut().chat.focused = false;
         assert!(h.ime_anchor_rect(1200.0, 800.0).is_none());
+    }
+
+    #[test]
+    fn chat_ime_anchor_tracks_input_caret() {
+        let mut h = host();
+        h.editor_state_mut().chat.focused = true;
+        h.editor_state_mut().chat.set_input_text("abcd");
+        h.editor_state_mut().chat.set_input_caret(0, 0);
+        let start = h
+            .ime_anchor_rect(1200.0, 800.0)
+            .expect("chat focus should yield ime anchor");
+
+        h.editor_state_mut().chat.set_input_caret(3, 0);
+        let after_three = h
+            .ime_anchor_rect(1200.0, 800.0)
+            .expect("chat focus should yield ime anchor");
+
+        assert!(
+            after_three.origin.x > start.origin.x + 12.0,
+            "expected IME anchor to move with caret: start={start:?}, after={after_three:?}"
+        );
+        assert!(
+            after_three.size.x <= 4.0,
+            "IME anchor should describe the caret, not the whole input: {after_three:?}"
+        );
     }
 }

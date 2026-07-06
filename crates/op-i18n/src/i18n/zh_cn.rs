@@ -274,6 +274,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.noModelsConnected" => "未连接模型",
         "ai.searchModels" => "搜索模型...",
         "ai.noModelsFound" => "未找到匹配的模型",
+        "ai.modificationApplied" => "已修改",
+        "ai.designElement" => "元素",
+        "ai.designElements" => "元素",
         "ai.quickAction.loginScreen" => "设计一个移动端登录页面",
         "ai.quickAction.loginScreenPrompt" => {
             "设计一个现代的移动端登录页面，包含邮箱输入框、密码输入框、登录按钮和社交登录选项"
@@ -286,8 +289,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         }
         "ai.quickAction.colorPalette" => "为我的应用推荐配色方案",
         "ai.quickAction.colorPalettePrompt" => "为一个宠物护理应用推荐一套现代配色方案",
-        "ai.quickAction.dashboard" => "面向公用事业公司的技术仪表板 Web 应用",
-        "ai.quickAction.dashboardPrompt" => "面向公用事业公司的技术仪表板 Web 应用",
+        "ai.quickAction.dashboard" => {
+            "设计一个暗色音乐流媒体App首页。包含问候语\"晚上好\"、\"最近播放\"横向滑动专辑封面卡片、\"为你推荐\"区3张歌单卡片（封面和歌单名）、\"新发行\"区4张专辑卡片2x2网格、底部悬浮迷你播放器（当前曲目+播放/暂停控件）。底部导航栏（首页、搜索、音乐库、会员）。深色背景搭配荧光绿强调。"
+        }
+        "ai.quickAction.dashboardPrompt" => {
+            "设计一个暗色音乐流媒体App首页。包含问候语\"晚上好\"、\"最近播放\"横向滑动专辑封面卡片、\"为你推荐\"区3张歌单卡片（封面和歌单名）、\"新发行\"区4张专辑卡片2x2网格、底部悬浮迷你播放器（当前曲目+播放/暂停控件）。底部导航栏（首页、搜索、音乐库、会员）。深色背景搭配荧光绿强调。"
+        }
         "ai.quickAction.travelApp" => "旅行预订 App 发现页",
         "ai.quickAction.travelAppPrompt" => {
             "设计一个旅行预订App发现页。包含搜索区\"想去哪？\"输入框、日期选择标签、人数选择。热门目的地横向滑动卡片（目的地照片、城市名、起步价），\"本周特惠\"区2张特惠卡片带折扣标签，最近浏览区2张紧凑卡片。底部导航栏（发现、收藏、行程、消息、个人）。温暖友好的设计，橙色点缀。"

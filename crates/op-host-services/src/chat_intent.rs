@@ -35,10 +35,10 @@
 //! - TS wraps the modification apply in one history batch; Rust
 //!   applies per-node through the MCP tool path (same granularity
 //!   as the Rust design pipeline until host batch mode lands).
-//! - Node parsing reuses `op_orchestrator::parse::parse_nodes`
-//!   (a superset of TS `extractJsonFromResponse` for messy LLM
-//!   output, but typed: a response of partial patch objects without
-//!   a `type` field fails to parse where untyped TS would accept it).
+//! - Node parsing replays modify-only `I(parent, {...})` scripts with
+//!   `op_mcp::script_runner::run_script_to_program`, preserving authored ids
+//!   for recursive diff application, then falls back to
+//!   `op_orchestrator::parse::parse_nodes` for legacy flat JSON output.
 
 use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
@@ -736,6 +736,51 @@ pub struct ModifyPlan {
     pub system_prompt: String,
 }
 
+fn strip_base64_data_uris(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(s) if s.starts_with("data:") && s.contains(";base64,") => {
+            *s = "<image>".to_string();
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                strip_base64_data_uris(item);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for item in map.values_mut() {
+                strip_base64_data_uris(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub(crate) fn parse_modify_nodes(
+    full_response: &str,
+) -> Vec<crate::chat_canvas_tools::DesignModificationOp> {
+    let nodes = op_mcp::script_runner::run_script_to_program(full_response)
+        .ok()
+        .map(|program| {
+            op_mcp::parse_program_objects(&program)
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !nodes.is_empty() {
+        return nodes;
+    }
+    op_orchestrator::parse::parse_nodes(full_response)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|node| {
+            (
+                "null".to_string(),
+                serde_json::to_value(node).unwrap_or(serde_json::Value::Null),
+            )
+        })
+        .collect()
+}
+
 /// Build the modification plan: target selection per
 /// `ai-chat-handlers.ts:709-719` (selected nodes, else last frame of
 /// the page, else last page child), then the
@@ -762,7 +807,9 @@ pub fn build_modify_plan(state: &EditorState, instruction: &str) -> Option<Modif
         return None;
     }
 
-    let context_json = serde_json::to_string(&targets).ok()?;
+    let mut context = serde_json::to_value(&targets).ok()?;
+    strip_base64_data_uris(&mut context);
+    let context_json = serde_json::to_string(&context).ok()?;
     let mut user_message = format!("CONTEXT NODES:\n{context_json}\n\nINSTRUCTION:\n{instruction}");
     if let Some(var_context) = build_variable_context(state) {
         user_message.push_str("\n\n");
@@ -837,6 +884,62 @@ pub struct CliTurnPlan {
 /// TS `ai-chat-handlers.ts:721-722` — the modification progress step.
 const MODIFY_STEP: &str =
     r#"<step title="Checking guidelines">Analyzing modification request...</step>"#;
+const MODIFY_RETRY_REMINDER: &str =
+    "\n\nCRITICAL: Respond with ONLY I(...) JavaScript statements -- never prose, explanations, or numbered/bulleted lists. If you truly cannot make the change, return an empty program.";
+
+struct ModifyTurnParse {
+    full_response: String,
+    nodes: Vec<crate::chat_canvas_tools::DesignModificationOp>,
+    stream_error: Option<String>,
+}
+
+fn applied_modify_nodes_json(
+    nodes: &[crate::chat_canvas_tools::DesignModificationOp],
+) -> Option<String> {
+    let node_values = nodes
+        .iter()
+        .map(|(_, node)| node.clone())
+        .collect::<Vec<_>>();
+    if node_values.is_empty() {
+        return None;
+    }
+    serde_json::to_string_pretty(&node_values).ok()
+}
+
+fn stream_and_parse_modify_turn(
+    provider: &dyn ChatProvider,
+    request: ChatRequest,
+) -> ModifyTurnParse {
+    let mut full_response = String::new();
+    let mut stream_error: Option<String> = None;
+    for delta in provider.send(request) {
+        match delta {
+            ChatDelta::TextDelta(s) => full_response.push_str(&s),
+            // TS: thinking chunks are ignored for modification — the
+            // caller already shows progress.
+            ChatDelta::Thinking(_) | ChatDelta::ToolUse { .. } => {}
+            ChatDelta::Error(msg) => {
+                stream_error = Some(msg);
+                break;
+            }
+            ChatDelta::Done { .. } => break,
+        }
+    }
+
+    // TS order: parse first; a stream error only surfaces when no
+    // nodes could be extracted (design-generator.ts:158-165).
+    let nodes = parse_modify_nodes(&full_response);
+    ModifyTurnParse {
+        full_response,
+        nodes,
+        stream_error,
+    }
+}
+
+fn with_modify_retry_reminder(mut request: ChatRequest) -> ChatRequest {
+    request.system_prompt.push_str(MODIFY_RETRY_REMINDER);
+    request
+}
 
 /// The TS degrade rules (`ai-chat-handlers.ts:700-705`): a modify
 /// intent on an empty page becomes a new design, and `isModification`
@@ -938,39 +1041,20 @@ pub fn run_modify_turn(
     {
         return;
     }
-    let mut full_response = String::new();
-    let mut stream_error: Option<String> = None;
-    for delta in provider.send(request) {
-        match delta {
-            ChatDelta::TextDelta(s) => full_response.push_str(&s),
-            // TS: thinking chunks are ignored for modification — the
-            // caller already shows progress.
-            ChatDelta::Thinking(_) | ChatDelta::ToolUse { .. } => {}
-            ChatDelta::Error(msg) => {
-                stream_error = Some(msg);
-                break;
-            }
-            ChatDelta::Done { .. } => break,
-        }
+
+    let mut parsed = stream_and_parse_modify_turn(provider, request.clone());
+    if parsed.nodes.is_empty() {
+        parsed = stream_and_parse_modify_turn(provider, with_modify_retry_reminder(request));
     }
 
-    // TS order: parse first; a stream error only surfaces when no
-    // nodes could be extracted (design-generator.ts:158-165).
-    let nodes = op_orchestrator::parse::parse_nodes(&full_response).unwrap_or_default();
+    let ModifyTurnParse {
+        full_response,
+        nodes,
+        stream_error,
+    } = parsed;
     if !nodes.is_empty() {
-        // TS: accumulated = rawResponse (the transcript's design-block
-        // renderer shows the JSON as an applyable card).
-        if chat_tx
-            .send(ChatDelta::TextDelta(format!("\n{full_response}")))
-            .is_err()
-        {
-            return;
-        }
         let args = serde_json::json!({
-            "nodes": nodes
-                .iter()
-                .map(|n| serde_json::to_value(n).unwrap_or(serde_json::Value::Null))
-                .collect::<Vec<_>>(),
+            "nodes": &nodes,
         });
         let result = executor.execute(APPLY_MODIFICATION_OP, &args.to_string());
         let applied = serde_json::from_str::<serde_json::Value>(&result.content)
@@ -978,8 +1062,21 @@ pub fn run_modify_turn(
             .and_then(|v| v.get("count").and_then(|c| c.as_u64()))
             .unwrap_or(0);
         if applied > 0 {
+            if let Some(json) = applied_modify_nodes_json(&nodes) {
+                if chat_tx
+                    .send(ChatDelta::TextDelta(format!("\n```json\n{json}\n```")))
+                    .is_err()
+                {
+                    return;
+                }
+            }
             // TS `ai-chat-handlers.ts:830-831`.
             let _ = chat_tx.send(ChatDelta::TextDelta("\n\n<!-- APPLIED -->".to_string()));
+        } else if chat_tx
+            .send(ChatDelta::TextDelta(format!("\n{full_response}")))
+            .is_err()
+        {
+            return;
         }
         let _ = chat_tx.send(ChatDelta::Done {
             stop_reason: StopReason::EndTurn,
@@ -990,20 +1087,8 @@ pub fn run_modify_turn(
     let message = if let Some(err) = stream_error {
         err
     } else {
-        // TS parse-failure error text, verbatim.
-        let trimmed = full_response.trim();
-        let hint = if trimmed.is_empty() {
-            "The model returned an empty response.".to_string()
-        } else {
-            let preview: String = trimmed.chars().take(150).collect();
-            let ellipsis = if full_response.chars().count() > 150 {
-                "…"
-            } else {
-                ""
-            };
-            format!("Model output: \"{preview}{ellipsis}\"")
-        };
-        format!("Could not parse design nodes from model response. {hint}")
+        "The model returned a description instead of an applyable edit. Try rephrasing (e.g. name the element to add) or run it again."
+            .to_string()
     };
     let _ = chat_tx.send(ChatDelta::Error(message));
     let _ = chat_tx.send(ChatDelta::Done {

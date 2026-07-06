@@ -35,6 +35,7 @@ mod batch_layered;
 mod batch_layered_tests;
 mod batch_page;
 mod batch_program;
+pub mod batch_program_objects;
 #[cfg(test)]
 mod batch_program_tests;
 pub mod bulk_vars;
@@ -149,6 +150,7 @@ pub use batch_design::{
 };
 pub use batch_design_result::{batch_design_snapshot, BatchDesign};
 pub use batch_get::{batch_get_snapshot, BatchGet};
+pub use batch_program_objects::parse_program_objects;
 pub use bulk_vars::{
     get_variables_snapshot, set_themes_snapshot, set_variables_snapshot, GetVariables, SetThemes,
     SetVariables,
