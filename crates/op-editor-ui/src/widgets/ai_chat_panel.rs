@@ -21,7 +21,7 @@ use crate::{Point2D, Rect, TextLayout};
 use jian_core::text_input::TextInputState;
 use jian_widgets::components::select::SelectState;
 use op_editor_core::chat::ChatState;
-use op_editor_core::EditorState;
+use op_editor_core::{EditorState, PenNodeExt};
 
 pub const AI_CHAT_WIDTH: f32 = op_editor_core::chat::DEFAULT_CHAT_PANEL_WIDTH;
 pub const AI_CHAT_HEIGHT: f32 = op_editor_core::chat::DEFAULT_CHAT_PANEL_HEIGHT;
@@ -103,6 +103,9 @@ pub struct AIChatPlaceholder<'a> {
     /// Kept for future affordances; paint tests verify it is seeded correctly.
     #[allow(dead_code)]
     pub(crate) selected_count: usize,
+    /// Text painted in the selection chip: selected node name for a
+    /// single resolved selection, count label for multi-selection.
+    pub(crate) selected_label: Option<String>,
     /// Model-picker dropdown interaction state.
     pub model_picker: &'a SelectState,
     /// Text state for the model-picker search query.
@@ -178,6 +181,7 @@ impl<'a> AIChatPlaceholder<'a> {
             label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
             selected_count: state.selection_count(),
+            selected_label: selection_chip_label_for_state(state),
             model_picker: &ui.chat_model_picker,
             model_picker_input: &ui.chat_model_picker_input,
             design_hover: ui.chat_design_block_hover,
@@ -225,8 +229,10 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     fn selection_chip_label(&self) -> String {
-        op_i18n::translate(self.locale, "common.selected")
-            .replace("{{count}}", &self.selected_count.to_string())
+        self.selected_label.clone().unwrap_or_else(|| {
+            op_i18n::translate(self.locale, "common.selected")
+                .replace("{{count}}", &self.selected_count.to_string())
+        })
     }
 
     pub(crate) fn selection_chip_rect(&self, input_rect: Rect) -> Option<Rect> {
@@ -397,6 +403,54 @@ impl<'a> AIChatPlaceholder<'a> {
             ),
             size: Point2D::new(rect.size.x - PAD * 2.0, input_h),
         }
+    }
+
+    pub fn input_text_rect(&self, rect: Rect) -> Rect {
+        let input_block = self.input_rect(rect);
+        Rect {
+            origin: Point2D::new(
+                input_block.origin.x,
+                input_block.origin.y + self.selection_chip_row_h(),
+            ),
+            size: Point2D::new(input_block.size.x, self.input_area_height_for_rect(rect)),
+        }
+    }
+
+    pub fn input_caret_rect(&self, rect: Rect) -> Rect {
+        let input_text = self.input_text_rect(rect);
+        crate::widgets::ai_chat_input_text::input_caret_rect(
+            &self.state.input,
+            input_text,
+            input_text.size.y,
+        )
+    }
+}
+
+fn selection_chip_label_for_state(state: &EditorState) -> Option<String> {
+    match state.selection_count() {
+        0 => None,
+        1 => {
+            let id = state.selection.set.first()?;
+            if !id.is_real() {
+                return None;
+            }
+            let node = op_editor_core::walkers::find_node(state.active_children(), id);
+            Some(
+                node.and_then(|node| {
+                    node.base()
+                        .name
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                        .map(str::to_string)
+                })
+                .unwrap_or_else(|| id.as_str().to_string()),
+            )
+        }
+        count => Some(
+            op_i18n::translate(state.editor_ui.locale, "common.selected")
+                .replace("{{count}}", &count.to_string()),
+        ),
     }
 }
 

@@ -664,6 +664,63 @@ Applied to canvas."#,
 }
 
 #[test]
+fn assistant_applied_modify_json_without_ids_renders_localized_folded_card() {
+    let mut message = ChatMessage::assistant(
+        r#"```json
+[{"type":"text","name":"Caption","content":"Updated"}]
+```
+<!-- APPLIED -->"#,
+    );
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::ZhCn,
+    );
+    let block = &items[0].design_blocks[0];
+
+    assert_eq!(items[0].design_blocks.len(), 1);
+    assert_eq!(block.element_count, 1);
+    assert_eq!(block.label, "已修改 · 1 元素");
+    assert!(block.apply.is_none(), "applied cards must not offer Apply");
+    assert!(!block.expanded, "applied cards are folded by default");
+
+    message.design_block_expanded_overrides = vec![Some(true)];
+    let expanded = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::ZhCn,
+    );
+    let block = &expanded[0].design_blocks[0];
+    assert!(block.expanded, "applied cards remain expandable");
+    assert!(block.body.size.y > 0.0);
+    assert!(
+        block.apply.is_none(),
+        "expanded applied cards still omit Apply"
+    );
+    assert!(block.code_lines.iter().any(|line| line.contains("Caption")));
+}
+
+#[test]
+fn assistant_plain_json_with_type_is_not_a_design_block() {
+    let message = ChatMessage::assistant(
+        r#"```json
+{"id":"event-1","type":"audit","payload":{"ok":true}}
+```"#,
+    );
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(items[0].design_blocks.is_empty());
+    let visible_text = items[0].bubble.as_ref().unwrap().lines.join("\n");
+    assert!(visible_text.contains(r#""type":"audit""#));
+}
+
+#[test]
 fn expanded_design_json_block_reserves_body_and_surfaces_code_like_ts() {
     let mut message = ChatMessage::assistant(
         r#"```json
@@ -682,6 +739,10 @@ fn expanded_design_json_block_reserves_body_and_surfaces_code_like_ts() {
     assert!(block.expanded);
     assert!(block.rect.size.y > 32.0);
     assert!(block.body.size.y > 0.0);
+    assert!(
+        block.apply.is_some(),
+        "generation cards keep the Apply button"
+    );
     assert!(
         (block.body.origin.y - (block.header.origin.y + block.header.size.y + 4.0)).abs() < 1e-4,
         "TS expanded design cards put the JSON preview in a separate mt-1 body box"
