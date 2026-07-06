@@ -71,19 +71,29 @@ jobs:
       # EGL, so STEP1A_REQUIRE_GPU is left unset: the op-host-native GPU
       # smoke (memory_loop) self-uses the raster fallback instead of
       # hard-failing on EGL init. Real-GPU coverage runs on dev machines.
-      # Windows runs the whole workspace single-threaded. Many crates' tests
-      # (op-host-native / -desktop / -services / …) trigger a skia `FontMgr`
-      # (DirectWrite on Windows) via NativeBackend or SkiaMeasure; concurrent
-      # DirectWrite init across a test binary's parallel worker threads
-      # segfaults (STATUS_ACCESS_VIOLATION). `--test-threads=1` serializes each
-      # binary — cross-binary (separate-process) concurrency is safe, so one
-      # flag covers every skia-touching crate. macOS / Linux run in parallel.
       - name: Test workspace (non-Windows, parallel)
         if: runner.os != 'Windows'
         run: cargo test --workspace
-      - name: Test workspace (Windows, serialized — skia/DirectWrite)
+      # Windows: skia's `FontMgr` is DirectWrite, which segfaults
+      # (STATUS_ACCESS_VIOLATION) when a test spawns a worker thread doing
+      # font layout (SkiaMeasure) concurrently with the main thread — an
+      # intra-test race `--test-threads=1` can NOT serialize (it only
+      # serializes tests against each other, not threads inside one test).
+      # nextest runs every test in its OWN process, so such a crash is
+      # isolated + named instead of taking down the whole test binary, and
+      # cross-test DirectWrite state can't leak between them. Doctests run
+      # separately (nextest doesn't execute them).
+      - name: Install cargo-nextest (Windows)
         if: runner.os == 'Windows'
-        run: cargo test --workspace -- --test-threads=1
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+      - name: Test workspace (Windows, nextest per-process isolation)
+        if: runner.os == 'Windows'
+        run: cargo nextest run --workspace
+      - name: Doctests (Windows)
+        if: runner.os == 'Windows'
+        run: cargo test --workspace --doc
       - name: Run CanvasKit web host tests
         run: cargo test -p op-host-web --features canvaskit -- --test-threads=1
       - run: cargo clippy --workspace --all-targets -- -D warnings

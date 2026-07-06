@@ -22,7 +22,11 @@ mcp-debug-tools = ["op-mcp/debug-tools"]
 op-editor-core = { path = "../op-editor-core" }
 op-editor-ui = { path = "../op-editor-ui" }
 op-editor-host-core = { path = "../op-editor-host-core" }
-op-mcp = { path = "../op-mcp", features = ["script"] }
+# The native-only `script` feature (QuickJS via rquickjs-sys) is enabled
+# per-target below: rquickjs-sys ships no prebuilt bindings for
+# aarch64-pc-windows-msvc (an unshipped check-only arch), so it stays off
+# there while remaining on for every target we actually build/run.
+op-mcp = { path = "../op-mcp" }
 op-ai = { path = "../op-ai" }
 op-ai-skills = { path = "../op-ai-skills" }
 op-orchestrator = { path = "../op-orchestrator" }
@@ -70,3 +74,9 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "textlayout",
   "pdf",
 ] }
+
+# Native-only QuickJS script feature — enabled everywhere except
+# aarch64-pc-windows-msvc, whose rquickjs-sys has no prebuilt bindings
+# (that arch is a check-only target, never shipped).
+[target.'cfg(not(all(target_os = "windows", target_arch = "aarch64")))'.dependencies]
+op-mcp = { path = "../op-mcp", features = ["script"] }

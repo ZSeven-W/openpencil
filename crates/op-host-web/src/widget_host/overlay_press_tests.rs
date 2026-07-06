@@ -369,12 +369,27 @@ fn variables_panel_open_does_not_paint_legacy_modal() {
 
     host.paint_editor(&mut backend, W, H);
 
+    // The retired legacy variables surface was a near full-viewport modal
+    // backdrop; the current surface is the floating VariablesPanel
+    // (820x480, anchored beside the toolbar). Guard only against a round
+    // fill spanning almost the whole viewport — the earlier "> half
+    // viewport" heuristic false-tripped once the property panel collapsed
+    // (nothing-selected default) widened the canvas so the legitimate
+    // floating panel paints unclamped.
     assert!(
         !backend
             .round_fills
             .iter()
-            .any(|r| r.size.x > W * 0.5 && r.size.y > H * 0.5),
-        "variables_panel_open should not paint the legacy variables modal"
+            .any(|r| r.size.x >= W * 0.9 && r.size.y >= H * 0.9),
+        "variables_panel_open should not paint the legacy full-viewport modal"
+    );
+    // ...and the floating panel itself must actually paint.
+    let panel = host
+        .variables_panel_rect(W, H)
+        .expect("variables panel fits in the test viewport");
+    assert!(
+        painted_inside(&backend, panel),
+        "the floating VariablesPanel background should paint"
     );
 }
 
