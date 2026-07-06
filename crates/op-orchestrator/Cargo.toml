@@ -9,7 +9,9 @@ repository.workspace = true
 
 [dependencies]
 op-editor-core = { path = "../op-editor-core" }
-op-mcp = { path = "../op-mcp", features = ["script"] }
+# `script` feature enabled per-target below (off on aarch64-pc-windows-msvc,
+# whose rquickjs-sys has no prebuilt bindings; that arch is check-only).
+op-mcp = { path = "../op-mcp" }
 op-ai-skills = { path = "../op-ai-skills" }
 # Real jian flex layout (resolved absolute rects) for geometry-driven structural
 # validation — the deterministic analogue of Pencil's per-batch snapshot_layout.
@@ -28,3 +30,8 @@ tokio = { version = "1", features = ["sync", "rt", "macros"] }
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+
+# Native-only QuickJS script feature — off on aarch64-pc-windows-msvc
+# (no rquickjs-sys prebuilt bindings; check-only target, never shipped).
+[target.'cfg(not(all(target_os = "windows", target_arch = "aarch64")))'.dependencies]
+op-mcp = { path = "../op-mcp", features = ["script"] }
