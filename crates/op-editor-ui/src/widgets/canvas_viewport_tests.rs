@@ -4,6 +4,8 @@ use crate::layout_scene::{
     SceneStrokeAlign,
 };
 use crate::{Color, Point2D, Rect, TextLayout};
+use jian_ops_schema::node::{ContainerProps, FrameNode, PenNode, PenNodeBase, RectangleNode};
+use jian_ops_schema::sizing::SizingBehavior;
 use std::collections::HashMap;
 
 /// Records op order; clip-isolated paint = `Save, Clip, Fill, …, Restore`.
@@ -24,6 +26,9 @@ struct RecordingBackend {
     rects: usize,
     strokes: usize,
     text: usize,
+    texts: Vec<String>,
+    text_colors: Vec<jian_core::scene::Color>,
+    text_positions: Vec<Point2D>,
     dots: usize,
     mesh_fills: usize,
     shader_fills: usize,
@@ -40,8 +45,14 @@ impl crate::RenderBackend for RecordingBackend {
         self.strokes += 1;
         self.ops.push(Op::Stroke);
     }
-    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {
+    fn draw_text(&mut self, layout: &TextLayout, point: Point2D) {
         self.text += 1;
+        self.texts
+            .extend(layout.runs().iter().map(|run| run.content.clone()));
+        self.text_colors
+            .extend(layout.runs().iter().map(|run| run.color));
+        self.text_positions
+            .extend(layout.runs().iter().map(|_| point));
         self.ops.push(Op::Text);
     }
     fn clip_rect(&mut self, _: Rect) {
@@ -115,6 +126,56 @@ fn leaf(id: &str, kind: NodeKind, bounds: Rect, fill: Option<Color>) -> SceneNod
     n
 }
 
+fn named_rect_node(id: &str, name: &str) -> PenNode {
+    PenNode::Rectangle(RectangleNode {
+        base: PenNodeBase {
+            id: id.to_string(),
+            name: Some(name.to_string()),
+            ..Default::default()
+        },
+        container: ContainerProps {
+            width: Some(SizingBehavior::Number(100.0)),
+            height: Some(SizingBehavior::Number(40.0)),
+            ..Default::default()
+        },
+        children: None,
+        state: None,
+        bindings: None,
+        events: None,
+        lifecycle: None,
+        semantics: None,
+        gestures: None,
+        route: None,
+    })
+}
+
+fn named_frame_node(id: &str, name: &str) -> PenNode {
+    PenNode::Frame(FrameNode {
+        base: PenNodeBase {
+            id: id.to_string(),
+            name: Some(name.to_string()),
+            ..Default::default()
+        },
+        container: ContainerProps {
+            width: Some(SizingBehavior::Number(320.0)),
+            height: Some(SizingBehavior::Number(200.0)),
+            ..Default::default()
+        },
+        children: Some(Vec::new()),
+        image_search_query: None,
+        reusable: None,
+        screen: None,
+        slot: None,
+        state: None,
+        bindings: None,
+        events: None,
+        lifecycle: None,
+        semantics: None,
+        gestures: None,
+        route: None,
+    })
+}
+
 /// A one-page scene mirroring `Document::sample`: a Frame with a
 /// stroke, a filled Rect child, and two Text nodes.
 fn sample_scene() -> LayoutScene {
@@ -162,6 +223,129 @@ fn sample_state() -> EditorState {
 }
 
 #[test]
+fn single_selection_overlay_omits_name_and_paints_dimensions() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_rect_node("n2", "Schedule Card 1")];
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    let scene = sample_scene();
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    assert!(!backend.texts.iter().any(|text| text == "Schedule Card 1"));
+    assert!(
+        backend
+            .texts
+            .iter()
+            .all(|text| !text.starts_with("Selected:")),
+        "single-select overlay must not paint a count label"
+    );
+    assert!(
+        backend.texts.iter().any(|text| text == "120 × 40"),
+        "single-select overlay should paint bottom dimensions; texts: {:?}",
+        backend.texts
+    );
+}
+
+#[test]
+fn single_selection_dimension_label_uses_active_color() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_rect_node("n2", "Schedule Card 1")];
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    let scene = sample_scene();
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    let color = backend
+        .texts
+        .iter()
+        .zip(backend.text_colors.iter())
+        .find_map(|(text, color)| (text == "120 × 40").then_some(*color))
+        .expect("selected dimensions label should be painted");
+    assert_eq!(color, viewport.theme.primary.to_jian());
+}
+
+#[test]
+fn selected_root_frame_paints_one_name_label() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_frame_node("n1", "Frame")];
+    state.set_single_selection(op_editor_core::NodeId::new("n1"));
+    let scene = sample_scene();
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    let painted_count = backend.texts.iter().filter(|text| *text == "Frame").count();
+    assert_eq!(
+        painted_count, 1,
+        "selected root frame should not draw both the root label and selection pill"
+    );
+    let position = backend
+        .texts
+        .iter()
+        .zip(backend.text_positions.iter())
+        .find_map(|(text, position)| (text == "Frame").then_some(*position))
+        .expect("selected root frame label should be painted");
+    assert_eq!(
+        position.x, 40.0,
+        "selected root frame label should use the plain root-title position, not pill padding"
+    );
+}
+
+#[test]
+fn multi_selection_overlay_omits_count_label_and_paints_union_dimensions() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![
+        named_rect_node("n2", "Schedule Card 1"),
+        named_rect_node("n3", "Schedule Card 2"),
+    ];
+    state.selection.set = vec![
+        op_editor_core::NodeId::new("n2"),
+        op_editor_core::NodeId::new("n3"),
+    ];
+    state.selection.anchor = op_editor_core::NodeId::new("n3");
+    let scene = sample_scene();
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    assert!(!backend
+        .texts
+        .iter()
+        .any(|text| text == "Selected: 2 objects"));
+    assert!(
+        backend.texts.iter().all(|text| text != "Schedule Card 1"),
+        "multi-select overlay must not paint individual selected node names"
+    );
+    assert!(
+        backend.texts.iter().any(|text| text == "200 × 60"),
+        "multi-select overlay should paint union dimensions; texts: {:?}",
+        backend.texts
+    );
+}
+
+#[test]
 fn from_sample_scene_paints_expected_primitives() {
     let state = sample_state();
     let scene = sample_scene();
@@ -176,8 +360,9 @@ fn from_sample_scene_paints_expected_primitives() {
         };
         viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
     }
-    // ≥3 fills (canvas bg, frame fill, button rect), ≥2 strokes
-    // (frame outline + selection overlay), 2 text draws.
+    // >=3 fills (canvas bg, frame fill, button rect), >=2 strokes
+    // (frame outline + selection overlay), and the two scene text runs
+    // still draw even when overlay labels add their own text.
     assert!(
         backend.rects >= 3,
         "expected ≥3 fills, got {}",
@@ -188,7 +373,8 @@ fn from_sample_scene_paints_expected_primitives() {
         "expected ≥2 strokes (frame + selection overlay), got {}",
         backend.strokes
     );
-    assert_eq!(backend.text, 2, "two text nodes draw two text runs");
+    assert!(backend.texts.iter().any(|text| text == "Title"));
+    assert!(backend.texts.iter().any(|text| text == "Button"));
 }
 
 #[test]
@@ -574,6 +760,24 @@ fn frame_label_paint_uses_top_level_scene_nodes() {
         0,
         "frame labels belong to top-level roots and should not deep-search the scene"
     );
+}
+
+#[test]
+fn selected_root_frame_label_uses_primary_active_color() {
+    let scene = sample_scene();
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_frame_node("n1", "Frame")];
+    state.set_single_selection(op_editor_core::NodeId::new("n1"));
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+
+    let color = viewport
+        .frame_labels
+        .iter()
+        .find(|(id, _, _)| id == "n1")
+        .map(|(_, _, color)| *color)
+        .expect("root frame label should be collected");
+
+    assert_eq!(color, viewport.theme.primary);
 }
 
 #[test]
