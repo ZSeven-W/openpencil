@@ -154,8 +154,14 @@ impl NativeBackend {
     /// image cache. The convenience `with_dpi` covers the common
     /// "fresh backend" path.
     pub fn new(skia: jian_skia::SkiaBackend, dpi: f32) -> Self {
-        let font_mgr = skia_safe::FontMgr::new();
-        let default_typeface = font_mgr.new_from_data(ROBOTO_TTF, None);
+        // `FontMgr::new()` + `new_from_data` are DirectWrite on Windows.
+        // Serialize with all other font work (reentrant); the prewarm loop
+        // below resolves ~50 glyphs and is likewise locked per call.
+        let (font_mgr, default_typeface) = jian_skia::with_font_lock(|| {
+            let font_mgr = skia_safe::FontMgr::new();
+            let default_typeface = font_mgr.new_from_data(ROBOTO_TTF, None);
+            (font_mgr, default_typeface)
+        });
         let mut this = Self {
             skia,
             dpi,
@@ -534,16 +540,20 @@ impl NativeBackend {
 /// `use-system-fonts.ts` hook queries). Names come back in manager
 /// order; the caller sorts / dedupes.
 pub fn enumerate_system_font_families() -> Vec<String> {
-    let mgr = skia_safe::FontMgr::new();
-    let count = mgr.count_families();
-    let mut out = Vec::with_capacity(count);
-    for i in 0..count {
-        let name = mgr.family_name(i);
-        if !name.trim().is_empty() {
-            out.push(name);
+    // `FontMgr::new()` + family enumeration is DirectWrite on Windows;
+    // serialize with all other font work (reentrant).
+    jian_skia::with_font_lock(|| {
+        let mgr = skia_safe::FontMgr::new();
+        let count = mgr.count_families();
+        let mut out = Vec::with_capacity(count);
+        for i in 0..count {
+            let name = mgr.family_name(i);
+            if !name.trim().is_empty() {
+                out.push(name);
+            }
         }
-    }
-    out
+        out
+    })
 }
 
 #[cfg(test)]
