@@ -1242,25 +1242,26 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             // set_ime_cursor_area; the committed candidate lands
             // through apply_ime_commit -> apply_text.
             WindowEvent::Ime(winit::event::Ime::Preedit(text, cursor)) => {
-                if self.host.apply_ime_preedit(&text, cursor) {
-                    if let Some(rect) = self
-                        .host
-                        .ime_anchor_rect(self.viewport_width, self.viewport_height)
-                    {
-                        if let Some(window) = self.window.as_ref() {
-                            let dpi = window.scale_factor();
-                            window.set_ime_cursor_area(
-                                winit::dpi::PhysicalPosition::new(
-                                    (rect.origin.x as f64) * dpi,
-                                    ((rect.origin.y + rect.size.y) as f64) * dpi,
-                                ),
-                                winit::dpi::PhysicalSize::new(
-                                    (rect.size.x as f64) * dpi,
-                                    (rect.size.y as f64) * dpi,
-                                ),
-                            );
-                        }
+                let changed = self.host.apply_ime_preedit(&text, cursor);
+                if let Some(rect) = self
+                    .host
+                    .ime_anchor_rect(self.viewport_width, self.viewport_height)
+                {
+                    if let Some(window) = self.window.as_ref() {
+                        let dpi = window.scale_factor();
+                        window.set_ime_cursor_area(
+                            winit::dpi::PhysicalPosition::new(
+                                (rect.origin.x as f64) * dpi,
+                                ((rect.origin.y + rect.size.y) as f64) * dpi,
+                            ),
+                            winit::dpi::PhysicalSize::new(
+                                (rect.size.x as f64) * dpi,
+                                (rect.size.y as f64) * dpi,
+                            ),
+                        );
                     }
+                }
+                if changed {
                     self.request_redraw(true);
                 }
             }
@@ -1285,6 +1286,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // mouse press can branch on shift+click for
                 // multi-select.
                 self.host.set_modifier_shift(self.shift_modifier);
+                self.host.set_modifier_alt(self.alt_modifier);
             }
             WindowEvent::KeyboardInput {
                 event:

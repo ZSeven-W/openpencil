@@ -255,6 +255,10 @@ pub struct WidgetHostNative {
     /// cursor anchor so each `apply_cursor_move` translates the
     /// selected node by the delta.
     pub(in crate::widget_host) node_drag: Option<NodeDragState>,
+    /// Original selected ids for an active Option-drag clone move.
+    /// Drop hit-testing skips these so a fresh clone does not
+    /// immediately reparent back into the source it overlaps.
+    pub(in crate::widget_host) option_drag_source_ids: Vec<op_editor_core::NodeId>,
     /// Active handle-drag — set when the user pressed on one of
     /// the 8 selection handles. Carries the start screen anchor +
     /// the original bounds so each move computes a fresh
@@ -302,6 +306,9 @@ pub struct WidgetHostNative {
     /// this via `set_modifier_shift` on every modifier change.
     /// Drives shift+click multi-select in `apply_press`.
     pub(in crate::widget_host) shift_held: bool,
+    /// Whether Alt/Option is currently held. Node dragging uses this
+    /// to duplicate the current selection before moving it.
+    pub(in crate::widget_host) alt_held: bool,
     /// Last viewport size seen by paint/press. Used by handlers
     /// that don't receive viewport dims (e.g. apply_cursor_move
     /// driving the color-picker drag).
@@ -601,6 +608,7 @@ impl WidgetHostNative {
             panel_resize: None,
             variables_resize: None,
             node_drag: None,
+            option_drag_source_ids: Vec::new(),
             path_anchor_drag: None,
             arc_handle_drag: None,
             handle_drag: None,
@@ -611,6 +619,7 @@ impl WidgetHostNative {
             next_node_id: 100,
             now_ms: 0,
             shift_held: false,
+            alt_held: false,
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
             preview: None,
@@ -624,6 +633,10 @@ impl WidgetHostNative {
     /// on shift+click semantics.
     pub fn set_modifier_shift(&mut self, held: bool) {
         self.shift_held = held;
+    }
+
+    pub fn set_modifier_alt(&mut self, held: bool) {
+        self.alt_held = held;
     }
 
     /// Push the host's monotonic millisecond timestamp into the

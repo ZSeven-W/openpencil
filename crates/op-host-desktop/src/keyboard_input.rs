@@ -119,6 +119,7 @@ impl DesktopApp {
                 // the canvas text editor, then a focused property
                 // input; otherwise the arrow nudges the selection.
                 consumed = self.host.apply_chat_model_picker_caret(false)
+                    || self.host.apply_chat_input_caret(false)
                     || self.host.apply_rename_caret(false)
                     || self.host.apply_text_edit_caret(false)
                     || self.host.apply_property_caret(false)
@@ -126,6 +127,7 @@ impl DesktopApp {
             }
             Key::Named(NamedKey::ArrowRight) if !self.zoom_modifier && !settings_focused => {
                 consumed = self.host.apply_chat_model_picker_caret(true)
+                    || self.host.apply_chat_input_caret(true)
                     || self.host.apply_rename_caret(true)
                     || self.host.apply_text_edit_caret(true)
                     || self.host.apply_property_caret(true)

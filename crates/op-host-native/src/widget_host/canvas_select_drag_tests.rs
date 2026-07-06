@@ -131,6 +131,59 @@ fn blank_canvas_press_exits_the_entered_container() {
 }
 
 #[test]
+fn clicking_root_frame_label_selects_that_root() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"frame","id":"music","name":"Music App Home","x":400,"y":60,"width":240,"height":200,
+           "children":[]}
+        ]}"#,
+    );
+
+    press_doc(&mut host, 424.0, 42.0);
+
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("music"));
+    assert!(
+        host.node_drag.is_some(),
+        "label press should behave like a root press"
+    );
+}
+
+fn overlapping_rect_stack(count: usize) -> String {
+    let children = (0..count)
+        .map(|i| {
+            let x = if i + 1 == count {
+                400.0
+            } else {
+                10_000.0 + i as f32 * 100.0
+            };
+            format!(
+                r#"{{"type":"rectangle","id":"n{i}","name":"Layer {i}","x":{x},"y":60,"width":80,"height":80}}"#
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(r#"{{"version":"0.8.0","children":[{children}]}}"#)
+}
+
+#[test]
+fn canvas_selection_scrolls_layer_panel_to_hidden_selected_row() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, &overlapping_rect_stack(40));
+    host.editor_state_mut().editor_ui.layer_layers_scroll.offset = 0.0;
+    host.mark_paint_dirty_for_test();
+
+    press_doc(&mut host, 440.0, 100.0);
+
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("n39"));
+    assert!(
+        host.editor_state().editor_ui.layer_layers_scroll.offset > 0.0,
+        "selecting a canvas node below the visible layer rows should reveal it"
+    );
+}
+
+#[test]
 fn promotion_inside_entered_container_stops_at_its_child() {
     // card > inner (frame) > deep (rect): with card entered, a press
     // on `deep` selects `inner`, not the page-root `card`.
@@ -192,6 +245,17 @@ fn dragging_flex_child_reorders_at_midpoint_index_on_release() {
     // and c (176) → index 1.
     let (mx, my) = screen_at(&host, 440.0, 160.0);
     host.apply_cursor_move(mx, my);
+    let preview = host
+        .editor_state()
+        .editor_ui
+        .canvas_drop_indicator
+        .as_ref()
+        .expect("dragging a flex child paints a drop preview");
+    assert!(preview.target.is_some());
+    assert!(
+        preview.insertion.is_some(),
+        "same-flex reorder paints an insertion line"
+    );
     // Flex child must not doc-translate during the drag.
     let a = op_editor_core::walkers::find_node(
         host.editor_state().active_children(),
@@ -200,6 +264,11 @@ fn dragging_flex_child_reorders_at_midpoint_index_on_release() {
     .expect("a present");
     assert_eq!(a.base().x, None, "no live x materialization");
     release(&mut host);
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .canvas_drop_indicator
+        .is_none());
     assert_eq!(child_order(&host, "stack"), vec!["b", "a", "c"]);
 }
 
@@ -214,6 +283,50 @@ fn dragging_flex_child_within_its_own_slot_keeps_order() {
     host.apply_cursor_move(mx, my);
     release(&mut host);
     assert_eq!(child_order(&host, "stack"), vec!["a", "b", "c"]);
+}
+
+#[test]
+fn flex_child_dragged_to_blank_canvas_becomes_root_at_dropped_position() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, VSTACK);
+    host.editor_state_mut().editor_ui.entered_container = Some(NodeId::new("stack"));
+    host.mark_paint_dirty_for_test();
+
+    press_doc(&mut host, 440.0, 80.0); // over `a`, abs origin 400,60
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("a"));
+    let (mx, my) = screen_at(&host, 760.0, 80.0); // +320 doc px, outside stack
+    host.apply_cursor_move(mx, my);
+    let preview = host
+        .editor_state()
+        .editor_ui
+        .canvas_drop_indicator
+        .as_ref()
+        .expect("drag out paints a root-drop ghost");
+    assert!(preview.target.is_none());
+    assert!(preview.insertion.is_none());
+    assert!((preview.ghost.x - 720.0).abs() < 1.0);
+    assert!((preview.ghost.y - 60.0).abs() < 1.0);
+    release(&mut host);
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .canvas_drop_indicator
+        .is_none());
+
+    let children = host.editor_state().active_children();
+    assert_eq!(children[0].id_str(), "a", "flow child becomes a page root");
+    let moved = op_editor_core::walkers::find_node(children, &NodeId::new("a")).unwrap();
+    assert!(
+        (moved.base().x.unwrap_or(0.0) - 720.0).abs() < 1.0,
+        "root x should use dropped bounds, got {:?}",
+        moved.base().x
+    );
+    assert!(
+        (moved.base().y.unwrap_or(0.0) - 60.0).abs() < 1.0,
+        "root y should use dropped bounds, got {:?}",
+        moved.base().y
+    );
+    assert_eq!(child_order(&host, "stack"), vec!["b", "c"]);
 }
 
 #[test]
@@ -241,7 +354,7 @@ fn text_dragged_fully_outside_parent_reparents_to_page_root() {
     assert_eq!(
         children[0].id_str(),
         "label",
-        "content primitives detach to the page root (drag-reparent-policy)"
+        "nested nodes detach to the page root at the drop target"
     );
     let label = &children[0];
     assert!(
@@ -254,8 +367,7 @@ fn text_dragged_fully_outside_parent_reparents_to_page_root() {
 }
 
 #[test]
-fn shape_dragged_outside_parent_keeps_its_parent() {
-    // TS drag-reparent-policy: frame/shape-style nodes never detach.
+fn shape_dragged_outside_parent_becomes_page_root() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
@@ -274,19 +386,91 @@ fn shape_dragged_outside_parent_keeps_its_parent() {
     host.apply_cursor_move(mx, my);
     release(&mut host);
     let children = host.editor_state().active_children();
+    assert_eq!(children[0].id_str(), "box", "dragged shape becomes a root");
     let card = op_editor_core::walkers::find_node(children, &NodeId::new("card")).unwrap();
-    let kept: Vec<&str> = card
-        .children()
-        .unwrap()
-        .iter()
-        .map(|c| c.id_str())
-        .collect();
-    assert_eq!(kept, vec!["box"], "shape stays inside its parent");
-    // The free-layout translate itself still committed.
+    assert!(card.children().unwrap().is_empty());
     let boxn = op_editor_core::walkers::find_node(children, &NodeId::new("box")).unwrap();
     assert!(
-        (boxn.base().x.unwrap_or(0.0) - 420.0).abs() < 1.0,
-        "live translate kept; got {:?}",
+        (boxn.base().x.unwrap_or(0.0) - 820.0).abs() < 1.0,
+        "visual x preserved as root; got {:?}",
         boxn.base().x
+    );
+}
+
+#[test]
+fn shape_dragged_into_sibling_frame_reparents_to_that_frame() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"frame","id":"src","name":"Source","x":400,"y":60,"width":200,"height":120,
+           "children":[
+             {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
+           ]},
+          {"type":"frame","id":"target","name":"Target","x":700,"y":60,"width":220,"height":160,
+           "children":[]}
+        ]}"#,
+    );
+    host.editor_state_mut().editor_ui.entered_container = Some(NodeId::new("src"));
+    host.mark_paint_dirty_for_test();
+
+    press_doc(&mut host, 445.0, 105.0); // box center: abs origin 420,80
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("box"));
+    let (mx, my) = screen_at(&host, 760.0, 100.0); // inside `target`
+    host.apply_cursor_move(mx, my);
+    release(&mut host);
+
+    let children = host.editor_state().active_children();
+    let src = op_editor_core::walkers::find_node(children, &NodeId::new("src")).unwrap();
+    assert!(src.children().unwrap().is_empty());
+    let target = op_editor_core::walkers::find_node(children, &NodeId::new("target")).unwrap();
+    let moved = &target.children().unwrap()[0];
+    assert_eq!(moved.id_str(), "box");
+    assert!(
+        (moved.base().x.unwrap_or(0.0) - 35.0).abs() < 1.0,
+        "visual x preserved relative to target; got {:?}",
+        moved.base().x
+    );
+    assert!(
+        (moved.base().y.unwrap_or(0.0) - 15.0).abs() < 1.0,
+        "visual y preserved relative to target; got {:?}",
+        moved.base().y
+    );
+}
+
+#[test]
+fn root_shape_dragged_into_frame_becomes_that_frame_child() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"rectangle","id":"box","name":"Box","x":400,"y":80,"width":50,"height":50},
+          {"type":"frame","id":"target","name":"Target","x":700,"y":60,"width":220,"height":160,
+           "children":[]}
+        ]}"#,
+    );
+    host.mark_paint_dirty_for_test();
+
+    press_doc(&mut host, 425.0, 105.0); // box center
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("box"));
+    let (mx, my) = screen_at(&host, 760.0, 100.0);
+    host.apply_cursor_move(mx, my);
+    release(&mut host);
+
+    let children = host.editor_state().active_children();
+    assert_eq!(children.len(), 1);
+    assert_eq!(children[0].id_str(), "target");
+    let target = op_editor_core::walkers::find_node(children, &NodeId::new("target")).unwrap();
+    let moved = &target.children().unwrap()[0];
+    assert_eq!(moved.id_str(), "box");
+    assert!(
+        (moved.base().x.unwrap_or(0.0) - 35.0).abs() < 1.0,
+        "root visual x preserved relative to target; got {:?}",
+        moved.base().x
+    );
+    assert!(
+        (moved.base().y.unwrap_or(0.0) - 15.0).abs() < 1.0,
+        "root visual y preserved relative to target; got {:?}",
+        moved.base().y
     );
 }
