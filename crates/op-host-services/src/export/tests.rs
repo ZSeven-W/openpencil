@@ -235,15 +235,14 @@ fn export_node_raster_crops_to_the_named_node() {
         &bytes[..8],
         &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
     );
-    // The cropped surface is the 40×40 node + 2×MARGIN, far
-    // smaller than the ~440 px page union the whole-page export
-    // would have produced. PNG IHDR carries the dimensions as
-    // big-endian u32s at byte offsets 16 (width) and 20 (height).
+    // The cropped surface is the tight 40×40 node, far smaller than
+    // the ~440 px page union the whole-page export would have
+    // produced. PNG IHDR carries the dimensions as big-endian u32s at
+    // byte offsets 16 (width) and 20 (height).
     let png_width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
     let png_height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
-    let expected = (40.0 + MARGIN * 2.0) as u32;
-    assert_eq!(png_width, expected);
-    assert_eq!(png_height, expected);
+    assert_eq!(png_width, 40);
+    assert_eq!(png_height, 40);
     let _ = std::fs::remove_file(&tmp);
 }
 
@@ -353,20 +352,20 @@ fn export_raster_paints_only_authored_stroke_sides() {
     let decoded = decode_rgba(&std::fs::read(&tmp).unwrap());
 
     // Bounds include a 2 px stroke pad, so doc (x,y) maps to
-    // `(MARGIN + 2 + x, MARGIN + 2 + y)`.
-    let top = pixel_at(&decoded, MARGIN as i32 + 22, MARGIN as i32 + 2);
+    // `(2 + x, 2 + y)` in the tight export.
+    let top = pixel_at(&decoded, 22, 2);
     assert_eq!(top[3], 0, "top edge must remain transparent, got {top:?}");
-    let left = pixel_at(&decoded, MARGIN as i32 + 2, MARGIN as i32 + 12);
+    let left = pixel_at(&decoded, 2, 12);
     assert_eq!(
         left[3], 0,
         "left edge must remain transparent, got {left:?}"
     );
-    let bottom = pixel_at(&decoded, MARGIN as i32 + 22, MARGIN as i32 + 20);
+    let bottom = pixel_at(&decoded, 22, 20);
     assert!(
         bottom[3] > 200,
         "bottom edge should paint the authored stroke, got {bottom:?}"
     );
-    let below = pixel_at(&decoded, MARGIN as i32 + 22, MARGIN as i32 + 23);
+    let below = pixel_at(&decoded, 22, 23);
     assert_eq!(
         below[3], 0,
         "sided strokes should stay inside the authored bounds, got {below:?}"
@@ -471,8 +470,8 @@ fn export_renders_data_url_image_bitmaps() {
     let res = export_node_raster(&scene, "img", &tmp, RasterFormat::Png, 1.0);
     assert!(res.is_ok(), "image export failed: {res:?}");
     let decoded = decode_rgba(&std::fs::read(&tmp).unwrap());
-    // Image centre = node centre offset by the export MARGIN.
-    let c = pixel_at(&decoded, MARGIN as i32 + 10, MARGIN as i32 + 10);
+    // Image centre sits at the node centre in the tight export.
+    let c = pixel_at(&decoded, 10, 10);
     assert!(
         c[0] > 200 && c[1] < 60 && c[2] < 60 && c[3] > 200,
         "expected the red bitmap at the node centre, got {c:?}"
@@ -504,7 +503,7 @@ fn export_remote_image_without_bytes_paints_the_canvas_placeholder() {
     // (min(40,40)×0.4, clamped ≥12 → doc 12..28), so probe doc (6,6):
     // inside the fill, clear of the glyph box and the 1 px dashed
     // perimeter.
-    let c = pixel_at(&decoded, MARGIN as i32 + 6, MARGIN as i32 + 6);
+    let c = pixel_at(&decoded, 6, 6);
     assert!(
         c[0] > 190 && c[1] > 190 && c[2] > 190 && c[3] > 200,
         "expected the grey placeholder fill, got {c:?}"
@@ -536,20 +535,22 @@ fn export_clip_content_trims_child_overflow() {
     assert!(res.is_ok(), "clip export failed: {res:?}");
     let bytes = std::fs::read(&tmp).unwrap();
     let decoded = decode_rgba(&bytes);
-    // Surface sized to the clipped frame (40 + 2×MARGIN), not the
-    // un-clipped 80 px child union.
-    let expected = (40.0 + MARGIN * 2.0) as i32;
-    assert_eq!((decoded.0, decoded.1), (expected, expected));
+    // Surface sized to the tight clipped frame, not the un-clipped
+    // 80 px child union and not an added transparent margin.
+    assert_eq!((decoded.0, decoded.1), (40, 40));
     // Inside the frame the child paints…
-    let inside = pixel_at(&decoded, MARGIN as i32 + 20, MARGIN as i32 + 20);
+    let inside = pixel_at(&decoded, 20, 20);
     assert!(
         inside[2] > 200 && inside[3] > 200,
         "expected the blue child inside the frame, got {inside:?}"
     );
-    // …below the frame (doc y > 40, inside the margin band) the
-    // overflow is clipped away — transparent, like the canvas.
-    let below = pixel_at(&decoded, MARGIN as i32 + 20, MARGIN as i32 + 44);
-    assert_eq!(below[3], 0, "overflow must be clipped, got {below:?}");
+    // Content reaches the exported image edge; there is no transparent
+    // border around the clipped frame.
+    let edge = pixel_at(&decoded, 20, 39);
+    assert!(
+        edge[2] > 200 && edge[3] > 200,
+        "expected blue content at the tight export edge, got {edge:?}"
+    );
     let _ = std::fs::remove_file(&tmp);
 }
 
@@ -624,11 +625,11 @@ fn export_paints_styled_text_runs_with_decorations() {
     assert!(res.is_ok(), "styled-text export failed: {res:?}");
     let decoded = decode_rgba(&std::fs::read(&tmp).unwrap());
     // Underline strokes at baseline (top + font_size = 20) + 0.12 ×
-    // 20 ≈ doc y 22.4 → px rows ~38..40 after the MARGIN offset.
-    let band_y0 = MARGIN as i32 + 22;
+    // 20 ≈ doc y 22.4 → px rows ~22..24 in the tight export.
+    let band_y0 = 22;
     let mut painted_in_band = 0;
     for y in band_y0..(band_y0 + 3) {
-        for x in MARGIN as i32..(MARGIN as i32 + 90) {
+        for x in 0..90 {
             if pixel_at(&decoded, x, y)[3] > 0 {
                 painted_in_band += 1;
             }

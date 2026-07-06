@@ -43,7 +43,7 @@ pub mod screenshot;
 pub use export_svg::export_svg;
 pub use scene_painter::{paint_node, paint_nodes};
 
-const MARGIN: f32 = 16.0;
+const MARGIN: f32 = 0.0;
 
 /// Hard ceilings for the offscreen raster surface. A huge page (or a
 /// `debug_screenshot` request with extreme padding/scale) would
