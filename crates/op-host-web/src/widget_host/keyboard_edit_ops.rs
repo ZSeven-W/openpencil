@@ -147,6 +147,14 @@ impl WidgetHost {
             return false;
         }
         let snap = self.editor_state.snapshot_for_history();
+        if self
+            .editor_state
+            .move_selected_in_layout_direction(dx as f64, dy as f64)
+        {
+            self.editor_state.history_push_past(snap);
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.translate_selected(dx as f64, dy as f64) {
             self.editor_state.history_push_past(snap);
             self.mark_dirty();
@@ -329,6 +337,21 @@ impl WidgetHost {
                 .move_left(false, self.now_ms);
         }
         self.sync_variable_row_input_legacy(false);
+        self.mark_dirty();
+        true
+    }
+
+    /// Left / Right arrow on the focused chat input. Consumes the key
+    /// even at text boundaries so it never falls through to canvas nudge.
+    pub fn apply_chat_input_caret(&mut self, forward: bool) -> bool {
+        if !self.editor_state.chat.focused {
+            return false;
+        }
+        if forward {
+            self.editor_state.chat.input.move_right(false, self.now_ms);
+        } else {
+            self.editor_state.chat.input.move_left(false, self.now_ms);
+        }
         self.mark_dirty();
         true
     }

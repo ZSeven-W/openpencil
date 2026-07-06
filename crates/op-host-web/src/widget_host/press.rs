@@ -5,8 +5,8 @@
 //! dispatchers in their own sibling modules (mirroring the native
 //! host's layout) so this file stays under the 800-line cap.
 use op_editor_ui::widgets::{
-    AIChatHit, AIChatPlaceholder, LayerPanel, LayerPanelHit, LocalePicker, PropertyPanel, Toolbar,
-    TopBarHit, TOP_BAR_HEIGHT,
+    AIChatHit, AIChatPlaceholder, CanvasViewport, LayerPanel, LayerPanelHit, LocalePicker,
+    PropertyPanel, Toolbar, TopBarHit, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -919,8 +919,34 @@ impl WidgetHost {
                 // is under the cursor — `node_at_doc_point` queries
                 // the layout-resolved render scene.
                 let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
+                let canvas_rect = Rect {
+                    origin: Point2D::new(cx0, cy0),
+                    size: Point2D::new(_cw, _ch),
+                };
                 let canvas_local = Point2D::new(x - cx0, y - cy0);
                 let doc_point = self.editor_state.viewport.to_document(canvas_local);
+                let canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+                if let Some(sc_node_id) =
+                    canvas.frame_label_at_point(canvas_rect, Point2D::new(x, y))
+                {
+                    let node_id = op_editor_core::NodeId::new(&sc_node_id);
+                    if self.shift_held {
+                        let was_in_set = self.editor_state.is_selected(&node_id);
+                        self.editor_state.toggle_selection(node_id);
+                        if !was_in_set {
+                            self.start_node_drag(x, y);
+                        }
+                    } else {
+                        let already_in_set = self.editor_state.is_selected(&node_id);
+                        if !already_in_set || self.editor_state.selection_count() == 1 {
+                            self.editor_state.set_single_selection(node_id);
+                        }
+                        self.start_node_drag(x, y);
+                    }
+                    self.scroll_layer_panel_selection_into_view(viewport_height);
+                    self.mark_dirty();
+                    return true;
+                }
                 let hit = self
                     .layout_scene
                     .node_at_doc_point(doc_point, self.editor_state.viewport.zoom);
@@ -954,6 +980,7 @@ impl WidgetHost {
                             self.editor_state.set_single_selection(node_id);
                         }
                     }
+                    self.scroll_layer_panel_selection_into_view(viewport_height);
                     if should_start_drag {
                         self.start_node_drag(x, y);
                     }

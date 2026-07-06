@@ -1005,6 +1005,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                     return;
                 };
                 b.host.set_modifier_shift(evt.shift_key());
+                b.host.set_modifier_alt(evt.alt_key());
                 b.host.set_clocks(now_ms_perf(), now_unix_secs());
                 let (w, h) = b.backend.logical_size();
                 let (x, y) =
@@ -1064,6 +1065,8 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 let Ok(mut b) = inner.try_borrow_mut() else {
                     return;
                 };
+                b.host.set_modifier_shift(evt.shift_key());
+                b.host.set_modifier_alt(evt.alt_key());
                 b.host.set_clocks(now_ms_perf(), now_unix_secs());
                 let (x, y) =
                     b.event_offset_to_logical(evt.offset_x() as f32, evt.offset_y() as f32);
@@ -1086,6 +1089,8 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             let Ok(mut b) = inner.try_borrow_mut() else {
                 return;
             };
+            b.host.set_modifier_shift(evt.shift_key());
+            b.host.set_modifier_alt(evt.alt_key());
             b.host.set_clocks(now_ms_perf(), now_unix_secs());
             let (w, h) = b.backend.logical_size();
             let was_middle = evt.button() == 1;
@@ -1222,6 +1227,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 "ArrowLeft" if !is_mod => {
                     consumed = b.host.apply_settings_caret(false)
                         || b.host.apply_chat_model_picker_caret(false)
+                        || b.host.apply_chat_input_caret(false)
                         || b.host.apply_rename_caret(false)
                         || b.host.apply_text_edit_caret(false)
                         || b.host.apply_property_caret(false)
@@ -1230,6 +1236,7 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 "ArrowRight" if !is_mod => {
                     consumed = b.host.apply_settings_caret(true)
                         || b.host.apply_chat_model_picker_caret(true)
+                        || b.host.apply_chat_input_caret(true)
                         || b.host.apply_rename_caret(true)
                         || b.host.apply_text_edit_caret(true)
                         || b.host.apply_property_caret(true)

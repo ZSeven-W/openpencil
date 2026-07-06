@@ -280,4 +280,29 @@ impl WidgetHost {
         }
         true
     }
+
+    pub(in crate::widget_host) fn scroll_layer_panel_selection_into_view(
+        &mut self,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.sidebar_open {
+            return false;
+        }
+        let selected = self.editor_state.selection.anchor.clone();
+        if !selected.is_real() {
+            return false;
+        }
+        let rect = self.layer_panel_rect(viewport_height);
+        let panel = LayerPanel::from_editor(&self.editor_state);
+        let Some(next) = panel.layers_offset_revealing(rect, &selected) else {
+            return false;
+        };
+        let scroll = &mut self.editor_state.editor_ui.layer_layers_scroll;
+        if (scroll.offset - next).abs() <= f32::EPSILON {
+            return false;
+        }
+        scroll.offset = next;
+        self.mark_dirty();
+        true
+    }
 }

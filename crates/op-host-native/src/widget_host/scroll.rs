@@ -359,6 +359,40 @@ impl WidgetHostNative {
         true
     }
 
+    pub(in crate::widget_host) fn scroll_layer_panel_selection_into_view(
+        &mut self,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::{LayerPanel, TOP_BAR_HEIGHT};
+        use op_editor_ui::Rect;
+
+        if !self.editor_state.editor_ui.sidebar_open {
+            return false;
+        }
+        let selected = self.editor_state.selection.anchor.clone();
+        if !selected.is_real() {
+            return false;
+        }
+        let rect = Rect {
+            origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
+            size: Point2D::new(
+                self.editor_state.editor_ui.layer_panel_width,
+                (viewport_height - TOP_BAR_HEIGHT).max(0.0),
+            ),
+        };
+        let panel = LayerPanel::from_editor(&self.editor_state);
+        let Some(next) = panel.layers_offset_revealing(rect, &selected) else {
+            return false;
+        };
+        let scroll = &mut self.editor_state.editor_ui.layer_layers_scroll;
+        if (scroll.offset - next).abs() <= f32::EPSILON {
+            return false;
+        }
+        scroll.offset = next;
+        self.mark_dirty();
+        true
+    }
+
     /// Wheel event — zoom centered at (x, y) over the canvas.
     /// Scroll the open icon picker's list when the pointer is over its panel.
     /// Shared by `apply_wheel` and `apply_pan_gesture` so trackpad pans scroll

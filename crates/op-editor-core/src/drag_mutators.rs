@@ -1,10 +1,10 @@
 //! Canvas-drag mutators: handle-resize (with descendant scaling) +
-//! drag-end auto-layout reorder / reparent-to-page-root.
+//! drag-end auto-layout reorder / cross-container reparenting.
 //!
 //! Ports the TS behavior from `skia-interaction.ts` (`handleResizeMove`
-//! / `handleDragEnd`), `drag-reparent-policy.ts`, and pen-core
-//! `tree-utils.ts::scaleChildrenInPlace`. Split out of `mutators.rs`
-//! to keep that file under the 800-line ceiling.
+//! / `handleDragEnd`) and pen-core `tree-utils.ts::scaleChildrenInPlace`.
+//! Split out of `mutators.rs` to keep that file under the 800-line
+//! ceiling.
 
 use crate::geometry::{own_bounds, DocRect};
 use crate::node_id::NodeId;
@@ -20,6 +20,23 @@ use jian_ops_schema::node::PenNode;
 pub enum FlexDirection {
     Vertical,
     Horizontal,
+}
+
+/// Canonical drop destination for canvas node dragging. The host
+/// resolves hit-testing and absolute container bounds; core owns the
+/// document-tree mutation and coordinate conversion.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DragDropTarget {
+    /// Insert as a top-level node in the active page.
+    PageRoot { index: usize },
+    /// Insert into a container. `parent_abs_*` are the target
+    /// container's absolute document-space origin read from layout.
+    Container {
+        parent_id: NodeId,
+        parent_abs_x: f64,
+        parent_abs_y: f64,
+        index: usize,
+    },
 }
 
 /// The container's explicit auto-layout direction, or `None` for
@@ -38,23 +55,12 @@ pub fn auto_layout_direction(node: &PenNode) -> Option<FlexDirection> {
     }
 }
 
-/// TS `drag-reparent-policy.ts`: auto-reparenting a dragged child out
-/// of its parent is surprising for frame/shape-style nodes — users
-/// expect those to keep their parent while repositioning. Primitive
-/// content nodes (text / image / icon / input) keep the legacy
-/// "drag out to detach" behavior.
-pub fn should_auto_reparent_outside_parent(node: &PenNode) -> bool {
-    !matches!(
-        node,
-        PenNode::Frame(_)
-            | PenNode::Group(_)
-            | PenNode::Rectangle(_)
-            | PenNode::Ellipse(_)
-            | PenNode::Line(_)
-            | PenNode::Polygon(_)
-            | PenNode::Path(_)
-            | PenNode::Ref(_)
-    )
+/// Current canvas drag semantics allow any editable dragged subtree to
+/// leave its parent. The editability and cycle checks are enforced by
+/// `move_node_to_drop_target`; this helper is kept for older callers
+/// that still ask the policy question by node type.
+pub fn should_auto_reparent_outside_parent(_node: &PenNode) -> bool {
+    true
 }
 
 /// Immediate parent id of `target` anywhere in the forest, or `None`
@@ -182,6 +188,44 @@ impl EditorState {
         cur != idx
     }
 
+    /// Move the single selected child one slot along its parent
+    /// auto-layout axis. Non-flow selections return false so callers
+    /// can fall back to normal pixel nudging.
+    pub fn move_selected_in_layout_direction(&mut self, dx: f64, dy: f64) -> bool {
+        if self.selection_count() != 1 {
+            return false;
+        }
+        let selected = self.selection.anchor.clone();
+        if !selected.is_real() || !self.is_editable(&selected) {
+            return false;
+        }
+
+        let children = self.active_children();
+        let Some((Some(parent_id), current_index)) =
+            walkers::find_parent_and_index(children, &selected)
+        else {
+            return false;
+        };
+        let Some(parent) = walkers::find_node(children, &parent_id) else {
+            return false;
+        };
+        let Some(direction) = auto_layout_direction(parent) else {
+            return false;
+        };
+
+        let target_index = match direction {
+            FlexDirection::Vertical if dy < 0.0 => current_index.checked_sub(1),
+            FlexDirection::Vertical if dy > 0.0 => Some(current_index + 1),
+            FlexDirection::Horizontal if dx < 0.0 => current_index.checked_sub(1),
+            FlexDirection::Horizontal if dx > 0.0 => Some(current_index + 1),
+            _ => None,
+        };
+        let Some(target_index) = target_index else {
+            return false;
+        };
+        self.reorder_child_to_index(&parent_id, &selected, target_index)
+    }
+
     /// Detach `id` from its parent and re-insert it as the FIRST
     /// top-level child of the active page, preserving its visual
     /// position via the absolute `(abs_x, abs_y)` the caller read off
@@ -206,5 +250,98 @@ impl EditorState {
         }
         children.insert(0, node);
         true
+    }
+
+    /// Move a dragged node to a resolved canvas drop target,
+    /// preserving the visual origin supplied by the host.
+    ///
+    /// Coordinate semantics:
+    /// - Page root: node `x`/`y` become the dropped absolute origin.
+    /// - Free container: node `x`/`y` become relative to the target
+    ///   container origin.
+    /// - Flex container: node enters flow at `index`, so authored
+    ///   `x`/`y` are cleared.
+    ///
+    /// When the node changes parent, the resolved drag bounds are
+    /// frozen as literal `width` / `height` so keyword sizing such as
+    /// `fill_container` keeps its visual size after leaving the old
+    /// container.
+    pub fn move_node_to_drop_target(
+        &mut self,
+        id: &NodeId,
+        target: DragDropTarget,
+        abs_x: f64,
+        abs_y: f64,
+        abs_w: f64,
+        abs_h: f64,
+    ) -> bool {
+        if !id.is_real() || !self.is_subtree_editable(id) {
+            return false;
+        }
+
+        let source_parent = parent_of(self.active_children(), id);
+        let (target_parent, target_index, target_flex, target_abs) = {
+            let children = self.active_children();
+            let Some(source) = walkers::find_node(children, id) else {
+                return false;
+            };
+            match &target {
+                DragDropTarget::PageRoot { index } => (None, *index, false, (0.0, 0.0)),
+                DragDropTarget::Container {
+                    parent_id,
+                    parent_abs_x,
+                    parent_abs_y,
+                    index,
+                } => {
+                    if parent_id == id || walkers::descendant_contains(source, parent_id) {
+                        return false;
+                    }
+                    let Some(parent) = walkers::find_node(children, parent_id) else {
+                        return false;
+                    };
+                    if parent.children().is_none() {
+                        return false;
+                    }
+                    (
+                        Some(parent_id.clone()),
+                        *index,
+                        auto_layout_direction(parent).is_some(),
+                        (*parent_abs_x, *parent_abs_y),
+                    )
+                }
+            }
+        };
+
+        let Some(mut node) = walkers::extract_node(self.active_children_mut(), id) else {
+            return false;
+        };
+        if source_parent != target_parent {
+            if abs_w.is_finite() && abs_w > 0.0 {
+                node.set_width_px(abs_w);
+            }
+            if abs_h.is_finite() && abs_h > 0.0 {
+                node.set_height_px(abs_h);
+            }
+        }
+        {
+            let base = node.base_mut();
+            if target_flex {
+                base.x = None;
+                base.y = None;
+            } else if target_parent.is_some() {
+                base.x = Some(abs_x - target_abs.0);
+                base.y = Some(abs_y - target_abs.1);
+            } else {
+                base.x = Some(abs_x);
+                base.y = Some(abs_y);
+            }
+        }
+
+        walkers::insert_into_parent(
+            self.active_children_mut(),
+            target_parent.as_ref(),
+            Some(target_index),
+            node,
+        )
     }
 }

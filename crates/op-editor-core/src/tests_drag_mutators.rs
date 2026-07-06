@@ -5,7 +5,8 @@
 #![cfg(test)]
 
 use crate::drag_mutators::{
-    auto_layout_direction, parent_of, should_auto_reparent_outside_parent, FlexDirection,
+    auto_layout_direction, parent_of, should_auto_reparent_outside_parent, DragDropTarget,
+    FlexDirection,
 };
 use crate::geometry::DocRect;
 use crate::node_id::NodeId;
@@ -214,6 +215,73 @@ fn reorder_child_to_index_clamps_to_tail_and_reports_noop() {
 }
 
 #[test]
+fn layout_arrow_down_moves_selection_forward_in_vertical_container() {
+    let f = flex_frame(
+        "f1",
+        "Stack",
+        0.0,
+        0.0,
+        200.0,
+        300.0,
+        vec![
+            flow_rect("a", "A", 100.0, 40.0),
+            flow_rect("b", "B", 100.0, 40.0),
+            flow_rect("c", "C", 100.0, 40.0),
+        ],
+    );
+    let mut s = state_with(vec![f]);
+    s.set_single_selection(NodeId::new("b"));
+
+    assert!(s.move_selected_in_layout_direction(0.0, 1.0));
+
+    let parent = find_node(s.active_children(), &NodeId::new("f1")).unwrap();
+    let order: Vec<&str> = parent
+        .children()
+        .unwrap()
+        .iter()
+        .map(|c| c.id_str())
+        .collect();
+    assert_eq!(order, vec!["a", "c", "b"]);
+    assert_eq!(s.selection.anchor, NodeId::new("b"));
+}
+
+#[test]
+fn layout_arrow_left_moves_selection_backward_in_horizontal_container() {
+    use jian_ops_schema::node::container::LayoutMode;
+
+    let mut f = flex_frame(
+        "f1",
+        "Row",
+        0.0,
+        0.0,
+        300.0,
+        100.0,
+        vec![
+            flow_rect("a", "A", 80.0, 40.0),
+            flow_rect("b", "B", 80.0, 40.0),
+            flow_rect("c", "C", 80.0, 40.0),
+        ],
+    );
+    if let PenNode::Frame(frame) = &mut f {
+        frame.container.layout = Some(LayoutMode::Horizontal);
+    }
+    let mut s = state_with(vec![f]);
+    s.set_single_selection(NodeId::new("b"));
+
+    assert!(s.move_selected_in_layout_direction(-1.0, 0.0));
+
+    let parent = find_node(s.active_children(), &NodeId::new("f1")).unwrap();
+    let order: Vec<&str> = parent
+        .children()
+        .unwrap()
+        .iter()
+        .map(|c| c.id_str())
+        .collect();
+    assert_eq!(order, vec!["b", "a", "c"]);
+    assert_eq!(s.selection.anchor, NodeId::new("b"));
+}
+
+#[test]
 fn reparent_to_page_root_preserves_visual_position() {
     let mut s = nested_state();
     assert!(s.reparent_to_page_root(&NodeId::new("r1"), 400.0, 50.0));
@@ -234,17 +302,174 @@ fn reparent_to_page_root_is_noop_for_top_level_nodes() {
 }
 
 #[test]
-fn reparent_policy_matches_ts_drag_reparent_policy() {
-    // Frame/shape-style nodes keep their parent; content primitives
-    // (text, …) detach.
+fn reparent_policy_allows_shape_container_and_content_nodes() {
     let r = rect("r", "R", 0.0, 0.0, 10.0, 10.0);
     let t = text("t", "T", 0.0, 0.0, 10.0, 10.0, "hi");
     let f = frame("f", "F", 0.0, 0.0, 10.0, 10.0, vec![]);
     let g = group("g", "G", vec![]);
-    assert!(!should_auto_reparent_outside_parent(&r));
-    assert!(!should_auto_reparent_outside_parent(&f));
-    assert!(!should_auto_reparent_outside_parent(&g));
+    assert!(should_auto_reparent_outside_parent(&r));
+    assert!(should_auto_reparent_outside_parent(&f));
+    assert!(should_auto_reparent_outside_parent(&g));
     assert!(should_auto_reparent_outside_parent(&t));
+}
+
+#[test]
+fn drop_into_free_container_preserves_visual_position_as_relative_xy() {
+    let src_child = rect("box", "Box", 20.0, 30.0, 50.0, 40.0);
+    let src = frame("src", "Source", 100.0, 100.0, 200.0, 200.0, vec![src_child]);
+    let target = frame("target", "Target", 400.0, 200.0, 240.0, 180.0, vec![]);
+    let mut s = state_with(vec![src, target]);
+
+    assert!(s.move_node_to_drop_target(
+        &NodeId::new("box"),
+        DragDropTarget::Container {
+            parent_id: NodeId::new("target"),
+            parent_abs_x: 400.0,
+            parent_abs_y: 200.0,
+            index: 0,
+        },
+        450.0,
+        260.0,
+        50.0,
+        40.0,
+    ));
+
+    let src = find_node(s.active_children(), &NodeId::new("src")).unwrap();
+    assert!(src.children().unwrap().is_empty());
+    let target = find_node(s.active_children(), &NodeId::new("target")).unwrap();
+    let moved = target
+        .children()
+        .unwrap()
+        .iter()
+        .find(|node| node.id_str() == "box")
+        .expect("box moved into target");
+    assert_eq!(moved.base().x, Some(50.0));
+    assert_eq!(moved.base().y, Some(60.0));
+}
+
+#[test]
+fn drop_to_page_root_makes_nested_node_a_root_at_absolute_position() {
+    let src_child = rect("box", "Box", 20.0, 30.0, 50.0, 40.0);
+    let src = frame("src", "Source", 100.0, 100.0, 200.0, 200.0, vec![src_child]);
+    let target = frame("target", "Target", 400.0, 200.0, 240.0, 180.0, vec![]);
+    let mut s = state_with(vec![src, target]);
+
+    assert!(s.move_node_to_drop_target(
+        &NodeId::new("box"),
+        DragDropTarget::PageRoot { index: 1 },
+        700.0,
+        80.0,
+        50.0,
+        40.0,
+    ));
+
+    let ids: Vec<&str> = s
+        .active_children()
+        .iter()
+        .map(|node| node.id_str())
+        .collect();
+    assert_eq!(ids, vec!["src", "box", "target"]);
+    let moved = find_node(s.active_children(), &NodeId::new("box")).unwrap();
+    assert_eq!(moved.base().x, Some(700.0));
+    assert_eq!(moved.base().y, Some(80.0));
+}
+
+#[test]
+fn drop_root_into_free_container_preserves_visual_position() {
+    let root = rect("box", "Box", 100.0, 120.0, 50.0, 40.0);
+    let target = frame("target", "Target", 400.0, 200.0, 240.0, 180.0, vec![]);
+    let mut s = state_with(vec![root, target]);
+
+    assert!(s.move_node_to_drop_target(
+        &NodeId::new("box"),
+        DragDropTarget::Container {
+            parent_id: NodeId::new("target"),
+            parent_abs_x: 400.0,
+            parent_abs_y: 200.0,
+            index: 0,
+        },
+        440.0,
+        230.0,
+        50.0,
+        40.0,
+    ));
+
+    let root_ids: Vec<&str> = s
+        .active_children()
+        .iter()
+        .map(|node| node.id_str())
+        .collect();
+    assert_eq!(root_ids, vec!["target"]);
+    let target = find_node(s.active_children(), &NodeId::new("target")).unwrap();
+    let moved = &target.children().unwrap()[0];
+    assert_eq!(moved.id_str(), "box");
+    assert_eq!(moved.base().x, Some(40.0));
+    assert_eq!(moved.base().y, Some(30.0));
+}
+
+#[test]
+fn drop_root_into_flex_container_clears_xy_and_inserts_at_index() {
+    let root = rect("box", "Box", 100.0, 120.0, 50.0, 40.0);
+    let target = flex_frame(
+        "stack",
+        "Stack",
+        400.0,
+        200.0,
+        240.0,
+        180.0,
+        vec![
+            flow_rect("a", "A", 100.0, 40.0),
+            flow_rect("b", "B", 100.0, 40.0),
+        ],
+    );
+    let mut s = state_with(vec![root, target]);
+
+    assert!(s.move_node_to_drop_target(
+        &NodeId::new("box"),
+        DragDropTarget::Container {
+            parent_id: NodeId::new("stack"),
+            parent_abs_x: 400.0,
+            parent_abs_y: 200.0,
+            index: 1,
+        },
+        430.0,
+        245.0,
+        50.0,
+        40.0,
+    ));
+
+    let stack = find_node(s.active_children(), &NodeId::new("stack")).unwrap();
+    let children = stack.children().unwrap();
+    let ids: Vec<&str> = children.iter().map(|node| node.id_str()).collect();
+    assert_eq!(ids, vec!["a", "box", "b"]);
+    let moved = children.iter().find(|node| node.id_str() == "box").unwrap();
+    assert_eq!(moved.base().x, None);
+    assert_eq!(moved.base().y, None);
+}
+
+#[test]
+fn drop_into_own_descendant_is_rejected_without_detaching() {
+    let inner = frame("inner", "Inner", 20.0, 20.0, 100.0, 100.0, vec![]);
+    let root = frame("root", "Root", 100.0, 100.0, 200.0, 200.0, vec![inner]);
+    let mut s = state_with(vec![root]);
+
+    assert!(!s.move_node_to_drop_target(
+        &NodeId::new("root"),
+        DragDropTarget::Container {
+            parent_id: NodeId::new("inner"),
+            parent_abs_x: 120.0,
+            parent_abs_y: 120.0,
+            index: 0,
+        },
+        130.0,
+        130.0,
+        200.0,
+        200.0,
+    ));
+
+    assert_eq!(s.active_children().len(), 1);
+    assert!(find_node(s.active_children(), &NodeId::new("root")).is_some());
+    assert!(find_node(s.active_children(), &NodeId::new("inner")).is_some());
 }
 
 #[test]

@@ -1,33 +1,35 @@
 //! Canvas selection semantics (enter-group on double-click) + the
-//! node-drag release commit (auto-layout reorder / reparent-to-root).
+//! node-drag release commit (auto-layout reorder / cross-container
+//! reparenting).
 //!
 //! TS sources: `skia-interaction.ts:1182-1256` (`handleDragEnd`),
 //! `:1262-1294` (double-click enter-group) and
-//! `drag-reparent-policy.ts`. The selection-resolution rules live in
 //! `op_editor_core::selection_resolve`; this module is the host glue
 //! that reads the layout scene for absolute bounds.
 
 use super::{NodeDragState, WidgetHostNative};
 use jian_ops_schema::node::PenNode;
 use op_editor_core::drag_mutators::{
-    auto_layout_direction, parent_of, should_auto_reparent_outside_parent, FlexDirection,
+    auto_layout_direction, parent_of, DragDropTarget, FlexDirection,
 };
+use op_editor_core::editor_ui_state::{CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect};
 use op_editor_core::{NodeId, PenNodeExt};
+use op_editor_ui::{Point2D, Rect};
 
 /// Read-phase summary of one dragged node — collected before any
 /// mutation so no document / scene borrow survives into the mutators.
 struct DragCommitPlan {
+    target: Option<DragDropTarget>,
+    dropped_bounds: Rect,
+    indicator: Option<CanvasDropIndicator>,
+}
+
+struct ContainerDropCandidate {
     parent_id: NodeId,
-    /// `Some(direction)` when the parent is an auto-layout container.
+    bounds: Rect,
     flex: Option<FlexDirection>,
-    /// Dropped absolute bounds `(x, y, w, h)` of the dragged node.
-    bounds: (f32, f32, f32, f32),
-    /// Whether the node sits fully outside its parent's bounds AND
-    /// the reparent policy allows detaching it.
-    reparent_to_root: bool,
-    /// Sibling ids (dragged node excluded) in document order, with
-    /// each sibling's main-axis midpoint from the layout scene.
-    sibling_mids: Vec<f32>,
+    index: usize,
+    insertion: Option<CanvasOverlayLine>,
 }
 
 impl WidgetHostNative {
@@ -44,6 +46,7 @@ impl WidgetHostNative {
         x: f32,
         y: f32,
         text_edit_was_active: bool,
+        viewport_height: f32,
     ) -> bool {
         use op_editor_core::selection_resolve::{
             resolve_canvas_selection_target, SelectionResolution,
@@ -60,7 +63,7 @@ impl WidgetHostNative {
             // TS dblclick order (skia-interaction.ts:1279-1296):
             // entering a selected frame/group wins over the
             // text-edit fallback.
-            if self.try_enter_selected_container_on_double_click(&ec_id) {
+            if self.try_enter_selected_container_on_double_click(&ec_id, viewport_height) {
                 return true;
             }
             if self.editor_state.start_text_edit(ec_id.clone()) {
@@ -84,6 +87,7 @@ impl WidgetHostNative {
             total_dx: 0.0,
             total_dy: 0.0,
         };
+        self.option_drag_source_ids.clear();
         if self.shift_held {
             // Shift+click toggles set membership of the resolved
             // target; a child of a selected node keeps the set and
@@ -98,6 +102,7 @@ impl WidgetHostNative {
             } else {
                 self.node_drag = Some(fresh_drag);
             }
+            self.scroll_layer_panel_selection_into_view(viewport_height);
             return true;
         }
         // Plain click: keep a multi-set when clicking inside it (TS
@@ -109,6 +114,7 @@ impl WidgetHostNative {
             }
         }
         self.editor_state.sync_entered_container_with_selection();
+        self.scroll_layer_panel_selection_into_view(viewport_height);
         self.editor_state.commit_history();
         self.node_drag = Some(fresh_drag);
         true
@@ -123,6 +129,7 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn try_enter_selected_container_on_double_click(
         &mut self,
         deepest: &NodeId,
+        viewport_height: f32,
     ) -> bool {
         if self.editor_state.selection_count() != 1 {
             return false;
@@ -148,16 +155,29 @@ impl WidgetHostNative {
         }
         self.editor_state.set_single_selection(deepest.clone());
         self.editor_state.sync_entered_container_with_selection();
+        self.scroll_layer_panel_selection_into_view(viewport_height);
         self.mark_dirty();
         true
     }
 
-    /// Node-drag release commit (TS `handleDragEnd`): a node dropped
-    /// fully outside its parent reparents to the page root preserving
-    /// its visual position (content primitives only — see
-    /// `drag-reparent-policy.ts`); a child dropped within an
-    /// auto-layout parent re-inserts at the midpoint-derived sibling
-    /// index. Free-layout children were already translated live.
+    pub(in crate::widget_host) fn update_node_drag_preview(&mut self, drag: &NodeDragState) {
+        let id = self.editor_state.selection.anchor.clone();
+        let next = if id.is_real() {
+            self.plan_drag_commit(&id, drag)
+                .and_then(|plan| plan.indicator)
+        } else {
+            None
+        };
+        if self.editor_state.editor_ui.canvas_drop_indicator != next {
+            self.editor_state.editor_ui.canvas_drop_indicator = next;
+        }
+    }
+
+    /// Node-drag release commit: a node dropped into another container
+    /// reparents there; a node dropped outside every container becomes
+    /// a page root; a child dropped within an auto-layout parent
+    /// re-inserts at the midpoint-derived sibling index. Free-layout
+    /// children were already translated live.
     pub(in crate::widget_host) fn commit_node_drag(&mut self, drag: &NodeDragState) -> bool {
         if !drag.moved {
             return false;
@@ -182,84 +202,264 @@ impl WidgetHostNative {
     /// Read phase — gather everything the commit needs as owned data.
     fn plan_drag_commit(&self, id: &NodeId, drag: &NodeDragState) -> Option<DragCommitPlan> {
         let children = self.editor_state.active_children();
-        // Top-level nodes have no reorder / reparent policy to run.
-        let parent_id = parent_of(children, id)?;
-        let parent = op_editor_core::walkers::find_node(children, &parent_id)?;
-        let flex = auto_layout_direction(parent);
+        let current_parent = parent_of(children, id);
+        let current_parent_flex = current_parent
+            .as_ref()
+            .and_then(|parent_id| op_editor_core::walkers::find_node(children, parent_id))
+            .and_then(auto_layout_direction);
         let page = self.layout_scene.active_page()?;
         let node_scene = page.find(id.as_str())?;
         let mut nb = node_scene.aggregate_bounds();
-        if flex.is_some() {
+        if current_parent_flex.is_some() {
             // Flex children never doc-translate during the drag — the
             // accumulated cursor delta is where the user dropped them.
             nb.origin.x += drag.total_dx as f32;
             nb.origin.y += drag.total_dy as f32;
         }
-        let pb = page.find(parent_id.as_str())?.aggregate_bounds();
-        let outside = nb.origin.x + nb.size.x <= pb.origin.x
-            || nb.origin.x >= pb.origin.x + pb.size.x
-            || nb.origin.y + nb.size.y <= pb.origin.y
-            || nb.origin.y >= pb.origin.y + pb.size.y;
-        let node_ref = op_editor_core::walkers::find_node(children, id)?;
-        let reparent_to_root = outside && should_auto_reparent_outside_parent(node_ref);
-        // Sibling main-axis midpoints in document order (dragged node
-        // excluded) — TS treats a missing render node as midpoint 0.
-        let vertical = matches!(flex, Some(FlexDirection::Vertical));
-        let sibling_mids = parent
-            .children()
-            .map(|siblings| {
-                siblings
-                    .iter()
-                    .filter(|sib| sib.id_str() != id.as_str())
-                    .map(|sib| {
-                        page.find(sib.id_str())
-                            .map(|sn| {
-                                let b = sn.aggregate_bounds();
-                                if vertical {
-                                    b.origin.y + b.size.y / 2.0
-                                } else {
-                                    b.origin.x + b.size.x / 2.0
-                                }
-                            })
-                            .unwrap_or(0.0)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let center = Point2D::new(nb.origin.x + nb.size.x / 2.0, nb.origin.y + nb.size.y / 2.0);
+        let candidate = self.container_drop_candidate(id, center, nb);
+        let mut indicator = None;
+        let target = if let Some(candidate) = candidate {
+            let same_parent = current_parent.as_ref() == Some(&candidate.parent_id);
+            if same_parent && candidate.flex.is_none() {
+                None
+            } else {
+                indicator = Some(CanvasDropIndicator {
+                    ghost: overlay_rect(nb),
+                    target: Some(overlay_rect(candidate.bounds)),
+                    insertion: candidate.insertion,
+                });
+                Some(DragDropTarget::Container {
+                    parent_id: candidate.parent_id,
+                    parent_abs_x: candidate.bounds.origin.x as f64,
+                    parent_abs_y: candidate.bounds.origin.y as f64,
+                    index: candidate.index,
+                })
+            }
+        } else if current_parent.is_some() {
+            indicator = Some(CanvasDropIndicator {
+                ghost: overlay_rect(nb),
+                target: None,
+                insertion: None,
+            });
+            Some(DragDropTarget::PageRoot { index: 0 })
+        } else {
+            None
+        };
         Some(DragCommitPlan {
-            parent_id,
-            flex,
-            bounds: (nb.origin.x, nb.origin.y, nb.size.x, nb.size.y),
-            reparent_to_root,
-            sibling_mids,
+            target,
+            dropped_bounds: nb,
+            indicator,
         })
     }
 
     /// Mutation phase — apply the planned reparent / reorder.
     fn apply_drag_commit(&mut self, id: &NodeId, plan: DragCommitPlan) -> bool {
-        let (bx, by, bw, bh) = plan.bounds;
-        if plan.reparent_to_root {
-            return self
-                .editor_state
-                .reparent_to_page_root(id, bx as f64, by as f64);
-        }
-        let Some(dir) = plan.flex else {
-            // Free-layout child inside its parent: the live translate
-            // already committed the move.
+        let Some(target) = plan.target else {
             return false;
         };
-        let drag_mid = match dir {
-            FlexDirection::Vertical => by + bh / 2.0,
-            FlexDirection::Horizontal => bx + bw / 2.0,
+        let bounds = plan.dropped_bounds;
+        self.editor_state.move_node_to_drop_target(
+            id,
+            target,
+            bounds.origin.x as f64,
+            bounds.origin.y as f64,
+            bounds.size.x as f64,
+            bounds.size.y as f64,
+        )
+    }
+
+    fn container_drop_candidate(
+        &self,
+        dragged_id: &NodeId,
+        point: Point2D,
+        dragged_bounds: Rect,
+    ) -> Option<ContainerDropCandidate> {
+        let children = self.editor_state.active_children();
+        let source = op_editor_core::walkers::find_node(children, dragged_id)?;
+        let page = self.layout_scene.active_page()?;
+        deepest_container_at(children, source, point, page, &self.option_drag_source_ids).map(
+            |(parent_id, bounds, flex)| {
+                let (index, insertion) = if let Some(dir) = flex {
+                    flex_insert_preview(children, page, &parent_id, dragged_id, dragged_bounds, dir)
+                } else {
+                    (0, None)
+                };
+                ContainerDropCandidate {
+                    parent_id,
+                    bounds,
+                    flex,
+                    index,
+                    insertion,
+                }
+            },
+        )
+    }
+}
+
+fn deepest_container_at(
+    nodes: &[PenNode],
+    source: &PenNode,
+    point: Point2D,
+    page: &op_editor_ui::layout_scene::ScenePage,
+    excluded_ids: &[NodeId],
+) -> Option<(NodeId, Rect, Option<FlexDirection>)> {
+    let mut hit = None;
+    for node in nodes {
+        if node.children().is_none() {
+            continue;
+        }
+        let node_id = NodeId::new(node.id_str());
+        if excluded_ids.contains(&node_id) {
+            continue;
+        }
+        if op_editor_core::walkers::descendant_contains(source, &node_id) {
+            continue;
+        }
+        let Some(scene) = page.find(node.id_str()) else {
+            continue;
         };
-        let mut new_index = plan.sibling_mids.len();
-        for (i, sib_mid) in plan.sibling_mids.iter().enumerate() {
-            if drag_mid < *sib_mid {
-                new_index = i;
+        let bounds = scene.bounds;
+        if !rect_contains(bounds, point) {
+            continue;
+        }
+        hit = Some((node_id, bounds, auto_layout_direction(node)));
+        if let Some(children) = node.children() {
+            if let Some(deeper) = deepest_container_at(children, source, point, page, excluded_ids)
+            {
+                hit = Some(deeper);
+            }
+        }
+    }
+    hit
+}
+
+fn flex_insert_preview(
+    nodes: &[PenNode],
+    page: &op_editor_ui::layout_scene::ScenePage,
+    parent_id: &NodeId,
+    dragged_id: &NodeId,
+    dragged_bounds: Rect,
+    dir: FlexDirection,
+) -> (usize, Option<CanvasOverlayLine>) {
+    let Some(parent) = op_editor_core::walkers::find_node(nodes, parent_id) else {
+        return (0, None);
+    };
+    let Some(parent_scene) = page.find(parent_id.as_str()) else {
+        return (0, None);
+    };
+    let parent_bounds = parent_scene.bounds;
+    let vertical = matches!(dir, FlexDirection::Vertical);
+    let drag_mid = if vertical {
+        dragged_bounds.origin.y + dragged_bounds.size.y / 2.0
+    } else {
+        dragged_bounds.origin.x + dragged_bounds.size.x / 2.0
+    };
+    let mut index = parent
+        .children()
+        .map(|children| {
+            children
+                .iter()
+                .filter(|node| node.id_str() != dragged_id.as_str())
+                .count()
+        })
+        .unwrap_or(0);
+    if let Some(children) = parent.children() {
+        for (i, child) in children
+            .iter()
+            .filter(|node| node.id_str() != dragged_id.as_str())
+            .enumerate()
+        {
+            let Some(scene) = page.find(child.id_str()) else {
+                continue;
+            };
+            let bounds = scene.aggregate_bounds();
+            let mid = if vertical {
+                bounds.origin.y + bounds.size.y / 2.0
+            } else {
+                bounds.origin.x + bounds.size.x / 2.0
+            };
+            if drag_mid < mid {
+                index = i;
                 break;
             }
         }
-        self.editor_state
-            .reorder_child_to_index(&plan.parent_id, id, new_index)
     }
+    let insertion = flex_insertion_line(parent, page, parent_bounds, dragged_id, index, vertical);
+    (index, insertion)
+}
+
+fn flex_insertion_line(
+    parent: &PenNode,
+    page: &op_editor_ui::layout_scene::ScenePage,
+    parent_bounds: Rect,
+    dragged_id: &NodeId,
+    index: usize,
+    vertical: bool,
+) -> Option<CanvasOverlayLine> {
+    let siblings: Vec<Rect> = parent
+        .children()?
+        .iter()
+        .filter(|node| node.id_str() != dragged_id.as_str())
+        .filter_map(|node| {
+            page.find(node.id_str())
+                .map(|scene| scene.aggregate_bounds())
+        })
+        .collect();
+    let inset = 8.0_f32.min(parent_bounds.size.x.max(parent_bounds.size.y) / 4.0);
+    if vertical {
+        let y = if siblings.is_empty() {
+            parent_bounds.origin.y + parent_bounds.size.y / 2.0
+        } else if index == 0 {
+            siblings[0].origin.y
+        } else if index >= siblings.len() {
+            let last = siblings[siblings.len() - 1];
+            last.origin.y + last.size.y
+        } else {
+            let prev = siblings[index - 1];
+            let next = siblings[index];
+            (prev.origin.y + prev.size.y + next.origin.y) / 2.0
+        };
+        Some(CanvasOverlayLine::new(
+            (parent_bounds.origin.x + inset) as f64,
+            y as f64,
+            (parent_bounds.origin.x + parent_bounds.size.x - inset) as f64,
+            y as f64,
+        ))
+    } else {
+        let x = if siblings.is_empty() {
+            parent_bounds.origin.x + parent_bounds.size.x / 2.0
+        } else if index == 0 {
+            siblings[0].origin.x
+        } else if index >= siblings.len() {
+            let last = siblings[siblings.len() - 1];
+            last.origin.x + last.size.x
+        } else {
+            let prev = siblings[index - 1];
+            let next = siblings[index];
+            (prev.origin.x + prev.size.x + next.origin.x) / 2.0
+        };
+        Some(CanvasOverlayLine::new(
+            x as f64,
+            (parent_bounds.origin.y + inset) as f64,
+            x as f64,
+            (parent_bounds.origin.y + parent_bounds.size.y - inset) as f64,
+        ))
+    }
+}
+
+fn rect_contains(rect: Rect, point: Point2D) -> bool {
+    point.x >= rect.origin.x
+        && point.x <= rect.origin.x + rect.size.x
+        && point.y >= rect.origin.y
+        && point.y <= rect.origin.y + rect.size.y
+}
+
+fn overlay_rect(rect: Rect) -> CanvasOverlayRect {
+    CanvasOverlayRect::new(
+        rect.origin.x as f64,
+        rect.origin.y as f64,
+        rect.size.x as f64,
+        rect.size.y as f64,
+    )
 }

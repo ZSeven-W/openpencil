@@ -15,8 +15,9 @@ use super::{
 };
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
-    rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder, LayoutCx,
-    LocalePicker, PropertyPanel, Toolbar, TopBar, TopBarHit, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder,
+    CanvasViewport, LayoutCx, LocalePicker, PropertyPanel, Toolbar, TopBar, TopBarHit, Widget,
+    TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -1079,6 +1080,18 @@ impl WidgetHostNative {
                         return true;
                     }
                 }
+                let canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+                if let Some(node_id) = canvas.frame_label_at_point(canvas_rect, Point2D::new(x, y))
+                {
+                    let ec_id = op_editor_core::NodeId::new(&node_id);
+                    return self.apply_canvas_node_press(
+                        ec_id,
+                        x,
+                        y,
+                        text_edit_was_active,
+                        viewport_height,
+                    );
+                }
                 if let Some(node_id) = self
                     .layout_scene
                     .node_at_doc_point(doc_point, self.editor_state.viewport.zoom)
@@ -1086,7 +1099,13 @@ impl WidgetHostNative {
                     // Selection promotion / enter-group / drag start —
                     // see `canvas_select_drag.rs`.
                     let ec_id = op_editor_core::NodeId::new(&node_id);
-                    return self.apply_canvas_node_press(ec_id, x, y, text_edit_was_active);
+                    return self.apply_canvas_node_press(
+                        ec_id,
+                        x,
+                        y,
+                        text_edit_was_active,
+                        viewport_height,
+                    );
                 }
                 // Empty canvas press — start a marquee.
                 let cleared_now = if !self.shift_held {
