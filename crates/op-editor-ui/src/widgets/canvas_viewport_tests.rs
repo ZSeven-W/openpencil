@@ -29,6 +29,7 @@ struct RecordingBackend {
     texts: Vec<String>,
     text_colors: Vec<jian_core::scene::Color>,
     text_positions: Vec<Point2D>,
+    fill_rects: Vec<Rect>,
     dots: usize,
     mesh_fills: usize,
     shader_fills: usize,
@@ -37,7 +38,8 @@ struct RecordingBackend {
 impl crate::RenderBackend for RecordingBackend {
     fn begin_frame(&mut self) {}
     fn end_frame(&mut self) {}
-    fn fill_rect(&mut self, _: Rect, _: Color) {
+    fn fill_rect(&mut self, rect: Rect, _: Color) {
+        self.fill_rects.push(rect);
         self.rects += 1;
         self.ops.push(Op::Fill);
     }
@@ -72,7 +74,8 @@ impl crate::RenderBackend for RecordingBackend {
         self.strokes += 1;
         self.ops.push(Op::Stroke);
     }
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {
+    fn fill_round_rect(&mut self, rect: Rect, _: f32, _: Color) {
+        self.fill_rects.push(rect);
         self.rects += 1;
         self.ops.push(Op::Fill);
     }
@@ -274,6 +277,138 @@ fn single_selection_dimension_label_uses_active_color() {
         .find_map(|(text, color)| (text == "120 × 40").then_some(*color))
         .expect("selected dimensions label should be painted");
     assert_eq!(color, viewport.theme.primary.to_jian());
+}
+
+#[test]
+fn active_node_drag_hides_selection_chrome_and_dimension_label() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_rect_node("n2", "Schedule Card 1")];
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    let scene = sample_scene();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.node_drag_active = true;
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    assert!(
+        backend.texts.iter().all(|text| text != "120 × 40"),
+        "dragging should not paint the selected-size capsule; texts: {:?}",
+        backend.texts
+    );
+    assert_eq!(
+        backend.strokes, 1,
+        "dragging should hide selection outlines/handles, leaving only the frame stroke"
+    );
+}
+
+#[test]
+fn active_node_drag_suppresses_stale_child_hover_outline() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_frame_node("n1", "Frame")];
+    state.set_single_selection(op_editor_core::NodeId::new("n1"));
+    state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("n4"));
+    let scene = sample_scene();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.node_drag_active = true;
+    viewport.frame_labels.clear();
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    assert_eq!(
+        backend.strokes, 1,
+        "dragging should suppress stale child hover outlines, leaving only the frame stroke"
+    );
+}
+
+#[test]
+fn active_node_drag_overlay_paints_selected_node_at_absolute_drag_origin() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_rect_node("n2", "Schedule Card 1")];
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    let scene = sample_scene();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.node_drag_active = true;
+    viewport.node_drag_overlay = Some(CanvasNodeDragOverlay {
+        node_id: "n2".to_string(),
+        target_origin_doc: Point2D::new(100.0, 100.0),
+    });
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    assert!(
+        !backend
+            .fill_rects
+            .iter()
+            .any(|rect| *rect == Rect::xywh(60.0, 80.0, 120.0, 40.0)),
+        "drag overlay should hide the selected node at its layout slot"
+    );
+    assert!(
+        backend
+            .fill_rects
+            .iter()
+            .any(|rect| *rect == Rect::xywh(100.0, 100.0, 120.0, 40.0)),
+        "drag overlay should paint the selected node at the absolute cursor-following origin; fills: {:?}",
+        backend.fill_rects
+    );
+}
+
+#[test]
+fn active_node_drag_drop_indicator_omits_dragged_ghost_rect() {
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_rect_node("n2", "Schedule Card 1")];
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    let scene = sample_scene();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.node_drag_active = true;
+    viewport.drop_indicator = Some(op_editor_core::editor_ui_state::CanvasDropIndicator {
+        ghost: op_editor_core::editor_ui_state::CanvasOverlayRect::new(420.0, 30.0, 96.0, 48.0),
+        target: Some(op_editor_core::editor_ui_state::CanvasOverlayRect::new(
+            540.0, 30.0, 120.0, 80.0,
+        )),
+        insertion: Some(op_editor_core::editor_ui_state::CanvasOverlayLine::new(
+            528.0, 24.0, 528.0, 116.0,
+        )),
+    });
+
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    assert!(
+        !backend
+            .fill_rects
+            .iter()
+            .any(|rect| *rect == Rect::xywh(420.0, 30.0, 96.0, 48.0)),
+        "dragging should not paint a ghost fill around the dragged element; fills: {:?}",
+        backend.fill_rects
+    );
+    assert!(
+        backend
+            .fill_rects
+            .iter()
+            .any(|rect| *rect == Rect::xywh(540.0, 30.0, 120.0, 80.0)),
+        "dragging should still paint the target container preview; fills: {:?}",
+        backend.fill_rects
+    );
 }
 
 #[test]
