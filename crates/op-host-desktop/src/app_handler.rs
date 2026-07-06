@@ -872,9 +872,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                             return;
                         }
                     }
-                    if self.host.is_dragging_node() {
-                        window.set_cursor(winit::window::CursorIcon::Move);
-                    } else if over_layer_panel {
+                    if self.host.is_dragging_node() || over_layer_panel {
                         window.set_cursor(winit::window::CursorIcon::Default);
                     } else {
                         // `cursor_hint` hit-tests the layout-resolved render

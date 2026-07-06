@@ -190,6 +190,9 @@ impl WidgetHostNative {
         {
             return Some(false);
         }
+        let zoom = self.editor_state.viewport.zoom.max(0.0001);
+        let total_dx = ((x - drag.press_screen_x) / zoom) as f64;
+        let total_dy = ((y - drag.press_screen_y) / zoom) as f64;
         if !drag.moved {
             let option_source_ids: Vec<op_editor_core::NodeId> =
                 self.editor_state.selection.set.to_vec();
@@ -201,21 +204,23 @@ impl WidgetHostNative {
                     .is_some()
             {
                 self.option_drag_source_ids = option_source_ids;
+                let _ = self
+                    .editor_state
+                    .move_selected_in_layout_direction(total_dx, total_dy);
                 self.mark_dirty();
             }
             if let Some(d) = self.node_drag.as_mut() {
                 d.moved = true;
             }
         }
-        let zoom = self.editor_state.viewport.zoom.max(0.0001);
         // Net doc-space travel since the press — the release commit
         // uses it to locate dropped flex children (which never
         // doc-translate during the drag). Recomputed from the press
         // anchor so smart-guide rewinds of `last_screen_*` can't
         // double-count.
         if let Some(d) = self.node_drag.as_mut() {
-            d.total_dx = ((x - d.press_screen_x) / zoom) as f64;
-            d.total_dy = ((y - d.press_screen_y) / zoom) as f64;
+            d.total_dx = total_dx;
+            d.total_dy = total_dy;
         }
         let prev_screen_x = drag.last_screen_x;
         let prev_screen_y = drag.last_screen_y;
@@ -276,7 +281,7 @@ impl WidgetHostNative {
                 }
             }
             if let Some(drag) = self.node_drag {
-                self.update_node_drag_preview(&drag);
+                self.apply_live_node_drag_preview(&drag);
             }
             return Some(true);
         }
@@ -1394,11 +1399,37 @@ impl WidgetHostNative {
         if let Some(drag) = self.node_drag.take() {
             // Drag ended — drop the transient smart-guide lines, then
             // run the drop policy (auto-layout reorder / reparent).
+            self.refresh_layout_scene();
+            let before_scene = self.layout_scene.clone();
+            let release_overlay = (self.editor_state.selection_count() == 1)
+                .then(|| {
+                    drag.overlay_bounds
+                        .map(|bounds| (self.editor_state.selection.anchor.clone(), bounds))
+                })
+                .flatten();
+            let should_commit_drop = self
+                .editor_state
+                .editor_ui
+                .canvas_drop_indicator
+                .as_ref()
+                .map(|indicator| indicator.target.is_some())
+                .unwrap_or(false)
+                || self.editor_state.selection_count() != 1;
             self.editor_state.editor_ui.active_guides.clear();
             self.editor_state.editor_ui.canvas_drop_indicator = None;
-            let _ = self.commit_node_drag(&drag);
+            if should_commit_drop {
+                let _ = self.commit_node_drag(&drag);
+            }
             self.option_drag_source_ids.clear();
             self.mark_dirty();
+            if should_commit_drop {
+                self.start_layout_transition_from_scene(before_scene);
+            } else {
+                self.refresh_layout_scene();
+                if let Some((node_id, bounds)) = release_overlay {
+                    self.start_layout_transition_from_bounds(&node_id, bounds);
+                }
+            }
             return true;
         }
         if self.code_selection_drag.take().is_some() {
@@ -1506,10 +1537,37 @@ impl WidgetHostNative {
         if let Some(drag) = self.node_drag.take() {
             // Drag ended — drop the transient smart-guide lines, then
             // run the drop policy (auto-layout reorder / reparent).
+            self.refresh_layout_scene();
+            let before_scene = self.layout_scene.clone();
+            let release_overlay = (self.editor_state.selection_count() == 1)
+                .then(|| {
+                    drag.overlay_bounds
+                        .map(|bounds| (self.editor_state.selection.anchor.clone(), bounds))
+                })
+                .flatten();
+            let should_commit_drop = self
+                .editor_state
+                .editor_ui
+                .canvas_drop_indicator
+                .as_ref()
+                .map(|indicator| indicator.target.is_some())
+                .unwrap_or(false)
+                || self.editor_state.selection_count() != 1;
             self.editor_state.editor_ui.active_guides.clear();
-            let _ = self.commit_node_drag(&drag);
+            self.editor_state.editor_ui.canvas_drop_indicator = None;
+            if should_commit_drop {
+                let _ = self.commit_node_drag(&drag);
+            }
             self.option_drag_source_ids.clear();
             self.mark_dirty();
+            if should_commit_drop {
+                self.start_layout_transition_from_scene(before_scene);
+            } else {
+                self.refresh_layout_scene();
+                if let Some((node_id, bounds)) = release_overlay {
+                    self.start_layout_transition_from_bounds(&node_id, bounds);
+                }
+            }
             return true;
         }
         if self.code_selection_drag.take().is_some() {

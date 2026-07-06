@@ -724,6 +724,9 @@ impl CkInner {
         if let Some(ime) = self.ime.as_mut() {
             ime.sync_focus(self.host.input_active());
         }
+        if self.host.layout_transition_active() {
+            crate::repaint_coalescer::request();
+        }
     }
 
     /// Rebuild the hidden ARIA DOM mirror from a freshly assembled tree.

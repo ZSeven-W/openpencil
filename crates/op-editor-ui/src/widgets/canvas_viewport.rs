@@ -316,6 +316,14 @@ pub struct CanvasViewport<'a> {
     pub(super) active_guides: Vec<op_editor_core::align_guides::AlignmentGuide>,
     /// Drop-target preview during canvas node dragging.
     pub(super) drop_indicator: Option<op_editor_core::editor_ui_state::CanvasDropIndicator>,
+    /// True while a selected canvas node is actively being dragged.
+    /// Selection chrome is hidden in that state so the dragged
+    /// element itself is the only moving visual affordance.
+    pub(super) node_drag_active: bool,
+    /// Optional floating copy of the dragged node. The base scene can
+    /// still be reflowed to preview sibling avoidance while this copy
+    /// follows the cursor.
+    pub(super) node_drag_overlay: Option<CanvasNodeDragOverlay>,
     /// Text node being edited (scene-space string id) and its shared
     /// draft/caret/selection state.
     pub(super) text_editing: Option<String>,
@@ -333,6 +341,12 @@ pub struct CanvasViewport<'a> {
     /// carries no node names); painted screen-space above each root
     /// frame (TS `drawFrameLabelColored`).
     pub(super) frame_labels: Vec<(String, String, Color)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CanvasNodeDragOverlay {
+    pub node_id: String,
+    pub target_origin_doc: Point2D,
 }
 
 impl<'a> CanvasViewport<'a> {
@@ -372,6 +386,8 @@ impl<'a> CanvasViewport<'a> {
             pen_dragging_handle: state.ui.pen_dragging_handle,
             active_guides: state.editor_ui.active_guides.clone(),
             drop_indicator: state.editor_ui.canvas_drop_indicator.clone(),
+            node_drag_active: false,
+            node_drag_overlay: None,
             text_editing: state
                 .ui
                 .text_editing
@@ -417,6 +433,8 @@ impl<'a> CanvasViewport<'a> {
             pen_dragging_handle: false,
             active_guides: Vec::new(),
             drop_indicator: None,
+            node_drag_active: false,
+            node_drag_overlay: None,
             text_editing: None,
             text_edit_input: Default::default(),
             canvas_background,
@@ -441,6 +459,14 @@ impl<'a> CanvasViewport<'a> {
             rect,
             point,
         )
+    }
+
+    pub fn set_node_drag_active(&mut self, active: bool) {
+        self.node_drag_active = active;
+    }
+
+    pub fn set_node_drag_overlay(&mut self, overlay: Option<CanvasNodeDragOverlay>) {
+        self.node_drag_overlay = overlay;
     }
 }
 
@@ -562,14 +588,21 @@ impl<'a> Widget for CanvasViewport<'a> {
         let viewport = &self.viewport;
         super::canvas_viewport_grid::paint_grid(cx, rect, viewport, &self.theme);
         let indicators = op_editor_core::agent_indicators::snapshot_at_if_active(self.now_ms);
-        let show_handles = self.selected_set.len() == 1;
+        let selection_chrome_visible = !self.node_drag_active;
+        let show_handles = selection_chrome_visible && self.selected_set.len() == 1;
         let single_selected_id = self.selected_set.first().map(String::as_str);
         let selected_lookup = if show_handles {
             single_selected_id
         } else {
             None
         };
-        let selected_root_frame_label = show_handles
+        let hovered_lookup = if selection_chrome_visible {
+            self.hovered.as_deref()
+        } else {
+            None
+        };
+        let selected_root_frame_label = selection_chrome_visible
+            && show_handles
             && self.scene.active_page().is_some_and(|page| {
                 single_selected_id.is_some_and(|id| page.children.iter().any(|node| node.id == id))
             });
@@ -598,8 +631,12 @@ impl<'a> Widget for CanvasViewport<'a> {
             let reveal_schedule = indicators
                 .as_ref()
                 .and_then(|indicators| reveal_schedule_for_paint(&indicators.reveals, self.now_ms));
+            let hidden_drag_node = self
+                .node_drag_overlay
+                .as_ref()
+                .map(|overlay| overlay.node_id.as_str());
             for child in page.children.iter().rev() {
-                let child_hits = super::canvas_viewport_paint::paint_node_with_options(
+                let child_hits = super::canvas_viewport_paint::paint_node_with_options_hiding(
                     cx,
                     child,
                     viewport_origin,
@@ -607,11 +644,35 @@ impl<'a> Widget for CanvasViewport<'a> {
                     edit_caret.clone(),
                     cull,
                     reveal_schedule,
-                    self.hovered.as_deref(),
+                    hovered_lookup,
                     selected_lookup,
                     self.pen_in_progress.as_deref(),
+                    hidden_drag_node,
                 );
                 paint_hits.merge_missing(child_hits);
+            }
+            if let Some(overlay) = self.node_drag_overlay.as_ref() {
+                if let Some(node) = page.find(overlay.node_id.as_str()) {
+                    let mut floating = node.clone();
+                    let current = floating.aggregate_bounds();
+                    super::canvas_layout_transition::translate_scene_subtree(
+                        &mut floating,
+                        overlay.target_origin_doc.x - current.origin.x,
+                        overlay.target_origin_doc.y - current.origin.y,
+                    );
+                    let _ = super::canvas_viewport_paint::paint_node_with_options(
+                        cx,
+                        &floating,
+                        viewport_origin,
+                        viewport.zoom,
+                        None,
+                        cull,
+                        reveal_schedule,
+                        None,
+                        None,
+                        None,
+                    );
+                }
             }
             if let Some(indicators) = indicators.as_ref() {
                 super::canvas_agent_cursor::paint_agent_cursors(
@@ -676,7 +737,14 @@ impl<'a> Widget for CanvasViewport<'a> {
         // bounds, and flex insertion line. It is painted over nodes
         // but below the final selection handles.
         if let Some(indicator) = self.drop_indicator.as_ref() {
-            paint_drop_indicator(cx, rect, viewport, &self.theme, indicator);
+            paint_drop_indicator(
+                cx,
+                rect,
+                viewport,
+                &self.theme,
+                indicator,
+                !self.node_drag_active,
+            );
         }
 
         // 4. Selection overlay — outlines + handles (single-select only).
@@ -691,29 +759,31 @@ impl<'a> Widget for CanvasViewport<'a> {
         } else {
             None
         };
-        if let Some(page) = active_page {
-            let selection_input = super::canvas_selection_overlay::SelectionPaintInput {
-                theme: &self.theme,
-                indicators: indicators.as_ref(),
-                now_ms: self.now_ms,
-                canvas_rect: rect,
-                viewport,
-                selection_label: self.selection_label.as_deref(),
-            };
-            if let Some(node) = single_selected_node {
-                super::canvas_selection_overlay::paint_selected_node(
-                    cx,
-                    node,
-                    &selection_input,
-                    show_handles,
-                );
-            } else if !self.selected_set.is_empty() {
-                super::canvas_selection_overlay::paint_multi_selection_overlays(
-                    cx,
-                    &page.children,
-                    &self.selected_set,
-                    &selection_input,
-                );
+        if selection_chrome_visible {
+            if let Some(page) = active_page {
+                let selection_input = super::canvas_selection_overlay::SelectionPaintInput {
+                    theme: &self.theme,
+                    indicators: indicators.as_ref(),
+                    now_ms: self.now_ms,
+                    canvas_rect: rect,
+                    viewport,
+                    selection_label: self.selection_label.as_deref(),
+                };
+                if let Some(node) = single_selected_node {
+                    super::canvas_selection_overlay::paint_selected_node(
+                        cx,
+                        node,
+                        &selection_input,
+                        show_handles,
+                    );
+                } else if !self.selected_set.is_empty() {
+                    super::canvas_selection_overlay::paint_multi_selection_overlays(
+                        cx,
+                        &page.children,
+                        &self.selected_set,
+                        &selection_input,
+                    );
+                }
             }
         }
 
@@ -806,6 +876,7 @@ fn paint_drop_indicator(
     viewport: &DocViewport,
     theme: &Theme,
     indicator: &op_editor_core::editor_ui_state::CanvasDropIndicator,
+    paint_ghost: bool,
 ) {
     let to_screen_rect = |r: op_editor_core::editor_ui_state::CanvasOverlayRect| {
         Rect::xywh(
@@ -823,11 +894,13 @@ fn paint_drop_indicator(
         cx.backend.fill_rect(rect, fill);
         cx.backend.stroke_rect(rect, stroke, 1.0);
     }
-    let ghost = to_screen_rect(indicator.ghost);
-    let ghost_fill = Color { a: 0.10, ..primary };
-    let ghost_stroke = Color { a: 0.85, ..primary };
-    cx.backend.fill_rect(ghost, ghost_fill);
-    paint_dashed_rect(cx, ghost, ghost_stroke, 1.25);
+    if paint_ghost {
+        let ghost = to_screen_rect(indicator.ghost);
+        let ghost_fill = Color { a: 0.10, ..primary };
+        let ghost_stroke = Color { a: 0.85, ..primary };
+        cx.backend.fill_rect(ghost, ghost_fill);
+        paint_dashed_rect(cx, ghost, ghost_stroke, 1.25);
+    }
     if let Some(line) = indicator.insertion {
         let from = Point2D::new(
             canvas_rect.origin.x + viewport.pan_x + line.x1 as f32 * viewport.zoom,

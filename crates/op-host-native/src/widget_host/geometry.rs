@@ -437,7 +437,7 @@ impl WidgetHostNative {
             return CursorHint::ResizeEw;
         }
         if self.is_dragging_node() {
-            return CursorHint::Grabbing;
+            return CursorHint::Default;
         }
         if self.rotate_drag.is_some() {
             return CursorHint::Rotate;
@@ -448,6 +448,14 @@ impl WidgetHostNative {
         if !self.over_canvas(x, y, viewport_w, viewport_h) {
             return CursorHint::Default;
         }
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let canvas_local = Point2D::new(x - cx0, y - cy0);
+        let doc_point = self.editor_state.viewport.to_document(canvas_local);
+        let zoom = self.editor_state.viewport.zoom;
+        let over_canvas_node = self
+            .layout_scene
+            .node_at_doc_point(doc_point, zoom)
+            .is_some();
         match self.editor_state.tool {
             Tool::Hand => CursorHint::Grab,
             // Shapes / Frame / Form-widget tools all place a node on
@@ -467,10 +475,15 @@ impl WidgetHostNative {
             | Tool::Checkbox
             | Tool::Slider
             | Tool::Progress
-            | Tool::Tabs => CursorHint::Crosshair,
+            | Tool::Tabs => {
+                if over_canvas_node {
+                    CursorHint::Default
+                } else {
+                    CursorHint::Crosshair
+                }
+            }
             Tool::Text => CursorHint::Text,
             Tool::Select => {
-                let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
                 let canvas_rect = Rect {
                     origin: Point2D::new(cx0, cy0),
                     size: Point2D::new(cw, ch),
@@ -494,15 +507,8 @@ impl WidgetHostNative {
                 {
                     return CursorHint::Rotate;
                 }
-                let canvas_local = Point2D::new(x - cx0, y - cy0);
-                let doc_point = self.editor_state.viewport.to_document(canvas_local);
-                let zoom = self.editor_state.viewport.zoom;
-                if self
-                    .layout_scene
-                    .node_at_doc_point(doc_point, zoom)
-                    .is_some()
-                {
-                    return CursorHint::Move;
+                if over_canvas_node {
+                    return CursorHint::Default;
                 }
                 CursorHint::Default
             }
