@@ -118,55 +118,62 @@ impl NativeBackend {
     /// synthetically (same philosophy as synthetic bold).
     #[tracing::instrument(skip(self, canvas, layout))]
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
-        let italic = layout.italic();
-        for run in draw_text_runs(layout) {
-            let segments = self.font_resolver.segment_text(
-                run.content.as_str(),
-                Some(&run.font_family),
-                run.font_weight,
-                italic,
-            );
-            if segments.is_empty() {
-                continue;
+        // Serialize the whole text-run paint — typeface resolution plus glyph
+        // rasterization via `draw_str`, both DirectWrite-backed on Windows —
+        // with every other font user, so a concurrent design-worker layout
+        // measure can't race skia's Windows font backend. Reentrant, so this
+        // is a no-op re-lock when the caller already holds it.
+        jian_skia::with_font_lock(|| {
+            let italic = layout.italic();
+            for run in draw_text_runs(layout) {
+                let segments = self.font_resolver.segment_text(
+                    run.content.as_str(),
+                    Some(&run.font_family),
+                    run.font_weight,
+                    italic,
+                );
+                if segments.is_empty() {
+                    continue;
+                }
+                let jc = run.color;
+                let mut paint = skia_safe::Paint::new(
+                    skia_safe::Color4f::new(
+                        f32::from(jc.r()) / 255.0,
+                        f32::from(jc.g()) / 255.0,
+                        f32::from(jc.b()) / 255.0,
+                        f32::from(jc.a()) / 255.0,
+                    ),
+                    None,
+                );
+                paint.set_anti_alias(true);
+                // Synthetic bold for typefaces the system serves at one
+                // weight only (notably the bundled Roboto-Regular for
+                // ASCII at weight ≥600). Stroke width scales with size
+                // so 28pt headline gets the same visual weight relative
+                // to its glyph as 13pt body text.
+                let want_bold = run.font_weight >= 600;
+                let mut x = origin.x + run.origin.x;
+                let y = origin.y + run.origin.y;
+                for segment in segments {
+                    let mut font = skia_safe::Font::new(&segment.typeface, run.font_size);
+                    if segment.synthetic_italic {
+                        font.set_skew_x(jian_skia::SYNTHETIC_ITALIC_SKEW);
+                    }
+                    if want_bold && segment.synthetic_bold {
+                        paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
+                        paint.set_stroke_width(run.font_size * 0.06);
+                    } else {
+                        paint.set_style(skia_safe::PaintStyle::Fill);
+                        paint.set_stroke_width(0.0);
+                    }
+                    canvas.draw_str(&segment.text, (x, y), &font, &paint);
+                    let (mut advance, _) = font.measure_str(&segment.text, None);
+                    if segment.synthetic_bold {
+                        advance *= jian_skia::SYNTHETIC_BOLD_WIDTH_FACTOR;
+                    }
+                    x += advance;
+                }
             }
-            let jc = run.color;
-            let mut paint = skia_safe::Paint::new(
-                skia_safe::Color4f::new(
-                    f32::from(jc.r()) / 255.0,
-                    f32::from(jc.g()) / 255.0,
-                    f32::from(jc.b()) / 255.0,
-                    f32::from(jc.a()) / 255.0,
-                ),
-                None,
-            );
-            paint.set_anti_alias(true);
-            // Synthetic bold for typefaces the system serves at one
-            // weight only (notably the bundled Roboto-Regular for
-            // ASCII at weight ≥600). Stroke width scales with size
-            // so 28pt headline gets the same visual weight relative
-            // to its glyph as 13pt body text.
-            let want_bold = run.font_weight >= 600;
-            let mut x = origin.x + run.origin.x;
-            let y = origin.y + run.origin.y;
-            for segment in segments {
-                let mut font = skia_safe::Font::new(&segment.typeface, run.font_size);
-                if segment.synthetic_italic {
-                    font.set_skew_x(jian_skia::SYNTHETIC_ITALIC_SKEW);
-                }
-                if want_bold && segment.synthetic_bold {
-                    paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
-                    paint.set_stroke_width(run.font_size * 0.06);
-                } else {
-                    paint.set_style(skia_safe::PaintStyle::Fill);
-                    paint.set_stroke_width(0.0);
-                }
-                canvas.draw_str(&segment.text, (x, y), &font, &paint);
-                let (mut advance, _) = font.measure_str(&segment.text, None);
-                if segment.synthetic_bold {
-                    advance *= jian_skia::SYNTHETIC_BOLD_WIDTH_FACTOR;
-                }
-                x += advance;
-            }
-        }
+        });
     }
 }
