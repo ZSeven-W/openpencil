@@ -5,8 +5,8 @@
 //! x ≥ 400 so every screen press lands right of the AI chat float
 //! (x ≤ 612) and the floating toolbar (x ≈ 252-300, y ≈ 60-400).
 
-use super::WidgetHostNative;
-use op_editor_core::{NodeId, PenNodeExt};
+use super::{CursorHint, NodeDragState, WidgetHostNative};
+use op_editor_core::{NodeId, PenNodeExt, Tool};
 
 const VIEWPORT_W: f32 = 1440.0;
 const VIEWPORT_H: f32 = 900.0;
@@ -225,6 +225,16 @@ const VSTACK: &str = r#"{"version":"0.8.0","children":[
    ]}
 ]}"#;
 
+const HSTACK: &str = r#"{"version":"0.8.0","children":[
+  {"type":"frame","id":"row","name":"Row","x":400,"y":60,"width":360,"height":120,
+   "layout":"horizontal","gap":8,
+   "children":[
+     {"type":"rectangle","id":"a","name":"A","width":80,"height":40},
+     {"type":"rectangle","id":"b","name":"B","width":80,"height":40},
+     {"type":"rectangle","id":"c","name":"C","width":80,"height":40}
+   ]}
+]}"#;
+
 fn child_order(host: &WidgetHostNative, parent: &str) -> Vec<String> {
     op_editor_core::walkers::find_node(host.editor_state().active_children(), &NodeId::new(parent))
         .and_then(|n| n.children())
@@ -233,7 +243,7 @@ fn child_order(host: &WidgetHostNative, parent: &str) -> Vec<String> {
 }
 
 #[test]
-fn dragging_flex_child_reorders_at_midpoint_index_on_release() {
+fn dragging_flex_child_reorders_at_midpoint_index_during_preview() {
     let mut host = WidgetHostNative::new();
     seed(&mut host, VSTACK);
     // Entered context so the press selects the flex child itself.
@@ -245,16 +255,32 @@ fn dragging_flex_child_reorders_at_midpoint_index_on_release() {
     // and c (176) → index 1.
     let (mx, my) = screen_at(&host, 440.0, 160.0);
     host.apply_cursor_move(mx, my);
-    let preview = host
-        .editor_state()
-        .editor_ui
-        .canvas_drop_indicator
-        .as_ref()
-        .expect("dragging a flex child paints a drop preview");
-    assert!(preview.target.is_some());
     assert!(
-        preview.insertion.is_some(),
-        "same-flex reorder paints an insertion line"
+        host.editor_state()
+            .editor_ui
+            .canvas_drop_indicator
+            .is_none(),
+        "same-container preview uses live sibling reflow, not an insertion line"
+    );
+    assert_eq!(
+        child_order(&host, "stack"),
+        vec!["b", "a", "c"],
+        "siblings should avoid the dragged child during cursor move"
+    );
+    let overlay = host
+        .node_drag
+        .and_then(|drag| drag.overlay_bounds)
+        .expect("same-container flex drag should paint a floating selected-node overlay");
+    assert!(
+        (overlay.origin.y - 140.0).abs() < 1.0,
+        "overlay follows the cursor instead of the reflow slot; got {:?}",
+        overlay
+    );
+    assert!(
+        host.layout_transition
+            .as_ref()
+            .is_some_and(|transition| transition.is_active(host.now_ms)),
+        "same-container reorder should animate sibling avoidance"
     );
     // Flex child must not doc-translate during the drag.
     let a = op_editor_core::walkers::find_node(
@@ -269,7 +295,60 @@ fn dragging_flex_child_reorders_at_midpoint_index_on_release() {
         .editor_ui
         .canvas_drop_indicator
         .is_none());
+    assert!(
+        host.layout_transition
+            .as_ref()
+            .is_some_and(|transition| transition.is_active(host.now_ms)),
+        "release should animate the floating dragged node into its final slot"
+    );
     assert_eq!(child_order(&host, "stack"), vec!["b", "a", "c"]);
+}
+
+#[test]
+fn select_tool_hovering_canvas_node_keeps_default_cursor() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, NESTED);
+    let (x, y) = screen_at(&host, 660.0, 80.0);
+
+    assert_eq!(
+        host.cursor_hint(x, y, VIEWPORT_W, VIEWPORT_H),
+        CursorHint::Default
+    );
+}
+
+#[test]
+fn placement_tool_hovering_canvas_node_keeps_default_cursor() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, NESTED);
+    host.editor_state_mut().tool = Tool::Rect;
+    host.mark_paint_dirty_for_test();
+    let (x, y) = screen_at(&host, 660.0, 80.0);
+
+    assert_eq!(
+        host.cursor_hint(x, y, VIEWPORT_W, VIEWPORT_H),
+        CursorHint::Default
+    );
+}
+
+#[test]
+fn active_node_drag_keeps_default_cursor() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, NESTED);
+    host.node_drag = Some(NodeDragState {
+        last_screen_x: 500.0,
+        last_screen_y: 500.0,
+        press_screen_x: 500.0,
+        press_screen_y: 500.0,
+        moved: true,
+        total_dx: 0.0,
+        total_dy: 0.0,
+        overlay_bounds: None,
+    });
+
+    assert_eq!(
+        host.cursor_hint(900.0, 220.0, VIEWPORT_W, VIEWPORT_H),
+        CursorHint::Default
+    );
 }
 
 #[test]
@@ -286,6 +365,52 @@ fn dragging_flex_child_within_its_own_slot_keeps_order() {
 }
 
 #[test]
+fn option_dragging_vertical_layout_child_up_copies_before_source() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, VSTACK);
+    host.editor_state_mut().editor_ui.entered_container = Some(NodeId::new("stack"));
+    host.set_modifier_alt(true);
+    host.mark_paint_dirty_for_test();
+
+    press_doc(&mut host, 440.0, 128.0);
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("b"));
+    let (mx, my) = screen_at(&host, 440.0, 116.0);
+    host.apply_cursor_move(mx, my);
+    release(&mut host);
+
+    let order = child_order(&host, "stack");
+    let clone_id = host.editor_state().selection.anchor.as_str().to_string();
+    assert_ne!(clone_id, "b");
+    assert_eq!(
+        order,
+        vec!["a".to_string(), clone_id, "b".to_string(), "c".to_string()]
+    );
+}
+
+#[test]
+fn option_dragging_horizontal_layout_child_left_copies_before_source() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, HSTACK);
+    host.editor_state_mut().editor_ui.entered_container = Some(NodeId::new("row"));
+    host.set_modifier_alt(true);
+    host.mark_paint_dirty_for_test();
+
+    press_doc(&mut host, 528.0, 80.0);
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("b"));
+    let (mx, my) = screen_at(&host, 516.0, 80.0);
+    host.apply_cursor_move(mx, my);
+    release(&mut host);
+
+    let order = child_order(&host, "row");
+    let clone_id = host.editor_state().selection.anchor.as_str().to_string();
+    assert_ne!(clone_id, "b");
+    assert_eq!(
+        order,
+        vec!["a".to_string(), clone_id, "b".to_string(), "c".to_string()]
+    );
+}
+
+#[test]
 fn flex_child_dragged_to_blank_canvas_becomes_root_at_dropped_position() {
     let mut host = WidgetHostNative::new();
     seed(&mut host, VSTACK);
@@ -296,16 +421,31 @@ fn flex_child_dragged_to_blank_canvas_becomes_root_at_dropped_position() {
     assert_eq!(host.editor_state().selection.anchor, NodeId::new("a"));
     let (mx, my) = screen_at(&host, 760.0, 80.0); // +320 doc px, outside stack
     host.apply_cursor_move(mx, my);
-    let preview = host
-        .editor_state()
-        .editor_ui
-        .canvas_drop_indicator
-        .as_ref()
-        .expect("drag out paints a root-drop ghost");
-    assert!(preview.target.is_none());
-    assert!(preview.insertion.is_none());
-    assert!((preview.ghost.x - 720.0).abs() < 1.0);
-    assert!((preview.ghost.y - 60.0).abs() < 1.0);
+    assert!(
+        host.editor_state()
+            .editor_ui
+            .canvas_drop_indicator
+            .is_none(),
+        "blank-canvas drag preview is the real page-root position"
+    );
+    let children = host.editor_state().active_children();
+    assert_eq!(
+        children[0].id_str(),
+        "a",
+        "dragged flow child leaves its source container during cursor move"
+    );
+    assert_eq!(child_order(&host, "stack"), vec!["b", "c"]);
+    let moved = op_editor_core::walkers::find_node(children, &NodeId::new("a")).unwrap();
+    assert!(
+        (moved.base().x.unwrap_or(0.0) - 720.0).abs() < 1.0,
+        "preview root x should use dropped bounds, got {:?}",
+        moved.base().x
+    );
+    assert!(
+        (moved.base().y.unwrap_or(0.0) - 60.0).abs() < 1.0,
+        "preview root y should use dropped bounds, got {:?}",
+        moved.base().y
+    );
     release(&mut host);
     assert!(host
         .editor_state()
@@ -327,6 +467,62 @@ fn flex_child_dragged_to_blank_canvas_becomes_root_at_dropped_position() {
         moved.base().y
     );
     assert_eq!(child_order(&host, "stack"), vec!["b", "c"]);
+}
+
+#[test]
+fn child_dragged_into_other_layout_uses_cross_container_placeholder() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[
+          {"type":"frame","id":"src","name":"Source","x":400,"y":60,"width":200,"height":120,
+           "children":[
+             {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
+           ]},
+          {"type":"frame","id":"target","name":"Target","x":700,"y":60,"width":220,"height":180,
+           "layout":"vertical","gap":8,
+           "children":[
+             {"type":"rectangle","id":"top","name":"Top","width":120,"height":40},
+             {"type":"rectangle","id":"bottom","name":"Bottom","width":120,"height":40}
+           ]}
+        ]}"#,
+    );
+    host.editor_state_mut().editor_ui.entered_container = Some(NodeId::new("src"));
+    host.mark_paint_dirty_for_test();
+
+    press_doc(&mut host, 445.0, 105.0);
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("box"));
+    let (mx, my) = screen_at(&host, 760.0, 120.0);
+    host.apply_cursor_move(mx, my);
+
+    let src = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("src"),
+    )
+    .unwrap();
+    assert!(
+        src.children().unwrap().is_empty(),
+        "drag preview should remove the item from its source container"
+    );
+    let preview = host
+        .editor_state()
+        .editor_ui
+        .canvas_drop_indicator
+        .as_ref()
+        .expect("cross-container drag keeps a target placeholder");
+    assert!(preview.target.is_some());
+    assert!(
+        preview.insertion.is_some(),
+        "auto-layout cross-container target should show an insertion line"
+    );
+
+    release(&mut host);
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .canvas_drop_indicator
+        .is_none());
+    assert_eq!(child_order(&host, "target"), vec!["top", "box", "bottom"]);
 }
 
 #[test]

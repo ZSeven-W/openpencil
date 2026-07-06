@@ -219,6 +219,7 @@ fn node_drag_snap_does_not_trap_incremental_cursor_motion() {
         moved: true,
         total_dx: 0.0,
         total_dy: 0.0,
+        overlay_bounds: None,
     });
 
     for x in (502..=522).step_by(2) {
@@ -261,6 +262,7 @@ fn node_drag_skips_smart_guides_for_large_documents() {
         moved: true,
         total_dx: 0.0,
         total_dy: 0.0,
+        overlay_bounds: None,
     });
 
     assert!(host.apply_cursor_move(502.0, 500.0));
@@ -300,6 +302,7 @@ fn node_drag_keeps_flex_child_in_layout_flow() {
         moved: true,
         total_dx: 0.0,
         total_dy: 0.0,
+        overlay_bounds: None,
     });
 
     assert!(host.apply_cursor_move(520.0, 500.0));
@@ -348,6 +351,7 @@ fn dragging_a_selection_with_a_locked_node_does_not_drift_it_in_the_scene() {
         moved: true,
         total_dx: 0.0,
         total_dy: 0.0,
+        overlay_bounds: None,
     });
     assert!(host.apply_cursor_move(540.0, 500.0));
 
@@ -393,6 +397,7 @@ fn incremental_drag_then_doc_restored_to_cached_value_rebuilds_the_scene() {
         moved: true,
         total_dx: 0.0,
         total_dy: 0.0,
+        overlay_bounds: None,
     });
     assert!(host.apply_cursor_move(540.0, 500.0));
     let patched = scene_node_xy(&host, "free");
