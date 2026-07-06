@@ -1078,6 +1078,13 @@ fn main() {
 // test stayed here — it drives the GUI design-session pumps, which need
 // `WidgetHostNative` (absent from op-host-services's default-features-off
 // op-host-native dependency).
+//
+// Runs on Windows too: the test spawns `run_cli_turn` (design layout-feedback
+// through `SkiaMeasure`) concurrently with the main thread's `WidgetHostNative`
+// construction + pumps (also `SkiaMeasure`) — the same two-thread DirectWrite
+// contention that hits production on Windows. `jian_skia::with_font_lock` now
+// serializes all `FontMgr`/DirectWrite access, so this concurrency is safe and
+// the test guards that the fix holds.
 #[cfg(test)]
 #[path = "chat_intent_host_tests.rs"]
 mod chat_intent_host_tests;

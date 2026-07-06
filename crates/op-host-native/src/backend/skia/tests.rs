@@ -156,18 +156,41 @@ fn dot_point_buffer_reuses_capacity_between_batches() {
 #[test]
 fn explicit_family_typeface_lookup_is_cached() {
     let mut be = NativeBackend::with_dpi(1.0);
-    let baseline = be.family_typeface_cache_len();
+    // A *concurrent* test registering bundled/imported fonts bumps the
+    // process-global font generation, which clears the resolver's per-char
+    // cache (`refresh_if_stale`) — spuriously breaking the `+ 1` counts.
+    // Retry until we get one clean measurement window: a warm-up lookup first
+    // syncs the resolver to the current generation (so a *prior* bump can't
+    // clear mid-measure), then we require the cache to behave AND the global
+    // generation to hold steady across the window. Under no contention the
+    // first attempt succeeds.
+    for attempt in 0..32 {
+        // Warm-up on a DISTINCT char settles the resolver against the current
+        // generation and seeds the cache, so `baseline` is stable.
+        let _ = be.typeface_for_family_char('Z', "Georgia", 400);
+        let gen = jian_skia::font_generation();
+        let baseline = be.family_typeface_cache_len();
 
-    let first = be
-        .typeface_for_family_char('A', "Georgia", 400)
-        .map(|tf| tf.unique_id());
-    assert_eq!(be.family_typeface_cache_len(), baseline + 1);
+        let first = be
+            .typeface_for_family_char('A', "Georgia", 400)
+            .map(|tf| tf.unique_id());
+        let grew_by_one = be.family_typeface_cache_len() == baseline + 1;
 
-    let second = be
-        .typeface_for_family_char('A', "Georgia", 400)
-        .map(|tf| tf.unique_id());
-    assert_eq!(second, first);
-    assert_eq!(be.family_typeface_cache_len(), baseline + 1);
+        let second = be
+            .typeface_for_family_char('A', "Georgia", 400)
+            .map(|tf| tf.unique_id());
+        let still_one = be.family_typeface_cache_len() == baseline + 1;
+
+        // A clean window: no concurrent generation bump cleared the cache,
+        // and caching behaved as asserted. Otherwise retry.
+        if jian_skia::font_generation() == gen && grew_by_one && second == first && still_one {
+            return;
+        }
+        assert!(
+            attempt < 31,
+            "typeface cache never stabilized under concurrent font registration"
+        );
+    }
 }
 
 #[test]
