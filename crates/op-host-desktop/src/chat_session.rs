@@ -128,10 +128,9 @@ fn drain_tool_requests(
             continue;
         }
         if req.name == op_host_services::chat_intent::APPLY_MODIFICATION_OP {
-            let nodes = serde_json::from_str::<serde_json::Value>(&req.args_json)
-                .ok()
-                .and_then(|v| v.get("nodes").and_then(|n| n.as_array().cloned()))
-                .unwrap_or_default();
+            let nodes = op_host_services::chat_canvas_tools::parse_design_modification_ops_arg(
+                &req.args_json,
+            );
             let (count, mutated) =
                 op_host_services::chat_canvas_tools::apply_design_modification(state, &nodes);
             if mutated {

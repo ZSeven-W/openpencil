@@ -1,9 +1,10 @@
 //! Tests for the CLI standard-mode intent router (GAP #33).
 
-use std::sync::mpsc;
+use std::collections::VecDeque;
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
+use op_ai::chat_provider::{ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, StopReason};
 use op_editor_core::EditorState;
 use op_orchestrator::DesignRequest;
 
@@ -140,6 +141,50 @@ impl ChatProvider for Scripted {
     }
 }
 
+struct ScriptedSequence {
+    responses: Mutex<VecDeque<Vec<ChatDelta>>>,
+    requests: Mutex<Vec<ChatRequest>>,
+}
+
+impl ScriptedSequence {
+    fn text(responses: &[&str]) -> Self {
+        Self {
+            responses: Mutex::new(responses.iter().map(|s| scripted_text_deltas(s)).collect()),
+            requests: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn requests(&self) -> Vec<ChatRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl ChatProvider for ScriptedSequence {
+    fn provider_label(&self) -> &str {
+        "scripted-sequence"
+    }
+
+    fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        self.requests.lock().unwrap().push(request);
+        let deltas = self
+            .responses
+            .lock()
+            .unwrap()
+            .pop_front()
+            .expect("scripted response for provider call");
+        Box::new(deltas.into_iter())
+    }
+}
+
+fn scripted_text_deltas(s: &str) -> Vec<ChatDelta> {
+    vec![
+        ChatDelta::TextDelta(s.to_string()),
+        ChatDelta::Done {
+            stop_reason: StopReason::EndTurn,
+        },
+    ]
+}
+
 // ---------------------------------------------------------------------------
 // LLM classification
 // ---------------------------------------------------------------------------
@@ -213,6 +258,20 @@ fn rect(id: &str, name: &str) -> PenNode {
     .expect("valid rectangle json")
 }
 
+fn image(id: &str, name: &str, src: &str) -> PenNode {
+    serde_json::from_value(serde_json::json!({
+        "type": "image",
+        "id": id,
+        "name": name,
+        "src": src,
+        "x": 0.0,
+        "y": 0.0,
+        "width": 120.0,
+        "height": 80.0,
+    }))
+    .expect("valid image json")
+}
+
 /// Page frame with a status bar + two content sections.
 fn state_with_page() -> EditorState {
     let mut state = EditorState::new();
@@ -228,6 +287,29 @@ fn state_with_page() -> EditorState {
         ],
     ));
     state
+}
+
+fn count_node_id(nodes: &[PenNode], id: &str) -> usize {
+    nodes
+        .iter()
+        .map(|node| {
+            usize::from(node.id_str() == id)
+                + node
+                    .children()
+                    .map(|kids| count_node_id(kids, id))
+                    .unwrap_or(0)
+        })
+        .sum()
+}
+
+fn modify_op(parent: &str, node: serde_json::Value) -> (String, serde_json::Value) {
+    (parent.to_string(), node)
+}
+
+fn modification_pairs_from_args(args_json: &str) -> Vec<(String, serde_json::Value)> {
+    let value = serde_json::from_str::<serde_json::Value>(args_json).expect("valid apply args");
+    serde_json::from_value(value.get("nodes").cloned().expect("nodes array"))
+        .expect("nodes are serialized parent/object pairs")
 }
 
 // ---------------------------------------------------------------------------
@@ -563,6 +645,78 @@ fn modify_plan_targets_selection_when_present() {
 }
 
 #[test]
+fn modify_plan_strips_base64_data_uris_from_context_nodes() {
+    let image_data_uri = "data:image/png;base64,AAAABBBBCCCC";
+    let fill_data_uri = "data:image/jpeg;base64,DDDDEEEEFFFF";
+    let mut image_fill_rect: PenNode = serde_json::from_value(serde_json::json!({
+        "type": "rectangle",
+        "id": "fill-card",
+        "name": "Image Fill Card",
+        "x": 0.0,
+        "y": 100.0,
+        "width": 120.0,
+        "height": 80.0,
+        "fill": [
+            { "type": "image", "url": fill_data_uri, "mode": "crop" },
+            { "type": "solid", "color": "$color-1" }
+        ],
+    }))
+    .expect("valid rectangle with image fill json");
+    image_fill_rect.base_mut().explain = Some("keep metadata".into());
+
+    let mut state = EditorState::new();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(frame(
+        "page-1",
+        "Home",
+        375.0,
+        vec![
+            image("hero-photo", "Hero Photo", image_data_uri),
+            image_fill_rect,
+        ],
+    ));
+
+    let plan = build_modify_plan(&state, "make it warmer").expect("plan");
+    let context_json = plan
+        .user_message
+        .strip_prefix("CONTEXT NODES:\n")
+        .and_then(|rest| rest.split_once("\n\nINSTRUCTION:\n").map(|(ctx, _)| ctx))
+        .expect("context section");
+    let context: serde_json::Value =
+        serde_json::from_str(context_json).expect("valid context json");
+
+    assert_eq!(
+        context
+            .pointer("/0/children/0/src")
+            .and_then(|v| v.as_str()),
+        Some("<image>")
+    );
+    assert_eq!(
+        context
+            .pointer("/0/children/1/fill/0/url")
+            .and_then(|v| v.as_str()),
+        Some("<image>")
+    );
+    assert_eq!(
+        context
+            .pointer("/0/children/1/fill/1/color")
+            .and_then(|v| v.as_str()),
+        Some("$color-1")
+    );
+    assert_eq!(
+        context
+            .pointer("/0/children/1/explain")
+            .and_then(|v| v.as_str()),
+        Some("keep metadata")
+    );
+    assert!(
+        !plan.user_message.contains("AAAABBBBCCCC") && !plan.user_message.contains("DDDDEEEEFFFF"),
+        "base64 blobs must not be sent to the model: {}",
+        plan.user_message
+    );
+}
+
+#[test]
 fn modify_plan_falls_back_to_last_frame_then_last_child() {
     // No selection → last top-level frame.
     let mut state = EditorState::new();
@@ -610,26 +764,40 @@ fn modify_plan_is_none_for_an_empty_page() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn apply_modification_updates_existing_and_inserts_new() {
+fn apply_modification_replaces_existing_and_inserts_unknown_top_level() {
     let mut state = state_with_page();
     let nodes = vec![
-        // Existing id → update in place.
-        serde_json::json!({ "id": "hero", "name": "Hero Updated" }),
+        // Existing id -> whole-node replacement.
+        modify_op(
+            "null",
+            serde_json::json!({
+                "id": "hero",
+                "type": "frame",
+                "name": "Hero Updated",
+                "width": 375.0,
+                "height": 200.0,
+                "children": []
+            }),
+        ),
         // Unknown id → insert under the primary frame (canonical
         // TextNode carries `content`).
-        serde_json::json!({
-            "id": "fresh-1",
-            "type": "text",
-            "name": "New Caption",
-            "content": "Hello",
-        }),
+        modify_op(
+            "null",
+            serde_json::json!({
+                "id": "fresh-1",
+                "type": "text",
+                "name": "New Caption",
+                "content": "Hello",
+            }),
+        ),
     ];
     let (count, mutated) = apply_design_modification(&mut state, &nodes);
-    assert_eq!(count, 2, "both nodes applied");
+    assert_eq!(count, 2, "replace existing plus insert unknown top-level");
     assert!(mutated);
     let doc = serde_json::to_string(&state.doc).unwrap();
-    assert!(doc.contains("Hero Updated"), "existing node updated");
+    assert!(doc.contains("Hero Updated"), "existing node is replaced");
     assert!(doc.contains("New Caption"), "new node inserted");
+    assert_eq!(count_node_id(state.active_children(), "hero"), 1);
     // The insert landed inside the page frame, not at the page root.
     let page = state
         .active_children()
@@ -638,9 +806,89 @@ fn apply_modification_updates_existing_and_inserts_new() {
         .unwrap();
     let kids = page.children().unwrap();
     assert!(
+        kids.iter().any(|k| k.id_str() == "hero"
+            && k.base()
+                .name
+                .as_deref()
+                .is_some_and(|n| n == "Hero Updated")),
+        "existing node remains in the primary frame"
+    );
+    assert!(
         kids.iter()
             .any(|k| k.base().name.as_deref().is_some_and(|n| n == "New Caption")),
         "implied-new node parents to the active page's primary frame"
+    );
+}
+
+#[test]
+fn apply_modification_adds_under_declared_existing_parent_without_touching_siblings() {
+    use op_editor_core::{walkers::find_node, NodeId};
+
+    let mut state = EditorState::new();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(frame(
+        "n217",
+        "Player",
+        320.0,
+        vec![rect("n218", "Track Info"), rect("n220", "Actions")],
+    ));
+    let before_parent = find_node(state.active_children(), &NodeId::new("n217")).unwrap();
+    let before_children = before_parent.children().unwrap();
+    let before_n218 = serde_json::to_value(&before_children[0]).unwrap();
+    let before_n220 = serde_json::to_value(&before_children[1]).unwrap();
+
+    let nodes = vec![modify_op(
+        "n217",
+        serde_json::json!({
+            "type": "frame",
+            "name": "Progress Bar",
+            "width": 220.0,
+            "height": 8.0,
+            "children": []
+        }),
+    )];
+
+    let (count, mutated) = apply_design_modification(&mut state, &nodes);
+
+    assert_eq!(count, 1);
+    assert!(mutated);
+    let parent = find_node(state.active_children(), &NodeId::new("n217")).unwrap();
+    assert_eq!(parent.base().name.as_deref(), Some("Player"));
+    let children = parent.children().unwrap();
+    assert_eq!(children.len(), 3);
+    assert_eq!(children[0].id_str(), "n218");
+    assert_eq!(children[1].id_str(), "n220");
+    assert_eq!(children[2].base().name.as_deref(), Some("Progress Bar"));
+    assert_eq!(serde_json::to_value(&children[0]).unwrap(), before_n218);
+    assert_eq!(serde_json::to_value(&children[1]).unwrap(), before_n220);
+}
+
+#[test]
+fn apply_modification_inserts_idless_null_parent_under_primary_frame() {
+    let mut state = state_with_page();
+    let nodes = vec![modify_op(
+        "null",
+        serde_json::json!({
+            "type": "text",
+            "name": "Loose Label",
+            "content": "Hello"
+        }),
+    )];
+
+    let (count, mutated) = apply_design_modification(&mut state, &nodes);
+
+    assert_eq!(count, 1);
+    assert!(mutated);
+    let page = state
+        .active_children()
+        .iter()
+        .find(|n| n.id_str() == "page-1")
+        .unwrap();
+    let kids = page.children().unwrap();
+    assert!(
+        kids.iter()
+            .any(|k| k.base().name.as_deref().is_some_and(|n| n == "Loose Label")),
+        "idless null-parent node inserts under the active page primary frame"
     );
 }
 
@@ -671,6 +919,330 @@ fn drain_chat(rx: &mpsc::Receiver<ChatDelta>) -> Vec<ChatDelta> {
         }
     }
     out
+}
+
+fn run_modify_turn_with_apply(
+    response: &str,
+) -> (
+    Vec<ChatDelta>,
+    EditorState,
+    Vec<(String, serde_json::Value)>,
+) {
+    let provider = Scripted::text(response);
+    let (chat_tx, chat_rx) = mpsc::channel();
+    let (executor, tool_rx) = chat_tool_channel();
+    let worker = std::thread::spawn(move || {
+        run_modify_turn(&provider, ChatRequest::default(), &chat_tx, &executor);
+    });
+
+    let req = tool_rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("modify route forwards the apply op");
+    assert_eq!(req.name, APPLY_MODIFICATION_OP);
+    let nodes = modification_pairs_from_args(&req.args_json);
+    let mut state = state_with_page();
+    let (count, mutated) = apply_design_modification(&mut state, &nodes);
+    assert_eq!(count, 1);
+    assert!(mutated);
+    req.ack
+        .send(op_ai::chat_provider::ChatToolResult {
+            content: serde_json::json!({ "success": true, "count": count }).to_string(),
+            is_error: false,
+        })
+        .unwrap();
+
+    let deltas = drain_chat(&chat_rx);
+    worker.join().unwrap();
+    (deltas, state, nodes)
+}
+
+fn run_modify_turn_with_sequence_apply(
+    provider: Arc<ScriptedSequence>,
+    request: ChatRequest,
+) -> (
+    Vec<ChatDelta>,
+    EditorState,
+    Vec<(String, serde_json::Value)>,
+) {
+    let (chat_tx, chat_rx) = mpsc::channel();
+    let (executor, tool_rx) = chat_tool_channel();
+    let worker_provider = Arc::clone(&provider);
+    let worker = std::thread::spawn(move || {
+        run_modify_turn(worker_provider.as_ref(), request, &chat_tx, &executor);
+    });
+
+    let req = tool_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("modify route forwards the apply op");
+    assert_eq!(req.name, APPLY_MODIFICATION_OP);
+    let nodes = modification_pairs_from_args(&req.args_json);
+    let mut state = state_with_page();
+    let (count, mutated) = apply_design_modification(&mut state, &nodes);
+    assert_eq!(count, 1);
+    assert!(mutated);
+    req.ack
+        .send(op_ai::chat_provider::ChatToolResult {
+            content: serde_json::json!({ "success": true, "count": count }).to_string(),
+            is_error: false,
+        })
+        .unwrap();
+
+    let deltas = drain_chat(&chat_rx);
+    worker.join().unwrap();
+    (deltas, state, nodes)
+}
+
+fn retry_test_request() -> ChatRequest {
+    ChatRequest {
+        system_prompt: "base modify system prompt".into(),
+        user_message: "CONTEXT NODES: []\n\nINSTRUCTION: change the hero".into(),
+        history: vec![
+            (ChatHistoryRole::User, "previous user turn".into()),
+            (ChatHistoryRole::Assistant, "previous assistant turn".into()),
+        ],
+        max_output_tokens: 1234,
+        model: Some("glm-test-model".into()),
+        ..ChatRequest::default()
+    }
+}
+
+fn expected_retry_request(mut request: ChatRequest) -> ChatRequest {
+    request.system_prompt.push_str(
+        "\n\nCRITICAL: Respond with ONLY I(...) JavaScript statements -- never prose, explanations, or numbered/bulleted lists. If you truly cannot make the change, return an empty program.",
+    );
+    request
+}
+
+fn text_delta_count(deltas: &[ChatDelta], needle: &str) -> usize {
+    deltas
+        .iter()
+        .filter(|d| matches!(d, ChatDelta::TextDelta(s) if s.contains(needle)))
+        .count()
+}
+
+fn expected_applied_json_delta(nodes: &[(String, serde_json::Value)]) -> ChatDelta {
+    let node_values = nodes
+        .iter()
+        .map(|(_, node)| node.clone())
+        .collect::<Vec<_>>();
+    let json = serde_json::to_string_pretty(&node_values).unwrap();
+    ChatDelta::TextDelta(format!("\n```json\n{json}\n```"))
+}
+
+#[test]
+fn run_modify_turn_script_response_applies_nodes_and_marks_applied() {
+    let response = r##"
+        I(null, {
+            id:"hero",
+            type:"frame",
+            name:"Hero Rewritten",
+            children:[{type:"text", name:"Progress Label", content:"0:42"}]
+        });
+    "##;
+
+    let (deltas, state, nodes) = run_modify_turn_with_apply(response);
+
+    assert_eq!(nodes[0].0, "null");
+    assert_eq!(nodes[0].1["id"], serde_json::json!("hero"));
+    assert_eq!(
+        deltas[0],
+        ChatDelta::TextDelta(
+            r#"<step title="Checking guidelines">Analyzing modification request...</step>"#.into()
+        )
+    );
+    assert_eq!(deltas[1], expected_applied_json_delta(&nodes));
+    assert_eq!(
+        deltas[2],
+        ChatDelta::TextDelta("\n\n<!-- APPLIED -->".into())
+    );
+    assert!(matches!(deltas[3], ChatDelta::Done { .. }));
+    let transcript_text = deltas
+        .iter()
+        .filter_map(|delta| match delta {
+            ChatDelta::TextDelta(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(!transcript_text.contains("I(null"));
+    let doc = serde_json::to_string(&state.doc).unwrap();
+    assert!(doc.contains("Progress Label"));
+    assert!(doc.contains("Hero Rewritten"));
+    assert_eq!(count_node_id(state.active_children(), "hero"), 1);
+}
+
+#[test]
+fn run_modify_turn_retries_prose_once_then_applies_script() {
+    let prose = "I can change the hero by making it clearer and more direct.";
+    let response = r##"
+        I(null, {
+            id:"hero",
+            type:"frame",
+            name:"Hero Retry Applied",
+            children:[{type:"text", name:"Retry Label", content:"Applied"}]
+        });
+    "##;
+    let provider = Arc::new(ScriptedSequence::text(&[prose, response]));
+    let request = retry_test_request();
+
+    let (deltas, state, nodes) =
+        run_modify_turn_with_sequence_apply(Arc::clone(&provider), request.clone());
+
+    let requests = provider.requests();
+    assert_eq!(
+        requests.len(),
+        2,
+        "empty first parse gets exactly one retry"
+    );
+    assert_eq!(requests[0], request);
+    assert_eq!(requests[1], expected_retry_request(request));
+    assert_eq!(nodes[0].0, "null");
+    assert_eq!(nodes[0].1["id"], serde_json::json!("hero"));
+    assert_eq!(
+        text_delta_count(&deltas, MODIFY_STEP),
+        1,
+        "retry must not stack a second modify progress step"
+    );
+    assert_eq!(
+        text_delta_count(&deltas, prose),
+        0,
+        "discarded first prose attempt must stay out of the transcript"
+    );
+    assert!(
+        deltas
+            .iter()
+            .any(|d| matches!(d, ChatDelta::TextDelta(s) if s.contains("<!-- APPLIED -->"))),
+        "successful retry must use the normal applied marker"
+    );
+    assert!(
+        !deltas.iter().any(|d| matches!(d, ChatDelta::Error(_))),
+        "successful retry must not emit the friendly recovery error"
+    );
+    let doc = serde_json::to_string(&state.doc).unwrap();
+    assert!(doc.contains("Hero Retry Applied"));
+    assert!(doc.contains("Retry Label"));
+}
+
+#[test]
+fn run_modify_turn_retries_prose_once_then_surfaces_friendly_recovery_error() {
+    let prose_1 = "I would make the selected card red.";
+    let prose_2 = "Here are the changes I would make: use a stronger accent color.";
+    let provider = Arc::new(ScriptedSequence::text(&[prose_1, prose_2]));
+    let request = retry_test_request();
+    let (chat_tx, chat_rx) = mpsc::channel();
+    let (executor, tool_rx) = chat_tool_channel();
+
+    run_modify_turn(provider.as_ref(), request.clone(), &chat_tx, &executor);
+
+    assert!(
+        tool_rx.try_recv().is_err(),
+        "double-prose responses must not dispatch an apply op"
+    );
+    let deltas = drain_chat(&chat_rx);
+    let requests = provider.requests();
+    assert_eq!(requests.len(), 2, "retry is capped at one extra call");
+    assert_eq!(requests[0], request);
+    assert_eq!(requests[1], expected_retry_request(request));
+    assert_eq!(
+        text_delta_count(&deltas, MODIFY_STEP),
+        1,
+        "retry must not stack a second modify progress step"
+    );
+    assert_eq!(text_delta_count(&deltas, prose_1), 0);
+    assert_eq!(text_delta_count(&deltas, prose_2), 0);
+    let errors: Vec<_> = deltas
+        .iter()
+        .filter_map(|d| match d {
+            ChatDelta::Error(msg) => Some(msg.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        errors,
+        vec![
+            "The model returned a description instead of an applyable edit. Try rephrasing (e.g. name the element to add) or run it again."
+        ]
+    );
+    assert!(matches!(
+        deltas.last(),
+        Some(ChatDelta::Done {
+            stop_reason: StopReason::Aborted
+        })
+    ));
+}
+
+#[test]
+fn run_modify_turn_script_response_does_not_retry() {
+    let response = r##"
+        I(null, {
+            id:"hero",
+            type:"frame",
+            name:"Hero First Attempt",
+            children:[{type:"text", name:"First Attempt Label", content:"Applied"}]
+        });
+    "##;
+    let provider = Arc::new(ScriptedSequence::text(&[
+        response,
+        "this second response must never be requested",
+    ]));
+    let request = retry_test_request();
+
+    let (deltas, state, nodes) =
+        run_modify_turn_with_sequence_apply(Arc::clone(&provider), request.clone());
+
+    let requests = provider.requests();
+    assert_eq!(requests.len(), 1, "valid first script must not retry");
+    assert_eq!(requests[0], request);
+    assert_eq!(nodes[0].1["id"], serde_json::json!("hero"));
+    assert_eq!(text_delta_count(&deltas, MODIFY_STEP), 1);
+    assert!(deltas
+        .iter()
+        .any(|d| matches!(d, ChatDelta::TextDelta(s) if s.contains("<!-- APPLIED -->"))));
+    let doc = serde_json::to_string(&state.doc).unwrap();
+    assert!(doc.contains("Hero First Attempt"));
+    assert!(doc.contains("First Attempt Label"));
+}
+
+#[test]
+fn run_modify_turn_flat_json_response_still_applies_via_fallback() {
+    let response = r##"[{"id":"flat-new","type":"text","name":"Flat Caption","content":"Hello"}]"##;
+
+    let (deltas, state, nodes) = run_modify_turn_with_apply(response);
+
+    assert_eq!(nodes[0].0, "null");
+    assert_eq!(deltas[1], expected_applied_json_delta(&nodes));
+    assert!(
+        deltas
+            .iter()
+            .any(|d| matches!(d, ChatDelta::TextDelta(s) if s.contains("<!-- APPLIED -->"))),
+        "modify route must emit the applied marker"
+    );
+    let doc = serde_json::to_string(&state.doc).unwrap();
+    assert!(doc.contains("Flat Caption"));
+}
+
+#[test]
+fn run_modify_turn_prose_response_surfaces_friendly_recovery_error() {
+    let provider = Scripted::text("sorry, I cannot help with that");
+    let (chat_tx, chat_rx) = mpsc::channel();
+    let (executor, tool_rx) = chat_tool_channel();
+
+    run_modify_turn(&provider, ChatRequest::default(), &chat_tx, &executor);
+
+    assert!(
+        tool_rx.try_recv().is_err(),
+        "prose responses must not dispatch an apply op"
+    );
+    let error = drain_chat(&chat_rx)
+        .into_iter()
+        .find_map(|d| match d {
+            ChatDelta::Error(msg) => Some(msg),
+            _ => None,
+        })
+        .expect("parse failure surfaces an error");
+    assert_eq!(
+        error,
+        "The model returned a description instead of an applyable edit. Try rephrasing (e.g. name the element to add) or run it again."
+    );
 }
 
 #[test]
@@ -712,9 +1284,11 @@ fn cli_turn_chat_route_streams_provider_deltas() {
 
 #[test]
 fn cli_turn_modify_route_applies_nodes_and_marks_applied() {
-    let response = r##"[{"id":"hero","type":"frame","name":"Hero Red","fill":[{"type":"solid","color":"#ff0000"}]}]"##;
+    let response = r##"
+        I("hero", {type:"text", name:"CLI Caption", content:"Added"});
+    "##;
     let plan = CliTurnPlan {
-        user_text: "make the hero red".into(),
+        user_text: "add a caption".into(),
         page_children_empty: false,
         classify_provider: Box::new(Scripted::text("DESIGN_MODIFY")),
         chat_provider: Box::new(Scripted::text("unused")),
@@ -738,11 +1312,7 @@ fn cli_turn_modify_route_applies_nodes_and_marks_applied() {
         .recv_timeout(Duration::from_secs(10))
         .expect("modify route forwards the apply op");
     assert_eq!(req.name, APPLY_MODIFICATION_OP);
-    let nodes = serde_json::from_str::<serde_json::Value>(&req.args_json)
-        .unwrap()
-        .get("nodes")
-        .and_then(|n| n.as_array().cloned())
-        .unwrap();
+    let nodes = modification_pairs_from_args(&req.args_json);
     let mut state = state_with_page();
     let (count, mutated) = apply_design_modification(&mut state, &nodes);
     assert_eq!(count, 1);
@@ -756,22 +1326,24 @@ fn cli_turn_modify_route_applies_nodes_and_marks_applied() {
 
     let deltas = drain_chat(&chat_rx);
     worker.join().unwrap();
-    // Step → raw response → APPLIED marker → Done.
+    // Step → fenced design JSON → APPLIED marker → Done.
     assert_eq!(
         deltas[0],
         ChatDelta::TextDelta(
             r#"<step title="Checking guidelines">Analyzing modification request...</step>"#.into()
         )
     );
-    assert_eq!(deltas[1], ChatDelta::TextDelta(format!("\n{response}")));
+    assert_eq!(deltas[1], expected_applied_json_delta(&nodes));
     assert_eq!(
         deltas[2],
         ChatDelta::TextDelta("\n\n<!-- APPLIED -->".into())
     );
     assert!(matches!(deltas[3], ChatDelta::Done { .. }));
-    // The doc was recolored through the apply path.
-    let doc = serde_json::to_string(&state.doc).unwrap().to_lowercase();
-    assert!(doc.contains("#ff0000"));
+    assert_eq!(nodes[0].0, "hero");
+    // The new node was inserted under the existing hero through the apply path.
+    let doc = serde_json::to_string(&state.doc).unwrap();
+    assert!(doc.contains("CLI Caption"));
+    assert_eq!(count_node_id(state.active_children(), "hero"), 1);
     // Design channels dropped.
     assert!(delta_rx.recv().is_err());
     assert!(cmd_rx.recv().is_err());
@@ -824,7 +1396,7 @@ fn cli_turn_modify_keyword_overrides_new_classifier_reply() {
 }
 
 #[test]
-fn cli_turn_modify_parse_failure_surfaces_ts_error() {
+fn cli_turn_modify_parse_failure_surfaces_friendly_recovery_error() {
     let plan = CliTurnPlan {
         user_text: "make the hero red".into(),
         page_children_empty: false,
@@ -852,9 +1424,9 @@ fn cli_turn_modify_parse_failure_surfaces_ts_error() {
             _ => None,
         })
         .expect("parse failure surfaces an error");
-    assert!(
-        error.starts_with("Could not parse design nodes from model response. Model output: "),
-        "got: {error}"
+    assert_eq!(
+        error,
+        "The model returned a description instead of an applyable edit. Try rephrasing (e.g. name the element to add) or run it again."
     );
 }
 

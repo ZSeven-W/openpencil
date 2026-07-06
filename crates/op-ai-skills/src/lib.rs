@@ -335,6 +335,28 @@ mod tests {
     }
 
     #[test]
+    fn local_edit_skill_outputs_script_gen_protocol() {
+        let skill = get_skill_by_name("local-edit").expect("local-edit skill must be registered");
+
+        assert!(
+            skill.content.contains("JavaScript program"),
+            "local-edit must request a script-gen JavaScript program"
+        );
+        assert!(
+            skill.content.contains("I(parent") || skill.content.contains("I(null"),
+            "local-edit must teach the I(parent, obj) call syntax"
+        );
+        assert!(
+            skill.content.contains("NO-OP") || skill.content.contains("no-op"),
+            "local-edit must explain script no-op stubs"
+        );
+        assert!(
+            !skill.content.contains("json` code block"),
+            "local-edit must not ask for the retired flat JSON code block"
+        );
+    }
+
+    #[test]
     fn design_agent_prompt_mentions_style_fetch() {
         let prompt = design_agent_system_prompt();
         assert!(

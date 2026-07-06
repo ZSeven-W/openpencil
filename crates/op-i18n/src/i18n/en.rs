@@ -274,6 +274,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.noModelsConnected" => "No models connected",
         "ai.searchModels" => "Search models...",
         "ai.noModelsFound" => "No models found",
+        "ai.modificationApplied" => "Modified",
+        "ai.designElement" => "element",
+        "ai.designElements" => "elements",
         "ai.quickAction.loginScreen" => "Design a mobile login screen",
         "ai.quickAction.loginScreenPrompt" => "Design a modern mobile login screen with email input, password input, login button, and social login options",
         "ai.quickAction.foodApp" => "Food app homepage",
@@ -282,8 +285,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.bottomNavPrompt" => "Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile",
         "ai.quickAction.colorPalette" => "Suggest a color palette for my app",
         "ai.quickAction.colorPalettePrompt" => "Suggest a modern color palette for a pet care app",
-        "ai.quickAction.dashboard" => "Technical dashboard web app for a utilities company",
-        "ai.quickAction.dashboardPrompt" => "Technical dashboard web app for a utilities company",
+        "ai.quickAction.dashboard" => {
+            "Design a dark-themed music streaming mobile app home screen. Include a greeting \"Good evening\", horizontal scrollable \"Recently Played\" album art cards, \"Made For You\" section with 3 playlist cards showing cover art and playlist names, \"New Releases\" section with 4 album cards in a 2x2 grid, and a floating mini player bar at the bottom showing current track with play/pause controls. Bottom tab bar (Home, Search, Library, Premium). Dark background with lime green accent."
+        }
+        "ai.quickAction.dashboardPrompt" => {
+            "Design a dark-themed music streaming mobile app home screen. Include a greeting \"Good evening\", horizontal scrollable \"Recently Played\" album art cards, \"Made For You\" section with 3 playlist cards showing cover art and playlist names, \"New Releases\" section with 4 album cards in a 2x2 grid, and a floating mini player bar at the bottom showing current track with play/pause controls. Bottom tab bar (Home, Search, Library, Premium). Dark background with lime green accent."
+        }
         "ai.quickAction.travelApp" => "Travel booking mobile app explore page",
         "ai.quickAction.travelAppPrompt" => {
             "Design a travel booking mobile app explore page. Include a search section with \"Where to?\" input, date picker chips, and guest count. Popular destinations as horizontal scrollable cards with destination photos, city names and starting prices. \"Deals of the Week\" section with 2 featured deal cards showing discount badges. Recently viewed section with 2 compact cards. Bottom tab bar (Explore, Wishlists, Trips, Messages, Profile). Warm, inviting design with orange accents."

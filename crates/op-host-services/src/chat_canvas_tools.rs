@@ -17,12 +17,15 @@
 //! executes via [`execute_chat_tool`] against the canonical state.
 
 use op_ai::chat_provider::{ChatToolDef, ChatToolResult};
-use op_editor_core::EditorState;
+use op_editor_core::{EditorState, PenNodeExt};
 pub use op_editor_host_core::chat::{chat_tool_channel, ChatToolRequest, UiChatToolExecutor};
 use op_mcp::{ToolRegistry, ToolResponse};
+use std::collections::HashSet;
 
 /// TS `maxTurns` for the chat agent loop (`ai-chat-handlers.ts:254`).
 pub const MAX_TOOL_TURNS: usize = 20;
+
+pub type DesignModificationOp = (String, serde_json::Value);
 
 /// The chat tool subset — the TS CRUD set (`getCrudToolDefs`) with the
 /// TS `TOOL_AUTH_MAP` auth levels. Design-pipeline tools
@@ -111,13 +114,19 @@ pub fn execute_chat_tool(
     name: &str,
     args_json: &str,
 ) -> (ChatToolResult, bool) {
-    let Some(_level) = chat_tool_level(name) else {
-        return (
-            error_result(format!("tool not available in chat: {name}")),
-            false,
-        );
+    let registry = if name == "replace_node" {
+        let mut registry = ToolRegistry::default();
+        registry.register(Box::new(op_mcp::replace_node_snapshot()));
+        registry
+    } else {
+        let Some(_level) = chat_tool_level(name) else {
+            return (
+                error_result(format!("tool not available in chat: {name}")),
+                false,
+            );
+        };
+        chat_tool_registry(state, name)
     };
-    let registry = chat_tool_registry(state, name);
     execute_with_registry(state, name, args_json, registry)
 }
 
@@ -197,14 +206,13 @@ fn error_result(message: String) -> ChatToolResult {
     }
 }
 
-/// Apply a DESIGN_MODIFY result to the live document — port of TS
-/// `extractAndApplyDesignModification` (design-canvas-ops.ts:589-618):
-/// nodes whose `id` already exists are updated in place; unknown ids
-/// are inserted under the active page's primary frame (TS
-/// `getActivePagePrimaryFrameId`, design-canvas-ops.ts:86-94), or the
-/// page root when the page has no frame. Each node dispatches through
-/// [`execute_chat_tool`] (`update_node` / `insert_node`) so validation
-/// matches the MCP path. Returns `(applied_count, mutated)`.
+/// Apply a DESIGN_MODIFY result to the live document. Top-level nodes
+/// whose `id` already exists replace that whole subtree; unknown or
+/// id-less nodes insert as new top-level elements under the active
+/// page's primary frame (TS `getActivePagePrimaryFrameId`,
+/// design-canvas-ops.ts:86-94). Inserts and replacements dispatch
+/// through MCP tool validation before applying commands. Returns
+/// `(applied_count, mutated)`.
 ///
 /// Documented divergence: TS wraps the loop in one history batch;
 /// here every node is its own undo step — the same granularity the
@@ -212,53 +220,232 @@ fn error_result(message: String) -> ChatToolResult {
 /// (design_session.rs `BeginUndoBatch` TODO).
 pub fn apply_design_modification(
     state: &mut EditorState,
-    nodes: &[serde_json::Value],
+    nodes: &[DesignModificationOp],
 ) -> (usize, bool) {
-    use op_editor_core::pen_node_ext::PenNodeExt;
-
     let mut count = 0usize;
     let mut mutated = false;
-    for node in nodes {
-        let id = node.get("id").and_then(|v| v.as_str()).map(str::to_string);
-        let exists = id.as_deref().is_some_and(|id| {
-            op_editor_core::walkers::find_node(
-                state.active_children(),
-                &op_editor_core::NodeId::new(id),
-            )
-            .is_some()
-        });
-        let (tool, args) = if exists {
-            (
-                "update_node",
-                serde_json::json!({ "nodeId": id, "data": node }),
-            )
+    for (parent, node) in nodes {
+        let id = node.get("id").and_then(|v| v.as_str());
+        let parent_exists = parent != "null" && node_exists(state, parent);
+        let (applied, did_mutate) = if parent_exists {
+            insert_modify_subtree(state, node, Some(parent.as_str()))
+        } else if parent == "null" && id.is_some_and(|id| node_exists(state, id)) {
+            replace_modify_subtree(state, node, id.expect("checked above"))
         } else {
-            // TS: parent the implied-new node to the active page's
-            // primary frame; null parent falls to the page root.
-            let parent = state
-                .active_children()
-                .iter()
-                .find(|n| matches!(n, jian_ops_schema::node::PenNode::Frame(_)))
-                .map(|n| n.id_str().to_string());
-            let mut args = serde_json::json!({ "data": node });
-            if let Some(parent) = parent {
-                args["parent"] = serde_json::Value::String(parent);
-            }
-            ("insert_node", args)
+            insert_modify_subtree(state, node, None)
         };
-        let (result, did_mutate) = execute_chat_tool(state, tool, &args.to_string());
-        if did_mutate {
-            mutated = true;
-        }
-        if !result.is_error {
-            count += 1;
-        } else {
-            // Best-effort apply (TS loop never aborts): log the
-            // per-node failure for diagnosis and continue.
-            eprintln!("[AI] design modification {tool} failed: {}", result.content);
-        }
+        count += applied;
+        mutated |= did_mutate;
     }
     (count, mutated)
+}
+
+pub fn parse_design_modification_ops_arg(args_json: &str) -> Vec<DesignModificationOp> {
+    let Ok(args) = serde_json::from_str::<serde_json::Value>(args_json) else {
+        return Vec::new();
+    };
+    let Some(nodes) = args.get("nodes") else {
+        return Vec::new();
+    };
+    serde_json::from_value::<Vec<DesignModificationOp>>(nodes.clone()).unwrap_or_else(|_| {
+        nodes
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .cloned()
+                    .map(|node| ("null".to_string(), node))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+fn replace_modify_subtree(
+    state: &mut EditorState,
+    node: &serde_json::Value,
+    node_id: &str,
+) -> (usize, bool) {
+    let target_id = op_editor_core::NodeId::new(node_id);
+    let Some(path) = node_index_path(state.active_children(), &target_id) else {
+        return (0, false);
+    };
+    let mut preserved_ids = HashSet::new();
+    if let Some(existing) = op_editor_core::walkers::find_node(state.active_children(), &target_id)
+    {
+        collect_subtree_ids(existing, &mut preserved_ids);
+    }
+
+    let mut incoming = node.clone();
+    backfill_placeholder_image_srcs(&mut incoming, state);
+    let args = serde_json::json!({
+        "nodeId": node_id,
+        "data": incoming,
+        "drop_children": true
+    });
+    let (result, mutated) = execute_chat_tool(state, "replace_node", &args.to_string());
+    if !result.is_error {
+        if let Some(replaced) = node_mut_at_path(state.active_children_mut(), &path) {
+            let mut used = HashSet::new();
+            restore_existing_subtree_ids(replaced, node, &preserved_ids, &mut used);
+        }
+        return (1, mutated);
+    }
+    eprintln!(
+        "[AI] design modification replace_node failed: {}",
+        result.content
+    );
+    (0, mutated)
+}
+
+fn node_index_path(
+    nodes: &[jian_ops_schema::node::PenNode],
+    target: &op_editor_core::NodeId,
+) -> Option<Vec<usize>> {
+    fn walk(
+        nodes: &[jian_ops_schema::node::PenNode],
+        target: &op_editor_core::NodeId,
+        path: &mut Vec<usize>,
+    ) -> bool {
+        for (idx, node) in nodes.iter().enumerate() {
+            path.push(idx);
+            if node.id_str() == target.as_str() {
+                return true;
+            }
+            if let Some(children) = node.children() {
+                if walk(children, target, path) {
+                    return true;
+                }
+            }
+            path.pop();
+        }
+        false
+    }
+
+    let mut path = Vec::new();
+    walk(nodes, target, &mut path).then_some(path)
+}
+
+fn node_mut_at_path<'a>(
+    nodes: &'a mut [jian_ops_schema::node::PenNode],
+    path: &[usize],
+) -> Option<&'a mut jian_ops_schema::node::PenNode> {
+    let (idx, rest) = path.split_first()?;
+    let node = nodes.get_mut(*idx)?;
+    if rest.is_empty() {
+        return Some(node);
+    }
+    node.children_mut()
+        .and_then(|children| node_mut_at_path(children, rest))
+}
+
+fn collect_subtree_ids(node: &jian_ops_schema::node::PenNode, ids: &mut HashSet<String>) {
+    ids.insert(node.id_str().to_string());
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_subtree_ids(child, ids);
+        }
+    }
+}
+
+fn restore_existing_subtree_ids(
+    node: &mut jian_ops_schema::node::PenNode,
+    incoming: &serde_json::Value,
+    preserved_ids: &HashSet<String>,
+    used: &mut HashSet<String>,
+) {
+    if let Some(id) = incoming
+        .get("id")
+        .and_then(|v| v.as_str())
+        .filter(|id| preserved_ids.contains(*id) && used.insert((*id).to_string()))
+    {
+        node.base_mut().id = id.to_string();
+    }
+
+    let incoming_children = incoming.get("children").and_then(|v| v.as_array());
+    if let (Some(children), Some(incoming_children)) = (node.children_mut(), incoming_children) {
+        for (child, incoming_child) in children.iter_mut().zip(incoming_children) {
+            restore_existing_subtree_ids(child, incoming_child, preserved_ids, used);
+        }
+    }
+}
+
+fn backfill_placeholder_image_srcs(incoming: &mut serde_json::Value, state: &EditorState) {
+    match incoming {
+        serde_json::Value::Object(obj) => {
+            let replacement = obj
+                .get("src")
+                .and_then(|src| (src.as_str() == Some("<image>")).then_some(()))
+                .and_then(|_| obj.get("id").and_then(|id| id.as_str()))
+                .and_then(|id| existing_real_image_src(state, id));
+            if let Some(src) = replacement {
+                obj.insert("src".into(), serde_json::Value::String(src));
+            }
+            for value in obj.values_mut() {
+                backfill_placeholder_image_srcs(value, state);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                backfill_placeholder_image_srcs(item, state);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn existing_real_image_src(state: &EditorState, id: &str) -> Option<String> {
+    let node = op_editor_core::walkers::find_node(
+        state.active_children(),
+        &op_editor_core::NodeId::new(id),
+    )?;
+    let jian_ops_schema::node::PenNode::Image(image) = node else {
+        return None;
+    };
+    let src = image.src.as_str();
+    is_real_image_src(src).then(|| src.to_string())
+}
+
+fn is_real_image_src(src: &str) -> bool {
+    src.starts_with("data:") || src.starts_with("http://") || src.starts_with("https://")
+}
+
+fn insert_modify_subtree(
+    state: &mut EditorState,
+    node: &serde_json::Value,
+    parent_id: Option<&str>,
+) -> (usize, bool) {
+    let mut args = serde_json::json!({ "data": node });
+    if let Some(parent) = parent_id
+        .map(str::to_string)
+        .or_else(|| primary_frame_id(state))
+    {
+        args["parent"] = serde_json::Value::String(parent);
+    }
+    let (result, mutated) = execute_chat_tool(state, "insert_node", &args.to_string());
+    if !result.is_error {
+        return (1, mutated);
+    }
+    eprintln!(
+        "[AI] design modification insert_node failed: {}",
+        result.content
+    );
+    (0, mutated)
+}
+
+fn node_exists(state: &EditorState, id: &str) -> bool {
+    op_editor_core::walkers::find_node(state.active_children(), &op_editor_core::NodeId::new(id))
+        .is_some()
+}
+
+fn primary_frame_id(state: &EditorState) -> Option<String> {
+    use op_editor_core::PenNodeExt;
+
+    state
+        .active_children()
+        .iter()
+        .find(|n| matches!(n, jian_ops_schema::node::PenNode::Frame(_)))
+        .map(|n| n.id_str().to_string())
 }
 
 /// Build a registry carrying only the requested chat tool — the same
@@ -386,6 +573,160 @@ mod tests {
         assert!(!mutated);
         let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
         assert_eq!(v["success"], serde_json::Value::Bool(false));
+    }
+
+    #[test]
+    fn apply_modification_replaces_existing_tree_and_backfills_image_src() {
+        use op_editor_core::{walkers::find_node, NodeId, PenNodeExt};
+
+        let mut state = EditorState::new();
+        state.active_children_mut().clear();
+        state.active_children_mut().push(
+            serde_json::from_value(serde_json::json!({
+                "type": "frame",
+                "id": "n100",
+                "name": "Before",
+                "x": -100.0,
+                "y": 0.0,
+                "width": 80.0,
+                "height": 80.0,
+                "children": []
+            }))
+            .expect("valid before node"),
+        );
+        state.active_children_mut().push(
+            serde_json::from_value(serde_json::json!({
+                "type": "frame",
+                "id": "n217",
+                "name": "Mini Player",
+                "x": 0.0,
+                "y": 0.0,
+                "width": 320.0,
+                "height": 180.0,
+                "children": [
+                    {
+                        "type": "image",
+                        "id": "n218",
+                        "name": "Cover Image",
+                        "src": "data:image/png;base64,REALIMAGE",
+                        "x": 0.0,
+                        "y": 0.0,
+                        "width": 80.0,
+                        "height": 80.0
+                    },
+                    {
+                        "type": "text",
+                        "id": "n220",
+                        "name": "Song Title",
+                        "content": "Original Title",
+                        "x": 90.0,
+                        "y": 0.0,
+                        "width": 180.0,
+                        "height": 24.0
+                    }
+                ]
+            }))
+            .expect("valid frame node"),
+        );
+        state.active_children_mut().push(
+            serde_json::from_value(serde_json::json!({
+                "type": "frame",
+                "id": "n300",
+                "name": "After",
+                "x": 400.0,
+                "y": 0.0,
+                "width": 80.0,
+                "height": 80.0,
+                "children": []
+            }))
+            .expect("valid after node"),
+        );
+
+        let nodes = vec![(
+            "null".to_string(),
+            serde_json::json!({
+                "type": "frame",
+                "id": "n217",
+                "name": "Mini Player Rewritten",
+                "children": [
+                    {
+                        "type": "image",
+                        "id": "n218",
+                        "name": "Cover Image Rewritten",
+                        "src": "<image>",
+                        "width": 10.0,
+                        "height": 10.0
+                    },
+                    {
+                        "type": "text",
+                        "id": "n220",
+                        "name": "Song Title Rewritten",
+                        "content": "B"
+                    },
+                    {
+                        "type": "frame",
+                        "name": "Progress Bar",
+                        "width": 220.0,
+                        "height": 8.0,
+                        "children": []
+                    }
+                ]
+            }),
+        )];
+        let (count, mutated) = apply_design_modification(&mut state, &nodes);
+
+        assert_eq!(count, 1);
+        assert!(mutated);
+        assert_eq!(state.active_children()[0].id_str(), "n100");
+        assert_eq!(state.active_children()[1].id_str(), "n217");
+        assert_eq!(state.active_children()[2].id_str(), "n300");
+        let mini_player = find_node(state.active_children(), &NodeId::new("n217"))
+            .expect("existing mini player remains");
+        let mini_json = serde_json::to_value(mini_player).expect("mini player serializes");
+        assert_eq!(
+            mini_json["name"],
+            serde_json::json!("Mini Player Rewritten")
+        );
+        let children = mini_player.children().expect("mini player children");
+        assert_eq!(children.len(), 3);
+        assert_eq!(children[0].id_str(), "n218");
+        assert_eq!(children[1].id_str(), "n220");
+        assert_eq!(children[2].base().name.as_deref(), Some("Progress Bar"));
+
+        let image =
+            find_node(state.active_children(), &NodeId::new("n218")).expect("cover image remains");
+        let image_json = serde_json::to_value(image).expect("image serializes");
+        assert_eq!(
+            image_json["name"],
+            serde_json::json!("Cover Image Rewritten")
+        );
+        assert_eq!(
+            image_json["src"],
+            serde_json::json!("data:image/png;base64,REALIMAGE")
+        );
+        assert_eq!(image_json["width"], serde_json::json!(10.0));
+
+        let title =
+            find_node(state.active_children(), &NodeId::new("n220")).expect("title remains");
+        let title_json = serde_json::to_value(title).expect("title serializes");
+        assert_eq!(
+            title_json["name"],
+            serde_json::json!("Song Title Rewritten")
+        );
+        assert_eq!(title_json["content"], serde_json::json!("B"));
+
+        fn count_id(nodes: &[jian_ops_schema::node::PenNode], id: &str) -> usize {
+            nodes
+                .iter()
+                .map(|node| {
+                    usize::from(node.id_str() == id)
+                        + node.children().map(|kids| count_id(kids, id)).unwrap_or(0)
+                })
+                .sum()
+        }
+        assert_eq!(count_id(state.active_children(), "n217"), 1);
+        assert_eq!(count_id(state.active_children(), "n218"), 1);
+        assert_eq!(count_id(state.active_children(), "n220"), 1);
     }
 
     #[test]

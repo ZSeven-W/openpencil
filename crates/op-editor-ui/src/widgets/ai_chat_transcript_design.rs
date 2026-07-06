@@ -32,6 +32,7 @@ pub(crate) struct DesignBlock {
     pub element_count: usize,
     pub label: String,
     pub streaming: bool,
+    pub applied: bool,
     pub code: String,
     pub copy_visible: bool,
     pub code_lines: Vec<String>,
@@ -115,9 +116,108 @@ fn finish_code_block(
 
 fn is_design_json(code: &str) -> bool {
     let trimmed = code.trim_start();
-    (trimmed.starts_with('[') || trimmed.starts_with('{'))
-        && code.contains("\"type\"")
-        && code.contains("\"id\"")
+    if !(trimmed.starts_with('[') || trimmed.starts_with('{')) || !code.contains("\"type\"") {
+        return false;
+    }
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(code) {
+        return value_contains_design_node(&value);
+    }
+    extract_json_objects(trimmed)
+        .map(|objects| objects.iter().any(value_contains_design_node))
+        .unwrap_or(false)
+}
+
+fn value_contains_design_node(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Array(items) => items.iter().any(value_contains_design_node),
+        serde_json::Value::Object(object) => object_is_design_node(object),
+        _ => false,
+    }
+}
+
+fn object_is_design_node(object: &serde_json::Map<String, serde_json::Value>) -> bool {
+    let Some(node_type) = object.get("type").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    object.contains_key("_parent")
+        || is_known_design_node_type(node_type)
+        || has_design_props(object)
+}
+
+fn is_known_design_node_type(node_type: &str) -> bool {
+    let normalized = node_type
+        .chars()
+        .filter(|ch| *ch != '_' && *ch != '-' && !ch.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    matches!(
+        normalized.as_str(),
+        "frame"
+            | "group"
+            | "rectangle"
+            | "rect"
+            | "ellipse"
+            | "line"
+            | "polygon"
+            | "path"
+            | "text"
+            | "textinput"
+            | "textarea"
+            | "image"
+            | "iconfont"
+            | "select"
+            | "switch"
+            | "checkbox"
+            | "slider"
+            | "radiogroup"
+            | "numberinput"
+            | "progress"
+            | "tabs"
+            | "ref"
+    )
+}
+
+fn has_design_props(object: &serde_json::Map<String, serde_json::Value>) -> bool {
+    const DESIGN_PROPS: &[&str] = &[
+        "x",
+        "y",
+        "width",
+        "height",
+        "children",
+        "fill",
+        "stroke",
+        "cornerRadius",
+        "fontSize",
+        "fontFamily",
+        "fontWeight",
+        "lineHeight",
+        "letterSpacing",
+        "textAlign",
+        "content",
+        "opacity",
+        "rotation",
+        "src",
+        "points",
+        "layoutMode",
+        "primaryAxisSizingMode",
+        "counterAxisSizingMode",
+    ];
+    object
+        .keys()
+        .any(|key| DESIGN_PROPS.contains(&key.as_str()))
+}
+
+pub(crate) fn applied_design_block_label(
+    locale: op_editor_core::Locale,
+    element_count: usize,
+) -> String {
+    let prefix = op_i18n::translate(locale, "ai.modificationApplied");
+    let unit = if element_count == 1 {
+        op_i18n::translate(locale, "ai.designElement")
+    } else {
+        op_i18n::translate(locale, "ai.designElements")
+    };
+    format!("{prefix} · {element_count} {unit}")
 }
 
 fn design_element_count(code: &str) -> usize {
@@ -387,6 +487,7 @@ pub(crate) fn place_design_blocks(
             element_count: pending.element_count,
             label: pending.label,
             streaming: pending.streaming,
+            applied: pending.applied,
             code: pending.code,
             copy_visible: hovered_index == Some(index),
             code_lines,
@@ -418,7 +519,11 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
     cx.backend.fill_round_rect(icon_bg_rect, 8.0, icon_bg);
     draw_icon(
         cx.backend,
-        Icon::Wand2,
+        if block.applied {
+            Icon::Check
+        } else {
+            Icon::Wand2
+        },
         Point2D::new(
             icon_bg_rect.origin.x + (DESIGN_ICON_BG - DESIGN_ICON_SIZE) / 2.0,
             icon_bg_rect.origin.y + (DESIGN_ICON_BG - DESIGN_ICON_SIZE) / 2.0,

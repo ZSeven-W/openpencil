@@ -80,10 +80,11 @@ pub struct Theme {
     /// surface (matches the TS app's `oklch(0.145 0 0)` ≈ `#252525`
     /// canvas tone, dialed back a touch for OP's chrome).
     pub canvas_surface: Color,
-    /// Medium-gray fill for user message bubbles in the AI chat
-    /// transcript (#27 style: distinct from the near-black panel bg,
-    /// readable against white text). Dark ≈ #3a3a45, light ≈ #d0d0d8.
+    /// Fill for user message bubbles in the AI chat transcript.
+    /// Follows the overall neutral shell: a distinct graphite chip
+    /// in both themes, with dedicated foreground for contrast.
     pub user_bubble: Color,
+    pub user_bubble_foreground: Color,
     /// Success green for the ✓ ring on completed tool/step cards
     /// (#27 reference: ~#3FB950, matches GitHub's success green).
     pub status_success: Color,
@@ -99,32 +100,32 @@ impl Theme {
     /// hex parity isn't a goal, semantic parity is.
     pub const fn dark() -> Self {
         Self {
-            background: rgb(0x0a, 0x0a, 0x0a),
+            background: rgb(0x12, 0x12, 0x12),
             foreground: rgb(0xfa, 0xfa, 0xfa),
-            card: rgb(0x14, 0x14, 0x14),
+            card: rgb(0x1e, 0x1e, 0x1e),
             card_foreground: rgb(0xfa, 0xfa, 0xfa),
-            popover: rgb(0x1a, 0x1a, 0x1a),
+            popover: rgb(0x18, 0x18, 0x18),
             popover_foreground: rgb(0xfa, 0xfa, 0xfa),
             primary: rgb(0x3b, 0x82, 0xf6),
             primary_foreground: rgb(0xff, 0xff, 0xff),
-            muted: rgb(0x1f, 0x1f, 0x1f),
-            muted_foreground: rgb(0x9a, 0x9a, 0x9a),
-            border: rgb(0x26, 0x26, 0x26),
-            accent: rgb(0x26, 0x26, 0x26),
+            muted: rgb(0x27, 0x27, 0x27),
+            muted_foreground: rgb(0xa3, 0xa3, 0xa3),
+            border: rgb(0x31, 0x31, 0x31),
+            accent: rgb(0x2d, 0x2d, 0x2d),
             accent_foreground: rgb(0xfa, 0xfa, 0xfa),
             destructive: rgb(0xef, 0x44, 0x44),
             destructive_foreground: rgb(0xfa, 0xfa, 0xfa),
-            secondary: rgb(0x26, 0x26, 0x26),
+            secondary: rgb(0x2a, 0x2a, 0x2a),
             secondary_foreground: rgb(0xfa, 0xfa, 0xfa),
-            input: rgb(0x2a, 0x2a, 0x2a),
+            input: rgb(0x34, 0x34, 0x34),
             ring: rgb(0x3b, 0x82, 0xf6),
             button_hover: rgba(0xff, 0xff, 0xff, 0.06),
-            row_selected: rgb(0x26, 0x26, 0x26),
-            row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.18),
-            // Matches TS CANVAS_BACKGROUND_DARK (#1a1a1a).
-            canvas_surface: rgb(0x1a, 0x1a, 0x1a),
-            // Medium-gray: visible against white text, lighter than the dark panel.
-            user_bubble: rgb(0x3a, 0x3a, 0x45),
+            row_selected: rgb(0x30, 0x30, 0x30),
+            row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.22),
+            // Pencil-like dark canvas, kept slightly warmer/lighter than the shell.
+            canvas_surface: rgb(0x1b, 0x1b, 0x1b),
+            user_bubble: rgb(0x50, 0x52, 0x60),
+            user_bubble_foreground: rgb(0xff, 0xff, 0xff),
             // GitHub-style success green ~#3FB950 for completed ✓ rings.
             status_success: rgb(0x3f, 0xb9, 0x50),
             // #FFD93D — warm yellow for the ⚡ speed chip icon + label.
@@ -137,33 +138,32 @@ impl Theme {
     /// Step 5 without another schema change.
     pub const fn light() -> Self {
         Self {
-            background: rgb(0xff, 0xff, 0xff),
-            foreground: rgb(0x0a, 0x0a, 0x0a),
-            card: rgb(0xff, 0xff, 0xff),
-            card_foreground: rgb(0x0a, 0x0a, 0x0a),
+            background: rgb(0xef, 0xef, 0xef),
+            foreground: rgb(0x1d, 0x1d, 0x1f),
+            card: rgb(0xf7, 0xf7, 0xf7),
+            card_foreground: rgb(0x1d, 0x1d, 0x1f),
             popover: rgb(0xff, 0xff, 0xff),
-            popover_foreground: rgb(0x0a, 0x0a, 0x0a),
+            popover_foreground: rgb(0x1d, 0x1d, 0x1f),
             primary: rgb(0x3b, 0x82, 0xf6),
             primary_foreground: rgb(0xff, 0xff, 0xff),
-            muted: rgb(0xf5, 0xf5, 0xf5),
-            muted_foreground: rgb(0x73, 0x73, 0x73),
-            border: rgb(0xe5, 0xe5, 0xe5),
-            accent: rgb(0xf5, 0xf5, 0xf5),
-            accent_foreground: rgb(0x0a, 0x0a, 0x0a),
+            muted: rgb(0xe9, 0xe9, 0xe9),
+            muted_foreground: rgb(0x68, 0x68, 0x6d),
+            border: rgb(0xd8, 0xd8, 0xda),
+            accent: rgb(0xe8, 0xe8, 0xea),
+            accent_foreground: rgb(0x1d, 0x1d, 0x1f),
             destructive: rgb(0xef, 0x44, 0x44),
             destructive_foreground: rgb(0xfa, 0xfa, 0xfa),
-            secondary: rgb(0xf5, 0xf5, 0xf5),
-            secondary_foreground: rgb(0x0a, 0x0a, 0x0a),
-            input: rgb(0xe5, 0xe5, 0xe5),
+            secondary: rgb(0xea, 0xea, 0xec),
+            secondary_foreground: rgb(0x1d, 0x1d, 0x1f),
+            input: rgb(0xe1, 0xe1, 0xe4),
             ring: rgb(0x3b, 0x82, 0xf6),
             button_hover: rgba(0x00, 0x00, 0x00, 0.06),
-            row_selected: rgb(0xe5, 0xe5, 0xe5),
-            row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.15),
-            // Matches TS CANVAS_BACKGROUND_LIGHT (#e5e5e5) — a clear grey so the
-            // white frame/page reads against the canvas instead of vanishing.
-            canvas_surface: rgb(0xe5, 0xe5, 0xe5),
-            // Light mode user bubble: a cool lavender-gray, legible on dark text.
-            user_bubble: rgb(0xd0, 0xd0, 0xd8),
+            row_selected: rgb(0xe4, 0xe4, 0xe7),
+            row_selected_primary: rgba(0x3b, 0x82, 0xf6, 0.18),
+            // Pencil-like light canvas, distinct from side panels but not stark white.
+            canvas_surface: rgb(0xf3, 0xf3, 0xf3),
+            user_bubble: rgb(0x5f, 0x62, 0x70),
+            user_bubble_foreground: rgb(0xff, 0xff, 0xff),
             // Success green is the same in both themes.
             status_success: rgb(0x3f, 0xb9, 0x50),
             // Slightly muted gold for light backgrounds (same hue as dark).
@@ -198,6 +198,34 @@ mod tests {
         let l = Theme::light();
         assert_eq!(d.primary.r, l.primary.r);
         assert_eq!(d.primary.b, l.primary.b);
+    }
+
+    #[test]
+    fn light_theme_uses_pencil_like_neutral_shell() {
+        let t = Theme::light();
+        assert!(t.background.r > 0.90 && t.background.r < 0.97);
+        assert!(t.canvas_surface.r > t.background.r);
+        assert!(t.card.r > t.background.r);
+        assert!(t.border.r < t.card.r);
+    }
+
+    #[test]
+    fn dark_theme_uses_pencil_like_neutral_shell() {
+        let t = Theme::dark();
+        assert!(t.background.r > 0.05 && t.background.r < t.card.r);
+        assert!(t.canvas_surface.r > t.background.r);
+        assert!(t.border.r > t.card.r);
+    }
+
+    #[test]
+    fn light_user_bubble_is_a_contrasting_graphite_chip() {
+        let t = Theme::light();
+        assert!(
+            t.user_bubble.r < 0.45 && t.user_bubble.g < 0.45 && t.user_bubble.b < 0.50,
+            "light user bubble should read as a graphite chip: {:?}",
+            t.user_bubble
+        );
+        assert_eq!(t.user_bubble_foreground, Color::WHITE);
     }
 
     #[test]

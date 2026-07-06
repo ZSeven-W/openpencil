@@ -301,9 +301,9 @@ mod tests {
     fn make_examples() -> [ExampleCard; 4] {
         [
             ExampleCard {
-                title: "Technical dashboard web app for a utilities company".into(),
+                title: "Design a dark-themed music streaming mobile app home screen".into(),
                 subtitle: "".into(),
-                prompt: "Technical dashboard web app for a utilities company".into(),
+                prompt: "Design a dark-themed music streaming mobile app home screen".into(),
                 emoji: "",
             },
             ExampleCard {

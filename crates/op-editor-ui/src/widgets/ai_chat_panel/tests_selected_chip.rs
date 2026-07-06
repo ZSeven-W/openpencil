@@ -42,6 +42,31 @@ fn panel_with_selection(count: usize) -> (EditorState, Rect) {
     (state, rect)
 }
 
+fn panel_with_named_selection() -> (EditorState, Rect) {
+    let mut state = EditorState::new();
+    state.doc.children = vec![jian_ops_schema::node::PenNode::Rectangle(
+        jian_ops_schema::node::RectangleNode {
+            base: jian_ops_schema::node::PenNodeBase {
+                id: "album".to_string(),
+                name: Some("Album Art".to_string()),
+                ..Default::default()
+            },
+            container: jian_ops_schema::node::ContainerProps::default(),
+            children: None,
+            state: None,
+            bindings: None,
+            events: None,
+            lifecycle: None,
+            semantics: None,
+            gestures: None,
+            route: None,
+        },
+    )];
+    state.set_single_selection(op_editor_core::NodeId::new("album"));
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    (state, rect)
+}
+
 fn paint_panel(panel: &AIChatPlaceholder<'_>, rect: Rect) -> SelectedChipPaintBackend {
     let mut backend = SelectedChipPaintBackend::default();
     let mut cx = PaintCx {
@@ -82,6 +107,22 @@ fn selected_count_three_paints_chip_text() {
         .texts
         .iter()
         .any(|(text, size, _, _)| text.contains('3') && (*size - 11.0).abs() < 1e-4));
+}
+
+#[test]
+fn single_selection_chip_paints_node_name_instead_of_count() {
+    let (state, rect) = panel_with_named_selection();
+    let panel = AIChatPlaceholder::from_editor(&state);
+
+    let backend = paint_panel(&panel, rect);
+    assert!(backend
+        .texts
+        .iter()
+        .any(|(text, size, _, _)| text == "Album Art" && (*size - 11.0).abs() < 1e-4));
+    assert!(!backend
+        .texts
+        .iter()
+        .any(|(text, _, _, _)| text == "1 selected"));
 }
 
 #[test]

@@ -346,19 +346,13 @@ fn stream_modify_route<W: Write>(
         }
     }
 
-    let nodes = op_orchestrator::parse::parse_nodes(&full_response).unwrap_or_default();
+    let nodes = crate::chat_intent::parse_modify_nodes(&full_response);
     if !nodes.is_empty() {
         write_delta_event(out, &format!("\n{full_response}"))?;
-        let node_values = nodes
-            .iter()
-            .map(|n| serde_json::to_value(n).unwrap_or(Value::Null))
-            .collect::<Vec<_>>();
         let (applied, version) = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            let (count, mutated) = crate::chat_canvas_tools::apply_design_modification(
-                &mut guard.editor,
-                &node_values,
-            );
+            let (count, mutated) =
+                crate::chat_canvas_tools::apply_design_modification(&mut guard.editor, &nodes);
             let version = if mutated {
                 guard.version += 1;
                 Some(guard.version)

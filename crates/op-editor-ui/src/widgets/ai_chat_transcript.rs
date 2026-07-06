@@ -21,7 +21,8 @@ use super::ai_chat_transcript_completion::{
     completion_card_rect, paint_completion_card, parse_completion_summary, CompletionSummary,
 };
 use super::ai_chat_transcript_design::{
-    extract_design_json_blocks, paint_design_block, place_design_blocks, DesignBlock,
+    applied_design_block_label, extract_design_json_blocks, paint_design_block,
+    place_design_blocks, DesignBlock,
 };
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
@@ -243,6 +244,7 @@ fn build_item(
     if design_applied {
         for block in &mut pending_design_blocks {
             block.applied = true;
+            block.label = applied_design_block_label(locale, block.element_count);
         }
     }
     // No streaming "Generating design..." placeholder card — the fixed
@@ -684,7 +686,7 @@ pub(crate) fn paint_transcript_with_selection(
             // #27 restyle: user bubble = medium-gray (theme.user_bubble),
             // assistant text = plain (no bubble background).
             let (bg, fg) = match item.role {
-                ChatRole::User => (theme.user_bubble, theme.foreground),
+                ChatRole::User => (theme.user_bubble, theme.user_bubble_foreground),
                 ChatRole::Assistant => (theme.muted, theme.foreground),
             };
             if bubble.typing {

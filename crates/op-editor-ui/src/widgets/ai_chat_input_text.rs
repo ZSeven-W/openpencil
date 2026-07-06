@@ -77,6 +77,61 @@ pub(crate) fn input_text_offset_at(
     ))
 }
 
+pub(crate) fn input_caret_rect(
+    input: &TextInputState,
+    input_rect: Rect,
+    input_area_h: f32,
+) -> Rect {
+    let text_rect = input_text_area_rect(input_rect, input.text(), input_area_h);
+    let mut backend = MeasureOnlyBackend;
+    let text_width = (text_rect.size.x - INPUT_TEXT_X_PAD * 2.0).max(0.0);
+    let lines = TextArea::layout_lines(&mut backend, input.text(), INPUT_FONT, text_width);
+    let visible_count = INPUT_MAX_LINES.min(lines.len()).max(1);
+    let caret = jian_core::text_input::prev_char_boundary(input.text(), input.caret());
+    let caret_line = caret_line_index(&lines, caret).unwrap_or(0);
+    let visible_start = if lines.len() <= visible_count {
+        0
+    } else {
+        caret_line
+            .saturating_add(1)
+            .saturating_sub(visible_count)
+            .min(lines.len() - visible_count)
+    };
+    let line_i = caret_line.clamp(visible_start, visible_start + visible_count - 1);
+    let line = &lines[line_i];
+    let rel = caret.saturating_sub(line.start).min(line.text.len());
+    let rel = jian_core::text_input::prev_char_boundary(&line.text, rel);
+    let x = backend.measure_text_family(&line.text[..rel], INPUT_FONT, "Inter");
+    let y = text_rect.origin.y + TEXT_AREA_PAD_Y + (line_i - visible_start) as f32 * line_height();
+    Rect::xywh(
+        text_rect.origin.x + INPUT_TEXT_X_PAD + x,
+        y,
+        1.5,
+        INPUT_FONT + 3.0,
+    )
+}
+
+fn line_height() -> f32 {
+    INPUT_FONT * 1.35
+}
+
+fn caret_line_index(
+    lines: &[jian_widgets::components::text_area::TextLine],
+    caret: usize,
+) -> Option<usize> {
+    lines.iter().enumerate().position(|(i, line)| {
+        if line.start == line.end {
+            return caret == line.start;
+        }
+        let end_is_soft_wrap = lines.get(i + 1).is_some_and(|next| next.start == line.end);
+        if end_is_soft_wrap {
+            caret >= line.start && caret < line.end
+        } else {
+            caret >= line.start && caret <= line.end
+        }
+    })
+}
+
 pub(crate) fn paint_input_text_area(
     cx: &mut PaintCx<'_>,
     theme: &Theme,

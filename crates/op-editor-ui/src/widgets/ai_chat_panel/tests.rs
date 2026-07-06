@@ -26,6 +26,23 @@ fn examples_grid_has_four_cards() {
 }
 
 #[test]
+fn second_example_is_music_streaming_home_prompt() {
+    let en = example_cards(op_editor_core::Locale::EnUs);
+    assert_eq!(
+        en[1].title,
+        "Design a dark-themed music streaming mobile app home screen. Include a greeting \"Good evening\", horizontal scrollable \"Recently Played\" album art cards, \"Made For You\" section with 3 playlist cards showing cover art and playlist names, \"New Releases\" section with 4 album cards in a 2x2 grid, and a floating mini player bar at the bottom showing current track with play/pause controls. Bottom tab bar (Home, Search, Library, Premium). Dark background with lime green accent."
+    );
+    assert_eq!(en[1].prompt, en[1].title);
+
+    let zh = example_cards(op_editor_core::Locale::ZhCn);
+    assert_eq!(
+        zh[1].title,
+        "设计一个暗色音乐流媒体App首页。包含问候语\"晚上好\"、\"最近播放\"横向滑动专辑封面卡片、\"为你推荐\"区3张歌单卡片（封面和歌单名）、\"新发行\"区4张专辑卡片2x2网格、底部悬浮迷你播放器（当前曲目+播放/暂停控件）。底部导航栏（首页、搜索、音乐库、会员）。深色背景搭配荧光绿强调。"
+    );
+    assert_eq!(zh[1].prompt, zh[1].title);
+}
+
+#[test]
 fn from_editor_tracks_selection_count_for_toolbar() {
     let mut s = EditorState::new();
     s.selection.set = vec![
