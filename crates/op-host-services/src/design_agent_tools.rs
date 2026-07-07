@@ -880,7 +880,7 @@ mod tests {
         let (result, mutated) = execute_design_tool_with_reveals(
             &mut state,
             "batch_design",
-            r#"{"operations":"root=I(null,{type:'frame',name:'Root',width:120,height:80})\ntitle=I(root,{type:'text',name:'Title',content:'Hello',width:80,height:20})"}"#,
+            r#"{"operations":"root=I(null,{type:'frame',name:'Root',width:120,height:80})\nbox=I(root,{type:'rectangle',name:'Box',width:80,height:20})"}"#,
             Some(epoch),
         );
         assert!(!result.is_error, "batch_design failed: {}", result.content);
