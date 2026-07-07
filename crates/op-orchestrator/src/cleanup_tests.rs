@@ -927,6 +927,8 @@ fn run_cleanup_passes_repairs_overbold_text_hierarchy() {
                 "id": "title",
                 "role": "heading",
                 "content": "Popular Restaurants",
+                "width": 320,
+                "height": 40,
                 "fontSize": 30,
                 "fontWeight": 800
             },
@@ -935,6 +937,8 @@ fn run_cleanup_passes_repairs_overbold_text_hierarchy() {
                 "id": "subtitle",
                 "role": "body-text",
                 "content": "Fresh Brooklyn favorites, delivered fast.",
+                "width": 320,
+                "height": 22,
                 "fontSize": 16,
                 "fontWeight": 800
             },
@@ -943,6 +947,8 @@ fn run_cleanup_passes_repairs_overbold_text_hierarchy() {
                 "id": "placeholder",
                 "name": "Placeholder",
                 "content": "Search restaurants or dishes",
+                "width": 280,
+                "height": 24,
                 "fontSize": 17,
                 "fontWeight": 800
             },
@@ -951,6 +957,8 @@ fn run_cleanup_passes_repairs_overbold_text_hierarchy() {
                 "id": "metadata",
                 "role": "caption",
                 "content": "20-30 min",
+                "width": 100,
+                "height": 18,
                 "fontSize": 14,
                 "fontWeight": 800
             }
