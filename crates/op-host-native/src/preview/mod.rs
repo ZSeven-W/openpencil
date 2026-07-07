@@ -674,7 +674,7 @@ impl PreviewSession {
 
     /// Test-only read access to the live runtime so the host test can
     /// assert injected text reached the widget state graph.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn runtime(&self) -> &Runtime {
         &self.runtime
     }
@@ -682,14 +682,14 @@ impl PreviewSession {
     /// Test-only: the session's own scene with live runtime widget
     /// values overlaid — what `paint_scene` walks — so render tests can
     /// assert widget values without a backend.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn preview_scene_for_test(&self) -> LayoutScene {
         self.overlay_runtime_state(&self.scene)
     }
 
     /// Test-only: translate a scene-space point into the runtime's
     /// root-relative space (exercises the tap coordinate fix).
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn scene_to_runtime_for_test(&self, x: f32, y: f32) -> (f32, f32) {
         self.scene_to_runtime(x, y)
     }
@@ -697,7 +697,7 @@ impl PreviewSession {
     /// Test-only: the absolute layout rect `(x, y, w, h)` the runtime
     /// resolved for the node with schema `id`, or `None` if unknown.
     /// In the runtime's root-relative space (no scene offset).
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn node_rect(&self, id: &str) -> Option<(f32, f32, f32, f32)> {
         let doc = self.runtime.document.as_ref()?;
         let key = doc.tree.by_id.get(id).copied()?;
@@ -707,13 +707,13 @@ impl PreviewSession {
 
     /// Test-only: the available size the runtime's primary root was laid
     /// out against (the root's authored size).
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn available(&self) -> (f32, f32) {
         self.available
     }
 
     /// Test-only: number of compiled binding sites.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn binding_sites_len_for_test(&self) -> usize {
         self.binding_sites.len()
     }
@@ -721,7 +721,7 @@ impl PreviewSession {
     /// Test-only: number of currently-mounted page-roots (1 in APP MODE
     /// — the entry screen only; N for an unmarked doc's top-level
     /// frames).
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn root_frames_len_for_test(&self) -> usize {
         self.root_frames.len()
     }
@@ -731,7 +731,7 @@ impl PreviewSession {
     /// widget runtime state the same way those two do. Returns `true`
     /// when the id resolved to a live node AND that node is in the
     /// focus chain (`FocusManager::request` rejects ids outside it).
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn focus_node_for_test(&mut self, id: &str) -> bool {
         let Some(key) = self
             .runtime
@@ -753,7 +753,7 @@ impl PreviewSession {
     /// bound input re-mounted after a screen switch reads back its
     /// persisted `$state.*` value even without an intervening focus
     /// call. Empty string for any other widget kind or an unknown id.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn widget_text_for_test(&mut self, id: &str) -> String {
         let schema = self.runtime.document.as_ref().and_then(|d| {
             let key = d.tree.by_id.get(id).copied()?;
