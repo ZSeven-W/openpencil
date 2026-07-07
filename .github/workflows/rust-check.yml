@@ -91,6 +91,8 @@ jobs:
           tool: nextest
       - name: Test workspace (Windows, nextest per-process isolation)
         if: runner.os == 'Windows'
+        env:
+          OP_TEST_ESTIMATE_TEXT_MEASURE: "1"
         run: cargo nextest run --workspace --test-threads=1
       - name: Doctests (Windows)
         if: runner.os == 'Windows'
