@@ -59,11 +59,15 @@
 mod app_mode;
 mod binding_sites;
 mod scene_helpers;
-#[cfg(test)]
+// Gated off Windows: preview tests exercise runtime layout through
+// `jian_skia::SkiaMeasure`, which hits DirectWrite in Windows CI and aborts
+// with STATUS_ACCESS_VIOLATION before Rust can report a normal failure.
+// macOS + Linux keep the full preview coverage.
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests;
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_app_mode;
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_bindings;
 
 use app_mode::AppMode;
