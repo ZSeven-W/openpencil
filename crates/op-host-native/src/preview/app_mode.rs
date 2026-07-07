@@ -212,7 +212,7 @@ impl PreviewSession {
 
     /// Test-only: the APP MODE screen path currently mounted
     /// (`app.current_path`), or `""` outside APP MODE.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn current_path_for_test(&self) -> &str {
         self.app
             .as_ref()
@@ -223,7 +223,7 @@ impl PreviewSession {
     /// Test-only: the installed `ScreenRouter`, so a test can drive
     /// navigations directly (`router.push(...)`) without a tap. Panics
     /// outside APP MODE.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn router_for_test(&self) -> &std::rc::Rc<jian_core::screens::ScreenRouter> {
         &self.app.as_ref().expect("app mode").router
     }
