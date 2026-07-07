@@ -227,6 +227,8 @@ fn sample_state() -> EditorState {
 
 #[test]
 fn single_selection_overlay_omits_name_and_paints_dimensions() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
     let mut state = EditorState::new();
     state.doc.children = vec![named_rect_node("n2", "Schedule Card 1")];
     state.set_single_selection(op_editor_core::NodeId::new("n2"));
@@ -257,6 +259,8 @@ fn single_selection_overlay_omits_name_and_paints_dimensions() {
 
 #[test]
 fn single_selection_dimension_label_uses_active_color() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
     let mut state = EditorState::new();
     state.doc.children = vec![named_rect_node("n2", "Schedule Card 1")];
     state.set_single_selection(op_editor_core::NodeId::new("n2"));
