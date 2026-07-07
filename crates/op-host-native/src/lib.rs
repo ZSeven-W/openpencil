@@ -116,6 +116,7 @@ pub use preview::PreviewSession;
     target_os = "android"
 ))]
 pub use widget_host::{CursorHint, WidgetHostNative};
+
 // canvas_view_stub stays desktop-only (uses glow GL-isolation probe).
 #[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
@@ -144,3 +145,14 @@ pub use context::EaglProvider;
 // link, and Task 3's `AppShell::run_desktop` will be the canonical
 // entry. Keeping the dead helper just to satisfy a removed link-check
 // is YAGNI.
+
+#[cfg(test)]
+pub(crate) mod font_registry_test_support {
+    use std::sync::{LazyLock, Mutex, MutexGuard};
+
+    static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    pub(crate) fn lock() -> MutexGuard<'static, ()> {
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}

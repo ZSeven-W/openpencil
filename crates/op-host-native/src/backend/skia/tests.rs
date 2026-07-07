@@ -155,6 +155,7 @@ fn dot_point_buffer_reuses_capacity_between_batches() {
 
 #[test]
 fn explicit_family_typeface_lookup_is_cached() {
+    let _guard = crate::font_registry_test_support::lock();
     let mut be = NativeBackend::with_dpi(1.0);
     // A *concurrent* test registering bundled/imported fonts bumps the
     // process-global font generation, which clears the resolver's per-char
@@ -195,6 +196,7 @@ fn explicit_family_typeface_lookup_is_cached() {
 
 #[test]
 fn skia_measure_matches_native_weighted_font_resolution() {
+    let _guard = crate::font_registry_test_support::lock();
     jian_skia::register_bundled_fonts(vec![
         include_bytes!("../../../../op-host-desktop/assets/fonts/CormorantGaramond-VF.ttf")
             .to_vec(),

@@ -332,6 +332,7 @@ fn food_app_doc() -> jian_ops_schema::PenDocument {
 
 #[test]
 fn preview_layout_matches_design_canvas() {
+    let _guard = crate::font_registry_test_support::lock();
     // Hit-test parity: the runtime layout (which preview taps hit-test
     // against) must resolve the SAME absolute rects as the static
     // design-canvas path, so a tap lands where the scene paints. For a
@@ -427,6 +428,7 @@ fn fill_root_doc() -> jian_ops_schema::PenDocument {
 
 #[test]
 fn preview_children_stay_within_root_width() {
+    let _guard = crate::font_registry_test_support::lock();
     // With a `fill_container` root, every node's right edge must fall
     // within the root frame's resolved width (the design canvas's own
     // resolved `screen` width), NOT the editor canvas region.
@@ -508,6 +510,7 @@ fn two_root_doc() -> jian_ops_schema::PenDocument {
 
 #[test]
 fn preview_lays_each_root_against_its_own_size() {
+    let _guard = crate::font_registry_test_support::lock();
     // Per-root layout proof: root-a is numeric 390, root-b is
     // `fill_container` (flex-default 1440). Each must resolve against its
     // OWN size, matching the design canvas.

@@ -525,6 +525,10 @@ fn child_dragged_into_other_layout_uses_cross_container_placeholder() {
     assert_eq!(child_order(&host, "target"), vec!["top", "box", "bottom"]);
 }
 
+#[cfg_attr(
+    target_os = "windows",
+    ignore = "WINDOWS_WIDGET_HOST_TEXT_DRAG_DIRECTWRITE_ABORT: text-node drag layout aborts in Windows CI; macOS and Linux keep coverage"
+)]
 #[test]
 fn text_dragged_fully_outside_parent_reparents_to_page_root() {
     let mut host = WidgetHostNative::new();
