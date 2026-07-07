@@ -26,7 +26,10 @@ default-members = ["crates/op-host-desktop", "crates/op-cli", "crates/op-host-we
 [workspace.package]
 version = "0.8.0"
 edition = "2021"
-rust-version = "1.85"
+# 1.87 floor: op-mcp's `script` feature (enabled unconditionally by
+# op-host-services + op-orchestrator) depends on rquickjs 0.12, whose
+# rust-version is 1.87. The pinned toolchain (rust-toolchain.toml) is 1.94.
+rust-version = "1.87"
 license = "MIT"
 authors = ["ZSeven-W <fini.yang@gmail.com>"]
 repository = "https://github.com/ZSeven-W/openpencil"
