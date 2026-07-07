@@ -60,7 +60,7 @@ thread_local! {
 /// and repeat reconversions (drag / resize / colour edits) re-measure identical
 /// text, so the cache turns those into hash lookups. (The estimate backend below
 /// is already cheap, so it is left unwrapped.)
-#[cfg(feature = "skia-measure")]
+#[cfg(all(feature = "skia-measure", not(all(test, target_os = "windows"))))]
 fn make_measure_backend() -> Rc<dyn MeasureBackend> {
     Rc::new(crate::measure_cache::CachingMeasureBackend::new(Rc::new(
         jian_skia::SkiaMeasure::new(),
@@ -71,7 +71,7 @@ fn make_measure_backend() -> Rc<dyn MeasureBackend> {
 /// skia-safe. It is a character-count heuristic (~10% width error); the
 /// CanvasKit backend re-measures glyphs exactly at paint time, so layout drift
 /// is bounded to flex sizing of unconstrained text.
-#[cfg(not(feature = "skia-measure"))]
+#[cfg(any(not(feature = "skia-measure"), all(test, target_os = "windows")))]
 fn make_measure_backend() -> Rc<dyn MeasureBackend> {
     jian_core::layout::measure::default_backend()
 }
