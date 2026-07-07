@@ -379,7 +379,9 @@ impl WidgetHostNative {
         self.commit_variable_row_focus_if_any();
         self.editor_state.editor_ui.agent_settings_open =
             !self.editor_state.editor_ui.agent_settings_open;
-        if !self.editor_state.editor_ui.agent_settings_open {
+        if self.editor_state.editor_ui.agent_settings_open {
+            self.editor_state.chat.blur_input(self.now_ms);
+        } else {
             self.editor_state.editor_ui.agent_settings_drag = None;
         }
         self.mark_dirty();

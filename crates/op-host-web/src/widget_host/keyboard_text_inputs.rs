@@ -28,7 +28,8 @@ impl WidgetHost {
             // instead of typing into the preset name).
             || self.editor_state.editor_ui.preset_name_input_active()
             || self.variables_search_active()
-            || self.editor_state.editor_ui.agent_settings.focus.is_some()
+            || (self.editor_state.editor_ui.agent_settings_open
+                && self.editor_state.editor_ui.agent_settings.focus.is_some())
             || self.editor_state.editor_ui.icon_picker.open
             || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open

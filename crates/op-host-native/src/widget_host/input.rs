@@ -45,7 +45,8 @@ impl WidgetHostNative {
             || self.editor_state.editor_ui.effect_param_focus.is_some()
             || self.editor_state.color_picker_hex_focused()
             || self.editor_state.color_picker_rgb_focused()
-            || self.editor_state.editor_ui.agent_settings.focus.is_some()
+            || (self.editor_state.editor_ui.agent_settings_open
+                && self.editor_state.editor_ui.agent_settings.focus.is_some())
             || self.editor_state.editor_ui.icon_picker.open
             || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
