@@ -132,6 +132,8 @@ jobs:
           tool: nextest
       - name: Test (host, Windows — nextest per-process isolation)
         if: matrix.cross == false && matrix.check_only != true && runner.os == 'Windows'
+        env:
+          OP_TEST_ESTIMATE_TEXT_MEASURE: "1"
         run: cargo nextest run --workspace --target ${{ matrix.target }} --test-threads=1
       - name: Doctests (host, Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os == 'Windows'
