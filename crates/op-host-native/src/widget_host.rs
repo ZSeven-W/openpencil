@@ -129,7 +129,9 @@ mod shape_picker_press;
 mod shortcut_surface_tests;
 mod shortcuts;
 mod text_edit_press;
-#[cfg(test)]
+// Windows CI DirectWrite/Skia text layout aborts inside these text-edit
+// fixtures before Rust can report an assertion. macOS + Linux keep coverage.
+#[cfg(all(test, not(target_os = "windows")))]
 mod text_edit_press_tests;
 #[cfg(test)]
 mod theme_tests;
