@@ -121,8 +121,10 @@ jobs:
       # worker thread doing font layout (SkiaMeasure) concurrently with the
       # main thread — an intra-test race --test-threads=1 can't serialize.
       # nextest runs each test in its own process so such a crash is isolated
-      # + named and cross-test DirectWrite state can't leak. Doctests run
-      # separately (nextest doesn't execute them). Matches rust-check.yml.
+      # + named. Keep those test processes serial on Windows: DirectWrite/Skia
+      # still aborts in CI when several native text-layout processes run at
+      # once. Doctests run separately (nextest doesn't execute them). Matches
+      # rust-check.yml.
       - name: Install cargo-nextest (Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os == 'Windows'
         uses: taiki-e/install-action@v2
@@ -130,7 +132,7 @@ jobs:
           tool: nextest
       - name: Test (host, Windows — nextest per-process isolation)
         if: matrix.cross == false && matrix.check_only != true && runner.os == 'Windows'
-        run: cargo nextest run --workspace --target ${{ matrix.target }}
+        run: cargo nextest run --workspace --target ${{ matrix.target }} --test-threads=1
       - name: Doctests (host, Windows)
         if: matrix.cross == false && matrix.check_only != true && runner.os == 'Windows'
         run: cargo test --workspace --target ${{ matrix.target }} --doc

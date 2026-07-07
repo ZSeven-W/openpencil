@@ -80,9 +80,10 @@ jobs:
       # intra-test race `--test-threads=1` can NOT serialize (it only
       # serializes tests against each other, not threads inside one test).
       # nextest runs every test in its OWN process, so such a crash is
-      # isolated + named instead of taking down the whole test binary, and
-      # cross-test DirectWrite state can't leak between them. Doctests run
-      # separately (nextest doesn't execute them).
+      # isolated + named instead of taking down the whole test binary.
+      # Keep those test processes serial on Windows: DirectWrite/Skia still
+      # aborts in CI when several native text-layout processes run at once.
+      # Doctests run separately (nextest doesn't execute them).
       - name: Install cargo-nextest (Windows)
         if: runner.os == 'Windows'
         uses: taiki-e/install-action@v2
@@ -90,7 +91,7 @@ jobs:
           tool: nextest
       - name: Test workspace (Windows, nextest per-process isolation)
         if: runner.os == 'Windows'
-        run: cargo nextest run --workspace
+        run: cargo nextest run --workspace --test-threads=1
       - name: Doctests (Windows)
         if: runner.os == 'Windows'
         run: cargo test --workspace --doc
