@@ -38,6 +38,7 @@ fn imported_face_count(family: &str) -> usize {
 
 #[test]
 fn measure_changes_after_registering_imported_font() {
+    let _guard = crate::font_registry_test_support::lock();
     let mut be = NativeBackend::with_dpi(1.0);
 
     // Resolve + measure the family BEFORE the import. This also populates

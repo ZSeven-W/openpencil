@@ -18,6 +18,7 @@ const SPACE_GROTESK: &[u8] =
 
 #[test]
 fn font_import_forces_layout_scene_rebuild_without_editor_dirty() {
+    let _guard = crate::font_registry_test_support::lock();
     let mut host = WidgetHostNative::new();
 
     // Settle the initial scene so `editor_state_dirty` is cleared and the
