@@ -101,14 +101,14 @@ fn property_panel_background_consumes_clicks() {
     seed(
         &mut host,
         r##"{ "version": "0.8.0", "children": [
-              {"type":"group","id":"text_group","name":"Text Group",
+              {"type":"group","id":"shape_group","name":"Shape Group",
                "children":[
-                 {"type":"text","id":"label","name":"Label","content":"Hello"}
+                 {"type":"rectangle","id":"box","name":"Box","width":80,"height":40}
                ]}
         ]}"##,
     );
     host.editor_state_mut()
-        .set_single_selection(NodeId::new("text_group"));
+        .set_single_selection(NodeId::new("shape_group"));
 
     let point = point_inside_property_panel_without_target(&host);
     assert!(
@@ -117,7 +117,7 @@ fn property_panel_background_consumes_clicks() {
     );
     assert_eq!(
         host.editor_state().selection.anchor,
-        NodeId::new("text_group")
+        NodeId::new("shape_group")
     );
 }
 
@@ -130,15 +130,15 @@ fn native_property_panel_group_component_button_switches_to_detach() {
               {"type":"frame","id":"screen","name":"Screen",
                "x":40,"y":40,"width":360,"height":640,
                "children":[
-                 {"type":"group","id":"text_group","name":"Text Group",
+                 {"type":"group","id":"shape_group","name":"Shape Group",
                   "children":[
-                    {"type":"text","id":"headline","name":"Headline","content":"Welcome"}
+                    {"type":"rectangle","id":"box","name":"Box","width":80,"height":40}
                   ]}
                ]}
         ]}"##,
     );
     host.editor_state_mut()
-        .set_single_selection(NodeId::new("text_group"));
+        .set_single_selection(NodeId::new("shape_group"));
 
     let create = point_for_action(&host, |action| {
         matches!(action, PropertyPanelAction::CreateComponent)
@@ -147,7 +147,7 @@ fn native_property_panel_group_component_button_switches_to_detach() {
     assert!(host
         .editor_state()
         .components
-        .find_by_id(&NodeId::new("text_group"))
+        .find_by_id(&NodeId::new("shape_group"))
         .is_some());
 
     let detach = point_for_action(&host, |action| {
@@ -157,7 +157,7 @@ fn native_property_panel_group_component_button_switches_to_detach() {
     assert!(host
         .editor_state()
         .components
-        .find_by_id(&NodeId::new("text_group"))
+        .find_by_id(&NodeId::new("shape_group"))
         .is_none());
 }
 
