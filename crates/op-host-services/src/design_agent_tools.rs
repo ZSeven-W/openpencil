@@ -988,7 +988,7 @@ mod tests {
         let (result, mutated) = execute_design_tool(
             &mut state,
             "batch_design",
-            r##"{"operations":"root=I(null,{type:'frame',name:'Card',width:320,height:120,fill:[{type:'solid',color:'#888888'}],children:[{type:'text',name:'Title',content:'Low contrast',fill:[{type:'solid',color:'#777777'}]}]})"}"##,
+            r##"{"operations":"root=I(null,{type:'frame',name:'Card',width:320,height:120,fill:[{type:'solid',color:'#888888'}],children:[{type:'text',name:'Title',content:'Low contrast',width:180,height:24,fill:[{type:'solid',color:'#777777'}]}]})"}"##,
         );
         assert!(!result.is_error, "batch failed: {}", result.content);
         assert!(mutated);
