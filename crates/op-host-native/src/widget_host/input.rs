@@ -1431,6 +1431,7 @@ impl WidgetHostNative {
                     self.start_layout_transition_from_bounds(&node_id, bounds);
                 }
             }
+            self.mark_dirty();
             return true;
         }
         if self.code_selection_drag.take().is_some() {
@@ -1569,6 +1570,7 @@ impl WidgetHostNative {
                     self.start_layout_transition_from_bounds(&node_id, bounds);
                 }
             }
+            self.mark_dirty();
             return true;
         }
         if self.code_selection_drag.take().is_some() {

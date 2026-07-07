@@ -133,6 +133,10 @@ fn one_node_json() -> String {
 // The host-coupled new-design route test.
 // ---------------------------------------------------------------------------
 
+#[cfg_attr(
+    target_os = "windows",
+    ignore = "WINDOWS_WIDGET_HOST_NATIVE_TEST_ABORT: WidgetHostNative/Skia host tests abort in Windows CI; macOS and Linux keep coverage"
+)]
 #[test]
 fn cli_new_design_clears_agent_frame_indicators_after_done() {
     // Held for the whole turn so an exact animation-deadline test can't
