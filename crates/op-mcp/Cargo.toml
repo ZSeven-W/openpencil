@@ -25,6 +25,6 @@ op-design-lint = { path = "../op-design-lint" }
 op-editor-core = { path = "../op-editor-core" }
 op-pen-loader = { path = "../op-pen-loader" }
 regex = "1"
-rquickjs = { version = "0.9", optional = true }
+rquickjs = { version = "0.12", optional = true }
 serde_json = { workspace = true }
 tracing = { workspace = true, optional = true }

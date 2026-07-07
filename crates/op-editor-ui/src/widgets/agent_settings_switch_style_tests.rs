@@ -455,8 +455,9 @@ fn system_auto_update_switch_matches_ts_unchecked_geometry_and_track() {
         backend
             .round_fills
             .iter()
-            .any(|(r, color)| rect_eq(*r, track) && color_eq(*color, panel.theme.border)),
-        "unchecked settings switch should use the TS bg-input color, mapped to the Rust border token"
+            .any(|(r, color)| rect_eq(*r, track) && color_eq(*color, panel.theme.input)),
+        "unchecked settings switch off-track should use the shadcn `input` token \
+         (distinct from `border` now that the light theme gives input its own value)"
     );
     assert!(
         backend
