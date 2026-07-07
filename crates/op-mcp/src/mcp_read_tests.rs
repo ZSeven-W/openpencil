@@ -195,6 +195,10 @@ fn snapshot_layout_unsized_node_uses_scene_aggregate_bounds() {
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "windows",
+    ignore = "Windows CI aborts in DirectWrite/Skia text measurement for fit-content layout"
+)]
 fn snapshot_layout_resolves_fit_content_text_to_measured_bounds() {
     let src = r##"{
       "version":"1.0.0","pages":[{"id":"p","name":"P","children":[
