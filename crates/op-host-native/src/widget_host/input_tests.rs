@@ -124,17 +124,17 @@ fn property_panel_blank_hover_consumes_and_clears_lower_hover() {
     seed(
         &mut host,
         r##"{ "version": "0.8.0", "children": [
-              {"type":"group","id":"text_group","name":"Text Group",
+              {"type":"group","id":"shape_group","name":"Shape Group",
                "children":[
-                 {"type":"text","id":"label","name":"Label","content":"Hello"}
+                 {"type":"rectangle","id":"box","name":"Box","width":80,"height":40}
                ]}
         ]}"##,
     );
     host.last_viewport_w = 1200.0;
     host.last_viewport_h = 800.0;
     host.editor_state_mut()
-        .set_single_selection(NodeId::new("text_group"));
-    host.editor_state_mut().editor_ui.canvas_hover_node = Some(NodeId::new("label"));
+        .set_single_selection(NodeId::new("shape_group"));
+    host.editor_state_mut().editor_ui.canvas_hover_node = Some(NodeId::new("box"));
 
     let point = point_inside_property_panel_without_target(&host);
 
