@@ -382,6 +382,16 @@ impl DesktopApp {
     /// pastes Figma clipboard HTML or the document node clipboard onto
     /// the canvas. `pub(crate)` for the Edit-menu path.
     pub(crate) fn handle_cmd_paste(&mut self) -> bool {
+        // Non-chat text inputs (settings, git, rename, etc.) are
+        // checked first so that opening a modal (e.g. agent settings
+        // via Cmd+,) while the chat input is focused routes the paste
+        // to the modal's field instead of the chat.
+        if self.host.input_active_pub() && !self.host.editor_state().chat.focused {
+            if let Some(text) = crate::clipboard::get_text() {
+                self.host.apply_input_paste(&text);
+            }
+            return true;
+        }
         if self.host.editor_state().chat.focused {
             // Clipboard image data wins over text when pasting into the
             // chat input; the paste is consumed either way.
@@ -389,12 +399,6 @@ impl DesktopApp {
                 if let Some(text) = crate::clipboard::get_text() {
                     self.host.chat_input_paste(&text);
                 }
-            }
-            return true;
-        }
-        if self.host.input_active_pub() {
-            if let Some(text) = crate::clipboard::get_text() {
-                self.host.apply_input_paste(&text);
             }
             return true;
         }

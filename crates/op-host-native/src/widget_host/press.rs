@@ -456,6 +456,7 @@ impl WidgetHostNative {
                 }
                 TopBarHit::OpenAgentSettings => {
                     self.editor_state.editor_ui.agent_settings_open = true;
+                    self.editor_state.chat.blur_input(self.now_ms);
                     self.mark_dirty();
                     return true;
                 }
