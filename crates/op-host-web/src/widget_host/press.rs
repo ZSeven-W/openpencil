@@ -359,6 +359,7 @@ impl WidgetHost {
                 }
                 TopBarHit::OpenAgentSettings => {
                     self.editor_state.editor_ui.agent_settings_open = true;
+                    self.editor_state.chat.blur_input(self.now_ms);
                 }
                 TopBarHit::ToggleFileMenu => {
                     self.editor_state.editor_ui.file_menu_open ^= true;
