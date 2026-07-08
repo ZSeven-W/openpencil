@@ -373,10 +373,10 @@ OpenPencil is part of a family of pure-Rust, AI-native tools from **[ZSeven-W](h
 
 | Project | What it is |
 | ------- | ---------- |
-| **[Zode](https://github.com/ZSeven-W/zode)** | Open-source, AI-native coding assistant for your terminal — a fast Rust TUI (`ratatui`) that reads your code, runs commands, searches files, and manages git. Drives OpenPencil over MCP. |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | Open-source, AI-native coding assistant for your terminal — a fast Rust TUI (`ratatui`) that reads your code, runs commands, searches files, and manages git. Drives OpenPencil over MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | A pure-Rust async runtime for shipping LLM agents — multi-provider, tool-capable end-to-end, structured permissions, real MCP, zero `unsafe`. Powers OpenPencil's built-in agent runtime (`vendor/agent`) and Zode. |
-| **[jian](https://github.com/ZSeven-W/jian)** | Pure-Rust, GPU-Skia UI framework — widgets, layout, events, and hot reload in one stack. Turns a declarative `.op` document into a native, AI-controllable app with no JS runtime, no DOM, no Electron. OpenPencil's UI framework (`vendor/jian`). |
-| **[noema](https://github.com/ZSeven-W/noema)** | Local-first, non-vector memory system for coding agents. Durable memory as inspectable files, a review queue for new entries, and lexical (embedding-free) recall — works across Zode, Codex, Claude Code, and MCP runtimes. |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | Pure-Rust, GPU-Skia UI framework — widgets, layout, events, and hot reload in one stack. Turns a declarative `.op` document into a native, AI-controllable app with no JS runtime, no DOM, no Electron. OpenPencil's UI framework (`vendor/jian`). |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | Local-first, non-vector memory system for coding agents. Durable memory as inspectable files, a review queue for new entries, and lexical (embedding-free) recall — works across Zode, Codex, Claude Code, and MCP runtimes. |
 
 ## Why Rust
 
