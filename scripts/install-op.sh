@@ -6,13 +6,13 @@
 # and installs the `op` binary into a bin directory on PATH.
 #
 # Usage:
-#   ./install-op.sh                 # install the latest release
-#   OP_VERSION=0.8.0 ./install-op.sh   # pin a specific version
-#   INSTALL_DIR=$HOME/.local/bin ./install-op.sh   # custom install dir
+#   ./install-op.sh                         # install the latest stable release
+#   OP_VERSION=0.8.0 ./install-op.sh        # pin a specific version
+#   INSTALL_DIR=$HOME/.local/bin ./install-op.sh
 #
-# Environment overrides:
-#   OP_VERSION    release version WITHOUT the leading "v" (default: latest)
-#   INSTALL_DIR   install target directory   (default: /usr/local/bin)
+# The release workflow stamps DEFAULT_OP_VERSION and DEFAULT_SHA_* in the copy
+# uploaded to GitHub Releases, so the release asset installs that exact tag and
+# verifies the CLI archive checksum.
 
 set -euo pipefail
 
@@ -20,22 +20,25 @@ OWNER="ZSeven-W"
 REPO="openpencil"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
-# Resolve the asset "label" token rust-release.yml uses in
-# op-cli-<label>.tar.gz: "<os>-<arch>" where os is macos/linux and arch is
-# x86_64/aarch64 (the cargo target arch, NOT the cask's x64/arm64 token).
+DEFAULT_OP_VERSION=""
+DEFAULT_SHA_MACOS_AARCH64=""
+DEFAULT_SHA_MACOS_X86_64=""
+DEFAULT_SHA_LINUX_AARCH64=""
+DEFAULT_SHA_LINUX_X86_64=""
+
 detect_label() {
   local os arch
   case "$(uname -s)" in
     Darwin) os="macos" ;;
-    Linux)  os="linux" ;;
+    Linux) os="linux" ;;
     *)
       echo "error: unsupported OS '$(uname -s)' (only macOS and Linux are packaged)" >&2
       exit 1
       ;;
   esac
   case "$(uname -m)" in
-    x86_64 | amd64)   arch="x86_64" ;;
-    arm64 | aarch64)  arch="aarch64" ;;
+    x86_64 | amd64) arch="x86_64" ;;
+    arm64 | aarch64) arch="aarch64" ;;
     *)
       echo "error: unsupported architecture '$(uname -m)'" >&2
       exit 1
@@ -44,16 +47,18 @@ detect_label() {
   printf '%s-%s' "$os" "$arch"
 }
 
-# Resolve the release version. Honors OP_VERSION; otherwise queries the
-# GitHub API for the latest release tag and strips the leading "v".
 resolve_version() {
   if [ -n "${OP_VERSION:-}" ]; then
     printf '%s' "$OP_VERSION"
     return
   fi
+  if [ -n "$DEFAULT_OP_VERSION" ]; then
+    printf '%s' "$DEFAULT_OP_VERSION"
+    return
+  fi
+
   local api tag
   api="https://api.github.com/repos/${OWNER}/${REPO}/releases/latest"
-  # Pull "tag_name": "vX.Y.Z" out of the JSON without a JSON parser.
   tag="$(curl -fsSL "$api" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\(v\{0,1\}[^"]*\)"$/\1/')"
   if [ -z "$tag" ]; then
     echo "error: could not resolve the latest release tag from GitHub" >&2
@@ -63,22 +68,52 @@ resolve_version() {
   printf '%s' "${tag#v}"
 }
 
+expected_sha_for_label() {
+  case "$1" in
+    macos-aarch64) printf '%s' "$DEFAULT_SHA_MACOS_AARCH64" ;;
+    macos-x86_64) printf '%s' "$DEFAULT_SHA_MACOS_X86_64" ;;
+    linux-aarch64) printf '%s' "$DEFAULT_SHA_LINUX_AARCH64" ;;
+    linux-x86_64) printf '%s' "$DEFAULT_SHA_LINUX_X86_64" ;;
+    *) printf '' ;;
+  esac
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum is required for checksum verification" >&2
+    exit 1
+  fi
+}
+
 main() {
-  local label version asset url tmp
+  local label version asset url tmp expected_sha actual_sha
   label="$(detect_label)"
   version="$(resolve_version)"
   asset="op-cli-${label}.tar.gz"
   url="https://github.com/${OWNER}/${REPO}/releases/download/v${version}/${asset}"
+  expected_sha="$(expected_sha_for_label "$label")"
 
   echo "==> Installing op ${version} (${label})"
   echo "    from ${url}"
 
   tmp="$(mktemp -d)"
-  # Always clean up the scratch dir, even on early exit.
   trap 'rm -rf "$tmp"' EXIT
 
-  # Download and unpack. The tarball contains a single bare `op` binary.
   curl -fsSL --retry 3 -o "$tmp/${asset}" "$url"
+  if [ -n "$expected_sha" ]; then
+    actual_sha="$(sha256_file "$tmp/${asset}")"
+    if [ "$actual_sha" != "$expected_sha" ]; then
+      echo "error: checksum mismatch for ${asset}" >&2
+      echo "       expected: $expected_sha" >&2
+      echo "       actual:   $actual_sha" >&2
+      exit 1
+    fi
+  fi
+
   tar -xzf "$tmp/${asset}" -C "$tmp"
   if [ ! -f "$tmp/op" ]; then
     echo "error: ${asset} did not contain an 'op' binary" >&2
@@ -86,11 +121,7 @@ main() {
   fi
   chmod +x "$tmp/op"
 
-  # Install — use sudo automatically only when the target dir is not
-  # writable by the current user (e.g. the default /usr/local/bin).
   echo "==> Installing to ${INSTALL_DIR}/op"
-  # Create the dir first (best effort) so the writability test below is
-  # meaningful for a not-yet-existing custom INSTALL_DIR.
   mkdir -p "$INSTALL_DIR" 2>/dev/null || true
   if [ -w "$INSTALL_DIR" ]; then
     install -m 0755 "$tmp/op" "$INSTALL_DIR/op"
