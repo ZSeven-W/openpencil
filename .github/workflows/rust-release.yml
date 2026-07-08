@@ -444,6 +444,7 @@ jobs:
             echo "::error::NPM_TOKEN is required to publish web SDK packages"
             exit 1
           fi
+          echo "::notice::NPM_TOKEN must be scoped for @zseven-w packages and have bypass 2FA enabled"
           printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > ~/.npmrc
           npm whoami
       - name: Build wasm-backed SDK packages
@@ -529,6 +530,54 @@ jobs:
             echo "::error::expected 3 SDK tarballs, found ${#sdk[@]}"
             exit 1
           fi
+      - name: Generate CLI install scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+
+          sha_file() {
+            sha256sum "release-files/$1" | awk '{print $1}'
+          }
+
+          cli_mac_arm_sha="$(sha_file "op-cli-macos-aarch64.tar.gz")"
+          cli_mac_x64_sha="$(sha_file "op-cli-macos-x86_64.tar.gz")"
+          cli_linux_arm_sha="$(sha_file "op-cli-linux-aarch64.tar.gz")"
+          cli_linux_x64_sha="$(sha_file "op-cli-linux-x86_64.tar.gz")"
+          cli_win_arm_sha="$(sha_file "op-cli-windows-aarch64.zip")"
+          cli_win_x64_sha="$(sha_file "op-cli-windows-x86_64.zip")"
+
+          cp scripts/install-op.sh release-files/install-op.sh
+          cp scripts/install-op.ps1 release-files/install-op.ps1
+          OP_INSTALLER_VERSION="$version" \
+          OP_SHA_MACOS_AARCH64="$cli_mac_arm_sha" \
+          OP_SHA_MACOS_X86_64="$cli_mac_x64_sha" \
+          OP_SHA_LINUX_AARCH64="$cli_linux_arm_sha" \
+          OP_SHA_LINUX_X86_64="$cli_linux_x64_sha" \
+          perl -0pi -e '
+            s/^DEFAULT_OP_VERSION=.*/DEFAULT_OP_VERSION="$ENV{OP_INSTALLER_VERSION}"/m;
+            s/^DEFAULT_SHA_MACOS_AARCH64=.*/DEFAULT_SHA_MACOS_AARCH64="$ENV{OP_SHA_MACOS_AARCH64}"/m;
+            s/^DEFAULT_SHA_MACOS_X86_64=.*/DEFAULT_SHA_MACOS_X86_64="$ENV{OP_SHA_MACOS_X86_64}"/m;
+            s/^DEFAULT_SHA_LINUX_AARCH64=.*/DEFAULT_SHA_LINUX_AARCH64="$ENV{OP_SHA_LINUX_AARCH64}"/m;
+            s/^DEFAULT_SHA_LINUX_X86_64=.*/DEFAULT_SHA_LINUX_X86_64="$ENV{OP_SHA_LINUX_X86_64}"/m;
+          ' release-files/install-op.sh
+          OP_INSTALLER_VERSION="$version" \
+          OP_SHA_WINDOWS_AARCH64="$cli_win_arm_sha" \
+          OP_SHA_WINDOWS_X86_64="$cli_win_x64_sha" \
+          perl -0pi -e '
+            s/^\$DefaultOpVersion = .*/\$DefaultOpVersion = "$ENV{OP_INSTALLER_VERSION}"/m;
+            s/^\$DefaultShaWindowsAarch64 = .*/\$DefaultShaWindowsAarch64 = "$ENV{OP_SHA_WINDOWS_AARCH64}"/m;
+            s/^\$DefaultShaWindowsX86_64 = .*/\$DefaultShaWindowsX86_64 = "$ENV{OP_SHA_WINDOWS_X86_64}"/m;
+          ' release-files/install-op.ps1
+          chmod +x release-files/install-op.sh
+          if grep -E 'DEFAULT_OP_VERSION=""|DEFAULT_SHA_(MACOS|LINUX)_[A-Z0-9_]+=""|\$Default(OpVersion|ShaWindows[A-Za-z0-9_]+) = ""' \
+              release-files/install-op.sh release-files/install-op.ps1; then
+            echo "::error::CLI install scripts still contain unstamped release metadata"
+            exit 1
+          fi
+          grep -q "$version" release-files/install-op.sh
+          grep -q "$version" release-files/install-op.ps1
       - name: Prepare release body
         shell: bash
         run: |
