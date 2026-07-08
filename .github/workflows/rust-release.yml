@@ -478,7 +478,7 @@ jobs:
               echo "::notice::${name}@${version} is already published; skipping"
               return
             fi
-            npm publish "$tarball" --access public --tag next
+            npm publish "./$tarball" --access public --tag next
           }
           publish_pkg "@zseven-w/op-web-sdk" "sdk-packages/zseven-w-op-web-sdk-${version}.tgz"
           publish_pkg "@zseven-w/op-web-sdk-react" "sdk-packages/zseven-w-op-web-sdk-react-${version}.tgz"
