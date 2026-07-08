@@ -79,7 +79,8 @@ RUN cargo build -p op-host-web-server --release
 # from Cargo.lock so the CLI matches the linked runtime.
 RUN if [ "$WEB_BUNDLE_SOURCE" = "build" ]; then \
       rustup target add wasm32-unknown-unknown && \
-      version="$(awk '/^name = \"wasm-bindgen\"$/{found=1; next} found && /^version = /{gsub(/[\" ]/,\"\",$3); print $3; exit}' Cargo.lock)" && \
+      version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)" && \
+      if [ -z "$version" ]; then echo "could not resolve wasm-bindgen version from Cargo.lock" >&2; exit 2; fi && \
       cargo install wasm-bindgen-cli --version "$version" --locked && \
       bash tools/check-wasm-bundle.sh ; \
     else \

@@ -3,7 +3,7 @@ import type { OpViewer } from '@zseven-w/op-web-sdk';
 import { ViewerContext } from './context.js';
 
 // Provider component that injects an OpViewer into React context.
-export function DesignProvider(props: { viewer: OpViewer; children: ReactNode }) {
+export function DesignProvider(props: { viewer: OpViewer; children?: ReactNode }) {
   return createElement(ViewerContext.Provider, { value: props.viewer }, props.children);
 }
 

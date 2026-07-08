@@ -57,6 +57,6 @@ export function DesignView(props: DesignViewProps) {
     { className: props.className },
     createElement('canvas', { ref: canvasRef, style: { width: '100%', height: '100%', display: 'block' } }),
     // Only render children once the viewer is ready.
-    viewer ? createElement(DesignProvider, { viewer, children: props.children }) : null,
+    viewer ? createElement(DesignProvider, { viewer }, props.children) : null,
   );
 }
