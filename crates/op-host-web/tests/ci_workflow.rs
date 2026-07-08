@@ -43,6 +43,68 @@ fn release_workflow_documents_current_canvaskit_bundle_path() {
 }
 
 #[test]
+fn release_workflow_resolves_macos_signing_identity_from_keychain() {
+    let workflow = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.github/workflows/rust-release.yml"
+    ))
+    .expect("rust-release workflow is readable");
+
+    assert!(
+        workflow.contains("Resolve macOS signing identity"),
+        "release workflow should resolve the imported Developer ID identity before signing"
+    );
+    assert!(
+        workflow.contains("security find-identity -v -p codesigning"),
+        "release workflow should query the imported keychain identity instead of guessing it"
+    );
+    assert!(
+        !workflow.contains("Developer ID Application ($APPLE_TEAM_ID)"),
+        "release workflow must not hard-code an incomplete Developer ID identity"
+    );
+}
+
+#[test]
+fn release_workflow_installs_nsis_on_windows_runner() {
+    let workflow = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.github/workflows/rust-release.yml"
+    ))
+    .expect("rust-release workflow is readable");
+
+    assert!(
+        workflow.contains("Install NSIS (windows)"),
+        "release workflow should install NSIS before invoking makensis"
+    );
+    assert!(
+        workflow.contains("choco install nsis"),
+        "release workflow should not assume makensis is preinstalled on windows-latest"
+    );
+    assert!(
+        workflow.contains("GITHUB_PATH") && workflow.contains("makensis.exe"),
+        "release workflow should add makensis.exe to PATH after installing NSIS"
+    );
+}
+
+#[test]
+fn release_workflow_distinguishes_published_npm_packages_from_check_failures() {
+    let workflow = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.github/workflows/rust-release.yml"
+    ))
+    .expect("rust-release workflow is readable");
+
+    assert!(
+        workflow.contains("already published; skipping"),
+        "release workflow should skip npm packages that are already published"
+    );
+    assert!(
+        workflow.contains("E404") && workflow.contains("failed to check npm package"),
+        "release workflow should publish only on npm 404 and fail on other npm view errors"
+    );
+}
+
+#[test]
 fn web_smoke_page_uses_current_canvaskit_bundle_command() {
     let smoke = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/smoke/step-1b.html"))
         .expect("web smoke page is readable");

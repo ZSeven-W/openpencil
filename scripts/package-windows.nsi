@@ -1,9 +1,9 @@
 ; OpenPencil Windows installer (NSIS).
 ;
-; Why NSIS (not Inno Setup): makensis is preinstalled on the GitHub
-; windows-latest runner image, and the TS reference pipeline
+; Why NSIS (not Inno Setup): the TS reference pipeline
 ; (apps/desktop/electron-builder.yml) also targets `nsis`, so installer UX
-; stays consistent between the Electron and Rust shells.
+; stays consistent between the Electron and Rust shells. The release workflow
+; installs NSIS explicitly before invoking makensis.
 ;
 ; Installs:
 ;   openpencil-desktop.exe  editor binary
