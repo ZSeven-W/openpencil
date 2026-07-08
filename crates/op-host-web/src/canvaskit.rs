@@ -259,6 +259,10 @@ extern "C" {
     fn rotate(this: &OpCk, deg: f32, px: f32, py: f32);
     #[wasm_bindgen(method)]
     fn resize(this: &OpCk, w: u32, h: u32);
+    /// Set the device-pixel-ratio used to supersample the offscreen text raster
+    /// so glyph bitmaps stay crisp on HiDPI displays.
+    #[wasm_bindgen(method, js_name = setDpr)]
+    fn set_dpr(this: &OpCk, dpr: f32);
 }
 
 const STEADY_CANVAS_PIXEL_BUDGET: f32 = 16_000_000.0;
@@ -299,6 +303,8 @@ pub struct CanvasKitBackend {
 
 impl CanvasKitBackend {
     pub fn new(ck: OpCk, dpr: f32, logical_w: u32, logical_h: u32) -> Self {
+        let dpr = dpr.max(1.0);
+        ck.set_dpr(dpr);
         Self {
             ck,
             dpr,
@@ -313,6 +319,7 @@ impl CanvasKitBackend {
         self.logical_w = logical_w.max(1);
         self.logical_h = logical_h.max(1);
         self.dpr = dpr.max(1.0);
+        self.ck.set_dpr(self.dpr);
         let pw = ((self.logical_w as f32) * self.dpr).round() as u32;
         let ph = ((self.logical_h as f32) * self.dpr).round() as u32;
         self.ck.resize(pw.max(1), ph.max(1));
