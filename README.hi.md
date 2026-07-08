@@ -287,7 +287,7 @@ cat design.dsl | op design - # stdin से पाइप करें
 | ------------------ | -------------------------------------------------------------------------------- |
 | **कोर**            | Rust वर्कस्पेस (`crates/`) — एडिटर स्टेट, विजेट्स, होस्ट्स, MCP, AI, codegen     |
 | **रेंडरिंग**       | हर जगह GPU Skia — नेटिव पर `skia-safe` (GL), ब्राउज़र में CanvasKit (WASM/WebGL2) |
-| **UI टूलकिट**      | jian — वेंडर्ड Rust विजेट/रेंडर/इवेंट टूलकिट (`vendor/jian`)                     |
+| **UI फ़्रेमवर्क**  | jian — वेंडर्ड शुद्ध-Rust GPU-Skia UI फ़्रेमवर्क: विजेट्स, लेआउट, इवेंट, हॉट रीलोड (`vendor/jian`) |
 | **विंडोइंग**       | winit (वेंडर्ड `casement` फ़ोर्क)                                                |
 | **डेस्कटॉप**       | नेटिव बाइनरी `openpencil-desktop` — कोई ब्राउज़र इंजन नहीं                       |
 | **वेब SDK**        | `op-web-sdk` + React 19 / Vue 3 एडाप्टर — रीड-ओनली `.op` व्यूअर (TypeScript)     |
@@ -295,6 +295,17 @@ cat design.dsl | op design - # stdin से पाइप करें
 | **AI**             | बिल्ट-इन Rust एजेंट रनटाइम · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Lint**           | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                               |
 | **फ़ाइल फ़ॉर्मेट** | `.op` — JSON-आधारित, मानव-पठनीय, Git-फ्रेंडली                                    |
+
+## पारिस्थितिकी तंत्र
+
+OpenPencil, **[ZSeven-W](https://github.com/ZSeven-W)** के शुद्ध-Rust, AI-नेटिव टूल्स के परिवार का हिस्सा है। ये आपस में जुड़ते हैं: `jian` OpenPencil को रेंडर करता है, `agent-rs` इसके एजेंट चलाता है, `noema` याद रखता है, और `zode` टर्मिनल से डिज़ाइन करता है।
+
+| प्रोजेक्ट | यह क्या है |
+| --------- | ---------- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | आपके टर्मिनल के लिए ओपन-सोर्स, AI-नेटिव कोडिंग असिस्टेंट — एक तेज़ Rust TUI (`ratatui`) जो आपका कोड पढ़ता है, कमांड चलाता है, फ़ाइलें खोजता है और git प्रबंधित करता है। MCP के ज़रिए OpenPencil को चलाता है। |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM एजेंट शिप करने के लिए एक शुद्ध-Rust async रनटाइम — मल्टी-प्रोवाइडर, एंड-टू-एंड टूल-सक्षम, संरचित अनुमतियाँ, वास्तविक MCP, शून्य `unsafe`। OpenPencil के बिल्ट-इन एजेंट रनटाइम (`vendor/agent`) और Zode को शक्ति देता है। |
+| **[jian](https://github.com/ZSeven-W/jian)** | शुद्ध-Rust, GPU-Skia UI फ़्रेमवर्क — एक ही स्टैक में विजेट्स, लेआउट, इवेंट और हॉट रीलोड। एक घोषणात्मक `.op` दस्तावेज़ को बिना JS रनटाइम, बिना DOM, बिना Electron के एक नेटिव, AI-नियंत्रणीय ऐप में बदल देता है। OpenPencil का UI फ़्रेमवर्क (`vendor/jian`)। |
+| **[noema](https://github.com/ZSeven-W/noema)** | कोडिंग एजेंट्स के लिए लोकल-फ़र्स्ट, नॉन-वेक्टर मेमोरी सिस्टम। निरीक्षण-योग्य फ़ाइलों के रूप में टिकाऊ मेमोरी, नई प्रविष्टियों के लिए एक समीक्षा कतार, और लेक्सिकल (एम्बेडिंग-मुक्त) रिकॉल — Zode, Codex, Claude Code और MCP रनटाइम में काम करता है। |
 
 ## Rust क्यों
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 एडाप्टर
 │   └── op-web-sdk-vue/       Vue 3 एडाप्टर
 ├── vendor/                   वेंडर्ड सबसिस्टम (git सबमॉड्यूल)
-│   ├── jian/                 Skia विजेट/रेंडर/इवेंट टूलकिट
+│   ├── jian/                 GPU-Skia UI फ़्रेमवर्क — विजेट/रेंडर/इवेंट
 │   ├── casement/             winit फ़ोर्क
 │   └── agent/                क्रॉस-प्रोडक्ट Rust एजेंट रनटाइम (agent-rs)
 └── .githooks/                ब्रांच नाम से प्री-कमिट वर्शन सिंक

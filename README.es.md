@@ -287,7 +287,7 @@ Soporta tres métodos de entrada: cadena inline, `@filepath` (leer desde archivo
 | ---------------------- | -------------------------------------------------------------------------------------------------- |
 | **Núcleo**             | Workspace Rust (`crates/`) — estado del editor, widgets, hosts, MCP, IA, codegen                   |
 | **Renderizado**        | GPU Skia en todas partes — `skia-safe` (GL) en nativo, CanvasKit (WASM/WebGL2) en el navegador     |
-| **Kit de UI**          | jian — kit de widgets/render/eventos en Rust incluido como vendor (`vendor/jian`)                  |
+| **Framework de UI** | jian — framework de UI GPU-Skia en Rust puro incluido como vendor: widgets, layout, eventos, recarga en caliente (`vendor/jian`) |
 | **Ventanas**           | winit (fork `casement` incluido como vendor)                                                       |
 | **Escritorio**         | Binario nativo `openpencil-desktop` — sin motor de navegador                                       |
 | **SDK web**            | `op-web-sdk` + adaptadores React 19 / Vue 3 — visor `.op` de solo lectura (TypeScript)              |
@@ -295,6 +295,17 @@ Soporta tres métodos de entrada: cadena inline, `@filepath` (leer desde archivo
 | **IA**                 | Runtime de agente Rust integrado · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK   |
 | **Lint**               | clippy · rustfmt (Rust) · oxlint · oxfmt (SDK web)                                                  |
 | **Formato de archivo** | `.op` — basado en JSON, legible por humanos, compatible con Git                                    |
+
+## Ecosistema
+
+OpenPencil forma parte de una familia de herramientas en Rust puro, nativas de IA, de **[ZSeven-W](https://github.com/ZSeven-W)**. Se combinan: `jian` renderiza OpenPencil, `agent-rs` ejecuta sus agentes, `noema` recuerda, y `zode` diseña desde la terminal.
+
+| Proyecto | Qué es |
+| -------- | ------ |
+| **[Zode](https://github.com/ZSeven-W/zode)** | Asistente de código open-source y nativo de IA para tu terminal — una TUI de Rust rápida (`ratatui`) que lee tu código, ejecuta comandos, busca archivos y gestiona git. Controla OpenPencil mediante MCP. |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Un runtime asíncrono en Rust puro para desplegar agentes LLM — multiproveedor, con capacidad de usar herramientas de extremo a extremo, permisos estructurados, MCP real, cero `unsafe`. Impulsa el runtime de agente integrado de OpenPencil (`vendor/agent`) y Zode. |
+| **[jian](https://github.com/ZSeven-W/jian)** | Framework de UI GPU-Skia en Rust puro — widgets, layout, eventos y recarga en caliente en una sola stack. Convierte un documento declarativo `.op` en una app nativa, controlable por IA, sin runtime de JS, sin DOM, sin Electron. El framework de UI de OpenPencil (`vendor/jian`). |
+| **[noema](https://github.com/ZSeven-W/noema)** | Sistema de memoria local-first y no vectorial para agentes de código. Memoria duradera como archivos inspeccionables, una cola de revisión para las nuevas entradas, y recuperación léxica (sin embeddings) — funciona en Zode, Codex, Claude Code y runtimes MCP. |
 
 ## Por Qué Rust
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     Adaptador para React 19
 │   └── op-web-sdk-vue/       Adaptador para Vue 3
 ├── vendor/                   Subsistemas incluidos como vendor (submódulos git)
-│   ├── jian/                 Kit de widgets/render/eventos Skia
+│   ├── jian/                 Framework de UI GPU-Skia — widgets/render/eventos
 │   ├── casement/             Fork de winit
 │   └── agent/                Runtime de agente Rust multi-producto (agent-rs)
 └── .githooks/                Sincronización de versión pre-commit desde nombre de rama

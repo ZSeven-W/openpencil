@@ -287,7 +287,7 @@ cat design.dsl | op design - # stdin からパイプ入力
 | ------------------ | -------------------------------------------------------------------------------- |
 | **コア**           | Rust ワークスペース（`crates/`） — エディター状態、ウィジェット、ホスト、MCP、AI、codegen |
 | **レンダリング**   | あらゆる場所で GPU Skia — ネイティブは `skia-safe`（GL）、ブラウザは CanvasKit（WASM/WebGL2） |
-| **UI ツールキット** | jian — ベンダー化された Rust ウィジェット/レンダー/イベントツールキット（`vendor/jian`） |
+| **UI フレームワーク** | jian — ベンダー化された純 Rust の GPU-Skia UI フレームワーク：ウィジェット、レイアウト、イベント、ホットリロード（`vendor/jian`） |
 | **ウィンドウイング** | winit（ベンダー化された `casement` フォーク）                                   |
 | **デスクトップ**   | ネイティブバイナリ `openpencil-desktop` — ブラウザエンジン不要                   |
 | **Web SDK**        | `op-web-sdk` + React 19 / Vue 3 アダプター — 読み取り専用 `.op` ビューアー（TypeScript） |
@@ -295,6 +295,17 @@ cat design.dsl | op design - # stdin からパイプ入力
 | **AI**             | ビルトイン Rust エージェントランタイム · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **リント**         | clippy · rustfmt（Rust） · oxlint · oxfmt（Web SDK）                             |
 | **ファイル形式**   | `.op` — JSON ベース、人間が読みやすく、Git フレンドリー                          |
+
+## エコシステム
+
+OpenPencil は **[ZSeven-W](https://github.com/ZSeven-W)** による純 Rust・AI ネイティブなツール群の一員です。これらは互いに組み合わさります：`jian` が OpenPencil をレンダリングし、`agent-rs` がそのエージェントを実行し、`noema` が記憶し、`zode` がターミナルからデザインします。
+
+| プロジェクト | 内容 |
+| ------- | ---------- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | ターミナル向けのオープンソース AI ネイティブコーディングアシスタント — コードを読み、コマンドを実行し、ファイルを検索し、git を管理する高速な Rust TUI（`ratatui`）。MCP 経由で OpenPencil を駆動します。 |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM エージェントを届けるための純 Rust 非同期ランタイム — マルチプロバイダー、エンドツーエンドでツール対応、構造化された権限、本物の MCP、`unsafe` ゼロ。OpenPencil のビルトインエージェントランタイム（`vendor/agent`）と Zode を支えます。 |
+| **[jian](https://github.com/ZSeven-W/jian)** | 純 Rust の GPU-Skia UI フレームワーク — ウィジェット、レイアウト、イベント、ホットリロードを一つのスタックに。宣言的な `.op` ドキュメントを、JS ランタイムも DOM も Electron もない、ネイティブで AI 制御可能なアプリへと変えます。OpenPencil の UI フレームワーク（`vendor/jian`）。 |
+| **[noema](https://github.com/ZSeven-W/noema)** | コーディングエージェント向けのローカルファースト・非ベクター記憶システム。検査可能なファイルとしての永続的な記憶、新規エントリのレビューキュー、そして語彙的（埋め込み不要）な想起 — Zode、Codex、Claude Code、MCP ランタイム間で機能します。 |
 
 ## なぜ Rust か
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 アダプター
 │   └── op-web-sdk-vue/       Vue 3 アダプター
 ├── vendor/                   ベンダー化されたサブシステム（git サブモジュール）
-│   ├── jian/                 Skia ウィジェット/レンダー/イベントツールキット
+│   ├── jian/                 GPU-Skia UI フレームワーク — ウィジェット/レンダー/イベント
 │   ├── casement/             winit フォーク
 │   └── agent/                製品横断 Rust エージェントランタイム（agent-rs）
 └── .githooks/                ブランチ名からのプレコミットバージョン同期

@@ -287,7 +287,7 @@ cat design.dsl | op design - # 从 stdin 管道输入
 | ------------ | -------------------------------------------------------------------------------- |
 | **核心**     | Rust workspace（`crates/`）— 编辑器状态、组件、宿主、MCP、AI、代码生成           |
 | **渲染**     | 全平台统一使用 GPU Skia — 原生端 `skia-safe`（GL），浏览器端 CanvasKit（WASM/WebGL2） |
-| **UI 工具包** | jian — 内置的 Rust 组件/渲染/事件工具包（`vendor/jian`）                        |
+| **UI 框架** | jian — 内置的纯 Rust GPU-Skia UI 框架：组件、布局、事件、热重载（`vendor/jian`） |
 | **窗口管理** | winit（内置 `casement` fork）                                                    |
 | **桌面端**   | 原生二进制文件 `openpencil-desktop` — 无浏览器引擎                              |
 | **Web SDK**  | `op-web-sdk` + React 19 / Vue 3 适配器 — 只读 `.op` 查看器（TypeScript）         |
@@ -295,6 +295,17 @@ cat design.dsl | op design - # 从 stdin 管道输入
 | **AI**       | 内置 Rust Agent 运行时 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **代码检查** | clippy · rustfmt（Rust）· oxlint · oxfmt（web SDK）                              |
 | **文件格式** | `.op` — 基于 JSON，人类可读，对 Git 友好                                         |
+
+## 生态
+
+OpenPencil 是 **[ZSeven-W](https://github.com/ZSeven-W)** 出品的一系列纯 Rust、AI 原生工具家族中的一员。它们彼此协作：`jian` 渲染 OpenPencil，`agent-rs` 运行它的智能体，`noema` 负责记忆，`zode` 则从终端进行设计。
+
+| 项目 | 简介 |
+| ---- | ---- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | 面向终端的开源、AI 原生编程助手 — 一个快速的 Rust TUI（`ratatui`），可读取你的代码、运行命令、搜索文件并管理 git。通过 MCP 驱动 OpenPencil。 |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | 用于交付 LLM 智能体的纯 Rust 异步运行时 — 多提供商、端到端工具能力、结构化权限、真正的 MCP、零 `unsafe`。为 OpenPencil 内置的智能体运行时（`vendor/agent`）和 Zode 提供动力。 |
+| **[jian](https://github.com/ZSeven-W/jian)** | 纯 Rust、GPU-Skia UI 框架 — 组件、布局、事件和热重载集于一栈。将声明式的 `.op` 文档变为原生、AI 可控的应用，无需 JS 运行时、无 DOM、无 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |
+| **[noema](https://github.com/ZSeven-W/noema)** | 面向编程智能体的本地优先、非向量记忆系统。以可检视的文件形式提供持久记忆、为新条目提供审阅队列，以及词法式（无需嵌入）召回 — 适用于 Zode、Codex、Claude Code 和 MCP 运行时。 |
 
 ## 为什么选择 Rust
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 适配器
 │   └── op-web-sdk-vue/       Vue 3 适配器
 ├── vendor/                   内置子系统（git 子模块）
-│   ├── jian/                 Skia 组件/渲染/事件工具包
+│   ├── jian/                 GPU-Skia UI 框架 — 组件/渲染/事件
 │   ├── casement/             winit fork
 │   └── agent/                跨产品 Rust Agent 运行时（agent-rs）
 └── .githooks/                预提交钩子：从分支名同步版本号

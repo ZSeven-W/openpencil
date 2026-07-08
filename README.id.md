@@ -287,7 +287,7 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 | --------------- | -------------------------------------------------------------------------------- |
 | **Inti**        | Workspace Rust (`crates/`) — state editor, widget, host, MCP, AI, codegen        |
 | **Rendering**   | GPU Skia di mana saja — `skia-safe` (GL) pada native, CanvasKit (WASM/WebGL2) di browser |
-| **Toolkit UI**  | jian — toolkit widget/render/event Rust yang di-vendor (`vendor/jian`)           |
+| **Framework UI** | jian — framework UI GPU-Skia murni-Rust yang di-vendor: widget, layout, event, hot reload (`vendor/jian`) |
 | **Windowing**   | winit (fork `casement` yang di-vendor)                                          |
 | **Desktop**     | Binary native `openpencil-desktop` — tanpa engine browser                        |
 | **Web SDK**     | `op-web-sdk` + adapter React 19 / Vue 3 — viewer `.op` baca-saja (TypeScript)     |
@@ -295,6 +295,17 @@ Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `
 | **AI**          | Runtime agen Rust bawaan · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Lint**        | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                               |
 | **Format file** | `.op` — berbasis JSON, mudah dibaca manusia, ramah Git                           |
+
+## Ekosistem
+
+OpenPencil adalah bagian dari keluarga alat murni-Rust, berbasis AI dari **[ZSeven-W](https://github.com/ZSeven-W)**. Mereka saling melengkapi: `jian` merender OpenPencil, `agent-rs` menjalankan agennya, `noema` mengingat, dan `zode` mendesain dari terminal.
+
+| Proyek | Apa itu |
+| ------ | ------- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | Asisten koding open-source berbasis AI untuk terminal Anda — TUI Rust yang cepat (`ratatui`) yang membaca kode Anda, menjalankan perintah, mencari file, dan mengelola git. Menggerakkan OpenPencil melalui MCP. |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Runtime async murni-Rust untuk merilis agen LLM — multi-penyedia, mampu memakai alat secara ujung-ke-ujung, izin terstruktur, MCP asli, tanpa `unsafe`. Menggerakkan runtime agen bawaan OpenPencil (`vendor/agent`) dan Zode. |
+| **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia murni-Rust — widget, layout, event, dan hot reload dalam satu stack. Mengubah dokumen `.op` deklaratif menjadi aplikasi native yang dapat dikendalikan AI tanpa runtime JS, tanpa DOM, tanpa Electron. Framework UI OpenPencil (`vendor/jian`). |
+| **[noema](https://github.com/ZSeven-W/noema)** | Sistem memori local-first, non-vektor untuk agen koding. Memori tahan lama sebagai file yang dapat diperiksa, antrean tinjauan untuk entri baru, dan pengambilan leksikal (tanpa embedding) — bekerja di seluruh Zode, Codex, Claude Code, dan runtime MCP. |
 
 ## Mengapa Rust
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     Adapter React 19
 │   └── op-web-sdk-vue/       Adapter Vue 3
 ├── vendor/                   Subsistem yang di-vendor (git submodules)
-│   ├── jian/                 Toolkit widget/render/event Skia
+│   ├── jian/                 Framework UI GPU-Skia — widget/render/event
 │   ├── casement/             Fork winit
 │   └── agent/                Runtime agen Rust lintas produk (agent-rs)
 └── .githooks/                Pre-commit sinkronisasi versi dari nama branch
