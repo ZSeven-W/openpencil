@@ -2,8 +2,8 @@ name: Rust release artifacts
 
 # Triggered on tag push (v*) — builds release binaries across desktop targets,
 # packages real installers per platform, builds the web Docker image and SDK
-# tarballs, publishes the web SDK packages to npm, and publishes a GitHub
-# prerelease.
+# tarballs, publishes the web SDK packages to npm, publishes a GitHub
+# prerelease, then updates the Homebrew tap and Scoop bucket.
 #
 # Artifact matrix (per platform; <v> = tag version, arch token = x64/arm64 to
 # match electron-builder's `${productName}-${version}-${arch}-…` convention
@@ -553,3 +553,264 @@ jobs:
           make_latest: false
           body_path: release-body.md
           files: release-files/*
+
+  package-managers:
+    name: Update Homebrew tap and Scoop bucket
+    needs: [release-draft]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+      HOMEBREW_TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY || 'ZSeven-W/homebrew-openpencil' }}
+      SCOOP_BUCKET_REPOSITORY: ${{ vars.SCOOP_BUCKET_REPOSITORY || 'ZSeven-W/scoop-openpencil' }}
+    steps:
+      - name: Validate package-manager token
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_GITHUB_TOKEN:-}" ]; then
+            echo "::error::TAP_GITHUB_TOKEN is required to update Homebrew and Scoop repositories"
+            exit 1
+          fi
+
+      - name: Download release assets and compute hashes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p release-assets
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir release-assets \
+            --clobber
+
+          required=(
+            "OpenPencil-${version}-arm64-mac.dmg"
+            "OpenPencil-${version}-x64-mac.dmg"
+            "openpencil-desktop-windows-x86_64.zip"
+            "openpencil-desktop-windows-aarch64.zip"
+            "op-cli-macos-aarch64.tar.gz"
+            "op-cli-macos-x86_64.tar.gz"
+            "op-cli-linux-aarch64.tar.gz"
+            "op-cli-linux-x86_64.tar.gz"
+            "op-cli-windows-aarch64.zip"
+            "op-cli-windows-x86_64.zip"
+          )
+          for file in "${required[@]}"; do
+            if [ ! -f "release-assets/$file" ]; then
+              echo "::error::missing release asset for package-manager update: $file"
+              exit 1
+            fi
+          done
+
+          sha_file() {
+            sha256sum "release-assets/$1" | awk '{print $1}'
+          }
+
+          {
+            echo "OP_VERSION=$version"
+            echo "MAC_ARM_DMG_SHA=$(sha_file "OpenPencil-${version}-arm64-mac.dmg")"
+            echo "MAC_X64_DMG_SHA=$(sha_file "OpenPencil-${version}-x64-mac.dmg")"
+            echo "CLI_MAC_ARM_SHA=$(sha_file "op-cli-macos-aarch64.tar.gz")"
+            echo "CLI_MAC_X64_SHA=$(sha_file "op-cli-macos-x86_64.tar.gz")"
+            echo "CLI_LINUX_ARM_SHA=$(sha_file "op-cli-linux-aarch64.tar.gz")"
+            echo "CLI_LINUX_X64_SHA=$(sha_file "op-cli-linux-x86_64.tar.gz")"
+            echo "DESKTOP_WIN_ARM_SHA=$(sha_file "openpencil-desktop-windows-aarch64.zip")"
+            echo "DESKTOP_WIN_X64_SHA=$(sha_file "openpencil-desktop-windows-x86_64.zip")"
+            echo "CLI_WIN_ARM_SHA=$(sha_file "op-cli-windows-aarch64.zip")"
+            echo "CLI_WIN_X64_SHA=$(sha_file "op-cli-windows-x86_64.zip")"
+          } >> "$GITHUB_ENV"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.HOMEBREW_TAP_REPOSITORY }}
+          token: ${{ env.TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Homebrew cask and formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p homebrew-tap/Casks homebrew-tap/Formula
+          cat > homebrew-tap/Casks/openpencil.rb <<EOF
+          cask "openpencil" do
+            version "${OP_VERSION}"
+
+            on_arm do
+              sha256 "${MAC_ARM_DMG_SHA}"
+              url "https://github.com/zseven-w/openpencil/releases/download/v#{version}/OpenPencil-#{version}-arm64-mac.dmg"
+            end
+            on_intel do
+              sha256 "${MAC_X64_DMG_SHA}"
+              url "https://github.com/zseven-w/openpencil/releases/download/v#{version}/OpenPencil-#{version}-x64-mac.dmg"
+            end
+
+            name "OpenPencil"
+            desc "Open-source AI-native vector design tool"
+            homepage "https://github.com/zseven-w/openpencil"
+
+            app "OpenPencil.app"
+
+            zap trash: [
+              "~/Library/Application Support/OpenPencil",
+              "~/Library/Preferences/com.zseven-w.openpencil.plist",
+              "~/Library/Preferences/dev.openpencil.app.plist",
+              "~/Library/Caches/com.zseven-w.openpencil",
+              "~/Library/Caches/dev.openpencil.app",
+            ]
+          end
+          EOF
+
+          cat > homebrew-tap/Formula/op.rb <<EOF
+          class Op < Formula
+            desc "OpenPencil command-line tool"
+            homepage "https://github.com/zseven-w/openpencil"
+            version "${OP_VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/zseven-w/openpencil/releases/download/v#{version}/op-cli-macos-aarch64.tar.gz"
+                sha256 "${CLI_MAC_ARM_SHA}"
+              else
+                url "https://github.com/zseven-w/openpencil/releases/download/v#{version}/op-cli-macos-x86_64.tar.gz"
+                sha256 "${CLI_MAC_X64_SHA}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/zseven-w/openpencil/releases/download/v#{version}/op-cli-linux-aarch64.tar.gz"
+                sha256 "${CLI_LINUX_ARM_SHA}"
+              else
+                url "https://github.com/zseven-w/openpencil/releases/download/v#{version}/op-cli-linux-x86_64.tar.gz"
+                sha256 "${CLI_LINUX_X64_SHA}"
+              end
+            end
+
+            def install
+              bin.install "op"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/op --version")
+            end
+          end
+          EOF
+
+          ruby -c homebrew-tap/Casks/openpencil.rb
+          ruby -c homebrew-tap/Formula/op.rb
+
+      - name: Commit Homebrew updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/openpencil.rb Formula/op.rb
+          if git diff --cached --quiet; then
+            echo "::notice::Homebrew tap already matches v${OP_VERSION}"
+          else
+            git commit -m "Update OpenPencil to v${OP_VERSION}"
+            git push
+          fi
+
+      - name: Checkout Scoop bucket
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SCOOP_BUCKET_REPOSITORY }}
+          token: ${{ env.TAP_GITHUB_TOKEN }}
+          path: scoop-bucket
+
+      - name: Update Scoop manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scoop-bucket/bucket
+          cat > scoop-bucket/bucket/openpencil.json <<EOF
+          {
+            "version": "${OP_VERSION}",
+            "description": "Open-source AI-native vector design tool",
+            "homepage": "https://github.com/zseven-w/openpencil",
+            "license": "MIT",
+            "architecture": {
+              "64bit": {
+                "url": "https://github.com/zseven-w/openpencil/releases/download/v${OP_VERSION}/openpencil-desktop-windows-x86_64.zip",
+                "hash": "${DESKTOP_WIN_X64_SHA}"
+              },
+              "arm64": {
+                "url": "https://github.com/zseven-w/openpencil/releases/download/v${OP_VERSION}/openpencil-desktop-windows-aarch64.zip",
+                "hash": "${DESKTOP_WIN_ARM_SHA}"
+              }
+            },
+            "bin": "openpencil-desktop.exe",
+            "shortcuts": [["openpencil-desktop.exe", "OpenPencil"]],
+            "checkver": {
+              "github": "https://github.com/zseven-w/openpencil"
+            },
+            "autoupdate": {
+              "architecture": {
+                "64bit": {
+                  "url": "https://github.com/zseven-w/openpencil/releases/download/v\$version/openpencil-desktop-windows-x86_64.zip"
+                },
+                "arm64": {
+                  "url": "https://github.com/zseven-w/openpencil/releases/download/v\$version/openpencil-desktop-windows-aarch64.zip"
+                }
+              }
+            }
+          }
+          EOF
+
+          cat > scoop-bucket/bucket/op.json <<EOF
+          {
+            "version": "${OP_VERSION}",
+            "description": "OpenPencil command-line tool",
+            "homepage": "https://github.com/zseven-w/openpencil",
+            "license": "MIT",
+            "architecture": {
+              "64bit": {
+                "url": "https://github.com/zseven-w/openpencil/releases/download/v${OP_VERSION}/op-cli-windows-x86_64.zip",
+                "hash": "${CLI_WIN_X64_SHA}"
+              },
+              "arm64": {
+                "url": "https://github.com/zseven-w/openpencil/releases/download/v${OP_VERSION}/op-cli-windows-aarch64.zip",
+                "hash": "${CLI_WIN_ARM_SHA}"
+              }
+            },
+            "bin": "op.exe",
+            "checkver": {
+              "github": "https://github.com/zseven-w/openpencil"
+            },
+            "autoupdate": {
+              "architecture": {
+                "64bit": {
+                  "url": "https://github.com/zseven-w/openpencil/releases/download/v\$version/op-cli-windows-x86_64.zip"
+                },
+                "arm64": {
+                  "url": "https://github.com/zseven-w/openpencil/releases/download/v\$version/op-cli-windows-aarch64.zip"
+                }
+              }
+            }
+          }
+          EOF
+
+          jq empty scoop-bucket/bucket/openpencil.json scoop-bucket/bucket/op.json
+
+      - name: Commit Scoop updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd scoop-bucket
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bucket/openpencil.json bucket/op.json
+          if git diff --cached --quiet; then
+            echo "::notice::Scoop bucket already matches v${OP_VERSION}"
+          else
+            git commit -m "Update OpenPencil to v${OP_VERSION}"
+            git push
+          fi
