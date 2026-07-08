@@ -1,5 +1,6 @@
 param(
   [string]$OpVersion = $env:OP_VERSION,
+  [switch]$PreRelease,
   [string]$InstallDir = $(if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:USERPROFILE ".openpencil\bin" })
 )
 
@@ -19,9 +20,14 @@ function Resolve-Version {
     return $DefaultOpVersion.TrimStart("v")
   }
 
-  $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases/latest"
+  $AllowPreRelease = $PreRelease.IsPresent -or $env:OP_PRERELEASE -in @("1", "true", "TRUE", "yes", "YES")
+  if ($AllowPreRelease) {
+    $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases" | Select-Object -First 1
+  } else {
+    $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases/latest"
+  }
   if (-not $Latest.tag_name) {
-    throw "install-op: could not resolve latest release tag; set OP_VERSION explicitly"
+    throw "install-op: could not resolve latest release tag; set OP_VERSION explicitly or OP_PRERELEASE=1 to allow pre-release tags"
   }
   return $Latest.tag_name.TrimStart("v")
 }

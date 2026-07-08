@@ -8,6 +8,7 @@
 # Usage:
 #   ./install-op.sh                         # install the latest stable release
 #   OP_VERSION=0.8.0 ./install-op.sh        # pin a specific version
+#   OP_PRERELEASE=1 ./install-op.sh         # allow the newest pre-release
 #   INSTALL_DIR=$HOME/.local/bin ./install-op.sh
 #
 # The release workflow stamps DEFAULT_OP_VERSION and DEFAULT_SHA_* in the copy
@@ -25,6 +26,7 @@ DEFAULT_SHA_MACOS_AARCH64=""
 DEFAULT_SHA_MACOS_X86_64=""
 DEFAULT_SHA_LINUX_AARCH64=""
 DEFAULT_SHA_LINUX_X86_64=""
+INSTALL_TMP=""
 
 detect_label() {
   local os arch
@@ -58,11 +60,16 @@ resolve_version() {
   fi
 
   local api tag
-  api="https://api.github.com/repos/${OWNER}/${REPO}/releases/latest"
+  if [ "${OP_PRERELEASE:-}" = "1" ] || [ "${OP_PRERELEASE:-}" = "true" ]; then
+    api="https://api.github.com/repos/${OWNER}/${REPO}/releases"
+  else
+    api="https://api.github.com/repos/${OWNER}/${REPO}/releases/latest"
+  fi
   tag="$(curl -fsSL "$api" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\(v\{0,1\}[^"]*\)"$/\1/')"
   if [ -z "$tag" ]; then
     echo "error: could not resolve the latest release tag from GitHub" >&2
     echo "       set OP_VERSION explicitly, e.g. OP_VERSION=0.8.0 $0" >&2
+    echo "       or set OP_PRERELEASE=1 to allow pre-release tags" >&2
     exit 1
   fi
   printf '%s' "${tag#v}"
@@ -101,7 +108,8 @@ main() {
   echo "    from ${url}"
 
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  INSTALL_TMP="$tmp"
+  trap 'rm -rf "$INSTALL_TMP"' EXIT
 
   curl -fsSL --retry 3 -o "$tmp/${asset}" "$url"
   if [ -n "$expected_sha" ]; then
