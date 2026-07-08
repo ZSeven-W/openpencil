@@ -33,9 +33,11 @@ pub fn releases_url() -> String {
     format!("https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases")
 }
 
-/// `releases/latest` API endpoint.
+/// Releases list API endpoint. GitHub's `releases/latest` endpoint excludes
+/// prereleases, so the desktop updater uses the list feed and picks the first
+/// non-draft release itself.
 fn latest_release_api() -> String {
-    format!("https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest")
+    format!("https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases?per_page=20")
 }
 
 /// Background release-API probe. One request per `spawn`; the
@@ -99,8 +101,9 @@ impl UpdateProbe {
     }
 }
 
-/// Query `releases/latest` and classify the running build against
-/// it. Blocking — only ever called on the probe worker thread.
+/// Query the releases list and classify the running build against the newest
+/// non-draft release, including prereleases. Blocking — only ever called on the
+/// probe worker thread.
 fn check_latest_release() -> UpdateStatus {
     let Some(tag) = fetch_latest_tag() else {
         return UpdateStatus::Error;
@@ -142,8 +145,24 @@ fn fetch_latest_tag() -> Option<String> {
             return None;
         }
         let json: serde_json::Value = resp.json().await.ok()?;
-        json.get("tag_name")?.as_str().map(str::to_string)
+        select_latest_release_tag(&json)
     })
+}
+
+/// Select the newest published release tag from GitHub's releases list.
+/// GitHub returns newest releases first. Drafts are not visible to users and
+/// must not drive update prompts; prereleases are visible and are intentionally
+/// allowed for v0.8.0.
+fn select_latest_release_tag(json: &serde_json::Value) -> Option<String> {
+    json.as_array()?
+        .iter()
+        .filter(|release| {
+            !release
+                .get("draft")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+        })
+        .find_map(|release| release.get("tag_name")?.as_str().map(str::to_string))
 }
 
 /// Download the platform installer for `version` on a worker thread
@@ -357,6 +376,37 @@ mod tests {
         // "newer"; the `-beta` suffix must not skew the compare.
         assert!(!is_newer("0.8.0-beta.1", "0.8.0"));
         assert!(is_newer("0.9.0-rc.1", "0.8.0"));
+    }
+
+    #[test]
+    fn releases_api_uses_list_endpoint_so_prereleases_are_visible() {
+        assert_eq!(
+            latest_release_api(),
+            "https://api.github.com/repos/ZSeven-W/openpencil/releases?per_page=20"
+        );
+    }
+
+    #[test]
+    fn release_list_selection_keeps_prerelease_and_skips_drafts() {
+        let feed = serde_json::json!([
+            {
+                "tag_name": "v0.9.0",
+                "draft": true,
+                "prerelease": false
+            },
+            {
+                "tag_name": "v0.8.0",
+                "draft": false,
+                "prerelease": true
+            },
+            {
+                "tag_name": "v0.7.5",
+                "draft": false,
+                "prerelease": false
+            }
+        ]);
+
+        assert_eq!(select_latest_release_tag(&feed).as_deref(), Some("v0.8.0"));
     }
 
     #[test]

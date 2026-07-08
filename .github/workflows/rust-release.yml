@@ -1,7 +1,8 @@
 name: Rust release artifacts
 
 # Triggered on tag push (v*) — builds release binaries across desktop targets,
-# packages real installers per platform, and assembles a GitHub Release draft.
+# packages real installers per platform, builds the web Docker image and SDK
+# tarballs, and assembles a GitHub Release draft.
 #
 # Artifact matrix (per platform; <v> = tag version, arch token = x64/arm64 to
 # match electron-builder's `${productName}-${version}-${arch}-…` convention
@@ -58,15 +59,22 @@ name: Rust release artifacts
 # The `build` job builds the real `op-host-desktop` crate (winit + skia-safe
 # runner that drives the Rust editor); its shipped executable keeps the
 # stable `openpencil-desktop` name. The `op` CLI (crates/op-cli, binary name
-# `op`) is built in the same cargo invocation. The Rust web bundle is built by
-# `.github/workflows/wasm-bundle-build.yml` as a separate deployable CanvasKit
-# artifact; this workflow currently keeps the native desktop release matrix
-# independent from that web artifact.
+# `op`) is built in the same cargo invocation. The web Docker job builds the
+# Rust web host from `Dockerfile.web-rust`, and the SDK job packages the
+# wasm-backed `packages/op-web-sdk*` workspace tarballs.
+#
+# The standalone `.github/workflows/wasm-bundle-build.yml` still gates the
+# CanvasKit web bundle on push/PR. This release workflow only assembles the
+# tagged, publishable artifacts.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
   build:
@@ -340,21 +348,108 @@ jobs:
             OpenPencil-*-linux.deb
           if-no-files-found: ignore
 
-  # Web bundle release note:
-  # The deployable Rust web bundle is produced by
-  # `.github/workflows/wasm-bundle-build.yml`, which builds the current
-  # CanvasKit feature set, runs `tools/check-wasm-bundle.sh`, size-gates the
-  # wasm output, and uploads the `op-web-bundle` artifact. This desktop release
-  # workflow still ships only native desktop + CLI artifacts; attach or merge the
-  # `op-web-bundle` artifact here only when tagged releases are meant to publish
-  # the standalone web bundle from the same draft.
+  web-docker:
+    name: Build and push web Docker image
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tag: ${{ steps.meta.outputs.tag }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Compute image metadata
+        id: meta
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openpencil-web"
+          tag="${image}:v${version}"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.web-rust
+          push: true
+          tags: ${{ steps.meta.outputs.tag }}
+
+  sdk-packages:
+    name: Build web SDK npm tarballs
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.94'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: web-sdk-release
+      - uses: oven-sh/setup-bun@v2
+      - name: Install wasm-bindgen-cli (pinned to Cargo.lock)
+        shell: bash
+        run: |
+          version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)"
+          if [ -z "$version" ]; then
+            echo "::error::could not resolve wasm-bindgen version from Cargo.lock"
+            exit 1
+          fi
+          cargo install wasm-bindgen-cli --version "$version" --locked
+      - name: Install binaryen
+        run: |
+          BINARYEN_VERSION=version_123
+          curl -fsSL \
+            "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
+            | tar -xz
+          echo "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+      - name: Install package workspace dependencies
+        working-directory: packages
+        run: bun install --frozen-lockfile
+      - name: Build wasm-backed SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd packages/op-web-sdk
+          bun run sync-wasm
+          bun run build
+          cd ../op-web-sdk-react
+          bun run build
+          cd ../op-web-sdk-vue
+          bun run build
+      - name: Pack npm tarballs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sdk-packages
+          for pkg in op-web-sdk op-web-sdk-react op-web-sdk-vue; do
+            (cd "packages/${pkg}" && bun pm pack --destination "${GITHUB_WORKSPACE}/sdk-packages")
+          done
+          ls -la sdk-packages
+      - name: Upload SDK tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpencil-web-sdk-packages
+          path: sdk-packages/*.tgz
+          if-no-files-found: error
 
   release-draft:
     name: Create / update GitHub Release draft
-    # Native release artifacts only. The deployable Rust web bundle is built by
-    # wasm-bundle-build.yml and can be attached separately when release policy
-    # calls for publishing the web bundle from this draft.
-    needs: [build]
+    needs: [build, web-docker, sdk-packages]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -363,16 +458,53 @@ jobs:
         with:
           path: dist
       - name: Flatten artifacts
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p release-files
           find dist -type f \
             \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.dmg" \
-               -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" \) \
+               -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" \
+               -o -name "*.tgz" \) \
             -exec cp {} release-files/ \;
           ls -la release-files
+          shopt -s nullglob
+          native=(release-files/OpenPencil-* release-files/openpencil-desktop-*)
+          cli=(release-files/op-cli-*)
+          sdk=(release-files/*.tgz)
+          if [ "${#native[@]}" -eq 0 ]; then
+            echo "::error::missing native desktop artifacts"
+            exit 1
+          fi
+          if [ "${#cli[@]}" -eq 0 ]; then
+            echo "::error::missing op-cli artifacts"
+            exit 1
+          fi
+          if [ "${#sdk[@]}" -ne 3 ]; then
+            echo "::error::expected 3 SDK tarballs, found ${#sdk[@]}"
+            exit 1
+          fi
+      - name: Prepare release body
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          note="RELEASE_NOTES/v${version}.md"
+          if [ ! -f "$note" ]; then
+            echo "::error::missing release note: $note"
+            exit 1
+          fi
+          cp "$note" release-body.md
+          {
+            printf '\n## Web Docker Image\n\n'
+            printf -- '- Image: `%s`\n' '${{ needs.web-docker.outputs.tag }}'
+            printf -- '- Digest: `%s`\n' '${{ needs.web-docker.outputs.digest }}'
+          } >> release-body.md
       - name: Create / update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
+          prerelease: true
+          make_latest: false
+          body_path: release-body.md
           files: release-files/*
-          generate_release_notes: true
