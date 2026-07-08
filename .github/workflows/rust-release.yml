@@ -48,7 +48,7 @@ name: Rust release artifacts
 #     against upstream source (present since v0.9.0)
 # NOT verifiable locally — needs a real tag-push CI run:
 #   * makensis compile of scripts/package-windows.nsi (no makensis on macOS;
-#     NSIS is preinstalled on windows-latest per the runner-images manifest)
+#     CI installs NSIS on windows-latest before packaging)
 #   * actual AppImage assembly (appimagetool is a Linux ELF; it also
 #     downloads its type2-runtime from GitHub at pack time — needs network)
 #   * dpkg-deb --build (no dpkg locally; only the layout path was dry-run)
@@ -185,6 +185,18 @@ jobs:
         with:
           p12-file-base64: ${{ secrets.CSC_LINK }}
           p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+      - name: Resolve macOS signing identity
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+          if [ -z "$identity" ]; then
+            security find-identity -v -p codesigning
+            echo "::error::Developer ID Application identity not found in imported keychain"
+            exit 1
+          fi
+          echo "MACOS_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
       - name: Package DMG (macos)
         if: runner.os == 'macOS'
         shell: bash
@@ -199,7 +211,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ "$HAS_APPLE_CERTIFICATE" = "true" ]; then
-            export MACOS_SIGN_IDENTITY="Developer ID Application ($APPLE_TEAM_ID)"
+            : "${MACOS_SIGN_IDENTITY:?MACOS_SIGN_IDENTITY was not resolved}"
+            export MACOS_SIGN_IDENTITY
           fi
           bash scripts/bundle-macos.sh
           APP="target/${{ matrix.target }}/release/bundle/osx/OpenPencil.app"
@@ -249,22 +262,42 @@ jobs:
           # The .app inside the DMG was signed by bundle-macos.sh after the
           # Developer ID cert import above. Sign the DMG container too, then
           # notarize + staple so Gatekeeper accepts the download.
-          IDENTITY="Developer ID Application ($APPLE_TEAM_ID)"
           codesign --force --timestamp --options runtime \
-            --sign "$IDENTITY" "$DMG"
+            --sign "$MACOS_SIGN_IDENTITY" "$DMG"
           xcrun notarytool submit "$DMG" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --wait
           xcrun stapler staple "$DMG"
+      - name: Install NSIS (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          $nsisRoots = @(
+            "${env:ProgramFiles(x86)}\NSIS",
+            "$env:ProgramFiles\NSIS"
+          )
+          $makensis = $null
+          foreach ($root in $nsisRoots) {
+            $candidate = Join-Path $root "makensis.exe"
+            if (Test-Path $candidate) {
+              $makensis = $candidate
+              break
+            }
+          }
+          if (-not $makensis) {
+            throw "makensis.exe not found after NSIS install"
+          }
+          Split-Path $makensis | Out-File -FilePath $env:GITHUB_PATH -Append
+          & $makensis /VERSION
       - name: Package NSIS installer (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # makensis is preinstalled on windows-latest (runner-images
-          # manifest). Defines are absolute because NSIS resolves relative
-          # paths against the .nsi's own directory (scripts/).
+          # Defines are absolute because NSIS resolves relative paths against
+          # the .nsi's own directory (scripts/).
           makensis `
             "/DVERSION=$env:OP_VERSION" `
             "/DARCH=${{ matrix.arch }}" `
@@ -475,9 +508,15 @@ jobs:
           publish_pkg() {
             local name="$1"
             local tarball="$2"
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+            local view_output
+            if view_output="$(npm view "${name}@${version}" version 2>&1)"; then
               echo "::notice::${name}@${version} is already published; skipping"
               return
+            fi
+            if ! grep -Eq 'E404|404 Not Found|is not in this registry' <<<"$view_output"; then
+              printf '%s\n' "$view_output"
+              echo "::error::failed to check npm package ${name}@${version}"
+              exit 1
             fi
             npm publish "./$tarball" --access public --tag next
           }
