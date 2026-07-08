@@ -65,6 +65,24 @@ fn release_workflow_resolves_macos_signing_identity_from_keychain() {
 }
 
 #[test]
+fn release_workflow_tolerates_missing_apple_notarization_agreement_for_prerelease() {
+    let workflow = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.github/workflows/rust-release.yml"
+    ))
+    .expect("rust-release workflow is readable");
+
+    assert!(
+        workflow.contains("A required agreement is missing or has expired"),
+        "pre-release workflow should recognize Apple's external legal-agreement notarization block"
+    );
+    assert!(
+        workflow.contains("signed but not notarized"),
+        "pre-release workflow should still upload signed DMGs when Apple legal agreements block notarization"
+    );
+}
+
+#[test]
 fn release_workflow_installs_nsis_on_windows_runner() {
     let workflow = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
