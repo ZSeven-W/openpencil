@@ -110,6 +110,7 @@ mod canvas_agent_cursor;
 mod canvas_agent_cursor_tests;
 mod canvas_frame_labels;
 pub mod canvas_layout_transition;
+pub mod canvas_overlay_transform;
 mod canvas_path_overlay;
 mod canvas_selection_overlay;
 pub mod canvas_text_edit;
