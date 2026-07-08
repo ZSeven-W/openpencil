@@ -159,6 +159,12 @@ Or use the install script (macOS / Linux):
 curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
 ```
 
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
 ## Cloning (with submodules)
 
 ```bash
@@ -278,10 +284,18 @@ docker build --target full -t openpencil-full .
 
 ## CLI — `op`
 
-Install via Homebrew and control the design tool from your terminal:
+Install via Homebrew or the install script, then control the design tool from your terminal:
 
 ```bash
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
