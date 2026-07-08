@@ -2,7 +2,7 @@ name: Rust release artifacts
 
 # Triggered on tag push (v*) — builds release binaries across desktop targets,
 # packages real installers per platform, builds the web Docker image and SDK
-# tarballs, and assembles a GitHub Release draft.
+# tarballs, and publishes a GitHub prerelease.
 #
 # Artifact matrix (per platform; <v> = tag version, arch token = x64/arm64 to
 # match electron-builder's `${productName}-${version}-${arch}-…` convention
@@ -448,7 +448,7 @@ jobs:
           if-no-files-found: error
 
   release-draft:
-    name: Create / update GitHub Release draft
+    name: Create / update GitHub prerelease
     needs: [build, web-docker, sdk-packages]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
@@ -500,10 +500,10 @@ jobs:
             printf -- '- Image: `%s`\n' '${{ needs.web-docker.outputs.tag }}'
             printf -- '- Digest: `%s`\n' '${{ needs.web-docker.outputs.digest }}'
           } >> release-body.md
-      - name: Create / update GitHub Release
+      - name: Create / update GitHub prerelease
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
           prerelease: true
           make_latest: false
           body_path: release-body.md
