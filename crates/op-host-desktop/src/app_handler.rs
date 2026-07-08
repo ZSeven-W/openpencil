@@ -104,6 +104,13 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         {
             attrs = attrs.with_decorations(false);
         }
+        #[cfg(target_os = "windows")]
+        {
+            use winit::platform::windows::{Color, CornerPreference, WindowAttributesExtWindows};
+            attrs = attrs
+                .with_corner_preference(CornerPreference::Round)
+                .with_border_color(Some(Color::from_rgb(0x31, 0x31, 0x31)));
+        }
         // Restore the window geometry from the previous session
         // (position / size / maximized). A missing or stale file
         // leaves the default attrs untouched.
