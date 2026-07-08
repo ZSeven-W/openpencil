@@ -45,6 +45,13 @@ export async function opCkInit(canvasId) {
   const browserTextCanvas = document.createElement('canvas');
   const browserTextCtx = browserTextCanvas.getContext('2d', { willReadFrequently: true });
   const browserTextCache = new Map();
+  // Device-pixel-ratio for the offscreen text raster. Glyph bitmaps are drawn
+  // onto the CanvasKit surface while a `scale(dpr, dpr)` transform is active, so
+  // a 1x raster would be magnified `dpr`x and read blurry on HiDPI displays. We
+  // supersample the offscreen canvas by `textDpr` and composite it back at
+  // `1 / textDpr` so glyphs land at native device resolution. Driven from Rust
+  // via `setDpr` on mount + every display resize.
+  let textDpr = 1;
   const browserTextFontStack = [
     '-apple-system',
     'BlinkMacSystemFont',
@@ -152,26 +159,34 @@ export async function opCkInit(canvasId) {
   };
   const browserTextImage = (t, sz, weight, italic, r, g, b, a) => {
     if (!browserTextCtx) return null;
-    const key = [t, sz, weight, italic ? 1 : 0, r, g, b, a].join('\n');
+    const ss = Math.max(1, textDpr);
+    const key = [t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\n');
     if (browserTextCache.has(key)) return browserTextCache.get(key);
     const font = browserTextFont(sz, weight, italic);
     browserTextCtx.font = font;
     const metrics = browserTextCtx.measureText(t);
+    // Logical (CSS-px) box the glyphs occupy; positioning stays in CSS units.
     const width = Math.max(1, Math.ceil(metrics.width + 4));
     const ascent = Math.ceil(metrics.actualBoundingBoxAscent || sz * 0.8);
     const descent = Math.ceil(metrics.actualBoundingBoxDescent || sz * 0.25);
     const baseline = ascent + 2;
     const height = Math.max(1, baseline + descent + 2);
-    browserTextCanvas.width = width;
-    browserTextCanvas.height = height;
+    // Back the offscreen canvas with `ss`x pixels and scale drawing so the
+    // rasterized glyphs carry device-resolution detail. Setting canvas.width/
+    // height resets the 2D context, so (re)apply font/baseline/fill + the
+    // supersample transform here.
+    browserTextCanvas.width = Math.max(1, Math.ceil(width * ss));
+    browserTextCanvas.height = Math.max(1, Math.ceil(height * ss));
+    browserTextCtx.setTransform(ss, 0, 0, ss, 0, 0);
     browserTextCtx.clearRect(0, 0, width, height);
     browserTextCtx.font = font;
     browserTextCtx.textBaseline = 'alphabetic';
     browserTextCtx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`;
     browserTextCtx.fillText(t, 2, baseline);
+    browserTextCtx.setTransform(1, 0, 0, 1, 0, 0);
     const image = CK.MakeImageFromCanvasImageSource(browserTextCanvas);
     if (!image) return null;
-    const entry = { image, width: metrics.width, baseline };
+    const entry = { image, width: metrics.width, baseline, ss };
     browserTextCache.set(key, entry);
     if (browserTextCache.size > 512) {
       const firstKey = browserTextCache.keys().next().value;
@@ -184,7 +199,19 @@ export async function opCkInit(canvasId) {
   const drawBrowserText = (t, x, y, sz, weight, italic, r, g, b, a) => {
     const entry = browserTextImage(t, sz, weight, italic, r, g, b, a);
     if (!entry) return 0;
-    canvas.drawImage(entry.image, x - 2, y - entry.baseline);
+    const ss = entry.ss || 1;
+    if (ss !== 1) {
+      // The bitmap is `ss`x oversampled; place it in logical space at
+      // (x-2, y-baseline) then scale down by `ss` so its device footprint
+      // matches the intended CSS box at native resolution.
+      canvas.save();
+      canvas.translate(x - 2, y - entry.baseline);
+      canvas.scale(1 / ss, 1 / ss);
+      canvas.drawImage(entry.image, 0, 0);
+      canvas.restore();
+    } else {
+      canvas.drawImage(entry.image, x - 2, y - entry.baseline);
+    }
     return entry.width;
   };
   const shaderPaint = (shader) => { const p = new CK.Paint(); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Fill); p.setShader(shader); return p; };
@@ -622,6 +649,19 @@ export async function opCkInit(canvasId) {
       try { surface.delete(); } catch (e) {}
       surface = CK.MakeWebGLCanvasSurface(canvasId);
       canvas = surface.getCanvas();
+    },
+    // Set the device-pixel-ratio used to supersample the offscreen text raster.
+    // Called from Rust on mount + every display resize so glyph bitmaps stay
+    // crisp on HiDPI screens.
+    setDpr(v) {
+      const next = Number.isFinite(v) && v > 0 ? Math.max(1, v) : 1;
+      if (next === textDpr) return;
+      textDpr = next;
+      // Prior bitmaps were baked at the old ratio; drop them so they re-raster.
+      for (const entry of browserTextCache.values()) {
+        if (entry && entry.image && entry.image.delete) entry.image.delete();
+      }
+      browserTextCache.clear();
     },
   };
 }
