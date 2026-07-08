@@ -264,12 +264,19 @@ jobs:
           # notarize + staple so Gatekeeper accepts the download.
           codesign --force --timestamp --options runtime \
             --sign "$MACOS_SIGN_IDENTITY" "$DMG"
-          xcrun notarytool submit "$DMG" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --wait
-          xcrun stapler staple "$DMG"
+          notary_log="$(mktemp)"
+          if xcrun notarytool submit "$DMG" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --wait 2>&1 | tee "$notary_log"; then
+            xcrun stapler staple "$DMG"
+          elif grep -q "A required agreement is missing or has expired" "$notary_log"; then
+            echo "::warning::Apple Developer agreement is missing or expired; $DMG is signed but not notarized/stapled"
+          else
+            echo "::error::macOS notarization failed"
+            exit 1
+          fi
       - name: Install NSIS (windows)
         if: runner.os == 'Windows'
         shell: pwsh
