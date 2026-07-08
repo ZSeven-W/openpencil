@@ -287,7 +287,7 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 | ----------------------- | -------------------------------------------------------------------------------- |
 | **Çekirdek**            | Rust çalışma alanı (`crates/`) — editör durumu, widget'lar, host'lar, MCP, AI, codegen |
 | **Görüntü İşleme**      | Her yerde GPU Skia — yerelde `skia-safe` (GL), tarayıcıda CanvasKit (WASM/WebGL2) |
-| **Arayüz Araç Seti**    | jian — vendored Rust widget/render/event araç seti (`vendor/jian`)               |
+| **UI çatısı**           | jian — vendored saf Rust GPU-Skia UI çatısı: widget'lar, düzen, olaylar, hot reload (`vendor/jian`) |
 | **Pencere Yönetimi**    | winit (vendored `casement` çatalı)                                               |
 | **Masaüstü**            | Yerel ikili `openpencil-desktop` — tarayıcı motoru yok                           |
 | **Web SDK**             | `op-web-sdk` + React 19 / Vue 3 adaptörleri — salt okunur `.op` görüntüleyici (TypeScript) |
@@ -295,6 +295,17 @@ cat design.dsl | op design - # stdin'den pipe ile besle
 | **AI**                  | Yerleşik Rust ajan çalışma ortamı · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Lint**                | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                               |
 | **Dosya Formatı**       | `.op` — JSON tabanlı, insan tarafından okunabilir, Git dostu                     |
+
+## Ekosistem
+
+OpenPencil, **[ZSeven-W](https://github.com/ZSeven-W)** tarafından geliştirilen saf Rust, AI-yerel araçlardan oluşan bir ailenin parçasıdır. Birbirini tamamlarlar: `jian` OpenPencil'ı işler, `agent-rs` ajanlarını çalıştırır, `noema` hatırlar ve `zode` terminalden tasarlar.
+
+| Proje | Nedir |
+| ----- | ----- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | Terminaliniz için açık kaynaklı, AI-yerel kodlama asistanı — kodunuzu okuyan, komutları çalıştıran, dosyaları arayan ve git'i yöneten hızlı bir Rust TUI'si (`ratatui`). OpenPencil'ı MCP üzerinden sürer. |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM ajanlarını sevk etmek için saf Rust asenkron çalışma ortamı — çoklu sağlayıcı, uçtan uca araç yetenekli, yapılandırılmış izinler, gerçek MCP ve sıfır `unsafe`. OpenPencil'ın yerleşik ajan çalışma ortamını (`vendor/agent`) ve Zode'u güçlendirir. |
+| **[jian](https://github.com/ZSeven-W/jian)** | Saf Rust, GPU-Skia UI çatısı — tek bir yığında widget'lar, düzen, olaylar ve hot reload. Bildirimsel bir `.op` belgesini JS çalışma ortamı, DOM ve Electron olmadan yerel, AI ile kontrol edilebilir bir uygulamaya dönüştürür. OpenPencil'ın UI çatısı (`vendor/jian`). |
+| **[noema](https://github.com/ZSeven-W/noema)** | Kodlama ajanları için yerel öncelikli, vektörsüz bellek sistemi. İncelenebilir dosyalar olarak kalıcı bellek, yeni girdiler için bir inceleme kuyruğu ve sözcüksel (gömme içermeyen) geri çağırma — Zode, Codex, Claude Code ve MCP çalışma ortamlarında çalışır. |
 
 ## Neden Rust
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 adaptörü
 │   └── op-web-sdk-vue/       Vue 3 adaptörü
 ├── vendor/                   Vendored alt sistemler (git submodule'ları)
-│   ├── jian/                 Skia widget/render/event araç seti
+│   ├── jian/                 GPU-Skia UI çatısı — widget/render/event
 │   ├── casement/             winit çatalı
 │   └── agent/                Ürünler arası Rust ajan çalışma ortamı (agent-rs)
 └── .githooks/                Dal adından ön-commit sürüm eşitleme

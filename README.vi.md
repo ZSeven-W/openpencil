@@ -287,7 +287,7 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 | ------------------ | ------------------------------------------------------------------------------------------- |
 | **Lõi**            | Rust workspace (`crates/`) — trạng thái editor, widget, host, MCP, AI, codegen              |
 | **Dựng hình**      | GPU Skia ở khắp nơi — `skia-safe` (GL) trên nền tảng gốc, CanvasKit (WASM/WebGL2) trên trình duyệt |
-| **Bộ công cụ UI**  | jian — bộ công cụ widget/render/event Rust được vendor hóa (`vendor/jian`)                  |
+| **Framework UI**   | jian — framework UI GPU-Skia thuần Rust được vendor hóa: widget, layout, sự kiện, hot reload (`vendor/jian`) |
 | **Cửa sổ**         | winit (bản fork `casement` được vendor hóa)                                                 |
 | **Desktop**        | Tệp nhị phân gốc `openpencil-desktop` — không có browser engine                             |
 | **Web SDK**        | `op-web-sdk` + các adapter React 19 / Vue 3 — trình xem `.op` chỉ đọc (TypeScript)           |
@@ -295,6 +295,17 @@ Hỗ trợ ba phương thức nhập liệu: chuỗi inline, `@filepath` (đọc
 | **AI**             | Runtime tác nhân Rust tích hợp sẵn · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Lint**           | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                                           |
 | **Định dạng tệp**  | `.op` — dựa trên JSON, dễ đọc, thân thiện với Git                                            |
+
+## Hệ sinh thái
+
+OpenPencil là một phần của bộ công cụ thuần Rust, thuần AI đến từ **[ZSeven-W](https://github.com/ZSeven-W)**. Chúng phối hợp với nhau: `jian` dựng hình OpenPencil, `agent-rs` chạy các tác nhân của nó, `noema` ghi nhớ, và `zode` thiết kế từ terminal.
+
+| Dự án | Là gì |
+| ----- | ----- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | Trợ lý lập trình mã nguồn mở, thuần AI cho terminal của bạn — một Rust TUI nhanh (`ratatui`) đọc mã của bạn, chạy lệnh, tìm kiếm tệp và quản lý git. Điều khiển OpenPencil qua MCP. |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Một runtime bất đồng bộ thuần Rust để phát hành các tác nhân LLM — đa nhà cung cấp, hỗ trợ công cụ đầu-cuối, quyền có cấu trúc, MCP thực thụ, không có `unsafe`. Cung cấp năng lượng cho runtime tác nhân tích hợp sẵn của OpenPencil (`vendor/agent`) và Zode. |
+| **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia thuần Rust — widget, layout, sự kiện và hot reload trong một stack duy nhất. Biến một tài liệu `.op` khai báo thành một ứng dụng gốc, có thể điều khiển bằng AI mà không cần JS runtime, không DOM, không Electron. Framework UI của OpenPencil (`vendor/jian`). |
+| **[noema](https://github.com/ZSeven-W/noema)** | Hệ thống bộ nhớ ưu tiên cục bộ, phi vector cho các tác nhân lập trình. Bộ nhớ bền vững dưới dạng tệp có thể kiểm tra, hàng đợi đánh giá cho các mục mới, và truy xuất từ vựng (không cần embedding) — hoạt động trên Zode, Codex, Claude Code và các runtime MCP. |
 
 ## Tại sao chọn Rust
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     Adapter React 19
 │   └── op-web-sdk-vue/       Adapter Vue 3
 ├── vendor/                   Các subsystem được vendor hóa (git submodules)
-│   ├── jian/                 Bộ công cụ widget/render/event Skia
+│   ├── jian/                 Framework UI GPU-Skia — widget/render/event
 │   ├── casement/             Bản fork của winit
 │   └── agent/                Runtime tác nhân Rust đa sản phẩm (agent-rs)
 └── .githooks/                Pre-commit đồng bộ phiên bản từ tên nhánh

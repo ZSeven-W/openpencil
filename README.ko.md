@@ -287,7 +287,7 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 | ------------- | ------------------------------------------------------------------------------ |
 | **코어**      | Rust 워크스페이스 (`crates/`) — 에디터 상태, 위젯, 호스트, MCP, AI, 코드젠     |
 | **렌더링**    | 모든 곳에서 GPU Skia — 네이티브는 `skia-safe` (GL), 브라우저는 CanvasKit (WASM/WebGL2) |
-| **UI 툴킷**   | jian — 벤더링된 Rust 위젯/렌더/이벤트 툴킷 (`vendor/jian`)                     |
+| **UI 프레임워크** | jian — 벤더링된 순수 Rust GPU-Skia UI 프레임워크: 위젯, 레이아웃, 이벤트, 핫 리로드 (`vendor/jian`) |
 | **윈도잉**    | winit (벤더링된 `casement` 포크)                                               |
 | **데스크톱**  | 네이티브 바이너리 `openpencil-desktop` — 브라우저 엔진 없음                    |
 | **웹 SDK**    | `op-web-sdk` + React 19 / Vue 3 어댑터 — 읽기 전용 `.op` 뷰어 (TypeScript)      |
@@ -295,6 +295,17 @@ cat design.dsl | op design - # stdin에서 파이프 입력
 | **AI**        | 내장 Rust 에이전트 런타임 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **린트**      | clippy · rustfmt (Rust) · oxlint · oxfmt (웹 SDK)                              |
 | **파일 형식** | `.op` — JSON 기반, 사람이 읽을 수 있는, Git 친화적                             |
+
+## 에코시스템
+
+OpenPencil은 **[ZSeven-W](https://github.com/ZSeven-W)**의 순수 Rust, AI 네이티브 도구 제품군의 일부입니다. 이들은 서로 맞물려 작동합니다: `jian`이 OpenPencil을 렌더링하고, `agent-rs`가 그 에이전트를 실행하며, `noema`가 기억하고, `zode`가 터미널에서 디자인합니다.
+
+| 프로젝트 | 내용 |
+| ------- | ---------- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | 터미널을 위한 오픈소스 AI 네이티브 코딩 어시스턴트 — 코드를 읽고, 명령을 실행하고, 파일을 검색하고, git을 관리하는 빠른 Rust TUI(`ratatui`). MCP를 통해 OpenPencil을 구동합니다. |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM 에이전트를 배포하기 위한 순수 Rust 비동기 런타임 — 멀티 프로바이더, 엔드투엔드 도구 지원, 구조화된 권한, 진짜 MCP, `unsafe` 제로. OpenPencil의 내장 에이전트 런타임(`vendor/agent`)과 Zode를 구동합니다. |
+| **[jian](https://github.com/ZSeven-W/jian)** | 순수 Rust GPU-Skia UI 프레임워크 — 위젯, 레이아웃, 이벤트, 핫 리로드를 하나의 스택에. 선언적 `.op` 문서를 JS 런타임도, DOM도, Electron도 없는 네이티브하고 AI로 제어 가능한 앱으로 바꿉니다. OpenPencil의 UI 프레임워크(`vendor/jian`). |
+| **[noema](https://github.com/ZSeven-W/noema)** | 코딩 에이전트를 위한 로컬 우선, 비벡터 메모리 시스템. 검사 가능한 파일로서의 지속적 메모리, 새 항목을 위한 리뷰 큐, 그리고 어휘 기반(임베딩 없는) 회상 — Zode, Codex, Claude Code, MCP 런타임 전반에서 작동합니다. |
 
 ## Rust를 선택한 이유
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 어댑터
 │   └── op-web-sdk-vue/       Vue 3 어댑터
 ├── vendor/                   벤더링된 서브시스템 (git submodules)
-│   ├── jian/                 Skia 위젯/렌더/이벤트 툴킷
+│   ├── jian/                 GPU-Skia UI 프레임워크 — 위젯/렌더/이벤트
 │   ├── casement/             winit 포크
 │   └── agent/                제품 공용 Rust 에이전트 런타임 (agent-rs)
 └── .githooks/                브랜치 이름에서 버전 동기화를 위한 pre-commit

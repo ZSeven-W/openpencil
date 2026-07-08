@@ -287,7 +287,7 @@ cat design.dsl | op design - # Pipe จาก stdin
 | -------------- | ---------------------------------------------------------------------------------------- |
 | **Core**       | Rust workspace (`crates/`) — editor state, widgets, hosts, MCP, AI, codegen              |
 | **Rendering**  | GPU Skia ทุกที่ — `skia-safe` (GL) บน native, CanvasKit (WASM/WebGL2) บนเบราว์เซอร์      |
-| **UI toolkit** | jian — Rust widget/render/event toolkit แบบ vendored (`vendor/jian`)                     |
+| **เฟรมเวิร์ก UI** | jian — เฟรมเวิร์ก UI แบบ GPU-Skia ที่เป็น pure-Rust และ vendored: widgets, layout, events, hot reload (`vendor/jian`) |
 | **Windowing**  | winit (vendored `casement` fork)                                                         |
 | **Desktop**    | Native binary `openpencil-desktop` — ไม่มี browser engine                                |
 | **Web SDK**    | `op-web-sdk` + React 19 / Vue 3 adapters — `.op` viewer แบบอ่านอย่างเดียว (TypeScript)   |
@@ -295,6 +295,17 @@ cat design.dsl | op design - # Pipe จาก stdin
 | **AI**         | Agent runtime ในตัว (Rust) · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Lint**       | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                                       |
 | **รูปแบบไฟล์** | `.op` — ใช้ JSON, อ่านได้โดยมนุษย์, Git-friendly                                         |
+
+## ระบบนิเวศ
+
+OpenPencil เป็นส่วนหนึ่งของตระกูลเครื่องมือแบบ pure-Rust ที่ขับเคลื่อนด้วย AI จาก **[ZSeven-W](https://github.com/ZSeven-W)** ซึ่งประกอบเข้าด้วยกัน: `jian` เรนเดอร์ OpenPencil, `agent-rs` รันเอเจนต์ของมัน, `noema` จดจำ, และ `zode` ออกแบบจากเทอร์มินัล
+
+| โปรเจกต์ | คืออะไร |
+| -------- | ------- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | ผู้ช่วยเขียนโค้ดแบบโอเพนซอร์สที่ขับเคลื่อนด้วย AI สำหรับเทอร์มินัลของคุณ — Rust TUI (`ratatui`) ที่รวดเร็วซึ่งอ่านโค้ดของคุณ รันคำสั่ง ค้นหาไฟล์ และจัดการ git ขับเคลื่อน OpenPencil ผ่าน MCP |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | async runtime แบบ pure-Rust สำหรับส่งมอบ LLM agent — รองรับหลายผู้ให้บริการ ใช้เครื่องมือได้แบบ end-to-end สิทธิ์แบบมีโครงสร้าง MCP จริง และ `unsafe` เป็นศูนย์ ขับเคลื่อน agent runtime ในตัวของ OpenPencil (`vendor/agent`) และ Zode |
+| **[jian](https://github.com/ZSeven-W/jian)** | เฟรมเวิร์ก UI แบบ GPU-Skia ที่เป็น pure-Rust — widgets, layout, events และ hot reload ในสแตกเดียว เปลี่ยนเอกสาร `.op` แบบ declarative ให้เป็นแอปแบบ native ที่ควบคุมด้วย AI ได้ โดยไม่มี JS runtime, ไม่มี DOM, ไม่มี Electron เฟรมเวิร์ก UI ของ OpenPencil (`vendor/jian`) |
+| **[noema](https://github.com/ZSeven-W/noema)** | ระบบหน่วยความจำแบบ local-first ที่ไม่ใช่เวกเตอร์สำหรับ coding agent หน่วยความจำที่คงทนในรูปแบบไฟล์ที่ตรวจสอบได้ คิวสำหรับตรวจทานรายการใหม่ และการเรียกคืนแบบ lexical (ไม่ใช้ embedding) — ทำงานได้ทั้งบน Zode, Codex, Claude Code และ MCP runtime |
 
 ## ทำไมต้อง Rust
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 adapter
 │   └── op-web-sdk-vue/       Vue 3 adapter
 ├── vendor/                   Subsystem แบบ vendored (git submodules)
-│   ├── jian/                 Skia widget/render/event toolkit
+│   ├── jian/                 เฟรมเวิร์ก UI แบบ GPU-Skia — widget/render/event
 │   ├── casement/             winit fork
 │   └── agent/                Rust agent runtime ข้ามผลิตภัณฑ์ (agent-rs)
 └── .githooks/                Pre-commit version sync จาก branch name

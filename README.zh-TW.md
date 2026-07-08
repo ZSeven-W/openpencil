@@ -287,7 +287,7 @@ cat design.dsl | op design - # 從 stdin 管道輸入
 | ---------------- | ---------------------------------------------------------------------------------- |
 | **核心**         | Rust workspace（`crates/`）— 編輯器狀態、widgets、hosts、MCP、AI、程式碼生成      |
 | **渲染**         | 全平台 GPU Skia — 原生端使用 `skia-safe`（GL），瀏覽器端使用 CanvasKit（WASM/WebGL2）|
-| **UI 工具包**    | jian — 內建 Rust widget/render/event 工具包（`vendor/jian`）                     |
+| **UI 框架**      | jian — 內建的純 Rust GPU-Skia UI 框架：widgets、版面配置、事件、熱重載（`vendor/jian`） |
 | **視窗系統**     | winit（vendored `casement` fork）                                                 |
 | **桌面端**       | 原生二進位檔 `openpencil-desktop` — 無需瀏覽器引擎                                |
 | **Web SDK**      | `op-web-sdk` + React 19 / Vue 3 轉接器 — 唯讀 `.op` 檢視器（TypeScript）          |
@@ -295,6 +295,17 @@ cat design.dsl | op design - # 從 stdin 管道輸入
 | **AI**           | 內建 Rust Agent 執行環境 · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Lint**         | clippy · rustfmt（Rust）· oxlint · oxfmt（Web SDK）                              |
 | **檔案格式**     | `.op` — 基於 JSON，人類可讀，對 Git 友好                                          |
+
+## 生態系
+
+OpenPencil 是 **[ZSeven-W](https://github.com/ZSeven-W)** 出品的一系列純 Rust、AI 原生工具家族中的一員。它們彼此協作：`jian` 渲染 OpenPencil，`agent-rs` 執行它的智能體，`noema` 負責記憶，`zode` 則從終端機進行設計。
+
+| 專案 | 簡介 |
+| ---- | ---- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | 面向終端機的開源、AI 原生程式設計助手 — 一個快速的 Rust TUI（`ratatui`），可讀取你的程式碼、執行命令、搜尋檔案並管理 git。透過 MCP 驅動 OpenPencil。 |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | 用於交付 LLM 智能體的純 Rust 非同步執行環境 — 多提供商、端到端工具能力、結構化權限、真正的 MCP、零 `unsafe`。為 OpenPencil 內建的智能體執行環境（`vendor/agent`）和 Zode 提供動力。 |
+| **[jian](https://github.com/ZSeven-W/jian)** | 純 Rust、GPU-Skia UI 框架 — widgets、版面配置、事件和熱重載集於一棧。將宣告式的 `.op` 文件變為原生、AI 可控的應用程式，無需 JS 執行環境、無 DOM、無 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |
+| **[noema](https://github.com/ZSeven-W/noema)** | 面向程式設計智能體的本地優先、非向量記憶系統。以可檢視的檔案形式提供持久記憶、為新項目提供審閱佇列，以及詞彙式（無需嵌入）召回 — 適用於 Zode、Codex、Claude Code 和 MCP 執行環境。 |
 
 ## 為何選擇 Rust
 
@@ -350,7 +361,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 轉接器
 │   └── op-web-sdk-vue/       Vue 3 轉接器
 ├── vendor/                   內建子系統（Git submodules）
-│   ├── jian/                 Skia widget/render/event 工具包
+│   ├── jian/                 GPU-Skia UI 框架 — 元件/渲染/事件
 │   ├── casement/             winit fork
 │   └── agent/                跨產品 Rust Agent 執行環境（agent-rs）
 └── .githooks/                Pre-commit 版本號同步（從分支名稱）

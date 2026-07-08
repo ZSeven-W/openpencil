@@ -167,7 +167,7 @@ git clone --recurse-submodules https://github.com/ZSeven-W/openpencil.git
 git submodule sync --recursive && git submodule update --init --recursive
 ```
 
-Three submodules live under `vendor/`, all public and fetched over HTTPS (no SSH key needed): `jian` (Skia widget/render/event toolkit), `casement` (winit fork), and `agent` (`agent-rs` — cross-product Rust agent runtime, shared by OP + Zode). `vendor/anthropic-agent-sdk` is tracked in-tree, not a submodule.
+Three submodules live under `vendor/`, all public and fetched over HTTPS (no SSH key needed): `jian` (GPU-Skia UI framework — widgets/render/events), `casement` (winit fork), and `agent` (`agent-rs` — cross-product Rust agent runtime, shared by OP + Zode). `vendor/anthropic-agent-sdk` is tracked in-tree, not a submodule.
 
 ## Quick Start (Development)
 
@@ -358,7 +358,7 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 | --------------- | ------------------------------------------------------------------------------------------ |
 | **Core**        | Rust workspace (`crates/`) — editor state, widgets, hosts, MCP, AI, codegen                 |
 | **Rendering**   | GPU Skia everywhere — `skia-safe` (GL) on native, CanvasKit (WASM/WebGL2) in the browser    |
-| **UI toolkit**  | jian — vendored Rust widget/render/event toolkit (`vendor/jian`)                            |
+| **UI framework** | jian — vendored pure-Rust GPU-Skia UI framework: widgets, layout, events, hot reload (`vendor/jian`) |
 | **Windowing**   | winit (vendored `casement` fork)                                                            |
 | **Desktop**     | Native binary `openpencil-desktop` — no browser engine                                      |
 | **Web SDK**     | `op-web-sdk` + React 19 / Vue 3 adapters — read-only `.op` viewer (TypeScript)              |
@@ -366,6 +366,17 @@ Supports three input methods: inline string, `@filepath` (read from file), or `-
 | **AI**          | Built-in Rust agent runtime · Anthropic SDK · Claude Agent SDK · OpenCode SDK · Copilot SDK |
 | **Lint**        | clippy · rustfmt (Rust) · oxlint · oxfmt (web SDK)                                          |
 | **File format** | `.op` — JSON-based, human-readable, Git-friendly                                            |
+
+## Ecosystem
+
+OpenPencil is part of a family of pure-Rust, AI-native tools from **[ZSeven-W](https://github.com/ZSeven-W)**. They compose: `jian` renders OpenPencil, `agent-rs` runs its agents, `noema` remembers, and `zode` designs from the terminal.
+
+| Project | What it is |
+| ------- | ---------- |
+| **[Zode](https://github.com/ZSeven-W/zode)** | Open-source, AI-native coding assistant for your terminal — a fast Rust TUI (`ratatui`) that reads your code, runs commands, searches files, and manages git. Drives OpenPencil over MCP. |
+| **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | A pure-Rust async runtime for shipping LLM agents — multi-provider, tool-capable end-to-end, structured permissions, real MCP, zero `unsafe`. Powers OpenPencil's built-in agent runtime (`vendor/agent`) and Zode. |
+| **[jian](https://github.com/ZSeven-W/jian)** | Pure-Rust, GPU-Skia UI framework — widgets, layout, events, and hot reload in one stack. Turns a declarative `.op` document into a native, AI-controllable app with no JS runtime, no DOM, no Electron. OpenPencil's UI framework (`vendor/jian`). |
+| **[noema](https://github.com/ZSeven-W/noema)** | Local-first, non-vector memory system for coding agents. Durable memory as inspectable files, a review queue for new entries, and lexical (embedding-free) recall — works across Zode, Codex, Claude Code, and MCP runtimes. |
 
 ## Why Rust
 
@@ -421,7 +432,7 @@ openpencil/
 │   ├── op-web-sdk-react/     React 19 adapter
 │   └── op-web-sdk-vue/       Vue 3 adapter
 ├── vendor/                   Vendored subsystems (git submodules)
-│   ├── jian/                 Skia widget/render/event toolkit
+│   ├── jian/                 GPU-Skia UI framework — widgets/render/events
 │   ├── casement/             winit fork
 │   └── agent/                Cross-product Rust agent runtime (agent-rs)
 └── .githooks/                Pre-commit version sync from branch name
