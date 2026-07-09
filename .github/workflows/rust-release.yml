@@ -8,7 +8,8 @@ name: Rust release artifacts
 # Artifact matrix (per platform; <v> = tag version, arch token = x64/arm64 to
 # match electron-builder's `${productName}-${version}-${arch}-…` convention
 # from apps/desktop/electron-builder.yml):
-#   macOS   OpenPencil-<v>-<arch>-mac.dmg        notarized .app via
+#   macOS   OpenPencil-<v>-<arch>-mac.dmg        notarized final DMG containing
+#                                                a notarized .app from
 #                                                scripts/bundle-macos.sh
 #                                                (.op/.pen/.fig associations in
 #                                                Info.plist, op CLI embedded in
@@ -260,7 +261,10 @@ jobs:
           APP="target/${{ matrix.target }}/release/bundle/osx/OpenPencil.app"
           DMG="OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
           STAGE="$(mktemp -d)"
-          cp -R "$APP" "$STAGE/OpenPencil.app"
+          ditto "$APP" "$STAGE/OpenPencil.app"
+          if [ "$HAS_APPLE_CERTIFICATE" = "true" ]; then
+            xcrun stapler validate "$STAGE/OpenPencil.app"
+          fi
           ln -s /Applications "$STAGE/Applications"
           # HFS+ instead of the APFS default: mountable on every macOS the
           # binary itself supports.
@@ -273,6 +277,38 @@ jobs:
             codesign --force --timestamp --sign "$MACOS_SIGN_IDENTITY" "$DMG"
             codesign --verify --verbose "$DMG"
           fi
+      - name: Notarize DMG (macos)
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DMG="OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
+          notary_log="$(mktemp)"
+          set +e
+          xcrun notarytool submit "$DMG" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait 2>&1 | tee "$notary_log"
+          notary_status="${PIPESTATUS[0]}"
+          set -e
+          submission_id="$(awk '/id: / { print $2; exit }' "$notary_log")"
+          if [ -n "$submission_id" ]; then
+            xcrun notarytool log "$submission_id" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
+          fi
+          if [ "$notary_status" -ne 0 ] || grep -q "status: Invalid" "$notary_log"; then
+            echo "::error::macOS DMG notarization failed"
+            exit 1
+          fi
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
       # ─── Code-signing secret reference ─────────────────────────────────
       # Each platform signing path is gated on its required secrets. Without
       # them, releases ship ad-hoc-signed (macOS, via scripts/bundle-macos.sh)
