@@ -195,10 +195,10 @@ sign_macos_code() {
     codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$path"
   fi
 }
-sign_macos_code "$APP/Contents/MacOS/openpencil-desktop"
 if [ -f "$APP/Contents/MacOS/op" ]; then
   sign_macos_code "$APP/Contents/MacOS/op"
 fi
+sign_macos_code "$APP/Contents/MacOS/openpencil-desktop"
 sign_macos_code "$APP"
 
 echo "==> registering with LaunchServices"
