@@ -78,17 +78,40 @@ fn release_workflow_notarizes_macos_app_before_packaging_dmg() {
     let package = workflow
         .find("Package DMG (macos)")
         .expect("release workflow should package a DMG after app notarization");
+    let notarize_dmg = workflow
+        .find("Notarize DMG (macos)")
+        .expect("release workflow should notarize the final DMG artifact");
     assert!(
         notarize < package,
         "release workflow should notarize and staple OpenPencil.app before creating the DMG"
+    );
+    assert!(
+        package < notarize_dmg,
+        "release workflow should notarize the final DMG after packaging the stapled app"
     );
     assert!(
         workflow.contains("ditto -c -k --keepParent \"$APP\""),
         "release workflow should submit a zipped .app bundle to Apple notarytool"
     );
     assert!(
+        workflow.contains("ditto \"$APP\" \"$STAGE/OpenPencil.app\""),
+        "release workflow should preserve stapled app metadata when staging the DMG"
+    );
+    assert!(
+        workflow.contains("xcrun stapler validate \"$STAGE/OpenPencil.app\""),
+        "release workflow should validate the staged app before creating the DMG"
+    );
+    assert!(
         workflow.contains("xcrun stapler staple \"$APP\""),
         "release workflow should staple the notarization ticket to the .app before DMG packaging"
+    );
+    assert!(
+        workflow.contains("xcrun stapler staple \"$DMG\""),
+        "release workflow should staple the final DMG so Gatekeeper can validate the downloaded artifact"
+    );
+    assert!(
+        workflow.contains("xcrun stapler validate \"$DMG\""),
+        "release workflow should validate the final stapled DMG"
     );
     assert!(
         workflow.contains("xcrun notarytool log"),
@@ -105,6 +128,14 @@ fn release_workflow_notarizes_macos_app_before_packaging_dmg() {
     assert!(
         !workflow.contains("exit \"$notary_status\""),
         "workflow must not reuse notarytool's exit code after parsing an Invalid status"
+    );
+    assert!(
+        workflow.contains("::error::macOS DMG notarization failed"),
+        "final DMG notarization failures should block the release"
+    );
+    assert!(
+        !workflow.contains("cp -R \"$APP\" \"$STAGE/OpenPencil.app\""),
+        "workflow should not use cp -R for the stapled app bundle because it can lose notarization metadata"
     );
     assert!(
         !workflow.contains("signed but not notarized"),
