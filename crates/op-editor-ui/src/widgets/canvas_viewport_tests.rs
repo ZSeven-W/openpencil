@@ -18,6 +18,7 @@ enum Op {
     Rotate,
     Fill,
     Stroke,
+    StrokeOval,
     Text,
 }
 
@@ -98,6 +99,14 @@ impl crate::RenderBackend for RecordingBackend {
         self.strokes += 1;
         self.stroke_colors.push(color);
         self.ops.push(Op::Stroke);
+    }
+    fn fill_oval(&mut self, _: Rect, _: Color) {
+        self.ops.push(Op::Fill);
+    }
+    fn stroke_oval(&mut self, _: Rect, color: Color, _: f32) {
+        self.strokes += 1;
+        self.stroke_colors.push(color);
+        self.ops.push(Op::StrokeOval);
     }
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, color: Color, _: f32) {
         self.strokes += 1;
@@ -1075,6 +1084,12 @@ const HOVER_OUTLINE_COLOR: Color = Color {
     b: 0.965,
     a: 1.0,
 };
+const SELECTION_BLUE: Color = Color {
+    r: 13.0 / 255.0,
+    g: 153.0 / 255.0,
+    b: 1.0,
+    a: 1.0,
+};
 
 /// Replay the recorded op stream up to the first stroke painted in
 /// `color`, tracking the save/restore transform stack, and return the
@@ -1103,8 +1118,45 @@ fn active_rotations_at_first_stroke(
                     .push(backend.rotations[rot_i]);
                 rot_i += 1;
             }
-            Op::Stroke => {
+            Op::Stroke | Op::StrokeOval => {
                 if backend.stroke_colors[stroke_i] == color {
+                    return Some(stack.last().cloned().unwrap_or_default());
+                }
+                stroke_i += 1;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn active_rotations_at_first_oval_stroke(
+    backend: &RecordingBackend,
+    color: Color,
+) -> Option<Vec<(f32, Point2D)>> {
+    let mut stroke_i = 0usize;
+    let mut rot_i = 0usize;
+    let mut stack: Vec<Vec<(f32, Point2D)>> = vec![Vec::new()];
+    for op in &backend.ops {
+        match op {
+            Op::Save => {
+                let top = stack.last().cloned().unwrap_or_default();
+                stack.push(top);
+            }
+            Op::Restore => {
+                stack.pop();
+            }
+            Op::Rotate => {
+                stack
+                    .last_mut()
+                    .expect("unbalanced save/restore")
+                    .push(backend.rotations[rot_i]);
+                rot_i += 1;
+            }
+            Op::Stroke | Op::StrokeOval => {
+                let is_match =
+                    matches!(op, Op::StrokeOval) && backend.stroke_colors[stroke_i] == color;
+                if is_match {
                     return Some(stack.last().cloned().unwrap_or_default());
                 }
                 stroke_i += 1;
@@ -1195,6 +1247,159 @@ fn hover_outline_on_child_applies_ancestor_rotation() {
         "child hover outline must rotate about the ancestor's pivot; got {:?}, want {:?}",
         rotations[0].1,
         pivot
+    );
+}
+
+#[test]
+fn selection_overlay_on_child_applies_ancestor_rotation() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let mut scene = sample_scene();
+    let rotation = 0.5_f32;
+    scene.pages[0].children[0].rotation = rotation;
+    let mut state = EditorState::new();
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    let rect = Rect::xywh(0.0, 0.0, 800.0, 600.0);
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, rect);
+    }
+
+    let rotations = active_rotations_at_first_stroke(&backend, viewport.theme.primary)
+        .expect("selected child overlay should paint primary strokes");
+    assert!(
+        rotations.iter().any(|(r, _)| (*r - rotation).abs() < 1e-4),
+        "selection overlay should inherit the rotated ancestor transform; got {rotations:?}"
+    );
+}
+
+#[test]
+fn multi_selection_overlay_on_children_applies_ancestor_rotation() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let mut scene = sample_scene();
+    let rotation = 0.5_f32;
+    scene.pages[0].children[0].rotation = rotation;
+    let mut state = EditorState::new();
+    state.selection.set = vec![
+        op_editor_core::NodeId::new("n2"),
+        op_editor_core::NodeId::new("n3"),
+    ];
+    state.selection.anchor = op_editor_core::NodeId::new("n2");
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    let rotations = active_rotations_at_first_stroke(&backend, viewport.theme.primary)
+        .expect("multi-selection overlay should paint primary strokes");
+    assert!(
+        rotations.iter().any(|(r, _)| (*r - rotation).abs() < 1e-4),
+        "multi-selection overlay should inherit the rotated ancestor transform; got {rotations:?}"
+    );
+}
+
+#[test]
+fn path_editor_overlay_on_child_applies_ancestor_rotation() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let mut path = SceneNode::leaf("editing-path", NodeKind::Path);
+    path.bounds = Rect::xywh(60.0, 80.0, 120.0, 40.0);
+    path.points = vec![Point2D::new(60.0, 80.0), Point2D::new(180.0, 120.0)];
+    path.path_anchors = vec![
+        SceneAnchor {
+            pos: Point2D::new(60.0, 80.0),
+            handle_in: None,
+            handle_out: None,
+            point_type: ScenePointType::Corner,
+        },
+        SceneAnchor {
+            pos: Point2D::new(180.0, 120.0),
+            handle_in: None,
+            handle_out: None,
+            point_type: ScenePointType::Corner,
+        },
+    ];
+    let rotation = 0.5_f32;
+    let mut frame = SceneNode::leaf("rotated-frame", NodeKind::Frame);
+    frame.bounds = Rect::xywh(40.0, 40.0, 320.0, 200.0);
+    frame.rotation = rotation;
+    frame.children = vec![path];
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: vec![frame],
+        }],
+        active_page_index: 0,
+    };
+    let mut state = EditorState::new();
+    state.set_single_selection(op_editor_core::NodeId::new("editing-path"));
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.tool = op_editor_core::Tool::Select;
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    let rotations = active_rotations_at_first_oval_stroke(&backend, SELECTION_BLUE)
+        .expect("path editor should paint selection-blue anchor strokes");
+    assert!(
+        rotations.iter().any(|(r, _)| (*r - rotation).abs() < 1e-4),
+        "path editor overlay should inherit the rotated ancestor transform; got {rotations:?}"
+    );
+}
+
+#[test]
+fn arc_handles_on_child_apply_ancestor_rotation() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let mut ellipse = SceneNode::leaf("arc-ellipse", NodeKind::Ellipse);
+    ellipse.bounds = Rect::xywh(60.0, 80.0, 120.0, 80.0);
+    ellipse.arc_start_angle = Some(0.0);
+    ellipse.arc_sweep_angle = Some(90.0);
+    ellipse.arc_inner_radius = Some(0.5);
+    let rotation = 0.5_f32;
+    let mut frame = SceneNode::leaf("rotated-frame", NodeKind::Frame);
+    frame.bounds = Rect::xywh(40.0, 40.0, 320.0, 200.0);
+    frame.rotation = rotation;
+    frame.children = vec![ellipse];
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "p".into(),
+            children: vec![frame],
+        }],
+        active_page_index: 0,
+    };
+    let mut state = EditorState::new();
+    state.set_single_selection(op_editor_core::NodeId::new("arc-ellipse"));
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.tool = op_editor_core::Tool::Select;
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    let rotations = active_rotations_at_first_oval_stroke(&backend, viewport.theme.background)
+        .expect("arc handles should paint oval strokes");
+    assert!(
+        rotations.iter().any(|(r, _)| (*r - rotation).abs() < 1e-4),
+        "arc handles should inherit the rotated ancestor transform; got {rotations:?}"
     );
 }
 

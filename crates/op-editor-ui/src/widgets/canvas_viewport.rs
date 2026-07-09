@@ -785,6 +785,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                         node,
                         &selection_input,
                         show_handles,
+                        &paint_hits.selected_transforms,
                     );
                 } else if !self.selected_set.is_empty() {
                     super::canvas_selection_overlay::paint_multi_selection_overlays(
@@ -814,6 +815,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             self.pen_dragging_handle,
             self.selected_set.len(),
             anchor_selected_node,
+            &paint_hits.selected_transforms,
             rect,
             viewport,
         );
@@ -830,17 +832,24 @@ impl<'a> Widget for CanvasViewport<'a> {
                             rect.origin.y + viewport.pan_y + p.y * zoom,
                         )
                     };
-                    // Rotate the overlay to match a rotated ellipse.
-                    let rotated = node.rotation.abs() > f32::EPSILON;
-                    if rotated {
-                        let b = node.bounds;
-                        let pivot = to_screen(Point2D::new(
-                            b.origin.x + b.size.x / 2.0,
-                            b.origin.y + b.size.y / 2.0,
-                        ));
-                        cx.backend.save();
-                        cx.backend.rotate(node.rotation, pivot);
-                    }
+                    // Replay the selected ellipse's transform chain so
+                    // arc handles follow rotated/flipped ancestors too.
+                    let transformed = super::canvas_overlay_transform::replay_on_backend(
+                        cx,
+                        &paint_hits.selected_transforms,
+                    ) || {
+                        let rotated = node.rotation.abs() > f32::EPSILON;
+                        if rotated {
+                            let b = node.bounds;
+                            let pivot = to_screen(Point2D::new(
+                                b.origin.x + b.size.x / 2.0,
+                                b.origin.y + b.size.y / 2.0,
+                            ));
+                            cx.backend.save();
+                            cx.backend.rotate(node.rotation, pivot);
+                        }
+                        rotated
+                    };
                     let r = 4.5; // screen-px radius
                     for (_, p) in handles {
                         let center = to_screen(p);
@@ -853,7 +862,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                         cx.backend.fill_oval(bounds, self.theme.primary);
                         cx.backend.stroke_oval(bounds, self.theme.background, 1.5);
                     }
-                    if rotated {
+                    if transformed {
                         cx.backend.restore();
                     }
                 }
