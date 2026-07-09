@@ -15,6 +15,7 @@ enum Op {
     Restore,
     Clip,
     Scale,
+    Rotate,
     Fill,
     Stroke,
     Text,
@@ -33,6 +34,10 @@ struct RecordingBackend {
     dots: usize,
     mesh_fills: usize,
     shader_fills: usize,
+    /// One `(radians, pivot)` per [`Op::Rotate`], in op order.
+    rotations: Vec<(f32, Point2D)>,
+    /// One color per [`Op::Stroke`], in op order.
+    stroke_colors: Vec<Color>,
 }
 
 impl crate::RenderBackend for RecordingBackend {
@@ -43,8 +48,9 @@ impl crate::RenderBackend for RecordingBackend {
         self.rects += 1;
         self.ops.push(Op::Fill);
     }
-    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {
+    fn stroke_rect(&mut self, _: Rect, color: Color, _: f32) {
         self.strokes += 1;
+        self.stroke_colors.push(color);
         self.ops.push(Op::Stroke);
     }
     fn draw_text(&mut self, layout: &TextLayout, point: Point2D) {
@@ -70,8 +76,13 @@ impl crate::RenderBackend for RecordingBackend {
     fn scale(&mut self, _: Point2D, _: Point2D) {
         self.ops.push(Op::Scale);
     }
-    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {
+    fn rotate(&mut self, radians: f32, pivot: Point2D) {
+        self.rotations.push((radians, pivot));
+        self.ops.push(Op::Rotate);
+    }
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, color: Color, _: f32) {
         self.strokes += 1;
+        self.stroke_colors.push(color);
         self.ops.push(Op::Stroke);
     }
     fn fill_round_rect(&mut self, rect: Rect, _: f32, _: Color) {
@@ -83,12 +94,14 @@ impl crate::RenderBackend for RecordingBackend {
         self.dots += centers.len();
         self.ops.push(Op::Fill);
     }
-    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, color: Color, _: f32) {
         self.strokes += 1;
+        self.stroke_colors.push(color);
         self.ops.push(Op::Stroke);
     }
-    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, color: Color, _: f32) {
         self.strokes += 1;
+        self.stroke_colors.push(color);
         self.ops.push(Op::Stroke);
     }
     fn fill_round_rect_mesh_gradient(
@@ -1052,6 +1065,136 @@ fn hover_outline_does_not_deep_search_after_scene_paint() {
     assert!(
         backend.strokes > 0,
         "hover outline should still paint dashed strokes"
+    );
+}
+
+/// Mirror of the hover-outline stroke color in `canvas_viewport.rs`.
+const HOVER_OUTLINE_COLOR: Color = Color {
+    r: 0.231,
+    g: 0.51,
+    b: 0.965,
+    a: 1.0,
+};
+
+/// Replay the recorded op stream up to the first stroke painted in
+/// `color`, tracking the save/restore transform stack, and return the
+/// `(radians, pivot)` rotations active at that stroke. `None` when no
+/// stroke of that color was painted.
+fn active_rotations_at_first_stroke(
+    backend: &RecordingBackend,
+    color: Color,
+) -> Option<Vec<(f32, Point2D)>> {
+    let mut stroke_i = 0usize;
+    let mut rot_i = 0usize;
+    let mut stack: Vec<Vec<(f32, Point2D)>> = vec![Vec::new()];
+    for op in &backend.ops {
+        match op {
+            Op::Save => {
+                let top = stack.last().cloned().unwrap_or_default();
+                stack.push(top);
+            }
+            Op::Restore => {
+                stack.pop();
+            }
+            Op::Rotate => {
+                stack
+                    .last_mut()
+                    .expect("unbalanced save/restore")
+                    .push(backend.rotations[rot_i]);
+                rot_i += 1;
+            }
+            Op::Stroke => {
+                if backend.stroke_colors[stroke_i] == color {
+                    return Some(stack.last().cloned().unwrap_or_default());
+                }
+                stroke_i += 1;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+#[test]
+fn hover_outline_rotates_with_rotated_frame() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let mut scene = sample_scene();
+    let rotation = 0.5_f32;
+    scene.pages[0].children[0].rotation = rotation;
+    let state = EditorState::new();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.hovered = Some("n1".into());
+    let mut backend = RecordingBackend::default();
+    let rect = Rect::xywh(0.0, 0.0, 800.0, 600.0);
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, rect);
+    }
+
+    let rotations = active_rotations_at_first_stroke(&backend, HOVER_OUTLINE_COLOR)
+        .expect("hover outline should paint dashed strokes");
+    assert_eq!(
+        rotations.len(),
+        1,
+        "hover outline should paint under the hovered frame's rotation"
+    );
+    // Frame n1 spans (40, 40, 320, 200) → doc-space center (200, 140).
+    let vp = &viewport.viewport;
+    let pivot = Point2D::new(
+        rect.origin.x + vp.pan_x + 200.0 * vp.zoom,
+        rect.origin.y + vp.pan_y + 140.0 * vp.zoom,
+    );
+    assert!((rotations[0].0 - rotation).abs() < 1e-4);
+    assert!(
+        (rotations[0].1.x - pivot.x).abs() < 0.5 && (rotations[0].1.y - pivot.y).abs() < 0.5,
+        "hover outline must rotate about the frame's own center; got {:?}, want {:?}",
+        rotations[0].1,
+        pivot
+    );
+}
+
+#[test]
+fn hover_outline_on_child_applies_ancestor_rotation() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let mut scene = sample_scene();
+    let rotation = 0.5_f32;
+    scene.pages[0].children[0].rotation = rotation;
+    let state = EditorState::new();
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    // n2 is an unrotated child of the rotated frame n1.
+    viewport.hovered = Some("n2".into());
+    let mut backend = RecordingBackend::default();
+    let rect = Rect::xywh(0.0, 0.0, 800.0, 600.0);
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, rect);
+    }
+
+    let rotations = active_rotations_at_first_stroke(&backend, HOVER_OUTLINE_COLOR)
+        .expect("hover outline should paint dashed strokes");
+    assert_eq!(
+        rotations.len(),
+        1,
+        "child hover outline should inherit the rotated ancestor's transform"
+    );
+    // The pivot is the rotated PARENT's center, not the child's.
+    let vp = &viewport.viewport;
+    let pivot = Point2D::new(
+        rect.origin.x + vp.pan_x + 200.0 * vp.zoom,
+        rect.origin.y + vp.pan_y + 140.0 * vp.zoom,
+    );
+    assert!((rotations[0].0 - rotation).abs() < 1e-4);
+    assert!(
+        (rotations[0].1.x - pivot.x).abs() < 0.5 && (rotations[0].1.y - pivot.y).abs() < 0.5,
+        "child hover outline must rotate about the ancestor's pivot; got {:?}, want {:?}",
+        rotations[0].1,
+        pivot
     );
 }
 
