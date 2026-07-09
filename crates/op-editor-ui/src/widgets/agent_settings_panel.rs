@@ -45,6 +45,37 @@ pub(super) const NAME_FONT: f32 = 13.0;
 pub(super) const SUB_FONT: f32 = 11.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentSettingsPanelMode {
+    Full,
+    WebBuiltinOnly,
+}
+
+impl AgentSettingsPanelMode {
+    fn visible_tabs(self) -> &'static [AgentSettingsTab] {
+        match self {
+            AgentSettingsPanelMode::Full => &AgentSettingsTab::ALL,
+            AgentSettingsPanelMode::WebBuiltinOnly => &[
+                AgentSettingsTab::Agents,
+                AgentSettingsTab::Images,
+                AgentSettingsTab::System,
+            ],
+        }
+    }
+
+    fn active_tab(self, settings: &AgentSettings) -> AgentSettingsTab {
+        if self.visible_tabs().contains(&settings.tab) {
+            settings.tab
+        } else {
+            AgentSettingsTab::Agents
+        }
+    }
+
+    fn shows_external_agents(self) -> bool {
+        matches!(self, AgentSettingsPanelMode::Full)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentSettingsHit {
     Close,
     SelectTab(AgentSettingsTab),
@@ -113,6 +144,7 @@ pub struct AgentSettingsPanel<'a> {
     pub theme: Theme,
     pub settings: AgentSettings,
     pub now_ms: u64,
+    mode: AgentSettingsPanelMode,
     ui: &'a EditorUiState,
 }
 
@@ -127,6 +159,22 @@ impl<'a> AgentSettingsPanel<'a> {
             theme: theme_for(&state.editor_ui),
             settings: state.editor_ui.agent_settings.clone(),
             now_ms,
+            mode: AgentSettingsPanelMode::Full,
+            ui: &state.editor_ui,
+        }
+    }
+
+    pub fn for_web_editor(state: &'a EditorState) -> Self {
+        Self::for_web_editor_at(state, 0)
+    }
+
+    pub fn for_web_editor_at(state: &'a EditorState, now_ms: u64) -> Self {
+        Self {
+            id: WidgetId::new(5200),
+            theme: theme_for(&state.editor_ui),
+            settings: state.editor_ui.agent_settings.clone(),
+            now_ms,
+            mode: AgentSettingsPanelMode::WebBuiltinOnly,
             ui: &state.editor_ui,
         }
     }
@@ -147,7 +195,7 @@ impl<'a> AgentSettingsPanel<'a> {
         if (close_rect(panel)).contains(point) {
             return AgentSettingsHit::Close;
         }
-        for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
+        for (i, tab) in self.mode.visible_tabs().iter().enumerate() {
             if (nav_item_rect(panel, i)).contains(point) {
                 return AgentSettingsHit::SelectTab(*tab);
             }
@@ -155,7 +203,7 @@ impl<'a> AgentSettingsPanel<'a> {
         // Translate the cursor into the scrolled content frame
         // for hit-tests over scrollable rows.
         let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
-        match self.settings.tab {
+        match self.mode.active_tab(&self.settings) {
             AgentSettingsTab::Agents => {
                 match agent_settings_builtin::hit_test(
                     content_rect(panel),
@@ -193,6 +241,9 @@ impl<'a> AgentSettingsPanel<'a> {
                         return AgentSettingsHit::RemoveBuiltinAgent(index);
                     }
                     BuiltinHit::None => {}
+                }
+                if !self.mode.shows_external_agents() {
+                    return AgentSettingsHit::Inside;
                 }
                 let content = content_rect(panel);
                 let acp_y = acp_section_y(content, &self.settings);
@@ -297,7 +348,7 @@ impl<'a> AgentSettingsPanel<'a> {
     /// `nav_item_rect` walk so the hover tint aligns with the click
     /// target.
     pub fn nav_at(&self, panel: Rect, point: Point2D) -> Option<AgentSettingsTab> {
-        for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
+        for (i, tab) in self.mode.visible_tabs().iter().enumerate() {
             if (nav_item_rect(panel, i)).contains(point) {
                 return Some(*tab);
             }
@@ -310,6 +361,9 @@ impl<'a> AgentSettingsPanel<'a> {
     /// outside every card. Used for hover state.
     pub fn card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
         if !(panel).contains(point) {
+            return None;
+        }
+        if !self.mode.shows_external_agents() {
             return None;
         }
         let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
@@ -327,6 +381,9 @@ impl<'a> AgentSettingsPanel<'a> {
 
     pub fn acp_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
         if !(panel).contains(point) {
+            return None;
+        }
+        if !self.mode.shows_external_agents() {
             return None;
         }
         let content = content_rect(panel);
@@ -399,8 +456,8 @@ impl<'a> AgentSettingsPanel<'a> {
     /// clamp `scroll_y` so the bottom of the list never floats
     /// above the panel bottom.
     pub fn content_total_height(&self) -> f32 {
-        match self.settings.tab {
-            AgentSettingsTab::Agents => agents_content_height(&self.settings),
+        match self.mode.active_tab(&self.settings) {
+            AgentSettingsTab::Agents => agents_content_height(&self.settings, self.mode),
             AgentSettingsTab::Mcp => agent_settings_mcp::content_height(&self.settings),
             AgentSettingsTab::Images => agent_settings_images::content_height(&self.settings),
             AgentSettingsTab::System => agent_settings_system::content_height(),
@@ -408,8 +465,13 @@ impl<'a> AgentSettingsPanel<'a> {
     }
 }
 
-fn agents_content_height(settings: &AgentSettings) -> f32 {
-    12.0 + (agent_settings_builtin::content_height(settings) + SECTION_GAP)
+fn agents_content_height(settings: &AgentSettings, mode: AgentSettingsPanelMode) -> f32 {
+    let builtin = 12.0 + agent_settings_builtin::content_height(settings);
+    if !mode.shows_external_agents() {
+        return builtin + 24.0;
+    }
+    builtin
+        + SECTION_GAP
         + (agent_settings_acp::content_height(settings) + SECTION_GAP)
         + 32.0
         + 5.0 * (CARD_HEIGHT + CARD_GAP)
@@ -432,7 +494,15 @@ impl<'a> Widget for AgentSettingsPanel<'a> {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        paint_panel(cx, &self.theme, &self.settings, rect, self.ui, self.now_ms);
+        paint_panel(
+            cx,
+            &self.theme,
+            &self.settings,
+            rect,
+            self.ui,
+            self.now_ms,
+            self.mode,
+        );
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -449,18 +519,19 @@ fn paint_panel(
     panel: Rect,
     _ui: &EditorUiState,
     now_ms: u64,
+    mode: AgentSettingsPanelMode,
 ) {
     cx.backend.fill_round_rect(panel, 14.0, theme.card);
     cx.backend.stroke_round_rect(panel, 14.0, theme.border, 1.0);
-    paint_sidebar(cx, theme, settings, _ui, panel);
+    paint_sidebar(cx, theme, settings, _ui, panel, mode);
     let content_rect = content_rect(panel);
     cx.backend.save();
     cx.backend.clip_rect(content_rect);
     cx.backend
         .translate(Point2D::new(0.0, -settings.scroll_y.offset));
-    match settings.tab {
+    match mode.active_tab(settings) {
         AgentSettingsTab::Agents => {
-            paint_agents_tab(cx, theme, settings, _ui, content_rect, now_ms)
+            paint_agents_tab(cx, theme, settings, _ui, content_rect, now_ms, mode)
         }
         AgentSettingsTab::Mcp => {
             agent_settings_mcp::paint_mcp_tab(cx, theme, settings, _ui, content_rect, now_ms)
@@ -482,6 +553,7 @@ fn paint_sidebar(
     settings: &AgentSettings,
     ui: &EditorUiState,
     panel: Rect,
+    mode: AgentSettingsPanelMode,
 ) {
     let sidebar = Rect {
         origin: panel.origin,
@@ -505,9 +577,10 @@ fn paint_sidebar(
         &title,
         Point2D::new(panel.origin.x + 16.0, panel.origin.y + 31.0),
     );
-    for (i, tab) in AgentSettingsTab::ALL.iter().enumerate() {
+    let active_tab = mode.active_tab(settings);
+    for (i, tab) in mode.visible_tabs().iter().enumerate() {
         let r = nav_item_rect(panel, i);
-        let selected = *tab == settings.tab;
+        let selected = *tab == active_tab;
         let hovered = !selected && settings.hover_nav == Some(*tab);
         if selected {
             cx.backend.fill_round_rect(r, 8.0, theme.muted);
@@ -578,9 +651,13 @@ fn paint_agents_tab(
     ui: &EditorUiState,
     content: Rect,
     now_ms: u64,
+    mode: AgentSettingsPanelMode,
 ) {
     let mut y = content.origin.y + 12.0;
     y = agent_settings_builtin::paint_builtin_section(cx, theme, settings, ui, content, y, now_ms);
+    if !mode.shows_external_agents() {
+        return;
+    }
     y += SECTION_GAP;
     y = agent_settings_acp::paint_acp_section(cx, theme, settings, ui, content, y, now_ms);
     y += SECTION_GAP;

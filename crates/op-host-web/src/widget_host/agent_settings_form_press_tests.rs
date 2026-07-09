@@ -3,7 +3,7 @@ use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 fn content_metrics(host: &WidgetHost) -> (f32, f32, f32) {
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     (
         rect.origin.x + 200.0 + 24.0,
@@ -80,7 +80,7 @@ fn builtin_draft_cancel_press_sets_and_release_clears_agent_settings_button() {
 }
 
 #[test]
-fn acp_draft_save_press_sets_and_release_clears_agent_settings_button() {
+fn web_acp_draft_save_control_is_hidden() {
     let mut host = WidgetHost::new();
     host.editor_state
         .editor_ui
@@ -101,19 +101,23 @@ fn acp_draft_save_press_sets_and_release_clears_agent_settings_button() {
         1200.0,
         800.0,
     ));
-    assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::AcpSaveDraft
-        ))
-    );
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+    assert!(host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .acp_agent_draft
+        .is_some());
+    assert!(host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .acp_agents
+        .is_empty());
 }
 
 #[test]
-fn acp_draft_cancel_press_sets_and_release_clears_agent_settings_button() {
+fn web_acp_draft_cancel_control_is_hidden() {
     let mut host = WidgetHost::new();
     host.editor_state
         .editor_ui
@@ -127,13 +131,11 @@ fn acp_draft_cancel_press_sets_and_release_clears_agent_settings_button() {
         1200.0,
         800.0,
     ));
-    assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::AcpCancelDraft
-        ))
-    );
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+    assert!(host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .acp_agent_draft
+        .is_some());
 }

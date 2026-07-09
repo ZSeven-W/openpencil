@@ -23,7 +23,7 @@ impl WidgetHost {
             let mcp = self.editor_state.editor_ui.agent_settings.mcp_server;
             (mcp.running, mcp.port)
         };
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+        let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
         let hit = panel.hit_test(panel_rect, Point2D::new(x, y));
         self.editor_state.editor_ui.pressed_button =

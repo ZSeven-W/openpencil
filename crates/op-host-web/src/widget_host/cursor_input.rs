@@ -63,7 +63,7 @@ impl WidgetHost {
             image_provider_option_hover,
             new_hover,
         ) = {
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+            let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
             let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
             let hit = panel.hit_test(panel_rect, point);
             let is_agents = matches!(

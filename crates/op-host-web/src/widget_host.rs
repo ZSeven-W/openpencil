@@ -810,11 +810,11 @@ impl WidgetHost {
         self.last_viewport_h = viewport_height;
         if self.editor_state.editor_ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
+            let panel_rect = AgentSettingsPanel::for_web_editor(&self.editor_state)
                 .rect(viewport_width, viewport_height);
             let point = Point2D::new(x, y);
             if (panel_rect).contains(point) {
-                if let Some(max) = AgentSettingsPanel::for_editor(&self.editor_state)
+                if let Some(max) = AgentSettingsPanel::for_web_editor(&self.editor_state)
                     .builtin_preset_scroll_max_at(panel_rect, point)
                 {
                     let settings = &mut self.editor_state.editor_ui.agent_settings;
@@ -824,7 +824,7 @@ impl WidgetHost {
                     self.mark_dirty();
                     return true;
                 }
-                let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+                let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
                 let total = panel.content_total_height();
                 let viewport_h_inner = panel_rect.size.y - 48.0;
                 let max_scroll = (total - viewport_h_inner).max(0.0);
