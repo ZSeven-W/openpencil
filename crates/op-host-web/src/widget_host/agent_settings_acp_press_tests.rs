@@ -1,9 +1,8 @@
 use super::WidgetHost;
-use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 fn content_metrics(host: &WidgetHost) -> (f32, f32, f32) {
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     (
         rect.origin.x + 200.0 + 24.0,
@@ -17,7 +16,7 @@ fn acp_card_y(content_y: f32) -> f32 {
 }
 
 #[test]
-fn acp_agent_connect_press_sets_and_release_clears_agent_settings_button() {
+fn web_acp_agent_connect_control_is_hidden() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.agent_settings.add_acp_agent();
     host.editor_state.editor_ui.agent_settings.acp_agents[0].command = "op-agent".into();
@@ -30,12 +29,7 @@ fn acp_agent_connect_press_sets_and_release_clears_agent_settings_button() {
         1200.0,
         800.0,
     ));
-    assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::AcpConnection(0)
-        ))
-    );
+    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
     assert!(!host.editor_state.editor_ui.agent_settings.acp_agents[0].connected);
     assert_eq!(
         host.editor_state
@@ -43,9 +37,6 @@ fn acp_agent_connect_press_sets_and_release_clears_agent_settings_button() {
             .agent_settings
             .pending_acp_agent_connect
             .as_deref(),
-        Some("acp-1")
+        None
     );
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
-    assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }

@@ -397,7 +397,7 @@ impl WidgetHost {
         // §10a z-order.
         if ui.agent_settings_open {
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel = AgentSettingsPanel::for_editor_at(&self.editor_state, self.now_ms);
+            let panel = AgentSettingsPanel::for_web_editor_at(&self.editor_state, self.now_ms);
             let panel_rect = panel.rect(viewport_width, viewport_height);
             // Dim scrim behind the modal so the underlying canvas
             // reads as "blocked." Matches the native shell's chrome.

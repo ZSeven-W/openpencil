@@ -1,7 +1,7 @@
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
-    AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider,
-    ImageTestStatus, ProviderConnectPhase, SettingsFocus,
+    AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageTestStatus,
+    ProviderConnectPhase, SettingsFocus,
 };
 use op_editor_core::{AgentProvider, AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
@@ -10,7 +10,7 @@ use op_editor_ui::Point2D;
 #[test]
 fn close_press_sets_and_release_clears_agent_settings_button() {
     let mut host = WidgetHost::new();
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let close_x = rect.origin.x + rect.size.x - 24.0;
     let close_y = rect.origin.y + 24.0;
@@ -25,43 +25,61 @@ fn close_press_sets_and_release_clears_agent_settings_button() {
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
-#[test]
-fn web_provider_connect_starts_real_daemon_probe_request() {
-    let mut host = WidgetHost::new();
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
-    let rect = panel.rect(1200.0, 800.0);
-    let mut connect_point = None;
+fn first_hit_point(
+    panel: &AgentSettingsPanel<'_>,
+    rect: op_editor_ui::Rect,
+    hit: AgentSettingsHit,
+) -> Option<Point2D> {
     let mut y = rect.origin.y;
     while y < rect.origin.y + rect.size.y {
         let mut x = rect.origin.x;
         while x < rect.origin.x + rect.size.x {
             let p = Point2D::new(x, y);
-            if panel.hit_test(rect, p) == AgentSettingsHit::Connect(AgentProvider::CodexCli) {
-                connect_point = Some(p);
-                break;
+            if panel.hit_test(rect, p) == hit {
+                return Some(p);
             }
             x += 4.0;
         }
-        if connect_point.is_some() {
-            break;
-        }
         y += 4.0;
     }
-    let point = connect_point.expect("Codex connect button point");
+    None
+}
 
-    assert!(host.dispatch_agent_settings_press(point.x, point.y, 1200.0, 800.0));
+#[test]
+fn web_agent_settings_hides_cli_provider_connect_targets() {
+    let host = WidgetHost::new();
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
 
-    let settings = &host.editor_state.editor_ui.agent_settings;
-    let idx =
-        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
-    assert!(!settings.connected[idx]);
+    assert!(
+        first_hit_point(
+            &panel,
+            rect,
+            AgentSettingsHit::Connect(AgentProvider::CodexCli)
+        )
+        .is_none(),
+        "web agent settings should hide Codex CLI connect targets"
+    );
+}
+
+#[test]
+fn web_agent_settings_hides_mcp_tab_from_sidebar() {
+    let host = WidgetHost::new();
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let mcp_nav = first_hit_point(
+        &panel,
+        rect,
+        AgentSettingsHit::SelectTab(AgentSettingsTab::Mcp),
+    );
+
     assert_eq!(
-        settings.provider_connection[idx].phase,
-        ProviderConnectPhase::Probing
+        mcp_nav, None,
+        "web agent settings should not expose the MCP tab"
     );
     assert_eq!(
-        settings.pending_provider_connect,
-        Some(AgentProvider::CodexCli)
+        host.editor_state.editor_ui.agent_settings.tab,
+        AgentSettingsTab::Agents
     );
 }
 
@@ -174,7 +192,7 @@ fn toggling_builtin_kind_commits_focused_api_key_draft() {
         .settings_input
         .set_text("sk-web");
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -199,7 +217,7 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
     let mut host = WidgetHost::new();
     host.set_now_ms(1234);
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -236,10 +254,9 @@ fn add_provider_opens_unsaved_builtin_agent_draft() {
 }
 
 #[test]
-fn add_acp_agent_press_opens_unsaved_draft() {
+fn web_add_acp_agent_control_is_hidden() {
     let mut host = WidgetHost::new();
-    host.set_now_ms(1234);
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -247,37 +264,23 @@ fn add_acp_agent_press_opens_unsaved_draft() {
     let add_x = content_x + content_w - 12.0 - 48.0;
     let add_y = content_y + 12.0 + 120.0 + 28.0 + 12.0;
 
-    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
     assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::AddAcpAgent
-        ))
+        panel.hit_test(rect, Point2D::new(add_x, add_y)),
+        AgentSettingsHit::Inside
     );
+    assert!(host.dispatch_agent_settings_press(add_x, add_y, 1200.0, 800.0));
 
     let settings = &host.editor_state.editor_ui.agent_settings;
     assert!(settings.acp_agents.is_empty());
-    assert!(settings.acp_agent_draft.is_some());
-    assert_eq!(
-        settings.focus,
-        Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command))
-    );
-    assert_eq!(
-        host.editor_state
-            .editor_ui
-            .settings_input
-            .next_blink_flip_ms(1234),
-        1734
-    );
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert!(settings.acp_agent_draft.is_none());
+    assert_eq!(settings.focus, None);
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
 fn builtin_provider_menu_selects_ts_preset_for_draft() {
     let mut host = WidgetHost::new();
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -309,7 +312,7 @@ fn builtin_provider_menu_selects_ts_preset_for_draft() {
 #[test]
 fn save_builtin_agent_draft_persists_provider() {
     let mut host = WidgetHost::new();
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -338,7 +341,7 @@ fn image_generation_add_press_sets_and_release_clears_agent_settings_button() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -376,7 +379,7 @@ fn image_search_test_press_sets_and_release_clears_agent_settings_button() {
         .agent_settings
         .openverse_client_secret = "secret".into();
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_y = rect.origin.y + 24.0;
     let content_w = rect.size.x - 200.0 - 48.0;
@@ -413,7 +416,7 @@ fn image_generation_profile_test_tracks_testing_status_like_ts() {
         field: ImageGenField::Name,
     });
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -463,7 +466,7 @@ fn image_generation_provider_select_commits_and_closes_menu() {
         field: ImageGenField::Name,
     });
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -556,7 +559,7 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
         .settings_input
         .set_text("Config 1");
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -578,10 +581,10 @@ fn image_generation_profile_header_click_toggles_editor_closed() {
 }
 
 #[test]
-fn mcp_server_press_sets_and_release_clears_agent_settings_button() {
+fn web_mcp_server_button_is_hidden_when_mcp_tab_is_persisted() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -589,25 +592,29 @@ fn mcp_server_press_sets_and_release_clears_agent_settings_button() {
     let server_card_top = content_y + 36.0;
     let button_x = content_x + content_w - 16.0 - 72.0;
 
+    assert_eq!(
+        panel.hit_test(rect, Point2D::new(button_x + 36.0, server_card_top + 26.0)),
+        AgentSettingsHit::Inside
+    );
     assert!(host.dispatch_agent_settings_press(
         button_x + 36.0,
         server_card_top + 26.0,
         1200.0,
         800.0
     ));
-    assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::McpServer
-        ))
+    assert!(
+        !host
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .mcp_server
+            .running
     );
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
-fn copying_mcp_client_config_records_feedback_time() {
+fn web_mcp_client_config_copy_is_hidden_when_mcp_tab_is_persisted() {
     let mut host = WidgetHost::new();
     host.set_now_ms(4_321);
     host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
@@ -617,13 +624,20 @@ fn copying_mcp_client_config_records_feedback_time() {
         .mcp_server
         .running = true;
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
     let content_w = rect.size.x - 200.0 - 48.0;
     let client_config_y = content_y + 36.0 + 52.0 + 8.0;
 
+    assert_eq!(
+        panel.hit_test(
+            rect,
+            Point2D::new(content_x + content_w - 22.0, client_config_y + 18.0)
+        ),
+        AgentSettingsHit::Inside
+    );
     assert!(host.dispatch_agent_settings_press(
         content_x + content_w - 22.0,
         client_config_y + 18.0,
@@ -636,25 +650,14 @@ fn copying_mcp_client_config_records_feedback_time() {
             .editor_ui
             .agent_settings
             .mcp_client_config_copied_at_ms,
-        Some(4_321)
+        None
     );
-    assert_eq!(
-        host.editor_state.chat.pending_copy_text.as_deref(),
-        Some("{\n  \"type\": \"http\",\n  \"url\": \"http://127.0.0.1:3100/mcp\"\n}")
-    );
-    assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::McpClientConfigCopy
-        ))
-    );
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
+    assert_eq!(host.editor_state.chat.pending_copy_text.as_deref(), None);
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
 }
 
 #[test]
-fn mcp_server_button_hover_tracks_cursor() {
+fn web_mcp_server_button_hover_is_hidden_when_mcp_tab_is_persisted() {
     let mut host = WidgetHost::new();
     host.last_viewport_w = 1200.0;
     host.last_viewport_h = 800.0;
@@ -666,7 +669,7 @@ fn mcp_server_button_hover_tracks_cursor() {
         .mcp_server
         .running = true;
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;
@@ -674,9 +677,10 @@ fn mcp_server_button_hover_tracks_cursor() {
     let server_card_y = content_y + 36.0;
     let button_x = content_x + content_w - 16.0 - 72.0;
 
-    assert!(host.update_agent_settings_hover(button_x + 36.0, server_card_y + 26.0,));
+    assert!(!host.update_agent_settings_hover(button_x + 36.0, server_card_y + 26.0,));
     assert!(
-        host.editor_state
+        !host
+            .editor_state
             .editor_ui
             .agent_settings
             .hover_mcp_server_button
@@ -695,7 +699,7 @@ fn image_settings_button_hover_tracks_cursor() {
         .agent_settings
         .images_advanced_open = true;
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;

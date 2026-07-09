@@ -74,7 +74,7 @@ fn image_provider_option_press_defers_selection_until_release() {
         field: ImageGenField::Name,
     });
 
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     let content_x = rect.origin.x + 200.0 + 24.0;
     let content_y = rect.origin.y + 24.0;

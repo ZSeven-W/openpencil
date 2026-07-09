@@ -1,10 +1,10 @@
 use super::WidgetHost;
-use op_editor_core::agent_settings::{AcpAgentField, BuiltinAgentField, SettingsFocus};
+use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
 use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 
 fn content_metrics(host: &WidgetHost) -> (f32, f32, f32) {
-    let panel = AgentSettingsPanel::for_editor(&host.editor_state);
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
     let rect = panel.rect(1200.0, 800.0);
     (
         rect.origin.x + 200.0 + 24.0,
@@ -95,7 +95,7 @@ fn builtin_compact_remove_press_sets_and_release_clears_agent_settings_button() 
 }
 
 #[test]
-fn acp_compact_edit_press_sets_and_release_clears_agent_settings_button() {
+fn web_acp_compact_edit_control_is_hidden() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.agent_settings.add_acp_agent();
     host.editor_state.editor_ui.agent_settings.hover_acp_agent = 0;
@@ -107,26 +107,16 @@ fn acp_compact_edit_press_sets_and_release_clears_agent_settings_button() {
         1200.0,
         800.0,
     ));
-    assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::AcpEdit(0)
-        ))
-    );
-    assert_eq!(
-        host.editor_state.editor_ui.agent_settings.focus,
-        Some(SettingsFocus::AcpAgent {
-            index: 0,
-            field: AcpAgentField::DisplayName,
-        })
-    );
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+    assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
+    assert_eq!(
+        host.editor_state.editor_ui.agent_settings.acp_agents.len(),
+        1
+    );
 }
 
 #[test]
-fn acp_compact_remove_press_sets_and_release_clears_agent_settings_button() {
+fn web_acp_compact_remove_control_is_hidden() {
     let mut host = WidgetHost::new();
     host.editor_state.editor_ui.agent_settings.add_acp_agent();
     host.editor_state.editor_ui.agent_settings.hover_acp_agent = 0;
@@ -138,19 +128,10 @@ fn acp_compact_remove_press_sets_and_release_clears_agent_settings_button() {
         1200.0,
         800.0,
     ));
-    assert_eq!(
-        host.editor_state.editor_ui.pressed_button,
-        Some(ButtonPressTarget::AgentSettings(
-            AgentSettingsButton::AcpRemove(0)
-        ))
-    );
-    assert!(host
-        .editor_state
-        .editor_ui
-        .agent_settings
-        .acp_agents
-        .is_empty());
-
-    assert!(host.apply_release_with_viewport(1200.0, 800.0));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+    assert_eq!(host.editor_state.editor_ui.agent_settings.focus, None);
+    assert_eq!(
+        host.editor_state.editor_ui.agent_settings.acp_agents.len(),
+        1
+    );
 }
