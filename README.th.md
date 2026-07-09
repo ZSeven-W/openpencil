@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-มี image หลายรูปแบบให้เลือก — เลือกแบบที่เหมาะกับความต้องการของคุณ:
+Rust release ที่มี tag จะเผยแพร่ image แบบ web host เพียงตัวเดียว ส่วน image TypeScript เดิมที่รวม AI CLI จะไม่ถูกเผยแพร่อีกต่อไป
 
-| Image                        | ขนาด    | รวม                    |
-| ---------------------------- | ------- | ---------------------- |
-| `openpencil:latest`          | ~226 MB | เว็บแอปเท่านั้น        |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI      |
-| `openpencil-codex:latest`    | —       | + Codex CLI            |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI         |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI   |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI           |
-| `openpencil-full:latest`     | ~1 GB   | เครื่องมือ CLI ทั้งหมด |
+| Image | รวม |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle และ CanvasKit assets |
 
-**รัน (เว็บเท่านั้น):**
+Web UI แสดงเฉพาะ built-in agent profiles เท่านั้น เครื่องมือ Claude/Codex/OpenCode/Copilot/Gemini CLI จะไม่ถูกบันเดิลใน Docker images
+
+**รัน:**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**รันพร้อม AI CLI (เช่น Claude Code):**
-
-AI chat ต้องใช้การเข้าสู่ระบบ OAuth ของ Claude CLI ใช้ Docker volume เพื่อเก็บรักษา session การเข้าสู่ระบบ:
-
-```bash
-# ขั้นตอนที่ 1 — เข้าสู่ระบบ (ครั้งเดียว)
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# ขั้นตอนที่ 2 — เริ่มต้น
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+จากนั้นเปิด `http://localhost:3100/`
 
 **Build ในเครื่อง:**
 
 ```bash
-# พื้นฐาน (เว็บเท่านั้น)
-docker build --target base -t openpencil .
-
-# พร้อม CLI เฉพาะตัว
-docker build --target with-claude -t openpencil-claude .
-
-# เต็มรูปแบบ (CLI ทั้งหมด)
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## การออกแบบที่ขับเคลื่อนด้วย AI

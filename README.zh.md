@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-提供多个镜像变体 — 按需选择：
+带标签的 Rust release 会发布单一 web-host 镜像。带内置 AI CLI 的旧 TypeScript 镜像不再发布。
 
-| 镜像                         | 大小    | 包含                 |
-| ---------------------------- | ------- | -------------------- |
-| `openpencil:latest`          | ~226 MB | 仅 Web 应用          |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
-| `openpencil-codex:latest`    | —       | + Codex CLI          |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
-| `openpencil-full:latest`     | ~1 GB   | 全部 CLI 工具        |
+| 镜像 | 包含 |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host、wasm bundle 和 CanvasKit 资源 |
 
-**运行（仅 Web）：**
+Web UI 只暴露内置 agent profiles；Docker 镜像不再内置 Claude/Codex/OpenCode/Copilot/Gemini CLI 工具。
+
+**运行：**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**运行 AI CLI（以 Claude Code 为例）：**
-
-AI 聊天依赖 Claude CLI 的 OAuth 登录。使用 Docker volume 持久化登录会话：
-
-```bash
-# 第一步 — 登录（仅需一次）
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# 第二步 — 启动
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+然后打开 `http://localhost:3100/`。
 
 **本地构建：**
 
 ```bash
-# 基础版（仅 Web）
-docker build --target base -t openpencil .
-
-# 指定 CLI
-docker build --target with-claude -t openpencil-claude .
-
-# 完整版（全部 CLI）
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## AI 原生设计

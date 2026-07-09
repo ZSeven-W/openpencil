@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-Tersedia beberapa varian image — pilih yang sesuai kebutuhan Anda:
+Rilis Rust bertag menerbitkan satu image web host. Image TypeScript lama yang menyertakan AI CLI tidak lagi diterbitkan.
 
-| Image                        | Ukuran  | Termasuk             |
-| ---------------------------- | ------- | -------------------- |
-| `openpencil:latest`          | ~226 MB | Hanya aplikasi web   |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
-| `openpencil-codex:latest`    | —       | + Codex CLI          |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
-| `openpencil-full:latest`     | ~1 GB   | Semua alat CLI       |
+| Image | Termasuk |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle, dan aset CanvasKit |
 
-**Jalankan (hanya web):**
+Web UI hanya menampilkan built-in agent profiles; alat Claude/Codex/OpenCode/Copilot/Gemini CLI tidak dibundel ke dalam image Docker.
+
+**Jalankan:**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**Jalankan dengan AI CLI (misal Claude Code):**
-
-Chat AI bergantung pada login OAuth Claude CLI. Gunakan volume Docker untuk menyimpan sesi login:
-
-```bash
-# Langkah 1 — Login (satu kali)
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# Langkah 2 — Mulai
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+Lalu buka `http://localhost:3100/`.
 
 **Build secara lokal:**
 
 ```bash
-# Dasar (hanya web)
-docker build --target base -t openpencil .
-
-# Dengan CLI tertentu
-docker build --target with-claude -t openpencil-claude .
-
-# Lengkap (semua CLI)
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## Desain Berbasis AI

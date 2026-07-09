@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-複数のイメージバリアントが利用可能です — ニーズに合ったものを選択してください：
+タグ付きの Rust リリースでは、単一の web-host イメージを公開します。AI CLI を同梱していた引退済みの TypeScript イメージはもう公開されません。
 
-| イメージ                     | サイズ  | 含まれるもの         |
-| ---------------------------- | ------- | -------------------- |
-| `openpencil:latest`          | ~226 MB | Web アプリのみ       |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
-| `openpencil-codex:latest`    | —       | + Codex CLI          |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
-| `openpencil-full:latest`     | ~1 GB   | すべての CLI ツール  |
+| イメージ | 含まれるもの |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host、wasm bundle、CanvasKit assets |
 
-**実行（Web のみ）：**
+Web UI は built-in agent profiles のみを公開します。Claude/Codex/OpenCode/Copilot/Gemini CLI ツールは Docker イメージに同梱されません。
+
+**実行：**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**AI CLI 付きで実行（例：Claude Code）：**
-
-AI チャットは Claude CLI OAuth ログインに依存しています。Docker ボリュームを使用してログインセッションを永続化してください：
-
-```bash
-# ステップ 1 — ログイン（初回のみ）
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# ステップ 2 — 起動
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+その後 `http://localhost:3100/` を開いてください。
 
 **ローカルビルド：**
 
 ```bash
-# ベース（Web のみ）
-docker build --target base -t openpencil .
-
-# 特定の CLI 付き
-docker build --target with-claude -t openpencil-claude .
-
-# フル（すべての CLI）
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## AI ネイティブデザイン
