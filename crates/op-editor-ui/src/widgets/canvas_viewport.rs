@@ -200,23 +200,6 @@ pub fn rotation_corner_at_point(
     None
 }
 
-/// Apply the inverse of a rotation about `pivot` to `point`. Used
-/// by hit-tests so a rotated selection's handles + rotation ring
-/// + body all match the rendered (rotated) geometry.
-fn inverse_rotate(point: Point2D, pivot: Point2D, radians: f32) -> Point2D {
-    if radians.abs() < f32::EPSILON {
-        return point;
-    }
-    let dx = point.x - pivot.x;
-    let dy = point.y - pivot.y;
-    let cos_t = (-radians).cos();
-    let sin_t = (-radians).sin();
-    Point2D::new(
-        pivot.x + dx * cos_t - dy * sin_t,
-        pivot.y + dx * sin_t + dy * cos_t,
-    )
-}
-
 /// Hit-test the 8 selection handles around the currently-selected
 /// node. Returns the handle at `point` (a small slop around each
 /// handle center counts) or `None` if no selection / no handle.
@@ -274,6 +257,23 @@ pub fn selection_handle_at_point(
         }
     }
     None
+}
+
+/// Apply the inverse of a rotation about `pivot` to `point`. Used
+/// by hit-tests so a rotated selection's handles + rotation ring
+/// + body all match the rendered (rotated) geometry.
+fn inverse_rotate(point: Point2D, pivot: Point2D, radians: f32) -> Point2D {
+    if radians.abs() < f32::EPSILON {
+        return point;
+    }
+    let dx = point.x - pivot.x;
+    let dy = point.y - pivot.y;
+    let cos_t = (-radians).cos();
+    let sin_t = (-radians).sin();
+    Point2D::new(
+        pivot.x + dx * cos_t - dy * sin_t,
+        pivot.y + dx * sin_t + dy * cos_t,
+    )
 }
 
 /// Caret-blink descriptor for the text node currently being edited.
@@ -691,7 +691,17 @@ impl<'a> Widget for CanvasViewport<'a> {
                     b: 0.965,
                     a: 1.0,
                 };
+                // Replay the hovered node's root→node flip/rotation
+                // chain so the dashed outline lands on the rendered
+                // geometry, not the unrotated doc-space bounds.
+                let hover_transformed = super::canvas_overlay_transform::replay_on_backend(
+                    cx,
+                    &paint_hits.hover_transforms,
+                );
                 paint_dashed_rect(cx, screen, HOVER, 1.5);
+                if hover_transformed {
+                    cx.backend.restore();
+                }
             }
             super::canvas_frame_labels::paint_frame_labels(
                 cx,
