@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-여러 이미지 변형을 사용할 수 있습니다 — 필요에 맞는 것을 선택하세요:
+태그된 Rust 릴리스는 단일 web-host 이미지를 게시합니다. AI CLI가 포함되던 은퇴한 TypeScript 이미지는 더 이상 게시되지 않습니다.
 
-| 이미지                       | 크기    | 포함 내용            |
-| ---------------------------- | ------- | -------------------- |
-| `openpencil:latest`          | ~226 MB | 웹 앱만              |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI    |
-| `openpencil-codex:latest`    | —       | + Codex CLI          |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI       |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI         |
-| `openpencil-full:latest`     | ~1 GB   | 모든 CLI 도구        |
+| 이미지 | 포함 내용 |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle, CanvasKit assets |
 
-**실행 (웹만):**
+웹 UI는 내장 agent profiles만 노출합니다. Claude/Codex/OpenCode/Copilot/Gemini CLI 도구는 Docker 이미지에 포함되지 않습니다.
+
+**실행:**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**AI CLI와 함께 실행 (예: Claude Code):**
-
-AI 채팅은 Claude CLI OAuth 로그인에 의존합니다. Docker 볼륨을 사용하여 로그인 세션을 유지하세요:
-
-```bash
-# 1단계 — 로그인 (최초 1회)
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# 2단계 — 시작
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+그런 다음 `http://localhost:3100/`을 여세요.
 
 **로컬 빌드:**
 
 ```bash
-# 기본 (웹만)
-docker build --target base -t openpencil .
-
-# 특정 CLI 포함
-docker build --target with-claude -t openpencil-claude .
-
-# 전체 (모든 CLI)
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## AI 네이티브 디자인

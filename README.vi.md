@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-Có nhiều biến thể image khác nhau — chọn loại phù hợp với nhu cầu của bạn:
+Các bản phát hành Rust có tag chỉ phát hành một image web host. Các image TypeScript cũ có kèm AI CLI không còn được phát hành.
 
-| Image                        | Kích thước | Bao gồm              |
-| ---------------------------- | ---------- | -------------------- |
-| `openpencil:latest`          | ~226 MB    | Chỉ ứng dụng web     |
-| `openpencil-claude:latest`   | —          | + Claude Code CLI    |
-| `openpencil-codex:latest`    | —          | + Codex CLI          |
-| `openpencil-opencode:latest` | —          | + OpenCode CLI       |
-| `openpencil-copilot:latest`  | —          | + GitHub Copilot CLI |
-| `openpencil-gemini:latest`   | —          | + Gemini CLI         |
-| `openpencil-full:latest`     | ~1 GB      | Tất cả công cụ CLI   |
+| Image | Bao gồm |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle và tài nguyên CanvasKit |
 
-**Chạy (chỉ web):**
+Web UI chỉ hiển thị các built-in agent profiles; công cụ Claude/Codex/OpenCode/Copilot/Gemini CLI không được đóng gói trong Docker images.
+
+**Chạy:**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**Chạy với AI CLI (ví dụ Claude Code):**
-
-Chat AI dựa vào đăng nhập OAuth của Claude CLI. Sử dụng Docker volume để lưu phiên đăng nhập:
-
-```bash
-# Bước 1 — Đăng nhập (một lần)
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# Bước 2 — Khởi động
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+Sau đó mở `http://localhost:3100/`.
 
 **Build cục bộ:**
 
 ```bash
-# Cơ bản (chỉ web)
-docker build --target base -t openpencil .
-
-# Với một CLI cụ thể
-docker build --target with-claude -t openpencil-claude .
-
-# Đầy đủ (tất cả CLI)
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## Thiết kế thuần AI

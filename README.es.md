@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-Hay varias variantes de imagen disponibles — elige la que se ajuste a tus necesidades:
+Las releases Rust etiquetadas publican una única imagen de web host. Las imágenes TypeScript retiradas con CLIs de IA incluidos ya no se publican.
 
-| Imagen                       | Tamaño  | Incluye                    |
-| ---------------------------- | ------- | -------------------------- |
-| `openpencil:latest`          | ~226 MB | Solo aplicación web        |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI          |
-| `openpencil-codex:latest`    | —       | + Codex CLI                |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI             |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI       |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI               |
-| `openpencil-full:latest`     | ~1 GB   | Todas las herramientas CLI |
+| Imagen | Incluye |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle y recursos de CanvasKit |
 
-**Ejecutar (solo web):**
+La UI web expone solo perfiles de agente integrados; las herramientas Claude/Codex/OpenCode/Copilot/Gemini CLI no se incluyen en las imágenes Docker.
+
+**Ejecutar:**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**Ejecutar con AI CLI (ej. Claude Code):**
-
-El chat de IA depende del inicio de sesión OAuth de Claude CLI. Usa un volumen Docker para persistir la sesión de inicio de sesión:
-
-```bash
-# Paso 1 — Iniciar sesión (una sola vez)
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# Paso 2 — Iniciar
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+Luego abre `http://localhost:3100/`.
 
 **Compilar localmente:**
 
 ```bash
-# Base (solo web)
-docker build --target base -t openpencil .
-
-# Con un CLI específico
-docker build --target with-claude -t openpencil-claude .
-
-# Completa (todos los CLIs)
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## Diseño Nativo de IA

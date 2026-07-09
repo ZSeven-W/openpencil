@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-Birden fazla görüntü varyantı mevcuttur — ihtiyaçlarınıza uygun olanı seçin:
+Etiketli Rust sürümleri tek bir web host görüntüsü yayımlar. AI CLI'ları içeren emekli TypeScript görüntüleri artık yayımlanmaz.
 
-| Görüntü                      | Boyut   | İçerik                  |
-| ---------------------------- | ------- | ----------------------- |
-| `openpencil:latest`          | ~226 MB | Yalnızca web uygulaması |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI       |
-| `openpencil-codex:latest`    | —       | + Codex CLI             |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI          |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI    |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI            |
-| `openpencil-full:latest`     | ~1 GB   | Tüm CLI araçları        |
+| Görüntü | İçerik |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle ve CanvasKit varlıkları |
 
-**Çalıştır (yalnızca web):**
+Web UI yalnızca yerleşik agent profillerini gösterir; Claude/Codex/OpenCode/Copilot/Gemini CLI araçları Docker görüntülerine dahil değildir.
+
+**Çalıştır:**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**AI CLI ile çalıştır (ör. Claude Code):**
-
-AI sohbeti Claude CLI OAuth girişine bağlıdır. Giriş oturumunu kalıcı hale getirmek için bir Docker hacmi kullanın:
-
-```bash
-# Adım 1 — Giriş (tek seferlik)
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# Adım 2 — Başlat
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+Ardından `http://localhost:3100/` adresini açın.
 
 **Yerel olarak derle:**
 
 ```bash
-# Temel (yalnızca web)
-docker build --target base -t openpencil .
-
-# Belirli bir CLI ile
-docker build --target with-claude -t openpencil-claude .
-
-# Tam (tüm CLI'lar)
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## AI Destekli Tasarım

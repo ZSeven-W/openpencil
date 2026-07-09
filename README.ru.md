@@ -119,52 +119,27 @@ cargo run -p op-host-desktop
 
 ### Docker
 
-Доступно несколько вариантов образов — выберите подходящий для ваших нужд:
+Тегированные Rust-релизы публикуют один образ web host. Устаревшие TypeScript-образы со встроенными AI CLI больше не публикуются.
 
-| Образ                        | Размер  | Содержит              |
-| ---------------------------- | ------- | --------------------- |
-| `openpencil:latest`          | ~226 МБ | Только веб-приложение |
-| `openpencil-claude:latest`   | —       | + Claude Code CLI     |
-| `openpencil-codex:latest`    | —       | + Codex CLI           |
-| `openpencil-opencode:latest` | —       | + OpenCode CLI        |
-| `openpencil-copilot:latest`  | —       | + GitHub Copilot CLI  |
-| `openpencil-gemini:latest`   | —       | + Gemini CLI          |
-| `openpencil-full:latest`     | ~1 ГБ   | Все CLI-инструменты   |
+| Образ | Содержит |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle и ресурсы CanvasKit |
 
-**Запуск (только веб):**
+Веб-интерфейс показывает только встроенные профили агентов; инструменты Claude/Codex/OpenCode/Copilot/Gemini CLI не входят в Docker-образы.
+
+**Запуск:**
 
 ```bash
-docker run -d -p 3000:3000 ghcr.io/zseven-w/openpencil:latest
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
 ```
 
-**Запуск с AI CLI (например, Claude Code):**
-
-AI-чат использует OAuth-авторизацию Claude CLI. Используйте Docker-том для сохранения сессии авторизации:
-
-```bash
-# Шаг 1 — Авторизация (однократно)
-docker volume create openpencil-claude-auth
-docker run -it --rm \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest claude login
-
-# Шаг 2 — Запуск
-docker run -d -p 3000:3000 \
-  -v openpencil-claude-auth:/root/.claude \
-  ghcr.io/zseven-w/openpencil-claude:latest
-```
+Затем откройте `http://localhost:3100/`.
 
 **Локальная сборка:**
 
 ```bash
-# Базовый (только веб)
-docker build --target base -t openpencil .
-
-# С конкретным CLI
-docker build --target with-claude -t openpencil-claude .
-
-# Полный (все CLI)
-docker build --target full -t openpencil-full .
+docker build -f Dockerfile.web-rust -t openpencil-web-rust .
+docker run -p 3100:3100 openpencil-web-rust
 ```
 
 ## AI-нативный дизайн
