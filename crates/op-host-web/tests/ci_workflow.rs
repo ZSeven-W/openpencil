@@ -132,6 +132,17 @@ fn macos_bundle_signing_uses_hardened_runtime_for_developer_id() {
         script.contains("sign_macos_code \"$APP/Contents/MacOS/op\""),
         "bundle script should sign the embedded op CLI before signing the bundle"
     );
+
+    let sign_cli = script
+        .find("sign_macos_code \"$APP/Contents/MacOS/op\"")
+        .expect("bundle script signs embedded op CLI");
+    let sign_main = script
+        .find("sign_macos_code \"$APP/Contents/MacOS/openpencil-desktop\"")
+        .expect("bundle script signs the main app executable");
+    assert!(
+        sign_cli < sign_main,
+        "bundle script should sign embedded CLI executables before the main app executable"
+    );
 }
 
 #[test]
