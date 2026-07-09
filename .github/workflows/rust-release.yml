@@ -16,7 +16,6 @@ name: Rust release artifacts
 #                                                Contents/MacOS; Developer ID
 #                                                signed/notarized when secrets
 #                                                exist, ad-hoc signed locally)
-#           openpencil-desktop-<label>.tar.gz    raw binary (kept)
 #           op-cli-<label>.tar.gz                standalone CLI
 #   Windows OpenPencil-<v>-<arch>-win-setup.exe  NSIS installer (Start-Menu +
 #                                                desktop shortcuts, HKCR
@@ -171,7 +170,9 @@ jobs:
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../openpencil-desktop-${{ matrix.label }}.tar.gz openpencil-desktop
+          if [ "$RUNNER_OS" != "macOS" ]; then
+            tar czf ../../../openpencil-desktop-${{ matrix.label }}.tar.gz openpencil-desktop
+          fi
           tar czf ../../../op-cli-${{ matrix.label }}.tar.gz op
       - name: Package archives (windows)
         if: matrix.archive == 'zip'

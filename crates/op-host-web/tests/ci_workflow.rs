@@ -144,6 +144,40 @@ fn release_workflow_notarizes_macos_app_before_packaging_dmg() {
 }
 
 #[test]
+fn release_workflow_does_not_publish_unsigned_macos_desktop_tarball() {
+    let workflow = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.github/workflows/rust-release.yml"
+    ))
+    .expect("rust-release workflow is readable");
+
+    assert!(
+        workflow.contains("if [ \"$RUNNER_OS\" != \"macOS\" ]; then\n            tar czf ../../../openpencil-desktop-${{ matrix.label }}.tar.gz openpencil-desktop"),
+        "macOS release artifacts should not include the raw desktop binary tarball because the signed/notarized desktop artifact is the DMG"
+    );
+    assert!(
+        workflow.contains("tar czf ../../../op-cli-${{ matrix.label }}.tar.gz op"),
+        "macOS and Linux release artifacts should keep publishing standalone op CLI archives"
+    );
+
+    let macos_block_start = workflow
+        .find("#   macOS")
+        .expect("workflow should document macOS artifacts");
+    let windows_block_start = workflow
+        .find("#   Windows")
+        .expect("workflow should document Windows artifacts");
+    let macos_block = &workflow[macos_block_start..windows_block_start];
+    assert!(
+        !macos_block.contains("openpencil-desktop-<label>.tar.gz"),
+        "release workflow comments should not document a macOS raw desktop tarball"
+    );
+    assert!(
+        macos_block.contains("op-cli-<label>.tar.gz"),
+        "release workflow comments should still document the macOS CLI archive"
+    );
+}
+
+#[test]
 fn macos_bundle_signing_uses_hardened_runtime_for_developer_id() {
     let script = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
