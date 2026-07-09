@@ -65,20 +65,72 @@ fn release_workflow_resolves_macos_signing_identity_from_keychain() {
 }
 
 #[test]
-fn release_workflow_tolerates_missing_apple_notarization_agreement_for_prerelease() {
+fn release_workflow_notarizes_macos_app_before_packaging_dmg() {
     let workflow = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../.github/workflows/rust-release.yml"
     ))
     .expect("rust-release workflow is readable");
 
+    let notarize = workflow
+        .find("Notarize macOS app")
+        .expect("release workflow should notarize the .app before packaging");
+    let package = workflow
+        .find("Package DMG (macos)")
+        .expect("release workflow should package a DMG after app notarization");
     assert!(
-        workflow.contains("A required agreement is missing or has expired"),
-        "pre-release workflow should recognize Apple's external legal-agreement notarization block"
+        notarize < package,
+        "release workflow should notarize and staple OpenPencil.app before creating the DMG"
     );
     assert!(
-        workflow.contains("signed but not notarized"),
-        "pre-release workflow should still upload signed DMGs when Apple legal agreements block notarization"
+        workflow.contains("ditto -c -k --keepParent \"$APP\""),
+        "release workflow should submit a zipped .app bundle to Apple notarytool"
+    );
+    assert!(
+        workflow.contains("xcrun stapler staple \"$APP\""),
+        "release workflow should staple the notarization ticket to the .app before DMG packaging"
+    );
+    assert!(
+        workflow.contains("xcrun notarytool log"),
+        "release workflow should fetch the Apple notary log when notarization fails"
+    );
+    assert!(
+        workflow.contains("::error::macOS app notarization failed"),
+        "macOS app notarization failures should block the release"
+    );
+    assert!(
+        workflow.contains("echo \"::error::macOS app notarization failed\"\n            exit 1"),
+        "invalid notarization status can be reported with a zero notarytool exit code, so the workflow must exit non-zero explicitly"
+    );
+    assert!(
+        !workflow.contains("exit \"$notary_status\""),
+        "workflow must not reuse notarytool's exit code after parsing an Invalid status"
+    );
+    assert!(
+        !workflow.contains("signed but not notarized"),
+        "release workflow must not upload macOS artifacts after notarization fails"
+    );
+}
+
+#[test]
+fn macos_bundle_signing_uses_hardened_runtime_for_developer_id() {
+    let script = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../scripts/bundle-macos.sh"
+    ))
+    .expect("bundle-macos script is readable");
+
+    assert!(
+        script.contains("--timestamp --options runtime"),
+        "Developer ID macOS signing should enable hardened runtime and secure timestamp"
+    );
+    assert!(
+        script.contains("sign_macos_code \"$APP/Contents/MacOS/openpencil-desktop\""),
+        "bundle script should explicitly sign the main app executable before signing the bundle"
+    );
+    assert!(
+        script.contains("sign_macos_code \"$APP/Contents/MacOS/op\""),
+        "bundle script should sign the embedded op CLI before signing the bundle"
     );
 }
 

@@ -8,10 +8,13 @@ name: Rust release artifacts
 # Artifact matrix (per platform; <v> = tag version, arch token = x64/arm64 to
 # match electron-builder's `${productName}-${version}-${arch}-…` convention
 # from apps/desktop/electron-builder.yml):
-#   macOS   OpenPencil-<v>-<arch>-mac.dmg        .app via scripts/bundle-macos.sh
+#   macOS   OpenPencil-<v>-<arch>-mac.dmg        notarized .app via
+#                                                scripts/bundle-macos.sh
 #                                                (.op/.pen/.fig associations in
 #                                                Info.plist, op CLI embedded in
-#                                                Contents/MacOS, ad-hoc signed)
+#                                                Contents/MacOS; Developer ID
+#                                                signed/notarized when secrets
+#                                                exist, ad-hoc signed locally)
 #           openpencil-desktop-<label>.tar.gz    raw binary (kept)
 #           op-cli-<label>.tar.gz                standalone CLI
 #   Windows OpenPencil-<v>-<arch>-win-setup.exe  NSIS installer (Start-Menu +
@@ -197,7 +200,7 @@ jobs:
             exit 1
           fi
           echo "MACOS_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
-      - name: Package DMG (macos)
+      - name: Bundle macOS app
         if: runner.os == 'macOS'
         shell: bash
         env:
@@ -215,7 +218,47 @@ jobs:
             export MACOS_SIGN_IDENTITY
           fi
           bash scripts/bundle-macos.sh
+      - name: Notarize macOS app
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
           APP="target/${{ matrix.target }}/release/bundle/osx/OpenPencil.app"
+          APP_ZIP="OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac-app.zip"
+          ditto -c -k --keepParent "$APP" "$APP_ZIP"
+          notary_log="$(mktemp)"
+          set +e
+          xcrun notarytool submit "$APP_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait 2>&1 | tee "$notary_log"
+          notary_status="${PIPESTATUS[0]}"
+          set -e
+          submission_id="$(awk '/id: / { print $2; exit }' "$notary_log")"
+          if [ -n "$submission_id" ]; then
+            xcrun notarytool log "$submission_id" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" || true
+          fi
+          if [ "$notary_status" -ne 0 ] || grep -q "status: Invalid" "$notary_log"; then
+            echo "::error::macOS app notarization failed"
+            exit 1
+          fi
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+      - name: Package DMG (macos)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="target/${{ matrix.target }}/release/bundle/osx/OpenPencil.app"
+          DMG="OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
           STAGE="$(mktemp -d)"
           cp -R "$APP" "$STAGE/OpenPencil.app"
           ln -s /Applications "$STAGE/Applications"
@@ -225,14 +268,16 @@ jobs:
             -volname "OpenPencil $OP_VERSION" \
             -srcfolder "$STAGE" \
             -fs HFS+ -format UDZO -ov \
-            "OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
-      # ─── Code-signing scaffolding (NO-OP until secrets exist) ───────────
-      # Until the secrets below are configured in the repo/org settings,
-      # EVERY signing step is skipped and releases ship ad-hoc-signed
-      # (macOS, via scripts/bundle-macos.sh) / unsigned (Windows) — the
-      # current behavior, unchanged. Each step is gated on its first
-      # required secret being non-empty, so adding the secrets is the only
-      # action needed to turn signing on.
+            "$DMG"
+          if [ "$HAS_APPLE_CERTIFICATE" = "true" ]; then
+            codesign --force --timestamp --sign "$MACOS_SIGN_IDENTITY" "$DMG"
+            codesign --verify --verbose "$DMG"
+          fi
+      # ─── Code-signing secret reference ─────────────────────────────────
+      # Each platform signing path is gated on its required secrets. Without
+      # them, releases ship ad-hoc-signed (macOS, via scripts/bundle-macos.sh)
+      # / unsigned (Windows); with them, CI performs Developer ID
+      # signing/notarization for macOS and Authenticode signing for Windows.
       #
       # Required macOS secrets (Developer ID + notarization):
       #   CSC_LINK                    base64 of the Developer ID Application
@@ -250,33 +295,6 @@ jobs:
       # Optional downstream publish secrets consumed by release packaging:
       #   NPM_TOKEN                   npm registry token for SDK publishing
       #   TAP_GITHUB_TOKEN            GitHub token for tap/formula publishing
-      - name: Codesign + notarize DMG (macos)
-        if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
-        shell: bash
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: |
-          DMG="OpenPencil-$OP_VERSION-${{ matrix.arch }}-mac.dmg"
-          # The .app inside the DMG was signed by bundle-macos.sh after the
-          # Developer ID cert import above. Sign the DMG container too, then
-          # notarize + staple so Gatekeeper accepts the download.
-          codesign --force --timestamp --options runtime \
-            --sign "$MACOS_SIGN_IDENTITY" "$DMG"
-          notary_log="$(mktemp)"
-          if xcrun notarytool submit "$DMG" \
-              --apple-id "$APPLE_ID" \
-              --team-id "$APPLE_TEAM_ID" \
-              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-              --wait 2>&1 | tee "$notary_log"; then
-            xcrun stapler staple "$DMG"
-          elif grep -q "A required agreement is missing or has expired" "$notary_log"; then
-            echo "::warning::Apple Developer agreement is missing or expired; $DMG is signed but not notarized/stapled"
-          else
-            echo "::error::macOS notarization failed"
-            exit 1
-          fi
       - name: Install NSIS (windows)
         if: runner.os == 'Windows'
         shell: pwsh
