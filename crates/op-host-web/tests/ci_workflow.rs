@@ -186,6 +186,20 @@ fn release_workflow_distinguishes_published_npm_packages_from_check_failures() {
 }
 
 #[test]
+fn release_workflow_downloads_only_openpencil_release_artifacts() {
+    let workflow = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.github/workflows/rust-release.yml"
+    ))
+    .expect("rust-release workflow is readable");
+
+    assert!(
+        workflow.contains("pattern: openpencil-*"),
+        "release workflow should not download Docker build metadata artifacts into release assets"
+    );
+}
+
+#[test]
 fn web_smoke_page_uses_current_canvaskit_bundle_command() {
     let smoke = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/smoke/step-1b.html"))
         .expect("web smoke page is readable");
