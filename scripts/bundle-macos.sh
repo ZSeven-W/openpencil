@@ -42,9 +42,9 @@
 #   OPENPENCIL_CLI_BINARY  path to a prebuilt `op` CLI binary; embedded at
 #                          Contents/MacOS/op so the .app/DMG ships the CLI
 #   MACOS_SIGN_IDENTITY    codesign identity. Defaults to "-" (ad-hoc).
-#                          No signing secrets exist in CI today; when a
-#                          Developer ID cert lands, export this env (plus
-#                          keychain import + notarization in the workflow).
+#                          When set to a Developer ID identity, the script
+#                          signs binaries and the app bundle with hardened
+#                          runtime + secure timestamp for notarization.
 
 set -euo pipefail
 
@@ -187,10 +187,19 @@ fi
 # signed first so we don't need the deprecated `--deep`.
 SIGN_IDENTITY="${MACOS_SIGN_IDENTITY:--}"
 echo "==> codesigning (identity: $SIGN_IDENTITY)"
+sign_macos_code() {
+  local path="$1"
+  if [ "$SIGN_IDENTITY" = "-" ]; then
+    codesign --force --sign "$SIGN_IDENTITY" "$path"
+  else
+    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$path"
+  fi
+}
+sign_macos_code "$APP/Contents/MacOS/openpencil-desktop"
 if [ -f "$APP/Contents/MacOS/op" ]; then
-  codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/op"
+  sign_macos_code "$APP/Contents/MacOS/op"
 fi
-codesign --force --sign "$SIGN_IDENTITY" "$APP"
+sign_macos_code "$APP"
 
 echo "==> registering with LaunchServices"
 LSREG=/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister
