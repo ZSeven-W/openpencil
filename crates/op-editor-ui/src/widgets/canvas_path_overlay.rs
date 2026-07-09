@@ -16,6 +16,7 @@
 
 use crate::layout_scene::{SceneAnchor, SceneNode};
 use crate::theme::Theme;
+use crate::widgets::canvas_overlay_transform::OverlayTransform;
 use crate::widgets::canvas_viewport::path_handle_positions;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
@@ -70,6 +71,7 @@ pub(super) fn paint_path_overlays(
     pen_dragging_handle: bool,
     selected_count: usize,
     selected_node: Option<&SceneNode>,
+    selected_transforms: &[OverlayTransform],
     canvas_rect: Rect,
     viewport: &Viewport,
 ) {
@@ -95,7 +97,7 @@ pub(super) fn paint_path_overlays(
     if !matches!(node.kind, crate::layout_scene::NodeKind::Path) || node.hidden {
         return;
     }
-    with_node_rotation(cx, node, canvas_rect, viewport, |cx| {
+    with_node_overlay_transform(cx, node, canvas_rect, viewport, selected_transforms, |cx| {
         if matches!(tool, op_editor_core::Tool::Pen) {
             paint_ghost_edit_handles(cx, node, theme, canvas_rect, viewport);
         } else {
@@ -104,18 +106,36 @@ pub(super) fn paint_path_overlays(
     });
 }
 
-/// Wrap `f` in a save/rotate/restore matching the node's rotation so
-/// the overlay sits on the rotated path (handle coords are stored in
-/// the node's unrotated local frame).
-fn with_node_rotation(
+/// Wrap `f` in the same root→node transform chain the path painted
+/// under. Fallback to the legacy own-node rotation when called without
+/// traversal-captured transforms.
+fn with_node_overlay_transform(
     cx: &mut PaintCx<'_>,
     node: &SceneNode,
     canvas_rect: Rect,
     viewport: &Viewport,
+    transforms: &[OverlayTransform],
     f: impl FnOnce(&mut PaintCx<'_>),
 ) {
-    let rotated = node.rotation.abs() > f32::EPSILON;
-    if rotated {
+    let transformed = super::canvas_overlay_transform::replay_on_backend(cx, transforms)
+        || replay_legacy_node_rotation(cx, node, canvas_rect, viewport, transforms);
+    f(cx);
+    if transformed {
+        cx.backend.restore();
+    }
+}
+
+fn replay_legacy_node_rotation(
+    cx: &mut PaintCx<'_>,
+    node: &SceneNode,
+    canvas_rect: Rect,
+    viewport: &Viewport,
+    transforms: &[OverlayTransform],
+) -> bool {
+    if !transforms.is_empty() || node.rotation.abs() <= f32::EPSILON {
+        return false;
+    }
+    {
         let b = node.aggregate_bounds();
         let pivot = to_screen_point(
             Point2D::new(b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0),
@@ -125,10 +145,7 @@ fn with_node_rotation(
         cx.backend.save();
         cx.backend.rotate(node.rotation, pivot);
     }
-    f(cx);
-    if rotated {
-        cx.backend.restore();
-    }
+    true
 }
 
 fn to_screen_point(p: Point2D, canvas_rect: Rect, viewport: &Viewport) -> Point2D {

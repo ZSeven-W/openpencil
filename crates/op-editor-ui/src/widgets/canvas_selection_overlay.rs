@@ -1,5 +1,6 @@
 use crate::layout_scene::{NodeKind, SceneNode};
 use crate::theme::Theme;
+use crate::widgets::canvas_overlay_transform::OverlayTransform;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_indicators::AgentIndicators;
@@ -26,6 +27,7 @@ pub(super) fn paint_selected_node(
     node: &SceneNode,
     input: &SelectionPaintInput<'_>,
     show_handles: bool,
+    transforms: &[OverlayTransform],
 ) {
     let Some(world_rect) = selection_world_rect(node, input) else {
         return;
@@ -34,15 +36,8 @@ pub(super) fn paint_selected_node(
         node.kind,
         NodeKind::Frame | NodeKind::Group | NodeKind::Other(_)
     );
-    let rotated = node.rotation.abs() > f32::EPSILON;
-    if rotated {
-        let pivot = Point2D::new(
-            world_rect.origin.x + world_rect.size.x / 2.0,
-            world_rect.origin.y + world_rect.size.y / 2.0,
-        );
-        cx.backend.save();
-        cx.backend.rotate(node.rotation, pivot);
-    }
+    let transformed = super::canvas_overlay_transform::replay_on_backend(cx, transforms)
+        || replay_legacy_node_rotation(cx, node, world_rect, transforms);
     super::canvas_viewport_overlay::paint_selection_overlay(
         cx,
         world_rect,
@@ -50,12 +45,32 @@ pub(super) fn paint_selected_node(
         is_container,
         show_handles,
     );
-    if rotated {
+    if transformed {
         cx.backend.restore();
     }
     if let (true, Some(label)) = (show_handles, input.selection_label) {
         paint_selection_label(cx, input, world_rect, label);
     }
+}
+
+fn replay_legacy_node_rotation(
+    cx: &mut PaintCx<'_>,
+    node: &SceneNode,
+    world_rect: Rect,
+    transforms: &[OverlayTransform],
+) -> bool {
+    if !transforms.is_empty() || node.rotation.abs() <= f32::EPSILON {
+        return false;
+    }
+    {
+        let pivot = Point2D::new(
+            world_rect.origin.x + world_rect.size.x / 2.0,
+            world_rect.origin.y + world_rect.size.y / 2.0,
+        );
+        cx.backend.save();
+        cx.backend.rotate(node.rotation, pivot);
+    }
+    true
 }
 
 pub(super) fn paint_multi_selection_overlays(
@@ -70,9 +85,10 @@ pub(super) fn paint_multi_selection_overlays(
     let selected: HashSet<&str> = selected_ids.iter().map(String::as_str).collect();
     let mut union_rect = None;
     for root in roots {
+        let mut transforms = Vec::new();
         union_rect = union_optional_rects(
             union_rect,
-            paint_selected_subtree(cx, root, &selected, input),
+            paint_selected_subtree(cx, root, &selected, input, &mut transforms),
         );
     }
     if let (Some(world_rect), Some(label)) = (union_rect, input.selection_label) {
@@ -85,19 +101,50 @@ fn paint_selected_subtree(
     node: &SceneNode,
     selected: &HashSet<&str>,
     input: &SelectionPaintInput<'_>,
+    transforms: &mut Vec<OverlayTransform>,
 ) -> Option<Rect> {
+    let pushed = push_node_transform(node, input, transforms);
     let mut union_rect = None;
     if selected.contains(node.id.as_str()) {
         union_rect = selection_world_rect(node, input);
-        paint_selected_node(cx, node, input, false);
+        paint_selected_node(cx, node, input, false, transforms);
     }
     for child in &node.children {
         union_rect = union_optional_rects(
             union_rect,
-            paint_selected_subtree(cx, child, selected, input),
+            paint_selected_subtree(cx, child, selected, input, transforms),
         );
     }
+    if pushed {
+        transforms.pop();
+    }
     union_rect
+}
+
+fn push_node_transform(
+    node: &SceneNode,
+    input: &SelectionPaintInput<'_>,
+    transforms: &mut Vec<OverlayTransform>,
+) -> bool {
+    if !node.flip_x && !node.flip_y && node.rotation.abs() <= f32::EPSILON {
+        return false;
+    }
+    let bounds = node.aggregate_bounds();
+    let pivot = Point2D::new(
+        input.canvas_rect.origin.x
+            + input.viewport.pan_x
+            + (bounds.origin.x + bounds.size.x / 2.0) * input.viewport.zoom,
+        input.canvas_rect.origin.y
+            + input.viewport.pan_y
+            + (bounds.origin.y + bounds.size.y / 2.0) * input.viewport.zoom,
+    );
+    transforms.push(OverlayTransform {
+        rotation: node.rotation,
+        flip_x: node.flip_x,
+        flip_y: node.flip_y,
+        pivot,
+    });
+    true
 }
 
 fn selection_world_rect(node: &SceneNode, input: &SelectionPaintInput<'_>) -> Option<Rect> {

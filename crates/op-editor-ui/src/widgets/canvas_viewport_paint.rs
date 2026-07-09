@@ -278,6 +278,7 @@ pub struct PaintNodeHits<'a> {
     /// empty when `hover_rect` is `None` or the chain is identity.
     pub(crate) hover_transforms: Vec<OverlayTransform>,
     pub(crate) selected_node: Option<&'a SceneNode>,
+    pub(crate) selected_transforms: Vec<OverlayTransform>,
     pub(crate) pen_node: Option<&'a SceneNode>,
 }
 
@@ -288,6 +289,7 @@ impl<'a> PaintNodeHits<'a> {
         transforms: &[OverlayTransform],
     ) -> Self {
         let hover_rect = hovered_outline_rect(node, options);
+        let selected_node = (options.selected == Some(node.id.as_str())).then_some(node);
         Self {
             hover_transforms: if hover_rect.is_some() {
                 transforms.to_vec()
@@ -295,7 +297,12 @@ impl<'a> PaintNodeHits<'a> {
                 Vec::new()
             },
             hover_rect,
-            selected_node: (options.selected == Some(node.id.as_str())).then_some(node),
+            selected_transforms: if selected_node.is_some() {
+                transforms.to_vec()
+            } else {
+                Vec::new()
+            },
+            selected_node,
             pen_node: (options.pen == Some(node.id.as_str())).then_some(node),
         }
     }
@@ -307,6 +314,7 @@ impl<'a> PaintNodeHits<'a> {
         }
         if self.selected_node.is_none() {
             self.selected_node = child.selected_node;
+            self.selected_transforms = child.selected_transforms;
         }
         if self.pen_node.is_none() {
             self.pen_node = child.pen_node;
