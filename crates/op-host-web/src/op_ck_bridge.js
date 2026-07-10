@@ -42,6 +42,28 @@ export async function opCkInit(canvasId) {
   // re-segmenting by script.
   const importedTypefaces = new Map();
   const coverageCache = new Map();
+  // Per-CHARACTER coverage segments for imported-family text, keyed on
+  // `(imported family key, size, text)`. `importedCoverageSegments` used to
+  // rebuild a throwaway CK.Font + call getGlyphIDs over the whole string on
+  // EVERY drawText/measureTextFamilyStyled call, every frame — bounded FIFO
+  // cache like `browserTextCache` below (values are plain JS arrays, no
+  // wasm handles, so eviction is a plain `.delete()` on the Map).
+  const IMPORTED_COVERAGE_CACHE_CAP = 512;
+  const importedCoverageCache = new Map();
+  // Per-(imported family key, size) CK.Font instances shared by the
+  // family-aware draw + measure paths (`importedFamilyFont`). Bounded,
+  // full-wipe eviction mirroring `svgPathCache` below (these ARE wasm
+  // handles and must be `.delete()`d before the Map entry is dropped).
+  const IMPORTED_FONT_CACHE_CAP = 512;
+  const importedFamilyFontCache = new Map();
+  // Both imported-font caches key off `importedTypefaces`' identity, so any
+  // registry change (register / remove) invalidates both — called from
+  // `registerImportedFont` and `removeImportedFont` below.
+  const clearImportedFontCaches = () => {
+    importedCoverageCache.clear();
+    for (const f of importedFamilyFontCache.values()) f.delete();
+    importedFamilyFontCache.clear();
+  };
   const browserTextCanvas = document.createElement('canvas');
   const browserTextCtx = browserTextCanvas.getContext('2d', { willReadFrequently: true });
   const browserTextCache = new Map();
@@ -147,8 +169,31 @@ export async function opCkInit(canvasId) {
   const col = (r, g, b, a) => CK.Color4f(r, g, b, a);
   const isPaintStyle = (style) => Boolean(style && typeof style.value !== 'undefined');
   const setPaintStyle = (paint, style) => { if (isPaintStyle(style)) paint.setStyle(style); };
-  const fillPaint = (r, g, b, a) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Fill); return p; };
-  const strokePaint = (r, g, b, a, w) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Stroke); p.setStrokeWidth(w); p.setStrokeCap(CK.StrokeCap.Round); p.setStrokeJoin(CK.StrokeJoin.Round); return p; };
+  // Long-lived fill/stroke paints reused across every plain-color primitive
+  // draw (fillRect, fillRRect, ovals, lines, polygons, SVG path fills) —
+  // a full-editor repaint issued hundreds of `new CK.Paint()` + `.delete()`
+  // pairs per frame otherwise. Every `fillPaint`/`strokePaint` call resets
+  // ALL mutable properties (color, antialias, style, stroke width/cap/join)
+  // it ever sets, so no state leaks between unrelated call sites even though
+  // a couple of callers (drawText) further mutate the returned paint (e.g.
+  // StrokeAndFill for bold synth) after fetching it — the next fetch wipes
+  // that back to a clean Fill/Stroke paint. Callers must NOT `.delete()`
+  // these two objects. One-off-effect paints (shaders, blend modes, mask
+  // filters/blur) are excluded from this cache by design — see
+  // `shaderPaint` and `fillInnerShadowSvgPath`'s `cut` paint.
+  const cachedFillPaint = new CK.Paint();
+  const cachedStrokePaint = new CK.Paint();
+  const fillPaint = (r, g, b, a) => { const p = cachedFillPaint; p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Fill); return p; };
+  const strokePaint = (r, g, b, a, w) => { const p = cachedStrokePaint; p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Stroke); p.setStrokeWidth(w); p.setStrokeCap(CK.StrokeCap.Round); p.setStrokeJoin(CK.StrokeJoin.Round); return p; };
+  // Dedicated (allocated + `.delete()`d) fill paint for the one call site
+  // that needs a SECOND live fill paint while `drawText`'s cached `p` (see
+  // above) is already in scope: `drawScriptRun` is invoked both standalone
+  // AND nested inside `drawText`'s per-segment loop, so it cannot safely
+  // share the single cached fill paint without the outer and inner draws
+  // fighting over the same object mid-loop. Kept as a plain allocation
+  // rather than a second cache since text draws are far less frequent than
+  // the primitive-shape hot path this task targets.
+  const allocFillPaint = (r, g, b, a) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Fill); return p; };
   const browserTextFont = (sz, weight, italic) => `${italic ? 'italic ' : ''}${Math.max(100, Math.min(900, Math.round(weight || 400)))} ${Math.max(1, sz)}px ${browserTextFontStack}`;
   const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);
   const allSegmentsUseBrowserTextFallback = (segs) => segs.length > 0 && segs.every((seg) => shouldUseBrowserTextFallback(seg.text, seg.emoji));
@@ -274,18 +319,40 @@ export async function opCkInit(canvasId) {
     const key = first.toLowerCase();
     return GENERIC_FAMILIES.has(key) ? '' : key;
   };
-  // Resolve the imported typeface for a family stack (null when unregistered).
-  const familyTypeface = (family) => {
+  // Resolve the imported typeface entry for a family stack (null when
+  // unregistered). Returns `{ key, tf }` — `key` is the same
+  // `importedTypefaces` key used to look the typeface up, so callers can
+  // key the coverage/font caches below on the same identity.
+  const familyTypefaceEntry = (family) => {
     const key = primaryFamilyKey(family);
     if (!key) return null;
     const entry = importedTypefaces.get(key);
-    return entry ? entry.tf : null;
+    return entry ? { key, tf: entry.tf } : null;
   };
   // Shared "typeface + font for (family, sz)" so the family-aware draw and
-  // measure paths build the SAME CK.Font and agree to sub-pixel. Caller deletes.
-  const importedFamilyFont = (tf, sz, italic) => {
-    const f = new CK.Font(tf, sz);
-    if (italic) f.setSkewX(-0.25);
+  // measure paths build the SAME CK.Font and agree to sub-pixel. Cached per
+  // `(family key, size)` — `importedFamilyFont` used to build + discard a
+  // fresh CK.Font on every imported segment of every draw/measure call.
+  // Iterations that use this font always fully consume it (draw or measure)
+  // before the next one is fetched, so a single shared instance per key is
+  // safe to reuse across loop iterations and across calls. Skew (italic) is
+  // reset unconditionally on every fetch since the same cached Font may be
+  // reused for an italic run and then a later upright run. Callers must NOT
+  // `.delete()` the returned Font; eviction (mirroring `svgPathCache`) frees
+  // every cached wasm Font before wiping the map. Invalidated wholesale by
+  // `clearImportedFontCaches` whenever the imported-font registry changes.
+  const importedFamilyFont = (key, tf, sz, italic) => {
+    const cacheKey = key + '\n' + sz;
+    let f = importedFamilyFontCache.get(cacheKey);
+    if (!f) {
+      f = new CK.Font(tf, sz);
+      if (importedFamilyFontCache.size >= IMPORTED_FONT_CACHE_CAP) {
+        for (const v of importedFamilyFontCache.values()) v.delete();
+        importedFamilyFontCache.clear();
+      }
+      importedFamilyFontCache.set(cacheKey, f);
+    }
+    f.setSkewX(italic ? -0.25 : 0);
     return f;
   };
   // Split a run into maximal {text, imported} segments by whether the imported
@@ -296,36 +363,52 @@ export async function opCkInit(canvasId) {
   // imported family for the whole run. `getGlyphIDs` returns one id per
   // codepoint, so it aligns with the codepoint iteration; if the counts don't
   // line up we conservatively treat the whole run as uncovered.
-  const importedCoverageSegments = (tf, sz, t) => {
+  const importedCoverageSegments = (key, tf, sz, t) => {
+    const cacheKey = key + '\n' + sz + '\n' + t;
+    const cached = importedCoverageCache.get(cacheKey);
+    if (cached) return cached;
     const cps = Array.from(t);
-    if (cps.length === 0) return [];
-    const f = new CK.Font(tf, sz);
-    let ids = null;
-    try {
-      ids = f.getGlyphIDs(t);
-    } catch (e) {
-      ids = null;
-    }
-    f.delete();
-    if (!ids || ids.length !== cps.length) return [{ text: t, imported: false }];
-    const out = [];
-    let cur = '';
-    let curImported = null;
-    for (let i = 0; i < cps.length; i++) {
-      const imp = ids[i] !== 0;
-      if (curImported === null) {
-        curImported = imp;
-        cur = cps[i];
-      } else if (imp === curImported) {
-        cur += cps[i];
+    let segs;
+    if (cps.length === 0) {
+      segs = [];
+    } else {
+      const f = new CK.Font(tf, sz);
+      let ids = null;
+      try {
+        ids = f.getGlyphIDs(t);
+      } catch (e) {
+        ids = null;
+      }
+      f.delete();
+      if (!ids || ids.length !== cps.length) {
+        segs = [{ text: t, imported: false }];
       } else {
-        out.push({ text: cur, imported: curImported });
-        cur = cps[i];
-        curImported = imp;
+        const out = [];
+        let cur = '';
+        let curImported = null;
+        for (let i = 0; i < cps.length; i++) {
+          const imp = ids[i] !== 0;
+          if (curImported === null) {
+            curImported = imp;
+            cur = cps[i];
+          } else if (imp === curImported) {
+            cur += cps[i];
+          } else {
+            out.push({ text: cur, imported: curImported });
+            cur = cps[i];
+            curImported = imp;
+          }
+        }
+        if (cur) out.push({ text: cur, imported: curImported });
+        segs = out;
       }
     }
-    if (cur) out.push({ text: cur, imported: curImported });
-    return out;
+    importedCoverageCache.set(cacheKey, segs);
+    if (importedCoverageCache.size > IMPORTED_COVERAGE_CACHE_CAP) {
+      const firstKey = importedCoverageCache.keys().next().value;
+      importedCoverageCache.delete(firstKey);
+    }
+    return segs;
   };
   // Draw a run via the script-segmented fallback (system / CJK / emoji /
   // browser-canvas), returning the advance consumed. Shared by the
@@ -339,7 +422,7 @@ export async function opCkInit(canvasId) {
       for (const seg of segs) cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
       return cx - x;
     }
-    const p = fillPaint(r, g, b, a);
+    const p = allocFillPaint(r, g, b, a);
     if (weight >= 600 && isPaintStyle(CK.PaintStyle.StrokeAndFill)) {
       setPaintStyle(p, CK.PaintStyle.StrokeAndFill);
       p.setStrokeWidth(sz * 0.06);
@@ -420,44 +503,44 @@ export async function opCkInit(canvasId) {
     },
     clear(r, g, b, a) { canvas.clear(col(r, g, b, a)); },
 
-    fillRect(x, y, w, h, r, g, b, a) { const p = fillPaint(r, g, b, a); canvas.drawRect(CK.LTRBRect(x, y, x + w, y + h), p); p.delete(); },
-    strokeRect(x, y, w, h, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawRect(CK.LTRBRect(x, y, x + w, y + h), p); p.delete(); },
-    fillRoundRect(x, y, w, h, rad, r, g, b, a) { const p = fillPaint(r, g, b, a); canvas.drawRRect(CK.RRectXY(CK.LTRBRect(x, y, x + w, y + h), rad, rad), p); p.delete(); },
-    strokeRoundRect(x, y, w, h, rad, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawRRect(CK.RRectXY(CK.LTRBRect(x, y, x + w, y + h), rad, rad), p); p.delete(); },
-    fillOval(x, y, w, h, r, g, b, a) { const p = fillPaint(r, g, b, a); canvas.drawOval(CK.LTRBRect(x, y, x + w, y + h), p); p.delete(); },
-    strokeOval(x, y, w, h, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawOval(CK.LTRBRect(x, y, x + w, y + h), p); p.delete(); },
-    strokeLine(x1, y1, x2, y2, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawLine(x1, y1, x2, y2, p); p.delete(); },
+    fillRect(x, y, w, h, r, g, b, a) { const p = fillPaint(r, g, b, a); canvas.drawRect(CK.LTRBRect(x, y, x + w, y + h), p); },
+    strokeRect(x, y, w, h, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawRect(CK.LTRBRect(x, y, x + w, y + h), p); },
+    fillRoundRect(x, y, w, h, rad, r, g, b, a) { const p = fillPaint(r, g, b, a); canvas.drawRRect(CK.RRectXY(CK.LTRBRect(x, y, x + w, y + h), rad, rad), p); },
+    strokeRoundRect(x, y, w, h, rad, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawRRect(CK.RRectXY(CK.LTRBRect(x, y, x + w, y + h), rad, rad), p); },
+    fillOval(x, y, w, h, r, g, b, a) { const p = fillPaint(r, g, b, a); canvas.drawOval(CK.LTRBRect(x, y, x + w, y + h), p); },
+    strokeOval(x, y, w, h, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawOval(CK.LTRBRect(x, y, x + w, y + h), p); },
+    strokeLine(x1, y1, x2, y2, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawLine(x1, y1, x2, y2, p); },
 
     fillPolygon(pts, r, g, b, a) {
       const path = new CK.Path(); path.moveTo(pts[0], pts[1]);
       for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i], pts[i + 1]);
       path.close();
-      const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); p.delete(); path.delete();
+      const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); path.delete();
     },
     // SVG path d-string scaled by `size/viewbox` and translated to (tx,ty).
     strokeSvgPath(d, tx, ty, scale, r, g, b, a, sw) {
       const path = cachedSvgPath(d); if (!path) return;
       const m = CK.Matrix.multiply(CK.Matrix.translated(tx, ty), CK.Matrix.scaled(scale, scale));
       path.transform(m);
-      const p = strokePaint(r, g, b, a, sw); canvas.drawPath(path, p); p.delete(); path.delete();
+      const p = strokePaint(r, g, b, a, sw); canvas.drawPath(path, p); path.delete();
     },
     fillSvgPath(d, tx, ty, scale, evenOdd, r, g, b, a) {
       const path = cachedSvgPath(d); if (!path) return;
       if (evenOdd) path.setFillType(CK.FillType.EvenOdd);
       const m = CK.Matrix.multiply(CK.Matrix.translated(tx, ty), CK.Matrix.scaled(scale, scale));
       path.transform(m);
-      const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); p.delete(); path.delete();
+      const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); path.delete();
     },
     fillSvgPathInRect(d, x, y, w, h, evenOdd, r, g, b, a) {
       const path = cachedSvgPath(d); if (!path) return;
       if (evenOdd) path.setFillType(CK.FillType.EvenOdd);
       fitPathToRect(path, x, y, w, h);
-      const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); p.delete(); path.delete();
+      const p = fillPaint(r, g, b, a); canvas.drawPath(path, p); path.delete();
     },
     strokeSvgPathInRect(d, x, y, w, h, r, g, b, a, sw) {
       const path = cachedSvgPath(d); if (!path) return;
       fitPathToRect(path, x, y, w, h);
-      const p = strokePaint(r, g, b, a, sw); canvas.drawPath(path, p); p.delete(); path.delete();
+      const p = strokePaint(r, g, b, a, sw); canvas.drawPath(path, p); path.delete();
     },
     fillSvgPathInRectLinearGradient(d, x, y, w, h, evenOdd, stops, angleDeg, opacity) {
       const path = cachedSvgPath(d); if (!path) return;
@@ -467,9 +550,18 @@ export async function opCkInit(canvasId) {
       if (!gs.colors.length) { path.delete(); return; }
       const points = linearGradientPoints(x, y, w, h, angleDeg);
       const shader = CK.Shader.MakeLinearGradient(points.start, points.end, gs.colors, gs.offsets, CK.TileMode.Clamp);
-      const p = shader ? shaderPaint(shader) : fillPaint(...firstStopColor(stops, opacity));
-      canvas.drawPath(path, p);
-      p.delete(); if (shader && shader.delete) shader.delete(); path.delete();
+      if (shader) {
+        // shaderPaint always allocates fresh (one-off effect, excluded from
+        // the shared cache) — this instance owns its own delete.
+        const p = shaderPaint(shader);
+        canvas.drawPath(path, p);
+        p.delete();
+        if (shader.delete) shader.delete();
+      } else {
+        const p = fillPaint(...firstStopColor(stops, opacity));
+        canvas.drawPath(path, p);
+      }
+      path.delete();
     },
     fillSvgPathInRectRadialGradient(d, x, y, w, h, evenOdd, stops, cxFrac, cyFrac, radiusFrac, opacity) {
       const path = cachedSvgPath(d); if (!path) return;
@@ -480,9 +572,18 @@ export async function opCkInit(canvasId) {
       const center = [x + w * Math.max(0, Math.min(1, cxFrac)), y + h * Math.max(0, Math.min(1, cyFrac))];
       const radius = Math.max(0.01, Math.max(w, h) * Math.max(0, Math.min(1, radiusFrac)));
       const shader = CK.Shader.MakeRadialGradient(center, radius, gs.colors, gs.offsets, CK.TileMode.Clamp);
-      const p = shader ? shaderPaint(shader) : fillPaint(...firstStopColor(stops, opacity));
-      canvas.drawPath(path, p);
-      p.delete(); if (shader && shader.delete) shader.delete(); path.delete();
+      if (shader) {
+        // shaderPaint always allocates fresh (one-off effect, excluded from
+        // the shared cache) — this instance owns its own delete.
+        const p = shaderPaint(shader);
+        canvas.drawPath(path, p);
+        p.delete();
+        if (shader.delete) shader.delete();
+      } else {
+        const p = fillPaint(...firstStopColor(stops, opacity));
+        canvas.drawPath(path, p);
+      }
+      path.delete();
     },
     fillInnerShadowSvgPath(d, x, y, w, h, evenOdd, offsetX, offsetY, blur, r, g, b, a) {
       const path = cachedSvgPath(d); if (!path) return;
@@ -501,7 +602,11 @@ export async function opCkInit(canvasId) {
       const fill = fillPaint(r, g, b, a);
       canvas.drawPath(path, fill);
 
-      const cut = fillPaint(0, 0, 0, 1);
+      // Dedicated (allocated + deleted) paint: `cut` carries a one-off blend
+      // mode + blur mask filter, so it is excluded from the shared fill-
+      // paint cache by design — reusing the cache here would leak DstOut /
+      // the blur mask into every later `fillPaint()` caller.
+      const cut = allocFillPaint(0, 0, 0, 1);
       cut.setBlendMode(CK.BlendMode.DstOut);
       let mask = null;
       const sigma = blur * 0.5;
@@ -511,7 +616,7 @@ export async function opCkInit(canvasId) {
       }
       canvas.drawPath(offsetPath, cut);
 
-      cut.delete(); if (mask && mask.delete) mask.delete(); fill.delete();
+      cut.delete(); if (mask && mask.delete) mask.delete();
       canvas.restore();
       canvas.restore();
       offsetPath.delete(); path.delete();
@@ -524,8 +629,8 @@ export async function opCkInit(canvasId) {
       // keeps the imported family where it applies and never renders tofu,
       // matching native. Draw + measure split on the SAME importedCoverage
       // segments and share drawScriptRun/importedFamilyFont, so advances agree.
-      const importedTf = familyTypeface(family);
-      const covSegs = importedTf ? importedCoverageSegments(importedTf, sz, t) : null;
+      const importedEntry = familyTypefaceEntry(family);
+      const covSegs = importedEntry ? importedCoverageSegments(importedEntry.key, importedEntry.tf, sz, t) : null;
       if (!covSegs || (covSegs.length === 1 && !covSegs[0].imported)) {
         drawScriptRun(t, x, y, sz, weight, italic, r, g, b, a);
         return;
@@ -538,22 +643,20 @@ export async function opCkInit(canvasId) {
       let cx = x;
       for (const seg of covSegs) {
         if (seg.imported) {
-          const f = importedFamilyFont(importedTf, sz, italic);
+          const f = importedFamilyFont(importedEntry.key, importedEntry.tf, sz, italic);
           canvas.drawText(seg.text, cx, y, p, f);
           cx += runWidth(f, seg.text);
-          f.delete();
         } else {
           cx += drawScriptRun(seg.text, cx, y, sz, weight, italic, r, g, b, a);
         }
       }
-      p.delete();
     },
     measureText(t, sz) {
       return this.measureTextStyled(t, sz, 400, false);
     },
     measureTextFamilyStyled(t, family, sz, weight, italic) {
-      const importedTf = familyTypeface(family);
-      const covSegs = importedTf ? importedCoverageSegments(importedTf, sz, t) : null;
+      const importedEntry = familyTypefaceEntry(family);
+      const covSegs = importedEntry ? importedCoverageSegments(importedEntry.key, importedEntry.tf, sz, t) : null;
       if (!covSegs || (covSegs.length === 1 && !covSegs[0].imported)) {
         // No imported family (or it covers nothing): the family-blind
         // script-segmented measure — the SAME path drawText falls to.
@@ -562,9 +665,8 @@ export async function opCkInit(canvasId) {
       let w = 0;
       for (const seg of covSegs) {
         if (seg.imported) {
-          const f = importedFamilyFont(importedTf, sz, italic);
+          const f = importedFamilyFont(importedEntry.key, importedEntry.tf, sz, italic);
           w += runWidth(f, seg.text);
-          f.delete();
         } else {
           w += this.measureTextStyled(seg.text, sz, weight, italic);
         }
@@ -612,6 +714,7 @@ export async function opCkInit(canvasId) {
       if (prev && prev.tf && prev.tf.delete) prev.tf.delete();
       importedTypefaces.set(key, { tf, family: String(family || '') });
       coverageCache.clear();
+      clearImportedFontCaches();
       return true;
     },
     // (Fresh browser imports parse the family name in Rust via `ttf-parser` —
@@ -634,6 +737,7 @@ export async function opCkInit(canvasId) {
       if (!entry) return;
       if (entry.tf && entry.tf.delete) entry.tf.delete();
       importedTypefaces.delete(key);
+      clearImportedFontCaches();
     },
 
     clipRect(x, y, w, h) { canvas.clipRect(CK.LTRBRect(x, y, x + w, y + h), CK.ClipOp.Intersect, true); },
