@@ -1,5 +1,6 @@
 //! Bundled Iconify catalog plus lightweight SVG-body parsing.
 
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -92,8 +93,72 @@ pub fn lookup_icon(collection: &str, name: &str) -> Option<&'static IconCatalogE
         .and_then(|idx| brands.icons.get(*idx))
 }
 
+/// Identity of a cached [`search_icons`] result. The catalog itself
+/// (`core_catalog` + `BRAND_CATALOG`) is process-global and immutable
+/// once loaded, so `(query, limit, brand_catalog_loaded())` fully
+/// determines the result — comparing it by value (never a
+/// pointer/length shortcut) makes a stale-serving collision
+/// impossible regardless of which caller or document triggered the
+/// search, so this cache needs no per-document owner-scoping.
+#[derive(PartialEq)]
+struct SearchCacheKey {
+    query: String,
+    limit: usize,
+    brand_loaded: bool,
+}
+
+thread_local! {
+    /// Single-slot memo: the icon picker calls `search_icons` with the
+    /// SAME (query, limit) up to 4× per frame (hover / hit-test / paint
+    /// / max-scroll) and again on every repaint while the picker stays
+    /// open, previously re-walking the whole catalog — two full passes
+    /// plus a `format!` per icon — every single time. A cache hit here
+    /// just clones a `Vec<&'static IconCatalogEntry>` (pointer-sized
+    /// copies), which is orders of magnitude cheaper than the walk.
+    static SEARCH_CACHE: RefCell<Option<(SearchCacheKey, Vec<&'static IconCatalogEntry>)>> =
+        const { RefCell::new(None) };
+    /// Observable rebuild counter — increments only when a fresh scan
+    /// runs. Lets tests prove a cache hit does not recompute.
+    static SEARCH_BUILD_COUNT: Cell<u64> = const { Cell::new(0) };
+}
+
 pub fn search_icons(query: &str, limit: usize) -> Vec<&'static IconCatalogEntry> {
     let query = query.trim().to_lowercase();
+    let brand_loaded = brand_catalog_loaded();
+    let hit = SEARCH_CACHE.with(|cell| {
+        cell.borrow().as_ref().and_then(|(key, result)| {
+            (key.query == query && key.limit == limit && key.brand_loaded == brand_loaded)
+                .then(|| result.clone())
+        })
+    });
+    if let Some(result) = hit {
+        return result;
+    }
+    let result = search_icons_uncached(&query, limit);
+    SEARCH_BUILD_COUNT.with(|c| c.set(c.get() + 1));
+    SEARCH_CACHE.with(|cell| {
+        *cell.borrow_mut() = Some((
+            SearchCacheKey {
+                query,
+                limit,
+                brand_loaded,
+            },
+            result.clone(),
+        ));
+    });
+    result
+}
+
+/// Number of fresh catalog scans performed so far on this thread — a
+/// monotonic counter used by tests to assert cache hits do not
+/// recompute.
+#[cfg(test)]
+pub(crate) fn search_icons_build_count() -> u64 {
+    SEARCH_BUILD_COUNT.with(Cell::get)
+}
+
+/// The actual catalog walk — `query` is already trimmed + lowercased.
+fn search_icons_uncached(query: &str, limit: usize) -> Vec<&'static IconCatalogEntry> {
     if query.is_empty() {
         return all_icons().take(limit).collect();
     }
@@ -107,7 +172,7 @@ pub fn search_icons(query: &str, limit: usize) -> Vec<&'static IconCatalogEntry>
         }
     }
     for icon in all_icons() {
-        if (icon.name != query && matches_query(icon, &query))
+        if (icon.name != query && matches_query(icon, query))
             || format!("{}:{}", icon.collection, icon.name) == query
         {
             out.push(icon);
@@ -339,4 +404,64 @@ fn points_path(points: &str, close: bool) -> Option<String> {
         out.push('Z');
     }
     Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_icons_cache_hits_on_unchanged_query() {
+        let before = search_icons_build_count();
+        let first = search_icons("arrow", 10);
+        let after_first = search_icons_build_count();
+        assert_eq!(
+            after_first,
+            before + 1,
+            "first call with a fresh query must rebuild"
+        );
+
+        let second = search_icons("arrow", 10);
+        assert_eq!(
+            search_icons_build_count(),
+            after_first,
+            "unchanged (query, limit) must hit the cache, not rebuild"
+        );
+        // `IconCatalogEntry` has no `PartialEq`; compare identity via the
+        // `&'static` pointers (both calls must resolve the SAME cached
+        // entries, not merely equal-looking ones).
+        assert_eq!(first.len(), second.len());
+        assert!(first
+            .iter()
+            .zip(second.iter())
+            .all(|(a, b)| std::ptr::eq(*a, *b)));
+    }
+
+    #[test]
+    fn search_icons_cache_recomputes_on_query_change() {
+        let _ = search_icons("arrow", 10);
+        let before = search_icons_build_count();
+
+        let _ = search_icons("close", 10);
+
+        assert_eq!(
+            search_icons_build_count(),
+            before + 1,
+            "a changed query must invalidate the cache and rebuild"
+        );
+    }
+
+    #[test]
+    fn search_icons_cache_recomputes_on_limit_change() {
+        let _ = search_icons("arrow", 10);
+        let before = search_icons_build_count();
+
+        let _ = search_icons("arrow", 5);
+
+        assert_eq!(
+            search_icons_build_count(),
+            before + 1,
+            "a changed limit must invalidate the cache and rebuild"
+        );
+    }
 }

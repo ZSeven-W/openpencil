@@ -18,6 +18,8 @@
 //! hit-rects are NOT part of the section walker — the panel checks
 //! [`font_picker_action_at`] before the generic action walk.
 
+use std::rc::Rc;
+
 use crate::widgets::property_panel::PropertyPanelAction;
 use crate::widgets::property_panel_inputs::{INPUT_HEIGHT, PAD_X};
 use crate::widgets::property_panel_layout::VisibleSections;
@@ -31,9 +33,15 @@ pub use crate::font_catalog::{BUNDLED_FONT_FAMILIES, FALLBACK_SYSTEM_FONTS};
 /// paint in their own group above the bundled + system groups and
 /// carry an inline remove affordance. `bundled` is always `false`
 /// when `imported` is `true`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FontPickerEntry<'a> {
-    pub family: &'a str,
+///
+/// `family` is owned (not `&'a str` borrowed from the caller's family
+/// lists) so a built `Vec<FontPickerEntry>` can be memoized cross-frame
+/// in `font_picker_cache` without a self-referential lifetime — see
+/// that module's docs. The allocation only happens when the cache
+/// actually rebuilds (query or family-list change), not on every call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FontPickerEntry {
+    pub family: String,
     pub bundled: bool,
     pub imported: bool,
 }
@@ -44,18 +52,37 @@ pub struct FontPickerEntry<'a> {
 /// by the same case-insensitive `search` substring (TS `filtered`
 /// memo). The host resolves `SetFontFamilyIndex(i)` against this same
 /// function, so paint / hit / dispatch agree.
-pub fn font_picker_entries<'a>(
-    imported_families: &'a [String],
-    system_families: &'a [String],
+///
+/// Memoized cross-frame in `font_picker_cache`, keyed by value on
+/// `(imported_families, system_families, query)` — see that module's
+/// docs for why a shared, un-owner-scoped thread-local slot is safe
+/// here. Returns the cache's shared `Rc` directly (not a fresh clone
+/// of the `Vec`), so a hit — the common case: the panel re-reads this
+/// from up to five accessors per frame with unchanged inputs — costs a
+/// refcount bump, not a deep clone of every entry's owned `family`.
+pub fn font_picker_entries(
+    imported_families: &[String],
+    system_families: &[String],
     search: &str,
-) -> Vec<FontPickerEntry<'a>> {
+) -> Rc<Vec<FontPickerEntry>> {
     let q = search.trim().to_lowercase();
-    let matches = |family: &str| q.is_empty() || family.to_lowercase().contains(&q);
-    let mut out: Vec<FontPickerEntry<'a>> = Vec::new();
+    super::font_picker_cache::resolve(imported_families, system_families, &q, || {
+        build_font_picker_entries(imported_families, system_families, &q)
+    })
+}
+
+/// The actual filter pass — `q` is already trimmed + lowercased.
+fn build_font_picker_entries(
+    imported_families: &[String],
+    system_families: &[String],
+    q: &str,
+) -> Vec<FontPickerEntry> {
+    let matches = |family: &str| q.is_empty() || family.to_lowercase().contains(q);
+    let mut out: Vec<FontPickerEntry> = Vec::new();
     for family in imported_families {
         if matches(family) {
             out.push(FontPickerEntry {
-                family,
+                family: family.clone(),
                 bundled: false,
                 imported: true,
             });
@@ -64,7 +91,7 @@ pub fn font_picker_entries<'a>(
     for family in BUNDLED_FONT_FAMILIES {
         if matches(family) {
             out.push(FontPickerEntry {
-                family,
+                family: family.to_string(),
                 bundled: true,
                 imported: false,
             });
@@ -74,7 +101,7 @@ pub fn font_picker_entries<'a>(
         for family in FALLBACK_SYSTEM_FONTS {
             if matches(family) {
                 out.push(FontPickerEntry {
-                    family,
+                    family: family.to_string(),
                     bundled: false,
                     imported: false,
                 });
@@ -84,7 +111,7 @@ pub fn font_picker_entries<'a>(
         for family in system_families {
             if matches(family) {
                 out.push(FontPickerEntry {
-                    family,
+                    family: family.clone(),
                     bundled: false,
                     imported: false,
                 });
@@ -163,7 +190,7 @@ fn family_trigger_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rec
 pub fn font_picker_layout(
     panel_rect: Rect,
     visible: VisibleSections,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
     scroll: f32,
 ) -> Option<FontPickerLayout> {
@@ -281,7 +308,7 @@ pub fn font_picker_contains(
     state: &SelectState,
     panel_rect: Rect,
     visible: VisibleSections,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
     point: Point2D,
 ) -> bool {
@@ -305,7 +332,7 @@ pub fn font_picker_hit(
     state: &SelectState,
     panel_rect: Rect,
     visible: VisibleSections,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
     point: Point2D,
 ) -> SelectHit {
@@ -356,7 +383,7 @@ pub fn font_picker_hit(
 pub fn font_picker_action_at(
     panel_rect: Rect,
     visible: VisibleSections,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
     state: &SelectState,
     point: Point2D,
@@ -398,7 +425,7 @@ pub fn font_picker_action_at(
 pub fn font_picker_entry_index_at(
     panel_rect: Rect,
     visible: VisibleSections,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
     state: &SelectState,
     point: Point2D,
@@ -417,7 +444,7 @@ pub fn font_picker_entry_index_at(
 pub fn font_picker_import_action_at(
     panel_rect: Rect,
     visible: VisibleSections,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
     state: &SelectState,
     point: Point2D,
@@ -447,7 +474,7 @@ pub fn font_picker_import_action_at(
 pub fn font_picker_max_scroll(
     panel_rect: Rect,
     visible: VisibleSections,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
 ) -> f32 {
     font_picker_layout(panel_rect, visible, entries, allow_import, 0.0)

@@ -223,6 +223,9 @@ fn new_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     file_actions::preserve_app_preferences(b.host().editor_state(), &mut state);
     state.editor_ui.file_name_display = None;
     *b.host_mut().editor_state_mut() = state;
+    // Fresh starter document restarts at revision 0 / page 0 — rotate the
+    // LayerPanel cache owner so the next paint rebuilds (same aliasing as Open).
+    b.host_mut().force_rotate_layer_panel_owner();
     b.host_mut().mark_editor_state_dirty();
     let (w, h) = b.viewport_size();
     b.host_mut().fit_content_to_viewport(w, h);
@@ -485,6 +488,10 @@ fn apply_opened_document<C: RepaintContext + 'static>(
             let mut state = ingested.state;
             state.editor_ui.file_name_display = Some(file_name.to_string());
             *b.host_mut().editor_state_mut() = state;
+            // The loaded document restarts at revision 0 / page 0, aliasing the
+            // replaced document's LayerPanel row-model-cache key — rotate the
+            // owner so the next paint rebuilds instead of serving stale rows.
+            b.host_mut().force_rotate_layer_panel_owner();
             b.host_mut().mark_editor_state_dirty();
             let (w, h) = b.viewport_size();
             b.host_mut().fit_content_to_viewport(w, h);

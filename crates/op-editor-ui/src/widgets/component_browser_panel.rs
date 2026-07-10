@@ -46,6 +46,21 @@ const PILL_GAP: f32 = 6.0;
 /// Approximate glyph advance at the 11 px body size.
 pub(in crate::widgets) const CHAR_W: f32 = 6.0;
 
+// Test-only call counter for `ComponentBrowserPanel::filtered` — lets
+// tests prove a single `hit_test` / `paint` pass filters the kit set
+// exactly once instead of the pre-fix 2× (see `filtered`'s doc
+// comment for why this stays a within-call dedup rather than a
+// cross-frame cache).
+#[cfg(test)]
+thread_local! {
+    static FILTERED_CALL_COUNT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn filtered_call_count() -> u64 {
+    FILTERED_CALL_COUNT.with(std::cell::Cell::get)
+}
+
 /// The 6 categories actually shipped by the built-in starter kit
 /// plus "All" — paint walks this in order and skips a category with
 /// no matching components in the active kit set.
@@ -195,7 +210,8 @@ impl<'a> ComponentBrowserPanel<'a> {
                 return Some(B::Category(cat));
             }
         }
-        self.card_rects(panel)
+        let count = self.filtered().len();
+        self.card_rects(panel, count)
             .into_iter()
             .position(|r| r.contains(point))
             .map(B::Card)
@@ -254,7 +270,26 @@ impl<'a> ComponentBrowserPanel<'a> {
     /// query — name + tags substring-match). Paint + hit-test share
     /// this so indices into the card grid agree. Widgets-scoped so the
     /// kit-strip sibling's tests can assert the kit filter narrows it.
+    ///
+    /// NOT cross-frame cached (unlike the icon / font-picker / design-md
+    /// caches). `ComponentBrowserPanel` is rebuilt fresh from
+    /// `EditorState` every frame (no persistent owner survives across
+    /// frames), and `self.kits()` (`EditorState::ui_kits`) carries no
+    /// revision/generation counter to key a memo on cheaply. A coarse
+    /// substitute (id/len fingerprint) would risk serving one
+    /// document's rows to another that coincidentally fingerprints the
+    /// same on a shared thread — exactly the collision
+    /// `layer_panel_cache` documents guarding against with real
+    /// per-document revisions. A true value-equality key is no
+    /// cheaper than recomputing: `KitComponent::template` is a full
+    /// `PenNode` tree, so comparing `Vec<UIKit>` by value costs about
+    /// as much as the filter walk itself. So this one is intentionally
+    /// left uncached across frames; only the redundant *within-one-call*
+    /// invocations are fixed below (`card_rects` now takes a
+    /// caller-computed `count` instead of re-deriving it).
     pub(in crate::widgets) fn filtered(&self) -> Vec<(&str, &KitComponent)> {
+        #[cfg(test)]
+        FILTERED_CALL_COUNT.with(|c| c.set(c.get() + 1));
         let query = self
             .state
             .editor_ui
@@ -348,9 +383,13 @@ impl<'a> ComponentBrowserPanel<'a> {
     }
 
     /// Card slot rects, in row-major order — paint + hit-test share
-    /// this so a click maps onto the right component index.
-    fn card_rects(&self, panel: Rect) -> Vec<Rect> {
-        let count = self.filtered().len();
+    /// this so a click maps onto the right component index. `count`
+    /// is the caller's already-computed `self.filtered().len()` —
+    /// passed in instead of recomputed here so a single paint / hit-test
+    /// pass filters the kit set exactly once (see `filtered`'s doc
+    /// comment for why this stays a within-call dedup rather than a
+    /// cross-frame cache).
+    fn card_rects(&self, panel: Rect, count: usize) -> Vec<Rect> {
         let left = panel.origin.x + PAD;
         let top = self.grid_clip_top(panel) + CARD_GAP;
         let cols = CARD_COLS as f32;
@@ -404,7 +443,11 @@ impl<'a> ComponentBrowserPanel<'a> {
             }
         }
         let filtered = self.filtered();
-        for (i, rect) in self.card_rects(panel).into_iter().enumerate() {
+        for (i, rect) in self
+            .card_rects(panel, filtered.len())
+            .into_iter()
+            .enumerate()
+        {
             if rect.contains(point) {
                 let (kit_id, comp) = &filtered[i];
                 return Some(ComponentBrowserHit::InsertComponent(
@@ -598,8 +641,10 @@ impl<'a> ComponentBrowserPanel<'a> {
                 self.theme.muted_foreground,
             );
         } else {
-            for (i, ((_, comp), card_rect)) in
-                filtered.iter().zip(self.card_rects(rect)).enumerate()
+            for (i, ((_, comp), card_rect)) in filtered
+                .iter()
+                .zip(self.card_rects(rect, filtered.len()))
+                .enumerate()
             {
                 let target = ComponentBrowserButton::Card(i);
                 let hovered = self.hover == Some(target);
@@ -688,3 +733,7 @@ impl<'a> ComponentBrowserPanel<'a> {
 }
 
 pub(in crate::widgets) use crate::util::truncate_ellipsis as truncate;
+
+#[cfg(test)]
+#[path = "component_browser_panel_tests.rs"]
+mod tests;

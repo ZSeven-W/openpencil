@@ -9,13 +9,18 @@ fn transcript_hit_resolves_design_json_copy_button_like_ts() {
 ```"#
     ));
     let messages = std::slice::from_ref(&message);
+    let canonical = crate::widgets::ai_chat_transcript_cache::unowned_for_tests(
+        messages,
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
     let block =
         &build_transcript(messages, body(), op_editor_core::Locale::EnUs)[0].design_blocks[0];
     let x = block.header.origin.x + block.header.size.x - 38.0;
     let y = block.header.origin.y + block.header.size.y / 2.0;
 
     assert_eq!(
-        transcript_hit(messages, body(), x, y, op_editor_core::Locale::EnUs, 0.0),
+        transcript_hit(&canonical, body(), x, y, 0.0),
         Some(TranscriptHit::CopyDesignBlock(code.to_string()))
     );
 }

@@ -24,6 +24,10 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) {
+        // Rotate the transcript-cache owner if the active chat session changed
+        // since the last frame, BEFORE any resolve stores under it — the new
+        // tab's build is then stamped with the fresh owner.
+        self.rotate_chat_owner_if_session_changed();
         self.sync_theme_from_editor();
         // 1. Background fill so previous-frame pixels never bleed.
         frame.fill_rect(
@@ -128,7 +132,10 @@ impl WidgetHostNative {
             let mut layer_panel = if let Some(d) = &active_drag {
                 LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source)
             } else {
-                LayerPanel::from_editor(&self.editor_state)
+                // Per-frame paint: resolve the row model through the
+                // owner-scoped cache so idle / streaming / hover repaints
+                // that don't touch the layer tree skip the walk + measure.
+                LayerPanel::from_editor_owned(&self.editor_state, self.layer_panel_owner)
             };
             if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
@@ -265,7 +272,10 @@ impl WidgetHostNative {
         //    of the toolbar in any overlap region (matches the
         //    user's requested z-order: chat above toolbar).
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
+            // Owner-stamp so paint stores the canonical build under THIS host's
+            // owner — the display-frame cursor hint reads it back by that owner.
+            let chat = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .owned_by(self.chat_panel_owner);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };

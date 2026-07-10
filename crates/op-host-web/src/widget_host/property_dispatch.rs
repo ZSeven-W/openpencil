@@ -54,6 +54,10 @@ impl WidgetHost {
         } else {
             self.editor_state.replace_document(doc);
         }
+        // A whole-document replacement can restart the revision at 0 / page 0,
+        // aliasing the previous document's LayerPanel row-model-cache key — rotate
+        // the owner so the next owned paint resolve rebuilds the rows.
+        self.force_rotate_layer_panel_owner();
         self.mark_dirty();
     }
 

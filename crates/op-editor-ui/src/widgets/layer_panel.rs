@@ -10,6 +10,7 @@
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::layer_panel_cache::{self, CachedLayerRows};
 use crate::widgets::layer_panel_walkers::{
     apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
     pages_content_width, pages_from_state, visible_row_range, walk, walk_excluding,
@@ -18,7 +19,8 @@ use crate::widgets::layer_panel_walkers::{
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 use jian_core::text_input::TextInputState;
-use op_editor_core::NodeId;
+use op_editor_core::{NodeId, SelectionState};
+use std::rc::Rc;
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::editor_ui_state::EditorUiState;
@@ -50,12 +52,10 @@ pub struct LayerItem {
     pub kind_label: String,
     pub icon: Icon,
     pub depth: usize,
-    pub selected: bool,
     pub has_children: bool,
     pub hidden: bool,
     pub locked: bool,
     pub collapsed: bool,
-    pub hovered: bool,
     /// True when the row can host children (Frame/Group); gates
     /// the middle drag-Into band.
     pub is_container: bool,
@@ -73,14 +73,15 @@ pub struct PageItem {
     pub page_index: usize,
     pub label: String,
     pub active: bool,
-    pub hovered: bool,
     pub renaming: bool,
 }
 
 pub struct LayerPanel {
     pub id: WidgetId,
-    pub pages: Vec<PageItem>,
-    pub items: Vec<LayerItem>,
+    /// Cached, styling-neutral row models (shared via `Rc`; a cache hit
+    /// is a refcount bump, not a per-row re-allocation).
+    pub pages: Rc<Vec<PageItem>>,
+    pub items: Rc<Vec<LayerItem>>,
     pub theme: Theme,
     pub pages_label: &'static str,
     pub layers_label: &'static str,
@@ -88,25 +89,80 @@ pub struct LayerPanel {
     pub drag_ghost: Option<(LayerItem, f32)>,
     pub now_ms: u64,
     pub rename_input: Option<TextInputState>,
+    /// Live styling overlay — selection + hover are applied at paint /
+    /// hit-test time so they never invalidate the cached row model.
+    pub selection: SelectionState,
+    pub hovered_layer: Option<NodeId>,
+    pub hovered_page: Option<usize>,
     /// Scroll state for the bounded Pages / Layers regions.
     pub pages_scroll: LayerScrollSnapshot,
     pub layers_scroll: LayerScrollSnapshot,
 }
 
 impl LayerPanel {
-    /// Build the panel from the editor state — walks the canonical
-    /// `PenNode` tree on the active page.
+    /// Allocate a process-unique owner id for a persistent host's
+    /// LayerPanel cache slot (mirrors `AIChatPlaceholder::next_owner`).
+    /// A host pulls an id at construction, passes it to
+    /// [`Self::from_editor_owned`] on the per-frame paint path, and pulls
+    /// a FRESH id after every whole-document replacement
+    /// (`force_rotate_layer_panel_owner`) — ids are stable only between
+    /// replacements.
+    pub fn next_layer_panel_owner() -> u64 {
+        layer_panel_cache::next_owner()
+    }
+
+    /// Build the panel from the editor state via the CACHE-BYPASS path —
+    /// always a fresh walk that never touches the shared slot. Used by
+    /// unit tests and non-per-frame host call sites (click / scroll /
+    /// geometry / a11y). The per-frame paint path calls
+    /// [`Self::from_editor_owned`] to reap the cache.
     pub fn from_editor(state: &EditorState) -> Self {
-        let rename = RenameView::from_state(state);
-        let pages = pages_from_state(state, &rename);
-        let cx = WalkCx::from_state(state);
-        let mut items = Vec::new();
-        for child in state.active_children() {
-            walk(child, &cx, 0, &mut items);
-        }
-        apply_layer_rename(&mut items, &rename);
-        let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH);
-        let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH);
+        Self::from_editor_owned(state, layer_panel_cache::UNOWNED)
+    }
+
+    /// Owner-scoped build for the per-frame paint path. Resolves the row
+    /// model through the thread-local cache scoped to `owner`; rebuilds
+    /// only when the document revision / active page / collapsed set /
+    /// rename draft change. Selection + hover are applied as a live
+    /// overlay (see `layer_panel_cache`), so a selection-/hover-only
+    /// change reuses the cached rows.
+    pub fn from_editor_owned(state: &EditorState, owner: u64) -> Self {
+        let rows = layer_panel_cache::resolve_owned(owner, state, || build_layer_rows(state));
+        Self::assemble(
+            state,
+            rows.pages.clone(),
+            rows.items.clone(),
+            rows.pages_content_width,
+            rows.layers_content_width,
+        )
+    }
+
+    /// Live selection overlay — true when `id` is in the editor
+    /// selection. Paint / hit-test read this instead of a baked flag so
+    /// selection changes never invalidate the cached row model.
+    pub fn is_row_selected(&self, id: &NodeId) -> bool {
+        self.selection.contains(id)
+    }
+
+    /// Live hover overlay for a layer row.
+    pub fn is_row_hovered(&self, id: &NodeId) -> bool {
+        self.hovered_layer.as_ref() == Some(id)
+    }
+
+    /// Live hover overlay for a page row.
+    pub fn is_page_hovered(&self, page_index: usize) -> bool {
+        self.hovered_page == Some(page_index)
+    }
+
+    /// Assemble a panel from an already-built (cached or fresh) row model,
+    /// stamping the live styling overlay + scroll snapshots + chrome.
+    fn assemble(
+        state: &EditorState,
+        pages: Rc<Vec<PageItem>>,
+        items: Rc<Vec<LayerItem>>,
+        pages_content_width: f32,
+        layers_content_width: f32,
+    ) -> Self {
         Self {
             id: WidgetId::new(1000),
             pages,
@@ -118,6 +174,9 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
+            selection: state.selection.clone(),
+            hovered_layer: state.editor_ui.hovered_layer_id.clone(),
+            hovered_page: state.editor_ui.hovered_page_index,
             pages_scroll: LayerScrollSnapshot::new(
                 state.editor_ui.layer_pages_scroll,
                 state.editor_ui.layer_pages_h_scroll,
@@ -148,12 +207,10 @@ impl LayerPanel {
             kind_label: kind_label(node).to_string(),
             icon: icon_for_node(node),
             depth: 0,
-            selected: false,
             has_children: node.children().map(|c| !c.is_empty()).unwrap_or(false),
             hidden: base.visible == Some(false),
             locked: base.locked.unwrap_or(false),
             collapsed: state.editor_ui.collapsed_layers.contains(source),
-            hovered: false,
             // Reparent-into drop targets match TS CONTAINER_TYPES
             // (layer-panel.tsx:14 — frame/group/rectangle/ref).
             is_container: matches!(
@@ -171,6 +228,10 @@ impl LayerPanel {
     /// so `drop_target_at` returns y values that match where the
     /// source lands after reorder.
     pub fn from_editor_with_drag_source(state: &EditorState, drag_source: &NodeId) -> Self {
+        // The drag-in-progress row set excludes the dragged subtree and is
+        // resolved fresh every frame (an active gesture, not the idle
+        // repaint the cache targets), so it deliberately bypasses the
+        // shared slot. Selection / hover still overlay via `assemble`.
         let rename = RenameView::from_state(state);
         let pages = pages_from_state(state, &rename);
         let cx = WalkCx::from_state(state);
@@ -181,35 +242,20 @@ impl LayerPanel {
         apply_layer_rename(&mut items, &rename);
         let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH);
         let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH);
-        Self {
-            id: WidgetId::new(1000),
-            pages,
-            items,
-            theme: theme_for(&state.editor_ui),
-            pages_label: t(&state.editor_ui, "pages.title"),
-            layers_label: t(&state.editor_ui, "layers.title"),
-            drop_target: None,
-            drag_ghost: None,
-            now_ms: 0,
-            rename_input: state.ui.layer_rename.as_ref().map(|r| r.input.clone()),
-            pages_scroll: LayerScrollSnapshot::new(
-                state.editor_ui.layer_pages_scroll,
-                state.editor_ui.layer_pages_h_scroll,
-                pages_content_width,
-            ),
-            layers_scroll: LayerScrollSnapshot::new(
-                state.editor_ui.layer_layers_scroll,
-                state.editor_ui.layer_layers_h_scroll,
-                layers_content_width,
-            ),
-        }
+        Self::assemble(
+            state,
+            Rc::new(pages),
+            Rc::new(items),
+            pages_content_width,
+            layers_content_width,
+        )
     }
 
     pub fn empty() -> Self {
         Self {
             id: WidgetId::new(1000),
-            pages: Vec::new(),
-            items: Vec::new(),
+            pages: Rc::new(Vec::new()),
+            items: Rc::new(Vec::new()),
             theme: Theme::dark(),
             pages_label: "Pages",
             layers_label: "Layers",
@@ -217,6 +263,9 @@ impl LayerPanel {
             drag_ghost: None,
             now_ms: 0,
             rename_input: None,
+            selection: SelectionState::empty(),
+            hovered_layer: None,
+            hovered_page: None,
             pages_scroll: LayerScrollSnapshot::default(),
             layers_scroll: LayerScrollSnapshot::default(),
         }
@@ -265,6 +314,29 @@ impl LayerPanel {
             view_top
         };
         Some(next.clamp(0.0, r.layers.max_offset))
+    }
+}
+
+/// Walk the active page into the styling-neutral row model the cache
+/// stores: page rows + depth-flattened layer rows + both content widths.
+/// This is the expensive per-frame work (tree walk + per-node `String`
+/// allocation + label measurement) the cache exists to skip.
+fn build_layer_rows(state: &EditorState) -> CachedLayerRows {
+    let rename = RenameView::from_state(state);
+    let pages = pages_from_state(state, &rename);
+    let cx = WalkCx::from_state(state);
+    let mut items = Vec::new();
+    for child in state.active_children() {
+        walk(child, &cx, 0, &mut items);
+    }
+    apply_layer_rename(&mut items, &rename);
+    let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH);
+    let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH);
+    CachedLayerRows {
+        pages: Rc::new(pages),
+        items: Rc::new(items),
+        pages_content_width,
+        layers_content_width,
     }
 }
 
@@ -362,10 +434,11 @@ impl Widget for LayerPanel {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, PAGE_ROW_HEIGHT - 4.0),
             };
+            let page_hovered = self.is_page_hovered(index);
             if page.active {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected);
-            } else if page.hovered {
+            } else if page_hovered {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.button_hover);
             }
@@ -402,7 +475,7 @@ impl Widget for LayerPanel {
             // Hover-reveal × delete button on the trailing edge —
             // matches TS page-row hover affordance. Hit-test geometry
             // mirrors the paint exactly.
-            if page.hovered {
+            if page_hovered {
                 let close_x = rect.origin.x + rect.size.x - ROW_PAD_X - 14.0;
                 let close_y = y + (PAGE_ROW_HEIGHT - 14.0) / 2.0;
                 draw_icon(
@@ -450,17 +523,20 @@ impl Widget for LayerPanel {
             LAYER_ROW_HEIGHT,
         ) {
             let item = &self.items[index];
+            // Live styling overlay — never baked into the cached item.
+            let selected = self.is_row_selected(&item.node_id);
+            let hovered = self.is_row_hovered(&item.node_id);
             y = r.layers_rows_top - r.layers.offset + index as f32 * LAYER_ROW_HEIGHT;
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
             };
-            if item.selected {
+            if selected {
                 // TS uses bg-blue-500/15 + primary text + primary
                 // icon for the selected layer row.
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.row_selected_primary);
-            } else if item.hovered {
+            } else if hovered {
                 cx.backend
                     .fill_round_rect(row, 6.0, self.theme.button_hover);
             }
@@ -485,7 +561,7 @@ impl Widget for LayerPanel {
             } else {
                 None
             };
-            let icon_color = if item.selected {
+            let icon_color = if selected {
                 dim(self.theme.primary, dim_factor)
             } else if let Some(tint) = component_tint {
                 dim(tint, dim_factor)
@@ -520,7 +596,7 @@ impl Widget for LayerPanel {
                 icon_color,
                 1.4,
             );
-            let label_color = if item.selected {
+            let label_color = if selected {
                 dim(self.theme.primary, dim_factor)
             } else if let Some(tint) = component_tint {
                 dim(tint, dim_factor)
@@ -562,7 +638,7 @@ impl Widget for LayerPanel {
             } else {
                 Icon::LockOpen
             };
-            let trailing_default = if item.selected {
+            let trailing_default = if selected {
                 dim(self.theme.primary, dim_factor)
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
@@ -583,8 +659,8 @@ impl Widget for LayerPanel {
             let trailing_size = 12.0;
             let trailing_stroke = 1.2;
             let trailing_y = row.origin.y + 7.0;
-            let show_eye = item.hovered;
-            let show_lock = item.hovered;
+            let show_eye = hovered;
+            let show_lock = hovered;
             if show_eye {
                 draw_icon(
                     cx.backend,

@@ -1,6 +1,6 @@
-use super::ai_chat_transcript::{build_transcript_with_design_hover, ACTION_STEP_H};
+use super::ai_chat_transcript::ACTION_STEP_H;
+use super::ai_chat_transcript_cache::CanonicalTranscript;
 use crate::{Point2D, Rect};
-use op_editor_core::chat::ChatMessage;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranscriptHit {
@@ -14,29 +14,31 @@ pub enum TranscriptHit {
 }
 
 pub(crate) fn transcript_hit(
-    messages: &[ChatMessage],
+    canonical: &CanonicalTranscript,
     body_rect: Rect,
     x: f32,
     y: f32,
-    locale: op_editor_core::Locale,
     scroll_offset: f32,
 ) -> Option<TranscriptHit> {
     if !(body_rect).contains(Point2D::new(x, y)) {
         return None;
     }
-    for item in build_transcript_with_design_hover(messages, body_rect, locale, None, scroll_offset)
-    {
+    // The canonical layout is scroll 0; the caller resolved it once and passes
+    // it in, so shift the query point down by the scroll instead of rebuilding
+    // (or re-fingerprinting) a scroll-applied transcript.
+    let p = Point2D::new(x, y + scroll_offset);
+    for item in &canonical.items {
         if let Some(t) = &item.thinking {
-            if (t.header).contains(Point2D::new(x, y)) {
+            if (t.header).contains(p) {
                 return Some(TranscriptHit::ToggleThinking(item.msg_index));
             }
         }
         if let Some(t) = &item.tools {
-            if (t.header).contains(Point2D::new(x, y)) {
+            if (t.header).contains(p) {
                 return Some(TranscriptHit::ToggleToolCalls(item.msg_index));
             }
             for (tool_index, card) in t.cards.iter().enumerate() {
-                if (card.header).contains(Point2D::new(x, y)) {
+                if (card.header).contains(p) {
                     return Some(TranscriptHit::SetToolCallCardExpanded(
                         item.msg_index,
                         tool_index,
@@ -55,7 +57,7 @@ pub(crate) fn transcript_hit(
                 step.rect.size.x,
                 ACTION_STEP_H,
             );
-            if (header).contains(Point2D::new(x, y)) {
+            if (header).contains(p) {
                 return Some(TranscriptHit::SetActionStepExpanded(
                     item.msg_index,
                     step_index,
@@ -65,17 +67,17 @@ pub(crate) fn transcript_hit(
         }
         for (block_index, block) in item.design_blocks.iter().enumerate() {
             if let Some(apply) = block.apply {
-                if (apply).contains(Point2D::new(x, y)) {
+                if (apply).contains(p) {
                     return Some(TranscriptHit::ApplyDesignBlock(
                         item.msg_index,
                         block.code.clone(),
                     ));
                 }
             }
-            if (block.copy).contains(Point2D::new(x, y)) {
+            if (block.copy).contains(p) {
                 return Some(TranscriptHit::CopyDesignBlock(block.code.clone()));
             }
-            if (block.header).contains(Point2D::new(x, y)) {
+            if (block.header).contains(p) {
                 return Some(TranscriptHit::SetDesignBlockExpanded(
                     item.msg_index,
                     block_index,
@@ -88,20 +90,19 @@ pub(crate) fn transcript_hit(
 }
 
 pub(crate) fn design_block_at(
-    messages: &[ChatMessage],
+    canonical: &CanonicalTranscript,
     body_rect: Rect,
     x: f32,
     y: f32,
-    locale: op_editor_core::Locale,
     scroll_offset: f32,
 ) -> Option<(usize, usize)> {
     if !(body_rect).contains(Point2D::new(x, y)) {
         return None;
     }
-    for item in build_transcript_with_design_hover(messages, body_rect, locale, None, scroll_offset)
-    {
+    let p = Point2D::new(x, y + scroll_offset);
+    for item in &canonical.items {
         for (block_index, block) in item.design_blocks.iter().enumerate() {
-            if (block.rect).contains(Point2D::new(x, y)) {
+            if (block.rect).contains(p) {
                 return Some((item.msg_index, block_index));
             }
         }

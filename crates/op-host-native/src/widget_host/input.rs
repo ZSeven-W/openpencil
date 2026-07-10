@@ -337,7 +337,11 @@ impl WidgetHostNative {
 
     fn chat_transcript_text_offset_at_screen(&self, x: f32, y: f32) -> Option<(usize, usize)> {
         let chat_rect = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)?;
+        // Selection probe resolves the transcript cache; owner-stamp it so the
+        // slot stays tagged with this host's panel instead of clobbering it to
+        // UNOWNED (which would flip the cursor-shape hint's read to None).
         match AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+            .owned_by(self.chat_panel_owner)
             .hit_test(chat_rect, Point2D::new(x, y))
         {
             Some(AIChatHit::SelectTranscriptText(message_index, offset)) => {
@@ -350,6 +354,7 @@ impl WidgetHostNative {
     fn chat_input_text_offset_at_screen(&self, x: f32, y: f32) -> Option<usize> {
         let chat_rect = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)?;
         match AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+            .owned_by(self.chat_panel_owner)
             .hit_test(chat_rect, Point2D::new(x, y))
         {
             Some(AIChatHit::SelectInputText(offset)) => Some(offset),
@@ -480,6 +485,9 @@ impl WidgetHostNative {
     }
 
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        // Session-switch owner rotation before the cursor_probe resolve below
+        // stores the canonical build (mirrors the paint entry).
+        self.rotate_chat_owner_if_session_changed();
         // In-flight VariablesPanel edge resize — owns the cursor.
         if self.variables_resize.is_some()
             && self.apply_variables_panel_resize(x, y, self.last_viewport_w, self.last_viewport_h)
@@ -896,14 +904,28 @@ impl WidgetHostNative {
                 }
             }
         }
+        // Resolve the chat transcript ONCE for this cursor event. The
+        // header-hover hit-test AND the design-block hover below both read this
+        // single combined probe, so a move over the transcript fingerprints it
+        // once instead of twice. This is the ONE hash per physical cursor move;
+        // the separate cursor-hint pass (`geometry::cursor_hint`) reads the
+        // stored build with zero hashes and stays consistent with the displayed
+        // frame, so nothing coord-keyed is cached here anymore.
+        let chat_probe = self
+            .ai_chat_rect(self.last_viewport_w, self.last_viewport_h)
+            .map(|chat_rect| {
+                use op_editor_ui::widgets::AIChatPlaceholder;
+                AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                    .owned_by(self.chat_panel_owner)
+                    .cursor_probe(chat_rect, Point2D::new(x, y))
+            });
         // AI chat header buttons (chevron / maximize / new chat) hover.
         // The chat panel is itself the topmost surface, so this is NOT
-        // gated on `over_topmost`; hit_test returns None off the panel,
-        // which clears any stale header hover.
-        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
-            use op_editor_ui::widgets::AIChatPlaceholder;
-            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
-                .hit_test(chat_rect, Point2D::new(x, y))
+        // gated on `over_topmost`; the hit is None off the panel, which
+        // clears any stale header hover.
+        if let Some(probe) = chat_probe.as_ref() {
+            let new_hover = probe
+                .hit
                 .as_ref()
                 .and_then(op_editor_ui::widgets::editor_state_ext::chat_header_hover);
             if new_hover != self.editor_state.editor_ui.chat_header_hover {
@@ -988,7 +1010,16 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        if self.update_chat_design_hover(x, y, over_topmost) {
+        // Design-block hover — reuse the combined probe resolved above (gated on
+        // `over_topmost` exactly as the old dedicated pass was).
+        let design_hover = if over_topmost {
+            None
+        } else {
+            chat_probe
+                .as_ref()
+                .and_then(|probe| probe.design_block_hover)
+        };
+        if self.apply_chat_design_hover(design_hover) {
             return true;
         }
         if let Some(drag) = self.rotate_drag {

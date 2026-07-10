@@ -3,6 +3,8 @@
 //! hover / scroll helpers, split out of `property_panel.rs` for the
 //! 800-line cap (same `impl PropertyPanel`).
 
+use std::rc::Rc;
+
 use crate::widgets::property_panel::PropertyPanel;
 use crate::widgets::{property_panel_image_assets, property_panel_typography};
 use crate::{Point2D, Rect};
@@ -41,8 +43,10 @@ impl PropertyPanel {
 
     /// Visible font-picker entries for the current search + host
     /// enumeration — paint, hit-test, and the host dispatch resolve
-    /// `SetFontFamilyIndex` against this same list.
-    pub fn font_picker_entries(&self) -> Vec<property_panel_typography::FontPickerEntry<'_>> {
+    /// `SetFontFamilyIndex` against this same list. Returns the cache's
+    /// shared `Rc` (see `font_picker_cache`) so the panel's several
+    /// per-frame accessors don't each pay for a deep clone.
+    pub fn font_picker_entries(&self) -> Rc<Vec<property_panel_typography::FontPickerEntry>> {
         property_panel_typography::font_picker_entries(
             &self.imported_font_families,
             &self.system_font_families,

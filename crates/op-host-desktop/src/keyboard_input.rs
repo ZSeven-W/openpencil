@@ -554,6 +554,10 @@ impl DesktopApp {
             self.chat_running_tab = op_editor_core::adjust_running_tab_after_close(running, idx);
         }
         self.host.editor_state_mut().chat.close_tab(idx);
+        // Session set mutated (possibly same-index replacement): rotate the
+        // transcript-cache owner so a pre-repaint cursor hint can't pair the
+        // closed session's cached geometry with the survivor's messages.
+        self.host.force_rotate_chat_owner();
         self.host.mark_editor_state_dirty();
     }
 
@@ -580,6 +584,9 @@ impl DesktopApp {
     /// tab while the user composes in the new one.
     pub(crate) fn new_chat_tab(&mut self) {
         self.host.editor_state_mut().chat.new_tab();
+        // New active session: rotate the transcript-cache owner so the
+        // event-time cursor hint reads `None` until this tab's first paint.
+        self.host.force_rotate_chat_owner();
         self.host.mark_editor_state_dirty();
     }
 }

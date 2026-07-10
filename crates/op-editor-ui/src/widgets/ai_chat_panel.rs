@@ -141,6 +141,15 @@ pub struct AIChatPlaceholder<'a> {
     pub(crate) parallel_agents_picker_open: bool,
     /// Which row (1–6) the cursor is over inside the Parallel Agents picker.
     pub(crate) parallel_agents_picker_hover: Option<u32>,
+    /// Opaque, stable per-panel-INSTANCE id used to scope the thread-local
+    /// transcript cache. A host allocates ONE id (`Self::next_owner`) for its
+    /// persistent widget-host state and stamps every constructed panel with it
+    /// via [`Self::owned_by`], so the display-frame hint
+    /// (`hit_test_current_build`) only ever reads a build THIS panel resolved —
+    /// never one left behind by a different panel after a tab/host switch.
+    /// Defaults to `UNOWNED` (0) for plain `from_editor*` constructions (unit
+    /// tests / paths that never touch the hint).
+    pub(crate) owner: u64,
 }
 
 /// Minimal per-tab snapshot used by the tab-row painter.
@@ -207,7 +216,24 @@ impl<'a> AIChatPlaceholder<'a> {
             tab_hover: ui.chat_tab_hover,
             parallel_agents_picker_open: ui.parallel_agents_picker_open,
             parallel_agents_picker_hover: ui.parallel_agents_picker_hover,
+            owner: crate::widgets::ai_chat_transcript_cache::UNOWNED,
         }
+    }
+
+    /// Allocate a fresh, process-unique panel-owner id. A host calls this ONCE
+    /// for its persistent widget-host state; the id is then handed to every
+    /// panel it builds via [`Self::owned_by`].
+    pub fn next_owner() -> u64 {
+        crate::widgets::ai_chat_transcript_cache::next_panel_owner()
+    }
+
+    /// Stamp this panel with its host's stable owner id so its transcript-cache
+    /// resolves and display-frame hint reads are scoped to this panel instance.
+    /// A no-op-shaped builder: hosts append `.owned_by(self.chat_panel_owner)`
+    /// at the paint / cursor-probe / cursor-hint construction sites.
+    pub fn owned_by(mut self, owner: u64) -> Self {
+        self.owner = owner;
+        self
     }
 
     /// Height of the staged-attachment row — `0` when none is staged.
@@ -326,11 +352,17 @@ impl<'a> AIChatPlaceholder<'a> {
     /// bottom once it is reached.
     pub fn transcript_scroll_max(&self, rect: Rect) -> f32 {
         let body = self.body_rect(rect);
-        (crate::widgets::ai_chat_transcript::transcript_content_height(
+        // Resolve owner-scoped so a rebuild here tags the slot with this panel's
+        // owner (rather than clobbering it to UNOWNED), keeping the native
+        // cursor-shape hint matching between wheel events and paints.
+        (crate::widgets::ai_chat_transcript_cache::cached_canonical_transcript_owned(
+            self.owner,
             &self.state.messages,
             body,
             self.locale,
-        ) - body.size.y)
+        )
+        .total_height
+            - body.size.y)
             .max(0.0)
     }
 
@@ -713,10 +745,19 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             );
         } else {
             let body = self.body_rect(rect);
-            let scroll_offset = crate::widgets::ai_chat_transcript::transcript_effective_offset(
-                &self.state.messages,
+            // Fingerprint + resolve the transcript ONCE for the whole paint
+            // pass, then thread the build into both the scroll clamp and the
+            // painter so neither re-hashes.
+            let canonical =
+                crate::widgets::ai_chat_transcript_cache::cached_canonical_transcript_owned(
+                    self.owner,
+                    &self.state.messages,
+                    body,
+                    self.locale,
+                );
+            let scroll_offset = crate::widgets::ai_chat_transcript::effective_offset_of(
+                &canonical,
                 body,
-                self.locale,
                 self.state.transcript_scroll.offset,
                 self.state.transcript_pinned,
             );
@@ -725,8 +766,8 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.theme,
                 body,
                 &self.state.messages,
+                &canonical,
                 self.now_ms,
-                self.locale,
                 self.design_hover,
                 self.state.transcript_selection,
                 scroll_offset,

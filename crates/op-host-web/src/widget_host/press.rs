@@ -759,7 +759,8 @@ impl WidgetHost {
         //    click inside its rect is consumed here, even when
         //    that point lies inside the toolbar rect underneath.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
+            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .owned_by(self.chat_panel_owner);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 if matches!(hit, AIChatHit::Resize(_)) {
                     return true;

@@ -33,6 +33,113 @@ fn four_rects() -> EditorState {
 }
 
 #[test]
+fn owned_build_reuses_cache_on_unchanged_inputs() {
+    let owner = LayerPanel::next_layer_panel_owner();
+    let state = EditorState::sample();
+    // Prime the slot for this owner, then a second identical resolve must
+    // NOT recompute (the whole point of the row-model cache).
+    let _ = LayerPanel::from_editor_owned(&state, owner);
+    let before = super::layer_panel_cache::layer_row_build_count();
+    let panel = LayerPanel::from_editor_owned(&state, owner);
+    let after = super::layer_panel_cache::layer_row_build_count();
+    assert_eq!(after, before, "unchanged inputs must reuse the cached rows");
+    assert_eq!(panel.items.len(), 5);
+}
+
+#[test]
+fn owned_build_rebuilds_on_document_mutation() {
+    let owner = LayerPanel::next_layer_panel_owner();
+    let mut state = EditorState::sample();
+    let _ = LayerPanel::from_editor_owned(&state, owner);
+    let before = super::layer_panel_cache::layer_row_build_count();
+    // Bumping the document revision is THE content-change signal the key
+    // rides — it must invalidate the cached rows.
+    state.mark_document_changed();
+    let _ = LayerPanel::from_editor_owned(&state, owner);
+    let after = super::layer_panel_cache::layer_row_build_count();
+    assert_eq!(
+        after,
+        before + 1,
+        "a document mutation must rebuild the row model"
+    );
+}
+
+#[test]
+fn owned_build_reuses_cache_on_styling_only_change() {
+    let owner = LayerPanel::next_layer_panel_owner();
+    let mut state = EditorState::starter();
+    let _ = LayerPanel::from_editor_owned(&state, owner);
+    let before = super::layer_panel_cache::layer_row_build_count();
+    // Selection + hover are styling-only overlays: they must NOT rebuild
+    // the rows, yet the panel must still reflect them live.
+    state.set_single_selection(NodeId::new("n10"));
+    state.editor_ui.hovered_layer_id = Some(NodeId::new("n10"));
+    let panel = LayerPanel::from_editor_owned(&state, owner);
+    let after = super::layer_panel_cache::layer_row_build_count();
+    assert_eq!(
+        after, before,
+        "selection/hover-only change must reuse cached rows"
+    );
+    assert!(panel.is_row_selected(&NodeId::new("n10")));
+    assert!(panel.is_row_hovered(&NodeId::new("n10")));
+}
+
+#[test]
+fn whole_document_replacement_needs_owner_rotation_to_avoid_stale_rows() {
+    // Two DIFFERENT documents that both start at revision 0 with the same
+    // active page index — so their `LayerRowKey`s (revision + page +
+    // collapsed_fp + rename_fp) are byte-identical. This is exactly the
+    // whole-document-replacement aliasing the reviewer flagged: opening /
+    // importing / MCP-replacing a document restarts the revision at 0 while the
+    // host's layer-panel owner never rotates on its own.
+    let doc_a = four_rects(); // rows A/B/C/D
+    let doc_b = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"m1","name":"W","width":10,"height":10},
+              {"type":"rectangle","id":"m2","name":"X","width":10,"height":10}
+        ]}"##,
+    ); // rows W/X
+    assert_eq!(
+        doc_a.document_revision(),
+        doc_b.document_revision(),
+        "both freshly loaded documents must share a revision (the aliasing precondition)"
+    );
+    assert_eq!(doc_a.ui.active_page_index, doc_b.ui.active_page_index);
+
+    let owner = LayerPanel::next_layer_panel_owner();
+    let primed = LayerPanel::from_editor_owned(&doc_a, owner);
+    assert_eq!(primed.items.len(), 4, "primed rows are document A's");
+
+    // Without rotation the colliding (rev 0, page 0) key serves document A's
+    // STALE rows for document B — the bug the owner rotation fixes.
+    let stale = LayerPanel::from_editor_owned(&doc_b, owner);
+    assert_eq!(
+        stale.items.len(),
+        4,
+        "same owner + colliding key serves the PREVIOUS document's cached rows"
+    );
+
+    // Rotating the owner (what the hosts now do at every replacement seam) makes
+    // the next owned resolve miss the stale slot and rebuild against document B.
+    let rotated = LayerPanel::next_layer_panel_owner();
+    let before = super::layer_panel_cache::layer_row_build_count();
+    let fresh = LayerPanel::from_editor_owned(&doc_b, rotated);
+    let after = super::layer_panel_cache::layer_row_build_count();
+    assert_eq!(
+        after,
+        before + 1,
+        "a rotated owner must rebuild the row model after replacement"
+    );
+    assert_eq!(
+        fresh.items.len(),
+        2,
+        "rebuilt rows reflect the NEW document"
+    );
+    assert_eq!(fresh.items[0].label, "W");
+    assert_eq!(fresh.items[1].label, "X");
+}
+
+#[test]
 fn from_sample_doc_flattens_to_5_layer_rows() {
     let state = EditorState::sample();
     let panel = LayerPanel::from_editor(&state);
@@ -55,7 +162,11 @@ fn from_sample_doc_has_one_active_page() {
 fn selection_flag_marks_only_selected_row() {
     let state = EditorState::sample(); // selection anchors on n11
     let panel = LayerPanel::from_editor(&state);
-    let selected = panel.items.iter().filter(|i| i.selected).count();
+    let selected = panel
+        .items
+        .iter()
+        .filter(|i| panel.is_row_selected(&i.node_id))
+        .count();
     assert_eq!(selected, 1);
 }
 
@@ -180,8 +291,8 @@ fn selected_visible_unlocked_layer_does_not_expose_trailing_actions_without_hove
     let mut state = EditorState::starter();
     state.set_single_selection(NodeId::new("n10"));
     let panel = LayerPanel::from_editor(&state);
-    assert!(panel.items[0].selected);
-    assert!(!panel.items[0].hovered);
+    assert!(panel.is_row_selected(&panel.items[0].node_id));
+    assert!(!panel.is_row_hovered(&panel.items[0].node_id));
     assert!(!panel.items[0].hidden);
     assert!(!panel.items[0].locked);
     let rect = Rect {
@@ -227,7 +338,7 @@ fn hidden_locked_layer_does_not_expose_trailing_actions_without_hover() {
     state.toggle_node_hidden(&NodeId::new("n10"));
     state.toggle_node_locked(&NodeId::new("n10"));
     let panel = LayerPanel::from_editor(&state);
-    assert!(!panel.items[0].hovered);
+    assert!(!panel.is_row_hovered(&panel.items[0].node_id));
     assert!(panel.items[0].hidden);
     assert!(panel.items[0].locked);
     let rect = Rect {

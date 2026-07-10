@@ -22,7 +22,7 @@ pub fn paint_font_picker(
     panel_rect: Rect,
     visible: VisibleSections,
     locale: op_editor_core::Locale,
-    entries: &[FontPickerEntry<'_>],
+    entries: &[FontPickerEntry],
     allow_import: bool,
     search: &str,
     state: &SelectState,
@@ -222,8 +222,8 @@ pub fn paint_font_picker(
                 // Each row renders in its own family (TS style
                 // fontFamily: font.family).
                 let label = TextLayout::single_run(
-                    entry.family,
-                    entry.family,
+                    &entry.family,
+                    &entry.family,
                     11.0,
                     (if is_active {
                         theme.primary

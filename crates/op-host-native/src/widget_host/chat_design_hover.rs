@@ -1,23 +1,15 @@
 use super::WidgetHostNative;
-use op_editor_ui::widgets::AIChatPlaceholder;
-use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
-    pub(in crate::widget_host) fn update_chat_design_hover(
+    /// Store the chat design-block hover resolved for the current cursor event.
+    /// `new_hover` comes from the combined `AIChatPlaceholder::cursor_probe`
+    /// (the same probe that drives the header hover), so the design hover no
+    /// longer re-fingerprints the transcript on its own. Returns `true` when the
+    /// stored hover changed (the caller repaints).
+    pub(in crate::widget_host) fn apply_chat_design_hover(
         &mut self,
-        x: f32,
-        y: f32,
-        over_topmost: bool,
+        new_hover: Option<(usize, usize)>,
     ) -> bool {
-        let new_hover = if !over_topmost {
-            self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)
-                .and_then(|chat_rect| {
-                    let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
-                    panel.design_block_hover_at(chat_rect, Point2D::new(x, y))
-                })
-        } else {
-            None
-        };
         if new_hover == self.editor_state.editor_ui.chat_design_block_hover {
             return false;
         }

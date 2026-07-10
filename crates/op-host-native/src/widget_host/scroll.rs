@@ -61,7 +61,11 @@ impl WidgetHostNative {
             return false;
         };
         let (body, max) = {
-            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
+            // Owner-stamp: `transcript_scroll_max` resolves the cache, so a
+            // rebuild here tags the slot with this host's owner (not UNOWNED),
+            // keeping the cursor hint consistent across wheel + paint.
+            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .owned_by(self.chat_panel_owner);
             (
                 panel.body_rect(chat_rect),
                 panel.transcript_scroll_max(chat_rect),

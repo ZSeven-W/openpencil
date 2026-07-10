@@ -277,6 +277,22 @@ pub struct WidgetHost {
     /// when its signature can't carry viewport dims (mirrors native).
     pub(in crate::widget_host) last_viewport_w: f32,
     pub(in crate::widget_host) last_viewport_h: f32,
+    /// Stable, process-unique id scoping this host's chat-panel transcript
+    /// cache (mirrors native `WidgetHostNative::chat_panel_owner`). Stamped onto
+    /// every `AIChatPlaceholder` this host builds so the thread-local canonical
+    /// slot is owned by this panel instance and never cross-paired with another.
+    pub(in crate::widget_host) chat_panel_owner: u64,
+    /// Stable, process-unique id scoping this host's LayerPanel row-model
+    /// cache (mirrors native `WidgetHostNative::layer_panel_owner`).
+    /// Stamped onto the per-frame paint build (`from_editor_owned`). Page
+    /// switches don't rotate (the key includes `active_page_index`), but
+    /// whole-document replacements do — see
+    /// `force_rotate_layer_panel_owner` (revision counters restart at 0).
+    pub(in crate::widget_host) layer_panel_owner: u64,
+    /// Active chat-session (tab) index observed at the last owner rotation; a
+    /// change rotates `chat_panel_owner` (see
+    /// [`Self::rotate_chat_owner_if_session_changed`]).
+    pub(in crate::widget_host) last_chat_session_index: usize,
 }
 
 impl WidgetHost {
@@ -469,6 +485,7 @@ impl WidgetHost {
         // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
+        let last_chat_session_index = editor_state.chat.active_index();
         Self {
             editor_state,
             layout_scene,
@@ -503,7 +520,51 @@ impl WidgetHost {
             wall_now_secs: 0,
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
+            chat_panel_owner: op_editor_ui::widgets::AIChatPlaceholder::next_owner(),
+            layer_panel_owner: op_editor_ui::widgets::LayerPanel::next_layer_panel_owner(),
+            last_chat_session_index,
         }
+    }
+
+    /// Rotate the chat-panel transcript-cache owner when the active chat session
+    /// (tab) changed since the last call (mirrors native). The new tab's build is
+    /// then stamped with a fresh owner so it never cross-pairs with the previous
+    /// tab's cached geometry. Called at the top of the paint / cursor-move entry.
+    pub(in crate::widget_host) fn rotate_chat_owner_if_session_changed(&mut self) {
+        let active = self.editor_state.chat.active_index();
+        if active != self.last_chat_session_index {
+            self.last_chat_session_index = active;
+            self.chat_panel_owner = op_editor_ui::widgets::AIChatPlaceholder::next_owner();
+        }
+    }
+
+    /// Force a chat-panel transcript-cache owner rotation NOW, unconditionally —
+    /// even when `chat.active_index()` is unchanged (mirrors native). Called
+    /// synchronously at every host session-mutation site (tab switch / new tab /
+    /// close tab) so a pointer move arriving before the next paint cannot pair the
+    /// previous session's cached geometry with the new session's messages, and so
+    /// same-index session replacement (close active tab 0 → next session at index
+    /// 0; close the sole tab → replaced in place) — which the index-only poll in
+    /// [`Self::rotate_chat_owner_if_session_changed`] misses — is still covered.
+    /// `pub(crate)` because the tab-close path runs in `crate::web_chat`, outside
+    /// the `widget_host` module.
+    pub(crate) fn force_rotate_chat_owner(&mut self) {
+        self.chat_panel_owner = op_editor_ui::widgets::AIChatPlaceholder::next_owner();
+        self.last_chat_session_index = self.editor_state.chat.active_index();
+    }
+
+    /// Force a LayerPanel row-model-cache owner rotation NOW (mirrors native
+    /// `WidgetHostNative::force_rotate_layer_panel_owner`). A freshly loaded /
+    /// imported / live-synced document restarts its revision at 0 and its active
+    /// page index at 0, so a WHOLE-DOCUMENT replacement leaves the cache key
+    /// `(document_revision, active_page_index, collapsed_fp, rename_fp)`
+    /// byte-identical to the previous document's while the owner never rotates
+    /// on its own — the paint path would keep serving the previous document's
+    /// cached rows. Rotating at every replacement seam forces the next owned
+    /// paint resolve to rebuild. `pub(crate)` because the Open / New seams run in
+    /// `crate::dom_io`, outside the `widget_host` module.
+    pub(crate) fn force_rotate_layer_panel_owner(&mut self) {
+        self.layer_panel_owner = op_editor_ui::widgets::LayerPanel::next_layer_panel_owner();
     }
 
     /// Forward the latest shift-key state from the DOM listener
@@ -640,10 +701,13 @@ impl WidgetHost {
 
     fn chat_transcript_text_offset_at_screen(&self, x: f32, y: f32) -> Option<(usize, usize)> {
         let chat_rect = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h)?;
+        // Selection probe resolves the transcript cache; owner-stamp it so the
+        // slot stays tagged with this host's panel (mirrors native).
         match op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
             &self.editor_state,
             self.now_ms,
         )
+        .owned_by(self.chat_panel_owner)
         .hit_test(chat_rect, Point2D::new(x, y))
         {
             Some(op_editor_ui::widgets::AIChatHit::SelectTranscriptText(message_index, offset)) => {
@@ -659,6 +723,7 @@ impl WidgetHost {
             &self.editor_state,
             self.now_ms,
         )
+        .owned_by(self.chat_panel_owner)
         .hit_test(chat_rect, Point2D::new(x, y))
         {
             Some(op_editor_ui::widgets::AIChatHit::SelectInputText(offset)) => Some(offset),
@@ -759,10 +824,13 @@ impl WidgetHost {
             return false;
         };
         let (body, max) = {
+            // `transcript_scroll_max` resolves the cache; owner-stamp so a rebuild
+            // here tags the slot with this host's panel rather than UNOWNED.
             let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
                 &self.editor_state,
                 self.now_ms,
-            );
+            )
+            .owned_by(self.chat_panel_owner);
             (
                 panel.body_rect(chat_rect),
                 panel.transcript_scroll_max(chat_rect),

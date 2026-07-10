@@ -110,6 +110,12 @@ pub(crate) fn drain_chat_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C
             .take();
         if let Some(idx) = pending_close {
             close_chat_tab(b.host_mut().editor_state_mut(), idx);
+            // The close can install a different session at the SAME active index
+            // (close active tab 0, or close the sole tab), which the index-only
+            // poll would miss — force a transcript-cache owner rotation now so the
+            // cursor-shape hint can't pair the removed tab's geometry with the
+            // surviving session's messages before the next paint re-stamps.
+            b.host_mut().force_rotate_chat_owner();
             b.host_mut().mark_editor_state_dirty();
         }
     }

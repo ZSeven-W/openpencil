@@ -132,7 +132,8 @@ impl WidgetHostNative {
         self.refresh_layout_scene();
         // AI chat panel sits above canvas — check first.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
+            let panel =
+                AIChatPlaceholder::from_editor(&self.editor_state).owned_by(self.chat_panel_owner);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 if let Some(target) = chat_button_press_target(&hit) {
                     self.editor_state.editor_ui.pressed_button = Some(target);
@@ -211,6 +212,10 @@ impl WidgetHostNative {
                         self.editor_state.chat.new_tab();
                         self.editor_state.chat.pending_new_chat = true;
                         self.editor_state.editor_ui.close_chat_model_picker();
+                        // Session set mutated: rotate the transcript-cache owner
+                        // NOW so a pre-paint CursorMoved hint can't cross-pair the
+                        // old tab's geometry with the new tab's messages.
+                        self.force_rotate_chat_owner();
                         self.mark_dirty();
                         return true;
                     }
@@ -373,6 +378,11 @@ impl WidgetHostNative {
                         // tab; see the host's `chat_running_tab`).
                         self.editor_state.chat.switch_to(idx);
                         self.editor_state.editor_ui.close_chat_model_picker();
+                        // Active session changed: rotate the transcript-cache owner
+                        // synchronously so a CursorMoved arriving before the next
+                        // paint reads None (default arrow) instead of pairing the
+                        // previous tab's cached geometry with this tab's messages.
+                        self.force_rotate_chat_owner();
                         self.mark_dirty();
                         return true;
                     }

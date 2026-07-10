@@ -16,7 +16,8 @@ impl WidgetHost {
         // clicks don't fall through to the canvas.
         self.refresh_layout_scene();
         if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
-            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
+            let panel =
+                AIChatPlaceholder::from_editor(&self.editor_state).owned_by(self.chat_panel_owner);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
                 if let Some(target) = chat_button_press_target(&hit) {
                     self.editor_state.editor_ui.pressed_button = Some(target);
@@ -99,6 +100,10 @@ impl WidgetHost {
                         self.editor_state.chat.new_tab();
                         self.editor_state.chat.pending_new_chat = true;
                         self.editor_state.editor_ui.close_chat_model_picker();
+                        // Session set mutated: rotate the transcript-cache owner
+                        // NOW so a pre-paint pointer move can't cross-pair the old
+                        // tab's geometry with the new tab's messages.
+                        self.force_rotate_chat_owner();
                         self.mark_dirty();
                         return true;
                     }
@@ -257,6 +262,10 @@ impl WidgetHost {
                         // bound tab (see `web_chat`'s RUNNING_TAB).
                         self.editor_state.chat.switch_to(idx);
                         self.editor_state.editor_ui.close_chat_model_picker();
+                        // Active session changed: rotate the transcript-cache owner
+                        // synchronously so a pointer move before the next paint
+                        // reads None instead of the previous tab's geometry.
+                        self.force_rotate_chat_owner();
                         self.mark_dirty();
                         return true;
                     }

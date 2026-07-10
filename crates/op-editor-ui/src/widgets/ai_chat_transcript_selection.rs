@@ -1,7 +1,5 @@
-use super::ai_chat_transcript::{
-    build_transcript_with_design_hover, TextBubble, BODY_FONT, CHAR_UNIT_PX, LINE_H,
-    USER_BUBBLE_PAD,
-};
+use super::ai_chat_transcript::{TextBubble, BODY_FONT, CHAR_UNIT_PX, LINE_H, USER_BUBBLE_PAD};
+use super::ai_chat_transcript_cache::CanonicalTranscript;
 use super::ai_chat_transcript_text::char_display_units;
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
@@ -17,39 +15,49 @@ pub(crate) struct TranscriptTextHit {
 
 pub(crate) fn transcript_text_offset_at(
     messages: &[ChatMessage],
+    canonical: &CanonicalTranscript,
     body_rect: Rect,
     point: Point2D,
-    locale: op_editor_core::Locale,
     scroll_offset: f32,
 ) -> Option<TranscriptTextHit> {
     if !(body_rect).contains(point) {
         return None;
     }
-    for item in build_transcript_with_design_hover(messages, body_rect, locale, None, scroll_offset)
-    {
+    // Canonical layout is scroll-0 and already resolved by the caller; shift the
+    // query point down by the scroll so it lands in the same coordinate space as
+    // the cached rects. `messages` supplies the live per-message text content.
+    let p = Point2D::new(point.x, point.y + scroll_offset);
+    for item in &canonical.items {
         if item.role != ChatRole::User {
             continue;
         }
         let Some(bubble) = &item.bubble else {
             continue;
         };
-        if bubble.typing || bubble.completion.is_some() || !(bubble.rect).contains(point) {
+        if bubble.typing || bubble.completion.is_some() || !(bubble.rect).contains(p) {
             continue;
         }
-        let text = &messages[item.msg_index].content;
+        // Bounds-defense: the cached build may carry more items than the live
+        // `messages` slice if messages shrank between the resolve that produced
+        // this build and this probe (owner scoping stops CROSS-panel pairing but
+        // not a same-panel same-frame shrink). A miss is treated as no-hit — an
+        // out-of-bounds index would otherwise panic.
+        let Some(message) = messages.get(item.msg_index) else {
+            continue;
+        };
+        let text = &message.content;
         if text.is_empty() || bubble.lines.is_empty() {
             continue;
         }
         // User bubble text starts at USER_BUBBLE_PAD (14px) inset (#27 restyle).
         let text_top = bubble.rect.origin.y + USER_BUBBLE_PAD;
-        let line_idx = ((point.y - text_top).max(0.0) / LINE_H)
+        let line_idx = ((p.y - text_top).max(0.0) / LINE_H)
             .floor()
             .clamp(0.0, (bubble.lines.len() - 1) as f32) as usize;
         let line = &bubble.lines[line_idx];
         let line_offsets = line_start_offsets(text, &bubble.lines);
         let line_start = *line_offsets.get(line_idx).unwrap_or(&0);
-        let line_offset =
-            line_offset_at_x(line, point.x - (bubble.rect.origin.x + USER_BUBBLE_PAD));
+        let line_offset = line_offset_at_x(line, p.x - (bubble.rect.origin.x + USER_BUBBLE_PAD));
         let offset = prev_char_boundary(text, (line_start + line_offset).min(text.len()));
         return Some(TranscriptTextHit {
             message_index: item.msg_index,

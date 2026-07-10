@@ -8,12 +8,13 @@ use crate::widgets::ai_chat_checklist::{
     fixed_checklist_items, fixed_checklist_list_rect, fixed_checklist_max_scroll,
     fixed_checklist_rect, HEADER_H, ITEM_GAP, PROGRESS_H,
 };
-use crate::widgets::ai_chat_hit::{AIChatHit, ChatResizeEdge};
+use crate::widgets::ai_chat_hit::{AIChatHit, ChatCursorProbe, ChatResizeEdge};
 use crate::widgets::ai_chat_panel_controls::attachment_row_hit;
 use crate::widgets::ai_chat_panel_header::{
     tab_hit_at, tab_row_rects, MAXIMIZE_GAP, MAXIMIZE_W, NEW_CHAT_D,
 };
 use crate::widgets::ai_chat_panel_paint::example_card_rects;
+use crate::widgets::ai_chat_transcript_cache::CanonicalTranscript;
 use crate::{Point2D, Rect};
 
 impl<'a> AIChatPlaceholder<'a> {
@@ -28,6 +29,20 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
+        self.hit_test_with_canonical(rect, point, None)
+    }
+
+    /// Hit-test with an optionally pre-resolved canonical transcript. When
+    /// `canonical` is `Some`, the transcript branch reuses it instead of
+    /// resolving (and re-fingerprinting) its own — this is how
+    /// [`Self::cursor_probe`] makes one cursor event fingerprint the transcript
+    /// at most once. `None` resolves it on demand (the plain `hit_test` path).
+    fn hit_test_with_canonical(
+        &self,
+        rect: Rect,
+        point: Point2D,
+        canonical: Option<&CanonicalTranscript>,
+    ) -> Option<AIChatHit> {
         if let Some(edge) = self.resize_edge_at(rect, point) {
             return Some(AIChatHit::Resize(edge));
         }
@@ -302,18 +317,35 @@ impl<'a> AIChatPlaceholder<'a> {
         // drag-handle fallback so the headers are interactive.
         if !self.state.messages.is_empty() {
             let body = self.body_rect(rect);
-            let scroll_offset = crate::widgets::ai_chat_transcript::transcript_effective_offset(
-                &self.state.messages,
+            // Fingerprint + resolve the transcript ONCE for this event, then
+            // thread the build into the scroll clamp and every transcript
+            // probe below so none of them re-hashes. `cursor_probe` passes a
+            // build it already resolved so the whole cursor event hashes once.
+            let resolved;
+            let canonical: &CanonicalTranscript = match canonical {
+                Some(c) => c,
+                None => {
+                    resolved =
+                        crate::widgets::ai_chat_transcript_cache::cached_canonical_transcript_owned(
+                            self.owner,
+                            &self.state.messages,
+                            body,
+                            self.locale,
+                        );
+                    &resolved
+                }
+            };
+            let scroll_offset = crate::widgets::ai_chat_transcript::effective_offset_of(
+                canonical,
                 body,
-                self.locale,
                 self.state.transcript_scroll.offset,
                 self.state.transcript_pinned,
             );
             if let Some(hit) = crate::widgets::ai_chat_transcript::transcript_text_offset_at(
                 &self.state.messages,
+                canonical,
                 body,
                 point,
-                self.locale,
                 scroll_offset,
             ) {
                 return Some(AIChatHit::SelectTranscriptText(
@@ -322,11 +354,10 @@ impl<'a> AIChatPlaceholder<'a> {
                 ));
             }
             if let Some(hit) = crate::widgets::ai_chat_transcript::transcript_hit(
-                &self.state.messages,
+                canonical,
                 body,
                 point.x,
                 point.y,
-                self.locale,
                 scroll_offset,
             ) {
                 return Some(hit.into());
@@ -408,25 +439,121 @@ impl<'a> AIChatPlaceholder<'a> {
     }
 
     pub fn design_block_hover_at(&self, rect: Rect, point: Point2D) -> Option<(usize, usize)> {
+        self.design_block_hover_with_canonical(rect, point, None)
+    }
+
+    /// Design-block hover with an optionally pre-resolved canonical transcript.
+    /// [`Self::cursor_probe`] passes the build it already resolved so the hover
+    /// probe reuses it instead of fingerprinting the transcript again.
+    fn design_block_hover_with_canonical(
+        &self,
+        rect: Rect,
+        point: Point2D,
+        canonical: Option<&CanonicalTranscript>,
+    ) -> Option<(usize, usize)> {
         if self.state.messages.is_empty() {
             return None;
         }
         let body = self.body_rect(rect);
-        let scroll_offset = crate::widgets::ai_chat_transcript::transcript_effective_offset(
-            &self.state.messages,
+        // One fingerprint + resolve for this hover event; the scroll clamp and
+        // the design-block probe both read the resolved build.
+        let resolved;
+        let canonical: &CanonicalTranscript = match canonical {
+            Some(c) => c,
+            None => {
+                resolved =
+                    crate::widgets::ai_chat_transcript_cache::cached_canonical_transcript_owned(
+                        self.owner,
+                        &self.state.messages,
+                        body,
+                        self.locale,
+                    );
+                &resolved
+            }
+        };
+        let scroll_offset = crate::widgets::ai_chat_transcript::effective_offset_of(
+            canonical,
             body,
-            self.locale,
             self.state.transcript_scroll.offset,
             self.state.transcript_pinned,
         );
         crate::widgets::ai_chat_transcript_hit::design_block_at(
-            &self.state.messages,
+            canonical,
             body,
             point.x,
             point.y,
-            self.locale,
             scroll_offset,
         )
+    }
+
+    /// Combined per-cursor-event probe: resolve the canonical transcript layout
+    /// ONCE and return both the hit under the cursor and the design-block hover.
+    ///
+    /// Hosts drive one physical cursor move through the header-hover hit-test
+    /// and the design-block hover (and native re-runs the hit-test from its
+    /// cursor-hint pass). Calling those separately fingerprinted the whole
+    /// transcript two or three times. Resolving the build here and threading it
+    /// into both sub-probes collapses that to a single fingerprint per event;
+    /// the host feeds `hit` to the header-hover / cursor-hint updates and
+    /// `design_block_hover` to the design-hover update. Value-hashing stays the
+    /// correctness anchor — there are no pointer / length shortcuts.
+    pub fn cursor_probe(&self, rect: Rect, point: Point2D) -> ChatCursorProbe {
+        if self.state.messages.is_empty() {
+            // No transcript to resolve — the hit-test still handles the header,
+            // input and overlays, and there is no design block to hover.
+            return ChatCursorProbe {
+                hit: self.hit_test_with_canonical(rect, point, None),
+                design_block_hover: None,
+            };
+        }
+        let body = self.body_rect(rect);
+        let canonical = crate::widgets::ai_chat_transcript_cache::cached_canonical_transcript_owned(
+            self.owner,
+            &self.state.messages,
+            body,
+            self.locale,
+        );
+        ChatCursorProbe {
+            hit: self.hit_test_with_canonical(rect, point, Some(&canonical)),
+            design_block_hover: self.design_block_hover_with_canonical(
+                rect,
+                point,
+                Some(&canonical),
+            ),
+        }
+    }
+
+    /// Cursor-shape hit-test that reads the LAST BUILT (= last painted)
+    /// transcript layout WITHOUT fingerprinting or rebuilding anything.
+    ///
+    /// The native cursor-hint pass runs at raw-event time, before the deferred
+    /// `apply_cursor_move` resolves (and repaints) the transcript. Rather than
+    /// fingerprint the transcript a second time just to pick the cursor shape,
+    /// it hit-tests against whatever canonical build is currently stored — the
+    /// layout the user is actually looking at (the semantically correct target
+    /// for "what am I pointing at"). The redraw-time `cursor_probe` remains the
+    /// single hash per cursor move and self-corrects any hint staleness on the
+    /// next painted frame.
+    ///
+    /// When no build exists yet (no paint since launch) the transcript region
+    /// yields no hint — the caller falls back to the default arrow, which is
+    /// acceptable because the very next paint stores a build. Net on this path:
+    /// zero transcript fingerprints.
+    pub fn hit_test_current_build(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
+        if self.state.messages.is_empty() {
+            // No transcript region — the non-transcript hits (header / input /
+            // overlays) don't consult a canonical build, so this stays hash-free.
+            return self.hit_test_with_canonical(rect, point, None);
+        }
+        crate::widgets::ai_chat_transcript_cache::with_current_canonical(self.owner, |current| {
+            match current {
+                // Pure geometric hit against the displayed layout — no hashing.
+                Some((_, canonical)) => self.hit_test_with_canonical(rect, point, Some(canonical)),
+                // Nothing painted yet, or the stored build belongs to a
+                // different panel: no hint (arrow) until this panel paints.
+                None => None,
+            }
+        })
     }
 
     pub fn footer_hover_at(

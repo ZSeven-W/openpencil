@@ -60,7 +60,8 @@ impl<'a> RenameView<'a> {
 /// document (`pages == None`) yields one synthetic "Page 1" row.
 pub(super) fn pages_from_state(state: &EditorState, rename: &RenameView<'_>) -> Vec<PageItem> {
     let active = state.ui.active_page_index;
-    let hovered = state.editor_ui.hovered_page_index;
+    // Page hover is a styling-only overlay applied live by the panel, so
+    // it is not baked here (see `layer_panel_cache`).
     let build = |i: usize, name: &str| -> PageItem {
         let renaming = rename.page.map(|(p, _)| p == i).unwrap_or(false);
         PageItem {
@@ -70,7 +71,6 @@ pub(super) fn pages_from_state(state: &EditorState, rename: &RenameView<'_>) -> 
                 _ => name.to_string(),
             },
             active: i == active,
-            hovered: hovered == Some(i),
             renaming,
         }
     };
@@ -96,12 +96,12 @@ pub(super) fn apply_layer_rename(items: &mut [LayerItem], rename: &RenameView<'_
     }
 }
 
-/// Inputs the walk needs that are not on the node itself — the
-/// selection set, the hovered row, and the collapsed-layer set.
-/// Bundled so the recursive walk threads one borrow instead of four.
+/// Inputs the walk needs that are not on the node itself. Selection and
+/// hover are DELIBERATELY excluded: they are a styling-only overlay the
+/// panel applies live at paint / hit-test time, never baked into the
+/// cached row model (see `layer_panel_cache`). Only the collapsed-layer
+/// set — which changes the flattened row STRUCTURE — is threaded here.
 pub(super) struct WalkCx<'a> {
-    pub selected: &'a op_editor_core::SelectionState,
-    pub hovered: Option<&'a op_editor_core::NodeId>,
     pub ui: &'a EditorUiState,
 }
 
@@ -109,8 +109,6 @@ impl<'a> WalkCx<'a> {
     /// Build the walk context from an `EditorState`.
     pub(super) fn from_state(state: &'a EditorState) -> Self {
         Self {
-            selected: &state.selection,
-            hovered: state.editor_ui.hovered_layer_id.as_ref(),
             ui: &state.editor_ui,
         }
     }
@@ -139,12 +137,10 @@ fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: usize) -> LayerItem {
         kind_label: kind_label(node).to_string(),
         icon: icon_for_node(node),
         depth,
-        selected: cx.selected.contains(&canon),
         has_children,
         hidden: base.visible == Some(false),
         locked: base.locked.unwrap_or(false),
         collapsed: cx.ui.collapsed_layers.contains(&canon),
-        hovered: cx.hovered.map(|h| h.as_str() == base.id).unwrap_or(false),
         // Reparent-into drop targets match TS CONTAINER_TYPES
         // (layer-panel.tsx:14 — frame/group/rectangle/ref).
         is_container: matches!(

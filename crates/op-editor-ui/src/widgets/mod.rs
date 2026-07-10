@@ -33,8 +33,10 @@ pub mod tree;
 
 // Step 2 compositions (built on top of the primitives, driven by
 // `op_editor_core::EditorState`).
+pub(crate) mod font_picker_cache;
 pub mod layer_context_menu;
 pub mod layer_panel;
+pub(crate) mod layer_panel_cache;
 mod layer_panel_hit;
 mod layer_panel_paint;
 #[cfg(test)]
@@ -192,6 +194,7 @@ pub mod ai_chat_panel_paint;
 pub mod ai_chat_transcript;
 #[cfg(test)]
 mod ai_chat_transcript_apply_tests;
+pub(crate) mod ai_chat_transcript_cache;
 pub(crate) mod ai_chat_transcript_completion;
 pub(crate) mod ai_chat_transcript_design;
 pub(crate) mod ai_chat_transcript_hit;
@@ -204,6 +207,7 @@ pub mod align_toolbar;
 pub mod color_picker;
 mod component_browser_kits;
 pub mod component_browser_panel;
+pub(crate) mod design_md_line_cache;
 pub mod design_md_markdown;
 pub mod design_md_panel;
 #[cfg(test)]
@@ -261,7 +265,7 @@ pub use canvas_viewport_widget::widget_text_inset_left;
 
 pub use icons::{draw_icon, draw_icon_catalog_entry, draw_icon_data, Icon, IconPathData};
 
-pub use ai_chat_hit::{AIChatHit, ChatResizeEdge};
+pub use ai_chat_hit::{AIChatHit, ChatCursorProbe, ChatResizeEdge};
 pub use ai_chat_panel::{
     AIChatPlaceholder, AI_CHAT_COLLAPSED_HEIGHT, AI_CHAT_COLLAPSED_WIDTH, AI_CHAT_HEIGHT,
     AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT, AI_CHAT_MIN_WIDTH, AI_CHAT_WIDTH,
