@@ -81,6 +81,13 @@ enum DesktopEvent {
     /// `single_instance`). Wakes the loop to drain the forward queue + raise
     /// the window.
     ForwardedFileReady,
+    /// The OS accessibility adapter reported activation (a screen reader
+    /// attached). `DesktopA11y`'s cached tree may be stale or empty at this
+    /// exact instant (the activation callback runs off the render loop, see
+    /// `a11y.rs`), so this wakes the loop to force a repaint — the next
+    /// painted frame republishes a current full tree via the normal
+    /// `RedrawRequested` a11y push.
+    A11yActivated,
 }
 
 struct DesktopApp {

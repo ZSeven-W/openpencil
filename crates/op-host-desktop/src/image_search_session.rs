@@ -169,6 +169,31 @@ pub(crate) struct ImageSearchSession {
     in_flight: HashSet<String>,
     completed: HashSet<String>,
     jobs: Vec<ImageSearchJob>,
+    /// `(document revision, active page index)` at the last
+    /// `enqueue_missing` walk. When unchanged, the tree walk is skipped —
+    /// `enqueue_missing` runs on every `RedrawRequested`, so this gate keeps
+    /// idle frames from re-walking the whole active page. Cleared whenever
+    /// `in_flight`/`completed` mutate outside `enqueue_missing` (job
+    /// completion/failure, session reset) so those events force one rescan
+    /// even though the document revision did not move.
+    ///
+    /// The active page index is part of the key because `enqueue_missing`
+    /// only walks the ACTIVE page (`collect_targets` → `state.active_children()`),
+    /// while `set_active_page` / page reorder / page removal (see
+    /// `op-editor-core/src/page_mutators.rs`) mutate `ui.active_page_index`
+    /// WITHOUT bumping `document_revision` — a page switch is a UI-state
+    /// change, not a document-content mutation. Keying on revision alone
+    /// would make switching from a scanned page A to an unscanned page B at
+    /// the same revision silently skip page B forever.
+    last_scanned: Option<(u64, usize)>,
+    /// Test-only: counts how many times `enqueue_missing` has actually
+    /// walked the tree (as opposed to short-circuiting on the revision
+    /// gate), so tests can assert the gate skips redundant walks instead of
+    /// relying on `enqueue_missing`'s return value (which is already
+    /// `false` on a repeat call for a reason unrelated to the gate: the
+    /// target is already known via `in_flight`/`completed`).
+    #[cfg(test)]
+    scan_count: u32,
 }
 
 impl ImageSearchSession {
@@ -176,17 +201,64 @@ impl ImageSearchSession {
         Self::default()
     }
 
+    /// Full teardown of session state. MUST be the call used by every
+    /// whole-document-replacement path (Figma import, MCP `ReplaceDocument`),
+    /// not just `invalidate_scan_gate()` below: those replacements install a
+    /// fresh `EditorState` whose node ids can collide with ids from the
+    /// document that was just replaced (both start their id allocator over).
+    /// Invalidating only the scan gate would leave `in_flight` / `completed`
+    /// aliased against the OLD document, which then either (a) silently
+    /// suppresses a same-id target in the NEW document (still `completed`),
+    /// or (b) lets an old in-flight job apply its stale result to a same-id
+    /// node in the NEW document once it resolves (`poll_into` matches by raw
+    /// node id, not by document identity). Clearing `jobs` too drops any
+    /// still-pending job outright so it can never reach `poll_into` again.
     pub(crate) fn reset(&mut self) {
         self.in_flight.clear();
         self.completed.clear();
         self.jobs.clear();
+        self.invalidate_scan_gate();
     }
 
     pub(crate) fn is_pending(&self) -> bool {
         !self.jobs.is_empty()
     }
 
+    /// Force the next `enqueue_missing` to re-walk the tree even when the
+    /// `(revision, active page)` key looks unchanged (e.g. because a fresh
+    /// `EditorState` restarts its revision at 0 and its active page index at
+    /// 0, aliasing the previously scanned key).
+    ///
+    /// This clears ONLY the gate — `in_flight` / `completed` / `jobs` stay
+    /// as-is. That is correct for job-completion / failure bookkeeping
+    /// (`poll_into`'s two mutating arms, below) where those sets legitimately
+    /// still describe the current document. It is NOT sufficient on its own
+    /// for a whole-document replacement, where a fresh `EditorState`'s node
+    /// ids can alias ids from the document just replaced — use `reset()` for
+    /// that, which clears the sets/jobs too and calls this as its last step.
+    /// Intentionally private: every whole-document-replacement call site
+    /// (Figma import, MCP `ReplaceDocument`) must go through `reset()`
+    /// instead.
+    fn invalidate_scan_gate(&mut self) {
+        self.last_scanned = None;
+    }
+
     pub(crate) fn enqueue_missing(&mut self, state: &EditorState) -> bool {
+        // Perf gate: this runs on every `RedrawRequested`. Skip the whole-tree
+        // walk when the document content AND active page are unchanged since
+        // the last scan, and no session-set mutation (job completion/failure,
+        // reset) invalidated the gate in the meantime. The walk only covers
+        // the active page (`collect_targets` below), so the active page index
+        // must be part of the key — see `last_scanned`'s doc comment.
+        let key = (state.document_revision(), state.ui.active_page_index);
+        if self.last_scanned == Some(key) {
+            return false;
+        }
+        self.last_scanned = Some(key);
+        #[cfg(test)]
+        {
+            self.scan_count += 1;
+        }
         let mut known = self.completed.clone();
         known.extend(self.in_flight.iter().cloned());
         let targets = collect_targets(state, &known);
@@ -220,6 +292,11 @@ impl ImageSearchSession {
                     let job = self.jobs.swap_remove(i);
                     let id = job.node_id.as_str().to_string();
                     self.in_flight.remove(&id);
+                    // `in_flight`/`completed` mutated outside `enqueue_missing`
+                    // (and `apply_result` may edit the document without bumping
+                    // its revision) — invalidate the scan gate so the next
+                    // `enqueue_missing` re-walks once.
+                    self.last_scanned = None;
                     if let Some(url) = url {
                         if apply_result(state, &job.node_id, &url) {
                             changed = true;
@@ -238,6 +315,9 @@ impl ImageSearchSession {
                     let id = job.node_id.as_str().to_string();
                     self.in_flight.remove(&id);
                     self.completed.insert(id);
+                    // Same invalidation as the Ok arm: a failed job mutated the
+                    // session sets, so force one rescan.
+                    self.last_scanned = None;
                 }
             }
         }

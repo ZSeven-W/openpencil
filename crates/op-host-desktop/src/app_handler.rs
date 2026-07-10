@@ -176,11 +176,22 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // editor's regions immediately (subsequent frames push fresh
         // trees from `RedrawRequested`).
         if let Some(window) = self.window.as_ref() {
-            let mut a11y = a11y::DesktopA11y::new(window);
-            let update = self
-                .host
-                .accessibility_tree_update(self.viewport_width, self.viewport_height);
-            a11y.push(update);
+            // Same cross-thread wake-up mechanism live MCP requests use
+            // (`mcp_runtime.rs::mcp_wake_callback`): the activation
+            // handler may run off the render thread and can't repaint
+            // directly, so it sends a `DesktopEvent` that
+            // `user_event` turns into `request_redraw(true)`.
+            let wake_proxy = self.mcp_wake_proxy.clone();
+            let wake = move || {
+                if let Some(proxy) = wake_proxy.as_ref() {
+                    let _ = proxy.send_event(DesktopEvent::A11yActivated);
+                }
+            };
+            let mut a11y = a11y::DesktopA11y::new(window, wake);
+            let viewport_width = self.viewport_width;
+            let viewport_height = self.viewport_height;
+            let host = &mut self.host;
+            a11y.push(move || host.accessibility_tree_update(viewport_width, viewport_height));
             self.a11y = Some(a11y);
         }
 
@@ -340,6 +351,15 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // Raise the window even for a bare ping (no path) so a second
                 // launch surfaces the running editor.
                 self.raise_window();
+            }
+            DesktopEvent::A11yActivated => {
+                // Assistive tech just attached (see `a11y.rs`'s
+                // `CachedTreeActivation::request_initial_tree`, which sent
+                // this event). The app may have been fully idle
+                // (`ControlFlow::Wait`, no dirty frame), so force a real
+                // repaint here — the `RedrawRequested` handler's a11y push
+                // then republishes a current, full tree.
+                self.request_redraw(true);
             }
         }
     }
@@ -618,6 +638,17 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 ) {
                     figma_import_session::PumpOutcome::CompletedOk => {
                         self.rebind_git_session_for_current_path();
+                        // The import installed a fresh `EditorState` whose
+                        // revision restarts at 0 AND whose node ids can
+                        // collide with ids from the document just replaced.
+                        // A gate-only invalidation isn't enough: stale
+                        // `in_flight`/`completed` node ids could suppress a
+                        // same-id target in the new document, or a
+                        // still-pending job could apply its stale result to
+                        // a same-id node once it resolves. `reset()` drops
+                        // the whole session (sets + in-flight jobs + the
+                        // scan gate) so the new document starts clean.
+                        self.image_search.reset();
                         self.redraw_dirty = true;
                     }
                     figma_import_session::PumpOutcome::CompletedErr => {
@@ -768,15 +799,19 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     }
                     // Republish the accessibility tree alongside the
                     // painted frame so the screen reader's view tracks
-                    // the visible editor state (#67). `update_if_active`
-                    // is cheap when no assistive tech is attached.
-                    if self.a11y.is_some() {
-                        let update = self
-                            .host
-                            .accessibility_tree_update(self.viewport_width, self.viewport_height);
-                        if let Some(a11y) = self.a11y.as_mut() {
-                            a11y.push(update);
-                        }
+                    // the visible editor state (#67). The tree build
+                    // (including the O(nodes) `LayerPanel` walk) is
+                    // deferred into this closure, which `DesktopA11y`
+                    // only invokes from inside `update_if_active` — i.e.
+                    // only when assistive tech is actually attached, so
+                    // ordinary painted frames skip the walk entirely.
+                    if let Some(a11y) = self.a11y.as_mut() {
+                        let viewport_width = self.viewport_width;
+                        let viewport_height = self.viewport_height;
+                        let host = &mut self.host;
+                        a11y.push(move || {
+                            host.accessibility_tree_update(viewport_width, viewport_height)
+                        });
                     }
                 }
                 // Chat / design / Figma-import worker active → wake
