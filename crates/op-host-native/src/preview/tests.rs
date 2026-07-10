@@ -54,7 +54,7 @@ fn enter_input_exit_leaves_document_byte_identical() {
     let before = serde_json::to_string(&doc).expect("serialize before");
 
     {
-        let mut session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0)
+        let mut session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
             .expect("enter preview");
         session.set_now_ms(0);
         session.focus_next();
@@ -73,8 +73,8 @@ fn enter_input_exit_leaves_document_byte_identical() {
 fn dispatched_text_reaches_runtime_state_graph() {
     // Injected text must land in the runtime's widget state, not the doc.
     let doc = text_input_doc();
-    let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let mut session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
     session.set_now_ms(0);
     session.focus_next();
     let consumed = session.dispatch_text("hi");
@@ -97,8 +97,8 @@ fn overlay_reflects_typed_text() {
     // overlaid scene the painter walks must carry the typed text on the
     // field's `SceneWidget.value_str` (so `paint_text_field` draws it).
     let doc = text_input_doc();
-    let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let mut session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
     session.set_now_ms(0);
     session.focus_next();
     session.dispatch_text("hi");
@@ -142,8 +142,8 @@ fn preview_shows_resolved_color_in_scene() {
     let doc = jian_ops_schema::load_str(src)
         .expect("parse var-color doc")
         .value;
-    let session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
 
     let scene = session.preview_scene_for_test();
     let swatch = find(&scene, "swatch").expect("swatch node");
@@ -182,8 +182,8 @@ fn preview_shows_resolved_text_token() {
     let doc = jian_ops_schema::load_str(src)
         .expect("parse tokened-text doc")
         .value;
-    let session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
 
     let scene = session.preview_scene_for_test();
     let greet = find(&scene, "greet").expect("greet text node");
@@ -223,8 +223,8 @@ fn overlay_reflects_widget_toggle_on_tap() {
     // taps land where widgets paint AND the live state surfaces in the
     // render.
     let doc = switch_doc();
-    let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let mut session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
     session.set_now_ms(0);
 
     // Switch starts unchecked.
@@ -274,8 +274,8 @@ fn tap_translates_scene_space_to_runtime_for_offset_root() {
     let doc = jian_ops_schema::load_str(src)
         .expect("parse offset-root doc")
         .value;
-    let session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
 
     // A point inside the root in SCENE space maps to that point minus
     // the root's authored origin in RUNTIME space.
@@ -359,8 +359,8 @@ fn preview_layout_matches_design_canvas() {
 
     // A deliberately HUGE canvas region — the old code laid the doc out
     // against this and scattered. The fix ignores it (per-root).
-    let session =
-        PreviewSession::enter(&doc, (1600.0, 1200.0), &default_theme(), 0).expect("enter preview");
+    let session = PreviewSession::enter(&doc, (1600.0, 1200.0), &default_theme(), 0, false)
+        .expect("enter preview");
 
     let (aw, _ah) = session.available();
     assert!(
@@ -444,8 +444,8 @@ fn preview_children_stay_within_root_width() {
         .map(|n| n.w)
         .expect("design root width");
 
-    let session =
-        PreviewSession::enter(&doc, (1600.0, 1200.0), &default_theme(), 0).expect("enter preview");
+    let session = PreviewSession::enter(&doc, (1600.0, 1200.0), &default_theme(), 0, false)
+        .expect("enter preview");
 
     const BLEED: f32 = 2.0;
     for id in ["screen", "cats", "cat-pizza", "cat-seeall"] {
@@ -539,8 +539,8 @@ fn preview_lays_each_root_against_its_own_size() {
         "design rows should differ widely (a={design_row_a}, b={design_row_b}) — fixture sanity"
     );
 
-    let session =
-        PreviewSession::enter(&doc, (1600.0, 1200.0), &default_theme(), 0).expect("enter preview");
+    let session = PreviewSession::enter(&doc, (1600.0, 1200.0), &default_theme(), 0, false)
+        .expect("enter preview");
 
     const TOL: f32 = 1.0;
     let (_pax, _pay, pw_a, _pah) = session.node_rect("row-a").expect("preview rect for row-a");
@@ -573,7 +573,7 @@ fn legacy_role_promotion_is_recorded_as_warning() {
         .expect("parse legacy doc")
         .value;
 
-    let session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0)
+    let session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
         .expect("enter preview on legacy doc");
     for w in session.warnings() {
         assert!(!w.is_empty());
@@ -586,8 +586,8 @@ fn focus_seeds_widget_state_for_caret() {
     // its runtime state so the caret can paint immediately —
     // `Runtime::focus_next` alone only moves the focus pointer.
     let doc = text_input_doc();
-    let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let mut session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
     session.set_now_ms(0);
     session.focus_next();
     assert!(
@@ -616,8 +616,8 @@ fn preview_promotes_role_input_frame_to_interactive_field() {
     )
     .expect("parse role=input doc")
     .value;
-    let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter preview");
+    let mut session = PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false)
+        .expect("enter preview");
     session.set_now_ms(0);
 
     // The promoted field renders as a text_input widget in preview's scene.
@@ -675,7 +675,7 @@ fn hover_doc() -> jian_ops_schema::PenDocument {
 fn hover_move_fires_on_hover_enter() {
     let doc = hover_doc();
     let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter");
+        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false).expect("enter");
     session.set_now_ms(0);
     session.dispatch_pointer_phase(20.0, 20.0, PointerPhase::Hover);
     let v = session
@@ -709,7 +709,7 @@ fn slider_doc() -> jian_ops_schema::PenDocument {
 fn slider_drag_moves_value() {
     let doc = slider_doc();
     let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter");
+        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false).expect("enter");
     session.set_now_ms(0);
     let (x, y, w, h) = session.node_rect("vol").expect("slider rect");
     let cy = y + h / 2.0;
@@ -742,7 +742,7 @@ fn wheel_routes_only_to_on_scroll_handler() {
     }"##;
     let doc = jian_ops_schema::load_str(src).expect("parse").value;
     let mut session =
-        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0).expect("enter");
+        PreviewSession::enter(&doc, (800.0, 600.0), &default_theme(), 0, false).expect("enter");
     assert!(
         session.dispatch_wheel(20.0, 20.0, 0.0, -12.0),
         "onScroll node must consume"
@@ -750,7 +750,7 @@ fn wheel_routes_only_to_on_scroll_handler() {
 
     let plain = text_input_doc();
     let mut plain_session =
-        PreviewSession::enter(&plain, (800.0, 600.0), &default_theme(), 0).expect("enter");
+        PreviewSession::enter(&plain, (800.0, 600.0), &default_theme(), 0, false).expect("enter");
     assert!(
         !plain_session.dispatch_wheel(20.0, 20.0, 0.0, -12.0),
         "no handler → not consumed → host may pan/zoom"

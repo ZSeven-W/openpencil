@@ -66,7 +66,10 @@ pub mod variables;
 /// against the editor's variables + active theme. Builds the scene
 /// directly from the layout-resolved `DocPayload` — no intermediate
 /// shell-core `Document`.
-pub use layout_scene::{editor_state_to_layout_scene, pen_document_to_layout_scene};
+pub use layout_scene::{
+    editor_state_to_layout_scene, pen_document_to_layout_scene,
+    pen_document_to_layout_scene_for_preview,
+};
 /// Skips the layout-scene rebuild when the document / active theme / active page
 /// are unchanged — the hosts hold one and drive `refresh_layout_scene` through it.
 pub use scene_cache::SceneBuildCache;

@@ -159,6 +159,79 @@ pub fn pen_document_to_payload_preserving_geometry(doc: &PenDocument) -> LoadedD
     }
 }
 
+/// Convert a document pair into payloads for the Canvas Preview: the
+/// PAINT tree comes from `paint_doc` (the promoted document, so widget
+/// leaves carry their `SceneWidget` props) while GEOMETRY comes from
+/// `layout_doc` (the unpromoted document, laid out exactly as the
+/// design canvas lays it out — or, for preserve-geometry documents,
+/// its authored rects). Promotion keeps each frame's id, so the
+/// rect-by-id lookup lands for promoted widgets; the children a
+/// promotion dropped simply don't appear in the paint tree.
+///
+/// This is what makes Preview pixel-positions match the design canvas
+/// BY CONSTRUCTION: the design canvas resolves geometry from the same
+/// unpromoted tree through the same layout (or preserve) pass.
+///
+/// Both documents must be structurally parallel (the promoted document
+/// is loaded from the serialized unpromoted one), so their pages line
+/// up index-for-index.
+pub fn pen_documents_to_payload_for_preview(
+    paint_doc: &PenDocument,
+    layout_doc: &PenDocument,
+    preserve_authored_geometry: bool,
+) -> LoadedDoc {
+    let rects_for = |roots: &[PenNode]| -> BTreeMap<String, [f32; 4]> {
+        if preserve_authored_geometry {
+            crate::authored_geometry::rects_for_roots(roots)
+        } else {
+            let mut rects = BTreeMap::new();
+            for root in roots {
+                compute_layout(root, &mut rects);
+            }
+            rects
+        }
+    };
+    let build = |id: &str, name: &str, paint_roots: &[PenNode], layout_roots: &[PenNode]| {
+        let rects = rects_for(layout_roots);
+        let mut children: Vec<NodePayload> = paint_roots
+            .iter()
+            .map(|n| node_to_payload(n, &rects))
+            .collect();
+        mark_root_frame_clips(&mut children);
+        PagePayload {
+            id: id.to_string(),
+            name: name.to_string(),
+            children,
+        }
+    };
+    let pages: Vec<PagePayload> = match (&paint_doc.pages, &layout_doc.pages) {
+        (Some(paint_pages), Some(layout_pages)) => paint_pages
+            .iter()
+            .zip(layout_pages.iter())
+            .map(|(pp, lp)| build(&pp.id, &pp.name, &pp.children, &lp.children))
+            .collect(),
+        _ if !paint_doc.children.is_empty() => vec![build(
+            "page-1",
+            paint_doc.name.as_deref().unwrap_or("Page 1"),
+            &paint_doc.children,
+            &layout_doc.children,
+        )],
+        _ => vec![PagePayload {
+            id: "n1".to_string(),
+            name: "Page 1".into(),
+            children: Vec::new(),
+        }],
+    };
+    LoadedDoc {
+        payload: DocPayload {
+            version: 1,
+            active_page_index: 0,
+            pages,
+            var_table: crate::variables::VarTablePayload::default(),
+        },
+    }
+}
+
 /// Copy `PenDocument.variables` + `.themes` into a shell-core
 /// `VariableTable`. Caller assigns the result to `Document.var_table`
 /// AFTER `apply_payload` (which clears it via Default). Lossless on

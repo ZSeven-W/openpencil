@@ -160,6 +160,51 @@ pub fn pen_document_to_layout_scene(
     }
 }
 
+/// Build the Canvas Preview [`LayoutScene`]: paint tree from the
+/// PROMOTED document (so legacy `role=input` frames render as live
+/// widgets), geometry from the UNPROMOTED document laid out exactly as
+/// the design canvas lays it out — honoring
+/// `preserve_authored_geometry` for Figma Preserve imports. Node
+/// positions in the returned scene therefore match the design canvas
+/// by construction; only the paint representation differs.
+///
+/// Both documents must already be ref/token-resolved (the preview
+/// session prepares them before promotion), so no resolution passes
+/// run here; the var table still folds the document's variables +
+/// `active_theme` for any `$ref` fill lookups.
+pub fn pen_document_to_layout_scene_for_preview(
+    paint_doc: &jian_ops_schema::PenDocument,
+    layout_doc: &jian_ops_schema::PenDocument,
+    preserve_authored_geometry: bool,
+    active_theme: &std::collections::BTreeMap<String, String>,
+    active_page_index: usize,
+) -> LayoutScene {
+    let payload: DocPayload = crate::adapter::pen_documents_to_payload_for_preview(
+        paint_doc,
+        layout_doc,
+        preserve_authored_geometry,
+    )
+    .payload;
+    let mut var_table = crate::adapter::build_var_table(paint_doc);
+    var_table.active_theme = active_theme.clone();
+    LayoutScene {
+        pages: payload
+            .pages
+            .iter()
+            .map(|page| ScenePage {
+                id: page.id.clone(),
+                name: page.name.clone(),
+                children: page
+                    .children
+                    .iter()
+                    .map(|n| node_payload_to_scene(n, &var_table, 1.0))
+                    .collect(),
+            })
+            .collect(),
+        active_page_index: active_page_index.min(payload.pages.len().saturating_sub(1)),
+    }
+}
+
 /// Convert one resolved [`NodePayload`] into a [`SceneNode`].
 ///
 /// Geometry is copied straight through — `pen_document_to_payload`
