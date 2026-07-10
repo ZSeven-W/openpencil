@@ -1,6 +1,11 @@
 //! OpenPencil read-only web embedding SDK. Parses a `.op` document and
 //! renders it to a `<canvas>` via CanvasKit, with pan/zoom navigation,
 //! read-only snapshots, and SVG export. No editing.
+// `dirty_state` is compiled unconditionally (not gated behind the
+// `canvaskit` feature, unlike `render.rs` which owns the wasm rAF plumbing
+// around it) so its transition-logic unit tests run in the crate's default
+// native test build.
+mod dirty_state;
 mod document;
 mod export;
 mod navigation;
@@ -63,13 +68,6 @@ impl Viewer {
     }
 }
 
-/// No-op `mark_dirty` when the canvaskit render path is not compiled in.
-/// The real implementation lives in `render.rs` (feature = "canvaskit").
-#[cfg(not(feature = "canvaskit"))]
-impl Viewer {
-    pub(crate) fn mark_dirty(&self) {}
-}
-
 #[cfg(test)]
 mod scaffold_tests {
     #[test]
@@ -77,6 +75,9 @@ mod scaffold_tests {
         let _v = super::Viewer::placeholder();
     }
 }
+
+#[cfg(test)]
+mod dirty_state_tests;
 
 #[cfg(test)]
 mod document_tests;
