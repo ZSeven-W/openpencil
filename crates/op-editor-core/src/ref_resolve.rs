@@ -36,15 +36,19 @@ pub fn resolve_refs_for_canvas(doc: &PenDocument) -> PenDocument {
     let mut resolved = doc.clone();
     // Component lookup runs against the WHOLE document (any page),
     // so cross-page instances resolve like `instantiate_component`
-    // allows authoring them.
-    let lookup = doc.clone();
+    // allows authoring them. `resolve_nodes` only ever READS through
+    // `lookup` (find_node / expand_ref never mutate it), so the
+    // original `doc` borrow serves as the lookup source directly —
+    // it is a distinct object from `resolved`, which is built fresh
+    // into `out` vecs rather than mutated in place, so there is no
+    // borrow conflict and no need for a second whole-document clone.
     let mut visited = BTreeSet::new();
     if let Some(pages) = resolved.pages.as_mut() {
         for page in pages {
-            page.children = resolve_nodes(&page.children, &lookup, &mut visited);
+            page.children = resolve_nodes(&page.children, doc, &mut visited);
         }
     }
-    resolved.children = resolve_nodes(&resolved.children, &lookup, &mut visited);
+    resolved.children = resolve_nodes(&resolved.children, doc, &mut visited);
     resolved
 }
 
