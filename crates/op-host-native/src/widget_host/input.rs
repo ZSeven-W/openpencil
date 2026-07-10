@@ -587,8 +587,11 @@ impl WidgetHostNative {
         // `preview_dispatch_move` via `over_topmost_panel`, and
         // off-canvas moves fall through so top-bar hover still works
         // while previewing.
-        if self.preview.is_some() && self.preview_dispatch_move(x, y) {
-            return true;
+        if self.preview.is_some() {
+            self.preview_switcher_hover(x, y, self.last_viewport_w, self.last_viewport_h);
+            if self.preview_dispatch_move(x, y) {
+                return true;
+            }
         }
         // Top-most floating panel drags own cursor movement.
         if let Some(d) = self.design_md_drag {
@@ -1390,6 +1393,9 @@ impl WidgetHostNative {
     /// Mouse-release — ends active drag; chat-panel snaps corner.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         let pressed_released = self.release_pressed_feedback();
+        if self.preview_switcher_release() {
+            return true;
+        }
         // Live preview drag → pointer Up into the runtime.
         if self.preview_dispatch_release() {
             return true;

@@ -3278,6 +3278,7 @@ dependencies = [
  "libloading",
  "op-editor-core",
  "op-editor-ui",
+ "op-i18n",
  "op-pen-loader",
  "raw-window-handle",
  "scopeguard",

@@ -56,6 +56,17 @@ pub(in crate::preview) struct AppMode {
     pub(in crate::preview) theme: std::collections::BTreeMap<String, String>,
 }
 
+/// Result of the app-mode per-frame reconcile. `repaint` preserves the
+/// old boolean meaning (anything repaint-relevant changed); `switched`
+/// is true ONLY when the mounted screen actually swapped — the host
+/// recenters / resets device-frame scroll on `switched`, never on a
+/// warning-only pass.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReconcileOutcome {
+    pub repaint: bool,
+    pub switched: bool,
+}
+
 impl PreviewSession {
     /// Whether this session is running a routed multi-screen APP MODE
     /// document (vs. the classic single-page workbench preview).
@@ -83,13 +94,11 @@ impl PreviewSession {
     /// paint-side projections (layout, root frames, scene, binding
     /// sites) the same way `enter` built them for the entry screen.
     /// Called by the host once per frame BEFORE `paint_scene`. A no-op
-    /// (`false`) outside APP MODE. Returns `true` when anything
-    /// repaint-relevant changed (a screen switch or a newly appended
-    /// warning), so the host knows to refresh `preview_warnings` and
-    /// re-center the viewport on the newly-mounted screen.
-    pub fn reconcile(&mut self) -> bool {
+    /// outside APP MODE. The outcome separates repaint-relevant changes
+    /// from actual screen switches so warning-only passes never recenter.
+    pub fn reconcile(&mut self) -> ReconcileOutcome {
         let Some(app) = self.app.as_mut() else {
-            return false;
+            return ReconcileOutcome::default();
         };
         let outcome = match jian_core::screens::reconcile_screens(
             &mut self.runtime,
@@ -101,7 +110,10 @@ impl PreviewSession {
             Err(e) => {
                 self.warnings
                     .push(format!("preview: screen switch failed: {e}"));
-                return true;
+                return ReconcileOutcome {
+                    repaint: true,
+                    switched: false,
+                };
             }
         };
 
@@ -114,7 +126,10 @@ impl PreviewSession {
             changed = true;
         }
         if outcome.switched.is_none() {
-            return changed;
+            return ReconcileOutcome {
+                repaint: changed,
+                switched: false,
+            };
         }
 
         // The route tip diverged from the mounted screen: re-derive the
@@ -132,9 +147,14 @@ impl PreviewSession {
         // `solve_roots` failure leaves the visible scene matching the
         // new screen; only `root_frames` (the hit-test mapping) stays
         // stale — strictly better than nothing rebuilt.
+        // A screen switch invalidates any in-flight pointer anchor —
+        // its rects belong to the unmounted screen's scene.
+        self.gesture_mapping = None;
         app.page_idx = app.table.page_index(&app.current_path).unwrap_or(0);
-        self.scene = op_pen_loader::pen_document_to_layout_scene(
+        self.scene = op_pen_loader::pen_document_to_layout_scene_for_preview(
             &app.promoted_doc,
+            &self.layout_doc,
+            self.preserve_authored_geometry,
             &app.theme,
             app.page_idx,
         );
@@ -172,7 +192,10 @@ impl PreviewSession {
         // AFTER the scene/layout rebuild so it seeds against the screen
         // that will actually paint.
         self.seed_all_widget_states();
-        true
+        ReconcileOutcome {
+            repaint: true,
+            switched: true,
+        }
     }
 
     /// Seed EVERY widget on the currently-mounted document so the

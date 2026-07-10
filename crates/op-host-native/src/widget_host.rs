@@ -31,6 +31,7 @@
 //! - [`git_press`] — Git-panel press dispatch
 //! - [`paint`] — full editor-UI composition paint pass
 
+use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::widgets::SelectionHandle;
 use op_editor_ui::{Rect, Theme};
 
@@ -111,6 +112,9 @@ mod pen_press;
 mod pen_press_tests;
 mod press;
 mod press_helpers;
+mod preview_frame;
+#[cfg(all(test, not(target_os = "windows")))]
+mod preview_frame_tests;
 mod property_dispatch;
 mod property_layout_dispatch;
 #[cfg(test)]
@@ -325,6 +329,10 @@ pub struct WidgetHostNative {
     /// `Runtime` (host-local; `!Send`). Built on enter from the
     /// document JSON, dropped on exit so the document stays untouched.
     pub(in crate::widget_host) preview: Option<crate::preview::PreviewSession>,
+    pub(in crate::widget_host) preview_device_frame: Option<preview_frame::DeviceFrame>,
+    pub(in crate::widget_host) preview_scroll_y: f32,
+    pub(in crate::widget_host) preview_manual_pick: Option<PreviewDeviceKind>,
+    pub(in crate::widget_host) preview_surface_capture: Option<preview_frame::PreviewSurface>,
     /// Live preview pointer-drag state: `true` between a canvas Down
     /// and its Up, so cursor moves dispatch as drags (slider knob)
     /// instead of hovers.
@@ -658,6 +666,10 @@ impl WidgetHostNative {
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
             preview: None,
+            preview_device_frame: None,
+            preview_scroll_y: 0.0,
+            preview_manual_pick: None,
+            preview_surface_capture: None,
             preview_press_active: false,
             preview_last_doc: None,
             chat_panel_owner: op_editor_ui::widgets::AIChatPlaceholder::next_owner(),
@@ -773,16 +785,11 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.enter_preview();
                 self.editor_state.editor_ui.preview_warnings = session.warnings().to_vec();
                 self.preview = Some(session);
+                self.initialize_device_preview();
                 // APP MODE: center the viewport on the entry screen (a
                 // workbench-mode session has no screen rect, so this is
                 // a no-op there).
-                if let Some(rect) = self
-                    .preview
-                    .as_ref()
-                    .and_then(|p| p.current_screen_scene_rect())
-                {
-                    self.center_canvas_on(rect, canvas_size.0, canvas_size.1);
-                }
+                self.center_preview_entry_if_canvas(canvas_size);
                 self.mark_dirty();
                 true
             }
@@ -801,6 +808,7 @@ impl WidgetHostNative {
     /// touched it). Idempotent.
     pub fn exit_preview(&mut self) {
         self.preview = None;
+        self.clear_device_preview_state();
         self.preview_press_active = false;
         self.preview_last_doc = None;
         self.editor_state.editor_ui.exit_preview();
@@ -839,6 +847,7 @@ impl WidgetHostNative {
     /// the flex solve — `PreviewSession::resize` is itself a no-op.
     /// Returns early when not in preview.
     pub fn preview_resize(&mut self, viewport_w: f32, viewport_h: f32) {
+        self.cache_preview_viewport(viewport_w, viewport_h);
         if self.preview.is_none() {
             return;
         }
@@ -846,6 +855,7 @@ impl WidgetHostNative {
         if let Some(preview) = self.preview.as_mut() {
             preview.resize((cw, ch));
         }
+        self.recompute_device_frame(viewport_w, viewport_h);
     }
 
     /// Route a printable character into the live preview runtime.
@@ -869,6 +879,11 @@ impl WidgetHostNative {
         viewport_h: f32,
     ) -> Option<op_editor_ui::Point2D> {
         self.preview.as_ref()?;
+        if self.device_mode_active() {
+            // Device mode fails closed: a missing frame must never fall
+            // through to the editor viewport inverse.
+            return self.device_preview_doc_point(screen_x, screen_y);
+        }
         let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         if screen_x < cx0 || screen_x > cx0 + cw || screen_y < cy0 || screen_y > cy0 + ch {
             return None;
@@ -893,6 +908,7 @@ impl WidgetHostNative {
         let Some(doc) = self.preview_doc_point(screen_x, screen_y, viewport_w, viewport_h) else {
             return false;
         };
+        self.capture_device_preview_surface(screen_x, screen_y);
         self.preview_press_active = true;
         self.preview_last_doc = Some((doc.x, doc.y));
         let handled = self
@@ -941,6 +957,7 @@ impl WidgetHostNative {
     /// release is consumed).
     pub fn preview_dispatch_release(&mut self) -> bool {
         use jian_core::gesture::pointer::PointerPhase;
+        self.preview_surface_capture = None;
         if !self.preview_press_active {
             return false;
         }

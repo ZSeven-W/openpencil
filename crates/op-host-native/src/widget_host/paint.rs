@@ -74,12 +74,23 @@ impl WidgetHostNative {
         // down) so the switched screen paints this same frame, not one
         // frame late, and so the `preview_warnings` write here doesn't
         // conflict with `ui`'s borrow of `self.editor_state.editor_ui`.
+        let mut preview_switched = false;
+        let mut switched_screen_rect = None;
         if let Some(preview) = self.preview.as_mut() {
-            if preview.reconcile() {
+            let outcome = preview.reconcile();
+            if outcome.repaint {
                 self.editor_state.editor_ui.preview_warnings = preview.warnings().to_vec();
-                if let Some(rect) = preview.current_screen_scene_rect() {
-                    self.center_canvas_on(rect, viewport_width, viewport_height);
-                }
+            }
+            if outcome.switched {
+                preview_switched = true;
+                switched_screen_rect = preview.current_screen_scene_rect();
+            }
+        }
+        if preview_switched {
+            if self.device_mode_active() {
+                self.on_preview_screen_switched(viewport_width, viewport_height);
+            } else if let Some(rect) = switched_screen_rect {
+                self.center_canvas_on(rect, viewport_width, viewport_height);
             }
         }
 
@@ -87,6 +98,11 @@ impl WidgetHostNative {
         // paint pass. Every widget builder below reads `editor_state`
         // directly; the canvas reads `self.layout_scene`.
         self.refresh_layout_scene();
+        if self.device_mode_active() && self.preview_device_frame.is_none() {
+            // Paint owns authoritative viewport dimensions; enter-time
+            // cached dimensions can still be zero on a fresh host.
+            self.recompute_device_frame(viewport_width, viewport_height);
+        }
         let ui = &self.editor_state.editor_ui;
 
         // 2. TopBar.
@@ -162,7 +178,7 @@ impl WidgetHostNative {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            if let Some(preview) = self.preview.as_ref() {
+            if self.preview.is_some() {
                 // PREVIEW path — paint the canvas background, then the
                 // live document rendered through the SAME design-canvas
                 // scene painter (`paint_scene`), with widget runtime
@@ -171,16 +187,21 @@ impl WidgetHostNative {
                 // pixel-identical to design plus live. The editor's
                 // selection / handles / grid do NOT paint in preview.
                 frame.fill_rect(canvas_rect, self.theme.canvas_surface);
-                preview.paint_scene(
-                    &mut *frame,
-                    canvas_rect,
-                    (
-                        self.editor_state.viewport.pan_x,
-                        self.editor_state.viewport.pan_y,
-                    ),
-                    self.editor_state.viewport.zoom,
-                    self.now_ms,
-                );
+                if self.device_mode_active() {
+                    self.paint_device_frame(&mut *frame, canvas_rect);
+                } else if let Some(preview) = self.preview.as_ref() {
+                    preview.paint_scene(
+                        &mut *frame,
+                        canvas_rect,
+                        (
+                            self.editor_state.viewport.pan_x,
+                            self.editor_state.viewport.pan_y,
+                        ),
+                        self.editor_state.viewport.zoom,
+                        self.now_ms,
+                    );
+                }
+                self.paint_preview_switcher(&mut *frame, canvas_rect);
             } else {
                 // PAINT path — the canvas reads editor state + the
                 // layout-resolved render scene (`refresh_layout_scene`).
