@@ -292,10 +292,13 @@ impl ImageSearchSession {
                     let job = self.jobs.swap_remove(i);
                     let id = job.node_id.as_str().to_string();
                     self.in_flight.remove(&id);
-                    // `in_flight`/`completed` mutated outside `enqueue_missing`
-                    // (and `apply_result` may edit the document without bumping
-                    // its revision) — invalidate the scan gate so the next
-                    // `enqueue_missing` re-walks once.
+                    // `in_flight`/`completed` are mutated outside
+                    // `enqueue_missing`, and a failed job updates them without
+                    // any document-content change (so no revision bump) —
+                    // invalidate the scan gate so the next `enqueue_missing`
+                    // re-walks once. (A successful `apply_result` DOES bump the
+                    // revision, but the gate invalidation still covers the
+                    // failure path.)
                     self.last_scanned = None;
                     if let Some(url) = url {
                         if apply_result(state, &job.node_id, &url) {
@@ -724,7 +727,7 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
     };
     let is_unfilled_placeholder_frame = is_frame_placeholder_still_unfilled(node);
     let is_unfilled_placeholder_rectangle = is_image_area_rectangle_by_heuristic(node);
-    match node {
+    let changed = match node {
         PenNode::Image(image) => {
             if image.src == url {
                 return false;
@@ -771,7 +774,16 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
             true
         }
         _ => false,
+    };
+    if changed {
+        // This writes document content through raw `active_children_mut()`
+        // outside the command/history path, so bump the revision. The
+        // layer-panel row cache + save-dirty tracking key on
+        // `document_revision()`; the placeholder-frame/rectangle branches
+        // also clear `children`, which changes the visible layer rows.
+        state.mark_document_changed();
     }
+    changed
 }
 
 fn fetch_first_image_url_blocking(

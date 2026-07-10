@@ -234,6 +234,7 @@ fn apply_result_sets_empty_image_src() {
     state
         .active_children_mut()
         .push(image_node("img1", "", Some("burger fries")));
+    let revision_before = state.document_revision();
 
     assert!(apply_result(
         &mut state,
@@ -244,6 +245,13 @@ fn apply_result_sets_empty_image_src() {
         panic!("expected image");
     };
     assert_eq!(image.src, "https://example.com/photo.jpg");
+    // A content-mutating apply_result bumps the revision so the layer-panel
+    // row cache + save-dirty tracking (keyed on `document_revision()`) refresh.
+    assert_ne!(
+        state.document_revision(),
+        revision_before,
+        "apply_result that writes content must advance document_revision"
+    );
 }
 
 #[test]
