@@ -58,6 +58,14 @@ struct ApplyAck {
 pub struct McpPumpOutcome {
     pub repaint: bool,
     pub layout_dirty: bool,
+    /// Set when this pump swapped in a whole new document
+    /// (`UiRequest::ReplaceDocument` → `EditorState::replace_document`).
+    /// `replace_document` resets `document_revision()` back to 0, which can
+    /// alias a previously-scanned revision on an unrelated document — the
+    /// caller MUST invalidate any revision-keyed cache (e.g. the desktop
+    /// host's image-search scan gate) whenever this is `true`, the same way
+    /// it already does after a Figma import installs a fresh `EditorState`.
+    pub document_replaced: bool,
 }
 
 enum UiRequest {
@@ -178,6 +186,7 @@ impl McpLiveServer {
                     let _ = ack.send(());
                     outcome.repaint = true;
                     outcome.layout_dirty = true;
+                    outcome.document_replaced = true;
                 }
                 #[cfg(feature = "mcp-debug-tools")]
                 Ok(UiRequest::Screenshot { spec, ack }) => {
@@ -792,6 +801,46 @@ mod tests {
         assert!(
             insert.layout_dirty,
             "document-mutating MCP commands must rebuild layout"
+        );
+        assert!(
+            !insert.document_replaced,
+            "a plain Apply command is not a whole-document replace"
+        );
+    }
+
+    /// `ReplaceDocument` swaps in a whole new `EditorState` and resets
+    /// `document_revision()` back to 0 (see `EditorState::replace_document`).
+    /// Callers that key a cache off `document_revision()` (the desktop
+    /// host's image-search scan gate) need an explicit signal to
+    /// distinguish this from an ordinary revision-bumping `Apply`, since a
+    /// fresh document's revision can alias a previously-scanned one.
+    #[test]
+    fn pump_flags_document_replaced_only_for_replace_document_requests() {
+        let (req_tx, req_rx) = mpsc::channel();
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        let mut server = McpLiveServer {
+            port: 0,
+            token: "test-token".to_string(),
+            quit_flag: Arc::new(AtomicBool::new(false)),
+            req_rx,
+            stop_tx,
+        };
+        let mut state = EditorState::new();
+
+        let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+        req_tx
+            .send(UiRequest::ReplaceDocument {
+                doc: Box::new(EditorState::new().doc),
+                ack: ack_tx,
+            })
+            .expect("queue replace-document request");
+        let outcome = server.pump(&mut state);
+        assert!(ack_rx.try_recv().is_ok(), "replace must ack");
+        assert!(outcome.repaint);
+        assert!(outcome.layout_dirty);
+        assert!(
+            outcome.document_replaced,
+            "ReplaceDocument must flag document_replaced"
         );
     }
 }

@@ -166,6 +166,25 @@ impl DesktopApp {
         if outcome.layout_dirty {
             self.host.mark_editor_state_dirty();
         }
+        if outcome.document_replaced {
+            // `ReplaceDocument` (whole-document MCP sync, e.g. TS
+            // `setSyncDocument` parity) installs a fresh `EditorState` whose
+            // revision restarts at 0 AND whose node ids can collide with ids
+            // from the document just replaced — same aliasing risk as the
+            // Figma-import path (see `app_handler.rs`'s
+            // `figma_import_session::pump` handling). A gate-only
+            // invalidation isn't enough here: stale `in_flight`/`completed`
+            // node ids could suppress a same-id target in the new document,
+            // or a still-pending job could apply its stale result to a
+            // same-id node once it resolves. `reset()` drops the whole
+            // session (sets + in-flight jobs + the scan gate) so the new
+            // document starts clean.
+            self.image_search.reset();
+            // The replaced document restarts at revision 0 / page 0, so its
+            // LayerPanel row-model-cache key aliases the previous document's.
+            // Rotate the owner so the next paint rebuilds the rows.
+            self.host.force_rotate_layer_panel_owner();
+        }
         outcome.repaint
     }
 

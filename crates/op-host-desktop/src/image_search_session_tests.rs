@@ -428,6 +428,7 @@ fn poll_into_applies_finished_job_to_placeholder_frame() {
             node_id: NodeId::new("photo"),
             rx,
         }],
+        ..Default::default()
     };
 
     assert!(session.poll_into(&mut state));
@@ -465,6 +466,7 @@ fn successful_apply_does_not_suppress_later_unfilled_retry() {
             node_id: NodeId::new("photo"),
             rx,
         }],
+        ..Default::default()
     };
 
     assert!(session.poll_into(&mut state));
@@ -480,6 +482,195 @@ fn successful_apply_does_not_suppress_later_unfilled_retry() {
 
     assert_eq!(targets.len(), 1);
     assert_eq!(targets[0].node_id.as_str(), "photo");
+}
+
+#[test]
+fn enqueue_missing_skips_second_walk_when_document_unchanged() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+
+    let mut session = ImageSearchSession::new();
+
+    assert!(session.enqueue_missing(&state));
+    // Document revision hasn't changed since the first scan (no
+    // `mark_document_changed` call happened), so the second call must
+    // short-circuit on the revision gate instead of re-walking the tree.
+    session.enqueue_missing(&state);
+
+    assert_eq!(session.scan_count, 1);
+}
+
+#[test]
+fn poll_into_completion_invalidates_scan_gate() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+
+    // A completed (here: failed) job mutates `in_flight`/`completed`, which
+    // must force one rescan on the next `enqueue_missing` even though the
+    // document revision did not change.
+    let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
+    tx.send(None).unwrap();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["img1".to_string()]),
+        completed: HashSet::new(),
+        jobs: vec![ImageSearchJob {
+            node_id: NodeId::new("img1"),
+            rx,
+        }],
+        ..Default::default()
+    };
+
+    session.enqueue_missing(&state);
+    assert_eq!(session.scan_count, 1);
+    session.enqueue_missing(&state);
+    assert_eq!(
+        session.scan_count, 1,
+        "gate must hold while nothing changed"
+    );
+
+    session.poll_into(&mut state);
+
+    session.enqueue_missing(&state);
+    assert_eq!(session.scan_count, 2, "completion must force one rescan");
+    session.enqueue_missing(&state);
+    assert_eq!(
+        session.scan_count, 2,
+        "gate re-arms after the forced rescan"
+    );
+}
+
+#[test]
+fn reset_invalidates_scan_gate() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+
+    let mut session = ImageSearchSession::new();
+    session.enqueue_missing(&state);
+    session.enqueue_missing(&state);
+    assert_eq!(session.scan_count, 1);
+
+    session.reset();
+
+    session.enqueue_missing(&state);
+    assert_eq!(session.scan_count, 2);
+}
+
+#[test]
+fn enqueue_missing_rewalks_after_document_revision_changes() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+
+    let mut session = ImageSearchSession::new();
+    assert!(session.enqueue_missing(&state));
+
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img2", "", Some("latte cup")));
+    state.mark_document_changed();
+
+    assert!(session.enqueue_missing(&state));
+    assert_eq!(session.scan_count, 2);
+}
+
+#[test]
+fn enqueue_missing_rewalks_after_active_page_changes_even_with_same_revision() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+
+    let mut session = ImageSearchSession::new();
+    assert!(session.enqueue_missing(&state));
+    assert_eq!(session.scan_count, 1);
+
+    // `add_page` switches `ui.active_page_index` to the freshly created page
+    // WITHOUT calling `mark_document_changed` (see
+    // `op-editor-core/src/page_mutators.rs`), so `document_revision()` stays
+    // put. `enqueue_missing` only walks the active page, so the gate must
+    // still treat this as "unscanned" even though the revision looks
+    // unchanged, or the new page's placeholders would never be found.
+    let revision_before_switch = state.document_revision();
+    state.add_page().expect("add_page should succeed");
+    assert_eq!(
+        state.document_revision(),
+        revision_before_switch,
+        "page switch must not bump document_revision (that's the bug under test)"
+    );
+    state
+        .active_children_mut()
+        .push(image_node("img2", "", Some("latte cup")));
+
+    assert!(
+        session.enqueue_missing(&state),
+        "switching to a new, unscanned page must force a rescan"
+    );
+    assert_eq!(session.scan_count, 2);
+
+    // Same page again, nothing changed — gate holds.
+    session.enqueue_missing(&state);
+    assert_eq!(session.scan_count, 2);
+}
+
+#[test]
+fn enqueue_missing_rescans_after_invalidate_scan_gate_despite_revision_page_aliasing() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+
+    let mut session = ImageSearchSession::new();
+    assert!(session.enqueue_missing(&state));
+    assert_eq!(session.scan_count, 1);
+
+    // Simulate an MCP `ReplaceDocument`: `EditorState::replace_document`
+    // resets `revision`/`revision_counter` to 0 and installs a fresh
+    // `UiDraftState` (active_page_index back to 0), so a brand-new,
+    // never-scanned document can carry the EXACT same `(revision, page)`
+    // key as the document that was scanned before the replace.
+    let mut replaced = EditorState::default();
+    replaced.active_children_mut().clear();
+    replaced
+        .active_children_mut()
+        .push(image_node("img2", "", Some("latte cup")));
+    assert_eq!(
+        (replaced.document_revision(), replaced.ui.active_page_index),
+        (state.document_revision(), state.ui.active_page_index),
+        "the replacement document must alias the pre-replace gate key"
+    );
+
+    // Without an explicit invalidation, the gate wrongly stays shut — this is
+    // the aliasing hazard `reset()` exists to close. This test exercises the
+    // private `invalidate_scan_gate()` primitive directly to document that
+    // hazard in isolation; production replacement call sites (desktop MCP
+    // pump / Figma import) call `reset()` instead, which clears
+    // `in_flight`/`completed`/`jobs` too and invalidates the gate as its
+    // last step (see `document_replacement_reset_*` tests below for the
+    // stale-set hazards a gate-only invalidation would miss).
+    assert!(!session.enqueue_missing(&replaced));
+    assert_eq!(
+        session.scan_count, 1,
+        "gate aliases on the same (revision, page) key across a document replace"
+    );
+
+    session.invalidate_scan_gate();
+
+    assert!(session.enqueue_missing(&replaced));
+    assert_eq!(session.scan_count, 2, "invalidation forces the rescan");
 }
 
 #[test]
@@ -526,6 +717,97 @@ fn sniff_image_mime_detects_common_raster_formats() {
     assert_eq!(sniff_image_mime(b"GIF89arest"), Some("image/gif"));
     assert_eq!(sniff_image_mime(b"RIFFxxxxWEBPrest"), Some("image/webp"));
     assert_eq!(sniff_image_mime(b"<svg></svg>"), None);
+}
+
+#[test]
+fn document_replacement_reset_drops_stale_pending_job_so_it_cannot_apply_to_new_document() {
+    // Simulate: the pre-replacement document had a pending image-search job for
+    // node id "photo".
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["photo".to_string()]),
+        completed: HashSet::new(),
+        jobs: vec![ImageSearchJob {
+            node_id: NodeId::new("photo"),
+            rx,
+        }],
+        ..Default::default()
+    };
+
+    // Document replacement happens here (Figma import / MCP ReplaceDocument) while
+    // the job above is still in flight. Only invalidating the scan gate — NOT
+    // resetting the session — must NOT be enough to protect the new document.
+    session.reset();
+
+    // Replacement document reuses the SAME node id ("photo") as an unrelated,
+    // still-unfilled placeholder — plausible because both replacement paths install
+    // a fresh, small id space that can collide with ids from the prior document.
+    let mut new_state = EditorState::default();
+    new_state.active_children_mut().clear();
+    new_state.active_children_mut().push(rectangle_node(
+        "photo",
+        "Latte Image",
+        Some(vec![solid_fill()]),
+    ));
+
+    // The stale job resolves AFTER the replacement — its result must not land on
+    // the new document's unrelated "photo" node.
+    let _ = tx.send(Some(
+        "https://stale.example.com/old-document-photo.jpg".to_string(),
+    ));
+
+    let changed = session.poll_into(&mut new_state);
+
+    assert!(
+        !changed,
+        "a job queued before document replacement must not mutate the replacement document"
+    );
+    assert!(!session.is_pending());
+    let PenNode::Rectangle(rect) = &new_state.active_children()[0] else {
+        panic!("expected rectangle");
+    };
+    assert_eq!(
+        rect.container.fill.as_deref(),
+        Some([solid_fill()].as_slice()),
+        "replacement document's placeholder must remain untouched by the stale job"
+    );
+}
+
+#[test]
+fn document_replacement_reset_clears_completed_ids_so_replacement_targets_are_not_suppressed() {
+    // Simulate: the pre-replacement document had already resolved (or given up on)
+    // node id "photo", so it sits in `completed`.
+    let mut session = ImageSearchSession {
+        completed: HashSet::from(["photo".to_string()]),
+        ..Default::default()
+    };
+
+    // Document replacement happens here. Only invalidating the scan gate — NOT
+    // resetting the session — must NOT be enough: `completed` would still suppress
+    // any node reusing id "photo" in the new document forever.
+    session.reset();
+
+    // Replacement document reuses the SAME node id ("photo") for an unrelated,
+    // still-unfilled placeholder that DOES need enrichment.
+    let mut new_state = EditorState::default();
+    new_state.active_children_mut().clear();
+    new_state.active_children_mut().push(rectangle_node(
+        "photo",
+        "Latte Image",
+        Some(vec![solid_fill()]),
+    ));
+
+    let spawned = session.enqueue_missing(&new_state);
+
+    assert!(
+        spawned,
+        "replacement document's placeholder must be scheduled, not suppressed by a \
+         stale completed id inherited from the pre-replacement document"
+    );
+    assert!(
+        session.is_pending(),
+        "a job must be queued for the replacement document's placeholder"
+    );
 }
 
 #[tokio::test]
