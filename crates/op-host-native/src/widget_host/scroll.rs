@@ -441,6 +441,31 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        self.apply_wheel_inner(x, y, delta_y, viewport_width, viewport_height, false)
+    }
+
+    /// Pinch or modifier-promoted zoom intent. Device preview consumes
+    /// this without zooming or scrolling its fixed frame.
+    pub fn apply_pinch_gesture(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        self.apply_wheel_inner(x, y, delta_y, viewport_width, viewport_height, true)
+    }
+
+    fn apply_wheel_inner(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+        zoom_intent: bool,
+    ) -> bool {
         // Floating VariablesPanel owns the wheel over its rect — run this
         // BEFORE `over_topmost_panel`, which also lists the variables panel
         // and would otherwise swallow the event WITHOUT scrolling (its rows
@@ -578,10 +603,19 @@ impl WidgetHostNative {
         if self.try_scroll_layer_panel(x, y, layer_dx, layer_dy, viewport_height) {
             return true;
         }
-        // Live preview: a wheel over a node carrying `events.onScroll`
-        // goes to the runtime; otherwise fall through so the user can
-        // still pan/zoom the canvas while previewing. Runs below the
-        // panel/picker guards — they own the wheel over their rects.
+        // A device frame owns every wheel over the canvas. Branch on
+        // mode, not cached geometry, so missing geometry fails closed.
+        if self.device_mode_active() && self.over_canvas(x, y, viewport_width, viewport_height) {
+            if !zoom_intent {
+                if self.preview_dispatch_wheel(x, y, 0.0, delta_y, viewport_width, viewport_height)
+                {
+                    return true;
+                }
+                self.apply_device_scroll(delta_y);
+            }
+            return true;
+        }
+        // Canvas-mode preview preserves its existing runtime-first routing.
         if self.preview.is_some()
             && self.preview_dispatch_wheel(x, y, 0.0, delta_y, viewport_width, viewport_height)
         {
@@ -737,12 +771,14 @@ impl WidgetHostNative {
         if self.try_scroll_layer_panel(x, y, dx, dy, viewport_height) {
             return true;
         }
-        // Live preview: a two-finger trackpad pan over a node carrying
-        // `events.onScroll` goes to the runtime (same contract as the
-        // `apply_wheel` branch — the desktop runner routes PixelDelta
-        // scrolls here, never through `apply_wheel`); otherwise fall
-        // through so trackpad panning still navigates the canvas
-        // while previewing.
+        if self.device_mode_active() && self.over_canvas(x, y, viewport_width, viewport_height) {
+            if self.preview_dispatch_wheel(x, y, dx, dy, viewport_width, viewport_height) {
+                return true;
+            }
+            self.apply_device_scroll(dy);
+            return true;
+        }
+        // Canvas-mode preview preserves its existing runtime-first routing.
         if self.preview.is_some()
             && self.preview_dispatch_wheel(x, y, dx, dy, viewport_width, viewport_height)
         {

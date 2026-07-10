@@ -1241,7 +1241,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                         let dx = p.x as f32 / self.dpi;
                         let dy = p.y as f32 / self.dpi;
                         if self.zoom_modifier {
-                            self.host.apply_wheel(
+                            self.host.apply_pinch_gesture(
                                 self.cursor_x,
                                 self.cursor_y,
                                 dy,
@@ -1265,7 +1265,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 }
             }
             WindowEvent::PinchGesture { delta, .. } => {
-                let consumed = self.host.apply_wheel(
+                let consumed = self.host.apply_pinch_gesture(
                     self.cursor_x,
                     self.cursor_y,
                     delta as f32 * 400.0,

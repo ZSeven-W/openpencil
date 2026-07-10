@@ -811,6 +811,15 @@ pub struct EffectParamFocus {
     pub field: crate::EffectField,
 }
 
+/// Which device frame the Canvas Preview presents. `Canvas` is the
+/// free-canvas preview (today's behavior); inference never picks it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviewDeviceKind {
+    Phone,
+    Desktop,
+    Canvas,
+}
+
 /// Editor-UI overlay + panel state — the widget-layer toggles, hover
 /// targets, menu / modal open flags and panel metrics that the ~30
 /// editor widgets paint from. Faithful superset of the UI subset
@@ -932,6 +941,17 @@ pub struct EditorUiState {
     /// nodes (`LegacyRolePromoted`). Surfaced for diagnostics; cleared
     /// on exit. Never serialized.
     pub preview_warnings: Vec<String>,
+    /// RESOLVED device-frame kind while previewing (`None` outside
+    /// preview; never serialized). Three writers: `enter_preview`
+    /// inference (host-side), the switcher, and the host's app-mode
+    /// screen-switch re-inference — every re-inference writes back
+    /// here so the switcher and the frame can never disagree.
+    pub preview_device: Option<PreviewDeviceKind>,
+    /// Switcher segment under the cursor (hover wash).
+    pub preview_switcher_hover: Option<PreviewDeviceKind>,
+    /// Switcher segment currently pressed (activates on RELEASE
+    /// inside the same segment).
+    pub preview_switcher_pressed: Option<PreviewDeviceKind>,
     /// Floating `Cmd+,` agent-settings modal open.
     pub agent_settings_open: bool,
     pub agent_settings: crate::agent_settings::AgentSettings,
@@ -1355,6 +1375,9 @@ impl Default for EditorUiState {
             preserve_authored_geometry: false,
             preview_mode: false,
             preview_warnings: Vec::new(),
+            preview_device: None,
+            preview_switcher_hover: None,
+            preview_switcher_pressed: None,
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),
             agent_settings_drag: None,
@@ -1516,6 +1539,9 @@ impl EditorUiState {
     pub fn exit_preview(&mut self) {
         self.preview_mode = false;
         self.preview_warnings.clear();
+        self.preview_device = None;
+        self.preview_switcher_hover = None;
+        self.preview_switcher_pressed = None;
     }
 
     /// Flip Preview mode on/off. Returns the new state (`true` =
@@ -1903,6 +1929,19 @@ mod tests {
         ui.exit_preview();
         ui.exit_preview();
         assert!(!ui.preview_mode);
+    }
+
+    #[test]
+    fn exit_preview_clears_device_state() {
+        let mut c = EditorUiState::new();
+        c.enter_preview();
+        c.preview_device = Some(PreviewDeviceKind::Phone);
+        c.preview_switcher_hover = Some(PreviewDeviceKind::Desktop);
+        c.preview_switcher_pressed = Some(PreviewDeviceKind::Canvas);
+        c.exit_preview();
+        assert_eq!(c.preview_device, None);
+        assert_eq!(c.preview_switcher_hover, None);
+        assert_eq!(c.preview_switcher_pressed, None);
     }
 
     #[test]

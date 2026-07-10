@@ -66,6 +66,7 @@ serde_json = { workspace = true }
 # `op_editor_core::EditorState`. The host derives a read-only paint
 # `Document` from it each frame (see `widget_host.rs`).
 op-editor-core = { path = "../op-editor-core" }
+op-i18n = { path = "../op-i18n" }
 
 # Native-only deps cfg-gated outside wasm32. This is critical (resolves codex round 2 B1 BLOCK):
 # without cfg-gate, cargo would fetch + run skia-safe's build.rs (which fails on wasm32),
