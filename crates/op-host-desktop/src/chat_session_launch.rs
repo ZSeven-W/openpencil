@@ -484,6 +484,11 @@ pub(crate) fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> b
     }
     state.active_children_mut().clear();
     state.clear_selection();
+    // Raw `active_children_mut()` bypasses the command/history path, so
+    // bump the document revision explicitly. Without it the layer-panel
+    // row cache (keyed on `document_revision()`) keeps painting the
+    // now-deleted starter "Frame" row, and save-dirty tracking stays wrong.
+    state.mark_document_changed();
     true
 }
 
@@ -765,6 +770,45 @@ mod tests {
             *kids = children;
         }
         node
+    }
+
+    #[test]
+    fn clear_fresh_starter_frame_bumps_document_revision() {
+        let mut state = EditorState::new();
+        // Install the exact blank starter frame the design classifier
+        // recognizes (id "n10", name "Frame", 1200x800, white fill).
+        let starter: jian_ops_schema::node::PenNode = serde_json::from_value(serde_json::json!({
+            "type": "frame",
+            "id": "n10",
+            "name": "Frame",
+            "x": 0,
+            "y": 0,
+            "width": 1200,
+            "height": 800,
+            "fill": [{ "type": "solid", "color": "#ffffff" }],
+            "children": []
+        }))
+        .expect("starter frame fixture");
+        state.active_children_mut().clear();
+        state.active_children_mut().push(starter);
+        let revision_before = state.document_revision();
+
+        assert!(
+            clear_fresh_starter_frame_for_design(&mut state),
+            "the blank starter frame must be recognized and cleared"
+        );
+        assert!(
+            state.active_children().is_empty(),
+            "the starter Frame row must be gone after the clear"
+        );
+        // Regression: the raw `active_children_mut().clear()` must bump the
+        // revision, or the layer-panel row cache (keyed on
+        // `document_revision()`) keeps painting the deleted "Frame" row.
+        assert_ne!(
+            state.document_revision(),
+            revision_before,
+            "clearing the starter frame must advance document_revision"
+        );
     }
 
     #[test]

@@ -143,7 +143,13 @@ pub fn handle_pick_fill_image(host: &mut WidgetHostNative) {
             return;
         }
     };
-    let _ = host.editor_state_mut().set_selected_fill_image_url(&url);
+    if host.editor_state_mut().set_selected_fill_image_url(&url) {
+        // `set_selected_fill_image_url` writes fill content without touching
+        // the command/history path, so bump the revision (layer-panel cache +
+        // save-dirty tracking key on `document_revision()`). The sibling
+        // relink handler above bumps via `commit_history()`.
+        host.editor_state_mut().mark_document_changed();
+    }
     host.mark_editor_state_dirty();
 }
 
