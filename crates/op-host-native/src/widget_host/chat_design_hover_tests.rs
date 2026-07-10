@@ -64,7 +64,9 @@ fn cursor_move_tracks_hovered_design_json_card_for_copy_reveal() {
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     let chat_rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
-    let panel = AIChatPlaceholder::from_editor(host.editor_state());
+    // Stamp with the host's real owner, mirroring production: `design_block_hover_at`
+    // resolves the transcript cache, which debug-asserts against the UNOWNED sentinel.
+    let panel = AIChatPlaceholder::from_editor(host.editor_state()).owned_by(host.chat_panel_owner);
     let point = Point2D::new(chat_rect.origin.x + 24.0, chat_rect.origin.y + 52.0);
     assert_eq!(panel.design_block_hover_at(chat_rect, point), Some((0, 0)));
 

@@ -17,6 +17,7 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatMessage, ChatRole, ChatTranscriptSelection};
 
+use super::ai_chat_transcript_cache::CanonicalTranscript;
 use super::ai_chat_transcript_completion::{
     completion_card_rect, paint_completion_card, parse_completion_summary, CompletionSummary,
 };
@@ -65,7 +66,7 @@ const TYPING_DOT_GAP: f32 = 2.0;
 /// Height of a collapsible header row (thinking / tool-calls).
 pub(crate) const HEADER_H: f32 = 22.0;
 /// Vertical gap between two messages.
-const MSG_GAP: f32 = 12.0;
+pub(crate) const MSG_GAP: f32 = 12.0;
 /// Vertical gap between sub-blocks within one message.
 const SUB_GAP: f32 = 4.0;
 /// Height of one design-progress step row (#27 restyle: 48px for comfortable
@@ -196,13 +197,12 @@ fn step_state(
 
 /// Place one message starting at `top`. Returns the item and the
 /// `y` immediately below it (before the inter-message gap).
-fn build_item(
+pub(crate) fn build_item(
     msg: &ChatMessage,
     msg_index: usize,
     top: f32,
     body: Rect,
     locale: op_editor_core::Locale,
-    design_hover: Option<(usize, usize)>,
 ) -> (TranscriptItem, f32) {
     let is_user = msg.role == ChatRole::User;
     let mut bubble_w = if is_user {
@@ -371,9 +371,6 @@ fn build_item(
         bubble_w,
         SUB_GAP,
         &msg.design_block_expanded_overrides,
-        design_hover.and_then(|(message_index, block_index)| {
-            (message_index == msg_index).then_some(block_index)
-        }),
     );
     y = next_y;
 
@@ -490,78 +487,32 @@ fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
     }
 }
 
-/// Lay out the full transcript from the body top (no scroll offset).
-/// Each item carries absolute rects ready for paint and hit-test.
-/// Callers that scroll pass a non-zero offset via
-/// [`build_transcript_with_design_hover`].
-#[cfg(test)]
-pub(crate) fn build_transcript(
-    messages: &[ChatMessage],
-    body_rect: Rect,
-    locale: op_editor_core::Locale,
-) -> Vec<TranscriptItem> {
-    build_transcript_with_design_hover(messages, body_rect, locale, None, 0.0)
-}
-
-/// Lay out every message top-to-bottom, shifted up by `scroll_offset`
-/// (px). Offset `0` puts the first message at the body top; the host
-/// clamps the offset to `[0, content_height - body]` and pins it to the
-/// bottom while [`ChatState::transcript_pinned`] holds. The paint pass
-/// clips to `body_rect`, so items scrolled past the top/bottom edge are
-/// simply not visible.
-///
-/// [`ChatState::transcript_pinned`]: op_editor_core::chat::ChatState::transcript_pinned
-pub(crate) fn build_transcript_with_design_hover(
-    messages: &[ChatMessage],
-    body_rect: Rect,
-    locale: op_editor_core::Locale,
-    design_hover: Option<(usize, usize)>,
-    scroll_offset: f32,
-) -> Vec<TranscriptItem> {
-    if messages.is_empty() {
-        return Vec::new();
-    }
-    let mut items = Vec::new();
-    let mut top = body_rect.origin.y - scroll_offset;
-    for (i, msg) in messages.iter().enumerate() {
-        let (item, bottom) = build_item(msg, i, top, body_rect, locale, design_hover);
-        items.push(item);
-        top = bottom + MSG_GAP;
-    }
-    items
-}
-
 /// Total height (px) of the full transcript laid out from the body top.
-/// Drives the host's max-scroll clamp and the pinned-to-bottom offset.
+/// Served from the shared per-frame cache — no separate layout pass. The
+/// production max-scroll clamp (`AIChatPlaceholder::transcript_scroll_max`) now
+/// resolves owner-scoped directly for the same value, so this UNOWNED helper is
+/// retained only for the transcript layout tests.
+#[cfg(test)]
 pub(crate) fn transcript_content_height(
     messages: &[ChatMessage],
     body_rect: Rect,
     locale: op_editor_core::Locale,
 ) -> f32 {
-    if messages.is_empty() {
-        return 0.0;
-    }
-    let mut top = body_rect.origin.y;
-    for (i, msg) in messages.iter().enumerate() {
-        let (_, bottom) = build_item(msg, i, top, body_rect, locale, None);
-        top = bottom + MSG_GAP;
-    }
-    // `top` overshot by one MSG_GAP after the last message.
-    (top - MSG_GAP - body_rect.origin.y).max(0.0)
+    super::ai_chat_transcript_cache::unowned_for_tests(messages, body_rect, locale).total_height
 }
 
-/// Effective scroll offset to render at: the pinned-to-bottom maximum
-/// while `pinned`, otherwise the stored `offset` clamped to the
-/// scrollable range. Shared by paint + every transcript hit-test so
-/// they agree on item positions.
-pub(crate) fn transcript_effective_offset(
-    messages: &[ChatMessage],
+/// Effective scroll offset to render at, given an already-resolved canonical
+/// build: the pinned-to-bottom maximum while `pinned`, otherwise the stored
+/// `offset` clamped to the scrollable range. Taking the resolved build (rather
+/// than `messages`) is what lets the paint / hit entry points fingerprint the
+/// transcript once and reuse it for both the scroll clamp and the layout.
+pub(crate) fn effective_offset_of(
+    canonical: &CanonicalTranscript,
     body_rect: Rect,
-    locale: op_editor_core::Locale,
     offset: f32,
     pinned: bool,
 ) -> f32 {
-    let max = (transcript_content_height(messages, body_rect, locale) - body_rect.size.y).max(0.0);
+    let max = (canonical.total_height - body_rect.size.y).max(0.0);
     if pinned {
         max
     } else {
@@ -615,61 +566,31 @@ fn paint_typing_dots(
     }
 }
 
-/// Paint the chat transcript — the tail of `messages` that fits in
-/// `body_rect`, with collapsible thinking / tool blocks, image
-/// thumbnails and the streaming animation on the in-flight message.
-#[cfg(test)]
-pub(crate) fn paint_transcript(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    body_rect: Rect,
-    messages: &[ChatMessage],
-    now_ms: u64,
-    locale: op_editor_core::Locale,
-) {
-    paint_transcript_with_design_hover(cx, theme, body_rect, messages, now_ms, locale, None);
-}
-
-#[cfg(test)]
-pub(crate) fn paint_transcript_with_design_hover(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    body_rect: Rect,
-    messages: &[ChatMessage],
-    now_ms: u64,
-    locale: op_editor_core::Locale,
-    design_hover: Option<(usize, usize)>,
-) {
-    paint_transcript_with_selection(
-        cx,
-        theme,
-        body_rect,
-        messages,
-        now_ms,
-        locale,
-        design_hover,
-        None,
-        0.0,
-    );
-}
-
+/// Paint the transcript from an already-resolved canonical (scroll-0) build.
+/// The caller fingerprints the transcript once (via
+/// [`unowned_for_tests`]) and threads the build here, so paint never
+/// re-hashes; scroll is applied with a `translate`, not a rebuild. `messages`
+/// is still needed for the live text / image content the layout indexes into.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn paint_transcript_with_selection(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     body_rect: Rect,
     messages: &[ChatMessage],
+    canonical: &CanonicalTranscript,
     now_ms: u64,
-    locale: op_editor_core::Locale,
     design_hover: Option<(usize, usize)>,
     selection: Option<ChatTranscriptSelection>,
     scroll_offset: f32,
 ) {
     cx.backend.save();
+    // Clip in screen space, THEN shift by the scroll so the shared canonical
+    // (scroll-0) build paints at the right place — no scroll-applied rebuild.
     cx.backend.clip_rect(body_rect);
-    for item in
-        build_transcript_with_design_hover(messages, body_rect, locale, design_hover, scroll_offset)
-    {
+    if scroll_offset != 0.0 {
+        cx.backend.translate(Point2D::new(0.0, -scroll_offset));
+    }
+    for item in &canonical.items {
         for step in &item.steps {
             paint_action_step(cx, theme, step);
         }
@@ -679,8 +600,12 @@ pub(crate) fn paint_transcript_with_selection(
         if let Some(block) = &item.tools {
             paint_tool_panel(cx, theme, block);
         }
-        for block in &item.design_blocks {
-            paint_design_block(cx, theme, block);
+        for (block_index, block) in item.design_blocks.iter().enumerate() {
+            // Design-hover is paint-only: it reveals the per-block copy icon and
+            // never moves a rect, so it stays out of the layout cache and is
+            // resolved here against the live hover instead.
+            let copy_visible = design_hover == Some((item.msg_index, block_index));
+            paint_design_block(cx, theme, block, copy_visible);
         }
         if let Some(bubble) = &item.bubble {
             // #27 restyle: user bubble = medium-gray (theme.user_bubble),
@@ -720,16 +645,13 @@ pub(crate) fn paint_transcript_with_selection(
                     cx.backend.fill_round_rect(bubble.rect, 14.0, bg);
                 }
                 if item.role == ChatRole::User {
-                    if let Some(selection) =
-                        selection.filter(|selection| selection.message_index == item.msg_index)
-                    {
-                        paint_user_bubble_selection(
-                            cx,
-                            theme,
-                            &messages[item.msg_index].content,
-                            bubble,
-                            selection,
-                        );
+                    // Bounds-defense: index the live slice with `.get` — the
+                    // cached build can outlive a shrink of `messages`.
+                    if let (Some(selection), Some(message)) = (
+                        selection.filter(|selection| selection.message_index == item.msg_index),
+                        messages.get(item.msg_index),
+                    ) {
+                        paint_user_bubble_selection(cx, theme, &message.content, bubble, selection);
                     }
                 }
                 // #27 restyle: user bubble text uses generous USER_BUBBLE_PAD inset.
@@ -762,7 +684,13 @@ pub(crate) fn paint_transcript_with_selection(
         // Image thumbnails — a framed box with the decoded image
         // drawn on top (a no-op draw on backends without an image
         // pipeline leaves just the frame).
-        let msg_images = &messages[item.msg_index].images;
+        // Bounds-defense: a cached build item may reference a message index past
+        // the end of a shrunken live slice; fall back to no thumbnails rather
+        // than panicking on an out-of-bounds index.
+        let msg_images = messages
+            .get(item.msg_index)
+            .map(|m| m.images.as_slice())
+            .unwrap_or(&[]);
         for (rect, img) in item.images.iter().zip(msg_images.iter()) {
             cx.backend.fill_round_rect(*rect, 6.0, theme.muted);
             draw_icon(
@@ -783,9 +711,30 @@ pub(crate) fn paint_transcript_with_selection(
     cx.backend.restore();
 }
 
+/// Test-only builders / painters, split into a sibling file to keep this
+/// production module under the 800-line cap. Re-exported so existing
+/// `build_transcript` / `paint_transcript` / `transcript_effective_offset`
+/// call sites resolve through `ai_chat_transcript` unchanged.
+#[cfg(test)]
+#[path = "ai_chat_transcript_test_builders.rs"]
+mod test_builders;
+#[cfg(test)]
+pub(crate) use test_builders::{
+    build_transcript, build_transcript_with_design_hover, paint_transcript,
+    paint_transcript_with_design_hover, transcript_effective_offset,
+};
+
 #[cfg(test)]
 #[path = "ai_chat_transcript_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ai_chat_transcript_scroll_tests.rs"]
+mod scroll_tests;
+
+#[cfg(test)]
+#[path = "ai_chat_transcript_cache_tests.rs"]
+mod cache_tests;
 
 #[cfg(test)]
 #[path = "ai_chat_transcript_copy_tests.rs"]

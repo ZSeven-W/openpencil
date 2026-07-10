@@ -410,10 +410,22 @@ impl WidgetHostNative {
                 VariablesResizeEdge::Corner => CursorHint::ResizeNwse,
             };
         }
+        // Cursor-shape probe against the LAST BUILT (= last painted) transcript
+        // layout: the user points at what is on screen, so a pure geometric hit
+        // over the displayed build is the correct question — and it hashes
+        // nothing. `hit_test` would re-resolve + re-fingerprint the live
+        // transcript here (a second hash for the same physical move);
+        // `hit_test_current_build` reuses the stored build instead. The
+        // redraw-time `cursor_probe` (the single hash per cursor move)
+        // re-resolves the build and self-corrects any staleness on the next
+        // painted frame. Before the first paint no build exists and this yields
+        // the default arrow, which is acceptable.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_w, viewport_h) {
-            let panel = AIChatPlaceholder::from_editor(&self.editor_state);
+            // Owner-stamp so the display-frame hint reads only THIS host's build.
+            let panel =
+                AIChatPlaceholder::from_editor(&self.editor_state).owned_by(self.chat_panel_owner);
             if let Some(AIChatHit::SelectInputText(_) | AIChatHit::SelectTranscriptText(_, _)) =
-                panel.hit_test(chat_rect, Point2D::new(x, y))
+                panel.hit_test_current_build(chat_rect, Point2D::new(x, y))
             {
                 return CursorHint::Text;
             }

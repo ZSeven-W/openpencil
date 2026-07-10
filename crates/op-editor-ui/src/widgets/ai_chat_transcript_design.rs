@@ -34,7 +34,6 @@ pub(crate) struct DesignBlock {
     pub streaming: bool,
     pub applied: bool,
     pub code: String,
-    pub copy_visible: bool,
     pub code_lines: Vec<String>,
 }
 
@@ -425,7 +424,6 @@ pub(crate) fn place_design_blocks(
     width: f32,
     gap: f32,
     expanded_overrides: &[Option<bool>],
-    hovered_index: Option<usize>,
 ) -> (Vec<DesignBlock>, f32) {
     const BODY_TOP_GAP: f32 = 4.0;
     const BODY_PAD_Y: f32 = 8.0;
@@ -489,7 +487,6 @@ pub(crate) fn place_design_blocks(
             streaming: pending.streaming,
             applied: pending.applied,
             code: pending.code,
-            copy_visible: hovered_index == Some(index),
             code_lines,
         });
         y += DESIGN_BLOCK_H + body_h + apply_h + gap;
@@ -497,7 +494,15 @@ pub(crate) fn place_design_blocks(
     (blocks, y)
 }
 
-pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &DesignBlock) {
+/// Paint one design block. `copy_visible` reveals the per-block copy icon on
+/// hover; it is a paint-time flag resolved by the caller against the live
+/// design-hover, deliberately kept out of the cached layout.
+pub(crate) fn paint_design_block(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    block: &DesignBlock,
+    copy_visible: bool,
+) {
     let fill = if block.expanded {
         theme.muted.with_alpha(0.40)
     } else {
@@ -556,7 +561,7 @@ pub(crate) fn paint_design_block(cx: &mut PaintCx<'_>, theme: &Theme, block: &De
         .draw_text(&layout, Point2D::new(label_x, block.header.origin.y + 20.0));
     cx.backend.restore();
 
-    if block.copy_visible {
+    if copy_visible {
         let copy_color = theme.muted_foreground.with_alpha(0.30);
         draw_icon(
             cx.backend,

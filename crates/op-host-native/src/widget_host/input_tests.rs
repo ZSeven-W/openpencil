@@ -481,6 +481,15 @@ fn user_transcript_text_uses_text_cursor() {
     let x = rect.origin.x + 96.0;
     let y = rect.origin.y + 74.0;
 
+    // `cursor_hint` now reads the LAST BUILT transcript layout (zero hashes on
+    // that pass) rather than re-fingerprinting the live transcript. Prime that
+    // build the way a paint / cursor-move would — a press over the transcript
+    // resolves + stores the canonical — then the hint reads the stored build and
+    // flips to the text cursor. This exercises the native cursor_hint end-to-end
+    // (event ordering: build stored, then hint reads it).
+    assert!(host.apply_press(x, y, viewport_w, viewport_h));
+    assert!(host.apply_release_with_viewport(viewport_w, viewport_h));
+
     assert_eq!(
         host.cursor_hint(x, y, viewport_w, viewport_h),
         CursorHint::Text

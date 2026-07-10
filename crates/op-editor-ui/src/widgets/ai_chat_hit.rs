@@ -101,6 +101,26 @@ pub enum AIChatHit {
     CloseTab(usize),
 }
 
+/// Everything a host needs from the chat panel for a single cursor event,
+/// resolved from ONE canonical transcript build.
+///
+/// Hosts handling a cursor move used to call `hit_test` (header-hover) and
+/// `design_block_hover_at` separately — and native additionally re-ran
+/// `hit_test` from its cursor-hint pass — so a physical move over the
+/// transcript fingerprinted the whole message list two or three times. A single
+/// [`AIChatPlaceholder::cursor_probe`](super::AIChatPlaceholder::cursor_probe)
+/// resolves the canonical layout once and returns both results, so the move
+/// fingerprints the transcript at most once.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChatCursorProbe {
+    /// The hit under the cursor — identical to
+    /// [`AIChatPlaceholder::hit_test`](super::AIChatPlaceholder::hit_test).
+    pub hit: Option<AIChatHit>,
+    /// The `(message_index, block_index)` design block under the cursor, if any
+    /// — identical to [`AIChatPlaceholder::design_block_hover_at`](super::AIChatPlaceholder::design_block_hover_at).
+    pub design_block_hover: Option<(usize, usize)>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatResizeEdge {
     N,

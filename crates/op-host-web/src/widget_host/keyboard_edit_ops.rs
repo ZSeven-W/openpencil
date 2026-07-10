@@ -94,6 +94,9 @@ impl WidgetHost {
     /// lives in `web_chat`'s RUNNING_TAB, untouched here).
     pub fn apply_new_chat_tab(&mut self) -> bool {
         self.editor_state.chat.new_tab();
+        // Session set mutated: rotate the transcript-cache owner NOW so a pointer
+        // move before the next paint can't cross-pair the previous tab's geometry.
+        self.force_rotate_chat_owner();
         self.mark_dirty();
         true
     }

@@ -13,3 +13,21 @@ pub(super) fn hex_to_color(hex: &str) -> Color {
         },
     }
 }
+
+// Test-only call counter for `DesignMdPanel::layout` — lets tests prove a
+// single `paint` / `hit_test` pass resolves the section layout exactly
+// once instead of the pre-fix up-to-3×.
+#[cfg(test)]
+thread_local! {
+    static LAYOUT_CALL_COUNT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(super) fn tick_layout_call() {
+    LAYOUT_CALL_COUNT.with(|c| c.set(c.get() + 1));
+}
+
+#[cfg(test)]
+pub(crate) fn layout_call_count() -> u64 {
+    LAYOUT_CALL_COUNT.with(std::cell::Cell::get)
+}

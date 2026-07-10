@@ -340,6 +340,9 @@ impl WidgetHost {
     /// Cursor-move handler — drives canvas pan-drag, marquee /
     /// layer / chat / overlay drags, and the chrome hover washes.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        // Session-switch owner rotation before the cursor_probe resolve stores
+        // the canonical build (mirrors native).
+        self.rotate_chat_owner_if_session_changed();
         // Refresh the derived paint doc once up front so every hit-test
         // below (layer context menu, layer drag, align toolbar) reads
         // current geometry, never a stale snapshot.
@@ -577,11 +580,22 @@ impl WidgetHost {
         if self.update_chat_model_picker_hover(x, y, over_topmost) {
             return true;
         }
+        // Resolve the chat transcript ONCE for this cursor event: the
+        // header-hover hit-test AND the design-block hover below both read this
+        // single combined probe, so a move over the transcript fingerprints it
+        // once instead of twice.
+        let chat_probe = self
+            .ai_chat_rect(self.last_viewport_w, self.last_viewport_h)
+            .map(|chat_rect| {
+                use op_editor_ui::widgets::AIChatPlaceholder;
+                AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                    .owned_by(self.chat_panel_owner)
+                    .cursor_probe(chat_rect, Point2D::new(x, y))
+            });
         // AI chat header buttons (chevron / maximize / new chat) hover.
-        if let Some(chat_rect) = self.ai_chat_rect(self.last_viewport_w, self.last_viewport_h) {
-            use op_editor_ui::widgets::AIChatPlaceholder;
-            let new_hover = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
-                .hit_test(chat_rect, Point2D::new(x, y))
+        if let Some(probe) = chat_probe.as_ref() {
+            let new_hover = probe
+                .hit
                 .as_ref()
                 .and_then(op_editor_ui::widgets::editor_state_ext::chat_header_hover);
             if new_hover != self.editor_state.editor_ui.chat_header_hover {
@@ -664,7 +678,16 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
-        if self.update_chat_design_hover(x, y, over_topmost) {
+        // Design-block hover — reuse the combined probe resolved above (gated on
+        // `over_topmost` exactly as the old dedicated pass was).
+        let design_hover = if over_topmost {
+            None
+        } else {
+            chat_probe
+                .as_ref()
+                .and_then(|probe| probe.design_block_hover)
+        };
+        if self.apply_chat_design_hover(design_hover) {
             return true;
         }
         // PropertyPanel tab/action hover wash. Shown with a selection.

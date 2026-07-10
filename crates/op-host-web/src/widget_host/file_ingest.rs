@@ -30,6 +30,12 @@ impl WidgetHost {
         preserved.preserve_authored_geometry = state.editor_ui.preserve_authored_geometry;
         state.editor_ui = preserved;
         self.editor_state = state;
+        // The imported document restarts at revision 0 / page 0, so its
+        // LayerPanel row-model-cache key aliases the replaced document's — rotate
+        // the owner so the next owned paint resolve rebuilds instead of serving
+        // the previous document's cached rows (mirrors native
+        // `install_imported_state`).
+        self.force_rotate_layer_panel_owner();
         // An import always wants a fresh scene; invalidate the build cache so the
         // next `refresh_layout_scene` rebuilds even if the imported document
         // happens to match the last build's inputs (mirrors the native host).

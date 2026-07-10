@@ -54,6 +54,9 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) {
+        // Rotate the transcript-cache owner if the active chat session changed,
+        // BEFORE any resolve stores under it (mirrors native paint).
+        self.rotate_chat_owner_if_session_changed();
         self.sync_theme_from_editor();
         backend.fill_rect(
             Rect {
@@ -130,7 +133,10 @@ impl WidgetHost {
             let mut layer_panel = if let Some(d) = &active_drag {
                 LayerPanel::from_editor_with_drag_source(&self.editor_state, &d.source)
             } else {
-                LayerPanel::from_editor(&self.editor_state)
+                // Per-frame paint: resolve the row model through the
+                // owner-scoped cache so idle / streaming / hover repaints
+                // that don't touch the layer tree skip the walk + measure.
+                LayerPanel::from_editor_owned(&self.editor_state, self.layer_panel_owner)
             };
             if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
@@ -237,7 +243,10 @@ impl WidgetHost {
         }
 
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
-            let chat = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
+            // Owner-stamp so paint stores the canonical build under THIS host's
+            // owner (mirrors native).
+            let chat = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms)
+                .owned_by(self.chat_panel_owner);
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };

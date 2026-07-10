@@ -332,6 +332,29 @@ pub struct WidgetHostNative {
     /// Last preview pointer position in DOCUMENT space — the release
     /// dispatches its Up here (the OS reports release without coords).
     pub(in crate::widget_host) preview_last_doc: Option<(f32, f32)>,
+    /// Stable, process-unique id scoping this host's chat-panel transcript
+    /// cache. Allocated once at construction and stamped onto every
+    /// `AIChatPlaceholder` this host builds (`.owned_by`), so the display-frame
+    /// cursor-shape hint (`hit_test_current_build`) only reads a build THIS
+    /// panel resolved — never one a different panel left in the thread-local
+    /// slot after a tab/host switch.
+    pub(in crate::widget_host) chat_panel_owner: u64,
+    /// Stable, process-unique id scoping this host's LayerPanel row-model
+    /// cache. Stamped onto the per-frame paint build (`from_editor_owned`)
+    /// so the thread-local slot is owned by this panel and never
+    /// cross-served to another host on a revision-counter collision. Page
+    /// switches don't rotate (`active_page_index` is in the key), but
+    /// whole-document replacements do — see
+    /// `force_rotate_layer_panel_owner` (revision counters restart at 0,
+    /// so the key alone can alias across documents).
+    pub(in crate::widget_host) layer_panel_owner: u64,
+    /// Active chat-session (tab) index observed at the last owner rotation.
+    /// When the active session changes, [`Self::rotate_chat_owner_if_session_changed`]
+    /// rotates `chat_panel_owner` so the new tab's transcript never reads the
+    /// previous tab's cached geometry via the 0-hash cursor-shape hint (it reads
+    /// `None` — the default arrow — until the new tab's first paint re-stores the
+    /// slot under the rotated owner).
+    pub(in crate::widget_host) last_chat_session_index: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -594,6 +617,7 @@ impl WidgetHostNative {
         // Seed the render scene once up front; subsequent frames
         // re-derive only when `editor_state_dirty` is set.
         let layout_scene = op_pen_loader::editor_state_to_layout_scene(&editor_state);
+        let last_chat_session_index = editor_state.chat.active_index();
         Self {
             editor_state,
             layout_scene,
@@ -636,7 +660,64 @@ impl WidgetHostNative {
             preview: None,
             preview_press_active: false,
             preview_last_doc: None,
+            chat_panel_owner: op_editor_ui::widgets::AIChatPlaceholder::next_owner(),
+            layer_panel_owner: op_editor_ui::widgets::LayerPanel::next_layer_panel_owner(),
+            last_chat_session_index,
         }
+    }
+
+    /// Rotate the chat-panel transcript-cache owner when the active chat session
+    /// (tab) changed since the last call. A fresh owner means the new tab's
+    /// display-frame cursor hint reads `None` (the slot still belongs to the old
+    /// owner) until this tab's next paint re-resolves and re-stamps it — the
+    /// documented one-frame isolation. Called at the top of the paint / probe
+    /// entry points so the very next resolve stores under the rotated owner.
+    pub(in crate::widget_host) fn rotate_chat_owner_if_session_changed(&mut self) {
+        let active = self.editor_state.chat.active_index();
+        if active != self.last_chat_session_index {
+            self.last_chat_session_index = active;
+            self.chat_panel_owner = op_editor_ui::widgets::AIChatPlaceholder::next_owner();
+        }
+    }
+
+    /// Force a chat-panel transcript-cache owner rotation NOW, unconditionally —
+    /// even when `chat.active_index()` is unchanged. Called synchronously at each
+    /// host session-mutation site (tab switch / new tab). A tab switch changes the
+    /// active session but a `CursorMoved` can arrive before the next paint and run
+    /// the event-time cursor-shape hint (`geometry::cursor_hint` →
+    /// `hit_test_current_build`), which would otherwise pair the previous session's
+    /// cached geometry with the new session's live messages. Rotating here means
+    /// that hint reads `None` (default arrow) until the new session's first paint
+    /// re-stamps the slot. Rotating unconditionally also covers same-index session
+    /// replacement — closing active tab 0 installs the next session at index 0,
+    /// closing the sole tab replaces it in place — which the index-only poll in
+    /// [`Self::rotate_chat_owner_if_session_changed`] misses.
+    ///
+    /// Public because some session mutations run outside this crate: the desktop
+    /// runner's ⌘T `new_chat_tab` and tab-close `close_chat_tab` mutate
+    /// `chat` directly and must rotate synchronously for the same reason.
+    pub fn force_rotate_chat_owner(&mut self) {
+        self.chat_panel_owner = op_editor_ui::widgets::AIChatPlaceholder::next_owner();
+        self.last_chat_session_index = self.editor_state.chat.active_index();
+    }
+
+    /// Force a LayerPanel row-model-cache owner rotation NOW. The cache key is
+    /// `(document_revision, active_page_index, collapsed_fp, rename_fp)`, and a
+    /// freshly loaded / imported / MCP-replaced document restarts its revision
+    /// at 0 and its active page index at 0 — so a WHOLE-DOCUMENT replacement
+    /// leaves the key byte-identical to the previous document's, while the
+    /// owner never rotates on its own. The paint path would then serve the
+    /// PREVIOUS document's cached rows indefinitely. Rotating the owner at every
+    /// replacement seam makes the next owned paint resolve miss the stale slot
+    /// and rebuild against the new document. (Page/tab switches WITHIN a live
+    /// document need no rotation — they change `active_page_index`, which is in
+    /// the key.)
+    ///
+    /// Public because some replacement seams run outside this crate: the desktop
+    /// runner replaces `editor_state` on Open / New (`persistence.rs`) and MCP
+    /// `ReplaceDocument` (`mcp_runtime.rs`) and must rotate synchronously.
+    pub fn force_rotate_layer_panel_owner(&mut self) {
+        self.layer_panel_owner = op_editor_ui::widgets::LayerPanel::next_layer_panel_owner();
     }
 
     /// Push the host's current shift-key state. Runners call this
@@ -685,6 +766,7 @@ impl WidgetHostNative {
             canvas_size,
             &self.editor_state.ui.variables.active_theme,
             self.editor_state.ui.active_page_index,
+            self.editor_state.editor_ui.preserve_authored_geometry,
         ) {
             Ok(mut session) => {
                 session.set_now_ms(self.now_ms);
@@ -1130,6 +1212,13 @@ impl WidgetHostNative {
                 drop(old_scene);
             })
             .expect("spawn op-import-drop worker");
+
+        // The imported document restarts at revision 0 / page 0, so its
+        // LayerPanel row-model-cache key aliases the replaced document's.
+        // Rotate the owner here — the single funnel for the Figma-import path
+        // (figma_import_session) — so the next owned paint resolve rebuilds
+        // instead of serving the previous document's cached rows.
+        self.force_rotate_layer_panel_owner();
 
         // The scene was just taken (left empty) and is rebuilt lazily on the next
         // `refresh_layout_scene`. Invalidate the build cache so that rebuild is

@@ -11,16 +11,20 @@
 //! The panel is platform-free: the desktop host paints it, maps a
 //! click to a [`DesignMdHit`], and owns import / export / drag.
 
+use std::rc::Rc;
+
 use crate::theme::Theme;
-use crate::widgets::button::{paint_button_feedback_wash, paint_ghost_button_feedback};
+use crate::widgets::button::paint_ghost_button_feedback;
 use crate::widgets::design_md_markdown::{parse_blocks, parse_inline, wrap_runs, MdBlock, MdRun};
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{Icon, PaintCx};
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Point2D, Rect};
 use op_editor_core::{ButtonPressTarget, DesignMdButton, DesignMdSpec, EditorState, Locale};
 
 mod helpers;
-use helpers::{hex_to_color, truncate};
+#[cfg(test)]
+pub(crate) use helpers::layout_call_count;
+use helpers::truncate;
 
 /// Panel width in logical px.
 pub const DESIGN_MD_PANEL_W: f32 = 480.0;
@@ -81,8 +85,13 @@ pub struct DesignMdPanel<'a> {
     pub(in crate::widgets) pressed: Option<DesignMdButton>,
 }
 
-/// One rendered line within a section body.
-enum RenderLine {
+/// One rendered line within a section body. `pub(super)` (rather than
+/// private) so the sibling `design_md_line_cache` module — which
+/// memoizes `section_lines`'s parse + wrap output across frames — can
+/// name the type; see that module's docs for why the cache lives
+/// outside this file instead of as a field here.
+#[derive(Clone)]
+pub(super) enum RenderLine {
     /// A markdown heading — font size + pre-split inline runs.
     Heading(f32, Vec<MdRun>),
     /// A paragraph / bullet continuation line.
@@ -118,8 +127,10 @@ struct SectionLayout {
     expanded: bool,
     /// `y` where the body begins (panel coords).
     body_top: f32,
-    /// Rendered body lines (empty when collapsed).
-    lines: Vec<RenderLine>,
+    /// Rendered body lines (empty when collapsed). Shared with the
+    /// `design_md_line_cache` slot — cloning this is a refcount bump,
+    /// not a deep copy of every parsed `RenderLine`.
+    lines: Rc<Vec<RenderLine>>,
 }
 
 impl<'a> DesignMdPanel<'a> {
@@ -216,18 +227,23 @@ impl<'a> DesignMdPanel<'a> {
     }
 
     /// The raw markdown content of section `index`, capped at `limit`.
-    fn section_content(&self, index: u8) -> Option<(String, usize)> {
+    /// Borrows straight from `self.spec` (lifetime `'a`, not tied to
+    /// `&self`) instead of cloning, so `section_lines` can compare it
+    /// against the parse cache's stored key WITHOUT an eager allocation
+    /// on every call — the cache only clones into an owned `String` on
+    /// an actual miss.
+    fn section_content(&self, index: u8) -> Option<(&'a str, usize)> {
         let s = self.spec?;
         match index {
-            0 => s.visual_theme.clone().map(|c| (c, 600)),
+            0 => s.visual_theme.as_deref().map(|c| (c, 600)),
             2 => s
                 .typography
                 .as_ref()
-                .and_then(|t| t.scale.clone())
+                .and_then(|t| t.scale.as_deref())
                 .map(|c| (c, 600)),
-            3 => s.component_styles.clone().map(|c| (c, 1000)),
-            4 => s.layout_principles.clone().map(|c| (c, 1000)),
-            5 => s.generation_notes.clone().map(|c| (c, 600)),
+            3 => s.component_styles.as_deref().map(|c| (c, 1000)),
+            4 => s.layout_principles.as_deref().map(|c| (c, 1000)),
+            5 => s.generation_notes.as_deref().map(|c| (c, 600)),
             _ => None,
         }
     }
@@ -255,53 +271,65 @@ impl<'a> DesignMdPanel<'a> {
         }
     }
 
-    /// Render section `index`'s body into positioned lines.
-    fn section_lines(&self, index: u8) -> Vec<RenderLine> {
-        // The colour section is a swatch list, not markdown.
+    /// Render section `index`'s body into positioned lines. The
+    /// expensive part (`parse_blocks` + `parse_inline` + `wrap_runs`)
+    /// is memoized cross-frame in `design_md_line_cache`, keyed on the
+    /// section's raw content by value — see that module's docs. Returns
+    /// the cache's shared `Rc` directly (a hit is a refcount bump, not a
+    /// deep clone of every `RenderLine`).
+    fn section_lines(&self, index: u8) -> Rc<Vec<RenderLine>> {
+        // The colour section is a swatch list, not markdown — cheap
+        // enough (just an index range) that it needs no cache.
         if index == 1 {
             let count = self
                 .spec
                 .and_then(|s| s.color_palette.as_ref())
                 .map_or(0, |c| c.len());
-            return (0..count).map(RenderLine::Color).collect();
+            return Rc::new((0..count).map(RenderLine::Color).collect());
         }
         let Some((content, limit)) = self.section_content(index) else {
-            return Vec::new();
+            return Rc::new(Vec::new());
         };
         let budget = ((DESIGN_MD_PANEL_W - PAD * 2.0 - BODY_INDENT) / CHAR_W) as usize;
-        let mut lines = Vec::new();
-        for (bi, block) in parse_blocks(&content, limit).into_iter().enumerate() {
-            if bi > 0 {
-                lines.push(RenderLine::Gap);
-            }
-            match block {
-                MdBlock::Heading { level, text } => {
-                    let size = if level <= 3 { 12.0 } else { 11.5 };
-                    lines.push(RenderLine::Heading(size, parse_inline(&text)));
+        super::design_md_line_cache::resolve(index, content, limit, || {
+            let mut lines = Vec::new();
+            for (bi, block) in parse_blocks(content, limit).into_iter().enumerate() {
+                if bi > 0 {
+                    lines.push(RenderLine::Gap);
                 }
-                MdBlock::Paragraph(text) => {
-                    for wl in wrap_runs(&parse_inline(&text), budget) {
-                        lines.push(RenderLine::Body(wl));
+                match block {
+                    MdBlock::Heading { level, text } => {
+                        let size = if level <= 3 { 12.0 } else { 11.5 };
+                        lines.push(RenderLine::Heading(size, parse_inline(&text)));
                     }
-                }
-                MdBlock::Bullet(text) => {
-                    let wrapped = wrap_runs(&parse_inline(&text), budget.saturating_sub(2));
-                    for (i, wl) in wrapped.into_iter().enumerate() {
-                        if i == 0 {
-                            lines.push(RenderLine::Bullet(wl));
-                        } else {
+                    MdBlock::Paragraph(text) => {
+                        for wl in wrap_runs(&parse_inline(&text), budget) {
                             lines.push(RenderLine::Body(wl));
+                        }
+                    }
+                    MdBlock::Bullet(text) => {
+                        let wrapped = wrap_runs(&parse_inline(&text), budget.saturating_sub(2));
+                        for (i, wl) in wrapped.into_iter().enumerate() {
+                            if i == 0 {
+                                lines.push(RenderLine::Bullet(wl));
+                            } else {
+                                lines.push(RenderLine::Body(wl));
+                            }
                         }
                     }
                 }
             }
-        }
-        lines
+            lines
+        })
     }
 
     /// Compute every section's layout — shared by paint + hit-test so
-    /// they always agree on row positions.
+    /// they always agree on row positions. `paint` / `hit_test` each
+    /// call this at most once per pass and thread the result into their
+    /// other helpers, instead of the pre-fix up-to-3 independent calls.
     fn layout(&self, panel: Rect) -> Vec<SectionLayout> {
+        #[cfg(test)]
+        helpers::tick_layout_call();
         let left = panel.origin.x + PAD;
         let inner_w = panel.size.x - PAD * 2.0;
         let mut y = panel.origin.y + HEADER_H + SECTION_GAP;
@@ -324,7 +352,7 @@ impl<'a> DesignMdPanel<'a> {
             let lines = if expanded {
                 self.section_lines(index)
             } else {
-                Vec::new()
+                Rc::new(Vec::new())
             };
             let body_h: f32 = lines.iter().map(RenderLine::height).sum();
             y += body_h + SECTION_GAP;
@@ -340,10 +368,11 @@ impl<'a> DesignMdPanel<'a> {
         out
     }
 
-    /// The footer "remove" link rect — below the last section.
-    fn remove_rect(&self, panel: Rect) -> Rect {
-        let bottom = self
-            .layout(panel)
+    /// The footer "remove" link rect — below the last section. Takes
+    /// the caller's already-computed `sections` (from a single
+    /// [`Self::layout`] call) instead of recomputing it.
+    fn remove_rect(&self, panel: Rect, sections: &[SectionLayout]) -> Rect {
+        let bottom = sections
             .last()
             .map(|s| s.body_top + s.lines.iter().map(RenderLine::height).sum::<f32>())
             .unwrap_or(panel.origin.y + HEADER_H + SECTION_GAP);
@@ -353,20 +382,23 @@ impl<'a> DesignMdPanel<'a> {
         }
     }
 
-    fn content_bottom(&self, panel: Rect) -> f32 {
+    fn content_bottom(&self, panel: Rect, sections: &[SectionLayout]) -> f32 {
         if !self.has_content() {
             return panel.origin.y + HEADER_H;
         }
-        let remove = self.remove_rect(panel);
+        let remove = self.remove_rect(panel, sections);
         remove.origin.y + remove.size.y + PAD
     }
 
+    /// Public entry point (host wheel-scroll clamp).
     pub fn max_scroll(&self, panel: Rect) -> f32 {
-        (self.content_bottom(panel) - (panel.origin.y + panel.size.y)).max(0.0)
+        let sections = self.layout(panel);
+        (self.content_bottom(panel, &sections) - (panel.origin.y + panel.size.y)).max(0.0)
     }
 
-    fn effective_scroll(&self, panel: Rect) -> f32 {
-        self.scroll.clamp(0.0, self.max_scroll(panel))
+    fn effective_scroll(&self, panel: Rect, sections: &[SectionLayout]) -> f32 {
+        let max = (self.content_bottom(panel, sections) - (panel.origin.y + panel.size.y)).max(0.0);
+        self.scroll.clamp(0.0, max)
     }
 
     /// Map a click at `point` onto a [`DesignMdHit`]. `None` when the
@@ -393,13 +425,17 @@ impl<'a> DesignMdPanel<'a> {
             return Some(DesignMdHit::DragHeader);
         }
         if self.has_content() {
-            let content_point = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-            for sec in self.layout(panel) {
+            // Resolve `layout()` once and thread it into the scroll clamp
+            // + section walk + remove-link check below.
+            let sections = self.layout(panel);
+            let scroll = self.effective_scroll(panel, &sections);
+            let content_point = Point2D::new(point.x, point.y + scroll);
+            for sec in &sections {
                 if sec.header.contains(content_point) {
                     return Some(DesignMdHit::ToggleSection(sec.index));
                 }
             }
-            if self.remove_rect(panel).contains(content_point) {
+            if self.remove_rect(panel, &sections).contains(content_point) {
                 return Some(DesignMdHit::Remove);
             }
         } else {
@@ -524,10 +560,13 @@ impl<'a> DesignMdPanel<'a> {
         }
     }
 
-    /// Paint the project name + every present section.
+    /// Paint the project name + every present section. Resolves
+    /// `layout()` once for the whole paint pass and threads it into the
+    /// scroll clamp, the section walk, and the footer remove-link rect.
     fn paint_content(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         let left = rect.origin.x + PAD;
-        let scroll = self.effective_scroll(rect);
+        let sections = self.layout(rect);
+        let scroll = self.effective_scroll(rect, &sections);
         if let Some(name) = self.spec.and_then(|s| s.project_name.as_deref()) {
             self.text(
                 cx,
@@ -538,7 +577,10 @@ impl<'a> DesignMdPanel<'a> {
                 self.theme.foreground,
             );
         }
-        for mut sec in self.layout(rect) {
+        // Compute the remove rect from the same `sections` before the
+        // loop below consumes it by value.
+        let mut remove = self.remove_rect(rect, &sections);
+        for mut sec in sections {
             sec.header.origin.y -= scroll;
             sec.body_top -= scroll;
             self.paint_section_header(cx, &sec);
@@ -547,7 +589,6 @@ impl<'a> DesignMdPanel<'a> {
             }
         }
         // Footer "remove" link.
-        let mut remove = self.remove_rect(rect);
         remove.origin.y -= scroll;
         let remove_hovered = self.hover == Some(DesignMdButton::Remove);
         let remove_color = paint_ghost_button_feedback(
@@ -566,239 +607,11 @@ impl<'a> DesignMdPanel<'a> {
             remove_color,
         );
     }
-
-    /// Paint one section's collapsible header row.
-    fn paint_section_header(&self, cx: &mut PaintCx<'_>, sec: &SectionLayout) {
-        cx.backend
-            .fill_round_rect(sec.header, 7.0, self.theme.muted);
-        let target = DesignMdButton::ToggleSection(sec.index);
-        paint_button_feedback_wash(
-            cx.backend,
-            &self.theme,
-            sec.header,
-            7.0,
-            self.hover == Some(target),
-            self.is_pressed(target),
-        );
-        let chevron = if sec.expanded { "▾" } else { "▸" };
-        let baseline = sec.header.origin.y + SECTION_HEADER_H / 2.0 + 4.0;
-        self.text(
-            cx,
-            chevron,
-            sec.header.origin.x + 8.0,
-            baseline,
-            10.0,
-            self.theme.muted_foreground,
-        );
-        self.text(
-            cx,
-            self.t(sec.title_key),
-            sec.header.origin.x + 22.0,
-            baseline,
-            11.0,
-            self.theme.foreground,
-        );
-    }
-
-    /// Paint one expanded section's body lines.
-    fn paint_section_body(&self, cx: &mut PaintCx<'_>, panel: Rect, sec: &SectionLayout) {
-        let left = panel.origin.x + PAD + BODY_INDENT;
-        let mut y = sec.body_top;
-        for line in &sec.lines {
-            match line {
-                RenderLine::Heading(size, runs) => {
-                    self.paint_runs(cx, runs, left, y + 12.0, *size, true);
-                }
-                RenderLine::Body(runs) => {
-                    self.paint_runs(cx, runs, left, y + 11.0, 11.0, false);
-                }
-                RenderLine::Bullet(runs) => {
-                    self.text(
-                        cx,
-                        "•",
-                        left - 10.0,
-                        y + 11.0,
-                        11.0,
-                        self.theme.muted_foreground,
-                    );
-                    self.paint_runs(cx, runs, left, y + 11.0, 11.0, false);
-                }
-                RenderLine::Color(i) => {
-                    self.paint_color_row(cx, panel, *i, y);
-                }
-                RenderLine::Gap => {}
-            }
-            y += line.height();
-        }
-    }
-
-    /// Paint one colour-palette row — swatch + name + hex/role.
-    fn paint_color_row(&self, cx: &mut PaintCx<'_>, panel: Rect, index: usize, y: f32) {
-        let Some(color) = self
-            .spec
-            .and_then(|s| s.color_palette.as_ref())
-            .and_then(|c| c.get(index))
-        else {
-            return;
-        };
-        let left = panel.origin.x + PAD + BODY_INDENT;
-        let swatch = Rect {
-            origin: Point2D::new(left, y + 3.0),
-            size: Point2D::new(16.0, 16.0),
-        };
-        cx.backend
-            .fill_round_rect(swatch, 4.0, hex_to_color(&color.hex));
-        cx.backend
-            .stroke_round_rect(swatch, 4.0, self.theme.border, 1.0);
-        let text_x = left + 24.0;
-        self.text(
-            cx,
-            &truncate(&color.name, 28),
-            text_x,
-            y + 11.0,
-            11.0,
-            self.theme.foreground,
-        );
-        let detail = if color.role.is_empty() {
-            color.hex.clone()
-        } else {
-            format!("{} — {}", color.hex, color.role)
-        };
-        self.text(
-            cx,
-            &truncate(&detail, 52),
-            text_x,
-            y + 22.0,
-            10.0,
-            self.theme.muted_foreground,
-        );
-    }
-
-    /// Paint a sequence of inline-styled runs left-to-right. `heading`
-    /// brightens plain text; non-headings render plain text muted.
-    fn paint_runs(
-        &self,
-        cx: &mut PaintCx<'_>,
-        runs: &[MdRun],
-        x: f32,
-        baseline: f32,
-        size: f32,
-        heading: bool,
-    ) {
-        let mut cur = x;
-        for run in runs {
-            match run {
-                MdRun::Plain(s) => {
-                    let color = if heading {
-                        self.theme.foreground
-                    } else {
-                        self.theme.muted_foreground
-                    };
-                    self.text(cx, s, cur, baseline, size, color);
-                    cur += s.chars().count() as f32 * CHAR_W;
-                }
-                MdRun::Bold(s) => {
-                    self.text(cx, s, cur, baseline, size, self.theme.foreground);
-                    cur += s.chars().count() as f32 * CHAR_W;
-                }
-                MdRun::Code(s) => {
-                    let w = s.chars().count() as f32 * CHAR_W;
-                    cx.backend.fill_round_rect(
-                        Rect {
-                            origin: Point2D::new(cur - 2.0, baseline - 10.0),
-                            size: Point2D::new(w + 4.0, 14.0),
-                        },
-                        3.0,
-                        self.theme.muted,
-                    );
-                    self.text(cx, s, cur, baseline, size, self.theme.foreground);
-                    cur += w + 4.0;
-                }
-                MdRun::Color(hex) => {
-                    let swatch = Rect {
-                        origin: Point2D::new(cur, baseline - 9.0),
-                        size: Point2D::new(10.0, 10.0),
-                    };
-                    cx.backend.fill_round_rect(swatch, 2.0, hex_to_color(hex));
-                    cx.backend
-                        .stroke_round_rect(swatch, 2.0, self.theme.border, 1.0);
-                    self.text(cx, hex, cur + 14.0, baseline, size, self.theme.foreground);
-                    cur += 14.0 + hex.chars().count() as f32 * CHAR_W;
-                }
-            }
-        }
-    }
-
-    /// Paint one square header icon button.
-    fn icon_button(
-        &self,
-        cx: &mut PaintCx<'_>,
-        rect: Rect,
-        icon: Icon,
-        hovered: bool,
-        pressed: bool,
-    ) {
-        cx.backend.fill_round_rect(rect, 6.0, self.theme.muted);
-        jian_widgets::components::icon_button::IconButton {
-            icon_paths: icon.paths(),
-            hovered,
-            pressed,
-            active: false,
-            enabled: true,
-            icon_size: BTN - 10.0,
-            stroke_width: 1.5,
-        }
-        .paint(
-            cx.backend,
-            rect,
-            &crate::widgets::button::tokens_from_theme(&self.theme),
-        );
-    }
-
-    fn action_button(
-        &self,
-        cx: &mut PaintCx<'_>,
-        rect: Rect,
-        icon: Icon,
-        label: &str,
-        hovered: bool,
-        pressed: bool,
-    ) {
-        jian_widgets::components::button::Button {
-            label,
-            icon_paths: Some(icon.paths()),
-            // Secondary (muted fill) preserves the empty-state CTA's button
-            // affordance — Ghost would render it transparent until hover.
-            variant: jian_widgets::components::button::ButtonVariant::Secondary,
-            enabled: true,
-            hovered,
-            pressed,
-            font_size: 11.0,
-        }
-        .paint(
-            cx.backend,
-            rect,
-            &crate::widgets::button::tokens_from_theme(&self.theme),
-        );
-    }
-
-    /// Draw one line of text.
-    fn text(
-        &self,
-        cx: &mut PaintCx<'_>,
-        s: &str,
-        x: f32,
-        baseline_y: f32,
-        size: f32,
-        color: Color,
-    ) {
-        let layout = TextLayout::single_run(
-            s,
-            "system-ui",
-            size,
-            (color).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend.draw_text(&layout, Point2D::new(x, baseline_y));
-    }
 }
+
+// The section-body / colour-row / inline-run / shared-chrome paint
+// helpers live in a sibling file (`_paint.rs`) to keep this module
+// under the 800-line ceiling; a second `impl DesignMdPanel` block, not
+// re-exported (inherent methods resolve crate-wide without an import).
+#[path = "design_md_panel_paint.rs"]
+mod paint;

@@ -259,3 +259,114 @@ fn pressed_section_header_paints_pressed_feedback() {
         "pressed section header should paint shared pressed feedback"
     );
 }
+
+/// The `design_md_line_cache` memo should serve the same parsed +
+/// wrapped lines across repaints and hit-tests while the markdown
+/// content is unchanged, and rebuild only when it actually changes.
+#[test]
+fn section_lines_cache_hits_across_repaint_and_hit_test_recomputes_on_content_change() {
+    let state = open_state();
+    let rect = Rect::xywh(0.0, 0.0, 480.0, 560.0);
+
+    let before = crate::widgets::design_md_line_cache::build_count();
+    let panel = DesignMdPanel::for_editor(&state).expect("open");
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    panel.paint(&mut cx, rect);
+    let after_first_paint = crate::widgets::design_md_line_cache::build_count();
+    assert!(
+        after_first_paint > before,
+        "the default-expanded Visual Theme section should parse once on first paint"
+    );
+
+    // A fresh panel rebuilt from the SAME (unchanged) state — mirroring
+    // the real per-frame rebuild — must hit the cache on repaint.
+    let panel2 = DesignMdPanel::for_editor(&state).expect("open");
+    let mut backend2 = CaptureBackend::default();
+    let mut cx2 = PaintCx {
+        backend: &mut backend2,
+    };
+    panel2.paint(&mut cx2, rect);
+    assert_eq!(
+        crate::widgets::design_md_line_cache::build_count(),
+        after_first_paint,
+        "repaint with unchanged design-md content must hit the cache, not reparse"
+    );
+
+    // `hit_test` also resolves `layout()` (and therefore `section_lines`)
+    // — it must reuse the same cached parse.
+    let _ = panel2.hit_test(
+        rect,
+        Point2D::new(rect.origin.x + 10.0, rect.origin.y + 60.0),
+    );
+    assert_eq!(
+        crate::widgets::design_md_line_cache::build_count(),
+        after_first_paint,
+        "hit_test's layout() must reuse the cached parse, not rebuild"
+    );
+
+    // Changed markdown content must invalidate the cache and rebuild.
+    let mut changed = open_state();
+    changed.doc.design_md = Some(op_editor_core::parse_design_md(
+        "# Brief\n\n## Visual Theme\nA totally different theme, much longer than before",
+    ));
+    let panel3 = DesignMdPanel::for_editor(&changed).expect("open");
+    let mut backend3 = CaptureBackend::default();
+    let mut cx3 = PaintCx {
+        backend: &mut backend3,
+    };
+    panel3.paint(&mut cx3, rect);
+    assert!(
+        crate::widgets::design_md_line_cache::build_count() > after_first_paint,
+        "changed design-md content must invalidate the cache and rebuild"
+    );
+}
+
+/// Before this fix, `paint` independently ran `layout()` up to 3 times
+/// per pass (the scroll-clamp chain, the section-paint walk, and the
+/// footer remove-link rect each called it on their own). It must now
+/// resolve `layout()` exactly once and thread the result through.
+#[test]
+fn paint_resolves_layout_exactly_once() {
+    let state = open_state();
+    let panel = DesignMdPanel::for_editor(&state).expect("open");
+    let rect = Rect::xywh(0.0, 0.0, 480.0, 560.0);
+    let before = crate::widgets::design_md_panel::layout_call_count();
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    panel.paint(&mut cx, rect);
+
+    assert_eq!(
+        crate::widgets::design_md_panel::layout_call_count(),
+        before + 1,
+        "a single paint pass must resolve the section layout exactly once, not up to 3 times"
+    );
+}
+
+/// Same as above for `hit_test` — it independently ran `layout()` via
+/// the scroll-clamp chain, the section walk, and the remove-link check.
+#[test]
+fn hit_test_resolves_layout_exactly_once() {
+    let state = open_state();
+    let panel = DesignMdPanel::for_editor(&state).expect("open");
+    let rect = Rect::xywh(0.0, 0.0, 480.0, 560.0);
+    let before = crate::widgets::design_md_panel::layout_call_count();
+
+    // A point below the header so `hit_test` walks into the
+    // has_content() branch that resolves `layout()`.
+    let _ = panel.hit_test(
+        rect,
+        Point2D::new(rect.origin.x + 10.0, rect.origin.y + 60.0),
+    );
+
+    assert_eq!(
+        crate::widgets::design_md_panel::layout_call_count(),
+        before + 1,
+        "a single hit_test pass must resolve the section layout exactly once, not up to 3 times"
+    );
+}

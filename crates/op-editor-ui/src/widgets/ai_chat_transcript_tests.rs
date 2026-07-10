@@ -270,7 +270,12 @@ fn transcript_text_offset_at_resolves_user_message_text() {
         bubble.rect.origin.y + USER_BUBBLE_PAD + 2.0,
     );
 
-    let hit = transcript_text_offset_at(&messages, body, point, op_editor_core::Locale::EnUs, 0.0)
+    let canonical = crate::widgets::ai_chat_transcript_cache::unowned_for_tests(
+        &messages,
+        body,
+        op_editor_core::Locale::EnUs,
+    );
+    let hit = transcript_text_offset_at(&messages, &canonical, body, point, 0.0)
         .expect("user message text should be selectable");
 
     assert_eq!(hit.message_index, 0);
@@ -293,13 +298,18 @@ fn paint_transcript_highlights_selected_user_text() {
         backend: &mut backend,
     };
 
+    let canonical = crate::widgets::ai_chat_transcript_cache::unowned_for_tests(
+        &messages,
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
     paint_transcript_with_selection(
         &mut cx,
         &theme,
         body(),
         &messages,
+        &canonical,
         0,
-        op_editor_core::Locale::EnUs,
         None,
         Some(selection),
         0.0,
@@ -1113,95 +1123,4 @@ fn user_message_images_get_one_thumbnail_rect_each() {
     // Thumbnails do not overlap.
     let (a, b) = (items[0].images[0], items[0].images[1]);
     assert!(a.origin.x != b.origin.x || a.origin.y != b.origin.y);
-}
-
-#[test]
-fn transcript_hit_resolves_a_click_on_the_thinking_header() {
-    let mut m = ChatMessage::assistant("answer");
-    m.thinking = "reasoning".into();
-    let msgs = std::slice::from_ref(&m);
-    let header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
-        .thinking
-        .as_ref()
-        .unwrap()
-        .header;
-    let cx = header.origin.x + header.size.x / 2.0;
-    let cy = header.origin.y + header.size.y / 2.0;
-    assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
-        Some(TranscriptHit::ToggleThinking(0))
-    );
-}
-
-#[test]
-fn transcript_hit_resolves_a_click_on_the_tool_header() {
-    let mut m = ChatMessage::assistant("answer");
-    m.tool_calls = vec![ChatToolCall {
-        name: "insert_node".into(),
-        args: "{}".into(),
-    }];
-    let msgs = std::slice::from_ref(&m);
-    let header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
-        .tools
-        .as_ref()
-        .unwrap()
-        .header;
-    let cx = header.origin.x + header.size.x / 2.0;
-    let cy = header.origin.y + header.size.y / 2.0;
-    assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
-        Some(TranscriptHit::ToggleToolCalls(0))
-    );
-}
-
-#[test]
-fn transcript_hit_resolves_a_click_on_an_individual_tool_card_header() {
-    let mut m = ChatMessage::assistant("answer");
-    m.tools_collapsed = false;
-    m.tool_calls = vec![ChatToolCall {
-        name: "snapshot_layout".into(),
-        args: r#"{"args":{"pageId":"page-1"}}"#.into(),
-    }];
-    let msgs = std::slice::from_ref(&m);
-    let card_header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
-        .tools
-        .as_ref()
-        .unwrap()
-        .cards[0]
-        .header;
-    let cx = card_header.origin.x + card_header.size.x / 2.0;
-    let cy = card_header.origin.y + card_header.size.y / 2.0;
-    assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
-        Some(TranscriptHit::SetToolCallCardExpanded(0, 0, true))
-    );
-}
-
-#[test]
-fn transcript_hit_resolves_a_click_on_a_design_block_header() {
-    let m = ChatMessage::assistant(
-        r#"```json
-[{"id":"frame-1","type":"Frame"}]
-```"#,
-    );
-    let msgs = std::slice::from_ref(&m);
-    let header =
-        build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0].design_blocks[0].header;
-    let cx = header.origin.x + header.size.x / 2.0;
-    let cy = header.origin.y + header.size.y / 2.0;
-    assert_eq!(
-        transcript_hit(msgs, body(), cx, cy, op_editor_core::Locale::EnUs, 0.0),
-        Some(TranscriptHit::SetDesignBlockExpanded(0, 0, true))
-    );
-}
-
-#[test]
-fn transcript_hit_misses_when_the_click_is_not_on_a_header() {
-    let m = ChatMessage::assistant("plain answer, no thinking, no tools");
-    let msgs = std::slice::from_ref(&m);
-    // Click far below the single short message.
-    assert_eq!(
-        transcript_hit(msgs, body(), 20.0, 280.0, op_editor_core::Locale::EnUs, 0.0),
-        None
-    );
 }

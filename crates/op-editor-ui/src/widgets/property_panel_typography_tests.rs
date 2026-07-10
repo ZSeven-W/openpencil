@@ -502,3 +502,56 @@ fn import_action_at_returns_true_over_the_import_row() {
         import_centre
     ));
 }
+
+/// `font_picker_cache` should serve the same entries across calls with
+/// unchanged `(imported, system, query)` and rebuild only when one of
+/// them actually changes — the panel calls `font_picker_entries` from
+/// several accessors (paint / hit / hover / contains / max-scroll) per
+/// frame with identical live inputs.
+#[test]
+fn font_picker_entries_cache_hits_on_unchanged_inputs_and_recomputes_on_change() {
+    let imported = vec!["My Brand Sans".to_string()];
+    let system = vec!["Avenir".to_string(), "Menlo".to_string()];
+
+    let before = crate::widgets::font_picker_cache::build_count();
+    let first = font_picker_entries(&imported, &system, "men");
+    let after_first = crate::widgets::font_picker_cache::build_count();
+    assert!(
+        after_first > before,
+        "the first call with fresh inputs must rebuild"
+    );
+
+    // Same inputs, called again (mirrors a second accessor reading the
+    // same live state within one frame, or the next unchanged repaint).
+    let second = font_picker_entries(&imported, &system, "men");
+    assert_eq!(
+        crate::widgets::font_picker_cache::build_count(),
+        after_first,
+        "unchanged (imported, system, query) must hit the cache, not recompute"
+    );
+    assert_eq!(first, second);
+    // A hit must hand back the SAME allocation (refcount bump), not a
+    // fresh deep clone of every entry's owned `family`.
+    assert!(
+        std::rc::Rc::ptr_eq(&first, &second),
+        "a cache hit must return the shared Rc, not a cloned Vec"
+    );
+
+    // A changed query must invalidate + rebuild.
+    let _ = font_picker_entries(&imported, &system, "avenir");
+    assert!(
+        crate::widgets::font_picker_cache::build_count() > after_first,
+        "a changed query must invalidate the cache and rebuild"
+    );
+    let after_query_change = crate::widgets::font_picker_cache::build_count();
+
+    // A changed family list (e.g. a font import landing) must also
+    // invalidate + rebuild, even with the same query.
+    let mut system2 = system.clone();
+    system2.push("Georgia".to_string());
+    let _ = font_picker_entries(&imported, &system2, "avenir");
+    assert!(
+        crate::widgets::font_picker_cache::build_count() > after_query_change,
+        "a changed family list must invalidate the cache and rebuild"
+    );
+}
