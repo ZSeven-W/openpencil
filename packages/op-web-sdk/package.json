@@ -1,15 +1,22 @@
 {
   "name": "@zseven-w/op-web-sdk",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Read-only OpenPencil .op viewer SDK for the web (wasm-backed)",
   "license": "MIT",
   "type": "module",
-  "files": ["dist", "wasm"],
+  "files": [
+    "dist",
+    "wasm"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "require": "./dist/index.cjs" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
   },
   "scripts": {
     "build": "tsup",
@@ -17,5 +24,10 @@
     "test": "vitest run",
     "sync-wasm": "bash scripts/sync-wasm.sh"
   },
-  "devDependencies": { "tsup": "^8.0.0", "typescript": "^5.7.2", "vitest": "^3.0.0", "jsdom": "^25.0.0" }
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0",
+    "jsdom": "^25.0.0"
+  }
 }

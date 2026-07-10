@@ -38,26 +38,29 @@
 //!
 //! ## Hit-testing across two coordinate spaces
 //!
-//! The design scene offsets every page-root by its authored
-//! `(base.x, base.y)`, but the jian runtime lays each root at its own
-//! `(0, 0)`. So a tap arrives in SCENE space (it inverts the scene paint
-//! transform) and must be translated back into the runtime's
-//! root-relative space — subtract the containing root's authored origin
-//! — before [`Runtime::dispatch_pointer`]. See [`PreviewSession::dispatch_tap`].
+//! The scene paints DESIGN-canvas geometry while the runtime hit-tests
+//! its own (promoted, re-solved) layout, so a tap arriving in SCENE
+//! space maps through the rect pair of the deepest painted node it hit,
+//! with a per-gesture anchor (pointer capture). The whole pipeline
+//! lives in `input.rs` — see its module docs.
 //!
 //! ## Module split
 //!
 //! To honor the 800-line-per-file cap, [`AppMode`] + the per-root
 //! `solve_roots` + the app-mode query methods live in `app_mode.rs`,
-//! and the leaf formatter helpers (`apply_widget_state` /
-//! `display_string` / `format_warning`) live in `scene_helpers.rs`.
-//! `RootFrame` + `PreviewSession` stay here (shared), with the fields
-//! those sibling modules touch scoped `pub(in crate::preview)` (not
-//! `pub(super)`, which resolves to `pub(crate)` at this top-level
-//! module and would trip `private_interfaces` on the `AppMode` type).
+//! keyboard/focus/pointer dispatch + the scene→runtime coordinate
+//! mapping live in `input.rs`, and the leaf formatter helpers
+//! (`apply_widget_state` / `display_string` / `format_warning`) live in
+//! `scene_helpers.rs`. `RootFrame` + `PreviewSession` stay here
+//! (shared), with the fields those sibling modules touch scoped
+//! `pub(in crate::preview)` (not `pub(super)`, which resolves to
+//! `pub(crate)` at this top-level module and would trip
+//! `private_interfaces` on the `AppMode` type).
 
 mod app_mode;
 mod binding_sites;
+mod input;
+mod present;
 mod scene_helpers;
 // Gated off Windows: preview tests exercise runtime layout through
 // `jian_skia::SkiaMeasure`, which hits DirectWrite in Windows CI and aborts
@@ -69,12 +72,18 @@ mod tests;
 mod tests_app_mode;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_bindings;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_device_frame;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_geometry_parity;
 
 use app_mode::AppMode;
 use binding_sites::{collect_binding_sites, BindingSite};
 use scene_helpers::{apply_widget_state, display_string, format_warning};
 
-use jian_core::gesture::pointer::{Modifiers, PointerPhase};
+#[allow(unused_imports)]
+pub(crate) use present::PinnedPaint;
+
 use jian_core::widget_state::WidgetState;
 use jian_core::Runtime;
 use jian_ops_schema::compat::{load_str_with, LoadOptions};
@@ -116,12 +125,23 @@ pub struct PreviewSession {
     /// `pub(in crate::preview)` so `app_mode`'s
     /// `current_screen_scene_rect` can read the first frame's scene rect.
     pub(in crate::preview) root_frames: Vec<RootFrame>,
-    /// The design `LayoutScene` preview paints, built from the SAME
-    /// prepared + PROMOTED document the runtime was seeded from (so a
-    /// generated/legacy `role=input` field renders as an interactive
-    /// `text_input` widget, not a frame). Live widget values are
+    /// The design `LayoutScene` preview paints: paint tree from the
+    /// prepared + PROMOTED document (so a generated/legacy `role=input`
+    /// field renders as an interactive `text_input` widget, not a
+    /// frame), GEOMETRY from the unpromoted `layout_doc` laid out
+    /// exactly as the design canvas lays it out — so node positions
+    /// match design mode by construction. Live widget values are
     /// overlaid onto a clone of this each frame in `paint_scene`.
     scene: LayoutScene,
+    /// The prepared (ref/token-resolved, page-projected / screen-
+    /// normalized) but UNPROMOTED document — the geometry source the
+    /// design canvas would lay out. Kept so app-mode screen switches
+    /// rebuild the scene against the same geometry.
+    layout_doc: jian_ops_schema::PenDocument,
+    /// Whether the editor document carries authored (Figma Preserve)
+    /// geometry: the design canvas skips the flex solver for these, so
+    /// preview must too or every element shifts.
+    preserve_authored_geometry: bool,
     /// Non-fatal load warnings (e.g. legacy role promotions), formatted
     /// for display in the editor's `preview_warnings`.
     warnings: Vec<String>,
@@ -133,6 +153,12 @@ pub struct PreviewSession {
     /// classic single-page workbench preview. `pub(in crate::preview)`
     /// so `app_mode`'s `is_app_mode` can read it. See [`AppMode`].
     pub(in crate::preview) app: Option<AppMode>,
+    /// The (scene rect, runtime rect) pair the current pointer gesture
+    /// anchored on at `Down` — held `Move`s and the `Up` map through
+    /// it (pointer capture), so a drag that leaves the node's scene
+    /// bounds doesn't remap through a neighbour. `None` between
+    /// gestures or when the `Down` hit no mapped node.
+    gesture_mapping: Option<(Rect, Rect)>,
 }
 
 impl PreviewSession {
@@ -177,6 +203,7 @@ impl PreviewSession {
         canvas_size: (f32, f32),
         active_theme: &std::collections::BTreeMap<String, String>,
         active_page_index: usize,
+        preserve_authored_geometry: bool,
     ) -> Result<Self, String> {
         let _ = canvas_size; // layout is root-derived, not canvas-derived.
 
@@ -245,8 +272,13 @@ impl PreviewSession {
             prepared = std::borrow::Cow::Owned(owned);
         }
 
+        // Own the prepared (unpromoted) tree: it is BOTH the runtime's
+        // serialization source and the preview scene's geometry source
+        // (the design canvas lays out this exact tree, so taking rects
+        // from it keeps preview positions design-identical).
+        let layout_doc = prepared.into_owned();
         let src =
-            serde_json::to_string(&*prepared).map_err(|e| format!("serialize document: {e}"))?;
+            serde_json::to_string(&layout_doc).map_err(|e| format!("serialize document: {e}"))?;
 
         let loaded = load_str_with(
             &src,
@@ -313,23 +345,32 @@ impl PreviewSession {
 
         let (root_frames, primary_available) = app_mode::solve_roots(&mut runtime)?;
 
-        // Build the design scene from the promoted document. The active
-        // page was projected to the top-level `children` in `enter`, so
-        // it is page index 0. Refs/tokens are already resolved in
-        // `promoted_doc`, so the builder's detector walks early-out.
-        // APP MODE: page 0 of `promoted_doc` is the entry screen (the
-        // same convention `project_screens` guarantees), so this stays
-        // page-index 0 either way.
-        let scene = op_pen_loader::pen_document_to_layout_scene(&promoted_doc, active_theme, 0);
+        // Build the preview scene: paint tree from the promoted
+        // document, geometry from the unpromoted `layout_doc` — the
+        // design canvas's exact layout (or, for Figma Preserve imports,
+        // its authored rects), so preview positions match design mode
+        // by construction. The active page was projected to the top
+        // level in `enter`, so it is page index 0. APP MODE: page 0 is
+        // the entry screen (the `project_screens` convention) either way.
+        let scene = op_pen_loader::pen_document_to_layout_scene_for_preview(
+            &promoted_doc,
+            &layout_doc,
+            preserve_authored_geometry,
+            active_theme,
+            0,
+        );
 
         Ok(Self {
             runtime,
             available: primary_available,
             root_frames,
             scene,
+            layout_doc,
+            preserve_authored_geometry,
             warnings,
             binding_sites,
             app,
+            gesture_mapping: None,
         })
     }
 
@@ -547,131 +588,6 @@ impl PreviewSession {
         Some(jian_core::document::tree::node_schema_id(&node.schema).to_owned())
     }
 
-    // --- Input dispatch -------------------------------------------
-
-    /// Route a printable character into the focused widget. Returns
-    /// `true` when the runtime consumed it (a focused editable widget
-    /// accepted the text).
-    pub fn dispatch_text(&mut self, text: &str) -> bool {
-        self.runtime.dispatch_text_input(text)
-    }
-
-    /// Route a named key (e.g. `"Backspace"`, `"ArrowLeft"`, `"Enter"`,
-    /// `"Tab"`) into the runtime with the given modifier set. Returns
-    /// `true` when the dispatch emitted any semantic event.
-    pub fn dispatch_key(&mut self, key: &str, modifiers: Modifiers) -> bool {
-        !self
-            .runtime
-            .dispatch_keyboard(key.to_string(), modifiers)
-            .is_empty()
-    }
-
-    /// Dispatch a tap (Down then Up) at a SCENE-space point into the
-    /// runtime so clicks land on switches / buttons / and place caret /
-    /// focus in text inputs. The host converts the screen press to scene
-    /// (document) space via the editor viewport; here we translate it
-    /// into the runtime's root-relative space (subtract the containing
-    /// root's authored origin) so the hit-test matches where the widget
-    /// paints. Returns `true` when the runtime emitted any semantic
-    /// event.
-    pub fn dispatch_tap(&mut self, scene_x: f32, scene_y: f32) -> bool {
-        let down = self.dispatch_pointer_phase(scene_x, scene_y, PointerPhase::Down);
-        let up = self.dispatch_pointer_phase(scene_x, scene_y, PointerPhase::Up);
-        down || up
-    }
-
-    /// Dispatch one pointer phase at a SCENE-space point. `Down`/`Up`/
-    /// `Move` carry mouse-left button semantics (a held drag — slider
-    /// knobs); `Hover` is an unpressed move (fires `onHoverEnter` /
-    /// `onHoverLeave` actions). Returns `true` when the runtime emitted
-    /// any semantic event.
-    pub fn dispatch_pointer_phase(
-        &mut self,
-        scene_x: f32,
-        scene_y: f32,
-        phase: PointerPhase,
-    ) -> bool {
-        use jian_core::geometry::point;
-        use jian_core::gesture::pointer::{MouseButtons, PointerEvent, PointerKind};
-        let (rt_x, rt_y) = self.scene_to_runtime(scene_x, scene_y);
-        let mut ev = PointerEvent::simple(1, phase, point(rt_x, rt_y));
-        ev.kind = PointerKind::Mouse;
-        if matches!(phase, PointerPhase::Hover) {
-            ev.buttons = MouseButtons::empty();
-            ev.pressure = 0.0;
-        }
-        !self.runtime.dispatch_pointer(ev).is_empty()
-    }
-
-    /// Route a wheel at a SCENE-space point into the runtime. Returns
-    /// `true` only when a node carrying `events.onScroll` consumed it —
-    /// the host falls back to canvas pan/zoom otherwise. `dx`/`dy` are
-    /// screen-pixel deltas (same magnitude the design canvas pans by).
-    pub fn dispatch_wheel(&mut self, scene_x: f32, scene_y: f32, dx: f32, dy: f32) -> bool {
-        use jian_core::geometry::point;
-        use jian_core::gesture::pointer::WheelEvent;
-        let (rt_x, rt_y) = self.scene_to_runtime(scene_x, scene_y);
-        let ev = WheelEvent::simple(point(rt_x, rt_y), point(dx, dy));
-        !self.runtime.dispatch_wheel(ev).is_empty()
-    }
-
-    /// Translate a scene-space point into the runtime's root-relative
-    /// hit-test space: find the page-root whose scene bounds contain the
-    /// point and subtract its authored origin. Falls through unchanged
-    /// when the point is outside every root (nothing to hit there). For
-    /// a single root authored at the origin this is the identity.
-    fn scene_to_runtime(&self, x: f32, y: f32) -> (f32, f32) {
-        for frame in &self.root_frames {
-            let r = frame.scene_rect;
-            if x >= r.origin.x
-                && x <= r.origin.x + r.size.x
-                && y >= r.origin.y
-                && y <= r.origin.y + r.size.y
-            {
-                return (x - frame.offset.0, y - frame.offset.1);
-            }
-        }
-        (x, y)
-    }
-
-    /// Advance focus to the next focusable widget (Tab).
-    pub fn focus_next(&mut self) {
-        self.runtime.focus_next();
-        self.seed_focused_widget_state();
-    }
-
-    /// Advance focus to the previous focusable widget (Shift+Tab).
-    pub fn focus_previous(&mut self) {
-        self.runtime.focus_previous();
-        self.seed_focused_widget_state();
-    }
-
-    /// Lazily seed the focused widget's runtime state so a freshly
-    /// Tab-focused (but not-yet-typed) text input shows its caret right
-    /// away — `Runtime::focus_next` only moves the focus pointer; it
-    /// does not touch the widget-state store. A no-op for non-widget
-    /// (or already-seeded) focus targets.
-    fn seed_focused_widget_state(&mut self) {
-        let Some(key) = self.runtime.focus.current() else {
-            return;
-        };
-        // Clone the focused node's schema so the `&PenNode` borrow of
-        // `runtime.document` is released before `get_or_init` takes
-        // `runtime.widget_states` mutably (focus changes are rare, so
-        // the clone is cheap relative to the interaction it serves).
-        let schema = self
-            .runtime
-            .document
-            .as_ref()
-            .and_then(|d| d.tree.nodes.get(key))
-            .map(|n| n.schema.clone());
-        if let Some(schema) = schema {
-            self.runtime
-                .widget_states
-                .get_or_init(&schema, &self.runtime.state);
-        }
-    }
-
     /// Test-only read access to the live runtime so the host test can
     /// assert injected text reached the widget state graph.
     #[cfg(all(test, not(target_os = "windows")))]
@@ -687,22 +603,13 @@ impl PreviewSession {
         self.overlay_runtime_state(&self.scene)
     }
 
-    /// Test-only: translate a scene-space point into the runtime's
-    /// root-relative space (exercises the tap coordinate fix).
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn scene_to_runtime_for_test(&self, x: f32, y: f32) -> (f32, f32) {
-        self.scene_to_runtime(x, y)
-    }
-
     /// Test-only: the absolute layout rect `(x, y, w, h)` the runtime
     /// resolved for the node with schema `id`, or `None` if unknown.
     /// In the runtime's root-relative space (no scene offset).
     #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn node_rect(&self, id: &str) -> Option<(f32, f32, f32, f32)> {
-        let doc = self.runtime.document.as_ref()?;
-        let key = doc.tree.by_id.get(id).copied()?;
-        let r = self.runtime.layout.node_rect(key)?;
-        Some((r.origin.x, r.origin.y, r.size.width, r.size.height))
+        let r = self.runtime_rect(id)?;
+        Some((r.origin.x, r.origin.y, r.size.x, r.size.y))
     }
 
     /// Test-only: the available size the runtime's primary root was laid
@@ -724,26 +631,6 @@ impl PreviewSession {
     #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn root_frames_len_for_test(&self) -> usize {
         self.root_frames.len()
-    }
-
-    /// Test-only: focus a node by schema `id` directly (skips the
-    /// Tab-ring walk `focus_next`/`focus_previous` use), then seed its
-    /// widget runtime state the same way those two do. Returns `true`
-    /// when the id resolved to a live node AND that node is in the
-    /// focus chain (`FocusManager::request` rejects ids outside it).
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn focus_node_for_test(&mut self, id: &str) -> bool {
-        let Some(key) = self
-            .runtime
-            .document
-            .as_ref()
-            .and_then(|d| d.tree.by_id.get(id).copied())
-        else {
-            return false;
-        };
-        self.runtime.focus_request(key);
-        self.seed_focused_widget_state();
-        self.runtime.focus.current() == Some(key)
     }
 
     /// Test-only: the current text value of the text-input-family

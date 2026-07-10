@@ -60,8 +60,8 @@ fn preview_paints_resolved_orange_at_the_swatch() {
     let doc = jian_ops_schema::load_str(src)
         .expect("parse var-color doc")
         .value;
-    let session =
-        PreviewSession::enter(&doc, (200.0, 200.0), &Default::default(), 0).expect("enter preview");
+    let session = PreviewSession::enter(&doc, (200.0, 200.0), &Default::default(), 0, false)
+        .expect("enter preview");
 
     // Raster surface cleared to a sentinel BLUE so "unpainted" pixels
     // are unmistakable (white would collide with common widget fills).
