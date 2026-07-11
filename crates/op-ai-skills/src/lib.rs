@@ -101,6 +101,55 @@ pub fn design_agent_system_prompt() -> &'static str {
         .expect("skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus")
 }
 
+/// Return the design-agent tool-loop system prompt with the prompt-matched
+/// product-depth skills appended.
+///
+/// The bare [`design_agent_system_prompt`] carries the tool-loop PROTOCOL
+/// (read → guidelines → batch_design → screenshot) but none of the domain
+/// depth the orchestrator injects per subtask — a loop-generated dashboard
+/// never saw `dashboard.md`'s density floors, a mobile screen never saw the
+/// three-section architecture. This variant resolves the generation-phase
+/// skill set for `user_message` and appends ONLY the content skills:
+///
+/// - every intent-matched `domain` skill (dashboard / web-app / mobile-app /
+///   landing-page / slides / form-ui / cjk-typography / anti-slop / …), and
+/// - the two always-on principle bases (`product-principles`,
+///   `design-principles`).
+///
+/// Output-protocol skills (schema / layout / text-rules / codegen-* / …)
+/// are deliberately NOT appended: the loop's protocol is the tool loop
+/// itself, and the model can still pull topic guides on demand via
+/// `get_guidelines`. Budget trimming is the resolver's (per-skill budgets +
+/// phase cap), so a keyword-rich prompt cannot balloon the system prompt.
+pub fn design_agent_system_prompt_with_skills(user_message: &str) -> String {
+    let base = design_agent_system_prompt();
+    let ctx = resolve::resolve_skills(
+        types::Phase::Generation,
+        user_message,
+        &types::ResolveOptions::default(),
+    );
+    let depth: Vec<&str> = ctx
+        .skills
+        .iter()
+        .filter(|s| {
+            s.meta.category == types::SkillCategory::Domain
+                || matches!(
+                    s.meta.name.as_str(),
+                    "product-principles" | "design-principles"
+                )
+        })
+        .map(|s| s.content.trim())
+        .filter(|c| !c.is_empty())
+        .collect();
+    if depth.is_empty() {
+        return base.to_string();
+    }
+    format!(
+        "{base}\n\n---\n\n## Product-Design Depth (applies to this task)\n\n{}",
+        depth.join("\n\n")
+    )
+}
+
 /// The embedded `skills/` corpus — domain / knowledge / phase skill
 /// markdown plus the `style-guides/` subtree. Parsed into the skill
 /// registry on first access (see [`loader`]).
@@ -151,6 +200,56 @@ mod tests {
             "web-app guideline must contain design-principles content"
         );
         assert!(!content.is_empty());
+    }
+
+    #[test]
+    fn design_agent_prompt_with_skills_appends_matched_domain_depth() {
+        // A dashboard ask must carry dashboard.md + the always-on principle
+        // bases on top of the unchanged protocol base.
+        let prompt = design_agent_system_prompt_with_skills(
+            "Design an analytics dashboard with a client table",
+        );
+        assert!(
+            prompt.starts_with(design_agent_system_prompt()),
+            "protocol base must lead the assembled prompt"
+        );
+        assert!(
+            prompt.contains("Product-Design Depth"),
+            "depth section header present"
+        );
+        assert!(
+            prompt.contains("PURPOSE FIRST"),
+            "always-on product-principles must ride along"
+        );
+        assert!(
+            prompt.contains("DASHBOARD / ADMIN / DATA-TABLE DEPTH"),
+            "dashboard domain skill must resolve for a dashboard ask"
+        );
+    }
+
+    #[test]
+    fn design_agent_prompt_with_skills_matches_mobile_domain() {
+        let prompt =
+            design_agent_system_prompt_with_skills("design a mobile fitness app home screen");
+        assert!(
+            prompt.contains("THREE-SECTION ARCHITECTURE"),
+            "mobile-app domain skill must resolve for a mobile ask"
+        );
+    }
+
+    #[test]
+    fn design_agent_prompt_with_skills_excludes_protocol_skills() {
+        // Output-protocol skills (schema / layout / codegen) must NOT ride
+        // into the tool-loop prompt — the loop's protocol is the tool loop
+        // itself (design-agent.md), and doubling protocols confuses weak
+        // models. `layout.md`'s canonical opener is the marker.
+        let prompt = design_agent_system_prompt_with_skills(
+            "Design an analytics dashboard with a client table",
+        );
+        assert!(
+            !prompt.contains("LAYOUT ENGINE (flexbox-based)"),
+            "generation-protocol layout.md must not be appended"
+        );
     }
 
     #[test]

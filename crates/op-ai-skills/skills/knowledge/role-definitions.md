@@ -105,4 +105,8 @@ Table roles:
 - table-header: layout=horizontal, width=fill_container, alignItems=center, padding=[12,16]
 - table-cell: width=fill_container
 
+Chart role:
+
+- chart: set `role: "chart"` on the frame that PLOTS data (bar rows, sparkline area, donut wrapper) — not on the surrounding card. It marks the subtree as data marks, so validators never mistake bars/tracks for borderless cards. No layout defaults; style marks freely (borderless bars sharing the plot background are correct chart treatment).
+
 Your explicit props ALWAYS override role defaults. Only unset properties get filled in.

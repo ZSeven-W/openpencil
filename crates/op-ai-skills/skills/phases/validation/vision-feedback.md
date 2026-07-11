@@ -13,7 +13,7 @@ Cross-reference the visual issues you see in the screenshot with the node IDs in
 
 Check for these issues:
 
-1. WIDTH INCONSISTENCY: Form inputs, buttons, cards that are siblings but have different widths. They should all use "fill_container" width to match their parent.
+1. WIDTH INCONSISTENCY: Form inputs, buttons, and non-scrolling cards that are siblings but have different widths. They should all use "fill_container" width to match their parent. Cards inside an intentional horizontal scroller are exempt and should keep fixed widths.
 2. ELEMENT TOO NARROW: Buttons or inputs that are much narrower than their parent container. Fix: width="fill_container".
 3. SPACING: Uneven padding, elements too close to edges, inconsistent gaps between siblings.
 4. OVERFLOW: Text or elements visually clipped or extending beyond their container.
@@ -22,7 +22,7 @@ Check for these issues:
 7. MISSING ICONS: Path nodes that rendered as empty/invisible rectangles.
 8. COLOR ISSUES: Text with poor contrast against its background, wrong background colors, inconsistent color usage across similar elements.
 9. TYPOGRAPHY: Inconsistent font sizes between similar elements, wrong font weights for headings vs body text.
-10. MISSING BORDERS: Input fields, cards, or containers that lack a visible border and blend into their parent background. Fix with strokeColor and strokeWidth.
+10. MISSING BORDERS: Input fields, cards, or containers that lack a visible border and blend into their parent background. Fix with strokeColor and strokeWidth. Chart bars, bar tracks, and other data marks are exempt.
 11. STRUCTURAL INCONSISTENCY: Sibling elements that should follow the same pattern but have different child structures. For example, if one input field has a leading icon but a sibling input field does not, or a list item is missing an expected child element. Fix by adding the missing child node.
 12. MISSING ELEMENTS: When a reference design is provided, check if important UI elements visible in the reference are missing or absent in the current design. Fix by adding the missing element as a child of the appropriate parent.
 
@@ -61,6 +61,17 @@ TEXT CLIPPING DETECTION:
 - If a text node has an explicit pixel height (h=22, h=30 etc.) AND its content appears visually clipped or overlapping siblings, the fix is: set textGrowth="fixed-width" and height="fit_content". This lets the engine auto-calculate the correct height.
 - Text nodes should almost NEVER have explicit pixel heights. The node tree shows textGrowth and lineHeight values — use these to diagnose text issues.
 - Button text clipped at bottom: check if the parent frame's padding leaves enough space for the text height (fontSize x lineHeight). Fix the parent's padding or height, not the text's fontSize.
+
+INTENTIONAL HORIZONTAL SCROLLERS:
+
+- A node with `layout=horizontal clip=true` is an intentional horizontal scroller. A partially visible next card at the right edge is a scroll affordance, not an overflow defect.
+- Preserve fixed card widths and the authored edge treatment. Do not change width, height, padding, gap, alignItems, or justifyContent on the scroller, its descendants, or its ancestors to make every item fit in the screenshot.
+- Do not add right-side padding merely to make the clipped card look inset. The viewport may intentionally be flush with the screen edge while retaining left padding.
+
+CHART MARKS:
+
+- Data marks such as chart bars, bar tracks, and columns are not card surfaces. Do not add borders or strokes when they intentionally share the chart background color.
+- A muted track with a rounded colored fill is a normal chart treatment. Preserve it even when the track fill blends into the surrounding plot area.
 
 Structural fixes (add or remove nodes — use sparingly, only for clear structural issues):
 
