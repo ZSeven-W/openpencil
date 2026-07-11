@@ -535,17 +535,16 @@ Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details
 - [x] Figma `.fig` import
 - [x] Boolean operations (union, subtract, intersect)
 - [x] Multi-model capability profiles
-- [x] Monorepo restructure with reusable packages
+- [x] Cargo workspace with reusable Rust crates and web SDK packages
+- [x] Rust desktop & web editor
 - [x] CLI tool (`op`) for terminal control
-- [x] Built-in AI agent SDK with multi-provider support
+- [x] Built-in Rust agent runtime with multi-provider support
 - [x] i18n — 15 languages
-- [x] Headless design engine (`pen-engine`) + React UI SDK (`pen-react`)
+- [x] Wasm-backed viewer SDKs for JavaScript, React & Vue
 - [x] Style Guides with tag-based matching and MCP tools
-- [x] Concurrent Agent Teams with delegate tool and canvas indicators
-- [x] Built-in Rust agent runtime
+- [x] Concurrent Agent Teams with delegation and canvas indicators
 - [x] Git integration — clone, branch, push/pull, folder-mode three-way merge
-- [x] Canvas raster export (PNG / JPEG / WEBP / PDF)
-- [x] Rust shell — Step 1a (G1 shared Skia context) on `v0.8.0`: `SharedSkiaContext` + `NativeBackend` (Jian-`DrawOp`-backed) + shell-core re-exports `jian_core::gesture::*` (events stay consistent with Jian — no OP-side translation layer per v19.4) + `basic_window` demo, with the multi-platform CI matrix green (macOS aarch64 + x86_64, Linux x86_64 + aarch64 cross, Windows x86_64 + aarch64 cross, iOS aarch64 + sim, Android aarch64 + x86_64, wasm32). Spec `v19.5` FROZEN; `vendor/jian` pinned at `c4a794dc`. OP visual model (single-page + infinite canvas canonical / multi-page also supported / no routing / Figma import auto-converts) and OP chrome (toolbars / panels — Rust-only) deferred to Step 1c+.
+- [x] Canvas export (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] Collaborative editing
 - [ ] Plugin system
 

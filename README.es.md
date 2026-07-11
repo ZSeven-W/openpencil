@@ -400,12 +400,16 @@ cd packages && bun run bump <version>             # Sync SDK package.json versio
 - [x] Importación de Figma `.fig`
 - [x] Operaciones booleanas (unión, sustracción, intersección)
 - [x] Perfiles de capacidad multimodelo
-- [x] Reestructuración en monorepo con paquetes reutilizables
+- [x] Workspace de Cargo con crates de Rust y paquetes del SDK web reutilizables
+- [x] Editor Rust para escritorio y web
 - [x] Herramienta CLI (`op`) para control desde terminal
-- [x] SDK de agente AI integrado con soporte multi-proveedor
+- [x] Runtime de agentes Rust integrado con soporte multi-proveedor
 - [x] i18n — 15 idiomas
+- [x] SDKs de visualización basados en wasm para JavaScript, React y Vue
+- [x] Style Guides con coincidencia por etiquetas y herramientas MCP
+- [x] Agent Teams concurrentes con delegación e indicadores en el lienzo
 - [x] Integración con Git (clonar, ramas, push/pull, fusión a tres vías en modo carpeta)
-- [x] Exportación rasterizada del lienzo (PNG / JPEG / WEBP / PDF)
+- [x] Exportación del lienzo (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] Edición colaborativa
 - [ ] Sistema de plugins
 

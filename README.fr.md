@@ -400,12 +400,16 @@ Les contributions sont les bienvenues ! Consultez [CLAUDE.md](./CLAUDE.md) pour 
 - [x] Import Figma `.fig`
 - [x] Opérations booléennes (union, soustraction, intersection)
 - [x] Profils de capacités multi-modèles
-- [x] Restructuration en monorepo avec packages réutilisables
+- [x] Workspace Cargo avec crates Rust et packages de SDK web réutilisables
+- [x] Éditeur Rust pour bureau et web
 - [x] Outil CLI (`op`) pour le contrôle depuis le terminal
-- [x] SDK agent AI intégré avec support multi-fournisseurs
+- [x] Runtime d'agents Rust intégré avec support multi-fournisseurs
 - [x] i18n — 15 langues
+- [x] SDKs de visualisation basés sur wasm pour JavaScript, React et Vue
+- [x] Style Guides avec correspondance par tags et outils MCP
+- [x] Agent Teams concurrents avec délégation et indicateurs sur le canevas
 - [x] Intégration Git (clone, branche, push/pull, fusion à trois voies en mode dossier)
-- [x] Export raster du canevas (PNG / JPEG / WEBP / PDF)
+- [x] Export du canevas (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] Édition collaborative
 - [ ] Système de plugins
 

@@ -400,12 +400,16 @@ Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md]
 - [x] Figma `.fig` içe aktarma
 - [x] Boolean işlemler (birleştirme, çıkarma, kesişim)
 - [x] Çoklu model yetenek profilleri
-- [x] Yeniden kullanılabilir paketlerle monorepo yapılandırması
+- [x] Yeniden kullanılabilir Rust crate'leri ve web SDK paketleri içeren Cargo workspace
+- [x] Masaüstü ve web için Rust editörü
 - [x] CLI aracı (`op`) terminal kontrolü
-- [x] Çoklu sağlayıcı destekli yerleşik AI ajan SDK'sı
+- [x] Çoklu sağlayıcı destekli yerleşik Rust Agent Runtime
 - [x] i18n — 15 dil
+- [x] JavaScript, React ve Vue için wasm tabanlı Viewer SDK'ları
+- [x] Etiket tabanlı eşleştirme ve MCP araçlarıyla Style Guides
+- [x] Delegasyon ve kanvas göstergeleriyle eşzamanlı Agent Teams
 - [x] Git entegrasyonu (klonlama, dal, push/pull, klasör modu üç yönlü birleştirme)
-- [x] Kanvas raster dışa aktarma (PNG / JPEG / WEBP / PDF)
+- [x] Kanvas dışa aktarma (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] Ortak düzenleme
 - [ ] Eklenti sistemi
 

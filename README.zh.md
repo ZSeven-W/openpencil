@@ -400,12 +400,16 @@ cd packages && bun run bump <version>             # Sync SDK package.json versio
 - [x] Figma `.fig` 导入
 - [x] 布尔运算（合并、减去、相交）
 - [x] 多模型能力配置
-- [x] Monorepo 重构与可复用包
+- [x] Cargo workspace，包含可复用的 Rust crate 和 Web SDK 包
+- [x] Rust 桌面端与 Web 端编辑器
 - [x] CLI 工具（`op`）终端控制
-- [x] 内置 AI Agent SDK，支持多提供商
+- [x] 内置 Rust Agent Runtime，支持多提供商
 - [x] 国际化 — 15 种语言
+- [x] 基于 wasm 的 JavaScript、React 与 Vue Viewer SDK
+- [x] Style Guides，支持基于标签的匹配和 MCP 工具
+- [x] Concurrent Agent Teams，支持任务委派和画布状态指示
 - [x] Git 集成（克隆、分支、推送/拉取、文件夹模式三路合并）
-- [x] 画布栅格导出（PNG / JPEG / WEBP / PDF）
+- [x] 画布导出（SVG / PNG / JPEG / WEBP / PDF）
 - [ ] 协同编辑
 - [ ] 插件系统
 
