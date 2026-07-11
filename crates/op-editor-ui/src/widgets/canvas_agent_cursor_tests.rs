@@ -540,7 +540,11 @@ mod paint_tests {
             "pencil paints shadow + body + tip wedge"
         );
         let (pts, color) = &backend.polygons[1];
-        assert_eq!(pts.len(), 5, "pencil body has 5 vertices");
+        assert_eq!(
+            pts.len(),
+            19,
+            "rounded pencil body is a densely sampled arc polygon"
+        );
         assert!((color.g - 0.804).abs() < 0.01);
         assert!(
             (pts[0].x - 40.0).abs() < 0.01 && (pts[0].y - 60.0).abs() < 0.01,
