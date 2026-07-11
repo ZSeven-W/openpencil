@@ -4,6 +4,7 @@ use crate::figma_types::FigVec2;
 use crate::kiwi::FigValue;
 use crate::tree::{guid_to_string, TreeNode};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Pre-conversion pooled seeding: walk the whole tree, group every
 /// INSTANCE's single-segment virtual entries by SYMBOL, pool their
@@ -12,7 +13,7 @@ use std::collections::HashMap;
 /// pin quality doesn't depend on which instance converts first.
 pub fn seed_assignments_from_instances(
     root: &TreeNode,
-    symbol_tree: &HashMap<String, TreeNode>,
+    symbol_tree: &HashMap<String, Rc<TreeNode>>,
     cache: &mut HashMap<String, String>,
 ) {
     // symbol guid -> pk -> pooled evidence.

@@ -14,6 +14,7 @@ use jian_ops_schema::document::PenDocument;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::page::PenPage;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Outcome of a full-document Figma import.
 pub struct FigmaImportResult {
@@ -212,7 +213,7 @@ pub fn figma_all_pages_to_pen_document(
     }
 
     let mut component_map: HashMap<String, String> = HashMap::new();
-    let mut symbol_tree: HashMap<String, TreeNode> = HashMap::new();
+    let mut symbol_tree: HashMap<String, Rc<TreeNode>> = HashMap::new();
     let mut counter: u32 = 1;
     for page in &pages {
         collect_components(page, &mut component_map, &mut counter);
@@ -280,7 +281,7 @@ pub fn figma_to_pen_document(
     };
 
     let mut component_map: HashMap<String, String> = HashMap::new();
-    let mut symbol_tree: HashMap<String, TreeNode> = HashMap::new();
+    let mut symbol_tree: HashMap<String, Rc<TreeNode>> = HashMap::new();
     let mut counter: u32 = 1;
     collect_components(page, &mut component_map, &mut counter);
     collect_symbol_tree(&tree, &mut symbol_tree);
@@ -376,7 +377,7 @@ pub fn figma_node_changes_to_pen_nodes(
     }
 
     let mut component_map: HashMap<String, String> = HashMap::new();
-    let mut symbol_tree: HashMap<String, TreeNode> = HashMap::new();
+    let mut symbol_tree: HashMap<String, Rc<TreeNode>> = HashMap::new();
     let mut counter: u32 = 1;
     for node in &top_nodes {
         collect_components(node, &mut component_map, &mut counter);
