@@ -69,6 +69,24 @@ pub fn run_script_to_program(text: &str) -> Result<String, String> {
     Ok(program)
 }
 
+/// The first substantial declaration statement recurring later in the
+/// source marks a whole-script echo; return the text up to (excluding)
+/// the second occurrence. `None` when no duplication is present.
+fn truncate_duplicate_script(script: &str) -> Option<String> {
+    let needle = script.lines().find_map(|line| {
+        let trimmed = line.trim();
+        (trimmed.len() >= 20
+            && (trimmed.starts_with("const ")
+                || trimmed.starts_with("let ")
+                || trimmed.starts_with("var ")))
+        .then(|| &trimmed[..trimmed.len().min(60)])
+    })?;
+    let first = script.find(needle)?;
+    let after = first + needle.len();
+    let second_rel = script[after..].find(needle)?;
+    Some(script[..after + second_rel].to_string())
+}
+
 fn eval_after_initial_failure(script: &str, first_err: String) -> Result<String, String> {
     // GLM-5.2 commonly drops the outer `}` when `stroke:{...}` is the final
     // property of an I() object, so QuickJS reaches `)` with `{` still open.
@@ -79,6 +97,22 @@ fn eval_after_initial_failure(script: &str, first_err: String) -> Result<String,
                 original_len = script.len(),
                 repaired_len = balanced.len(),
                 "script failed as-is; bracket balance repair recovered a runnable source"
+            );
+            return Ok(p);
+        }
+    }
+
+    // DeepSeek V4 sometimes ECHOES the whole script a second time, glued
+    // straight onto the first copy (often mid-line after a trailing
+    // comment) - the re-declared `const` bindings then throw "invalid
+    // redefinition of lexical identifier" and the whole section is lost.
+    // Detect the first declaration recurring and run the first copy alone.
+    if let Some(deduped) = truncate_duplicate_script(script) {
+        if let Ok(p) = eval_to_program(&deduped) {
+            tracing::warn!(
+                original_len = script.len(),
+                deduped_len = deduped.len(),
+                "script failed as-is; duplicate-echo truncation recovered the first copy"
             );
             return Ok(p);
         }
@@ -464,3 +498,26 @@ fn strip_fences(text: &str) -> String {
 #[cfg(test)]
 #[path = "script_runner_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod duplicate_echo_tests {
+    use super::run_script_to_program;
+
+    /// DeepSeek V4 measured shape (2026-07-12): the model echoed the whole
+    /// script a second time, glued mid-line after a trailing comment — the
+    /// re-declared consts threw "invalid redefinition" and a valid section
+    /// was lost to retries.
+    #[test]
+    fn duplicated_script_echo_runs_the_first_copy() {
+        let single = r#"const sec = I(null, {type:"frame", name:"Main Workspace", width:"fill_container"});
+const bar = I(sec, {type:"frame", name:"Top Bar", height:56});
+"#;
+        let doubled = format!("{single}// keep the section around 150px.{single}");
+        let program = run_script_to_program(&doubled).expect("first copy salvaged");
+        assert_eq!(
+            program.lines().count(),
+            2,
+            "exactly the first copy's two inserts: {program}"
+        );
+    }
+}

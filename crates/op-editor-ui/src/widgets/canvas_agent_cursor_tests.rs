@@ -648,4 +648,35 @@ mod scan_gate_tests {
             "a filled column is unaffected by the gate"
         );
     }
+
+    /// Work-order gate: only the FIRST empty shell per container is "on
+    /// deck" — a queued sibling shell must not glow while an earlier one
+    /// still awaits its content.
+    #[test]
+    fn only_the_first_empty_shell_per_container_scans() {
+        let mut shell_a = SceneNode::leaf("shell-a", NodeKind::Frame);
+        shell_a.bounds = Rect::xywh(0.0, 0.0, 390.0, 200.0);
+        let mut shell_b = SceneNode::leaf("shell-b", NodeKind::Frame);
+        shell_b.bounds = Rect::xywh(0.0, 210.0, 390.0, 200.0);
+        let mut root = SceneNode::leaf("root", NodeKind::Frame);
+        root.bounds = Rect::xywh(0.0, 0.0, 390.0, 844.0);
+        root.children = vec![shell_a, shell_b];
+        let roots = vec![root];
+
+        let mut ind = AgentIndicators::default();
+        ind.run_active = true;
+        ind.frames.insert(
+            "root".into(),
+            op_editor_core::agent_indicators::AgentTag {
+                color: "#FF6B6B".into(),
+                name: "Kiki".into(),
+            },
+        );
+        let ids = generating_descendant_ids(&roots, Some(&ind)).expect("active run");
+        assert!(ids.contains("shell-a"), "the on-deck shell scans");
+        assert!(
+            !ids.contains("shell-b"),
+            "a queued later shell stays plain until its turn"
+        );
+    }
 }
