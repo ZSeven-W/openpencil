@@ -285,7 +285,11 @@ fn convert_instance(
 
     if inline {
         let key = component_guid.clone().unwrap();
-        if let Some(symbol_node) = ctx.symbol_tree.get(&key).cloned() {
+        // Borrow the `Rc<TreeNode>` in place instead of cloning it — the
+        // symbol map and `instance_assignments` are disjoint fields of
+        // `ctx`, so this borrow coexists with the `&mut` below without
+        // needing an owned copy of the (potentially large) subtree.
+        if let Some(symbol_node) = ctx.symbol_tree.get(&key) {
             if !symbol_node.children.is_empty() {
                 let overrides = figma
                     .get("symbolData")
@@ -299,13 +303,13 @@ fn convert_instance(
                 let is_swap = figma.get("overriddenSymbolID").is_some();
                 let derived = figma.get_array("derivedSymbolData").map(|a| {
                     if is_swap {
-                        crate::instance::filter_swap_stale_derived(a, &symbol_node, instance_size)
+                        crate::instance::filter_swap_stale_derived(a, symbol_node, instance_size)
                     } else {
                         a.to_vec()
                     }
                 });
                 let children = apply_instance_overrides_cached(
-                    &symbol_node,
+                    symbol_node,
                     overrides.as_deref(),
                     derived.as_deref(),
                     instance_size,

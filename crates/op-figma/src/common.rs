@@ -11,6 +11,7 @@ use jian_ops_schema::node::base::{NumberOrExpression, PenNodeBase};
 use jian_ops_schema::node::container::CornerRadius;
 use jian_ops_schema::sizing::SizingBehavior;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::RwLock;
 
 /// Stroke vs fill rendering for a host-resolved icon.
@@ -94,8 +95,10 @@ pub const SKIPPED_TYPES: &[&str] = &[
 pub struct ConversionContext {
     /// Figma SYMBOL guid → minted `fig_N` ref id.
     pub component_map: HashMap<String, String>,
-    /// Figma SYMBOL guid → its subtree (for instance inlining).
-    pub symbol_tree: HashMap<String, TreeNode>,
+    /// Figma SYMBOL guid → its subtree (for instance inlining). `Rc`-shared
+    /// so every instance of the same SYMBOL reuses one clone instead of
+    /// paying for a fresh deep clone per instance.
+    pub symbol_tree: HashMap<String, Rc<TreeNode>>,
     /// Non-fatal conversion notes.
     pub warnings: Vec<String>,
     /// Sequential `fig_N` id allocator.
