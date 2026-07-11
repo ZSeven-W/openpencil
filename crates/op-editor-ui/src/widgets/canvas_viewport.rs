@@ -307,6 +307,10 @@ pub struct CanvasViewport<'a> {
     /// Pen-tool draft: the in-progress path id + last cursor doc
     /// coord, used to paint the rubber-band preview.
     pub(super) pen_in_progress: Option<String>,
+    /// Ghost of the blank starter frame `(x, y, w, h)` doc-px — painted
+    /// after a design prompt clears the real node, until the generated
+    /// design's sized root arrives, so the canvas never flashes empty.
+    pub(super) starter_ghost: Option<[f32; 4]>,
     pub(super) pen_cursor_doc: Option<Point2D>,
     /// True while the Pen press-drag is minting handles — hides the
     /// rubber band (TS `isDraggingHandle`).
@@ -382,6 +386,7 @@ impl<'a> CanvasViewport<'a> {
                 .pen_in_progress
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
+            starter_ghost: state.editor_ui.starter_ghost,
             pen_cursor_doc: state.ui.pen_cursor_doc.map(|p| Point2D::new(p.x, p.y)),
             pen_dragging_handle: state.ui.pen_dragging_handle,
             active_guides: state.editor_ui.active_guides.clone(),
@@ -429,6 +434,7 @@ impl<'a> CanvasViewport<'a> {
             selection_label: None,
             tool: op_editor_core::Tool::Select,
             pen_in_progress: None,
+            starter_ghost: None,
             pen_cursor_doc: None,
             pen_dragging_handle: false,
             active_guides: Vec::new(),
@@ -506,7 +512,9 @@ fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
                 return None;
             }
             let id = op_editor_core::NodeId::new(node.base().id.clone());
-            let color = if state.selection.contains(&id) {
+            let generating = matches!(node, PenNode::Frame(_))
+                && op_editor_core::agent_indicators::is_frame_generating(node.base().id.as_str());
+            let color = if generating || state.selection.contains(&id) {
                 theme.primary
             } else {
                 match node {
@@ -516,9 +524,21 @@ fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
                     _ => return None,
                 }
             };
-            Some((node.base().id.clone(), name, color))
+            Some((
+                node.base().id.clone(),
+                generating_label_text(&name, generating),
+                color,
+            ))
         })
         .collect()
+}
+
+fn generating_label_text(base_name: &str, generating: bool) -> String {
+    if generating {
+        format!("✨ Generating: {base_name}")
+    } else {
+        base_name.to_string()
+    }
 }
 
 fn selection_size_label(state: &EditorState, scene: &LayoutScene) -> Option<String> {
@@ -635,6 +655,42 @@ impl<'a> Widget for CanvasViewport<'a> {
                 .node_drag_overlay
                 .as_ref()
                 .map(|overlay| overlay.node_id.as_str());
+            let generating_descendant_ids =
+                super::canvas_generation_scan::generating_descendant_ids(
+                    &page.children,
+                    indicators.as_ref(),
+                );
+            // Starter ghost: after a design prompt clears the blank starter
+            // frame, keep painting its silhouette (white artboard + name
+            // label) until the generated design's root lands — the canvas
+            // must never flash empty between prompt and first batch.
+            if let Some([gx, gy, gw, gh]) = self.starter_ghost {
+                let ghost = Rect {
+                    origin: Point2D::new(
+                        viewport_origin.x + gx * viewport.zoom,
+                        viewport_origin.y + gy * viewport.zoom,
+                    ),
+                    size: Point2D::new(gw * viewport.zoom, gh * viewport.zoom),
+                };
+                cx.backend.fill_rect(ghost, Color::WHITE);
+                cx.backend
+                    .stroke_rect(ghost, self.theme.border.with_alpha(0.8), 1.0);
+                let mf = self.theme.muted_foreground;
+                let label = crate::TextLayout::single_run(
+                    "Frame",
+                    "system-ui",
+                    11.0,
+                    jian_core::scene::Color::rgba(
+                        (mf.r * 255.0) as u8,
+                        (mf.g * 255.0) as u8,
+                        (mf.b * 255.0) as u8,
+                        255,
+                    ),
+                    Point2D::new(0.0, 0.0),
+                );
+                cx.backend
+                    .draw_text(&label, Point2D::new(ghost.origin.x, ghost.origin.y - 6.0));
+            }
             for child in page.children.iter().rev() {
                 let child_hits = super::canvas_viewport_paint::paint_node_with_options_hiding(
                     cx,
@@ -648,6 +704,11 @@ impl<'a> Widget for CanvasViewport<'a> {
                     selected_lookup,
                     self.pen_in_progress.as_deref(),
                     hidden_drag_node,
+                    self.now_ms,
+                    generating_descendant_ids.as_ref(),
+                    generating_descendant_ids
+                        .as_ref()
+                        .map(|_| super::canvas_generation_scan::SKELETON_BLUE),
                 );
                 paint_hits.merge_missing(child_hits);
             }

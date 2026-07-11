@@ -30,9 +30,10 @@ const ENTRY_MS: u64 = 250;
 /// Where the entry slide starts, relative to the first waypoint (screen px).
 const ENTRY_OFFSET_X: f32 = -28.0;
 const ENTRY_OFFSET_Y: f32 = -20.0;
-/// One full breathe (0 → 1 → 0) of the current-element border per this
-/// many ms — same cadence as the agent frame glow.
-const BORDER_BREATH_PERIOD_MS: u64 = 1_200;
+/// Tiny standalone leaves still reveal, but the cursor does not chase
+/// them. The threshold is in document-space square pixels.
+const MIN_STANDALONE_WAYPOINT_AREA: f32 = 2_000.0;
+
 /// Fallback for reveals not owned by any tagged agent (the same red the
 /// retired dashed-reveal border used as its untagged default).
 const FALLBACK_COLOR: Color = Color {
@@ -41,22 +42,26 @@ const FALLBACK_COLOR: Color = Color {
     b: 0.419,
     a: 1.0,
 };
-/// Tiny standalone leaves still reveal, but the cursor does not chase
-/// them. The threshold is in document-space square pixels.
-const MIN_STANDALONE_WAYPOINT_AREA: f32 = 2_000.0;
 
-/// Classic arrow-pointer silhouette, tip at the origin pointing up-left,
-/// in screen px (zoom-independent). Filled with the agent colour and
-/// outlined white, like a multiplayer cursor.
-const ARROW_POINTS: [(f32, f32); 7] = [
-    (0.0, 0.0),
-    (0.0, 14.5),
-    (3.6, 11.4),
-    (6.1, 16.6),
-    (8.7, 15.4),
-    (6.2, 10.3),
-    (10.9, 10.3),
+/// Pencil-silhouette pointer, TIP at the origin pointing up-left, body
+/// extending down-right at 45°, in screen px (zoom-independent). The
+/// brand cursor: the working agent literally draws with a pencil —
+/// agent-colour body, white outline, white sharpened tip wedge (see
+/// `PENCIL_TIP_POINTS`). Anatomy mirrors Pencil's multiplayer cursor
+/// (solid tinted pointer + name pill) without copying its arrow.
+const PENCIL_BODY_POINTS: [(f32, f32); 5] = [
+    (0.0, 0.0),   // graphite tip (hotspot)
+    (8.1, 2.1),   // right flank of the sharpened collar
+    (21.1, 15.3), // body end, right corner
+    (15.3, 21.1), // body end, left corner (flat eraser butt)
+    (2.1, 8.1),   // left flank of the sharpened collar
 ];
+
+/// White wedge over the tip — the sharpened-graphite highlight.
+const PENCIL_TIP_POINTS: [(f32, f32); 3] = [(0.0, 0.0), (4.1, 1.1), (1.1, 4.1)];
+
+/// Collar seam between the sharpened cone and the painted body.
+const PENCIL_COLLAR: ((f32, f32), (f32, f32)) = ((2.1, 8.1), (8.1, 2.1));
 
 /// A scheduled placement the cursor must reach: one generated node's
 /// reveal start, at that node's centre, plus the node's screen rect for
@@ -97,6 +102,19 @@ pub(crate) fn parse_hex(hex: &str) -> Option<Color> {
 pub(crate) fn ease_out_cubic(t: f32) -> f32 {
     let u = 1.0 - t.clamp(0.0, 1.0);
     1.0 - u * u * u
+}
+
+/// Smoothstep-style ease for flights: slow out of the park, fast
+/// mid-flight, soft landing. Chained short hops read as deliberate
+/// dart-dart-dart instead of a constant-speed crawl.
+pub(crate) fn ease_in_out_cubic(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    if t < 0.5 {
+        4.0 * t * t * t
+    } else {
+        let u = -2.0 * t + 2.0;
+        1.0 - u * u * u / 2.0
+    }
 }
 
 fn lerp(a: Point2D, b: Point2D, t: f32) -> Point2D {
@@ -143,9 +161,12 @@ pub(crate) fn cursor_kinematics(waypoints: &[Waypoint], now_ms: u64) -> Option<K
         });
     }
     let next = &waypoints[next_idx];
-    let depart = prev
-        .start_ms
-        .max(next.start_ms.saturating_sub(MAX_FLIGHT_MS));
+    // Flight occupies at most 70% of the gap so even densely-staggered
+    // hops keep a micro-dwell before departure — pause, then an eased
+    // dart, instead of continuous constant-speed crawling.
+    let gap = next.start_ms.saturating_sub(prev.start_ms).max(1);
+    let flight = MAX_FLIGHT_MS.min((gap as f64 * 0.7) as u64).max(1);
+    let depart = prev.start_ms.max(next.start_ms.saturating_sub(flight));
     if now_ms < depart {
         // Parked, waiting for a distant slot.
         return Some(Kinematics {
@@ -157,7 +178,7 @@ pub(crate) fn cursor_kinematics(waypoints: &[Waypoint], now_ms: u64) -> Option<K
     let window = next.start_ms.saturating_sub(depart).max(1);
     let t = ((now_ms - depart) as f32 / window as f32).clamp(0.0, 1.0);
     Some(Kinematics {
-        pos: lerp(prev.pos, next.pos, ease_out_cubic(t)),
+        pos: lerp(prev.pos, next.pos, ease_in_out_cubic(t)),
         alpha: 1.0,
         current,
     })
@@ -182,6 +203,10 @@ pub(crate) struct CursorSprite {
     pub name: Option<String>,
     /// Screen rect of the element the cursor is currently working on —
     /// it gets the breathing border.
+    // Production paint no longer draws the breathing border (skeleton owns
+    // the working-area affordance), but the kinematics tests still assert
+    // waypoint→current-element mapping through this field.
+    #[allow(dead_code)]
     pub current_rect: Option<Rect>,
 }
 
@@ -189,6 +214,12 @@ pub(crate) struct CursorSprite {
 /// inheriting agent tags down the tree the same way the frame-indicator
 /// overlay does. `remaining` early-stops the walk once every reveal in
 /// the snapshot has been located.
+///
+/// Waypoints target the REVEALING NODE itself — the cursor eases from
+/// element to element as they materialize (ancestor-window suppression
+/// keeps children that pop WITH their parent from double-booking it, and
+/// tiny standalone leaves are skipped so a 12px icon doesn't yank the
+/// pointer).
 fn collect_waypoints(
     node: &SceneNode,
     cx: &CollectWaypointCx<'_>,
@@ -218,6 +249,9 @@ fn collect_waypoints(
             .is_some_and(|ancestor_start| start_ms <= ancestor_start + DWELL_MS);
         let b = node.aggregate_bounds();
         let area = b.size.x * b.size.y;
+        // A tiny leaf only suppresses when it would be its OWN waypoint;
+        // inside a skeleton section the waypoint is the section, so even a
+        // 12px icon reveal legitimately parks the cursor on that section.
         let standalone_tiny_leaf = node.children.is_empty()
             && revealed_ancestor_start_ms.is_none()
             && area < MIN_STANDALONE_WAYPOINT_AREA;
@@ -265,7 +299,12 @@ fn collect_waypoints(
 fn coalesce_dwell_waypoints(placements: Vec<(String, Waypoint)>) -> Vec<(String, Waypoint)> {
     let mut coalesced: Vec<(String, Waypoint)> = Vec::new();
     for placement in placements {
-        if let Some((_, previous)) = coalesced.last() {
+        if let Some((previous_id, previous)) = coalesced.last() {
+            // Same skeleton section → one waypoint: keep the FIRST arrival
+            // and dwell (the cursor stays parked while the section fills).
+            if *previous_id == placement.0 {
+                continue;
+            }
             if placement.1.start_ms.saturating_sub(previous.start_ms) < DWELL_MS {
                 *coalesced.last_mut().expect("last checked above") = placement;
                 continue;
@@ -357,65 +396,85 @@ pub(crate) fn paint_agent_cursors(
     }
 }
 
-/// Bell curve 0 → 1 → 0 across the breath period.
-fn border_breath(now_ms: u64) -> f32 {
-    let phase = (now_ms % BORDER_BREATH_PERIOD_MS) as f32 / BORDER_BREATH_PERIOD_MS as f32;
-    (phase * std::f32::consts::PI).sin()
-}
+/// Slow breathing cycle for the current-element border.
+const BREATH_PERIOD_MS: u64 = 1_800;
 
 fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64) {
     if sprite.alpha <= 0.0 {
         return;
     }
-    // Breathing border on the element currently being placed: a soft
-    // outer wash plus a crisp ring that never fully disappears, so the
-    // "current element" stays identifiable through the whole beat.
+    // Breathing border on the element being output right now — skeleton
+    // blue (one generation language, not per-agent color), slow cycle so
+    // it reads as "alive", never as an alert.
     if let Some(rect) = sprite.current_rect {
-        let breath = border_breath(now_ms);
-        cx.backend.stroke_round_rect(
-            rect,
-            6.0,
-            sprite.color.with_alpha(breath * 0.35 * sprite.alpha),
-            3.0,
-        );
-        cx.backend.stroke_round_rect(
-            rect,
-            6.0,
-            sprite
-                .color
-                .with_alpha((0.35 + 0.65 * breath) * sprite.alpha),
-            1.5,
-        );
+        if rect.size.x > 1.0 && rect.size.y > 1.0 {
+            let phase = (now_ms % BREATH_PERIOD_MS) as f32 / BREATH_PERIOD_MS as f32;
+            let breath = 0.5 - 0.5 * (phase * std::f32::consts::TAU).cos();
+            let blue = super::canvas_generation_scan::SKELETON_BLUE;
+            cx.backend.stroke_rect(
+                rect,
+                blue.with_alpha((0.25 + 0.45 * breath) * sprite.alpha),
+                1.5,
+            );
+        }
     }
-    let pts: Vec<Point2D> = ARROW_POINTS
+    let at = |points: &[(f32, f32)]| -> Vec<Point2D> {
+        points
+            .iter()
+            .map(|(dx, dy)| Point2D::new(sprite.pos.x + dx, sprite.pos.y + dy))
+            .collect()
+    };
+    let body = at(&PENCIL_BODY_POINTS);
+    // Soft contact shadow first so the pencil lifts off the canvas.
+    let shadow: Vec<Point2D> = body
         .iter()
-        .map(|(dx, dy)| Point2D::new(sprite.pos.x + dx, sprite.pos.y + dy))
+        .map(|p| Point2D::new(p.x + 1.0, p.y + 1.5))
         .collect();
     cx.backend
-        .fill_polygon(&pts, sprite.color.with_alpha(sprite.alpha));
+        .fill_polygon(&shadow, Color::BLACK.with_alpha(0.18 * sprite.alpha));
     cx.backend
-        .stroke_polygon(&pts, Color::WHITE.with_alpha(0.9 * sprite.alpha), 1.5);
+        .fill_polygon(&body, sprite.color.with_alpha(sprite.alpha));
+    cx.backend
+        .stroke_polygon(&body, Color::WHITE.with_alpha(0.9 * sprite.alpha), 1.5);
+    // Sharpened tip: white graphite wedge + collar seam.
+    cx.backend.fill_polygon(
+        &at(&PENCIL_TIP_POINTS),
+        Color::WHITE.with_alpha(0.95 * sprite.alpha),
+    );
+    let (c0, c1) = PENCIL_COLLAR;
+    cx.backend.stroke_line(
+        Point2D::new(sprite.pos.x + c0.0, sprite.pos.y + c0.1),
+        Point2D::new(sprite.pos.x + c1.0, sprite.pos.y + c1.1),
+        Color::WHITE.with_alpha(0.8 * sprite.alpha),
+        1.2,
+    );
     if let Some(name) = &sprite.name {
         paint_name_pill(cx, sprite, name);
     }
 }
 
-/// Agent-coloured capsule label hanging below-right of the pointer.
+/// Agent-coloured capsule label hanging below-right of the pencil tail.
+/// Pencil-parity metrics: tight capsule, text optically centred (the old
+/// `y + 3 + FONT` baseline sat the label visibly LOW in the pill).
 fn paint_name_pill(cx: &mut PaintCx<'_>, sprite: &CursorSprite, name: &str) {
-    const FONT: f32 = 11.0;
-    const PAD_X: f32 = 7.0;
-    const OFFSET_X: f32 = 12.0;
-    const OFFSET_Y: f32 = 20.0;
+    const FONT: f32 = 10.5;
+    const PAD_X: f32 = 8.0;
+    const PILL_H: f32 = 17.0;
+    // Clear the pencil body's down-right diagonal (~22px) with a little air.
+    const OFFSET_X: f32 = 18.0;
+    const OFFSET_Y: f32 = 24.0;
     let name_w = cx.backend.measure_text(name, FONT);
-    let h = FONT + 6.0;
     let pill = Rect::xywh(
         sprite.pos.x + OFFSET_X,
         sprite.pos.y + OFFSET_Y,
         name_w + PAD_X * 2.0,
-        h,
+        PILL_H,
     );
-    cx.backend
-        .fill_round_rect(pill, h / 2.0, sprite.color.with_alpha(0.92 * sprite.alpha));
+    cx.backend.fill_round_rect(
+        pill,
+        PILL_H / 2.0,
+        sprite.color.with_alpha(0.95 * sprite.alpha),
+    );
     let label = TextLayout::single_run(
         name,
         "system-ui",
@@ -423,8 +482,10 @@ fn paint_name_pill(cx: &mut PaintCx<'_>, sprite: &CursorSprite, name: &str) {
         jian_core::scene::Color::rgba(255, 255, 255, (255.0 * sprite.alpha) as u8),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend.draw_text(
-        &label,
-        Point2D::new(pill.origin.x + PAD_X, pill.origin.y + 3.0 + FONT),
-    );
+    // Optical centring: baseline = centre + ~35% of the font size (cap
+    // height ≈ 0.7em, so half of it below centre) — matches the label
+    // centring the chrome buttons use.
+    let baseline_y = pill.origin.y + PILL_H / 2.0 + FONT * 0.35;
+    cx.backend
+        .draw_text(&label, Point2D::new(pill.origin.x + PAD_X, baseline_y));
 }

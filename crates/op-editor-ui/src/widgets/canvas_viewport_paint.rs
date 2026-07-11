@@ -21,9 +21,9 @@ use crate::widgets::canvas_viewport_overlay::{align_stroke_rect, paint_fill_then
 use crate::widgets::canvas_viewport_text::paint_text_node;
 use crate::widgets::canvas_viewport_widget::paint_widget_visual;
 use crate::widgets::PaintCx;
-use crate::{Point2D, Rect};
+use crate::{Color, Point2D, Rect};
 use jian_scene::path_geometry::flatten_path_points;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Paint every `Effect::DropShadow` on `node` as a blurred shape
 /// behind its fill. The shadow corner radius matches the node
@@ -244,6 +244,12 @@ pub struct RevealSchedule<'a> {
 /// placement "pop" that replaced the old dashed border fade.
 pub(crate) const REVEAL_POP_MS: u64 = 180;
 
+/// Wireframe-ghost window BEFORE the pop: a revealing node first paints as
+/// a blue outlined box at its own rect (Pencil parity — its streamed
+/// elements materialize as periwinkle wireframes sized like the coming
+/// content, then resolve), and only then pops in for real.
+pub(crate) const REVEAL_WIREFRAME_MS: u64 = 260;
+
 /// Placement pop: 0.85 → ~1.02 overshoot → 1.0 across [`REVEAL_POP_MS`]
 /// (ease-out-back). `None` once the pop has settled.
 pub(crate) fn reveal_pop_scale(elapsed_ms: u64) -> Option<f32> {
@@ -257,7 +263,7 @@ pub(crate) fn reveal_pop_scale(elapsed_ms: u64) -> Option<f32> {
     Some(0.85 + 0.15 * back)
 }
 
-struct PaintNodeOptions<'a> {
+struct PaintNodeOptions<'a, 'generation> {
     viewport_origin: Point2D,
     zoom: f32,
     edit_caret: Option<EditCaret>,
@@ -267,6 +273,9 @@ struct PaintNodeOptions<'a> {
     selected: Option<&'a str>,
     pen: Option<&'a str>,
     hidden: Option<&'a str>,
+    now_ms: u64,
+    generating_descendant_ids: Option<&'generation HashSet<String>>,
+    generation_accent: Option<Color>,
 }
 
 use super::canvas_overlay_transform::OverlayTransform;
@@ -285,7 +294,7 @@ pub struct PaintNodeHits<'a> {
 impl<'a> PaintNodeHits<'a> {
     fn for_node(
         node: &'a SceneNode,
-        options: &PaintNodeOptions<'_>,
+        options: &PaintNodeOptions<'_, '_>,
         transforms: &[OverlayTransform],
     ) -> Self {
         let hover_rect = hovered_outline_rect(node, options);
@@ -382,6 +391,9 @@ pub(crate) fn paint_node_with_options<'a>(
         selected,
         pen,
         None,
+        0,
+        None,
+        None,
     )
 }
 
@@ -398,6 +410,9 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
     selected: Option<&'a str>,
     pen: Option<&'a str>,
     hidden: Option<&'a str>,
+    now_ms: u64,
+    generating_descendant_ids: Option<&HashSet<String>>,
+    generation_accent: Option<Color>,
 ) -> PaintNodeHits<'a> {
     let options = PaintNodeOptions {
         viewport_origin,
@@ -409,6 +424,9 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
         selected,
         pen,
         hidden,
+        now_ms,
+        generating_descendant_ids,
+        generation_accent,
     };
     paint_node_inner(cx, node, &options, &mut Vec::new())
 }
@@ -455,7 +473,7 @@ pub fn paint_scene_page(
 fn paint_node_inner<'a>(
     cx: &mut PaintCx<'_>,
     node: &'a SceneNode,
-    options: &PaintNodeOptions<'_>,
+    options: &PaintNodeOptions<'_, '_>,
     transforms: &mut Vec<OverlayTransform>,
 ) -> PaintNodeHits<'a> {
     if options.hidden == Some(node.id.as_str()) {
@@ -474,16 +492,40 @@ fn paint_node_inner<'a>(
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
         return PaintNodeHits::default();
     }
-    let pop_scale = match reveal_state {
-        RevealPaintState::Active { elapsed_ms } => reveal_pop_scale(elapsed_ms),
-        _ => None,
-    };
     let world_rect = Rect {
         origin: Point2D::new(
             viewport_origin.x + node.bounds.origin.x * zoom,
             viewport_origin.y + node.bounds.origin.y * zoom,
         ),
         size: Point2D::new(node.bounds.size.x * zoom, node.bounds.size.y * zoom),
+    };
+    // Wireframe ghost: the first beat of a reveal paints the node as a blue
+    // outline box (content and children withheld) — the Pencil-style
+    // materialization: ghost box → real element.
+    if let RevealPaintState::Active { elapsed_ms } = reveal_state {
+        if elapsed_ms < REVEAL_WIREFRAME_MS && world_rect.size.x > 0.0 && world_rect.size.y > 0.0 {
+            let blue = super::canvas_generation_scan::SKELETON_BLUE;
+            let t = elapsed_ms as f32 / REVEAL_WIREFRAME_MS as f32;
+            // Brighten in fast, hold; the pop right after replaces it.
+            let ramp = (t * 3.0).clamp(0.3, 1.0);
+            let radius = node.corner_radius * zoom;
+            cx.backend
+                .fill_rect(world_rect, blue.with_alpha(0.08 * ramp));
+            if radius > 0.5 {
+                cx.backend
+                    .stroke_round_rect(world_rect, radius, blue.with_alpha(0.8 * ramp), 1.0);
+            } else {
+                cx.backend
+                    .stroke_rect(world_rect, blue.with_alpha(0.8 * ramp), 1.0);
+            }
+            return PaintNodeHits::default();
+        }
+    }
+    let pop_scale = match reveal_state {
+        RevealPaintState::Active { elapsed_ms } => {
+            reveal_pop_scale(elapsed_ms.saturating_sub(REVEAL_WIREFRAME_MS))
+        }
+        _ => None,
     };
     // Viewport culling — bounded leaves skip paint entirely when
     // off-screen. Containers (bounds = ZERO) always recurse.
@@ -584,6 +626,22 @@ fn paint_node_inner<'a>(
             // panels; paint the minimal tab-bar visual over the frame
             // fill, then the children render normally below.
             paint_widget_visual(cx, node, world_rect, zoom);
+            if let (true, Some(accent)) = (
+                super::canvas_generation_scan::is_placeholder_section(node)
+                    && options
+                        .generating_descendant_ids
+                        .is_some_and(|ids| ids.contains(&node.id)),
+                options.generation_accent,
+            ) {
+                super::canvas_generation_scan::paint_generation_scan(
+                    cx,
+                    node,
+                    world_rect,
+                    zoom,
+                    options.now_ms,
+                    accent,
+                );
+            }
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
                 let child_hover = paint_node_inner(cx, child, options, transforms);
@@ -775,7 +833,7 @@ fn paint_node_inner<'a>(
     hits
 }
 
-fn hovered_outline_rect(node: &SceneNode, options: &PaintNodeOptions<'_>) -> Option<Rect> {
+fn hovered_outline_rect(node: &SceneNode, options: &PaintNodeOptions<'_, '_>) -> Option<Rect> {
     if options.hovered != Some(node.id.as_str()) {
         return None;
     }

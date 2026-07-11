@@ -113,6 +113,9 @@ mod canvas_agent_cursor;
 #[cfg(test)]
 mod canvas_agent_cursor_tests;
 mod canvas_frame_labels;
+mod canvas_generation_scan;
+#[cfg(test)]
+mod canvas_generation_scan_tests;
 pub mod canvas_layout_transition;
 pub mod canvas_overlay_transform;
 mod canvas_path_overlay;
@@ -195,6 +198,7 @@ mod ai_chat_panel_footer;
 pub(crate) mod ai_chat_panel_header;
 mod ai_chat_panel_hit;
 pub mod ai_chat_panel_paint;
+pub(crate) mod ai_chat_tool_verbs;
 pub mod ai_chat_transcript;
 #[cfg(test)]
 mod ai_chat_transcript_apply_tests;
@@ -202,6 +206,9 @@ pub(crate) mod ai_chat_transcript_cache;
 pub(crate) mod ai_chat_transcript_completion;
 pub(crate) mod ai_chat_transcript_design;
 pub(crate) mod ai_chat_transcript_hit;
+pub(crate) mod ai_chat_transcript_identity;
+#[cfg(test)]
+mod ai_chat_transcript_identity_tests;
 pub(crate) mod ai_chat_transcript_paint_parts;
 pub(crate) mod ai_chat_transcript_selection;
 pub(crate) mod ai_chat_transcript_steps;

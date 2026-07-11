@@ -8,6 +8,23 @@ use jian_ops_schema::node::{ContainerProps, FrameNode, PenNode, PenNodeBase, Rec
 use jian_ops_schema::sizing::SizingBehavior;
 use std::collections::HashMap;
 
+#[test]
+fn generating_label_text_preserves_plain_names_when_idle() {
+    assert_eq!(generating_label_text("Checkout", false), "Checkout");
+}
+
+#[test]
+fn generating_label_text_prefixes_active_frame_names() {
+    assert_eq!(
+        generating_label_text("Checkout", true),
+        "✨ Generating: Checkout"
+    );
+    assert_eq!(
+        generating_label_text("移动端首页", true),
+        "✨ Generating: 移动端首页"
+    );
+}
+
 /// Records op order; clip-isolated paint = `Save, Clip, Fill, …, Restore`.
 #[derive(Debug, PartialEq, Eq)]
 enum Op {
