@@ -180,7 +180,7 @@ fn is_remote_image_url(src: &str) -> bool {
 /// decoded data URLs and host-fetched remote bytes), then an inline
 /// `data:` decode; a remote `http(s)` miss is recorded for the host
 /// fetcher and paints the placeholder this frame.
-fn image_source_bytes(src: &str, image_src_id: u64) -> Option<Arc<[u8]>> {
+pub(crate) fn image_source_bytes(src: &str, image_src_id: u64) -> Option<Arc<[u8]>> {
     let id = if image_src_id == 0 {
         stable_image_source_id(src)
     } else {

@@ -272,8 +272,8 @@ pub fn run_action(
                 let scene = &scene;
                 // When exactly one node is selected, raster export
                 // crops to that layer (TS parity: exportLayerToRaster);
-                // otherwise the whole active page is exported. SVG /
-                // PDF always stay page-level.
+                // otherwise the whole active page is exported. SVG uses
+                // the same selected-subtree rule; PDF stays page-level.
                 let single_node: Option<String> = {
                     let st = host.editor_state();
                     if st.selection_count() == 1 && st.selection.anchor.is_real() {
@@ -294,7 +294,10 @@ pub fn run_action(
                     Fmt::Png => raster(op_host_services::export::RasterFormat::Png),
                     Fmt::Jpeg => raster(op_host_services::export::RasterFormat::Jpeg),
                     Fmt::Webp => raster(op_host_services::export::RasterFormat::Webp),
-                    Fmt::Svg => op_host_services::export::export_svg(scene, &path),
+                    Fmt::Svg => match &single_node {
+                        Some(id) => op_host_services::export::export_node_svg(scene, id, &path),
+                        None => op_host_services::export::export_svg(scene, &path),
+                    },
                     Fmt::Pdf => op_host_services::export_pdf::export_pdf(scene, &path),
                 };
                 if let Err(e) = result {

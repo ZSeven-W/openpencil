@@ -13,6 +13,12 @@ pub fn export_svg(scene: &LayoutScene, target: &StdPath) -> Result<(), String> {
     std::fs::write(target, svg).map_err(|e| e.to_string())
 }
 
+/// Serialize one node and its subtree to an SVG file at `target`.
+pub fn export_node_svg(scene: &LayoutScene, node_id: &str, target: &StdPath) -> Result<(), String> {
+    let svg = op_editor_ui::svg_export::serialize_node_svg(scene, node_id)?;
+    std::fs::write(target, svg).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,5 +58,22 @@ mod tests {
         let res = export_svg(&scene, &tmp);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err(), "nothing to export");
+    }
+
+    #[test]
+    fn export_node_svg_writes_only_selected_subtree() {
+        let scene = scene_with(vec![
+            filled_rect("selected", 5.0, 5.0, 120.0, 60.0, Color::RED),
+            filled_rect("sibling", 500.0, 500.0, 10.0, 10.0, Color::BLACK),
+        ]);
+        let tmp =
+            std::env::temp_dir().join(format!("op-export-node-svg-{}.svg", std::process::id()));
+
+        export_node_svg(&scene, "selected", &tmp).expect("selected svg export");
+
+        let body = std::fs::read_to_string(&tmp).unwrap();
+        assert!(body.contains("selected"), "{body}");
+        assert!(!body.contains("sibling"), "{body}");
+        let _ = std::fs::remove_file(&tmp);
     }
 }

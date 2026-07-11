@@ -633,6 +633,7 @@ pub fn action_button_rects_with_fill_picker(
                 op_editor_core::ExportFormat::Png,
                 op_editor_core::ExportFormat::Jpeg,
                 op_editor_core::ExportFormat::Webp,
+                op_editor_core::ExportFormat::Svg,
             ];
             let count = formats.len() as f32;
             let first_row_y = format_rect.origin.y - 4.0 - 6.0 - count * EXPORT_PICKER_ROW_H;

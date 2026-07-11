@@ -362,3 +362,14 @@ fn export_svg_document_returns_vector_markup() {
     );
     assert!(svg.ends_with("</svg>"), "missing SVG close: {svg}");
 }
+
+#[test]
+fn export_svg_document_uses_single_selection() {
+    let mut state = op_editor_core::EditorState::sample();
+    state.set_single_selection(op_editor_core::NodeId::new("n11"));
+
+    let svg = crate::file_actions::export_svg_document(&state).expect("selected svg");
+
+    assert!(svg.contains("n11"), "selected node missing: {svg}");
+    assert!(!svg.contains("n13"), "unselected sibling leaked: {svg}");
+}
