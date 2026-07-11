@@ -536,9 +536,16 @@ impl ChatState {
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
-        let agent_name = self
-            .selected_model_entry()
-            .map(|entry| entry.provider.name().to_string());
+        // Built-in (API-key) models must not wear a CLI's name — a
+        // DeepSeek turn labelled "Codex CLI" reads as the wrong engine
+        // (measured, user report 2026-07-12). Design runs later restamp
+        // this with the run's agent persona (canvas cursor parity).
+        let agent_name = self.selected_model_entry().map(|entry| {
+            entry
+                .builtin_provider_display_name
+                .clone()
+                .unwrap_or_else(|| entry.provider.name().to_string())
+        });
         self.auto_title_from_prompt(&trimmed);
         self.collapsed = false;
         // A turn still in flight is interrupted by this new send — its
