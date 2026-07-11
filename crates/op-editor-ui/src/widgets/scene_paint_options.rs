@@ -45,6 +45,9 @@ pub fn paint_scene_page_with(
             None,
             None,
             options.skip_node,
+            0,
+            None,
+            None,
         );
     }
 }
@@ -80,6 +83,9 @@ pub fn paint_scene_subtree(
         None,
         None,
         None,
+        None,
+        None,
+        0,
         None,
         None,
     );

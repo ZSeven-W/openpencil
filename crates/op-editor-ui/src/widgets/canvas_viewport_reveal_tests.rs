@@ -107,9 +107,9 @@ fn active_reveal_paints_content_without_transform() {
     node.fill = Some(Color::RED);
     let reveals = HashMap::from([("c".to_string(), 1_000)]);
 
-    // 1_200: past the 180ms scale-pop window (started 1_000; Task 4), so
-    // the pop has settled and steady-state reveal paint has no transform.
-    let backend = paint_with_reveals(&node, &reveals, 1_200);
+    // 1_600: past the wireframe-ghost beat (260ms) AND the 180ms scale-pop
+    // window, so the pop has settled and steady-state paint has no transform.
+    let backend = paint_with_reveals(&node, &reveals, 1_600);
 
     assert_eq!(backend.scales, 0, "TS Skia reveal does not scale content");
     assert!(
@@ -126,10 +126,10 @@ fn active_reveal_starts_at_authored_position() {
     node.fill = Some(Color::RED);
     let reveals = HashMap::from([("c".to_string(), 1_000)]);
 
-    let backend = paint_with_reveals(&node, &reveals, 1_000);
+    let backend = paint_with_reveals(&node, &reveals, 1_260);
 
-    // elapsed_ms == 0 is exactly when the Task 4 scale-pop begins (by
-    // design — the sparkle cursor hands off to the pop at this instant),
+    // elapsed_ms == REVEAL_WIREFRAME_MS is exactly when the scale-pop
+    // begins (the wireframe ghost hands off to the pop at this instant),
     // so a save/scale now legitimately wraps the fill; the authored
     // (10,10) position painted underneath is still unshifted.
     assert_eq!(backend.scales, 1);
@@ -150,12 +150,13 @@ fn opening_parent_and_child_reveals_each_pop_independently() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_040)]);
 
-    let backend = paint_with_reveals(&frame, &reveals, 1_040);
+    let backend = paint_with_reveals(&frame, &reveals, 1_300);
 
-    // Parent (elapsed 40ms) and child (elapsed 0ms) are each independently
-    // inside their own 180ms Task 4 scale-pop window, so both legitimately
-    // apply save/scale/restore — nested pop-stacking is the per-node
-    // design, not something the paint layer suppresses.
+    // Parent (elapsed 300ms) and child (elapsed 260ms) are each past their
+    // wireframe-ghost beat and independently inside their own 180ms
+    // scale-pop window, so both legitimately apply save/scale/restore —
+    // nested pop-stacking is the per-node design, not something the paint
+    // layer suppresses.
     assert_eq!(backend.scales, 2);
     assert!(
         backend.ops.contains(&"fill(10,10)".to_string()),
@@ -168,10 +169,10 @@ fn overlapping_parent_and_child_reveals_pop_through_opening_beat() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_048)]);
 
-    let backend = paint_with_reveals(&frame, &reveals, 1_056);
+    let backend = paint_with_reveals(&frame, &reveals, 1_316);
 
-    // Parent (elapsed 56ms) and child (elapsed 8ms) are both still inside
-    // their own 180ms scale-pop windows — see
+    // Parent (elapsed 316ms) and child (elapsed 268ms) are both past the
+    // ghost beat and still inside their own 180ms scale-pop windows — see
     // opening_parent_and_child_reveals_each_pop_independently above.
     assert_eq!(
         backend.scales, 2,
@@ -184,11 +185,11 @@ fn child_pops_alone_after_parent_opening_beat() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_080)]);
 
-    let backend = paint_with_reveals(&frame, &reveals, 1_180);
+    let backend = paint_with_reveals(&frame, &reveals, 1_460);
 
-    // Parent's own pop window has settled (elapsed 180ms), but the child
-    // just started its own reveal (elapsed 100ms) and is legitimately
-    // inside ITS pop window — one scale, from the child alone.
+    // Parent's ghost+pop have settled (elapsed 460ms >= 260+180), but the
+    // child (elapsed 380ms) is legitimately inside ITS own pop window —
+    // one scale, from the child alone.
     assert_eq!(
         backend.scales, 1,
         "child pops on its own independent window"
@@ -201,10 +202,10 @@ fn delayed_child_pops_alone_after_parent_settles() {
     let frame = frame_with_child();
     let reveals = HashMap::from([("f".to_string(), 1_000), ("c".to_string(), 1_420)]);
 
-    let backend = paint_with_reveals(&frame, &reveals, 1_520);
+    let backend = paint_with_reveals(&frame, &reveals, 1_780);
 
-    // Parent settled long ago (elapsed 520ms); the child just started its
-    // own reveal (elapsed 100ms) and pops on its own independent window.
+    // Parent settled long ago (elapsed 780ms); the child (elapsed 360ms)
+    // is past its ghost beat and pops on its own independent window.
     assert_eq!(
         backend.scales, 1,
         "child pops on its own independent window"

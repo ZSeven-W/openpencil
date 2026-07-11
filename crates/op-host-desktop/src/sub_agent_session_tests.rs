@@ -57,7 +57,7 @@ fn build_prompt_includes_protocol_styleguide_guideline_and_scoping() {
         REAL_STYLEGUIDE,
         &["web-app"],
     );
-    let prompt = build_sub_agent_prompt(&s);
+    let prompt = build_sub_agent_prompt(&s, None);
 
     // Design-agent protocol prompt markers (verbatim from the corpus).
     assert!(
@@ -99,7 +99,7 @@ fn build_prompt_includes_protocol_styleguide_guideline_and_scoping() {
 #[test]
 fn build_prompt_omits_container_scope_when_no_containers() {
     let s = spec("Fill the nav", &[], REAL_STYLEGUIDE, &[]);
-    let prompt = build_sub_agent_prompt(&s);
+    let prompt = build_sub_agent_prompt(&s, None);
     assert!(prompt.contains("Fill the nav"));
     assert!(
         !prompt.contains("only build inside container node(s)"),
@@ -112,7 +112,7 @@ fn build_prompt_tolerates_unknown_styleguide_and_guideline() {
     // Unknown names resolve to None and are simply skipped — the prompt
     // still carries the protocol + the sub's assignment.
     let s = spec("Build a card", &["n1"], "no-such-guide", &["no-such-topic"]);
-    let prompt = build_sub_agent_prompt(&s);
+    let prompt = build_sub_agent_prompt(&s, None);
     assert!(prompt.contains("Build a card"));
     assert!(prompt.contains("batch_design"));
 }
@@ -382,4 +382,139 @@ fn pump_with_finished_subs_decrements_then_clears_agents_running() {
     // Idle: nothing to pump.
     assert!(!pump_sub_agents(&mut host, &mut subs, &mut active, None));
     agent_indicators::clear();
+}
+
+#[test]
+fn pumped_sub_agent_message_carries_its_identity() {
+    use op_ai::chat_provider::{ChatDelta, StopReason};
+    use op_editor_core::ChatMessage;
+    use op_host_native::WidgetHostNative;
+    use op_orchestrator::agent_identity::AgentIdentity;
+
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    agent_indicators::clear();
+
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(ChatMessage::assistant_streaming());
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(ChatDelta::TextDelta("sub reply".into())).unwrap();
+    tx.send(ChatDelta::Done {
+        stop_reason: StopReason::EndTurn,
+    })
+    .unwrap();
+    drop(tx);
+
+    let mut subs = vec![SubAgentSession {
+        session: Some(ChatSession::from_channels(rx, None)),
+        identity: AgentIdentity {
+            color: "#FF6B6B".into(),
+            name: "Kiki".into(),
+        },
+        indicator: None,
+        root_seed_mobile: false,
+    }];
+    let mut active = 0;
+
+    assert!(pump_sub_agents(&mut host, &mut subs, &mut active, None));
+
+    assert_eq!(
+        host.editor_state().chat.messages.len(),
+        2,
+        "the sub-agent must own a distinct assistant message"
+    );
+    let message = host.editor_state().chat.messages.last().unwrap();
+    assert_eq!(message.content, "sub reply");
+    assert_eq!(message.agent_name.as_deref(), Some("Kiki"));
+    assert_eq!(message.agent_color.as_deref(), Some("#FF6B6B"));
+    agent_indicators::clear();
+}
+
+#[test]
+fn sequential_sub_agents_keep_distinct_identity_messages() {
+    use op_ai::chat_provider::{ChatDelta, StopReason};
+    use op_editor_core::ChatMessage;
+    use op_host_native::WidgetHostNative;
+    use op_orchestrator::agent_identity::AgentIdentity;
+
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    agent_indicators::clear();
+
+    let session = |text: &str| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(ChatDelta::TextDelta(text.into())).unwrap();
+        tx.send(ChatDelta::Done {
+            stop_reason: StopReason::EndTurn,
+        })
+        .unwrap();
+        drop(tx);
+        ChatSession::from_channels(rx, None)
+    };
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(ChatMessage::assistant_streaming());
+    let mut subs = vec![
+        SubAgentSession {
+            session: Some(session("first")),
+            identity: AgentIdentity {
+                color: "#FF6B6B".into(),
+                name: "Kiki".into(),
+            },
+            indicator: None,
+            root_seed_mobile: false,
+        },
+        SubAgentSession {
+            session: Some(session("second")),
+            identity: AgentIdentity {
+                color: "#4ECDC4".into(),
+                name: "Mochi".into(),
+            },
+            indicator: None,
+            root_seed_mobile: false,
+        },
+    ];
+    let mut active = 0;
+
+    assert!(pump_sub_agents(&mut host, &mut subs, &mut active, None));
+    assert!(pump_sub_agents(&mut host, &mut subs, &mut active, None));
+
+    let messages = &host.editor_state().chat.messages;
+    assert_eq!(messages.len(), 3, "parent plus one message per sub-agent");
+    assert_eq!(messages[1].content, "first");
+    assert_eq!(messages[1].agent_name.as_deref(), Some("Kiki"));
+    assert_eq!(messages[2].content, "second");
+    assert_eq!(messages[2].agent_name.as_deref(), Some("Mochi"));
+    agent_indicators::clear();
+}
+
+#[test]
+fn build_prompt_injects_team_consistency_brief_when_canvas_has_screens() {
+    // Team mode is where chrome drift happens: every sub must see the same
+    // screen inventory / palette / copyable-chrome ids, plus the "chrome in
+    // your container is FINAL" rule.
+    let s = spec(
+        "Design the profile screen",
+        &["n20"],
+        REAL_STYLEGUIDE,
+        &["mobile"],
+    );
+    let brief = "EXISTING CANVAS CONTEXT - 1 screen: \"Home\" (390x844); chrome id n5.";
+    let prompt = build_sub_agent_prompt(&s, Some(brief));
+    assert!(
+        prompt.contains("Existing canvas context"),
+        "brief section present"
+    );
+    assert!(prompt.contains("chrome id n5"), "brief content verbatim");
+    assert!(
+        prompt.contains("never rebuild or duplicate"),
+        "chrome-is-final rule attached"
+    );
 }

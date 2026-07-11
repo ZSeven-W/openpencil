@@ -1242,6 +1242,12 @@ pub struct EditorUiState {
     /// drag release. View-only transient state: never serialized,
     /// never part of the undo snapshot.
     pub active_guides: Vec<crate::align_guides::AlignmentGuide>,
+    /// Ghost of the blank starter frame `(x, y, w, h)` in doc px. Set when a
+    /// design prompt clears the pristine starter; the canvas keeps painting
+    /// it until the generated design's sized root lands (or the turn ends),
+    /// so sending a prompt never flashes an empty canvas. Transient chrome
+    /// state — never persisted.
+    pub starter_ghost: Option<[f32; 4]>,
     /// Drop-target preview painted during canvas node dragging.
     /// View-only transient state: never serialized, never part of
     /// the undo snapshot.
@@ -1475,6 +1481,7 @@ impl Default for EditorUiState {
             last_canvas_click: None,
             last_variable_name_click: None,
             active_guides: Vec::new(),
+            starter_ghost: None,
             canvas_drop_indicator: None,
             update_status: UpdateStatus::Idle,
             git_panel: GitPanelState::default(),

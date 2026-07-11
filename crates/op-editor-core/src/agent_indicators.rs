@@ -26,6 +26,10 @@ pub const REVEAL_DURATION_MS: u64 = 1_000;
 /// slow (user-tuned): each element gets a readable fly-in → pop beat
 /// instead of a burst.
 pub const REVEAL_STAGGER_MS: u64 = 160;
+/// Minimum runway between "batch lands" and its first reveal — matches the
+/// cursor's `MAX_FLIGHT_MS` so the pencil always gets a full eased flight
+/// to a fresh batch instead of teleporting onto it.
+pub const CURSOR_FLIGHT_LEAD_MS: u64 = 350;
 /// Minimum delay before descendants of a newly revealed container begin
 /// their own entrances. This leaves the parent opening beat readable
 /// without making nested content feel stalled.
@@ -230,6 +234,12 @@ pub fn active_epoch() -> Option<u64> {
     r.run_active.then_some(r.epoch)
 }
 
+/// Whether `frame_id` belongs to the currently active generation run.
+pub fn is_frame_generating(frame_id: &str) -> bool {
+    let r = REGISTRY.lock().unwrap();
+    r.run_active && r.frames.contains_key(frame_id)
+}
+
 /// Return the root seed profile for `epoch` if its first batch has not
 /// consumed the guard yet.
 pub fn root_seed_hint_if_pending(epoch: u64) -> Option<bool> {
@@ -400,6 +410,12 @@ pub fn next_reveal_deadline_ms(now_ms: u64) -> Option<u64> {
     }
 }
 
+/// Next host-clock millisecond needed for the generating-frame scan animation.
+pub fn next_generation_scan_deadline_ms(now_ms: u64) -> Option<u64> {
+    let r = REGISTRY.lock().unwrap();
+    (r.run_active && !r.frames.is_empty()).then(|| now_ms.saturating_add(REVEAL_FRAME_MS))
+}
+
 fn rebase_external_clock_reveals(r: &mut AgentIndicators, now_ms: u64) {
     let future_floor = now_ms.saturating_add(CLOCK_REBASE_THRESHOLD_MS);
     let mut external: Vec<(String, u64)> = r
@@ -424,10 +440,15 @@ fn rebase_external_clock_reveals(r: &mut AgentIndicators, now_ms: u64) {
         .filter(|started| **started <= future_floor)
         .max()
         .copied();
+    // Floor the batch's FIRST slot a full cursor flight into the future:
+    // a reveal that starts "now" gives the pencil cursor a zero-length
+    // flight window (its departure back-dates into the past and the first
+    // paint frame lands at t≈1.0 — a visible TELEPORT between batches).
+    // Delaying the first pop by one flight keeps the whole approach eased.
     let mut next_slot = local_tail
         .map(|tail| tail.saturating_add(REVEAL_STAGGER_MS))
         .unwrap_or(now_ms)
-        .max(now_ms);
+        .max(now_ms.saturating_add(CURSOR_FLIGHT_LEAD_MS));
     for (id, raw_started) in external {
         let offset_start = now_ms.saturating_add(raw_started.saturating_sub(batch_start));
         let started_at = offset_start.max(next_slot);

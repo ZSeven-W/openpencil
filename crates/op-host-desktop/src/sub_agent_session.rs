@@ -41,10 +41,10 @@ use std::sync::Mutex;
 use op_ai::chat_provider::ChatRequest;
 use op_host_native::WidgetHostNative;
 use op_mcp::spawn_agents_tool::SpawnSpec;
-use op_orchestrator::agent_identity::assign_agent_identities;
+use op_orchestrator::agent_identity::assign_agent_identities_seeded;
 
 use op_ai_skills::style_guide::{select_style_guide, style_guide_registry, SelectOptions};
-use op_editor_core::agent_indicators;
+use op_editor_core::{agent_indicators, ChatMessage};
 use op_host_services::design_agent_tools::root_seed_prompt_is_mobile;
 
 use crate::chat_session::{self, builtin_provider_with_design_tools, ChatSession};
@@ -127,10 +127,12 @@ pub(crate) fn take_pending_spawn() -> Option<Vec<SpawnSpec>> {
 
 /// Build the scoped system prompt for one sub-agent: the design-agent
 /// protocol prompt, then the sub's assignment + container-node scoping,
-/// then the parent-resolved styleguide content, then each resolved
-/// guideline. The sub cannot search styleguides itself, so the parent
-/// passes the NAMES and we resolve the content here (wired, not stubbed).
-pub(crate) fn build_sub_agent_prompt(spec: &SpawnSpec) -> String {
+/// then the multi-screen consistency brief (when the canvas already holds
+/// screens — team mode is where chrome drift happens, each sub rebuilding
+/// its own navbar), then the parent-resolved styleguide content, then each
+/// resolved guideline. The sub cannot search styleguides itself, so the
+/// parent passes the NAMES and we resolve the content here.
+pub(crate) fn build_sub_agent_prompt(spec: &SpawnSpec, context_brief: Option<&str>) -> String {
     let mut prompt = op_ai_skills::design_agent_system_prompt().to_string();
 
     prompt.push_str("\n\n## Your sub-agent assignment\n\n");
@@ -140,6 +142,17 @@ pub(crate) fn build_sub_agent_prompt(spec: &SpawnSpec) -> String {
         prompt.push_str("\n\nScope: only build inside container node(s): ");
         prompt.push_str(&spec.container_nodes.join(", "));
         prompt.push('.');
+    }
+
+    if let Some(brief) = context_brief {
+        prompt.push_str("\n\n## Existing canvas context\n\n");
+        prompt.push_str(brief);
+        prompt.push_str(
+            "\nIf your container already contains shared chrome (status bar / navbar / tab \
+             bar), it is FINAL - restyle its active state at most; never rebuild or duplicate \
+             it. On mobile roots the standard iOS status bar is inserted by the HOST - never \
+             create a status bar anywhere (any you build is deleted on the spot).",
+        );
     }
 
     // Styleguide — resolve the parent-passed name to its markdown content.
@@ -189,8 +202,15 @@ pub(crate) fn launch_sub_agents(
     host: &mut WidgetHostNative,
     specs: Vec<SpawnSpec>,
 ) -> Vec<SubAgentSession> {
-    let identities = assign_agent_identities(specs.len());
+    let identities =
+        assign_agent_identities_seeded(specs.len(), crate::design_loop_indicator::identity_seed());
     let mut subs = Vec::with_capacity(specs.len());
+
+    // One consistency brief for the whole team, computed against the canvas
+    // as the parent left it (its own screen(s) + the empty containers): every
+    // sub sees the same screen inventory, palette, typefaces, and copyable
+    // chrome node ids, so N agents converge on ONE product instead of N.
+    let context_brief = op_host_services::design_context::design_context_brief(host.editor_state());
 
     for (spec, identity) in specs.into_iter().zip(identities) {
         // A fresh provider + tool channel per sub; skip if no ready
@@ -199,7 +219,7 @@ pub(crate) fn launch_sub_agents(
             continue;
         };
 
-        let system_prompt = build_sub_agent_prompt(&spec);
+        let system_prompt = build_sub_agent_prompt(&spec, context_brief.as_deref());
         // Same design-turn thinking policy as the single design-agent loop:
         // reasoning models that would burn their budget on `<think>` and draw
         // nothing are forced thinking-off (see `design_turn_thinking_mode`).
@@ -292,10 +312,21 @@ pub(crate) fn pump_sub_agents(
             let identity = subs[*active].identity.clone();
             subs[*active].indicator = Some(DesignLoopIndicator {
                 epoch,
-                color: identity.color,
-                name: identity.name,
+                color: identity.color.clone(),
+                name: identity.name.clone(),
                 initial_frame_ids,
             });
+            if subs[*active].session.is_some() {
+                let mut message = ChatMessage::assistant_streaming();
+                message.agent_name = Some(identity.name);
+                message.agent_color = Some(identity.color);
+                host.editor_state_mut()
+                    .chat
+                    .run_tab_mut(running_tab)
+                    .messages
+                    .push(message);
+                changed = true;
+            }
         }
 
         // Take the active session out so `host` and the session aren't
@@ -306,7 +337,16 @@ pub(crate) fn pump_sub_agents(
         SUB_AGENT_ACTIVE.store(true, Ordering::SeqCst);
         // Sub-agent transcript deltas bind to the same tab the parent design
         // loop started on (MT.3 session-per-tab).
-        let pumped = chat_session::pump(host, &mut session, running_tab);
+        let identity = subs[*active].identity.clone();
+        // Sub-agents never re-center the viewport — the parent loop's
+        // one-shot fit already framed the design; zero size disables it.
+        let pumped = chat_session::pump(
+            host,
+            &mut session,
+            running_tab,
+            Some((&identity.name, &identity.color)),
+            (0.0, 0.0),
+        );
         SUB_AGENT_ACTIVE.store(false, Ordering::SeqCst);
         if pumped {
             changed = true;

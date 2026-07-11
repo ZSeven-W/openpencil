@@ -5,6 +5,7 @@ mod reveal_pop_tests {
     use crate::layout_scene::{NodeKind, SceneNode};
     use crate::widgets::canvas_viewport_paint::{
         paint_node_with_options, reveal_pop_scale, RevealSchedule, REVEAL_POP_MS,
+        REVEAL_WIREFRAME_MS,
     };
     use crate::widgets::PaintCx;
     use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
@@ -76,7 +77,9 @@ mod reveal_pop_tests {
 
     #[test]
     fn fresh_reveal_paints_through_a_scale_pop() {
-        let backend = paint_at(1_050);
+        // Probe inside the pop window, which begins after the wireframe
+        // ghost beat (REVEAL_WIREFRAME_MS).
+        let backend = paint_at(1_000 + REVEAL_WIREFRAME_MS + 50);
         assert_eq!(backend.scales.len(), 1, "pop applies exactly one scale");
         let (scale, pivot) = backend.scales[0];
         assert!((scale.x - scale.y).abs() < 1e-6, "uniform scale");
@@ -90,7 +93,7 @@ mod reveal_pop_tests {
 
     #[test]
     fn settled_reveal_paints_without_transform() {
-        let backend = paint_at(1_000 + REVEAL_POP_MS + 100);
+        let backend = paint_at(1_000 + REVEAL_WIREFRAME_MS + REVEAL_POP_MS + 100);
         assert!(backend.scales.is_empty());
         assert_eq!(backend.saves, 0);
     }

@@ -363,6 +363,99 @@ mod sprite_tests {
             "border hands off to the newly started element at its reveal instant"
         );
     }
+
+    #[test]
+    fn nested_reveal_targets_the_node_not_its_wrappers() {
+        // root(600h) > AppContent wrapper(560h) > Header(80h) > revealing
+        // element. The cursor follows the ELEMENT itself — never a wrapper
+        // or root centre — and a tiny standalone leaf (below the waypoint
+        // area floor) is skipped entirely instead of yanking the pointer.
+        let mut element = SceneNode::leaf("element", NodeKind::Rect);
+        element.bounds = Rect::xywh(10.0, 30.0, 120.0, 50.0);
+        let mut header = SceneNode::leaf("header", NodeKind::Frame);
+        header.bounds = Rect::xywh(0.0, 20.0, 200.0, 80.0);
+        header.children = vec![element];
+        let mut feed = SceneNode::leaf("feed", NodeKind::Frame);
+        feed.bounds = Rect::xywh(0.0, 120.0, 200.0, 300.0);
+        let mut wrapper = SceneNode::leaf("wrapper", NodeKind::Frame);
+        wrapper.bounds = Rect::xywh(0.0, 20.0, 200.0, 560.0);
+        wrapper.children = vec![header, feed];
+        let mut root = SceneNode::leaf("root", NodeKind::Frame);
+        root.bounds = Rect::xywh(0.0, 0.0, 200.0, 600.0);
+        root.children = vec![wrapper];
+        let roots = vec![root];
+
+        let mut ind = AgentIndicators::default();
+        ind.reveals.insert("element".into(), 1_000);
+        let sprites = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 1_500);
+        assert_eq!(sprites.len(), 1);
+        let pos = sprites[0].pos;
+        assert!(
+            (pos.x - 70.0).abs() < 0.01 && (pos.y - 55.0).abs() < 0.01,
+            "cursor sits on the element's centre (70,55) — got ({}, {})",
+            pos.x,
+            pos.y
+        );
+
+        // A tiny standalone leaf never becomes a waypoint.
+        let mut tiny = AgentIndicators::default();
+        tiny.reveals.insert("tiny".into(), 1_000);
+        let mut tiny_leaf = SceneNode::leaf("tiny", NodeKind::Rect);
+        tiny_leaf.bounds = Rect::xywh(0.0, 0.0, 20.0, 20.0);
+        let tiny_roots = vec![tiny_leaf];
+        assert!(
+            cursor_sprites(&tiny_roots, &tiny, Point2D::ZERO, 1.0, 1_500).is_empty(),
+            "tiny standalone leaves are not chased"
+        );
+    }
+
+    #[test]
+    fn cursor_follows_each_revealing_node() {
+        // Root → section frame → two leaves revealing far apart. The cursor
+        // follows the ELEMENT being output: it sits on leaf-a while that is
+        // the latest reveal, then eases to leaf-b when its reveal starts.
+        let mut leaf_a = SceneNode::leaf("leaf-a", NodeKind::Rect);
+        leaf_a.bounds = Rect::xywh(10.0, 110.0, 80.0, 60.0);
+        let mut leaf_b = SceneNode::leaf("leaf-b", NodeKind::Rect);
+        leaf_b.bounds = Rect::xywh(100.0, 300.0, 80.0, 60.0);
+        let mut section = SceneNode::leaf("section", NodeKind::Frame);
+        section.bounds = Rect::xywh(0.0, 100.0, 200.0, 400.0);
+        section.children = vec![leaf_a, leaf_b];
+        let mut root = SceneNode::leaf("root", NodeKind::Frame);
+        root.bounds = Rect::xywh(0.0, 0.0, 200.0, 600.0);
+        root.children = vec![section];
+        let roots = vec![root];
+
+        let mut ind = AgentIndicators::default();
+        ind.reveals.insert("leaf-a".into(), 1_000);
+        ind.reveals.insert("leaf-b".into(), 3_000);
+
+        // Parked on leaf-a's centre after its reveal, before leaf-b's.
+        let sprites = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 2_000);
+        assert_eq!(sprites.len(), 1);
+        let pos = sprites[0].pos;
+        assert!(
+            (pos.x - 50.0).abs() < 0.01 && (pos.y - 140.0).abs() < 0.01,
+            "cursor parks on leaf-a's centre, got ({}, {})",
+            pos.x,
+            pos.y
+        );
+        // After leaf-b's reveal the cursor has moved to ITS centre, and the
+        // current-element rect (breathing border target) is leaf-b's rect.
+        let sprites = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 5_000);
+        let pos = sprites[0].pos;
+        assert!(
+            (pos.x - 140.0).abs() < 0.01 && (pos.y - 330.0).abs() < 0.01,
+            "cursor follows leaf-b, got ({}, {})",
+            pos.x,
+            pos.y
+        );
+        let rect = sprites[0].current_rect.expect("current element rect");
+        assert!(
+            (rect.origin.x - 100.0).abs() < 0.01 && (rect.origin.y - 300.0).abs() < 0.01,
+            "breathing border targets the revealing node"
+        );
+    }
 }
 
 mod paint_tests {
@@ -443,33 +536,24 @@ mod paint_tests {
         paint_agent_cursors(&mut cx, &roots, Point2D::new(0.0, 0.0), 1.0, 1_050, &ind);
         assert_eq!(
             backend.polygons.len(),
-            1,
-            "arrow body is one filled polygon"
+            3,
+            "pencil paints shadow + body + tip wedge"
         );
-        let (pts, color) = &backend.polygons[0];
-        assert_eq!(pts.len(), 7, "arrow pointer has 7 vertices");
+        let (pts, color) = &backend.polygons[1];
+        assert_eq!(pts.len(), 5, "pencil body has 5 vertices");
         assert!((color.g - 0.804).abs() < 0.01);
         assert!(
             (pts[0].x - 40.0).abs() < 0.01 && (pts[0].y - 60.0).abs() < 0.01,
-            "arrow tip sits on the current element's centre"
+            "pencil tip sits on the current element's centre"
         );
         assert!(
             !backend.polygon_strokes.is_empty(),
             "white outline strokes the arrow"
         );
-        assert_eq!(
-            backend.round_strokes.len(),
-            2,
-            "breathing border paints wash + crisp ring on the current element"
-        );
-        let (rect, border_color, _) = &backend.round_strokes[0];
         assert!(
-            (rect.origin.x - 10.0).abs() < 0.01 && (rect.origin.y - 30.0).abs() < 0.01,
-            "border wraps the current element"
-        );
-        assert!(
-            (border_color.g - 0.804).abs() < 0.01,
-            "border uses agent colour"
+            backend.round_strokes.is_empty(),
+            "the per-agent breathing border is retired — the generation \
+             skeleton owns the working-area affordance now"
         );
         assert_eq!(backend.labels, vec!["Mochi".to_string()]);
         assert!(!backend.round_fills.is_empty(), "name pill paints");
@@ -485,8 +569,8 @@ mod paint_tests {
             backend: &mut backend,
         };
         paint_agent_cursors(&mut cx, &roots, Point2D::ZERO, 1.0, 1_050, &ind);
-        assert_eq!(backend.polygons.len(), 1, "fallback arrow still paints");
-        let (_, color) = &backend.polygons[0];
+        assert_eq!(backend.polygons.len(), 3, "fallback pencil still paints");
+        let (_, color) = &backend.polygons[1];
         assert!(
             (color.r - 1.0).abs() < 0.01 && (color.g - 0.419).abs() < 0.01,
             "fallback red fill"
@@ -494,8 +578,8 @@ mod paint_tests {
         assert!(backend.labels.is_empty(), "no name pill without a tag");
         assert!(backend.round_fills.is_empty(), "no pill capsule either");
         assert!(
-            !backend.round_strokes.is_empty(),
-            "breathing border still marks the current element"
+            backend.round_strokes.is_empty(),
+            "no breathing border for untagged reveals either (retired)"
         );
     }
 
@@ -512,6 +596,56 @@ mod paint_tests {
             backend.polygons.is_empty()
                 && backend.round_fills.is_empty()
                 && backend.round_strokes.is_empty()
+        );
+    }
+}
+
+mod scan_gate_tests {
+    use crate::layout_scene::{NodeKind, SceneNode};
+    use crate::widgets::canvas_generation_scan::generating_descendant_ids;
+    use crate::Rect;
+    use op_editor_core::agent_indicators::AgentIndicators;
+
+    /// Pencil leaves the big undeclared half of a dashboard as plain
+    /// background while the sidebar is worked — an EMPTY region covering
+    /// most of the root gets NO skeleton wash; small shells keep it.
+    #[test]
+    fn dominant_empty_region_gets_no_scan_but_small_shells_do() {
+        let mut sidebar = SceneNode::leaf("sidebar", NodeKind::Frame);
+        sidebar.bounds = Rect::xywh(0.0, 0.0, 260.0, 900.0);
+        let mut sidebar_child = SceneNode::leaf("nav", NodeKind::Frame);
+        sidebar_child.bounds = Rect::xywh(0.0, 0.0, 260.0, 48.0);
+        sidebar.children = vec![sidebar_child];
+        let mut main = SceneNode::leaf("main", NodeKind::Frame);
+        main.bounds = Rect::xywh(260.0, 0.0, 1180.0, 900.0);
+        let mut header_shell = SceneNode::leaf("header-shell", NodeKind::Frame);
+        header_shell.bounds = Rect::xywh(0.0, 0.0, 1440.0, 90.0);
+        let mut root = SceneNode::leaf("root", NodeKind::Frame);
+        root.bounds = Rect::xywh(0.0, 0.0, 1440.0, 900.0);
+        root.children = vec![header_shell, sidebar, main];
+        let roots = vec![root];
+
+        let mut ind = AgentIndicators::default();
+        ind.run_active = true;
+        ind.frames.insert(
+            "root".into(),
+            op_editor_core::agent_indicators::AgentTag {
+                color: "#FF6B6B".into(),
+                name: "Kiki".into(),
+            },
+        );
+        let ids = generating_descendant_ids(&roots, Some(&ind)).expect("active run");
+        assert!(
+            !ids.contains("main"),
+            "the dominant empty region stays plain background"
+        );
+        assert!(
+            ids.contains("header-shell"),
+            "a small full-width shell keeps the scan"
+        );
+        assert!(
+            ids.contains("sidebar"),
+            "a filled column is unaffected by the gate"
         );
     }
 }

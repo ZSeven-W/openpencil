@@ -9,6 +9,40 @@ use std::sync::{LazyLock, Mutex};
 
 static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
+#[test]
+fn frame_generating_requires_active_run_and_registered_frame() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear();
+    assert!(!is_frame_generating("frame"));
+
+    let epoch = begin();
+    assert!(!is_frame_generating("frame"));
+    add_frame(epoch, "frame", "#4ECDC4", "Mochi");
+    assert!(is_frame_generating("frame"));
+    assert!(!is_frame_generating("other"));
+
+    end_if_epoch(epoch);
+    assert!(!is_frame_generating("frame"));
+}
+
+#[test]
+fn generation_scan_deadline_ticks_only_for_active_registered_frames() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear();
+    assert_eq!(next_generation_scan_deadline_ms(1_000), None);
+
+    let epoch = begin();
+    assert_eq!(next_generation_scan_deadline_ms(1_000), None);
+    add_frame(epoch, "frame", "#4ECDC4", "Mochi");
+    assert_eq!(
+        next_generation_scan_deadline_ms(1_000),
+        Some(1_000 + REVEAL_FRAME_MS)
+    );
+
+    end_if_epoch(epoch);
+    assert_eq!(next_generation_scan_deadline_ms(1_000), None);
+}
+
 // One test owns the whole flow so it doesn't race the process-global
 // registry against a sibling test under the default parallel runner.
 #[test]
@@ -249,11 +283,17 @@ fn snapshot_rebases_external_clock_reveals_to_paint_clock() {
 
     let snap = snapshot_at(1_000);
 
-    // Relative offsets larger than the queue beat survive the rebase
-    // verbatim; tighter gaps clamp to the beat (covered by the
-    // local-tail test below).
-    assert_eq!(snap.reveals.get("a"), Some(&1_000));
-    assert_eq!(snap.reveals.get("b"), Some(&1_400));
+    // The batch's first slot floors at now + CURSOR_FLIGHT_LEAD_MS so the
+    // pencil cursor gets a full eased flight instead of teleporting onto a
+    // reveal that starts "now". Followers keep at least the queue beat.
+    assert_eq!(
+        snap.reveals.get("a"),
+        Some(&(1_000 + CURSOR_FLIGHT_LEAD_MS))
+    );
+    assert_eq!(
+        snap.reveals.get("b"),
+        Some(&(1_000 + CURSOR_FLIGHT_LEAD_MS + REVEAL_STAGGER_MS))
+    );
     clear();
 }
 
@@ -268,13 +308,16 @@ fn snapshot_queues_external_reveals_after_active_local_tail() {
 
     let snap = snapshot_at(1_040);
 
+    // The flight-lead floor (1_040 + 350) wins over the local tail + beat
+    // (1_080 + 160) here — the first external reveal still gets a full
+    // cursor flight; followers keep the queue beat.
     assert_eq!(
         snap.reveals.get("external-a"),
-        Some(&(1_080 + REVEAL_STAGGER_MS))
+        Some(&(1_040 + CURSOR_FLIGHT_LEAD_MS))
     );
     assert_eq!(
         snap.reveals.get("external-b"),
-        Some(&(1_080 + REVEAL_STAGGER_MS * 2))
+        Some(&(1_040 + CURSOR_FLIGHT_LEAD_MS + REVEAL_STAGGER_MS))
     );
     clear();
 }
