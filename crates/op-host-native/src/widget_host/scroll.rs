@@ -9,35 +9,6 @@ use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
-    fn try_scroll_chat_checklist(
-        &mut self,
-        x: f32,
-        y: f32,
-        delta: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        use op_editor_ui::widgets::AIChatPlaceholder;
-        let point = Point2D::new(x, y);
-        let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) else {
-            return false;
-        };
-        let (checklist, max) = {
-            let panel = AIChatPlaceholder::from_editor_at(&self.editor_state, self.now_ms);
-            let Some(checklist) = panel.fixed_checklist_bounds(chat_rect) else {
-                return false;
-            };
-            (checklist, panel.fixed_checklist_scroll_max())
-        };
-        if !(checklist).contains(point) {
-            return false;
-        }
-        if scroll_by_max(&mut self.editor_state.chat.checklist_scroll, -delta, max) {
-            self.mark_dirty();
-        }
-        true
-    }
-
     /// Scroll the chat transcript message list when a wheel / trackpad
     /// pan lands over the panel body. The body swallows the event so a
     /// wheel over a long reply never zooms the canvas beneath. Mirrors
@@ -516,9 +487,6 @@ impl WidgetHostNative {
                 }
             }
         }
-        if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
-            return true;
-        }
         // Chat transcript message list — a wheel over the body scrolls
         // the conversation; the pinned-to-bottom auto-follow resumes once
         // the user scrolls back to the bottom.
@@ -690,9 +658,6 @@ impl WidgetHostNative {
                     return true;
                 }
             }
-        }
-        if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
-            return true;
         }
         if self.try_scroll_chat_transcript(x, y, dy, viewport_width, viewport_height) {
             return true;

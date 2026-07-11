@@ -1,7 +1,4 @@
 use crate::theme::Theme;
-use crate::widgets::ai_chat_checklist::{
-    fixed_checklist_height, fixed_checklist_rect, paint_fixed_checklist,
-};
 pub(crate) use crate::widgets::ai_chat_panel_controls::chat_neutral_feedback_color;
 // Re-exported for paint tests that verify hover tint colours.
 #[cfg(test)]
@@ -335,11 +332,8 @@ impl<'a> AIChatPlaceholder<'a> {
 
     pub fn body_rect(&self, rect: Rect) -> Rect {
         let body_top = rect.origin.y + HEADER_HEIGHT + 14.0; // gap before first bubble
-        let body_bottom = rect.origin.y + rect.size.y
-            - self.input_height_for_rect(rect)
-            - PAD
-            - 8.0
-            - fixed_checklist_height(self.state, self.state.checklist_collapsed);
+        let body_bottom =
+            rect.origin.y + rect.size.y - self.input_height_for_rect(rect) - PAD - 8.0;
         Rect {
             origin: Point2D::new(rect.origin.x + PAD, body_top),
             size: Point2D::new(rect.size.x - PAD * 2.0, (body_bottom - body_top).max(0.0)),
@@ -728,7 +722,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         );
 
         // Body — either messages or examples.
-        let checklist_h = fixed_checklist_height(self.state, self.state.checklist_collapsed);
         if self.state.messages.is_empty() {
             paint_examples(
                 cx,
@@ -771,16 +764,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.design_hover,
                 self.state.transcript_selection,
                 scroll_offset,
-            );
-        }
-        if checklist_h > 0.0 {
-            paint_fixed_checklist(
-                cx,
-                &self.theme,
-                fixed_checklist_rect(rect, input_h, checklist_h),
-                self.state,
-                self.state.checklist_collapsed,
-                self.state.checklist_scroll.offset,
             );
         }
         let input_block_rect = self.input_rect(rect);

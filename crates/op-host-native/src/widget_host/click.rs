@@ -362,16 +362,6 @@ impl WidgetHostNative {
                         self.mark_dirty();
                         return true;
                     }
-                    AIChatHit::ToggleChecklist => {
-                        self.editor_state.chat.toggle_checklist_collapsed();
-                        self.mark_dirty();
-                        return true;
-                    }
-                    AIChatHit::ToggleChecklistItem(idx) => {
-                        self.editor_state.chat.set_checklist_item_expanded(idx);
-                        self.mark_dirty();
-                        return true;
-                    }
                     AIChatHit::SwitchTab(idx) => {
                         // Pure editor-state change — a switch does NOT touch
                         // the run binding (a run keeps streaming into its own

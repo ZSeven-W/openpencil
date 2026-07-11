@@ -3,11 +3,6 @@
 //! Pure geometry; the painting half stays in `ai_chat_panel.rs`.
 
 use super::ai_chat_panel::{AIChatPlaceholder, HEADER_HEIGHT, PAD, RESIZE_CORNER, RESIZE_GUTTER};
-use crate::widgets::ai_chat_checklist::{
-    checklist_item_chevron_rect, checklist_item_height, fixed_checklist_height,
-    fixed_checklist_items, fixed_checklist_list_rect, fixed_checklist_max_scroll,
-    fixed_checklist_rect, HEADER_H, ITEM_GAP, PROGRESS_H,
-};
 use crate::widgets::ai_chat_hit::{AIChatHit, ChatCursorProbe, ChatResizeEdge};
 use crate::widgets::ai_chat_panel_controls::attachment_row_hit;
 use crate::widgets::ai_chat_panel_header::{
@@ -18,16 +13,6 @@ use crate::widgets::ai_chat_transcript_cache::CanonicalTranscript;
 use crate::{Point2D, Rect};
 
 impl<'a> AIChatPlaceholder<'a> {
-    pub fn fixed_checklist_bounds(&self, rect: Rect) -> Option<Rect> {
-        let checklist_h = fixed_checklist_height(self.state, self.state.checklist_collapsed);
-        (checklist_h > 0.0)
-            .then(|| fixed_checklist_rect(rect, self.input_height_for_rect(rect), checklist_h))
-    }
-
-    pub fn fixed_checklist_scroll_max(&self) -> f32 {
-        fixed_checklist_max_scroll(self.state, self.state.checklist_collapsed)
-    }
-
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
         self.hit_test_with_canonical(rect, point, None)
     }
@@ -272,45 +257,6 @@ impl<'a> AIChatPlaceholder<'a> {
             } else {
                 AIChatHit::FocusInput
             });
-        }
-        let checklist_h = fixed_checklist_height(self.state, self.state.checklist_collapsed);
-        if checklist_h > 0.0 {
-            let input_h = self.input_height_for_rect(rect);
-            let checklist = fixed_checklist_rect(rect, input_h, checklist_h);
-            if (checklist).contains(point) {
-                let header = Rect::xywh(
-                    checklist.origin.x,
-                    checklist.origin.y + PROGRESS_H,
-                    checklist.size.x,
-                    HEADER_H,
-                );
-                if (header).contains(point) {
-                    return Some(AIChatHit::ToggleChecklist);
-                }
-                if !self.state.checklist_collapsed {
-                    let list = fixed_checklist_list_rect(checklist);
-                    let items = fixed_checklist_items(self.state);
-                    let scroll = self
-                        .fixed_checklist_scroll_max()
-                        .min(self.state.checklist_scroll.offset.max(0.0));
-                    let mut row_y = list.origin.y - scroll;
-                    for (idx, item) in items.iter().enumerate() {
-                        let h = checklist_item_height(item);
-                        if !item.details.is_empty() {
-                            let chevron = checklist_item_chevron_rect(
-                                list.origin.x + PAD,
-                                row_y,
-                                list.size.x - PAD * 2.0,
-                            );
-                            if (chevron).contains(point) {
-                                return Some(AIChatHit::ToggleChecklistItem(idx));
-                            }
-                        }
-                        row_y += h + ITEM_GAP;
-                    }
-                }
-                return Some(AIChatHit::FocusInput);
-            }
         }
         // Transcript hit-test — a click on a message's thinking /
         // tool-call collapsible header toggles it. Checked before the
