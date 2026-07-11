@@ -218,6 +218,10 @@ fn fingerprint_messages(messages: &[ChatMessage]) -> u64 {
         m.design_block_expanded_overrides.hash(&mut h);
         m.action_step_expanded_overrides.hash(&mut h);
         m.streaming.hash(&mut h);
+        // Sub-agent identity header adds a layout row — its arrival
+        // mid-run must invalidate the cached build.
+        m.agent_name.hash(&mut h);
+        m.agent_color.hash(&mut h);
     }
     h.finish()
 }

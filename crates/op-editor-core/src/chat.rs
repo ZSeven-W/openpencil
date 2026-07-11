@@ -189,6 +189,10 @@ pub struct ChatImage {
 pub struct ChatMessage {
     pub role: ChatRole,
     pub content: String,
+    /// Display name of the agent that produced this assistant message.
+    pub agent_name: Option<String>,
+    /// Optional `#RRGGBB` identity colour assigned by an orchestrated agent.
+    pub agent_color: Option<String>,
     /// Accumulated reasoning text (`ChatDelta::Thinking`). Empty for
     /// user messages and for turns that emitted no thinking.
     pub thinking: String,
@@ -222,6 +226,8 @@ impl ChatMessage {
         Self {
             role: ChatRole::User,
             content: content.into(),
+            agent_name: None,
+            agent_color: None,
             thinking: String::new(),
             tool_calls: Vec::new(),
             images: Vec::new(),
@@ -240,6 +246,8 @@ impl ChatMessage {
         Self {
             role: ChatRole::Assistant,
             content: content.into(),
+            agent_name: None,
+            agent_color: None,
             thinking: String::new(),
             tool_calls: Vec::new(),
             images: Vec::new(),
@@ -540,6 +548,9 @@ impl ChatState {
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }
+        let agent_name = self
+            .selected_model_entry()
+            .map(|entry| entry.provider.name().to_string());
         self.auto_title_from_prompt(&trimmed);
         self.collapsed = false;
         // A turn still in flight is interrupted by this new send — its
@@ -568,7 +579,9 @@ impl ChatState {
         }
         self.messages.push(user_msg);
         // Empty streaming assistant bubble — provider deltas append here.
-        self.messages.push(ChatMessage::assistant_streaming());
+        let mut assistant_msg = ChatMessage::assistant_streaming();
+        assistant_msg.agent_name = agent_name;
+        self.messages.push(assistant_msg);
         self.input.set_text("");
         self.checklist_scroll.offset = 0.0;
         // Jump to the bottom so the new turn's reply is visible as it

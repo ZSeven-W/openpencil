@@ -26,6 +26,9 @@ use super::ai_chat_transcript_design::{
     place_design_blocks, DesignBlock,
 };
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
+use super::ai_chat_transcript_identity::{
+    layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
+};
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
 pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
@@ -48,20 +51,12 @@ pub(crate) const BUBBLE_PAD: f32 = 8.0;
 /// padding spec (~14px). Larger than BUBBLE_PAD so the user bubble
 /// feels spacious without inflating assistant / block bodies.
 pub(crate) const USER_BUBBLE_PAD: f32 = 14.0;
-/// Text shown in the TS-style empty streaming assistant pill.
 const TYPING_LABEL: &str = "Thinking";
-/// Text shown when a completed assistant action only contained hidden
-/// tool-call/result XML, matching the TS transcript fallback.
 const AUTOMATED_ACTION_LABEL: &str = "(Automated action completed)";
-/// Horizontal padding inside the empty streaming assistant pill.
 const TYPING_PAD_X: f32 = 10.0;
-/// Vertical padding inside the empty streaming assistant pill.
 const TYPING_PAD_Y: f32 = 4.0;
-/// Gap between the "Thinking" label and animated dots.
 const TYPING_LABEL_DOT_GAP: f32 = 6.0;
-/// Diameter of one animated typing dot.
 const TYPING_DOT: f32 = 4.0;
-/// Horizontal gap between animated typing dots.
 const TYPING_DOT_GAP: f32 = 2.0;
 /// Height of a collapsible header row (thinking / tool-calls).
 pub(crate) const HEADER_H: f32 = 22.0;
@@ -131,6 +126,7 @@ pub(crate) struct TextBubble {
 pub(crate) struct TranscriptItem {
     pub msg_index: usize,
     pub role: ChatRole,
+    pub agent_identity: Option<AgentIdentityHeader>,
     pub steps: Vec<ActionStep>,
     pub thinking: Option<Collapsible>,
     pub tools: Option<ToolPanel>,
@@ -216,6 +212,8 @@ pub(crate) fn build_item(
         body.origin.x
     };
     let mut y = top;
+    let (agent_identity, next_y) = layout_agent_identity(msg, x, y, bubble_w);
+    y = next_y;
     let (mut progress_steps, thinking_text) = split_design_progress(&msg.thinking);
     let raw_visible_content = if is_user {
         msg.content.clone()
@@ -467,6 +465,7 @@ pub(crate) fn build_item(
         TranscriptItem {
             msg_index,
             role: msg.role,
+            agent_identity,
             steps,
             thinking,
             tools,
@@ -591,6 +590,11 @@ pub(crate) fn paint_transcript_with_selection(
         cx.backend.translate(Point2D::new(0.0, -scroll_offset));
     }
     for item in &canonical.items {
+        // Ours: sub-agent identity header (name + colour chip) above the
+        // item's steps — the canonical build lays it out, paint replays it.
+        if let Some(identity) = &item.agent_identity {
+            paint_agent_identity(cx, theme, identity);
+        }
         for step in &item.steps {
             paint_action_step(cx, theme, step);
         }
