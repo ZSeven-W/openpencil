@@ -259,11 +259,39 @@ impl EditorState {
     /// file persistence. Expanding / collapsing a layer is not an
     /// undoable edit.
     pub fn snapshot_for_history(&self) -> EditorSnapshot {
+        // Default anchor: the adjacent history state. After an undo the
+        // redo stack is non-empty and its back is the state we came
+        // FROM (the closest neighbour of the current live state) — so a
+        // divergent edit captured here shares subtrees with it, and the
+        // anchor is read BEFORE `history_push_past` clears the redo
+        // stack. In normal forward editing the redo stack is empty, so
+        // the anchor falls through to the previous undo entry.
+        let anchor = self
+            .history
+            .future
+            .back()
+            .or_else(|| self.history.past.back());
+        self.snapshot_for_history_with_anchor(anchor)
+    }
+
+    /// [`snapshot_for_history`](Self::snapshot_for_history) with an
+    /// explicit anchor. `anchor` is the adjacent history snapshot whose
+    /// unchanged top-level subtrees the new snapshot should share by
+    /// `Arc`; `None` produces an all-fresh snapshot. Undo / redo pass
+    /// the popped destination here so the parked entry shares with
+    /// where the editor is going.
+    pub fn snapshot_for_history_with_anchor(
+        &self,
+        anchor: Option<&EditorSnapshot>,
+    ) -> EditorSnapshot {
         EditorSnapshot {
-            doc: self.doc.clone(),
+            doc: crate::history_snapshot::SharedDoc::capture(&self.doc, anchor.map(|s| &s.doc)),
             selection: self.selection.clone(),
             active_page_index: self.ui.active_page_index,
-            components: self.components.clone(),
+            components: crate::history_snapshot::SharedComponents::capture(
+                &self.components,
+                anchor.map(|s| &s.components),
+            ),
             app_state_owner: self.app_state_owner.clone(),
             revision: self.revision,
         }
@@ -286,12 +314,16 @@ impl EditorState {
         self.history_push_past(snap);
     }
 
-    /// Restore the editor state from a snapshot.
-    fn restore(&mut self, snap: EditorSnapshot) {
-        self.doc = snap.doc;
+    /// Restore the editor state from a snapshot. Materializes the
+    /// shared document + components back into owned values. `pub(crate)`
+    /// so batch rollback ([`crate::command_batch`]) routes through the
+    /// same materializing path instead of moving shared state into live
+    /// fields.
+    pub(crate) fn restore(&mut self, snap: EditorSnapshot) {
+        self.doc = snap.doc.materialize();
         self.selection = snap.selection;
         self.ui.active_page_index = snap.active_page_index;
-        self.components = snap.components;
+        self.components = snap.components.materialize();
         self.app_state_owner = snap.app_state_owner;
         self.revision = snap.revision;
         self.sync_dirty_flag();
@@ -302,7 +334,11 @@ impl EditorState {
         let Some(prev) = self.history.past.pop_back() else {
             return false;
         };
-        let cur = self.snapshot_for_history();
+        // Capture the current (live) state as the redo entry, anchored
+        // on the POPPED destination — before it is materialized — so the
+        // parked snapshot shares every unchanged subtree with where the
+        // editor is about to land.
+        let cur = self.snapshot_for_history_with_anchor(Some(&prev));
         self.history.future.push_back(cur);
         self.restore(prev);
         true
@@ -313,7 +349,9 @@ impl EditorState {
         let Some(next) = self.history.future.pop_back() else {
             return false;
         };
-        let cur = self.snapshot_for_history();
+        // Symmetric to undo: anchor the parked undo entry on the popped
+        // redo destination.
+        let cur = self.snapshot_for_history_with_anchor(Some(&next));
         self.history.past.push_back(cur);
         self.restore(next);
         true

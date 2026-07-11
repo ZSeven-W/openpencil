@@ -313,35 +313,26 @@ impl EditorState {
         if !matches!(live_ref, PenNode::Ref(_)) {
             return;
         }
-        let repair = |doc: &mut PenDocument| {
-            let contaminated = |children: &mut Vec<PenNode>| {
-                if let Some(node) = find_node_mut(children, ref_id) {
-                    if !matches!(node, PenNode::Ref(_)) {
-                        *node = live_ref.clone();
-                    }
-                }
-            };
-            if let Some(pages) = doc.pages.as_mut() {
-                for page in pages {
-                    contaminated(&mut page.children);
-                }
-            }
-            contaminated(&mut doc.children);
-        };
+        // Snapshot docs are now `Arc`-shared at top-level granularity, so
+        // this in-place fix is copy-on-write: `SharedDoc::repair_swap`
+        // `Arc::make_mut`s only the affected top-level entry, cloning it
+        // away from any sibling snapshot that shares the `Arc`. A
+        // pre-scope history state that shares an untouched instance
+        // subtree is therefore never contaminated.
         let len = self.history.past.len();
         for idx in history_len_before..len {
             if let Some(snap) = self.history.past.get_mut(idx) {
-                repair(&mut snap.doc);
+                snap.doc.repair_swap(ref_id, &live_ref);
             }
         }
         // Pending pre-edit snapshots (colour picker / text edit) taken
         // inside the scope carry the same contamination signature — a
         // non-Ref node at the instance id — and the same repair.
         if let Some(snap) = self.ui.pending_color_history.as_mut() {
-            repair(&mut snap.doc);
+            snap.doc.repair_swap(ref_id, &live_ref);
         }
         if let Some(snap) = self.ui.pending_text_edit_history.as_mut() {
-            repair(&mut snap.doc);
+            snap.doc.repair_swap(ref_id, &live_ref);
         }
     }
 }
@@ -497,7 +488,8 @@ mod tests {
             s.set_selected_color(true, "#00ff00")
         });
         let snap = s.history.past.back().expect("history entry pushed");
-        let in_snap = crate::walkers::find_node(&snap.doc.children, &NodeId::new("inst1"))
+        let snap_doc = snap.doc.materialize();
+        let in_snap = crate::walkers::find_node(&snap_doc.children, &NodeId::new("inst1"))
             .expect("inst1 in snapshot");
         assert!(
             matches!(in_snap, PenNode::Ref(_)),

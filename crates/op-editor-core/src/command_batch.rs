@@ -161,19 +161,21 @@ impl EditorState {
         let saved_future = std::mem::take(&mut self.history.future);
         for cmd in commands {
             if !self.apply(cmd) {
+                // Restore the pre-batch history bookkeeping first (this
+                // is batch-specific — a plain restore does not touch the
+                // undo/redo stacks): drop any sub-command undo entries
+                // and hand the parked redo stack back intact.
                 self.history.past.truncate(past_len);
                 self.history.future = saved_future;
-                self.doc = pre.doc;
-                self.selection = pre.selection;
-                self.ui.active_page_index = pre.active_page_index;
-                self.components = pre.components;
-                // Ownership must roll back with doc.state — a stale
-                // entry would mark a key generation-owned that the
-                // restored document no longer carries, silently
-                // skipping later merges of that key.
-                self.app_state_owner = pre.app_state_owner;
-                self.revision = pre.revision;
-                self.sync_dirty_flag();
+                // Then route the document / selection / page / component
+                // / app-state-owner / revision restore through the same
+                // materializing path undo/redo use. `restore` rebuilds
+                // the owned doc from the shared snapshot and re-syncs the
+                // dirty flag. Ownership rolls back with doc.state — a
+                // stale entry would mark a key generation-owned that the
+                // restored document no longer carries, silently skipping
+                // later merges of that key.
+                self.restore(pre);
                 return false;
             }
         }

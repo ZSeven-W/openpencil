@@ -52,6 +52,7 @@ pub mod geometry;
 pub mod git_button_state;
 pub mod grouping;
 pub mod history;
+pub mod history_snapshot;
 pub mod hoist_app_state;
 pub mod host_support;
 pub mod icon_picker_state;
@@ -140,6 +141,10 @@ mod dirty_tests;
 #[cfg(test)]
 mod fills_tests;
 #[cfg(test)]
+mod history_bench_tests;
+#[cfg(test)]
+mod history_snapshot_tests;
+#[cfg(test)]
 mod svg_import_tests;
 #[cfg(test)]
 mod test_support;
@@ -207,6 +212,7 @@ pub use fills::{
 pub use geometry::{aggregate_bounds, own_bounds, union_aggregate_bounds, DocRect};
 pub use git_button_state::GitButton;
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
+pub use history_snapshot::{SharedComponents, SharedDoc};
 pub use hoist_app_state::{hoist_app_state, UNPLANNED_APP_STATE_IDX};
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
