@@ -22,38 +22,77 @@ use op_host_services::design_agent_tools::{design_tool_defs, root_seed_prompt_is
 
 use super::clear_fresh_starter_frame_for_design;
 
-/// Recognised explicit opt-IN values for the design-agent loop.
-fn parse_loop_on(opt: Option<&str>) -> bool {
-    matches!(opt.map(str::trim), Some("1") | Some("true") | Some("on"))
+/// Parses recognized force-loop / force-orchestrator environment values.
+fn parse_loop_env(opt: Option<&str>) -> Option<bool> {
+    match opt.map(str::trim) {
+        Some("1" | "true" | "on") => Some(true),
+        Some("0" | "false" | "off") => Some(false),
+        _ => None,
+    }
+}
+
+/// Returns true when the prompt describes a landing or marketing page.
+fn prompt_is_landing(prompt: &str) -> bool {
+    let lower = prompt.to_lowercase();
+    let words = lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>();
+    let is_desktop_product = words.iter().any(|word| {
+        matches!(
+            *word,
+            "dashboard" | "admin" | "console" | "desktop" | "webapp"
+        )
+    }) || words.windows(2).any(|pair| pair == ["web", "app"])
+        || lower.contains("后台");
+    if is_desktop_product {
+        return false;
+    }
+
+    words.iter().any(|word| {
+        matches!(
+            *word,
+            "landing" | "website" | "homepage" | "marketing" | "hero"
+        )
+    }) || ["官网", "落地页", "营销"]
+        .iter()
+        .any(|keyword| lower.contains(keyword))
 }
 
 /// Pure predicate for the design-agent-loop gate.
 ///
-/// The single-shot ORCHESTRATOR (plan → scaffold → subagents → cleanup) is the
-/// default for builtin (API-key) providers. It injects the mobile status-bar +
-/// chrome and runs the role-resolver post-passes that the loop currently lacks:
-/// a loop-generated mobile screen shipped with NO status bar and a degraded
-/// node vocabulary (no path/rectangle/text_input), while the orchestrator (used
-/// by CLI providers) produced a polished screen for the same model. So the loop
-/// is OPT-IN until it grows the same scaffold chrome — enable it via the
-/// Settings "Experimental features" toggle or `OPENPENCIL_DESIGN_AGENT_LOOP=1|true|on`.
+/// Routing has three states: a truthy env value or the Settings experimental
+/// toggle forces the loop for every prompt; when neither force-loop condition
+/// applies, a falsy env value forces the single-shot orchestrator; otherwise
+/// mobile and landing prompts auto-route to the loop while desktop dashboard,
+/// web-app, and other prompts stay on the orchestrator.
+///
+/// The A/B evidence summarized in the openpencil-docs sonar plan validated the
+/// loop as better for mobile/landing work and worse for desktop dashboard work.
 ///
 /// Kept free of I/O so it is unit-testable without env-var flakiness.
-pub fn loop_enabled(experimental: bool, env: Option<&str>) -> bool {
-    experimental || parse_loop_on(env)
+pub fn loop_enabled(experimental: bool, env: Option<&str>, prompt: &str) -> bool {
+    if experimental {
+        return true;
+    }
+    if let Some(force_loop) = parse_loop_env(env) {
+        return force_loop;
+    }
+    root_seed_prompt_is_mobile(prompt) || prompt_is_landing(prompt)
 }
 
 /// Returns true when the design-agent loop should run for this turn.
 ///
-/// Default OFF (orchestrator); the loop is opt-in via the Settings experimental
-/// toggle or `OPENPENCIL_DESIGN_AGENT_LOOP=1|true|on`. (CLI providers never reach
-/// this gate — they stay on the orchestrator path in `launch_if_pending`.)
-pub(super) fn design_agent_loop_enabled(state: &op_editor_core::EditorState) -> bool {
+/// Explicit settings force one path; otherwise mobile and landing prompts use
+/// the loop. CLI providers never reach this gate — they stay on the orchestrator
+/// path in `launch_if_pending`.
+pub(super) fn design_agent_loop_enabled(state: &op_editor_core::EditorState, prompt: &str) -> bool {
     loop_enabled(
         state.editor_ui.agent_settings.experimental_features_enabled,
         std::env::var("OPENPENCIL_DESIGN_AGENT_LOOP")
             .ok()
             .as_deref(),
+        prompt,
     )
 }
 
@@ -138,7 +177,7 @@ pub(super) fn launch_design_loop_turn(
     current_chat: &mut Option<ChatSession>,
     current_design: &mut Option<DesignSession>,
 ) -> bool {
-    if !design_agent_loop_enabled(host.editor_state()) {
+    if !design_agent_loop_enabled(host.editor_state(), &user_text) {
         return false;
     }
     let Some((provider, tool_rx)) = builtin_provider_with_design_tools(host) else {
@@ -162,8 +201,21 @@ pub(super) fn launch_design_loop_turn(
     let chat = &mut host.editor_state_mut().chat;
     let effort = chat.effort_level;
     let attachments = std::mem::take(&mut chat.pending_attachments);
+    // Protocol base + prompt-matched domain depth (dashboard density floors,
+    // mobile three-section architecture, …) — the same content supply the
+    // orchestrator injects per subtask. Without it the loop model designs
+    // from the 181-line protocol prompt alone and ships sparse screens (the
+    // measured p14-type richness gap). On a non-empty canvas the consistency
+    // brief rides along so screen 2+ reads as the same product (shared chrome
+    // node ids, palette, typefaces).
+    let mut system_prompt = op_ai_skills::design_agent_system_prompt_with_skills(&user_text);
+    if let Some(brief) = op_host_services::design_context::design_context_brief(host.editor_state())
+    {
+        system_prompt.push_str("\n\n---\n\n");
+        system_prompt.push_str(&brief);
+    }
     let req = ChatRequest {
-        system_prompt: op_ai_skills::design_agent_system_prompt().to_string(),
+        system_prompt,
         user_message: user_text,
         history,
         // Design-loop turns should emit one <=25-op section batch, then wait for
@@ -229,37 +281,66 @@ mod tests {
         );
     }
 
-    // ── loop_enabled opt-in gate: default orchestrator, loop is opt-in ─────
+    // ── prompt-aware design-loop routing ───────────────────────────
     #[test]
-    fn loop_enabled_both_off_is_orchestrator() {
-        assert!(
-            !loop_enabled(false, None),
-            "no toggle, no env → default orchestrator (loop is opt-in until it grows scaffold chrome)"
-        );
+    fn loop_enabled_explicit_on_routes_any_prompt_to_loop() {
+        let dashboard = "Design an admin analytics dashboard web app";
+        assert!(loop_enabled(true, None, dashboard));
+        assert!(loop_enabled(false, Some("1"), dashboard));
+        assert!(loop_enabled(false, Some("true"), dashboard));
+        assert!(loop_enabled(false, Some(" on "), dashboard));
     }
 
     #[test]
-    fn loop_enabled_experimental_on_is_true() {
-        assert!(
-            loop_enabled(true, None),
-            "the Settings experimental toggle opts into the loop"
-        );
+    fn loop_enabled_explicit_off_routes_any_prompt_to_orchestrator() {
+        let mobile = "Design a mobile fitness app home";
+        assert!(!loop_enabled(false, Some("0"), mobile));
+        assert!(!loop_enabled(false, Some("false"), mobile));
+        assert!(!loop_enabled(false, Some(" off "), mobile));
     }
 
     #[test]
-    fn loop_enabled_env_on_is_true() {
-        assert!(loop_enabled(false, Some("1")), "env=1 opts into the loop");
-        assert!(loop_enabled(false, Some("true")));
-        assert!(loop_enabled(false, Some(" on ")));
+    fn loop_enabled_auto_routes_mobile_prompt_to_loop() {
+        assert!(loop_enabled(
+            false,
+            None,
+            "Design a mobile fitness app home"
+        ));
     }
 
     #[test]
-    fn loop_enabled_non_truthy_env_stays_orchestrator() {
-        assert!(!loop_enabled(false, Some("0")));
-        assert!(!loop_enabled(false, Some("false")));
-        assert!(!loop_enabled(false, Some("off")));
-        assert!(!loop_enabled(false, Some("garbage")));
-        // The experimental toggle opts in regardless of a non-truthy env value.
-        assert!(loop_enabled(true, Some("0")));
+    fn loop_enabled_auto_routes_landing_prompt_to_loop() {
+        assert!(loop_enabled(
+            false,
+            None,
+            "Design a landing page for a climate SaaS"
+        ));
+    }
+
+    #[test]
+    fn loop_enabled_auto_routes_dashboard_prompt_to_orchestrator() {
+        assert!(!loop_enabled(
+            false,
+            None,
+            "Design an admin analytics dashboard web app"
+        ));
+    }
+
+    #[test]
+    fn loop_enabled_auto_routes_ambiguous_homepage_to_orchestrator() {
+        assert!(!loop_enabled(
+            false,
+            None,
+            "Design the dashboard homepage for admin console"
+        ));
+    }
+
+    #[test]
+    fn loop_enabled_auto_routes_web_app_homepage_to_orchestrator() {
+        assert!(!loop_enabled(
+            false,
+            None,
+            "Design the homepage for a project management web app"
+        ));
     }
 }

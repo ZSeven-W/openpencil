@@ -44,7 +44,7 @@
 //! thickness, extend the translation or report a gap.
 
 use op_design_lint::plan::{PlannedAction, PlannedFix};
-use op_editor_core::{EditorCommand, EditorState};
+use op_editor_core::{EditorCommand, EditorState, NodeId};
 use op_orchestrator::{DocSink, PreValidationResult, PreValidator};
 
 /// Real `PreValidator` implementation backed by `op-design-lint`.
@@ -64,6 +64,9 @@ impl PreValidator for LintPreValidator {
         let mut by_category: std::collections::BTreeMap<String, usize> = Default::default();
 
         for fix in &plan {
+            if should_skip_scroller_layout_fix(fix, sink.state()) {
+                continue;
+            }
             let commands = planned_fix_to_commands(fix, sink.state());
             // Count this fix as applied only if at least one command lands.
             let mut any_applied = false;
@@ -84,6 +87,16 @@ impl PreValidator for LintPreValidator {
 
         PreValidationResult { total, by_category }
     }
+}
+
+fn should_skip_scroller_layout_fix(fix: &PlannedFix, state: &EditorState) -> bool {
+    matches!(
+        fix.action,
+        PlannedAction::SetPadding(_) | PlannedAction::SetHeightFitContent
+    ) && op_orchestrator::validation_fixes::is_protected_scroller_region(
+        state,
+        &NodeId::new(fix.node_id.clone()),
+    )
 }
 
 /// Translate one `PlannedFix` into the `EditorCommand`(s) needed to apply it.
@@ -425,6 +438,64 @@ mod tests {
                 "../../op-design-lint/tests/fixtures/docs/invisible-container-with-var.json"
             ),
             "invisible-container-with-var",
+        );
+    }
+
+    #[test]
+    fn pre_validation_preserves_scroller_layout_region() {
+        let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+            r##"{
+                "version":"1.0",
+                "children":[{
+                    "type":"frame","id":"root","name":"Explore",
+                    "width":390,"height":844,"layout":"vertical",
+                    "children":[
+                        {
+                            "type":"frame","id":"viewport","name":"Destinations Viewport",
+                            "width":"fill_container","height":"fit_content",
+                            "layout":"horizontal","clipContent":true,
+                            "children":[{
+                                "type":"frame","id":"card","name":"Kyoto Card",
+                                "width":294,"height":300,"layout":"vertical",
+                                "children":[{
+                                    "type":"text","id":"label","name":"Card Label",
+                                    "content":"Kyoto","width":"fit_content","height":24
+                                }]
+                            }]
+                        },
+                        {
+                            "type":"frame","id":"summary","name":"Summary",
+                            "width":"fill_container","height":"fit_content","layout":"vertical",
+                            "children":[{
+                                "type":"text","id":"summary-label","content":"Summary",
+                                "width":"fit_content","height":"fit_content"
+                            }]
+                        }
+                    ]
+                }]
+            }"##,
+        )
+        .expect("scroller pre-validation fixture");
+        let mut sink = TestSink::from_doc(doc);
+
+        let result = LintPreValidator.run_pre_validation_fixes(&mut sink);
+
+        assert_eq!(result.total, 0, "scroller geometry fixes must be filtered");
+        let root = op_editor_core::walkers::find_node(
+            sink.state().active_children(),
+            &op_editor_core::NodeId::new("root"),
+        )
+        .expect("root exists");
+        let root_json = serde_json::to_value(root).expect("root serializes");
+        assert!(root_json.get("padding").is_none());
+        let label = op_editor_core::walkers::find_node(
+            sink.state().active_children(),
+            &op_editor_core::NodeId::new("label"),
+        )
+        .expect("label exists");
+        assert_eq!(
+            serde_json::to_value(label).unwrap()["height"],
+            serde_json::json!(24.0)
         );
     }
 }

@@ -146,13 +146,56 @@ pub fn execute_design_tool_with_root_seed_guard(
         // repairs them in-process, instead of piling defects up for the loop-end
         // finalize. Deterministic analogue of Pencil's per-batch
         // snapshot_layout feedback.
+        let dup_bars_removed = remove_nested_duplicate_status_bars(state);
         let layout_issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
         let contrast_issues = scan_contrast_issues(state.active_children());
-        if !layout_issues.is_empty() || !contrast_issues.is_empty() || root_seed_hint.is_some() {
+        let icon_issues = scan_icon_issues(state.active_children());
+        let mut dup_root_issues = scan_duplicate_root_issues(state.active_children());
+        dup_root_issues.extend(scan_ring_issues(state.active_children()));
+        dup_root_issues.extend(scan_header_icon_row_issues(state.active_children()));
+        if dup_bars_removed > 0 {
+            dup_root_issues.push(format!(
+                "removed {dup_bars_removed} extra status bar(s) you built - the standard                  status bar already exists; NEVER create another one"
+            ));
+        }
+        let empty_shells = scan_empty_shells(state.active_children());
+        let unbound_slots = scan_unbound_image_slots(state.active_children());
+        if !layout_issues.is_empty()
+            || !dup_root_issues.is_empty()
+            || !contrast_issues.is_empty()
+            || !icon_issues.is_empty()
+            || !empty_shells.is_empty()
+            || !unbound_slots.is_empty()
+            || root_seed_hint.is_some()
+        {
             if let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&result.content) {
                 if let Some(obj) = envelope.as_object_mut() {
                     if !layout_issues.is_empty() {
                         obj.insert("layoutIssues".into(), serde_json::json!(layout_issues));
+                    }
+                    if !icon_issues.is_empty() {
+                        obj.insert("iconIssues".into(), serde_json::json!(icon_issues));
+                    }
+                    if !dup_root_issues.is_empty() {
+                        obj.insert("structureIssues".into(), serde_json::json!(dup_root_issues));
+                    }
+                    if !unbound_slots.is_empty() {
+                        obj.insert(
+                            "imageSlots".into(),
+                            serde_json::json!(format!(
+                                "{} - these bare solid squares read as image slots with NO                                  image; give EACH an image fill NOW: G(id, \"search\",                                  \"<2-3 word subject from its card's title>\")",
+                                unbound_slots.join(", ")
+                            )),
+                        );
+                    }
+                    if !empty_shells.is_empty() {
+                        obj.insert(
+                            "shellsRemaining".into(),
+                            serde_json::json!(format!(
+                                "{} - fill each in its own batch; NEVER end the design while any shell is empty (D() a shell you decided against)",
+                                empty_shells.join(", ")
+                            )),
+                        );
                     }
                     if !contrast_issues.is_empty() {
                         obj.insert(
@@ -165,6 +208,12 @@ pub fn execute_design_tool_with_root_seed_guard(
                     if !layout_issues.is_empty() {
                         hints.push(
                             "The resolved layout has the issues above. Fix them with a follow-up batch_design before building the next section."
+                                .to_string(),
+                        );
+                    }
+                    if !icon_issues.is_empty() {
+                        hints.push(
+                            "iconIssues: every icon listed renders as a fallback dot. Fix each with U(id, {\"iconFontName\":\"<glyph>\"}) using a real lucide glyph name (home/search/heart/compass/...)."
                                 .to_string(),
                         );
                     }
@@ -351,7 +400,15 @@ fn maybe_apply_root_seed_guard(
         .and_then(op_editor_core::agent_indicators::root_seed_hint_if_pending)
         .map(RootSeedTarget::from_mobile);
     let target = explicit_target.or(epoch_target)?;
-    let hint = seed_root_frame_if_needed(state, ids_before, target);
+    let seed_hint = seed_root_frame_if_needed(state, ids_before, target);
+    // Mobile chrome parity with the orchestrator scaffold: the loop's first
+    // batch gets the SAME pre-inserted status bar, so `mobile-app.md`'s
+    // "status bar is already pre-inserted" contract holds on this path too.
+    // Runs even when the model authored explicit root dimensions (the seed
+    // above early-returns then, but the chrome must still land).
+    let chrome_hint = (target == RootSeedTarget::Mobile)
+        .then(|| inject_mobile_status_bar_if_missing(state, ids_before))
+        .flatten();
 
     if let Some(guard) = root_seed_guard {
         guard.mark_consumed();
@@ -359,7 +416,133 @@ fn maybe_apply_root_seed_guard(
         op_editor_core::agent_indicators::mark_root_seed_guard_consumed(epoch);
     }
 
-    hint
+    match (seed_hint, chrome_hint) {
+        (Some(seed), Some(chrome)) => Some(format!("{seed} {chrome}")),
+        (Some(seed), None) => Some(seed),
+        (None, Some(chrome)) => Some(chrome),
+        (None, None) => None,
+    }
+}
+
+/// Insert the standard iOS status-bar chrome as the mobile root's FIRST
+/// child unless the model already built one. Reuses the orchestrator
+/// scaffold's exact node tree (`scaffold::mobile_status_bar_node`) so both
+/// generation paths ship byte-identical chrome. Returns the model-facing
+/// hint when the bar was injected.
+fn inject_mobile_status_bar_if_missing(
+    state: &mut EditorState,
+    ids_before: &HashSet<String>,
+) -> Option<String> {
+    let root = root_seed_candidate_mut(state, ids_before)?;
+    // OS chrome has exactly one canonical form. A model-built status bar
+    // (name matches, structure doesn't — no role, ad-hoc children) is
+    // REPLACED in place rather than kept: every hand-rolled variant we
+    // measured deviated visibly from the iOS reference (GLM-5.2 2026-07-11).
+    let noncanonical_index = root
+        .children()
+        .into_iter()
+        .flatten()
+        .position(|child| is_status_bar_node(child) && !is_canonical_status_bar(child));
+    if let Some(index) = noncanonical_index {
+        let root_id = root.id_str().to_string();
+        let fill_hex = op_editor_core::first_solid_fill_hex(root)
+            .unwrap_or("#ffffff")
+            .to_string();
+        let width = root.width_px().unwrap_or(390.0);
+        if let Ok(bar) =
+            op_orchestrator::scaffold::mobile_status_bar_node(&root_id, &fill_hex, width)
+        {
+            if let Some(children) = root.children_mut() {
+                children[index] = bar;
+                return Some(
+                    "The status bar you built was replaced with the standard iOS status bar                      (62px, role=status-bar) - do NOT rebuild or restyle it."
+                        .to_string(),
+                );
+            }
+        }
+        return None;
+    }
+    if root
+        .children()
+        .into_iter()
+        .flatten()
+        .any(is_status_bar_node)
+    {
+        return None;
+    }
+    let root_id = root.id_str().to_string();
+    let fill_hex = op_editor_core::first_solid_fill_hex(root)
+        .unwrap_or("#ffffff")
+        .to_string();
+    let width = root.width_px().unwrap_or(390.0);
+    let bar = op_orchestrator::scaffold::mobile_status_bar_node(&root_id, &fill_hex, width).ok()?;
+    root.children_mut()?.insert(0, bar);
+    Some(
+        "A standard iOS status bar (62px, role=status-bar) was pre-inserted as the root's \
+         first child - do NOT create another status bar; start your content below it."
+            .to_string(),
+    )
+}
+
+/// The injected/scaffold chrome shape: role tag + the Time/Levels pair.
+/// Anything else that merely NAMES itself a status bar is a hand-rolled
+/// variant slated for replacement.
+fn is_canonical_status_bar(node: &PenNode) -> bool {
+    node.base().role.as_deref() == Some("status-bar")
+        && node.children().is_some_and(|children| {
+            children
+                .iter()
+                .any(|c| c.base().name.as_deref() == Some("Levels"))
+        })
+}
+
+fn is_status_bar_node(node: &PenNode) -> bool {
+    if node.base().role.as_deref() == Some("status-bar") {
+        return true;
+    }
+    node.base()
+        .name
+        .as_deref()
+        .is_some_and(|name| name.to_ascii_lowercase().contains("status bar"))
+}
+
+/// Contract sweep, every batch: once a root carries the canonical status
+/// bar as a direct child, any OTHER status-bar-looking node in that root is
+/// removed on the spot. The first-batch injection hook can't see later
+/// batches — measured (test0711-22 23:07 run): the model hand-built a
+/// second "21:30" bar inside the Header several batches in, which then sat
+/// on screen until finalize. OS chrome is a contract, so the duplicate is
+/// removed deterministically rather than echoed.
+fn remove_nested_duplicate_status_bars(state: &mut EditorState) -> usize {
+    let mut removed = 0;
+    for root in state.active_children_mut() {
+        let has_canonical = root
+            .children()
+            .into_iter()
+            .flatten()
+            .any(is_canonical_status_bar);
+        if !has_canonical {
+            continue;
+        }
+        fn prune(node: &mut PenNode, keep_canonical: bool, removed: &mut usize) {
+            let Some(children) = node.children_mut() else {
+                return;
+            };
+            children.retain(|child| {
+                let duplicate = is_status_bar_node(child)
+                    && !(keep_canonical && is_canonical_status_bar(child));
+                if duplicate {
+                    *removed += 1;
+                }
+                !duplicate
+            });
+            for child in children {
+                prune(child, false, removed);
+            }
+        }
+        prune(root, true, &mut removed);
+    }
+    removed
 }
 
 fn seed_root_frame_if_needed(
@@ -603,6 +786,261 @@ struct ContrastIssue {
 }
 
 const CONTRAST_AA_TARGET: f64 = 4.5;
+
+/// Structure echo for abandoned rebuilds: TWO top-level frames with the
+/// same name means the model started a fresh copy instead of filling the
+/// existing root (measured: MiniMax-M3 left the original `Explore` with an
+/// empty AppContent and built everything in a second `Explore` — the user
+/// sees a blank artboard mid-run). Finalize's duplicate-root pass repairs
+/// the END state, but the in-loop model should merge NOW.
+fn scan_duplicate_root_issues(nodes: &[PenNode]) -> Vec<String> {
+    use std::collections::HashMap;
+    let mut by_name: HashMap<&str, Vec<&PenNode>> = HashMap::new();
+    for node in nodes {
+        if let PenNode::Frame(_) = node {
+            if let Some(name) = node.base().name.as_deref() {
+                if !name.trim().is_empty() {
+                    by_name.entry(name).or_default().push(node);
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (name, dupes) in by_name {
+        if dupes.len() < 2 {
+            continue;
+        }
+        let ids: Vec<&str> = dupes.iter().map(|n| n.id_str()).collect();
+        out.push(format!(
+            "duplicate top-level roots named \"{name}\" ({}) — you rebuilt a copy instead of \
+             filling the existing frame. Move your content into ONE root with M() and D() the \
+             abandoned empty copy; never leave both.",
+            ids.join(", ")
+        ));
+    }
+    out.sort();
+    out
+}
+
+/// Contract echo for broken icons: an `icon_font` whose `iconFontName` is
+/// missing, empty, or a FONT FAMILY name ("lucide" / "feather" /
+/// "material symbols …") renders as the fallback dot — the model wrote the
+/// family into the glyph field (measured: test0711-1.op shipped every icon
+/// as `iconFontName:"lucide"` with no glyph anywhere). The intended glyph
+/// cannot be recovered deterministically, so this echoes the offending ids
+/// for the in-loop model to repair with `U()`.
+/// Hairline "activity ring" echo: a cluster of large concentric ellipses
+/// stroked ~1px reads as faint wireframe circles, not progress rings
+/// (measured: GLM-5.2 test0711-2.op stacked six 1px ellipses for the
+/// Today's Activity ring). Ring thickness is the model's design intent, so
+/// this echoes instead of auto-fixing.
+/// Inventory of still-empty named shells — the skeleton-first protocol's
+/// countdown. Informational (not an "issue"): intermediate batches SHOULD
+/// have empty shells; the model uses the list to know what remains and to
+/// never end the turn with one unfilled (measured: an aborted run shipped
+/// an empty TabBar + MiniPlayer, test0711-22).
+/// A header-named row holding ONLY icons while its title text sits outside
+/// as a SIBLING — the bell floats alone in a full-width strip above the
+/// greeting (measured: "Header Row" = [bell], "Good evening" outside it,
+/// test0711-22). Which text belongs in the row is intent, so this echoes.
+/// Bare cover slots — EMPTY solid squares (>=48px, rounded/clipping) that
+/// read as image slots but carry NO image fill and NO G() binding. Some
+/// models (DeepSeek V4 measured) build entire album grids this way and
+/// never call G(), so every cover ships as a grey box. Echoed per batch so
+/// the model binds each slot itself; the enrichment fallback can then
+/// still fill whatever it ignores.
+fn scan_unbound_image_slots(nodes: &[PenNode]) -> Vec<String> {
+    let mut out = Vec::new();
+    fn is_bare_slot(node: &PenNode) -> bool {
+        let (container, rounded) = match node {
+            PenNode::Frame(f) => (
+                &f.container,
+                f.container.corner_radius.is_some() || f.container.clip_content == Some(true),
+            ),
+            PenNode::Rectangle(r) => (
+                &r.container,
+                r.container.corner_radius.is_some() || r.container.clip_content == Some(true),
+            ),
+            _ => return false,
+        };
+        if !rounded {
+            return false;
+        }
+        let (Some(w), Some(h)) = (
+            crate::design_agent_tools::sizing_px_of(&container.width),
+            crate::design_agent_tools::sizing_px_of(&container.height),
+        ) else {
+            return false;
+        };
+        if w < 48.0 || h < 48.0 || w / h > 1.6 || h / w > 1.6 {
+            return false;
+        }
+        if !matches!(
+            container.fill.as_deref(),
+            Some([jian_ops_schema::style::PenFill::Solid(_)])
+        ) {
+            return false;
+        }
+        node.children().is_none_or(|c| c.is_empty())
+    }
+    fn walk(nodes: &[PenNode], out: &mut Vec<String>) {
+        for node in nodes {
+            if out.len() >= 8 {
+                return;
+            }
+            if is_bare_slot(node) {
+                out.push(node.id_str().to_string());
+            }
+            if let Some(children) = node.children() {
+                walk(children, out);
+            }
+        }
+    }
+    walk(nodes, &mut out);
+    out
+}
+
+fn sizing_px_of(size: &Option<jian_ops_schema::sizing::SizingBehavior>) -> Option<f64> {
+    match size {
+        Some(jian_ops_schema::sizing::SizingBehavior::Number(px)) => Some(*px),
+        _ => None,
+    }
+}
+
+fn scan_header_icon_row_issues(nodes: &[PenNode]) -> Vec<String> {
+    let mut out = Vec::new();
+    fn walk(nodes: &[PenNode], out: &mut Vec<String>) {
+        for node in nodes {
+            if out.len() >= 4 {
+                return;
+            }
+            let Some(children) = node.children() else {
+                continue;
+            };
+            let has_text_sibling_ctx = children.iter().any(|c| matches!(c, PenNode::Text(_)));
+            for child in children {
+                let name = child.base().name.as_deref().unwrap_or("");
+                if !name.to_ascii_lowercase().contains("header") {
+                    continue;
+                }
+                let Some(row_children) = child.children() else {
+                    continue;
+                };
+                let icons_only = !row_children.is_empty()
+                    && row_children
+                        .iter()
+                        .all(|c| matches!(c, PenNode::IconFont(_)));
+                if icons_only && has_text_sibling_ctx {
+                    out.push(format!(
+                        "{} ({}): contains ONLY icons while the title text sits outside as a                          sibling - M() the title INTO this row (layout horizontal,                          justifyContent space_between) so the greeting and the icons share                          one line",
+                        name,
+                        child.id_str()
+                    ));
+                }
+            }
+            walk(children, out);
+        }
+    }
+    walk(nodes, &mut out);
+    out
+}
+
+fn scan_empty_shells(nodes: &[PenNode]) -> Vec<String> {
+    let mut out = Vec::new();
+    fn walk(nodes: &[PenNode], out: &mut Vec<String>) {
+        for node in nodes {
+            if out.len() >= 12 {
+                return;
+            }
+            if let Some(children) = node.children() {
+                let named = node.base().name.as_deref().unwrap_or("");
+                if children.is_empty()
+                    && !named.is_empty()
+                    && node.base().role.as_deref() != Some("status-bar")
+                {
+                    out.push(named.to_string());
+                } else {
+                    walk(children, out);
+                }
+            }
+        }
+    }
+    walk(nodes, &mut out);
+    out
+}
+
+fn scan_ring_issues(nodes: &[PenNode]) -> Vec<String> {
+    const MIN_RING_SIZE: f64 = 48.0;
+    const HAIRLINE: f32 = 2.5;
+    let mut out = Vec::new();
+    fn hairline_ring(node: &PenNode) -> bool {
+        let PenNode::Ellipse(ellipse) = node else {
+            return false;
+        };
+        if node.width_px().unwrap_or(0.0) < MIN_RING_SIZE {
+            return false;
+        }
+        matches!(
+            ellipse.stroke.as_ref().map(|s| &s.thickness),
+            Some(jian_ops_schema::style::StrokeThickness::Uniform(t)) if *t <= HAIRLINE
+        )
+    }
+    fn walk(nodes: &[PenNode], out: &mut Vec<String>) {
+        for node in nodes {
+            if out.len() >= 4 {
+                return;
+            }
+            if let Some(children) = node.children() {
+                let hairlines = children.iter().filter(|c| hairline_ring(c)).count();
+                if hairlines >= 2 {
+                    out.push(format!(
+                        "{}: {hairlines} large ellipses stroked <=2px look like faint wireframe                          circles, not progress rings - give each ring a thick stroke                          (thickness 8-12), muted track + accent progress",
+                        node.id_str()
+                    ));
+                }
+                walk(children, out);
+            }
+        }
+    }
+    walk(nodes, &mut out);
+    out
+}
+
+fn scan_icon_issues(nodes: &[PenNode]) -> Vec<String> {
+    const FAMILY_NAMES: [&str; 3] = ["lucide", "feather", "material symbols"];
+    let mut out = Vec::new();
+    fn walk(nodes: &[PenNode], out: &mut Vec<String>) {
+        for node in nodes {
+            if out.len() >= 12 {
+                return;
+            }
+            if let PenNode::IconFont(icon) = node {
+                let name = icon.icon_font_name.trim();
+                let lowered = name.to_ascii_lowercase();
+                let family_as_glyph = FAMILY_NAMES
+                    .iter()
+                    .any(|family| lowered.starts_with(family));
+                if name.is_empty() || family_as_glyph {
+                    out.push(format!(
+                        "icon {}: iconFontName is {} — it must be the GLYPH name \
+                         (e.g. \"home\", \"compass\"), not the font family",
+                        icon.base.id,
+                        if name.is_empty() {
+                            "missing".to_string()
+                        } else {
+                            format!("\"{name}\"")
+                        }
+                    ));
+                }
+            }
+            if let Some(children) = node.children() {
+                walk(children, out);
+            }
+        }
+    }
+    walk(nodes, &mut out);
+    out
+}
 
 fn scan_contrast_issues(nodes: &[PenNode]) -> Vec<ContrastIssue> {
     let mut candidates = Vec::new();
@@ -1089,6 +1527,121 @@ mod tests {
     }
 
     #[test]
+    fn execute_design_mobile_first_batch_injects_status_bar_chrome() {
+        // Chrome parity with the orchestrator scaffold: even when the model
+        // authored explicit root dimensions (so size seeding is skipped),
+        // the mobile root still gets the pre-inserted status bar as its
+        // FIRST child, and the hint tells the model not to build another.
+        let mut state = EditorState::new();
+        let mut guard = RootSeedGuard::from_prompt("mobile fitness tracker home");
+        let (result, mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Home',width:390,height:844,layout:'vertical'})"}"#,
+            None,
+            Some(&mut guard),
+        );
+
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let root = only_root_frame(&state);
+        let first = &root.children().expect("root children")[0];
+        assert_eq!(
+            first.base().role.as_deref(),
+            Some("status-bar"),
+            "status bar must be the root's first child"
+        );
+        assert_eq!(first.base().name.as_deref(), Some("Status Bar"));
+        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert!(
+            v["layoutHint"]
+                .as_str()
+                .unwrap_or("")
+                .contains("do NOT create another status bar"),
+            "chrome hint must be visible to the next batch: {}",
+            result.content
+        );
+    }
+
+    #[test]
+    fn execute_design_mobile_batch_canonicalizes_model_authored_status_bar() {
+        // The model built its own status bar in the first batch — the guard
+        // must NOT stack a second one, and the hand-rolled variant is
+        // replaced in place with the canonical chrome (every measured
+        // hand-built bar deviated visibly from the iOS reference).
+        let mut state = EditorState::new();
+        let mut guard = RootSeedGuard::from_prompt("iphone travel app");
+        let (result, mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Screen',width:390,height:844,layout:'vertical',children:[{type:'frame',name:'Status Bar',width:'fill_container',height:62}]})"}"#,
+            None,
+            Some(&mut guard),
+        );
+
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let root = only_root_frame(&state);
+        let bars = root
+            .children()
+            .expect("root children")
+            .iter()
+            .filter(|c| {
+                c.base()
+                    .name
+                    .as_deref()
+                    .is_some_and(|n| n.to_ascii_lowercase().contains("status bar"))
+            })
+            .count();
+        assert_eq!(bars, 1, "must not stack a second status bar");
+        let bar = root
+            .children()
+            .expect("root children")
+            .iter()
+            .find(|c| c.base().role.as_deref() == Some("status-bar"))
+            .expect("model-built bar replaced with the canonical status bar");
+        assert!(
+            bar.children()
+                .is_some_and(|children| children
+                    .iter()
+                    .any(|c| c.base().name.as_deref() == Some("Levels"))),
+            "canonical bar carries the Time/Levels structure"
+        );
+        let v: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert!(
+            v["layoutHint"]
+                .as_str()
+                .unwrap_or("")
+                .contains("replaced with the standard iOS status bar"),
+            "replacement must be echoed so the model stops restyling it: {}",
+            result.content
+        );
+    }
+
+    #[test]
+    fn execute_design_desktop_first_batch_gets_no_status_bar() {
+        let mut state = EditorState::new();
+        let mut guard = RootSeedGuard::from_prompt("SaaS analytics web app dashboard");
+        let (result, mutated) = execute_design_tool_with_root_seed_guard(
+            &mut state,
+            "batch_design",
+            r#"{"operations":"root=I(null,{type:'frame',name:'Dashboard'})"}"#,
+            None,
+            Some(&mut guard),
+        );
+
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+        let root = only_root_frame(&state);
+        let has_bar = root
+            .children()
+            .into_iter()
+            .flatten()
+            .any(|c| c.base().role.as_deref() == Some("status-bar"));
+        assert!(!has_bar, "desktop roots must not get mobile chrome");
+    }
+
+    #[test]
     fn execute_design_root_seed_guard_consumes_after_first_successful_batch() {
         let mut state = EditorState::new();
         let mut guard = RootSeedGuard::from_prompt("phone onboarding flow");
@@ -1234,5 +1787,153 @@ mod tests {
             "unknown tools should report the CRUD surface's 'not available in chat' error, got: {}",
             result.content
         );
+    }
+}
+
+#[cfg(test)]
+mod icon_issue_tests {
+    use super::*;
+
+    #[test]
+    fn family_name_as_glyph_and_missing_glyph_are_echoed() {
+        // test0711-1.op regression: every icon shipped as
+        // iconFontName:"lucide" (family in the glyph field) → fallback dots.
+        let nodes: Vec<PenNode> = serde_json::from_value(serde_json::json!([
+            { "type": "frame", "id": "root", "name": "R", "width": 100, "height": 100,
+              "children": [
+                { "type": "icon_font", "id": "bad1", "iconFontName": "lucide",
+                  "width": 20, "height": 20 },
+                { "type": "icon_font", "id": "bad2", "iconFontName": "",
+                  "width": 20, "height": 20 },
+                { "type": "icon_font", "id": "ok", "iconFontName": "compass",
+                  "width": 20, "height": 20 }
+              ] }
+        ]))
+        .expect("nodes");
+        let issues = scan_icon_issues(&nodes);
+        assert_eq!(issues.len(), 2, "{issues:?}");
+        assert!(issues[0].contains("bad1") && issues[0].contains("lucide"));
+        assert!(issues[1].contains("bad2") && issues[1].contains("missing"));
+        assert!(!issues.iter().any(|i| i.contains("\"ok\"")), "{issues:?}");
+    }
+}
+
+#[cfg(test)]
+mod duplicate_status_bar_tests {
+    use super::remove_nested_duplicate_status_bars;
+    use op_editor_core::PenNodeExt;
+
+    #[test]
+    fn nested_hand_built_status_bar_is_removed_once_canonical_exists() {
+        let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+            r##"{ "version": "1.0", "children": [{
+                "type": "frame", "id": "root", "name": "Music Home",
+                "width": 402, "height": 874, "layout": "vertical",
+                "children": [
+                    { "type": "frame", "id": "sb", "name": "Status Bar", "role": "status-bar",
+                      "width": "fill_container", "height": 62,
+                      "children": [
+                        { "type": "text", "id": "time", "name": "Time", "content": "9:41",
+                          "width": 54, "height": 22 },
+                        { "type": "frame", "id": "lv", "name": "Levels", "width": 70, "height": 22 }
+                      ] },
+                    { "type": "frame", "id": "hdr", "name": "Header",
+                      "width": "fill_container", "height": "fit_content",
+                      "children": [
+                        { "type": "frame", "id": "fake", "name": "Status Bar 2",
+                          "width": "fill_container", "height": 44 },
+                        { "type": "text", "id": "greet", "name": "Greeting",
+                          "content": "Good evening", "width": 200, "height": 30 }
+                      ] }
+                ]
+            }] }"##,
+        )
+        .expect("doc");
+        let mut state = op_editor_core::EditorState::from_document(doc);
+        let removed = remove_nested_duplicate_status_bars(&mut state);
+        assert_eq!(removed, 1, "the nested hand-built bar is swept");
+        let root = &state.active_children()[0];
+        fn find<'a>(
+            node: &'a jian_ops_schema::node::PenNode,
+            id: &str,
+        ) -> Option<&'a jian_ops_schema::node::PenNode> {
+            if node.id_str() == id {
+                return Some(node);
+            }
+            node.children()?.iter().find_map(|c| find(c, id))
+        }
+        assert!(find(root, "sb").is_some(), "canonical bar survives");
+        assert!(find(root, "fake").is_none(), "nested duplicate removed");
+        assert!(find(root, "greet").is_some(), "siblings untouched");
+    }
+}
+
+#[cfg(test)]
+mod ring_issue_tests {
+    use super::scan_ring_issues;
+
+    #[test]
+    fn hairline_ring_cluster_is_echoed_and_thick_rings_are_not() {
+        let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+            r##"{ "version": "1.0", "children": [{
+                "type": "frame", "id": "root", "name": "Screen",
+                "width": 390, "height": 844,
+                "children": [
+                    { "type": "frame", "id": "ring", "name": "ActivityRing",
+                      "width": 140, "height": 140, "layout": "none",
+                      "children": [
+                        { "type": "ellipse", "id": "e1", "width": 120, "height": 120,
+                          "stroke": { "thickness": 1 } },
+                        { "type": "ellipse", "id": "e2", "width": 120, "height": 120,
+                          "stroke": { "thickness": 1 } }
+                      ] },
+                    { "type": "frame", "id": "ok", "name": "HealthyRing",
+                      "width": 140, "height": 140, "layout": "none",
+                      "children": [
+                        { "type": "ellipse", "id": "e3", "width": 120, "height": 120,
+                          "stroke": { "thickness": 10 } },
+                        { "type": "ellipse", "id": "e4", "width": 120, "height": 120,
+                          "stroke": { "thickness": 10 } }
+                      ] }
+                ]
+            }] }"##,
+        )
+        .expect("doc");
+        let issues = scan_ring_issues(&doc.children);
+        assert_eq!(issues.len(), 1, "one cluster echoed: {issues:?}");
+        assert!(
+            issues[0].contains("ring") && issues[0].contains("thickness 8-12"),
+            "echo names the cluster and the fix: {issues:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod duplicate_root_tests {
+    use super::*;
+
+    #[test]
+    fn same_named_top_level_frames_are_echoed_once_per_name() {
+        // test0711-1-m3.op shape: model abandoned the original `Explore`
+        // (empty AppContent) and rebuilt everything in a second `Explore`.
+        let nodes: Vec<PenNode> = serde_json::from_value(serde_json::json!([
+            { "type": "frame", "id": "r1", "name": "Explore", "width": 390, "height": 844,
+              "children": [ { "type": "frame", "id": "empty", "name": "AppContent",
+                               "width": "fill_container", "height": "fit_content" } ] },
+            { "type": "frame", "id": "r2", "name": "Explore", "width": 390,
+              "height": "fit_content",
+              "children": [ { "type": "frame", "id": "rich", "name": "AppContent",
+                               "width": "fill_container", "height": "fit_content" } ] },
+            { "type": "frame", "id": "solo", "name": "Profile", "width": 390, "height": 844,
+              "children": [] }
+        ]))
+        .expect("nodes");
+        let issues = scan_duplicate_root_issues(&nodes);
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        assert!(
+            issues[0].contains("Explore") && issues[0].contains("r1") && issues[0].contains("r2")
+        );
+        assert!(issues[0].contains("M()") && issues[0].contains("D()"));
+        assert!(!issues[0].contains("Profile"));
     }
 }

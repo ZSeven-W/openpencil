@@ -482,6 +482,24 @@ pub(crate) fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> b
     if !active_page_is_blank_starter_frame(state) {
         return false;
     }
+    // Keep a visual ghost of the starter at its exact rect: the document
+    // node is gone (the pipeline must see an empty canvas), but the canvas
+    // keeps painting the frame until the generated design's sized root
+    // lands — sending a prompt never flashes an empty artboard.
+    if let Some(only) = state.active_children().first() {
+        use op_editor_core::PenNodeExt;
+        let base = only.base();
+        let (w, h) = (
+            only.width_px().unwrap_or(1200.0),
+            only.height_px().unwrap_or(800.0),
+        );
+        state.editor_ui.starter_ghost = Some([
+            base.x.unwrap_or(0.0) as f32,
+            base.y.unwrap_or(0.0) as f32,
+            w as f32,
+            h as f32,
+        ]);
+    }
     state.active_children_mut().clear();
     state.clear_selection();
     // Raw `active_children_mut()` bypasses the command/history path, so
@@ -490,6 +508,20 @@ pub(crate) fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> b
     // now-deleted starter "Frame" row, and save-dirty tracking stays wrong.
     state.mark_document_changed();
     true
+}
+
+/// Drop the starter ghost once it has served its purpose: the generated
+/// design's root landed (any top-level node exists again), or the turn is
+/// over with nothing produced. Returns true when the ghost was cleared.
+pub(crate) fn reconcile_starter_ghost(state: &mut EditorState, any_session_running: bool) -> bool {
+    if state.editor_ui.starter_ghost.is_none() {
+        return false;
+    }
+    if !state.active_children().is_empty() || !any_session_running {
+        state.editor_ui.starter_ghost = None;
+        return true;
+    }
+    false
 }
 
 fn active_page_is_blank_starter_frame(state: &EditorState) -> bool {

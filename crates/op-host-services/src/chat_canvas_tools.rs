@@ -22,6 +22,8 @@ pub use op_editor_host_core::chat::{chat_tool_channel, ChatToolRequest, UiChatTo
 use op_mcp::{ToolRegistry, ToolResponse};
 use std::collections::HashSet;
 
+use crate::chat_modify_sanitize::sanitize_modify_replacement;
+
 /// TS `maxTurns` for the chat agent loop (`ai-chat-handlers.ts:254`).
 pub const MAX_TOOL_TURNS: usize = 20;
 
@@ -271,13 +273,20 @@ fn replace_modify_subtree(
         return (0, false);
     };
     let mut preserved_ids = HashSet::new();
-    if let Some(existing) = op_editor_core::walkers::find_node(state.active_children(), &target_id)
+    let existing_json = if let Some(existing) =
+        op_editor_core::walkers::find_node(state.active_children(), &target_id)
     {
         collect_subtree_ids(existing, &mut preserved_ids);
-    }
+        serde_json::to_value(existing).ok()
+    } else {
+        None
+    };
 
     let mut incoming = node.clone();
     backfill_placeholder_image_srcs(&mut incoming, state);
+    if let Some(existing) = existing_json.as_ref() {
+        sanitize_modify_replacement(&mut incoming, existing);
+    }
     let args = serde_json::json!({
         "nodeId": node_id,
         "data": incoming,
