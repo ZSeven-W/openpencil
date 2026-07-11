@@ -58,6 +58,15 @@ impl EditorState {
     /// Apply a parsed numeric property edit to the anchor node.
     /// True on a real, editable selection.
     pub fn commit_property_edit(&mut self, focus: PropertyFocus, value: f32) -> bool {
+        let instance_scope = self.begin_instance_write_for_anchor();
+        let wrote = self.commit_property_edit_inner(focus, value);
+        if let Some(scope) = instance_scope {
+            self.finish_instance_write(scope);
+        }
+        wrote
+    }
+
+    fn commit_property_edit_inner(&mut self, focus: PropertyFocus, value: f32) -> bool {
         let sel = self.selection.anchor.clone();
         if !sel.is_real() || !self.is_editable(&sel) {
             return false;

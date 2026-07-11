@@ -59,6 +59,7 @@ pub mod icon_picker_state;
 pub mod image_node_props;
 pub mod image_panel_state;
 pub mod ime_state;
+mod instance_child_override;
 pub mod instance_override;
 pub mod mutators;
 pub mod node_defaults;
@@ -228,7 +229,8 @@ pub use hoist_app_state::{hoist_app_state, UNPLANNED_APP_STATE_IDX};
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use image_node_props::image_node_summary;
 pub use instance_override::{
-    apply_instance_override, resolve_instance_display_node, InstanceWriteScope,
+    apply_instance_override, resolve_instance_display_node,
+    resolve_instance_display_node_for_anchor, split_instance_child_anchor, InstanceWriteScope,
     INSTANCE_DIRECT_PROPS,
 };
 pub use jian_ops_schema::{DesignMdColor, DesignMdSpec, DesignMdTypography, PenDocument};

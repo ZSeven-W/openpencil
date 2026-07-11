@@ -301,23 +301,30 @@ impl PropertyPanel {
     /// resolves to a live node (the pre-Code-tab `for_selection_at`).
     fn for_selection_nodes(state: &EditorState, now_ms: u64) -> Option<Self> {
         if state.selection_count() == 1 {
-            let node = state.selected_node()?;
+            let authored_node = state.selected_node();
             // An INSTANCE (`Ref`) selection resolves into its merged
             // display node — component base → descendants[target]
-            // overrides → instance props (TS property-panel.tsx:74-96)
-            // — so the panel exposes the FULL section set. A dangling
-            // ref falls back to the raw node (near-empty mask).
-            let display = op_editor_core::resolve_instance_display_node(&state.doc, node);
-            let is_instance = display.is_some();
-            let display_node = display.unwrap_or_else(|| node.clone());
+            // overrides → instance props. A virtual child resolves to
+            // the effective component child plus descendants[childId].
+            // A dangling Ref falls back to the raw node.
+            let display = match authored_node {
+                Some(node) => op_editor_core::resolve_instance_display_node(&state.doc, node),
+                None => op_editor_core::resolve_instance_display_node_for_anchor(
+                    &state.doc,
+                    &state.selection.anchor,
+                ),
+            };
+            let is_instance = authored_node.is_some() && display.is_some();
+            let display_node = display.or_else(|| authored_node.cloned())?;
             let node = &display_node;
             let fill_type = op_editor_core::first_fill_type(node);
-            let fill_ref = state
-                .selected_color_variable_name(op_editor_core::ColorTarget::Fill)
-                .map(str::to_string);
-            let stroke_ref = state
-                .selected_color_variable_name(op_editor_core::ColorTarget::Stroke)
-                .map(str::to_string);
+            let variable_name = |raw: Option<&str>| {
+                raw.and_then(|value| value.strip_prefix('$'))
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_string)
+            };
+            let fill_ref = variable_name(op_editor_core::first_solid_fill_hex(node));
+            let stroke_ref = variable_name(op_editor_core::first_solid_stroke_hex(node));
             let mut snapshot = NodeSnapshot::from_node(node);
             if !state.editor_ui.agent_settings.experimental_features_enabled {
                 // The Widget section is an experimental surface. Hide it

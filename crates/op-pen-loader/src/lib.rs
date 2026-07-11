@@ -32,6 +32,8 @@ mod library;
 #[cfg(feature = "skia-measure")]
 mod measure_cache;
 mod path_bounds;
+#[cfg(test)]
+mod property_edit_scene_tests;
 mod scene_cache;
 
 /// Process-global font-registry generation. Advances on every runtime font

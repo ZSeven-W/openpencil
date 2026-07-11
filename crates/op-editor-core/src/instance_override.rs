@@ -20,14 +20,16 @@
 //! So the choke point is a **swap–run–diff–restore scope** around the
 //! host's property-panel dispatch entry points:
 //!
-//! 1. [`EditorState::begin_instance_write`] swaps the merged display
-//!    node (same id as the Ref, children stripped) into the Ref's tree
-//!    slot — every existing mutator then "just works" against it.
+//! 1. [`EditorState::begin_instance_write`] swaps the effective display
+//!    node (Ref id for a root, `refId__childId` for a virtual child;
+//!    children stripped) into the Ref's tree slot — every existing
+//!    mutator then "just works" against it.
 //! 2. The host runs the unmodified mutator(s).
 //! 3. [`EditorState::finish_instance_write`] diffs the display node's
-//!    top-level JSON before/after, restores the original `RefNode`,
-//!    and routes each changed key: `INSTANCE_DIRECT_PROPS` → the
-//!    RefNode base, everything else → `descendants[ref.target]`.
+//!    top-level JSON before/after and restores the original `RefNode`.
+//!    Root changes route `INSTANCE_DIRECT_PROPS` onto the Ref base and
+//!    everything else to `descendants[ref.target]`; child changes all
+//!    route to `descendants[original child id]`.
 //!
 //! Host integration points (op-host-native): `apply_property_action`,
 //! `commit_property_focus_if_any`, `commit_effect_param_focus_if_any`,
@@ -44,6 +46,10 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 use serde_json::{Map, Value};
 
+pub use crate::instance_child_override::{
+    resolve_instance_display_node_for_anchor, split_instance_child_anchor,
+};
+
 /// Properties stored directly on the `RefNode` (instance-level), not
 /// as overrides — mirrors TS `INSTANCE_DIRECT_PROPS`.
 ///
@@ -58,13 +64,6 @@ pub const INSTANCE_DIRECT_PROPS: &[&str] = &[
     "theme",
 ];
 
-/// NOTE (round-6): override writes are structurally ROOT-ONLY today —
-/// `begin_instance_write` strips the display node's children, so a
-/// child prop can never reach `route_display_diff`; nothing can
-/// "collapse" onto the top-level key. Editing an instance CHILD
-/// requires virtual-id (`refId__childId`) selection support, which is
-/// the deferred follow-up; its writes will key
-/// `descendants[original child id]` like TS.
 /// Keys that identify the node / route its overrides — never diffed,
 /// never routed.
 const STRUCTURAL_KEYS: &[&str] = &["id", "type", "ref", "descendants", "children", "reusable"];
@@ -123,9 +122,15 @@ pub fn resolve_instance_display_node(doc: &PenDocument, ref_node: &PenNode) -> O
     // The display node is an instance view, not a component definition.
     merged.remove("reusable");
     // Children: the component subtree with `descendants` child
-    // overrides applied at their ORIGINAL ids (display only).
+    // overrides applied at their ORIGINAL ids (display only). Mirror
+    // `expand_ref`'s slot fallback when an empty master gets inline
+    // instance children.
     let overrides = ref_map.get("descendants").and_then(Value::as_object);
-    if let Some(Value::Array(children)) = component_map.get("children") {
+    let children_source = match component_map.get("children") {
+        Some(Value::Array(children)) if !children.is_empty() => Some(children),
+        _ => ref_map.get("children").and_then(Value::as_array),
+    };
+    if let Some(children) = children_source {
         let with_overrides: Vec<Value> = children
             .iter()
             .map(|child| crate::ref_resolve::apply_overrides(child, overrides))
@@ -140,17 +145,22 @@ pub fn resolve_instance_display_node(doc: &PenDocument, ref_node: &PenNode) -> O
 #[derive(Debug)]
 pub struct InstanceWriteScope {
     ref_id: NodeId,
+    display_id: NodeId,
     target_id: String,
+    route_direct_props: bool,
     original_ref: PenNode,
     display_before: Map<String, Value>,
-    history_len_before: usize,
+    history_push_count_before: u64,
 }
 
 impl EditorState {
     /// Begin an instance-write scope for the selection anchor when it
-    /// is a resolvable `Ref`. `None` (no scope, run mutators as-is)
-    /// for every other selection.
+    /// is a resolvable `Ref` root or virtual instance child. `None`
+    /// (no scope, run mutators as-is) for every other selection.
     pub fn begin_instance_write_for_anchor(&mut self) -> Option<InstanceWriteScope> {
+        if self.instance_write_virtual_anchor.is_some() {
+            return None;
+        }
         let anchor = self.selection.anchor.clone();
         if !anchor.is_real() {
             return None;
@@ -158,18 +168,46 @@ impl EditorState {
         self.begin_instance_write(&anchor)
     }
 
-    /// Swap the merged display node into `ref_id`'s tree slot so the
-    /// anchor-keyed panel mutators write into it. The display node is
-    /// swapped in WITHOUT children so the component's child ids never
-    /// appear twice in the live tree. Must be paired with
+    /// Swap the effective display node for `anchor` into its authored
+    /// Ref's tree slot so anchor-keyed panel mutators write into it. A
+    /// virtual child keeps its virtual id; a Ref root keeps the Ref id.
+    /// The display node is swapped in WITHOUT children so component ids
+    /// never appear twice in the live tree. Must be paired with
     /// [`EditorState::finish_instance_write`].
-    pub fn begin_instance_write(&mut self, ref_id: &NodeId) -> Option<InstanceWriteScope> {
-        let node = find_node(self.active_children(), ref_id)?;
-        let PenNode::Ref(reference) = node else {
-            return None;
-        };
-        let target_id = reference.target.clone();
-        let mut display = resolve_instance_display_node(&self.doc, node)?;
+    pub fn begin_instance_write(&mut self, anchor: &NodeId) -> Option<InstanceWriteScope> {
+        let (ref_id, target_id, mut display, route_direct_props) =
+            if let Some((ref_id, child_id)) = split_instance_child_anchor(anchor, &self.doc) {
+                let ref_node = find_node(self.active_children(), &ref_id)?;
+                let base = ref_node.base();
+                if !matches!(ref_node, PenNode::Ref(_))
+                    || !base.visible.unwrap_or(true)
+                    || base.locked.unwrap_or(false)
+                {
+                    return None;
+                }
+                (
+                    ref_id,
+                    child_id.as_str().to_string(),
+                    resolve_instance_display_node_for_anchor(&self.doc, anchor)?,
+                    false,
+                )
+            } else {
+                let node = find_node(self.active_children(), anchor)?;
+                let PenNode::Ref(reference) = node else {
+                    return None;
+                };
+                let base = node.base();
+                if !base.visible.unwrap_or(true) || base.locked.unwrap_or(false) {
+                    return None;
+                }
+                (
+                    anchor.clone(),
+                    reference.target.clone(),
+                    resolve_instance_display_node(&self.doc, node)?,
+                    true,
+                )
+            };
+        let display_id = NodeId::new_opt(display.id_str())?;
         // Strip the subtree: panel writes only ever target the anchor
         // node's own props, and the component's original child ids
         // must not coexist with the live component subtree.
@@ -180,15 +218,20 @@ impl EditorState {
             Ok(Value::Object(map)) => map,
             _ => return None,
         };
-        let history_len_before = self.history.past.len();
-        let slot = find_node_mut(self.active_children_mut(), ref_id)?;
+        let history_push_count_before = self.history_push_count;
+        let slot = find_node_mut(self.active_children_mut(), &ref_id)?;
         let original_ref = std::mem::replace(slot, display);
+        if !route_direct_props {
+            self.instance_write_virtual_anchor = Some(display_id.clone());
+        }
         Some(InstanceWriteScope {
-            ref_id: ref_id.clone(),
+            ref_id,
+            display_id,
             target_id,
+            route_direct_props,
             original_ref,
             display_before,
-            history_len_before,
+            history_push_count_before,
         })
     }
 
@@ -199,24 +242,36 @@ impl EditorState {
     pub fn finish_instance_write(&mut self, scope: InstanceWriteScope) -> bool {
         let InstanceWriteScope {
             ref_id,
+            display_id,
             target_id,
+            route_direct_props,
             original_ref,
             display_before,
-            history_len_before,
+            history_push_count_before,
         } = scope;
-        let routed = self.route_display_diff(&ref_id, &target_id, original_ref, &display_before);
-        self.repair_scope_snapshots(&ref_id, history_len_before);
+        let routed = self.route_display_diff(
+            &display_id,
+            &target_id,
+            route_direct_props,
+            original_ref,
+            &display_before,
+        );
+        if self.instance_write_virtual_anchor.as_ref() == Some(&display_id) {
+            self.instance_write_virtual_anchor = None;
+        }
+        self.repair_scope_snapshots(&ref_id, &display_id, history_push_count_before);
         routed
     }
 
     fn route_display_diff(
         &mut self,
-        ref_id: &NodeId,
+        display_id: &NodeId,
         target_id: &str,
+        route_direct_props: bool,
         original_ref: PenNode,
         before: &Map<String, Value>,
     ) -> bool {
-        let Some(slot) = find_node_mut(self.active_children_mut(), ref_id) else {
+        let Some(slot) = find_node_mut(self.active_children_mut(), display_id) else {
             // The node vanished during the scope (host-level delete);
             // nothing to restore into.
             return false;
@@ -243,7 +298,7 @@ impl EditorState {
             if old == new {
                 continue;
             }
-            if INSTANCE_DIRECT_PROPS.contains(&key.as_str()) {
+            if route_direct_props && INSTANCE_DIRECT_PROPS.contains(&key.as_str()) {
                 direct.push((key.clone(), new.cloned()));
             } else {
                 // Removed keys persist as explicit nulls so the
@@ -306,23 +361,34 @@ impl EditorState {
     /// swapped display node in place of the Ref — undo would restore
     /// a silently-detached instance. Swap the live (routed) Ref back
     /// into those snapshots. Pre-scope snapshots are left untouched.
-    fn repair_scope_snapshots(&mut self, ref_id: &NodeId, history_len_before: usize) {
+    fn repair_scope_snapshots(
+        &mut self,
+        ref_id: &NodeId,
+        display_id: &NodeId,
+        history_push_count_before: u64,
+    ) {
         let Some(live_ref) = find_node(self.active_children(), ref_id).cloned() else {
             return;
         };
         if !matches!(live_ref, PenNode::Ref(_)) {
             return;
         }
-        // Snapshot docs are now `Arc`-shared at top-level granularity, so
-        // this in-place fix is copy-on-write: `SharedDoc::repair_swap`
-        // `Arc::make_mut`s only the affected top-level entry, cloning it
-        // away from any sibling snapshot that shares the `Arc`. A
-        // pre-scope history state that shares an untouched instance
-        // subtree is therefore never contaminated.
-        let len = self.history.past.len();
-        for idx in history_len_before..len {
-            if let Some(snap) = self.history.past.get_mut(idx) {
-                snap.doc.repair_swap(ref_id, &live_ref);
+        // Snapshot docs are `Arc`-shared at top-level granularity (remote's
+        // structurally-shared undo refactor), so this in-place fix is
+        // copy-on-write: `SharedDoc::repair_swap` `Arc::make_mut`s only the
+        // affected top-level entry, never contaminating a sibling snapshot.
+        // Ours: window the repair by PUSH COUNT (robust when the history
+        // cap evicted entries mid-scope) and sweep BOTH ids — the routed
+        // display node's id can differ from the Ref's for virtual
+        // instance-child anchors; `repair_swap` is a no-op when the id
+        // resolves to a healthy Ref, so the double sweep is idempotent.
+        let pushed = self
+            .history_push_count
+            .saturating_sub(history_push_count_before) as usize;
+        for snap in self.history.past.iter_mut().rev().take(pushed) {
+            snap.doc.repair_swap(ref_id, &live_ref);
+            if display_id != ref_id {
+                snap.doc.repair_swap(display_id, &live_ref);
             }
         }
         // Pending pre-edit snapshots (colour picker / text edit) taken
@@ -330,9 +396,15 @@ impl EditorState {
         // non-Ref node at the instance id — and the same repair.
         if let Some(snap) = self.ui.pending_color_history.as_mut() {
             snap.doc.repair_swap(ref_id, &live_ref);
+            if display_id != ref_id {
+                snap.doc.repair_swap(display_id, &live_ref);
+            }
         }
         if let Some(snap) = self.ui.pending_text_edit_history.as_mut() {
             snap.doc.repair_swap(ref_id, &live_ref);
+            if display_id != ref_id {
+                snap.doc.repair_swap(display_id, &live_ref);
+            }
         }
     }
 }
@@ -361,7 +433,13 @@ mod tests {
       "children":[
         {"type":"frame","id":"card","name":"Card","reusable":true,"x":0,"y":0,"width":200,"height":100,
          "fill":[{"type":"solid","color":"#222222"}],
-         "children":[{"type":"text","id":"title","name":"Title","content":"Hello"}]},
+         "children":[
+           {"type":"text","id":"title","name":"Title","content":"Hello"},
+           {"type":"icon_font","id":"icon","name":"home","iconFontName":"home",
+            "width":24,"height":24,"fill":[{"type":"solid","color":"#111111"}]},
+           {"type":"rectangle","id":"surface","name":"Surface","width":80,"height":32,
+            "cornerRadius":4}
+         ]},
         {"type":"ref","id":"inst1","ref":"card","x":300,"y":50}
       ]
     }"##;
@@ -380,6 +458,47 @@ mod tests {
             Some(PenNode::Ref(r)) => r,
             other => panic!("inst1 must stay a Ref, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn split_child_anchor_accepts_only_a_real_instance_descendant() {
+        let s = state();
+        assert_eq!(
+            split_instance_child_anchor(&NodeId::new("inst1__title"), &s.doc),
+            Some((NodeId::new("inst1"), NodeId::new("title")))
+        );
+        assert_eq!(
+            split_instance_child_anchor(&NodeId::new("inst1__missing"), &s.doc),
+            None,
+            "a delimiter alone must not manufacture an editable child"
+        );
+    }
+
+    #[test]
+    fn child_display_merges_master_value_with_descendant_override() {
+        let mut s = state();
+        if let Some(PenNode::Ref(r)) = find_node_mut(s.active_children_mut(), &NodeId::new("inst1"))
+        {
+            r.descendants = Some(std::collections::BTreeMap::from([(
+                "title".to_string(),
+                serde_json::json!({"fill":[{"type":"solid","color":"#ff8800"}]}),
+            )]));
+        }
+        let display =
+            resolve_instance_display_node_for_anchor(&s.doc, &NodeId::new("inst1__title"))
+                .expect("virtual child resolves for display");
+        assert_eq!(display.id_str(), "inst1__title");
+        let PenNode::Text(text) = &display else {
+            panic!("title keeps the master's Text kind");
+        };
+        assert_eq!(
+            text.content,
+            jian_ops_schema::node::TextContent::Plain("Hello".into())
+        );
+        assert_eq!(
+            crate::fills::first_solid_fill_hex(&display),
+            Some("#ff8800")
+        );
     }
 
     #[test]
@@ -433,6 +552,116 @@ mod tests {
             Some("#ff0000"),
             "resolve_refs_for_canvas applies the top-level override"
         );
+    }
+
+    #[test]
+    fn fill_write_on_instance_child_routes_to_child_override_and_renders() {
+        let mut s = state();
+        let child = NodeId::new("inst1__title");
+        s.set_single_selection(child.clone());
+        let routed =
+            apply_instance_override(&mut s, &child, |s| s.set_selected_color(true, "#ff0000"));
+        assert_eq!(routed, Some(true));
+        let over = ref_node(&s)
+            .descendants
+            .as_ref()
+            .and_then(|d| d.get("title"))
+            .expect("override object under the original child id");
+        assert_eq!(
+            over.pointer("/fill/0/color").and_then(Value::as_str),
+            Some("#ff0000")
+        );
+        let resolved = resolve_refs_for_canvas(&s.doc);
+        let expanded_child = find_node(&resolved.children, &child).expect("expanded child");
+        assert_eq!(
+            crate::fills::first_solid_fill_hex(expanded_child),
+            Some("#ff0000")
+        );
+    }
+
+    #[test]
+    fn stroke_width_write_on_instance_child_routes_and_renders() {
+        let mut s = state();
+        let child = NodeId::new("inst1__icon");
+        s.set_single_selection(child.clone());
+        assert!(s.commit_property_edit(crate::PropertyFocus::StrokeWidth, 5.0));
+        let over = ref_node(&s)
+            .descendants
+            .as_ref()
+            .and_then(|d| d.get("icon"))
+            .expect("stroke override under the original child id");
+        assert_eq!(
+            over.pointer("/stroke/thickness").and_then(Value::as_f64),
+            Some(5.0)
+        );
+        let resolved = resolve_refs_for_canvas(&s.doc);
+        let expanded_child = find_node(&resolved.children, &child).expect("expanded child");
+        assert_eq!(crate::fills::node_stroke_width(expanded_child), Some(5.0));
+    }
+
+    #[test]
+    fn corner_radius_write_on_instance_child_routes_through_position_r() {
+        let mut s = state();
+        let child = NodeId::new("inst1__surface");
+        s.set_single_selection(child);
+        assert!(s.commit_property_edit(crate::PropertyFocus::PositionR, 12.0));
+        assert_eq!(
+            ref_node(&s)
+                .descendants
+                .as_ref()
+                .and_then(|d| d.get("surface"))
+                .and_then(|v| v.get("cornerRadius"))
+                .and_then(Value::as_f64),
+            Some(12.0)
+        );
+    }
+
+    #[test]
+    fn locked_instance_rejects_virtual_child_write() {
+        let mut s = state();
+        if let Some(PenNode::Ref(r)) = find_node_mut(s.active_children_mut(), &NodeId::new("inst1"))
+        {
+            r.base.locked = Some(true);
+        }
+        let before = ref_node(&s).clone();
+        let child = NodeId::new("inst1__icon");
+        s.set_single_selection(child.clone());
+        assert!(
+            !s.set_selected_color(true, "#ff0000"),
+            "the locked Ref must reject child writes"
+        );
+        assert_eq!(ref_node(&s), &before);
+    }
+
+    #[test]
+    fn locked_master_child_is_editable_when_instance_is_unlocked() {
+        let mut s = state();
+        let icon = NodeId::new("icon");
+        find_node_mut(s.active_children_mut(), &icon)
+            .expect("master icon")
+            .base_mut()
+            .locked = Some(true);
+        let child = NodeId::new("inst1__icon");
+        s.set_single_selection(child.clone());
+        assert!(s.set_selected_color(true, "#ff0000"));
+        assert_eq!(
+            ref_node(&s)
+                .descendants
+                .as_ref()
+                .and_then(|d| d.get("icon"))
+                .and_then(|v| v.pointer("/fill/0/color"))
+                .and_then(Value::as_str),
+            Some("#ff0000")
+        );
+    }
+
+    #[test]
+    fn virtual_child_is_editable_and_keeps_the_property_panel_visible() {
+        let mut s = state();
+        let child = NodeId::new("inst1__icon");
+        s.set_single_selection(child.clone());
+        assert!(s.is_editable(&child));
+        assert!(s.property_panel_visible());
     }
 
     #[test]
@@ -494,6 +723,27 @@ mod tests {
         assert!(
             matches!(in_snap, PenNode::Ref(_)),
             "scope snapshot repaired — undo must restore a Ref, not the display node"
+        );
+    }
+
+    #[test]
+    fn child_scope_history_is_repaired_to_hold_the_ref() {
+        let mut s = state();
+        let child = NodeId::new("inst1__icon");
+        s.set_single_selection(child.clone());
+        apply_instance_override(&mut s, &child, |s| {
+            s.commit_history();
+            s.set_selected_color(true, "#00ff00")
+        });
+        let snap = s.history.past.back().expect("history entry pushed");
+        let in_snap = snap
+            .doc
+            .snapshot_find_node(0, &NodeId::new("inst1"))
+            .expect("authored Ref id restored in snapshot");
+        assert!(matches!(in_snap, PenNode::Ref(_)));
+        assert!(
+            snap.doc.snapshot_find_node(0, &child).is_none(),
+            "the virtual display node must not leak into history"
         );
     }
 

@@ -14,7 +14,11 @@ const COMPONENT_DOC: &str = r##"{
   "children":[
     {"type":"frame","id":"card","name":"Card","reusable":true,"x":0,"y":0,"width":200,"height":100,
      "fill":[{"type":"solid","color":"#222222"}],
-     "children":[{"type":"text","id":"title","name":"Title","content":"Hello"}]},
+     "children":[
+       {"type":"text","id":"title","name":"Title","content":"Hello"},
+       {"type":"icon_font","id":"icon","name":"home","iconFontName":"home",
+        "width":24,"height":24,"fill":[{"type":"solid","color":"#111111"}]}
+     ]},
     {"type":"ref","id":"inst1","ref":"card","x":300,"y":50}
   ]
 }"##;
@@ -74,6 +78,87 @@ fn position_commit_on_instance_writes_the_ref_base() {
     let r = ref_node(&host);
     assert_eq!(r.base.x, Some(400.0), "x is an INSTANCE_DIRECT_PROP");
     assert!(r.descendants.is_none(), "no override for a direct prop");
+}
+
+#[test]
+fn fill_hex_commit_on_virtual_child_lands_in_child_override() {
+    let mut host = seeded_host();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("inst1__icon"));
+    assert!(
+        op_editor_ui::widgets::PropertyPanel::for_selection(host.editor_state()).is_some(),
+        "virtual child keeps the inspector mounted"
+    );
+    host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::FillHex(0));
+    host.editor_state_mut()
+        .ui
+        .property_input
+        .set_text("#ff0000");
+    host.commit_property_focus_if_any();
+    let over = ref_node(&host)
+        .descendants
+        .as_ref()
+        .and_then(|d| d.get("icon"))
+        .expect("fill override routed under descendants[icon]");
+    assert_eq!(
+        over.pointer("/fill/0/color")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("#ff0000")
+    );
+}
+
+#[test]
+fn stroke_width_commit_on_virtual_child_lands_in_child_override() {
+    let mut host = seeded_host();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("inst1__icon"));
+    host.editor_state_mut().ui.property_focus = Some(op_editor_core::PropertyFocus::StrokeWidth);
+    host.editor_state_mut().ui.property_input.set_text("4");
+    host.commit_property_focus_if_any();
+    let over = ref_node(&host)
+        .descendants
+        .as_ref()
+        .and_then(|d| d.get("icon"))
+        .expect("stroke override routed under descendants[icon]");
+    assert_eq!(
+        over.pointer("/stroke/thickness")
+            .and_then(serde_json::Value::as_f64),
+        Some(4.0)
+    );
+}
+
+#[test]
+fn color_picker_on_virtual_child_opens_edits_and_keeps_ref_history() {
+    let mut host = seeded_host();
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("inst1__icon"));
+    assert!(host
+        .editor_state_mut()
+        .open_color_picker(op_editor_core::ui_draft::ColorTarget::Fill, 120.0));
+    assert!(host.editor_state_mut().color_picker_set_hsv(0.0, 1.0, 1.0));
+    assert!(host.editor_state_mut().close_color_picker());
+    let over = ref_node(&host)
+        .descendants
+        .as_ref()
+        .and_then(|d| d.get("icon"))
+        .expect("picker edit routed under descendants[icon]");
+    assert_eq!(
+        over.pointer("/fill/0/color")
+            .and_then(serde_json::Value::as_str),
+        Some("#ff0000")
+    );
+    let snapshot = host
+        .editor_state()
+        .history
+        .past
+        .back()
+        .expect("picker edit history");
+    assert!(matches!(
+        snapshot.doc.snapshot_find_node(0, &NodeId::new("inst1")),
+        Some(PenNode::Ref(_))
+    ));
 }
 
 #[test]
