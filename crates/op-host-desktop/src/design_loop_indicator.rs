@@ -122,6 +122,19 @@ pub(super) fn pump_indicator(
             .next()
             .expect("assign_agent_identities(1) always yields one");
         let initial = collect_top_level_frame_ids(state);
+        // Persona parity with the canvas: the streaming assistant bubble
+        // wears the run's agent identity (name + colour), not the backend
+        // label — Pencil's transcript reads "• Cosmo", never "Codex CLI".
+        if let Some(msg) = state
+            .chat
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|msg| msg.role == op_editor_core::ChatRole::Assistant && msg.streaming)
+        {
+            msg.agent_name = Some(id.name.clone());
+            msg.agent_color = Some(id.color.clone());
+        }
         *indicator = Some(DesignLoopIndicator {
             epoch,
             color: id.color,
