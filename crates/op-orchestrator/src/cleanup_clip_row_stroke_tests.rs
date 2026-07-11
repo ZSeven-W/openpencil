@@ -90,7 +90,7 @@ fn insert_date_scroller(
 }
 
 #[test]
-fn clipping_horizontal_row_with_stroked_chip_gets_stroke_padding_on_all_sides() {
+fn clipping_horizontal_row_with_stroked_chip_preserves_trailing_edge() {
     let mut sink = VecDocSink::new();
     insert_date_scroller(
         &mut sink,
@@ -104,7 +104,26 @@ fn clipping_horizontal_row_with_stroked_chip_gets_stroke_padding_on_all_sides() 
 
     assert_eq!(
         node_json(&sink, "date-row")["padding"],
-        json!([1.0, 1.0, 1.0, 1.0])
+        json!([1.0, 0.0, 1.0, 1.0])
+    );
+}
+
+#[test]
+fn clipping_horizontal_row_preserves_zero_trailing_padding() {
+    let mut sink = VecDocSink::new();
+    insert_date_scroller(
+        &mut sink,
+        "horizontal",
+        true,
+        "[0, 0, 0, 24]",
+        r##""stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#E5E7EB"}]} ,"##,
+    );
+
+    pad_clipping_horizontal_row_for_stroke(&mut sink, "root");
+
+    assert_eq!(
+        node_json(&sink, "date-row")["padding"],
+        json!([1.0, 0.0, 1.0, 24.0])
     );
 }
 

@@ -184,6 +184,19 @@ fn mobile_status_bar_json(root_id: &str, fill_hex: &str, width: f64) -> serde_js
     })
 }
 
+/// Build the mobile status-bar chrome as a canonical `PenNode`, for callers
+/// outside the scaffold pipeline (the design-agent loop's root-seed guard
+/// injects the SAME chrome the orchestrator scaffold pre-inserts, so a
+/// loop-generated mobile screen ships with an identical status bar).
+pub fn mobile_status_bar_node(
+    root_id: &str,
+    fill_hex: &str,
+    width: f64,
+) -> Result<PenNode, String> {
+    serde_json::from_value(mobile_status_bar_json(root_id, fill_hex, width))
+        .map_err(|e| format!("mobile status bar for `{root_id}`: {e}"))
+}
+
 /// 构建单个根 frame 的 `PenNode`,含可选状态栏子节点。
 ///
 /// 内部辅助函数,被 `build_scaffold`(单屏)和
@@ -207,17 +220,21 @@ fn resolve_section_gap(plan_gap: Option<f64>) -> f64 {
 
 /// A plan's `rootFrame.height` is often 0 — the model's "compute it from
 /// content". A LITERAL 0-height root makes every `fill_container` descendant
-/// resolve to 0px for the whole pipeline, so the geometry pass "correctly"
-/// demotes a healthy fill-height sidebar before `adjust_root_height_to_content`
-/// (the LAST pass) ever assigns the real number (measured: the sidebar footer
-/// floated mid-page on three consecutive user runs). Map non-positive to
-/// `fit_content` — the root hugs its content mid-pipeline, and the final
-/// adjust pass still writes the definitive numeric height.
-fn root_height_json(height: f64) -> serde_json::Value {
+/// resolve to 0px for the whole pipeline (measured: the sidebar footer
+/// floated mid-page on three consecutive user runs), and the old
+/// `fit_content` mapping made the artboard START as a thin strip that
+/// jerked taller with every subtask (user: "web 输出应该一开始就预设整体
+/// 高度，参考 Pencil"). Preset a full artboard by device class instead —
+/// mobile 844 / desktop 900 — so the canvas reads as a complete page being
+/// filled in; `adjust_root_height_to_content` (the LAST pass) still writes
+/// the definitive number at the end.
+fn root_height_json(height: f64, width: f64) -> serde_json::Value {
     if height > 0.0 {
         serde_json::json!(height)
+    } else if width <= 480.0 {
+        serde_json::json!(844)
     } else {
-        serde_json::json!("fit_content")
+        serde_json::json!(900)
     }
 }
 
@@ -247,7 +264,7 @@ fn build_root_frame_node(
         "x": x,
         "y": y,
         "width": width,
-        "height": root_height_json(height),
+        "height": root_height_json(height, width),
         "layout": layout,
         "gap": gap,
         "fill": [{ "type": "solid", "color": fill_hex }],
@@ -475,7 +492,7 @@ fn build_two_column_root_node(
         "x": x,
         "y": y,
         "width": width,
-        "height": root_height_json(height),
+        "height": root_height_json(height, width),
         "layout": "horizontal",
         "gap": 0,
         "alignItems": "stretch",

@@ -292,6 +292,13 @@ pub(crate) fn is_valid_structural_fix(fix: &Value) -> bool {
 
 // ── B2: Fix application (split to stay under 800-line ceiling) ───────────────
 
+#[path = "validation_scroll_guard.rs"]
+mod scroll_guard;
+pub use scroll_guard::is_protected_scroller_region;
+
+#[path = "validation_chart_guard.rs"]
+mod chart_guard;
+
 #[path = "validation_fixes_apply.rs"]
 pub(crate) mod apply;
 
@@ -313,3 +320,11 @@ mod tests_b2;
 #[cfg(test)]
 #[path = "validation_fixes_b3_tests.rs"]
 mod tests_b3;
+
+#[cfg(test)]
+#[path = "validation_fixes_scroller_guard_tests.rs"]
+mod tests_scroller_guard;
+
+#[cfg(test)]
+#[path = "validation_fixes_chart_guard_tests.rs"]
+mod tests_chart_guard;

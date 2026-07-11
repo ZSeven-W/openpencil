@@ -9,6 +9,8 @@
 
 use op_editor_core::{EditorCommand, LayoutPropValue, NodeId, PenNodeExt};
 
+use super::chart_guard::should_skip_chart_stroke_fix;
+use super::scroll_guard::{is_protected_scroller_region, should_skip_scroller_layout_fix};
 use crate::validation_fixes::{is_valid_fix_value, SAFE_FIX_PROPERTIES};
 use crate::validation_fixes_b3::{
     build_node_from_spec, node_type_str, snapshot_justify, snapshot_layout,
@@ -85,6 +87,22 @@ pub(crate) fn apply_validation_fixes(
         if !SAFE_FIX_PROPERTIES.iter().any(|p| p.name == fix.property) {
             result.errors.push(format!(
                 "{}.{} (unsupported property)",
+                fix.node_id, fix.property
+            ));
+            continue;
+        }
+
+        if should_skip_scroller_layout_fix(sink.state(), &node_id, &fix.property) {
+            result.errors.push(format!(
+                "{}.{} (intentional horizontal scroller region)",
+                fix.node_id, fix.property
+            ));
+            continue;
+        }
+
+        if should_skip_chart_stroke_fix(sink.state(), &node_id, &fix.property) {
+            result.errors.push(format!(
+                "{}.{} (chart mark border)",
                 fix.node_id, fix.property
             ));
             continue;
@@ -325,6 +343,13 @@ pub(crate) fn apply_validation_fixes(
                     continue;
                 };
 
+                if is_protected_scroller_region(sink.state(), &id) {
+                    result.errors.push(format!(
+                        "removeNode: {node_id} is in an intentional horizontal scroller region"
+                    ));
+                    continue;
+                }
+
                 // Never remove pre-injected chrome (e.g. iPhone status bar).
                 if node.base().role.as_deref() == Some("status-bar") {
                     result.errors.push(format!(
@@ -356,6 +381,13 @@ pub(crate) fn apply_validation_fixes(
                         .push(format!("addChild: parent {parent_id} not found"));
                     continue;
                 };
+
+                if is_protected_scroller_region(sink.state(), &pid) {
+                    result.errors.push(format!(
+                        "addChild: parent {parent_id} is in an intentional horizontal scroller region"
+                    ));
+                    continue;
+                }
 
                 // Never add children to the injected status-bar chrome.
                 if parent_node.base().role.as_deref() == Some("status-bar") {

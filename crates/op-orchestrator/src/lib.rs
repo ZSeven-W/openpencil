@@ -44,9 +44,13 @@ pub mod variables;
 pub(crate) mod abandoned_duplicate_roots;
 pub mod app_shell;
 pub mod append;
+pub(crate) mod avatar_repair;
+#[cfg(test)]
+mod avatar_repair_tests;
 pub(crate) mod chip_repair;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;
+pub(crate) mod cleanup_scroller_guard;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
 pub mod geometry_validation;
@@ -67,6 +71,10 @@ pub mod subagent;
 pub mod table_repair;
 pub mod tree_heuristics;
 
+#[cfg(test)]
+mod cleanup_mobile_chrome_nav_wrapper_tests;
+#[cfg(test)]
+mod cleanup_scroller_preservation_tests;
 #[cfg(test)]
 mod geometry_chip_tests;
 #[cfg(test)]

@@ -98,7 +98,9 @@ fn bottom_nav_detected_by_cjk_name() {
     run_cleanup_passes(&mut sink, &plan(), &["root"]);
 
     let nav = find_active_node(&sink, "cjk-nav-section").expect("CJK bottom nav survives");
-    assert_eq!(nav.base().x, Some(0.0));
+    // Authored absolute inset is CLEARED so the nav rejoins flex flow —
+    // a written x (even 0) is absolute placement and gets buried at (0,0).
+    assert_eq!(nav.base().x, None);
     assert_eq!(nav.width_px(), Some(390.0));
     assert_eq!(nav.height_px(), Some(72.0));
 }

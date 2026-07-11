@@ -260,3 +260,25 @@ fn forest_helper_resolves_each_root() {
     assert_eq!(role_of(&forest[0]).as_deref(), Some("navbar"));
     assert_eq!(role_of(&forest[1]).as_deref(), Some("footer"));
 }
+
+#[test]
+fn chart_names_infer_the_chart_role_including_cjk() {
+    // The chart role is the STRUCTURAL signal downstream guards key off
+    // (chart marks must not get card borders) — it must fire for English
+    // and CJK chart names alike, and NOT swallow chart-card surfaces.
+    let mut forest = vec![
+        frame("Weekly Workout Chart"),
+        frame("Revenue Graph"),
+        frame("心率走势图"),
+        frame("Heart Rate Chart Card"),
+    ];
+    resolve_forest_roles(&mut forest, 1200.0, Theme::Light);
+    assert_eq!(role_of(&forest[0]).as_deref(), Some("chart"));
+    assert_eq!(role_of(&forest[1]).as_deref(), Some("chart"));
+    assert_eq!(role_of(&forest[2]).as_deref(), Some("chart"));
+    assert_eq!(
+        role_of(&forest[3]).as_deref(),
+        Some("card"),
+        "a chart CARD is a card surface first (guards still see 'chart' in its name)"
+    );
+}

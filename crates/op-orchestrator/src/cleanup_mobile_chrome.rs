@@ -2,6 +2,145 @@ use crate::types::DocSink;
 use jian_ops_schema::node::PenNode;
 use op_editor_core::{first_solid_fill_hex, EditorCommand, LayoutPropValue, NodeId, PenNodeExt};
 
+/// Bottom navigation is structural chrome with exactly one legal position:
+/// the mobile root's LAST child. Models "catch up" on forgotten sections by
+/// appending them after the nav (measured: MiniMax-M3 appended the
+/// greeting+search header as the final root child, below the tab bar —
+/// test0710-1-m3.op). Nav-last is a structural CONTRACT (independent of
+/// intent), so it is deterministically repaired here with one Move; where
+/// the late section actually belongs is intent — the geometry echo tells
+/// the model to relocate it with `M()`.
+///
+/// Width-only mobile gate: `fit_content`-height mobile roots resolve no
+/// pixel height, so `is_mobile_root` (width AND height) would skip exactly
+/// the measured case.
+pub(crate) fn anchor_bottom_nav_last_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        anchor_bottom_nav_last(sink, &root_id);
+    }
+}
+
+fn anchor_bottom_nav_last(sink: &mut dyn DocSink, root_id: &str) {
+    let nav_id: Option<NodeId> = {
+        let Some(root) = super::find_root(sink.state(), root_id) else {
+            return;
+        };
+        if !root.width_px().is_some_and(|w| w <= 480.0) {
+            return;
+        }
+        let Some(children) = root.children() else {
+            return;
+        };
+        let last_index = children.len().saturating_sub(1);
+        children
+            .iter()
+            .enumerate()
+            .find(|(index, child)| {
+                *index < last_index
+                    && bottom_nav_surface_target(child, *index == last_index).is_some()
+            })
+            .map(|(_, child)| NodeId::new(child.id_str().to_string()))
+    };
+    if let Some(node_id) = nav_id {
+        sink.apply(EditorCommand::MoveNode {
+            node_id,
+            target_parent: NodeId::new(root_id.to_string()),
+            page_id: None,
+            index: None,
+        });
+    }
+}
+
+pub(crate) fn repair_mobile_structural_chrome_for_all_roots(sink: &mut dyn DocSink) {
+    let root_ids: Vec<String> = sink
+        .state()
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    for root_id in root_ids {
+        repair_mobile_structural_chrome(sink, &root_id);
+    }
+}
+
+/// A bottom-tab-bar SHELL the model never filled (skeleton-first plans it,
+/// the turn dies before the chrome batch — measured twice: an empty 68px
+/// TabBar, then an empty 72px "Tab Bar", test0711-22). An empty grey strip
+/// is worse than either outcome, and deleting the nav breaks the mobile
+/// contract — so the shell is filled with a standard generic 3-tab set
+/// (Home / Search / Profile). Labels are left fill-less on purpose: the
+/// text-fill backstop resolves them against the real background.
+pub(crate) fn fill_empty_bottom_nav_shells_for_all_roots(sink: &mut dyn DocSink) {
+    let targets: Vec<(NodeId, String)> = {
+        let mut out = Vec::new();
+        for root in sink.state().active_children() {
+            if !root.width_px().is_some_and(|w| w <= 480.0) {
+                continue;
+            }
+            let fg = if first_solid_fill_hex(root)
+                .and_then(super::relative_luminance)
+                .is_some_and(|lum| lum >= 0.5)
+            {
+                "#374151"
+            } else {
+                "#E5E7EB"
+            };
+            for child in root.children().into_iter().flatten() {
+                let empty = child.children().is_none_or(|children| children.is_empty());
+                if empty && is_bottom_nav_surface(child, false) {
+                    out.push((NodeId::new(child.id_str().to_string()), fg.to_string()));
+                }
+            }
+        }
+        out
+    };
+    for (nav_id, fg) in targets {
+        let tabs: Vec<PenNode> = [("home", "Home"), ("search", "Search"), ("user", "Profile")]
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (icon, label))| {
+                serde_json::from_value(serde_json::json!({
+                    "type": "frame",
+                    "id": format!("{}-gen-tab-{index}", nav_id.as_str()),
+                    "name": format!("{label} Tab"),
+                    "width": "fill_container",
+                    "height": "fill_container",
+                    "layout": "vertical",
+                    "gap": 4,
+                    "padding": [4, 0],
+                    "justifyContent": "center",
+                    "alignItems": "center",
+                    "children": [
+                        { "type": "icon_font",
+                          "id": format!("{}-gen-tab-{index}-icon", nav_id.as_str()),
+                          "iconFontName": icon, "width": 22, "height": 22,
+                          "fill": [{"type": "solid", "color": fg}] },
+                        { "type": "text",
+                          "id": format!("{}-gen-tab-{index}-label", nav_id.as_str()),
+                          "content": label, "fontSize": 10, "fontWeight": "600",
+                          "width": "fit_content", "height": "fit_content",
+                          "fill": [{"type": "solid", "color": fg}] }
+                    ]
+                }))
+                .ok()
+            })
+            .collect();
+        if tabs.len() == 3 {
+            sink.apply(EditorCommand::InsertAuthoredSubtree {
+                nodes: tabs,
+                parent_id: nav_id,
+                page_id: None,
+            });
+        }
+    }
+}
+
 pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &str) {
     let repairs = {
         let Some(root) = super::find_root(sink.state(), root_id) else {
@@ -52,10 +191,17 @@ pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &
         });
     }
     for (node_id, root_width) in repairs.bottom_nav_surfaces {
+        // `x`/`y` are CLEARED, never set: any authored position reads as
+        // ABSOLUTE placement in jian and yanks the nav out of flex flow —
+        // the old `"x":0` patch (without y) pinned a healthy 4-tab
+        // BottomTabBar to the root's top-left corner where later-painted
+        // siblings buried it ("the navbar vanished at finalize",
+        // test0711-22 23:34 run). The nav is the root's last FLEX child;
+        // the numeric width alone gives the full-bleed span.
         sink.apply(EditorCommand::PatchNodeData {
             node_id,
             patch_json: format!(
-                r#"{{"x":0,"width":{},"height":72,"layout":"horizontal","gap":0,"padding":[8,16,8,16],"justifyContent":"space_between","alignItems":"center","stroke":null,"effects":null,"cornerRadius":0}}"#,
+                r#"{{"x":null,"y":null,"width":{},"height":72,"layout":"horizontal","gap":0,"padding":[8,16,8,16],"justifyContent":"space_between","alignItems":"center","stroke":null,"effects":null,"cornerRadius":0}}"#,
                 root_width.round()
             ),
             page_id: None,
@@ -252,6 +398,9 @@ pub(super) fn bottom_nav_surface_target(
     allow_structural: bool,
 ) -> Option<&PenNode> {
     if is_bottom_nav_surface(root_child, allow_structural) {
+        if let Some(inner) = nested_bottom_nav_surface(root_child, allow_structural) {
+            return Some(inner);
+        }
         return Some(root_child);
     }
     // The actual nav row may be nested inside a wrapper section (e.g. a
@@ -266,6 +415,18 @@ pub(super) fn bottom_nav_surface_target(
     children.iter().enumerate().find_map(|(i, inner)| {
         let inner_structural = allow_structural && i == last;
         is_bottom_nav_surface(inner, inner_structural).then_some(inner)
+    })
+}
+
+fn nested_bottom_nav_surface(node: &PenNode, allow_structural: bool) -> Option<&PenNode> {
+    let children = node.children()?;
+    if children.len() < 2 {
+        return None;
+    }
+    children.iter().find(|child| {
+        child.is_container()
+            && (is_bottom_nav_surface(child, allow_structural)
+                || is_structural_bottom_nav_row(child))
     })
 }
 

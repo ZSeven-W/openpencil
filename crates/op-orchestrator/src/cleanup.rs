@@ -25,6 +25,10 @@ use op_editor_core::{
 mod cleanup_desktop_dashboard;
 #[path = "cleanup_mobile_chrome.rs"]
 mod cleanup_mobile_chrome;
+pub(crate) use cleanup_mobile_chrome::{
+    anchor_bottom_nav_last_for_all_roots, fill_empty_bottom_nav_shells_for_all_roots,
+    repair_mobile_structural_chrome_for_all_roots,
+};
 #[path = "cleanup_mobile_dense.rs"]
 mod cleanup_mobile_dense;
 
@@ -233,9 +237,9 @@ fn clip_row_stroke_padding_repair(node: &PenNode) -> Option<ClipRowStrokePadding
     if padding.iter().all(|side| *side >= stroke_padding) {
         return None;
     }
-    for side in &mut padding {
-        *side = side.max(stroke_padding);
-    }
+    padding[0] = padding[0].max(stroke_padding);
+    padding[2] = padding[2].max(stroke_padding);
+    padding[3] = padding[3].max(stroke_padding);
     Some(ClipRowStrokePaddingRepair {
         node_id: NodeId::new(node.id_str().to_string()),
         padding,
@@ -789,7 +793,10 @@ fn repair_mobile_content_sections(sink: &mut dyn DocSink, root_id: &str) {
             if !is_mobile_content_section(child) {
                 continue;
             }
-            if !has_horizontal_padding_at_least(child, 16.0) {
+            if !crate::cleanup_scroller_guard::subtree_contains_intentional_horizontal_scroller(
+                child,
+            ) && !has_horizontal_padding_at_least(child, 16.0)
+            {
                 repairs
                     .pad_sections
                     .push(NodeId::new(child.id_str().to_string()));
@@ -954,8 +961,13 @@ fn is_light_mobile_root(root: &PenNode) -> bool {
 
 fn is_mobile_root(root: &PenNode) -> bool {
     let width = root.width_px().unwrap_or(f64::INFINITY);
-    let height = root.height_px().unwrap_or(0.0);
-    width <= 480.0 && height >= 500.0
+    // `fit_content` roots resolve no pixel height — treat "unresolved" as
+    // mobile when the width says so, or every bottom-nav normalize pass
+    // (dedupe / distribute / anchor) silently skips exactly the shape the
+    // agentic loop produces (measured: GLM-5.2 root 390×fit_content kept a
+    // crooked nav because none of the passes ran).
+    let tall_enough = root.height_px().is_none_or(|h| h >= 500.0);
+    width <= 480.0 && tall_enough
 }
 
 fn is_mobile_content_section(node: &PenNode) -> bool {
@@ -988,10 +1000,16 @@ fn collect_overwide_mobile_descendants(
     max_width: f64,
     repairs: &mut MobileSectionRepairs,
 ) {
+    if crate::cleanup_scroller_guard::is_intentional_horizontal_scroller(node) {
+        return;
+    }
     let Some(children) = node.children() else {
         return;
     };
     for child in children {
+        if crate::cleanup_scroller_guard::is_intentional_horizontal_scroller(child) {
+            continue;
+        }
         if is_status_bar(child) || nav_surface_target(child).is_some() {
             continue;
         }
@@ -1249,7 +1267,7 @@ fn is_safe_dark_hex(hex: &str) -> bool {
     ) || relative_luminance_from_rgb(r, g, b) <= 0.035
 }
 
-fn relative_luminance(hex: &str) -> Option<f64> {
+pub(crate) fn relative_luminance(hex: &str) -> Option<f64> {
     let (r, g, b) = parse_hex_rgb(hex)?;
     Some(relative_luminance_from_rgb(r, g, b))
 }
@@ -1501,6 +1519,18 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         adjust_root_height_to_content(sink, rid);
         debug_probe_child_height(sink, rid, "adjust_root_height");
     }
+
+    crate::avatar_repair::remove_empty_twin_stubs_beside_images_for_all_roots(sink);
+    crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);
+
+    // LAST: structural chrome contract — bottom nav is the mobile root's
+    // final child. Runs AFTER the per-root passes (incl. bottom-nav dedup,
+    // which keeps the bottom-most duplicate: anchoring first would reorder
+    // duplicates and flip which one dedup keeps). A late "catch-up" section
+    // appended after the nav is repaired by moving the nav back to the end;
+    // where that section belongs is intent — the geometry echo handles it.
+    cleanup_mobile_chrome::fill_empty_bottom_nav_shells_for_all_roots(sink);
+    anchor_bottom_nav_last_for_all_roots(sink);
 }
 
 /// Apply a whole-root transform (the serialize → mutate → deserialize round-trip
