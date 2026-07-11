@@ -74,7 +74,11 @@ pub fn parse_save_response(response: &str) -> Result<SaveResponse, String> {
 
 pub fn export_svg_document(state: &EditorState) -> Result<String, String> {
     let scene = op_pen_loader::editor_state_to_layout_scene(state);
-    op_editor_ui::svg_export::serialize_active_page_svg(&scene)
+    if state.selection_count() == 1 && state.selection.anchor.is_real() {
+        op_editor_ui::svg_export::serialize_node_svg(&scene, state.selection.anchor.as_str())
+    } else {
+        op_editor_ui::svg_export::serialize_active_page_svg(&scene)
+    }
 }
 
 #[derive(Debug)]

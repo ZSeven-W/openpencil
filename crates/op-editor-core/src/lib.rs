@@ -81,6 +81,17 @@ pub mod statusbar_state;
 pub mod svg_import;
 pub mod svg_path_bounds;
 mod svg_path_data;
+
+/// Tight source-coordinate bounds for an SVG path-data string.
+pub fn svg_path_data_bounds(d: &str) -> Option<(f32, f32, f32, f32)> {
+    let bounds = svg_path_data::svg_path_bounds(d)?;
+    Some((
+        bounds.x as f32,
+        bounds.y as f32,
+        bounds.w as f32,
+        bounds.h as f32,
+    ))
+}
 pub mod text_edit;
 pub mod text_input_focus;
 pub mod theme_presets;

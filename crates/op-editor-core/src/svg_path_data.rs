@@ -37,9 +37,19 @@ enum Segment {
 /// the path is local to its own bbox origin.
 pub(crate) fn localize_svg_path(d: &str) -> Option<(String, SvgPathBounds)> {
     let segments = absolute_segments(d)?;
-    let bounds = segment_bounds(&segments)?;
+    let tight = segment_bounds(&segments)?;
+    let bounds = SvgPathBounds {
+        x: tight.x.floor(),
+        y: tight.y.floor(),
+        w: (tight.x + tight.w - tight.x.floor()).ceil().max(1.0),
+        h: (tight.y + tight.h - tight.y.floor()).ceil().max(1.0),
+    };
     let local = serialize_local_segments(&segments, bounds.x, bounds.y);
     Some((local, bounds))
+}
+
+pub(crate) fn svg_path_bounds(d: &str) -> Option<SvgPathBounds> {
+    segment_bounds(&absolute_segments(d)?)
 }
 
 fn absolute_segments(d: &str) -> Option<Vec<Segment>> {
@@ -257,10 +267,10 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
         return None;
     }
     Some(SvgPathBounds {
-        x: min_x.floor(),
-        y: min_y.floor(),
-        w: (max_x - min_x.floor()).ceil().max(1.0),
-        h: (max_y - min_y.floor()).ceil().max(1.0),
+        x: min_x,
+        y: min_y,
+        w: max_x - min_x,
+        h: max_y - min_y,
     })
 }
 

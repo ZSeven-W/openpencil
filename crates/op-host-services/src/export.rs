@@ -40,7 +40,7 @@ mod scene_painter;
 // → scene convenience `capture()` inside it stays `mcp-debug-tools`-gated.
 pub mod screenshot;
 
-pub use export_svg::export_svg;
+pub use export_svg::{export_node_svg, export_svg};
 pub use scene_painter::{paint_node, paint_nodes};
 
 const MARGIN: f32 = 0.0;
