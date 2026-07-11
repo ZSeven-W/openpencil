@@ -7,6 +7,7 @@ fn attach_tool_result_targets_the_matching_agent_message() {
     let running_call = || ChatToolCall {
         name: "batch_design".into(),
         args: r#"{"status":"running"}"#.into(),
+        content_offset: None,
     };
     let mut chat = ChatState::default();
     let mut parent = ChatMessage::assistant_streaming();

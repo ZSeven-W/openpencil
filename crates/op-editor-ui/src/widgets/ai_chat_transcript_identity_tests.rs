@@ -99,6 +99,7 @@ fn paint_tool_card_uses_narrative_verb_instead_of_raw_tool_name() {
     message.tool_calls.push(ChatToolCall {
         name: "batch_design".into(),
         args: r#"{"status":"done"}"#.into(),
+        content_offset: None,
     });
     let mut backend = IdentityPaintBackend::default();
     let mut cx = PaintCx {

@@ -48,6 +48,7 @@ fn transcript_hit_resolves_a_click_on_the_tool_header() {
     m.tool_calls = vec![ChatToolCall {
         name: "insert_node".into(),
         args: "{}".into(),
+        content_offset: None,
     }];
     let msgs = std::slice::from_ref(&m);
     let header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
@@ -70,6 +71,7 @@ fn transcript_hit_resolves_a_click_on_an_individual_tool_card_header() {
     m.tool_calls = vec![ChatToolCall {
         name: "snapshot_layout".into(),
         args: r#"{"args":{"pageId":"page-1"}}"#.into(),
+        content_offset: None,
     }];
     let msgs = std::slice::from_ref(&m);
     let card_header = build_transcript(msgs, body(), op_editor_core::Locale::EnUs)[0]
@@ -384,6 +386,7 @@ fn stale_build_with_more_items_than_live_messages_is_no_hit_not_a_panic() {
     tool.tool_calls = vec![ChatToolCall {
         name: "insert_node".into(),
         args: "{}".into(),
+        content_offset: None,
     }];
     let design = ChatMessage::assistant(
         "design answer — unique\n```json\n[{\"id\":\"frame-1\",\"type\":\"Frame\"}]\n```",

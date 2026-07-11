@@ -154,6 +154,22 @@ impl DesktopApp {
         self.last_saved_connections = Some(connected);
     }
 
+    /// Write UI preferences through on change (same frame-observer pattern
+    /// as the connection store — the picker mutates state in the widget
+    /// layer, which cannot reach the store).
+    pub(crate) fn persist_ui_pref_changes(&mut self) {
+        let style = self.host.editor_state().editor_ui.pencil_cursor_style;
+        if self.last_saved_pencil_cursor == Some(style) {
+            return;
+        }
+        if self.last_saved_pencil_cursor.is_none() {
+            self.last_saved_pencil_cursor = Some(style);
+            return;
+        }
+        crate::ui_prefs::save_pencil_cursor(style);
+        self.last_saved_pencil_cursor = Some(style);
+    }
+
     /// Begin the startup reconnect replay for providers remembered as
     /// connected last session. The first probe starts immediately; the
     /// rest ride the landing hook above, one at a time.

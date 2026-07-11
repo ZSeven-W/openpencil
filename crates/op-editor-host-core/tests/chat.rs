@@ -100,6 +100,7 @@ fn apply_poll_appends_content_and_clears_streaming_on_finish() {
             tool_calls: vec![ChatToolCall {
                 name: "t".into(),
                 args: "{}".into(),
+                content_offset: None,
             }],
             error: None,
             finished: false,
@@ -125,28 +126,38 @@ fn apply_poll_appends_content_and_clears_streaming_on_finish() {
 }
 
 #[test]
-fn design_loop_folds_narration_into_thinking_but_keeps_errors_visible() {
-    // Design-loop turns fold the model's free-text narration into the collapsed
-    // thinking area (the tool-call checklist carries progress); plain chat keeps
-    // it in the visible bubble; errors always surface in content.
+fn design_loop_streams_narration_as_visible_prose_with_offsets() {
+    // Pencil parity: design-loop narration is first-class transcript prose
+    // (it used to fold into the collapsed thinking area, leaving the panel
+    // showing nothing but "Thinking / N tool calls"). Tool calls stamp the
+    // content offset where they landed so the transcript interleaves.
     let mut design = ChatMessage::assistant_streaming();
     apply_poll_to_message_with(
         &mut design,
         &ChatPoll {
             text: "Let me build the header".into(),
             thinking: "raw".into(),
-            tool_calls: vec![],
+            tool_calls: vec![ChatToolCall {
+                name: "batch_design".into(),
+                args: "{}".into(),
+                content_offset: None,
+            }],
             error: None,
             finished: false,
         },
         true,
     );
     assert_eq!(
-        design.content, "",
-        "narration must NOT hit the visible bubble"
+        design.content, "Let me build the header",
+        "narration streams into the visible bubble"
     );
-    assert!(design.thinking.contains("Let me build the header"));
     assert!(design.thinking.contains("raw"));
+    assert!(!design.thinking.contains("Let me build the header"));
+    assert_eq!(
+        design.tool_calls[0].content_offset,
+        Some("Let me build the header".len() as u32),
+        "the call lands AFTER the narration that preceded it"
+    );
 
     let mut chat = ChatMessage::assistant_streaming();
     apply_poll_to_message_with(
@@ -194,6 +205,7 @@ fn apply_poll_opens_modify_tools_but_keeps_read_tools_collapsed() {
             tool_calls: vec![ChatToolCall {
                 name: "batch_design".into(),
                 args: "{}".into(),
+                content_offset: None,
             }],
             error: None,
             finished: false,
@@ -210,6 +222,7 @@ fn apply_poll_opens_modify_tools_but_keeps_read_tools_collapsed() {
             tool_calls: vec![ChatToolCall {
                 name: "snapshot_layout".into(),
                 args: "{}".into(),
+                content_offset: None,
             }],
             error: None,
             finished: false,

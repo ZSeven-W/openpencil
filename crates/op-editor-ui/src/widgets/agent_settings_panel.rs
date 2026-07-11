@@ -134,6 +134,8 @@ pub enum AgentSettingsHit {
     },
     ToggleAutoUpdate,
     ToggleExperimental,
+    /// Pick a pencil-cursor silhouette (Settings > System).
+    SelectPencilCursor(op_editor_core::PencilCursorStyle),
     FocusMcpPort,
     Outside,
     Inside,
@@ -336,6 +338,9 @@ impl<'a> AgentSettingsPanel<'a> {
                 match agent_settings_system::hit_test(content_rect(panel), scrolled) {
                     SystemHit::ToggleAutoUpdate => return AgentSettingsHit::ToggleAutoUpdate,
                     SystemHit::ToggleExperimental => return AgentSettingsHit::ToggleExperimental,
+                    SystemHit::SelectPencilCursor(style) => {
+                        return AgentSettingsHit::SelectPencilCursor(style)
+                    }
                     SystemHit::None => {}
                 }
             }

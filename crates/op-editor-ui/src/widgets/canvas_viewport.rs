@@ -310,6 +310,8 @@ pub struct CanvasViewport<'a> {
     /// Ghost of the blank starter frame `(x, y, w, h)` doc-px — painted
     /// after a design prompt clears the real node, until the generated
     /// design's sized root arrives, so the canvas never flashes empty.
+    /// User-selected pencil-cursor silhouette (Settings > System).
+    pub(super) pencil_cursor_style: op_editor_core::PencilCursorStyle,
     pub(super) starter_ghost: Option<[f32; 4]>,
     pub(super) pen_cursor_doc: Option<Point2D>,
     /// True while the Pen press-drag is minting handles — hides the
@@ -387,6 +389,7 @@ impl<'a> CanvasViewport<'a> {
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
             starter_ghost: state.editor_ui.starter_ghost,
+            pencil_cursor_style: state.editor_ui.pencil_cursor_style,
             pen_cursor_doc: state.ui.pen_cursor_doc.map(|p| Point2D::new(p.x, p.y)),
             pen_dragging_handle: state.ui.pen_dragging_handle,
             active_guides: state.editor_ui.active_guides.clone(),
@@ -435,6 +438,7 @@ impl<'a> CanvasViewport<'a> {
             tool: op_editor_core::Tool::Select,
             pen_in_progress: None,
             starter_ghost: None,
+            pencil_cursor_style: Default::default(),
             pen_cursor_doc: None,
             pen_dragging_handle: false,
             active_guides: Vec::new(),
@@ -743,6 +747,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                     viewport.zoom,
                     self.now_ms,
                     indicators,
+                    self.pencil_cursor_style,
                 );
             }
             if let Some(screen) = paint_hits.hover_rect {
