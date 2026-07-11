@@ -861,10 +861,16 @@ fn cleanup_structural_nav_only_matches_bottom_row_inside_single_wrapper() {
     // The bottom nav row IS spread to full width.
     let nav = find_node(root, "nav-row").expect("nav-row survives");
     let nav_json = serde_json::to_value(nav).expect("nav serializes");
-    assert_eq!(
-        nav_json["width"],
-        json!(390.0),
+    // Full-width in FLEX FLOW: numeric root-width or fill_container both
+    // qualify. The nav must NOT carry an authored x/y — that reads as
+    // absolute placement and buries it at the root's top-left corner.
+    assert!(
+        nav_json["width"] == json!(390.0) || nav_json["width"] == json!("fill_container"),
         "the bottom nav row should still be spread full-width: {nav_json}"
+    );
+    assert!(
+        nav_json.get("x").is_none_or(serde_json::Value::is_null),
+        "nav must stay in flex flow (no authored x): {nav_json}"
     );
     assert_eq!(nav_json["justifyContent"], json!("space_between"));
 }

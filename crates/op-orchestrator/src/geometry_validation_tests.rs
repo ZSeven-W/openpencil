@@ -1750,3 +1750,298 @@ fn real_layout_wraps_a_stack_pushed_past_its_cell_by_an_avatar() {
         cell.x + cell.w
     );
 }
+
+#[test]
+fn late_section_after_bottom_nav_is_echoed_for_the_model() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(serde_json::json!({
+        "version": "1.0",
+        "children": [{
+            "type": "frame", "id": "root", "name": "Explore",
+            "width": 375, "height": "fit_content", "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "nav", "name": "Bottom Navigation Bar",
+                  "role": "bottom-tab-bar", "width": "fill_container", "height": 72 },
+                { "type": "frame", "id": "hdr", "name": "Header & Search",
+                  "width": "fill_container", "height": "fit_content" }
+            ]
+        }]
+    }))
+    .expect("doc");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let issues = super::geometry_diagnostics(&state);
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.contains("Header & Search") && i.contains("AFTER the bottom tab bar")),
+        "late section must be echoed: {issues:?}"
+    );
+}
+
+#[test]
+fn desktop_roots_and_nav_last_mobile_roots_emit_no_nav_order_echo() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(serde_json::json!({
+        "version": "1.0",
+        "children": [
+            { "type": "frame", "id": "m", "name": "Mobile", "width": 390, "height": 844,
+              "children": [
+                { "type": "frame", "id": "c", "name": "Content", "width": "fill_container",
+                  "height": 400 },
+                { "type": "frame", "id": "nav", "name": "Bottom Tab Bar",
+                  "role": "bottom-tab-bar", "width": "fill_container", "height": 72 }
+              ] }
+        ]
+    }))
+    .expect("doc");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let issues = super::geometry_diagnostics(&state);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.contains("AFTER the bottom tab bar")),
+        "nav-last root must not echo: {issues:?}"
+    );
+}
+
+/// GLM-5.2 measured (test0711-1.op): a 300px-tall image inside a 42px
+/// "Avatar" strip painted across half the header. The width-overflow echo
+/// is blind to the vertical axis — this echo covers it.
+#[test]
+fn image_much_taller_than_its_parent_is_echoed_vertically() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(serde_json::json!({
+        "version": "1.0",
+        "children": [{
+            "type": "frame", "id": "root", "name": "Screen",
+            "width": 390, "height": 844, "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "avatar", "name": "Avatar",
+                  "width": "fill_container", "height": 42, "layout": "horizontal",
+                  "children": [
+                    { "type": "image", "id": "img", "name": "woman face headshot", "src": "",
+                      "width": "fill_container", "height": 300 }
+                  ] },
+                { "type": "frame", "id": "body", "name": "Body",
+                  "width": "fill_container", "height": "fill_container" }
+            ]
+        }]
+    }))
+    .expect("doc");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let issues = super::geometry_diagnostics(&state);
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.contains("woman face headshot") && i.contains("inflates")),
+        "vertical spill must be echoed: {issues:?}"
+    );
+}
+
+/// `clipContent` parents are intentional croppers — no vertical-spill noise.
+#[test]
+fn clipping_parent_suppresses_vertical_spill_echo() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(serde_json::json!({
+        "version": "1.0",
+        "children": [{
+            "type": "frame", "id": "root", "name": "Screen",
+            "width": 390, "height": 844, "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "avatar", "name": "Avatar", "clipContent": true,
+                  "width": 44, "height": 44, "layout": "horizontal",
+                  "children": [
+                    { "type": "image", "id": "img", "name": "man face headshot", "src": "",
+                      "width": "fill_container", "height": 300 }
+                  ] }
+            ]
+        }]
+    }))
+    .expect("doc");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let issues = super::geometry_diagnostics(&state);
+    assert!(
+        !issues
+            .iter()
+            .any(|i| i.contains("inflates") || i.contains("resolved")),
+        "clipContent crops on purpose — no echo expected: {issues:?}"
+    );
+}
+
+/// A 400x300 enrichment image inside a declared 358x170 card cover — jian
+/// inflates the card instead of overflowing, so only the declared-size check
+/// catches it. The image is retargeted to fill its slot.
+#[test]
+fn oversized_image_child_is_clamped_to_fill_its_slot() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [{
+            "type": "frame", "id": "root", "name": "Screen",
+            "width": 390, "height": 844, "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "cover", "name": "Card Cover",
+                  "width": 358, "height": 170, "layout": "vertical",
+                  "children": [
+                    { "type": "image", "id": "img", "name": "midnight city neon", "src": "",
+                      "width": 400, "height": 300 }
+                  ] }
+            ]
+        }] }"##,
+    )
+    .expect("doc");
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+    super::geometry_validate_and_fix(&mut sink, "root");
+
+    fn find_by_id<'a>(
+        node: &'a jian_ops_schema::node::PenNode,
+        id: &str,
+    ) -> Option<&'a jian_ops_schema::node::PenNode> {
+        use op_editor_core::PenNodeExt;
+        if node.id_str() == id {
+            return Some(node);
+        }
+        node.children()?.iter().find_map(|c| find_by_id(c, id))
+    }
+    let root = &state.active_children()[0];
+    let img = find_by_id(root, "img").expect("img");
+    {
+        use op_editor_core::PenNodeExt;
+        assert!(
+            img.width_px().is_none() && img.height_px().is_none(),
+            "oversized image switches to fill_container on both axes"
+        );
+    }
+}
+
+/// test0711-22 00:44 shape: a fill×fill image inside a `layout:"none"`
+/// Cover — `fill_container` is meaningless in an absolute container and the
+/// engine painted the cover as a thin right-edge sliver. The image is
+/// pinned to the parent's resolved rect.
+#[test]
+fn fill_image_in_absolute_container_is_pinned_to_parent_rect() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [{
+            "type": "frame", "id": "root", "name": "Screen",
+            "width": 402, "height": 874, "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "cover", "name": "Cover",
+                  "width": 160, "height": 160, "layout": "none", "clipContent": true,
+                  "children": [
+                    { "type": "image", "id": "img", "name": "album art", "src": "",
+                      "width": "fill_container", "height": "fill_container" }
+                  ] }
+            ]
+        }] }"##,
+    )
+    .expect("doc");
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+    super::geometry_validate_and_fix(&mut sink, "root");
+
+    fn find_by_id<'a>(
+        node: &'a jian_ops_schema::node::PenNode,
+        id: &str,
+    ) -> Option<&'a jian_ops_schema::node::PenNode> {
+        use op_editor_core::PenNodeExt;
+        if node.id_str() == id {
+            return Some(node);
+        }
+        node.children()?.iter().find_map(|c| find_by_id(c, id))
+    }
+    let root = &state.active_children()[0];
+    let img = find_by_id(root, "img").expect("img");
+    {
+        use op_editor_core::PenNodeExt;
+        assert_eq!(img.width_px(), Some(160.0), "pinned to parent width");
+        assert_eq!(img.height_px(), Some(160.0), "pinned to parent height");
+    }
+}
+
+/// One-off forensic harness: `OP_FORENSIC_FILE=<path> cargo test -p
+/// op-orchestrator forensic_resolved_rects -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn forensic_resolved_rects() {
+    let Ok(path) = std::env::var("OP_FORENSIC_FILE") else {
+        return;
+    };
+    let json = std::fs::read_to_string(&path).expect("read file");
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(&json).expect("parse");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let issues = super::geometry_diagnostics(&state);
+    eprintln!("DIAGNOSTICS ({}):", issues.len());
+    for issue in &issues {
+        eprintln!("  - {issue}");
+    }
+    let scene = op_pen_loader::editor_state_to_layout_scene(&state);
+    fn dump(nodes: &[jian_scene::layout_scene::SceneNode], depth: usize) {
+        for n in nodes {
+            let b = n.aggregate_bounds();
+            let kind = format!("{:?}", n.kind);
+            eprintln!(
+                "{}{} [{kind}] x={:.0} y={:.0} w={:.0} h={:.0}",
+                "  ".repeat(depth),
+                n.id,
+                b.origin.x,
+                b.origin.y,
+                b.size.x,
+                b.size.y
+            );
+            if depth < 4 {
+                dump(&n.children, depth + 1);
+            }
+        }
+    }
+    for page in &scene.pages {
+        dump(&page.children, 0);
+    }
+}
+
+/// test0711-2-ds: a card row declared 156 tall whose children resolve 165 —
+/// the 9px overshoot hid the artist line's bottom under the next section.
+/// Small overshoots grow the frame; the big-inflation class stays an echo.
+#[test]
+fn slightly_short_fixed_frame_grows_to_fit_its_children() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [{
+            "type": "frame", "id": "root", "name": "Screen",
+            "width": 390, "height": 844, "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "rail", "name": "Card Rail",
+                  "width": "fill_container", "height": 156, "layout": "horizontal", "gap": 12,
+                  "children": [
+                    { "type": "frame", "id": "card", "width": 140, "height": 156,
+                      "layout": "vertical", "gap": 8,
+                      "children": [
+                        { "type": "frame", "id": "cover", "width": 140, "height": 120 },
+                        { "type": "text", "id": "t1", "content": "Blinding Lights",
+                          "width": "fit_content", "height": 18 },
+                        { "type": "text", "id": "t2", "content": "The Weeknd",
+                          "width": "fit_content", "height": 15 }
+                      ] }
+                  ] }
+            ]
+        }] }"##,
+    )
+    .expect("doc");
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+    super::geometry_validate_and_fix(&mut sink, "root");
+
+    fn find_by_id<'a>(
+        node: &'a jian_ops_schema::node::PenNode,
+        id: &str,
+    ) -> Option<&'a jian_ops_schema::node::PenNode> {
+        use op_editor_core::PenNodeExt;
+        if node.id_str() == id {
+            return Some(node);
+        }
+        node.children()?.iter().find_map(|c| find_by_id(c, id))
+    }
+    let root = &state.active_children()[0];
+    let card = find_by_id(root, "card").expect("card");
+    {
+        use op_editor_core::PenNodeExt;
+        assert!(
+            card.height_px().is_some_and(|h| h > 156.0),
+            "card grew to cover its children, got {:?}",
+            card.height_px()
+        );
+    }
+}

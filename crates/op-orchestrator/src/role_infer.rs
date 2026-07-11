@@ -40,6 +40,7 @@ fn exact_role(lower: &str) -> Option<&'static str> {
         "tag" => "tag",
         "pill" => "pill",
         "table" => "table",
+        "chart" | "graph" | "sparkline" | "图表" => "chart",
         _ => return None,
     })
 }
@@ -109,6 +110,19 @@ static NAME_PATTERN_MAP: LazyLock<Vec<(Regex, &'static str, bool)>> = LazyLock::
         (
             Regex::new(r"bottom\s*(tab|nav)|\btab\s*bar\b").unwrap(),
             "bottom-tab-bar",
+            false,
+        ),
+        // Charts get a semantic role so downstream guards (chart marks must
+        // not receive card borders — validation_fixes chart guard, design-lint
+        // invisible-container detector) key off STRUCTURE instead of name
+        // needles. Ordered AFTER `card` so "Chart Card" stays a card surface
+        // (the guard's own label check still sees "chart" for context), and
+        // BEFORE `stat` so "Stats Chart" is the chart it names. CJK aliases
+        // ride without \b (word boundaries don't apply to han runs).
+        (
+            Regex::new(r"\bchart\b|\bgraph\b|\bhistogram\b|\bsparkline\b|图表|柱状|走势图|趋势图")
+                .unwrap(),
+            "chart",
             false,
         ),
         (Regex::new(r"\bstat").unwrap(), "stat-card", true),

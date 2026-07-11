@@ -167,21 +167,27 @@ const INVISIBLE_CONTRAST_THRESHOLD: f64 = 1.1;
 pub fn detect_invisible_containers(root: &PenNode, doc: &PenDocument) -> Vec<Issue> {
     let mut issues = Vec::new();
     let border_stroke = border_stroke(doc);
-    walk_invisible_containers(root, None, &border_stroke, &mut issues);
+    walk_invisible_containers(root, None, false, &border_stroke, &mut issues);
     issues
 }
 
 fn walk_invisible_containers(
     node: &PenNode,
     parent_fill: Option<&str>,
+    in_chart_context: bool,
     border_stroke: &Value,
     issues: &mut Vec<Issue>,
 ) {
     let node_fill = first_fill_color(node);
+    let in_chart_context = in_chart_context || is_chart_context_node(node);
 
     if let (Some(parent), Some(fill)) = (parent_fill, node_fill) {
         let is_layout_frame = matches!(node, PenNode::Frame(f) if f.container.layout.is_some());
-        if is_layout_frame && !has_stroke(node) && !children(node).is_empty() {
+        if is_layout_frame
+            && !has_stroke(node)
+            && !children(node).is_empty()
+            && !is_chart_visual_container(node, in_chart_context)
+        {
             let ratio = color_contrast(fill, parent);
             if ratio <= INVISIBLE_CONTRAST_THRESHOLD {
                 let is_dark_on_dark = parse_hex_color(parent)
@@ -207,8 +213,74 @@ fn walk_invisible_containers(
 
     let inherited = node_fill.or(parent_fill);
     for child in children(node) {
-        walk_invisible_containers(child, inherited, border_stroke, issues);
+        walk_invisible_containers(child, inherited, in_chart_context, border_stroke, issues);
     }
+}
+
+fn is_chart_visual_container(node: &PenNode, in_chart_context: bool) -> bool {
+    if !in_chart_context {
+        return false;
+    }
+    let label = node_identity_label(node);
+    if ["card", "panel", "section", "sidebar", "container"]
+        .iter()
+        .any(|needle| label.contains(needle))
+    {
+        return false;
+    }
+    if is_chart_context_node(node) {
+        return true;
+    }
+    let barish = label.contains("bar")
+        || label.contains("track")
+        || label.contains("column")
+        || label.contains("柱");
+    barish || (children(node).len() <= 3 && is_slender_chart_mark(node))
+}
+
+fn is_chart_context_node(node: &PenNode) -> bool {
+    let label = node_identity_label(node);
+    label.contains("chart")
+        || label.contains("graph")
+        || label.contains("histogram")
+        || label.contains("sparkline")
+        || label.contains("bar chart")
+        || label.contains("weekly bars")
+        || label.contains("activity chart")
+        || label.contains("activity graph")
+        || label.contains("activity bars")
+        || label.contains("图表")
+        || label.contains("柱状")
+}
+
+fn is_slender_chart_mark(node: &PenNode) -> bool {
+    let Some(width) = numeric_node_prop(node, "width") else {
+        return false;
+    };
+    let Some(height) = numeric_node_prop(node, "height") else {
+        return false;
+    };
+    width > 0.0
+        && height > 0.0
+        && ((width <= 110.0 && height >= width * 1.25)
+            || (height <= 110.0 && width >= height * 1.25))
+}
+
+fn numeric_node_prop(node: &PenNode, key: &str) -> Option<f64> {
+    serde_json::to_value(node).ok()?.get(key)?.as_f64()
+}
+
+fn node_identity_label(node: &PenNode) -> String {
+    let mut label = node_id(node).to_ascii_lowercase();
+    if let Ok(value) = serde_json::to_value(node) {
+        for key in ["role", "name"] {
+            if let Some(text) = value.get(key).and_then(Value::as_str) {
+                label.push(' ');
+                label.push_str(&text.to_ascii_lowercase());
+            }
+        }
+    }
+    label
 }
 
 /// Port of `getBorderStroke` (`detectors.ts:27-34`). Prefers the
@@ -546,5 +618,90 @@ mod tests {
             issues[0].suggested_value,
             json!({"thickness": 1, "fill": [{"type": "solid", "color": "#E2E8F0"}]})
         );
+    }
+
+    #[test]
+    fn invisible_detector_skips_chart_bar_tracks() {
+        let day_track = |id: &str, label: &str, fill: &str| {
+            json!({
+                "type": "frame",
+                "id": id,
+                "name": format!("{label} Bar Track"),
+                "layout": "vertical",
+                "width": 96,
+                "height": 250,
+                "fill": [{"type": "solid", "color": "#171717"}],
+                "children": [{
+                    "type": "frame",
+                    "id": format!("{id}-fill"),
+                    "name": format!("{label} Bar Fill"),
+                    "width": "fill_container",
+                    "height": 120,
+                    "cornerRadius": 22,
+                    "fill": [{"type": "solid", "color": fill}],
+                    "children": []
+                }]
+            })
+        };
+        let root = node(json!({
+            "type": "frame",
+            "id": "root",
+            "name": "Health Dashboard",
+            "layout": "vertical",
+            "fill": [{"type": "solid", "color": "#171717"}],
+            "children": [{
+                "type": "frame",
+                "id": "weekly-chart",
+                "name": "Weekly Activity Chart",
+                "layout": "horizontal",
+                "fill": [{"type": "solid", "color": "#171717"}],
+                "children": [
+                    day_track("mon", "Monday", "#2B2B2B"),
+                    day_track("tue", "Tuesday", "#2B2B2B"),
+                    day_track("wed", "Wednesday", "#2B2B2B"),
+                    day_track("thu", "Thursday", "#2B2B2B"),
+                    day_track("fri", "Friday", "#00D15E"),
+                    day_track("sat", "Saturday", "#2B2B2B"),
+                    day_track("sun", "Sunday", "#2B2B2B")
+                ]
+            }]
+        }));
+
+        let issues = detect_invisible_containers(&root, &doc_no_vars());
+
+        assert!(
+            issues.is_empty(),
+            "chart bar tracks are marks, not card surfaces needing strokes: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn invisible_detector_keeps_bar_chart_card_surface_fixable() {
+        let root = node(json!({
+            "type": "frame",
+            "id": "root",
+            "name": "Health Dashboard",
+            "layout": "vertical",
+            "fill": [{"type": "solid", "color": "#FFFFFF"}],
+            "children": [{
+                "type": "frame",
+                "id": "chart-card",
+                "name": "Bar Chart Card",
+                "layout": "vertical",
+                "width": 320,
+                "height": 300,
+                "fill": [{"type": "solid", "color": "#FFFFFF"}],
+                "children": [{
+                    "type": "text",
+                    "id": "title",
+                    "content": "Weekly activity"
+                }]
+            }]
+        }));
+
+        let issues = detect_invisible_containers(&root, &doc_no_vars());
+
+        assert_eq!(issues.len(), 1, "chart card should remain border-fixable");
+        assert_eq!(issues[0].node_id, "chart-card");
     }
 }

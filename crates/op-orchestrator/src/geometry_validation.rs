@@ -186,6 +186,9 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_collapse_fixes(&v, &rects, &mut cmds);
             collect_text_overflow_fixes(&v, &rects, &mut cmds);
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
+            collect_oversized_image_fixes(&v, &mut cmds);
+            collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
+            collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
             collect_card_row_height_fixes(&v, &rects, &mut cmds, false);
             collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
@@ -364,6 +367,55 @@ fn collect_text_overflow_fixes(
 ///
 /// Text children are handled by [`collect_text_overflow_fixes`]; `clipContent`
 /// parents crop on purpose — skipped.
+/// An IMAGE child whose numeric size exceeds its parent's DECLARED numeric
+/// size. jian grows the parent to contain it instead of overflowing, so the
+/// resolved-rect fixers above see nothing wrong — but the design's declared
+/// intent (a 42px avatar strip, a 170px card cover) is destroyed by the
+/// inflation (measured: a 400x300 enrichment image blew a music card open,
+/// test0711-22; a 300px headshot blew a 42px avatar strip, test0711-1).
+/// Fitting the image to its slot is a CONTRACT repair: the slot's size is
+/// the design decision, the image serves it.
+const IMAGE_INFLATION_SLACK: f64 = 8.0;
+
+fn collect_oversized_image_fixes(v: &Value, cmds: &mut Vec<EditorCommand>) {
+    let declared_w = fixed_width(v);
+    let declared_h = match v.get("height") {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(s)) => s.parse::<f64>().ok(),
+        _ => None,
+    };
+    if declared_w.is_some() || declared_h.is_some() {
+        for c in children(v) {
+            if c.get("type").and_then(Value::as_str) != Some("image") {
+                continue;
+            }
+            let Some(cid) = c.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+            let child_w = fixed_width(c);
+            let child_h = match c.get("height") {
+                Some(Value::Number(n)) => n.as_f64(),
+                Some(Value::String(s)) => s.parse::<f64>().ok(),
+                _ => None,
+            };
+            let too_wide = matches!((child_w, declared_w), (Some(cw), Some(pw)) if cw > pw + IMAGE_INFLATION_SLACK);
+            let too_tall = matches!((child_h, declared_h), (Some(ch), Some(ph)) if ch > ph + IMAGE_INFLATION_SLACK);
+            if too_wide || too_tall {
+                for property in ["width", "height"] {
+                    cmds.push(EditorCommand::SetNodeLayoutProp {
+                        node_id: NodeId::new(cid.to_string()),
+                        property: property.to_string(),
+                        value: LayoutPropValue::Keyword("fill_container".to_string()),
+                    });
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_oversized_image_fixes(c, cmds);
+    }
+}
+
 fn collect_frame_overflow_fixes(
     v: &Value,
     rects: &HashMap<String, Rect>,
@@ -845,11 +897,52 @@ pub fn geometry_diagnostics(state: &EditorState) -> Vec<String> {
             break;
         }
         if let Ok(v) = serde_json::to_value(root) {
+            bottom_nav_order_diagnostic(&v, &mut out);
             collect_diagnostics(&v, &rects, &mut out);
         }
     }
     out.truncate(MAX_DIAGNOSTICS);
     out
+}
+
+/// Structure echo: on a mobile-width root, any sibling that lands AFTER the
+/// bottom tab bar is a misplaced "catch-up" section (measured: MiniMax-M3
+/// appended the greeting+search header after the nav). The nav-last CONTRACT
+/// is deterministically repaired at finalize (`anchor_bottom_nav_last`);
+/// where the late section belongs is INTENT, so this echo tells the in-loop
+/// model to relocate it with `M()` instead of us guessing.
+fn bottom_nav_order_diagnostic(root: &Value, out: &mut Vec<String>) {
+    let width = root
+        .get("width")
+        .and_then(Value::as_f64)
+        .unwrap_or(f64::MAX);
+    if width > 480.0 {
+        return;
+    }
+    let Some(children) = root.get("children").and_then(Value::as_array) else {
+        return;
+    };
+    let is_nav = |c: &Value| {
+        c.get("role").and_then(Value::as_str) == Some("bottom-tab-bar")
+            || c.get("name").and_then(Value::as_str).is_some_and(|n| {
+                let n = n.to_ascii_lowercase();
+                n.contains("tab bar") || n.contains("bottom nav")
+            })
+    };
+    let Some(nav_index) = children.iter().position(is_nav) else {
+        return;
+    };
+    for late in children.iter().skip(nav_index + 1).filter(|c| !is_nav(c)) {
+        if out.len() >= MAX_DIAGNOSTICS {
+            return;
+        }
+        out.push(format!(
+            "{}: sits AFTER the bottom tab bar — bottom navigation must be the LAST child. \
+             If this is top context (greeting / search / page header), move it to the top of \
+             the content with M(); do not leave it below the nav.",
+            diag_label(late)
+        ));
+    }
 }
 
 /// `Name (id)` label for a diagnostic line.
@@ -955,11 +1048,178 @@ fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<S
             }
         }
     }
+    collect_vertical_spill_diagnostics(v, rects, out);
     collect_sibling_jam_diagnostics(v, rects, out);
     collect_starved_fill_diagnostics(v, rects, out);
     for c in children(v) {
         collect_diagnostics(c, rects, out);
     }
+}
+
+/// A fixed-height frame whose resolved CHILDREN run a LITTLE past its
+/// declared height (a card estimated 156 tall whose art + two text lines
+/// resolve to 165 — the artist line's bottom half vanished under the next
+/// section, measured test0711-2-ds). Small overshoots grow the frame to
+/// fit; big overshoots are the inflation class (content must shrink) and
+/// stay with the echo above.
+const GROW_TO_FIT_MIN: f64 = 4.0;
+const GROW_TO_FIT_MAX_FRACTION: f64 = 0.25;
+
+fn collect_grow_to_fit_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    if let Some(declared) = match v.get("height") {
+        Some(Value::Number(n)) => n.as_f64(),
+        _ => None,
+    } {
+        if v.get("clipContent").and_then(Value::as_bool) != Some(true) && declared > 0.0 {
+            if let Some(pr) = v
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(|id| rects.get(id))
+            {
+                let children_bottom = children(v)
+                    .iter()
+                    .filter_map(|c| {
+                        c.get("id")
+                            .and_then(Value::as_str)
+                            .and_then(|id| rects.get(id))
+                    })
+                    .map(|cr| cr.y + cr.h)
+                    .fold(f64::MIN, f64::max);
+                let overshoot = children_bottom - (pr.y + declared);
+                if overshoot > GROW_TO_FIT_MIN && overshoot <= declared * GROW_TO_FIT_MAX_FRACTION {
+                    if let Some(id) = v.get("id").and_then(Value::as_str) {
+                        cmds.push(EditorCommand::UpdateNode {
+                            node_id: NodeId::new(id.to_string()),
+                            x: None,
+                            y: None,
+                            width: None,
+                            height: Some((declared + overshoot).ceil() as i32),
+                            name: None,
+                            fill_hex: None,
+                            page_id: None,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_grow_to_fit_fixes(c, rects, cmds);
+    }
+}
+
+/// A `fill_container`-sized IMAGE inside a `layout: "none"` (absolute)
+/// container — `fill_container` has no meaning without a flex parent, so
+/// the engine falls back to the bitmap's own aspect and the "cover" paints
+/// as a skewed strip (measured: every New Releases cover rendered as a
+/// thin right-edge sliver, test0711-22 00:44). The image is pinned to its
+/// parent's RESOLVED rect: x/y 0, numeric width/height.
+fn collect_absolute_fill_image_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    let absolute_parent = matches!(layout_str(v), Some("none"));
+    if absolute_parent {
+        if let Some(pr) = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+        {
+            if pr.w > 1.0 && pr.h > 1.0 {
+                for c in children(v) {
+                    if c.get("type").and_then(Value::as_str) != Some("image") {
+                        continue;
+                    }
+                    let fill_w = c.get("width").and_then(Value::as_str) == Some("fill_container");
+                    let fill_h = c.get("height").and_then(Value::as_str) == Some("fill_container");
+                    if !fill_w && !fill_h {
+                        continue;
+                    }
+                    let Some(cid) = c.get("id").and_then(Value::as_str) else {
+                        continue;
+                    };
+                    cmds.push(EditorCommand::UpdateNode {
+                        node_id: NodeId::new(cid.to_string()),
+                        x: Some(0),
+                        y: Some(0),
+                        width: Some(pr.w.round() as i32),
+                        height: Some(pr.h.round() as i32),
+                        name: None,
+                        fill_hex: None,
+                        page_id: None,
+                    });
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_absolute_fill_image_fixes(c, rects, cmds);
+    }
+}
+
+/// A frame declaring a NUMERIC height but resolving MUCH taller — an
+/// oversized child inflated it (jian grows the parent instead of letting the
+/// child spill, so no edge ever crosses another and the width-overflow echo
+/// stays blind). Measured (GLM-5.2 test0711-1.op): a 300px image inside a
+/// declared-42px "Avatar" strip blew the strip — and the whole header —
+/// to 300px. A generous slack keeps line-height rounding out of the report;
+/// a real defect overshoots by multiples.
+const VERTICAL_SPILL_SLACK: f64 = 24.0;
+
+fn collect_vertical_spill_diagnostics(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    out: &mut Vec<String>,
+) {
+    if out.len() >= MAX_DIAGNOSTICS {
+        return;
+    }
+    if v.get("clipContent").and_then(Value::as_bool) == Some(true) {
+        return;
+    }
+    let Some(declared) = v.get("height").and_then(Value::as_f64) else {
+        return;
+    };
+    let Some(resolved) = v
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| rects.get(id))
+        .map(|r| r.h)
+    else {
+        return;
+    };
+    if resolved <= declared + VERTICAL_SPILL_SLACK {
+        return;
+    }
+    let culprit = children(v)
+        .iter()
+        .filter_map(|c| {
+            let cr = c
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(|id| rects.get(id))?;
+            (cr.h > declared + VERTICAL_SPILL_SLACK).then(|| (diag_label(c), cr.h))
+        })
+        .max_by(|a, b| a.1.total_cmp(&b.1));
+    let blame = culprit
+        .map(|(label, h)| {
+            format!(
+                " — its child {label} is {}px tall and inflates it",
+                h.round()
+            )
+        })
+        .unwrap_or_default();
+    out.push(format!(
+        "{}: declared {}px tall but resolved {}px{blame}; shrink the oversized content to fit the declared height (or grow the parent on purpose)",
+        diag_label(v),
+        declared.round(),
+        resolved.round()
+    ));
 }
 
 /// A text-bearing `fill_container` child squeezed to a sliver in a horizontal

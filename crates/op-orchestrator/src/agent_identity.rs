@@ -33,10 +33,22 @@ pub struct AgentIdentity {
 /// index; name is taken from the pool by index (distinct for the first
 /// 12 agents).
 pub fn assign_agent_identities(count: usize) -> Vec<AgentIdentity> {
+    assign_agent_identities_seeded(count, 0)
+}
+
+/// Like [`assign_agent_identities`], but rotated by a per-run `seed` so a
+/// fresh run meets a fresh face — index 0 was ALWAYS Kiki-in-coral before.
+/// Names and colours rotate on co-prime strides (pool sizes 12 and 6), so
+/// the same name still shows up in different colours across runs. Teams
+/// stay distinct: identities within one call never collide for counts up
+/// to the pool sizes.
+pub fn assign_agent_identities_seeded(count: usize, seed: u64) -> Vec<AgentIdentity> {
+    let name_offset = (seed % AGENT_NAMES.len() as u64) as usize;
+    let color_offset = ((seed / AGENT_NAMES.len() as u64) % AGENT_COLORS.len() as u64) as usize;
     (0..count)
         .map(|i| AgentIdentity {
-            color: AGENT_COLORS[i % AGENT_COLORS.len()].to_string(),
-            name: AGENT_NAMES[i % AGENT_NAMES.len()].to_string(),
+            color: AGENT_COLORS[(color_offset + i) % AGENT_COLORS.len()].to_string(),
+            name: AGENT_NAMES[(name_offset + i) % AGENT_NAMES.len()].to_string(),
         })
         .collect()
 }
@@ -65,5 +77,19 @@ mod tests {
     #[test]
     fn empty_team_yields_no_identities() {
         assert!(assign_agent_identities(0).is_empty());
+    }
+
+    #[test]
+    fn seed_rotates_names_and_colors_but_keeps_teams_distinct() {
+        let a = assign_agent_identities_seeded(3, 0);
+        let b = assign_agent_identities_seeded(3, 5);
+        assert_ne!(a[0].name, b[0].name, "a fresh seed meets a fresh face");
+        let c = assign_agent_identities_seeded(4, 17);
+        for i in 0..c.len() {
+            for j in (i + 1)..c.len() {
+                assert_ne!(c[i].name, c[j].name, "teammates stay distinct");
+                assert_ne!(c[i].color, c[j].color);
+            }
+        }
     }
 }

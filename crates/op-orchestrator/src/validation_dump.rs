@@ -100,6 +100,10 @@ fn walk_dump(node: &PenNode, depth: usize, lines: &mut Vec<String>) {
         props.push(format!("layout={}", format_layout(layout)));
     }
 
+    if node_clip_content(node) == Some(true) {
+        props.push("clip=true".to_string());
+    }
+
     // gap (container only)
     if let Some(gap) = node_gap(node) {
         props.push(format!("gap={}", format_number_or_expr(gap)));
@@ -297,6 +301,15 @@ fn node_layout(node: &PenNode) -> Option<&jian_ops_schema::node::LayoutMode> {
         PenNode::Frame(n) => n.container.layout.as_ref(),
         PenNode::Group(n) => n.container.layout.as_ref(),
         PenNode::Rectangle(n) => n.container.layout.as_ref(),
+        _ => None,
+    }
+}
+
+fn node_clip_content(node: &PenNode) -> Option<bool> {
+    match node {
+        PenNode::Frame(n) => n.container.clip_content,
+        PenNode::Group(n) => n.container.clip_content,
+        PenNode::Rectangle(n) => n.container.clip_content,
         _ => None,
     }
 }

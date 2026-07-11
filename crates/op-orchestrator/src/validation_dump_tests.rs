@@ -221,6 +221,7 @@ fn dump_layout_props() {
         },
         container: ContainerProps {
             layout: Some(LayoutMode::Horizontal),
+            clip_content: Some(true),
             gap: Some(jian_ops_schema::node::base::NumberOrExpression::Number(
                 12.0,
             )),
@@ -249,6 +250,10 @@ fn dump_layout_props() {
     );
     assert!(dump.contains("gap=12"), "expected gap in {dump}");
     assert!(dump.contains("pad=[0,24]"), "expected pad in {dump}");
+    assert!(
+        dump.contains("clip=true"),
+        "expected clipping intent in {dump}"
+    );
     assert!(
         dump.contains("justify=space_between"),
         "expected justify in {dump}"

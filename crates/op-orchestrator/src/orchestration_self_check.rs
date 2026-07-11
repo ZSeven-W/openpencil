@@ -51,10 +51,10 @@ pub(crate) fn check_value_forest(value: &Value, canvas_width: f64) -> SelfCheckR
     match value {
         Value::Array(nodes) => {
             for node in nodes {
-                check_node(node, canvas_width, &mut report);
+                check_node(node, canvas_width, false, &mut report);
             }
         }
-        Value::Object(_) => check_node(value, canvas_width, &mut report),
+        Value::Object(_) => check_node(value, canvas_width, false, &mut report),
         _ => {}
     }
     report
@@ -78,8 +78,9 @@ pub fn auto_fix_fixable_issues(nodes: &mut [PenNode], canvas_width: f64) -> bool
     true
 }
 
-fn check_node(node: &Value, canvas_width: f64, report: &mut SelfCheckReport) {
-    if is_mobile_product_row_overflow(node, canvas_width) {
+fn check_node(node: &Value, canvas_width: f64, in_scroller: bool, report: &mut SelfCheckReport) {
+    let in_scroller = in_scroller || is_clipping_horizontal_scroller(node);
+    if !in_scroller && is_mobile_product_row_overflow(node, canvas_width) {
         report.issues.push(SelfCheckIssue {
             code: "mobile-product-row-overflow",
             node_id: string_prop(node, "id").map(str::to_string),
@@ -112,7 +113,7 @@ fn check_node(node: &Value, canvas_width: f64, report: &mut SelfCheckReport) {
 
     if let Some(children) = children(node) {
         for child in children {
-            check_node(child, canvas_width, report);
+            check_node(child, canvas_width, in_scroller, report);
         }
     }
 }
@@ -122,24 +123,25 @@ fn auto_fix_value_forest(value: &mut Value, canvas_width: f64) -> bool {
         Value::Array(nodes) => {
             let mut changed = false;
             for node in nodes {
-                changed |= auto_fix_node(node, canvas_width);
+                changed |= auto_fix_node(node, canvas_width, false);
             }
             changed
         }
-        Value::Object(_) => auto_fix_node(value, canvas_width),
+        Value::Object(_) => auto_fix_node(value, canvas_width, false),
         _ => false,
     }
 }
 
-fn auto_fix_node(node: &mut Value, canvas_width: f64) -> bool {
+fn auto_fix_node(node: &mut Value, canvas_width: f64, in_scroller: bool) -> bool {
     let mut changed = false;
-    if is_mobile_product_row_overflow(node, canvas_width) {
+    let in_scroller = in_scroller || is_clipping_horizontal_scroller(node);
+    if !in_scroller && is_mobile_product_row_overflow(node, canvas_width) {
         changed |= auto_fix_product_row_overflow(node);
     }
 
     if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
         for child in children {
-            changed |= auto_fix_node(child, canvas_width);
+            changed |= auto_fix_node(child, canvas_width, in_scroller);
         }
     }
     changed
@@ -164,6 +166,11 @@ fn auto_fix_product_row_overflow(node: &mut Value) -> bool {
         changed = true;
     }
     changed
+}
+
+fn is_clipping_horizontal_scroller(node: &Value) -> bool {
+    string_prop(node, "layout") == Some("horizontal")
+        && node.get("clipContent").and_then(Value::as_bool) == Some(true)
 }
 
 fn is_mobile_product_row_overflow(node: &Value, canvas_width: f64) -> bool {
@@ -787,3 +794,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "orchestration_self_check_scroller_tests.rs"]
+mod tests_scroller;
