@@ -130,7 +130,7 @@ fn canvaskit_text_defaults_to_browser_system_font_fallback() {
         "const isEmojiCp",
         "const segments = (t)",
         "const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);",
-        "drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a)",
+        "drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a, seg.emoji)",
         "browserTextMeasure(seg.text, sz, weight, italic)",
         "CK.Typeface.GetDefault()",
     ] {
@@ -389,6 +389,158 @@ fn canvaskit_svg_path_nodes_fit_to_destination_rect() {
             "CanvasKit backend must override `{marker}` instead of using the icon-size fallback"
         );
     }
+}
+
+#[test]
+fn canvaskit_browser_text_raster_key_drops_color_and_alpha() {
+    let source = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+
+    // TEXT segments are keyed on (text, size, weight, italic, supersample)
+    // only — colour is applied at draw time, so N colours reuse ONE raster.
+    assert!(
+        source.contains(": [t, sz, weight, italic ? 1 : 0, ss].join('\\n');"),
+        "text raster cache key must contain no colour/alpha component"
+    );
+    assert!(
+        source.contains(": 'rgba(255, 255, 255, 1)';"),
+        "text glyph run must rasterize as a white full-alpha coverage mask"
+    );
+    // The unconditional RGBA-keyed raster cache (the thrash source) is gone —
+    // the ONLY colour-keyed path left is the emoji branch (prefixed 'e').
+    assert!(
+        !source.contains("const key = [t, sz, weight, italic ? 1 : 0, r, g, b, a, ss]"),
+        "the always-RGBA-keyed raster cache (the thrash source) must be gone"
+    );
+    // Emoji / colour-glyph segments keep the exact legacy baked-colour path
+    // (they ignore fillStyle, so tinting a white mask would flatten them).
+    assert!(
+        source.contains("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) =>"),
+        "browserTextImage must take an `emoji` selector + colour for the legacy emoji path"
+    );
+    assert!(
+        source.contains("['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\\n')"),
+        "emoji segments must keep a colour-keyed raster (legacy baked-colour path)"
+    );
+    assert!(
+        source.contains("`rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`"),
+        "emoji branch must bake the requested colour into fillStyle (colour glyphs ignore a white mask + tint)"
+    );
+}
+
+#[test]
+fn canvaskit_browser_text_cache_is_lru() {
+    let source = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+
+    // A cache hit re-inserts the entry (delete + set) so eviction drops the
+    // least-recently-used run, not the oldest-inserted (FIFO).
+    let image_fn = source
+        .find("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) =>")
+        .expect("browserTextImage marker exists");
+    let hit = source[image_fn..]
+        .find("const hit = browserTextCache.get(key);")
+        .expect("browserTextImage looks up the cache before rasterizing")
+        + image_fn;
+    let reinsert_delete = source[hit..]
+        .find("browserTextCache.delete(key);")
+        .expect("LRU hit re-inserts by deleting first")
+        + hit;
+    let reinsert_set = source[reinsert_delete..]
+        .find("browserTextCache.set(key, hit);")
+        .expect("LRU hit re-inserts to move the entry to most-recent")
+        + reinsert_delete;
+    // Eviction still deletes the wasm image handle of the dropped entry.
+    let evict = source[reinsert_set..]
+        .find("if (browserTextCache.size > 512)")
+        .expect("512-cap eviction still bounds the raster cache")
+        + reinsert_set;
+    let evict_delete = source[evict..]
+        .find("old.image.delete()")
+        .expect("evicted raster image handle is deleted")
+        + evict;
+    assert!(
+        hit < reinsert_delete
+            && reinsert_delete < reinsert_set
+            && reinsert_set < evict
+            && evict < evict_delete,
+        "browser text raster cache must be LRU (re-insert on hit) and delete evicted image handles"
+    );
+}
+
+#[test]
+fn canvaskit_text_tint_color_filter_cache_is_bounded_and_freed() {
+    let source = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+
+    // The tinting filter is a WHITE-mask SrcIn blend, keyed on rgb only (alpha
+    // rides the paint), cached in a bounded LRU map that deletes evicted handles.
+    for marker in [
+        "const TINT_FILTER_CACHE_CAP = 64;",
+        "const tintFilterCache = new Map();",
+        "const tintColorFilter = (r, g, b) =>",
+        "CK.ColorFilter.MakeBlend(col(r, g, b, 1), CK.BlendMode.SrcIn)",
+        "const key = r + '\\n' + g + '\\n' + b;",
+    ] {
+        assert!(
+            source.contains(marker),
+            "tint filter cache must preserve `{marker}` (rgb-keyed SrcIn blend, bounded LRU)"
+        );
+    }
+
+    // LRU re-insert on hit + delete on eviction, mirroring svgPathCache hygiene.
+    let cache_fn = source
+        .find("const tintColorFilter = (r, g, b) =>")
+        .expect("tintColorFilter marker exists");
+    let hit = source[cache_fn..]
+        .find("const hit = tintFilterCache.get(key);")
+        .expect("tintColorFilter looks up the cache")
+        + cache_fn;
+    let reinsert = source[hit..]
+        .find("tintFilterCache.set(key, hit);")
+        .expect("tint filter LRU re-inserts on hit")
+        + hit;
+    let evict = source[reinsert..]
+        .find("if (tintFilterCache.size > TINT_FILTER_CACHE_CAP)")
+        .expect("tint filter cache is bounded")
+        + reinsert;
+    let evict_delete = source[evict..]
+        .find("old.delete()")
+        .expect("evicted ColorFilter wasm handle is deleted")
+        + evict;
+    assert!(
+        hit < reinsert && reinsert < evict && evict < evict_delete,
+        "tint ColorFilter cache must be LRU and delete evicted wasm handles"
+    );
+
+    // Draw site: dedicated tint paint (not the shared fill paint) applies the
+    // filter + opacity, then draws the raster with that paint.
+    for marker in [
+        "const cachedTintPaint = new CK.Paint();",
+        "paint.setColorFilter(tintColorFilter(r, g, b) || null);",
+        "paint.setAlphaf(a < 0 ? 0 : a > 1 ? 1 : a);",
+        "canvas.drawImage(entry.image, 0, 0, paint);",
+        "canvas.drawImage(entry.image, x - 2, y - entry.baseline, paint);",
+    ] {
+        assert!(
+            source.contains(marker),
+            "drawBrowserText must preserve `{marker}` (tint-at-draw via dedicated paint)"
+        );
+    }
+    // The tint paint must not alias the shared fill/stroke paints.
+    assert!(
+        !source.contains("const cachedTintPaint = cachedFillPaint"),
+        "tint paint must be its own object, not an alias of the shared fill paint"
+    );
 }
 
 #[test]

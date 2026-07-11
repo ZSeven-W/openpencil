@@ -202,11 +202,41 @@ export async function opCkInit(canvasId) {
     browserTextCtx.font = browserTextFont(sz, weight, italic);
     return browserTextCtx.measureText(t).width;
   };
-  const browserTextImage = (t, sz, weight, italic, r, g, b, a) => {
+  // Rasterize a glyph run to a coverage bitmap. TEXT segments raster a WHITE
+  // (full-alpha) mask keyed on (text, size, weight, italic, supersample) — NO
+  // color / alpha in the key — and are recoloured at DRAW time via a SrcIn blend
+  // ColorFilter with opacity riding the paint (see `drawBrowserText`), so the
+  // same glyphs in N colours reuse ONE raster instead of thrashing this cache
+  // (the old key baked RGBA → >512 distinct colours re-rasterized + re-uploaded
+  // every pan/zoom frame). Canvas-2D fillText AA is grayscale coverage
+  // (transparent backdrop → no LCD subpixel path), so a white mask tinted
+  // `SrcIn(color)` reproduces `color × coverage` exactly — mathematically
+  // identical to the old per-colour raster.
+  //
+  // EMOJI / symbol segments are the exception: colour-emoji glyphs render with
+  // their EMBEDDED colours and ignore `fillStyle`, so a "white" mask is really
+  // native-coloured and `SrcIn` would flatten it to a solid block. Those
+  // segments therefore keep the exact legacy path — bake the requested colour
+  // into `fillStyle` (rgba, alpha too), key on rgba, and draw UNTINTED — which
+  // is byte-identical to the pre-change behaviour for the whole emoji-classified
+  // class (both colour glyphs and fillStyle-honouring monochrome symbols).
+  // Emoji were never the thrash source (nobody renders an emoji in 512 colours),
+  // so the colour-keyed cache for them costs nothing.
+  //
+  // LRU: a cache hit re-inserts the entry so the 512-cap eviction drops the
+  // least-recently-used run instead of the oldest-inserted (FIFO).
+  const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) => {
     if (!browserTextCtx) return null;
     const ss = Math.max(1, textDpr);
-    const key = [t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\n');
-    if (browserTextCache.has(key)) return browserTextCache.get(key);
+    const key = emoji
+      ? ['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\n')
+      : [t, sz, weight, italic ? 1 : 0, ss].join('\n');
+    const hit = browserTextCache.get(key);
+    if (hit) {
+      browserTextCache.delete(key);
+      browserTextCache.set(key, hit);
+      return hit;
+    }
     const font = browserTextFont(sz, weight, italic);
     browserTextCtx.font = font;
     const metrics = browserTextCtx.measureText(t);
@@ -226,12 +256,16 @@ export async function opCkInit(canvasId) {
     browserTextCtx.clearRect(0, 0, width, height);
     browserTextCtx.font = font;
     browserTextCtx.textBaseline = 'alphabetic';
-    browserTextCtx.fillStyle = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`;
+    // Emoji bake their colour (legacy path); text rasters a WHITE mask that is
+    // tinted at draw time.
+    browserTextCtx.fillStyle = emoji
+      ? `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
+      : 'rgba(255, 255, 255, 1)';
     browserTextCtx.fillText(t, 2, baseline);
     browserTextCtx.setTransform(1, 0, 0, 1, 0, 0);
     const image = CK.MakeImageFromCanvasImageSource(browserTextCanvas);
     if (!image) return null;
-    const entry = { image, width: metrics.width, baseline, ss };
+    const entry = { image, width: metrics.width, baseline, ss, emoji: Boolean(emoji) };
     browserTextCache.set(key, entry);
     if (browserTextCache.size > 512) {
       const firstKey = browserTextCache.keys().next().value;
@@ -241,9 +275,59 @@ export async function opCkInit(canvasId) {
     }
     return entry;
   };
-  const drawBrowserText = (t, x, y, sz, weight, italic, r, g, b, a) => {
-    const entry = browserTextImage(t, sz, weight, italic, r, g, b, a);
+  // Bounded rgb→ColorFilter cache for tinting the WHITE text raster at draw.
+  // `MakeBlend(color, SrcIn)` recolours the mask to `color × coverage`; alpha
+  // is NOT part of the filter (it rides the paint via setAlphaf), so the key is
+  // rgb only and one filter serves every opacity of a colour. Filters are wasm
+  // handles — LRU with a hard cap, `.delete()`ing the evicted handle (mirrors
+  // `svgPathCache`'s wasm-object hygiene). Cap is small: distinct text colours
+  // on screen are few, so this never thrashes the way the old RGBA raster key
+  // did. An evicted filter was already consumed by its draw call (immediate
+  // mode), and `cachedTintPaint` re-`setColorFilter`s before every draw, so a
+  // deleted handle is never dereferenced.
+  const TINT_FILTER_CACHE_CAP = 64;
+  const tintFilterCache = new Map();
+  const tintColorFilter = (r, g, b) => {
+    if (!(CK.ColorFilter && CK.ColorFilter.MakeBlend)) return null;
+    const key = r + '\n' + g + '\n' + b;
+    const hit = tintFilterCache.get(key);
+    if (hit) {
+      tintFilterCache.delete(key);
+      tintFilterCache.set(key, hit);
+      return hit;
+    }
+    const cf = CK.ColorFilter.MakeBlend(col(r, g, b, 1), CK.BlendMode.SrcIn);
+    if (!cf) return null;
+    tintFilterCache.set(key, cf);
+    if (tintFilterCache.size > TINT_FILTER_CACHE_CAP) {
+      const firstKey = tintFilterCache.keys().next().value;
+      const old = tintFilterCache.get(firstKey);
+      if (old && old.delete) old.delete();
+      tintFilterCache.delete(firstKey);
+    }
+    return cf;
+  };
+  // Dedicated long-lived paint that tints the white text raster. Kept SEPARATE
+  // from cachedFillPaint / cachedStrokePaint because drawBrowserText runs while
+  // drawText's / drawScriptRun's fill paint `p` is already live in an outer
+  // loop — sharing would corrupt that paint mid-run (the same reason
+  // allocFillPaint exists). antiAlias stays at the CK.Paint default (false) so
+  // image sampling matches the prior no-paint drawImage exactly.
+  const cachedTintPaint = new CK.Paint();
+  const drawBrowserText = (t, x, y, sz, weight, italic, r, g, b, a, emoji) => {
+    const entry = browserTextImage(t, sz, weight, italic, emoji, r, g, b, a);
     if (!entry) return 0;
+    // Emoji rasters bake their own colour and draw UNTINTED (legacy path);
+    // text rasters are white masks tinted here. For text: tint to (r,g,b) via a
+    // cached SrcIn ColorFilter with opacity `a` riding the paint — SrcIn keeps
+    // alpha = coverage × a and rgb = colour, pixel-identical to the old
+    // baked-colour raster.
+    let paint = null;
+    if (!entry.emoji) {
+      paint = cachedTintPaint;
+      paint.setColorFilter(tintColorFilter(r, g, b) || null);
+      paint.setAlphaf(a < 0 ? 0 : a > 1 ? 1 : a);
+    }
     const ss = entry.ss || 1;
     if (ss !== 1) {
       // The bitmap is `ss`x oversampled; place it in logical space at
@@ -252,8 +336,11 @@ export async function opCkInit(canvasId) {
       canvas.save();
       canvas.translate(x - 2, y - entry.baseline);
       canvas.scale(1 / ss, 1 / ss);
-      canvas.drawImage(entry.image, 0, 0);
+      if (paint) canvas.drawImage(entry.image, 0, 0, paint);
+      else canvas.drawImage(entry.image, 0, 0);
       canvas.restore();
+    } else if (paint) {
+      canvas.drawImage(entry.image, x - 2, y - entry.baseline, paint);
     } else {
       canvas.drawImage(entry.image, x - 2, y - entry.baseline);
     }
@@ -419,7 +506,7 @@ export async function opCkInit(canvasId) {
     if (segs.length === 0) return 0;
     if (allSegmentsUseBrowserTextFallback(segs)) {
       let cx = x;
-      for (const seg of segs) cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
+      for (const seg of segs) cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a, seg.emoji);
       return cx - x;
     }
     const p = allocFillPaint(r, g, b, a);
@@ -430,7 +517,7 @@ export async function opCkInit(canvasId) {
     let cx = x;
     for (const seg of segs) {
       if (shouldUseBrowserTextFallback(seg.text, seg.emoji)) {
-        cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a);
+        cx += drawBrowserText(seg.text, cx, y, sz, weight, italic, r, g, b, a, seg.emoji);
         continue;
       }
       const f = new CK.Font(tfFor(seg.text, seg.emoji), sz);
