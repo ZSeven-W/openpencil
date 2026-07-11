@@ -50,6 +50,7 @@ DESIGN GUIDELINES:
 - "mobile"/"移动端" + screen type = ACTUAL 375x812 screen, NOT desktop with phone mockup.
 - Buttons: height 44-52px, cornerRadius 8-12, padding [12, 24]. Icon+text: layout="horizontal", gap=8.
 - Icon-only buttons: 44x44, justifyContent/alignItems="center", path icon 20-24px.
+- PAIRED CONTROLS ARE TWINS: a stepper's −/+ buttons (guest count, quantity), prev/next arrows, and any increment/decrement pair MUST share identical width, height, cornerRadius, and icon size — only the fill emphasis may differ (e.g. minus = surface + border, plus = accent fill). A 56px rounded-square minus next to a 32px circular plus reads as broken, never as intentional.
 - Inputs: height 44px, light bg, subtle border, width="fill_container" in forms.
 - Cards: cornerRadius 12-16, clipContent: true, subtle shadows.
 - CARD ROW ALIGNMENT: sibling cards in horizontal layout ALL use width/height="fill_container".
