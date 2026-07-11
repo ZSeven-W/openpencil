@@ -821,9 +821,197 @@ fn document_replacement_reset_clears_completed_ids_so_replacement_targets_are_no
 #[tokio::test]
 #[ignore = "network smoke test for Openverse/Wikimedia"]
 async fn fetch_first_image_url_smoke() {
-    let url = fetch_first_image_url("burger fries", None, None)
+    let used = std::sync::Mutex::new(std::collections::HashSet::new());
+    let url = fetch_first_image_url("burger fries", None, None, &used)
         .await
         .expect("common query should return a renderable image data URL");
     assert!(url.starts_with("data:image/"), "got {url}");
     assert!(url.contains(";base64,"), "got {url}");
+}
+
+#[test]
+fn openverse_selection_skips_junk_and_prefers_query_overlap() {
+    use serde_json::json;
+    let results = vec![
+        json!({"title": "File Not Found", "url": "https://x/1.jpg"}),
+        json!({"title": "Sunset over green hills", "url": "https://x/2.jpg"}),
+        json!({"title": "Midnight city neon lights", "url": "https://x/3.jpg"}),
+    ];
+    let empty = std::collections::HashSet::new();
+    let picked = super::select_openverse_result(&results, "midnight city neon", &empty)
+        .expect("a result survives");
+    assert_eq!(
+        picked["url"], "https://x/3.jpg",
+        "query-overlapping title wins"
+    );
+
+    let all_junk = vec![
+        json!({"title": "404 error page", "url": "https://x/1.jpg"}),
+        json!({"title": "image not found placeholder", "url": "https://x/2.jpg"}),
+    ];
+    assert!(
+        super::select_openverse_result(&all_junk, "midnight city", &empty).is_none(),
+        "all-junk result sets leave the slot empty"
+    );
+
+    let no_overlap = vec![json!({"title": "Sunset over hills", "url": "https://x/9.jpg"})];
+    let fallback = super::select_openverse_result(&no_overlap, "midnight city", &empty)
+        .expect("non-junk fallback");
+    assert_eq!(fallback["url"], "https://x/9.jpg");
+
+    // Session dedup: a URL already used by another card is skipped, so
+    // near-identical queries stop filling every card with the same photo.
+    let mut used = std::collections::HashSet::new();
+    used.insert("https://x/3.jpg".to_string());
+    let second = super::select_openverse_result(&results, "midnight city neon", &used)
+        .expect("a different result");
+    assert_ne!(second["url"], "https://x/3.jpg", "used URL is skipped");
+}
+
+#[test]
+fn simplify_strips_design_artifact_words_but_never_to_empty() {
+    // "synthwave album cover neon" → the corpus has no album covers, but it
+    // has plenty of synthwave/neon photography.
+    assert_eq!(
+        simplify_search_query("synthwave album cover neon"),
+        "synthwave neon"
+    );
+    assert_eq!(
+        simplify_search_query("playlist cover daily mix"),
+        "daily mix"
+    );
+    // All-artifact queries keep their words rather than going empty.
+    assert_eq!(simplify_search_query("album cover"), "album cover");
+    // Concrete-subject queries are untouched.
+    assert_eq!(
+        simplify_search_query("kyoto temple cherry blossom"),
+        "kyoto temple cherry blossom"
+    );
+}
+
+#[test]
+fn failed_search_writes_the_adaptive_placeholder_sentinel() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("nonexistent subject")));
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(None).unwrap();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["img1".to_string()]),
+        jobs: vec![ImageSearchJob {
+            node_id: NodeId::new("img1"),
+            rx,
+        }],
+        ..Default::default()
+    };
+
+    assert!(session.poll_into(&mut state));
+    let PenNode::Image(image) = &state.active_children()[0] else {
+        panic!("expected image");
+    };
+    assert_eq!(image.src, SEARCH_FAILED_PLACEHOLDER_SRC);
+    assert!(
+        session.completed.contains("img1"),
+        "failed slot must not re-enqueue this session"
+    );
+}
+
+/// test0711-2-ds shape: "Mini Player" holds a bare unnamed 44×44 solid
+/// rectangle as the artwork slot — the name-keyword gate must work off the
+/// ANCESTOR chain so the anonymous slot still enriches.
+#[test]
+fn unnamed_square_slot_inside_media_named_parent_is_a_target() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(frame_node(
+        "player",
+        "Mini Player",
+        None,
+        Some(vec![solid_fill()]),
+        vec![
+            rectangle_node_with_sizing(
+                "art",
+                "",
+                Some(vec![solid_fill()]),
+                Some(SizingBehavior::Number(44.0)),
+                Some(SizingBehavior::Number(44.0)),
+            ),
+            text_label("title", None, "Blinding Lights"),
+        ],
+    ));
+
+    let targets = collect_targets(&state, &HashSet::new());
+    assert!(
+        targets.iter().any(|t| t.node_id.as_str() == "art"),
+        "anonymous 44px art slot must enrich: {targets:?}"
+    );
+
+    // The same bare rectangle OUTSIDE any media context stays untouched.
+    let mut plain = EditorState::default();
+    plain.active_children_mut().clear();
+    plain.active_children_mut().push(frame_node(
+        "box",
+        "Stats Row",
+        None,
+        Some(vec![solid_fill()]),
+        vec![rectangle_node_with_sizing(
+            "chip",
+            "",
+            Some(vec![solid_fill()]),
+            Some(SizingBehavior::Number(44.0)),
+            Some(SizingBehavior::Number(44.0)),
+        )],
+    ));
+    let targets = collect_targets(&plain, &HashSet::new());
+    assert!(
+        targets.iter().all(|t| t.node_id.as_str() != "chip"),
+        "no media context, no enrichment: {targets:?}"
+    );
+}
+
+/// DeepSeek V4 shape (test0711-2-ds): whole album grid of NAMELESS empty
+/// solid squares with no G() bindings — the sibling text ("Blinding
+/// Lights") is the subject source. A slot with no text siblings stays out.
+#[test]
+fn anonymous_cover_slot_uses_sibling_text_as_query() {
+    let mut card = frame_node(
+        "card",
+        "",
+        None,
+        None,
+        vec![
+            {
+                let mut slot = frame_node("slot", "", None, Some(vec![solid_fill()]), vec![]);
+                if let PenNode::Frame(f) = &mut slot {
+                    f.base.name = None;
+                    f.container.width = Some(SizingBehavior::Number(120.0));
+                    f.container.height = Some(SizingBehavior::Number(120.0));
+                    f.container.clip_content = Some(true);
+                }
+                slot
+            },
+            text_label("t1", None, "Blinding Lights"),
+            text_label("t2", None, "The Weeknd"),
+        ],
+    );
+    if let PenNode::Frame(f) = &mut card {
+        f.base.name = None;
+    }
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(card);
+
+    let targets = collect_targets(&state, &HashSet::new());
+    let slot = targets
+        .iter()
+        .find(|t| t.node_id.as_str() == "slot")
+        .expect("anonymous slot becomes a target");
+    assert!(
+        slot.query.to_lowercase().contains("blinding lights"),
+        "query derives from sibling text: {}",
+        slot.query
+    );
 }

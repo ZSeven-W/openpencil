@@ -556,7 +556,7 @@ fn pump_executes_scripted_tool_call_against_live_state() {
     ));
 
     for _ in 0..2000 {
-        pump(&mut host, &mut current, None);
+        pump(&mut host, &mut current, None, None, (1200.0, 800.0));
         if current.is_none() {
             break;
         }
@@ -660,7 +660,7 @@ fn pump_runs_loop_finalize_backstop_against_live_state() {
     ));
 
     for _ in 0..2000 {
-        pump(&mut host, &mut current, None);
+        pump(&mut host, &mut current, None, None, (1200.0, 800.0));
         if current.is_none() {
             break;
         }
@@ -718,7 +718,7 @@ fn pump_writes_to_bound_tab_not_the_active_tab() {
 
     for _ in 0..2000 {
         // running_tab = Some(0) — NOT the active tab (1).
-        pump(&mut host, &mut current, Some(0));
+        pump(&mut host, &mut current, Some(0), None, (1200.0, 800.0));
         if current.is_none() {
             break;
         }
@@ -808,4 +808,37 @@ fn design_turn_preserves_starter_frame_with_user_content() {
 
     assert!(!clear_fresh_starter_frame_for_design(&mut state));
     assert_eq!(state.active_children().len(), 2);
+}
+
+#[test]
+fn starter_ghost_lives_from_clear_until_design_root_or_idle() {
+    use super::launch::reconcile_starter_ghost;
+
+    // Clearing the starter captures its rect as the ghost.
+    let mut state = op_editor_core::EditorState::starter();
+    assert!(clear_fresh_starter_frame_for_design(&mut state));
+    assert_eq!(
+        state.editor_ui.starter_ghost,
+        Some([0.0, 0.0, 1200.0, 800.0]),
+        "ghost snapshots the starter rect"
+    );
+
+    // Session running, canvas still empty → ghost stays.
+    assert!(!reconcile_starter_ghost(&mut state, true));
+    assert!(state.editor_ui.starter_ghost.is_some());
+
+    // The design root lands → ghost retires.
+    let root: jian_ops_schema::node::PenNode = serde_json::from_str(
+        r#"{ "type": "frame", "id": "d1", "name": "Music Home", "width": 402, "height": 874 }"#,
+    )
+    .expect("root");
+    state.active_children_mut().push(root);
+    assert!(reconcile_starter_ghost(&mut state, true));
+    assert!(state.editor_ui.starter_ghost.is_none());
+
+    // Turn dies with nothing produced → ghost also retires.
+    let mut failed = op_editor_core::EditorState::starter();
+    assert!(clear_fresh_starter_frame_for_design(&mut failed));
+    assert!(reconcile_starter_ghost(&mut failed, false));
+    assert!(failed.editor_ui.starter_ghost.is_none());
 }

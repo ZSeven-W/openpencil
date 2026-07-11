@@ -286,6 +286,29 @@ fn effective_options(
     if let Some(session) = resume {
         options.resume = Some(session);
     }
+    // GUI-launch environment repair: a Dock-launched app misses the
+    // shell-rc exports a terminal launch has — without ANTHROPIC_* the
+    // CLI silently flips from the API key to the subscription OAuth
+    // credential, which the API rejects for custom-system-prompt
+    // requests with `403 Request not allowed`. Explicit process env
+    // still wins (insert only when absent from options.env).
+    //
+    // PATH deliberately does NOT ride here: the SDK's dangerous-env
+    // blocklist (`DANGEROUS_ENV_VARS` in transport/subprocess.rs)
+    // rejects any request whose options.env carries PATH — the whole
+    // query dies with "Invalid configuration" (measured 2026-07-11).
+    // The GUI PATH repair is process-wide instead
+    // (`chat_spawn::repair_gui_process_path` at desktop startup), which
+    // the SDK's `env::vars()` baseline inherits naturally.
+    for name in [
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+    ] {
+        if let Some(value) = crate::chat_spawn::env_var_with_login_shell(name) {
+            options.env.entry(name.to_string()).or_insert(value);
+        }
+    }
     options
 }
 
@@ -756,5 +779,34 @@ mod tests {
         };
         let options = effective_options(None, &req, None);
         assert_eq!(options.max_thinking_tokens, Some(0));
+    }
+}
+
+#[cfg(test)]
+mod effective_options_env_tests {
+    use super::*;
+    use op_ai::chat_provider::{ChatRequest, EffortLevel, ThinkingMode};
+
+    #[test]
+    fn options_env_never_carries_path() {
+        // The agent SDK's DANGEROUS_ENV_VARS blocklist rejects any request
+        // whose env map carries PATH — injecting it kills EVERY claude query
+        // with "Invalid configuration" (regression measured 2026-07-11).
+        let request = ChatRequest {
+            system_prompt: "design something".into(),
+            user_message: "hi".into(),
+            history: vec![],
+            max_output_tokens: 1024,
+            thinking: ThinkingMode::Adaptive,
+            effort: EffortLevel::Low,
+            attachments: vec![],
+            model: None,
+        };
+        let options = effective_options(None, &request, None);
+        assert!(
+            !options.env.contains_key("PATH"),
+            "PATH must never ride options.env: {:?}",
+            options.env.keys().collect::<Vec<_>>()
+        );
     }
 }

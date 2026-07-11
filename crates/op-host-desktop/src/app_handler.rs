@@ -154,6 +154,10 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         }
 
         self.window = Some(window);
+        // Replay last session's CLI connections (silent probes, one at a
+        // time) so the user isn't greeted by five "Connect" buttons on
+        // every launch.
+        self.restore_remembered_connections();
 
         if let Some(window) = self.window.as_ref() {
             let size = window.inner_size();
@@ -543,6 +547,8 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     &mut self.host,
                     &mut self.current_chat,
                     self.chat_running_tab,
+                    None,
+                    (self.viewport_width, self.viewport_height),
                 ) {
                     self.redraw_dirty = true;
                 }
@@ -676,6 +682,17 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 ) {
                     self.redraw_dirty = true;
                 }
+                // Update design-orchestrator canvas indicators (frame glows
+                // + scan) — the `current_design` counterpart to
+                // `pump_indicator` above. Runs AFTER `pump_commands` /
+                // `pump_progress` so a same-frame turn-finish (which clears
+                // `current_design`) is observed here, mirroring how
+                // `pump_indicator` runs after `chat_session::pump`.
+                crate::design_loop_indicator::pump_design_session_indicator(
+                    &mut self.design_session_indicator,
+                    &self.current_design,
+                    self.host.editor_state(),
+                );
                 // Each pump retires its session when the turn finishes — once
                 // no chat / design / sub-agent run remains in flight, the tab
                 // binding is stale, so clear it (a fresh turn re-captures the
@@ -685,6 +702,18 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     && self.sub_agents.is_empty()
                 {
                     self.chat_running_tab = None;
+                }
+                // Starter ghost: painted from the moment a design prompt
+                // clears the blank starter until the generated design's root
+                // lands (or the turn dies with nothing produced).
+                let session_running = self.current_chat.is_some() || self.current_design.is_some();
+                self.persist_connection_changes();
+                if crate::chat_session::reconcile_starter_ghost(
+                    self.host.editor_state_mut(),
+                    session_running,
+                ) {
+                    self.host.mark_editor_state_dirty();
+                    self.redraw_dirty = true;
                 }
                 self.image_search.enqueue_missing(self.host.editor_state());
                 if self.image_search.poll_into(self.host.editor_state_mut()) {

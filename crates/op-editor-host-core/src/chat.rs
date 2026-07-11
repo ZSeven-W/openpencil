@@ -100,6 +100,8 @@ pub struct ChatSession {
     /// checklist already carries the progress, so the raw "Let me build the
     /// header…" chatter is noise. Plain chat / CLI turns keep it `false`.
     is_design_loop: bool,
+    loop_finalized: bool,
+    viewport_fitted: bool,
 }
 
 /// Result of a single non-blocking [`ChatSession::poll`].
@@ -238,6 +240,8 @@ impl ChatSession {
             deferred_tool_requests: VecDeque::new(),
             finished: false,
             is_design_loop: false,
+            loop_finalized: false,
+            viewport_fitted: false,
         }
     }
 
@@ -254,6 +258,31 @@ impl ChatSession {
         self.is_design_loop
     }
 
+    /// Record that the loop's structural finalize pass ran for this turn.
+    pub fn mark_loop_finalized(&mut self) {
+        self.loop_finalized = true;
+    }
+
+    /// Record that the host centered the viewport on this design turn's
+    /// first sized root.
+    pub fn mark_viewport_fitted(&mut self) {
+        self.viewport_fitted = true;
+    }
+
+    /// True once the host centered the viewport on this turn's design root.
+    pub fn viewport_fitted(&self) -> bool {
+        self.viewport_fitted
+    }
+
+    /// True when the loop's structural finalize pass already ran. A design
+    /// loop that dies early (429 / quota / abort) never sends the finalize
+    /// op — the host uses this to run the backstop on teardown (measured:
+    /// an aborted run shipped an empty 68px TabBar shell + empty MiniPlayer,
+    /// test0711-22).
+    pub fn loop_finalized(&self) -> bool {
+        self.loop_finalized
+    }
+
     /// Wrap externally supplied channels, used when a host owns its own
     /// routing worker but wants the shared poll/finish behavior.
     pub fn from_channels(
@@ -266,6 +295,8 @@ impl ChatSession {
             deferred_tool_requests: VecDeque::new(),
             finished: false,
             is_design_loop: false,
+            loop_finalized: false,
+            viewport_fitted: false,
         }
     }
 
