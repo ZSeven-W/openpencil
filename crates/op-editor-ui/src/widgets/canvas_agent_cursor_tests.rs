@@ -606,9 +606,9 @@ mod scan_gate_tests {
     use crate::Rect;
     use op_editor_core::agent_indicators::AgentIndicators;
 
-    /// Pencil leaves the big undeclared half of a dashboard as plain
-    /// background while the sidebar is worked — an EMPTY region covering
-    /// most of the root gets NO skeleton wash; small shells keep it.
+    /// Pencil lights sections in WORK ORDER: while an earlier shell is
+    /// still empty, later regions (however large) stay plain; once it is
+    /// the first empty shell, even the dashboard's main column washes.
     #[test]
     fn dominant_empty_region_gets_no_scan_but_small_shells_do() {
         let mut sidebar = SceneNode::leaf("sidebar", NodeKind::Frame);
@@ -646,6 +646,26 @@ mod scan_gate_tests {
         assert!(
             ids.contains("sidebar"),
             "a filled column is unaffected by the gate"
+        );
+
+        // Once the earlier shells fill, the big main column is ON DECK and
+        // must wash — it is now where work happens (user report: the right
+        // side jumped from plain black to finished content with no scan).
+        let mut filled_header = SceneNode::leaf("header-shell", NodeKind::Frame);
+        filled_header.bounds = Rect::xywh(0.0, 0.0, 1440.0, 90.0);
+        filled_header.children = vec![SceneNode::leaf("h-child", NodeKind::Text)];
+        let mut sidebar2 = SceneNode::leaf("sidebar", NodeKind::Frame);
+        sidebar2.bounds = Rect::xywh(0.0, 0.0, 260.0, 900.0);
+        sidebar2.children = vec![SceneNode::leaf("nav2", NodeKind::Frame)];
+        let mut main2 = SceneNode::leaf("main", NodeKind::Frame);
+        main2.bounds = Rect::xywh(260.0, 0.0, 1180.0, 900.0);
+        let mut root2 = SceneNode::leaf("root", NodeKind::Frame);
+        root2.bounds = Rect::xywh(0.0, 0.0, 1440.0, 900.0);
+        root2.children = vec![filled_header, sidebar2, main2];
+        let ids = generating_descendant_ids(&[root2], Some(&ind)).expect("active run");
+        assert!(
+            ids.contains("main"),
+            "the main column washes once it is the first empty shell"
         );
     }
 
