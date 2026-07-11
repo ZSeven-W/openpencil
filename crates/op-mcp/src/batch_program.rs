@@ -1,12 +1,26 @@
 //! Multi-line mixed `batch_design` DSL program executor.
 //!
 //! Mirrors TS `packages/pen-mcp/src/tools/batch-design-dsl.ts`
-//! (`runBatchDesignDsl` + `executeLine`): arbitrary programs mixing
-//! I/U/C/R/G/M/D operations with shared bindings and slash-path
-//! expressions, executed line by line with TS's best-effort error
-//! semantics — a failing line is collected into `errors[]` (with a
-//! 200-char line preview) and execution CONTINUES, exactly like the
-//! TS `try/catch` around `executeLine`.
+//! (`runBatchDesignDsl` + `executeLine`) for the line grammar: arbitrary
+//! programs mixing I/U/C/R/G/M/D operations with shared bindings and
+//! slash-path expressions, executed line by line.
+//!
+//! ## Line-failure policy
+//!
+//! The agent-facing tool surface is TRANSACTIONAL (Pencil's contract:
+//! "if any operation fails, every already-executed operation of the
+//! batch is rolled back"): when any line fails, NO command ships — the
+//! live document is untouched, `errors[]` lists every failing line
+//! (200-char preview), and the envelope carries `applied:false` plus a
+//! resend hint. A half-applied batch is worse than a rejected one for a
+//! model in a feedback loop: the loop's next batch would build on a tree
+//! the model believes complete.
+//!
+//! The orchestrator's internal script-gen path opts back into the old
+//! TS best-effort semantics (failing lines dropped, survivors apply)
+//! via the internal `_line_policy=best_effort` arg — it runs against a
+//! scratch document, surfaces drops as warnings, and has its own
+//! retry/cleanup ladder downstream (`program_gen.rs`).
 //!
 //! ## Snapshot simulation + one host command
 //!
@@ -91,12 +105,40 @@ pub(crate) fn run_batch_design_program(
             });
         }
     }
+    // Live-doc node count BEFORE any line runs — the honest `nodeCount`
+    // for a rolled-back transaction (nothing will have been applied).
+    let baseline_count = count_forest(ctx.sim.active_children());
+    // Internal knob for the orchestrator's script-gen path (see module
+    // doc); absent → transactional, the agent-facing contract.
+    let transactional = args.get("_line_policy").map(String::as_str) != Some("best_effort");
 
     let mut errors: Vec<Value> = Vec::new();
     for line in split_operations(operations) {
         if let Err(error) = execute_line(&line, &mut ctx) {
             errors.push(json!({ "line": line_preview(&line), "error": error }));
         }
+    }
+
+    if transactional && !errors.is_empty() {
+        // Roll the whole batch back: drop every recorded command so the
+        // host applies NOTHING. Bindings/results are dropped too — their
+        // node ids never land, and reporting them would invite the model
+        // to reference phantom nodes in its next batch.
+        let mut envelope = serde_json::Map::new();
+        envelope.insert("results".into(), Value::Array(Vec::new()));
+        envelope.insert("nodeCount".into(), json!(baseline_count));
+        envelope.insert("applied".into(), Value::Bool(false));
+        envelope.insert(
+            "hint".into(),
+            json!(format!(
+                "Transaction rolled back: {} operation(s) failed, so NONE of this batch was \
+                 applied — the document is unchanged. Fix the failing line(s) and resend the \
+                 whole corrected batch.",
+                errors.len()
+            )),
+        );
+        envelope.insert("errors".into(), Value::Array(errors));
+        return ToolOutcome::OkJson(Value::Object(envelope).to_string());
     }
 
     let node_count = count_forest(ctx.sim.active_children());

@@ -48,6 +48,13 @@ pub fn run_program_to_forest(program: &str) -> Result<(Vec<PenNode>, StateSchema
     let mut state = EditorState::new();
     let mut args: BTreeMap<String, String> = BTreeMap::new();
     args.insert("operations".to_string(), program.to_string());
+    // The agent-facing batch_design surface is transactional (any failing
+    // line rolls back the whole batch). This scratch-document path keeps
+    // the old best-effort semantics on purpose: there is no model in a
+    // feedback loop to resend a corrected batch mid-subtask — drops are
+    // surfaced as warnings and the orchestrator's retry ladder + cleanup
+    // passes own the repair.
+    args.insert("_line_policy".to_string(), "best_effort".to_string());
 
     let cmd = {
         let tool = op_mcp::batch_design_snapshot(&state);

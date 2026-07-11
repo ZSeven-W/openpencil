@@ -332,6 +332,38 @@ fn batch_design_normalizes_underscore_flex_keywords() {
 }
 
 #[test]
+fn batch_design_defaults_missing_stroke_thickness() {
+    // DeepSeek V4 writes `stroke:{"color":…}` with no `thickness` — the
+    // schema requires it, one rejected node cascaded into "parent not
+    // found" for 60+ descendant lines and the design shipped as one empty
+    // section (measured 2026-07-12). The normalize layer must default it.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"frame","name":"Card","stroke":{"color":"#333333"},"children":[{"type":"text","content":"inside","width":100,"height":20}]})"##
+            .to_string(),
+    );
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertSubtree command");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert_eq!(
+        value["stroke"]["thickness"],
+        serde_json::json!(1.0),
+        "missing thickness defaults to hairline: {:?}",
+        value["stroke"]
+    );
+    assert_eq!(
+        value["children"].as_array().map(Vec::len),
+        Some(1),
+        "child landed with its parent"
+    );
+}
+
+#[test]
 fn batch_design_maps_pencil_autolayout_dialect() {
     // MiniMax-M3 is trained on Pencil's schema: it emits `layoutMode` /
     // `itemSpacing` / `strokeWeight` / `primaryAxisAlignItems` /
