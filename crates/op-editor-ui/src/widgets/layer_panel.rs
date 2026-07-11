@@ -661,6 +661,24 @@ impl Widget for LayerPanel {
             let trailing_y = row.origin.y + 7.0;
             let show_eye = hovered;
             let show_lock = hovered;
+            // Opaque backing behind the hover icon cluster: a long label
+            // runs right up to the row edge and the eye/lock glyphs were
+            // drawn straight over its letters. Rebuild the row surface
+            // locally (panel bg + the row's own wash) so the icons sit on
+            // clean ground.
+            if show_eye || show_lock {
+                let backing = Rect {
+                    origin: Point2D::new(eye_x - 8.0, row.origin.y),
+                    size: Point2D::new(row.origin.x + row.size.x - (eye_x - 8.0), row.size.y),
+                };
+                cx.backend.fill_rect(backing, self.theme.card);
+                if selected {
+                    cx.backend
+                        .fill_rect(backing, self.theme.row_selected_primary);
+                } else if hovered {
+                    cx.backend.fill_rect(backing, self.theme.button_hover);
+                }
+            }
             if show_eye {
                 draw_icon(
                     cx.backend,
