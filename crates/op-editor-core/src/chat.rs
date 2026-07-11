@@ -359,15 +359,6 @@ pub struct ChatState {
     /// the canvas region with a small inset, mirroring the TS app's
     /// expanded panel.
     pub maximized: bool,
-    /// Collapsed state for the fixed "Pencil it out" design checklist
-    /// pinned above the input, mirroring the TS checklist header.
-    pub checklist_collapsed: bool,
-    /// Indices of fixed-checklist rows whose detail sub-lines are
-    /// expanded. Absent = collapsed (the default). Mirrors the
-    /// per-index override model used by design-block cards.
-    pub checklist_item_expanded: std::collections::BTreeSet<usize>,
-    /// Vertical scroll offset inside the fixed design checklist rows.
-    pub checklist_scroll: jian_core::scroll::ScrollState,
     /// Vertical scroll offset (px from the conversation top) of the
     /// transcript message list. Clamped to `[0, content_height - body]`
     /// by the host on wheel; ignored while [`transcript_pinned`] holds.
@@ -457,9 +448,6 @@ impl Default for ChatState {
             panel_position: None,
             collapsed: false,
             maximized: false,
-            checklist_collapsed: false,
-            checklist_item_expanded: std::collections::BTreeSet::new(),
-            checklist_scroll: Default::default(),
             transcript_scroll: Default::default(),
             transcript_pinned: true,
             pending_send: None,
@@ -583,7 +571,6 @@ impl ChatState {
         assistant_msg.agent_name = agent_name;
         self.messages.push(assistant_msg);
         self.input.set_text("");
-        self.checklist_scroll.offset = 0.0;
         // Jump to the bottom so the new turn's reply is visible as it
         // streams, even if the user had scrolled up in the prior turn.
         self.transcript_pinned = true;
@@ -634,7 +621,6 @@ impl ChatState {
         self.pending_stop_chat = false;
         self.pending_copy_text = None;
         self.transcript_selection = None;
-        self.checklist_scroll.offset = 0.0;
         self.transcript_pinned = true;
         self.transcript_scroll.offset = 0.0;
         self.pending_attachments.clear();
@@ -817,22 +803,6 @@ impl ChatState {
                 .resize(step_idx + 1, None);
         }
         msg.action_step_expanded_overrides[step_idx] = Some(expanded);
-    }
-
-    /// Flip the fixed design-checklist panel state.
-    pub fn toggle_checklist_collapsed(&mut self) {
-        self.checklist_collapsed = !self.checklist_collapsed;
-        if self.checklist_collapsed {
-            self.checklist_scroll.offset = 0.0;
-        }
-    }
-
-    /// Toggle a single fixed-checklist row's detail expansion by index.
-    /// Absent = collapsed (default); present = expanded.
-    pub fn set_checklist_item_expanded(&mut self, item_idx: usize) {
-        if !self.checklist_item_expanded.remove(&item_idx) {
-            self.checklist_item_expanded.insert(item_idx);
-        }
     }
 
     /// Advance the thinking-mode selector one step:
@@ -1301,39 +1271,6 @@ mod tests {
         chat.queue_copy_text("json");
 
         assert_eq!(chat.pending_copy_text.as_deref(), Some("json"));
-    }
-
-    #[test]
-    fn set_checklist_item_expanded_toggles_membership() {
-        let mut chat = ChatState::default();
-        assert!(chat.checklist_item_expanded.is_empty());
-
-        chat.set_checklist_item_expanded(2);
-        assert!(chat.checklist_item_expanded.contains(&2));
-
-        chat.set_checklist_item_expanded(2);
-        assert!(!chat.checklist_item_expanded.contains(&2));
-    }
-
-    #[test]
-    fn toggle_checklist_collapsed_flips_panel_checklist_flag() {
-        let mut chat = ChatState::default();
-        assert!(!chat.checklist_collapsed);
-
-        chat.toggle_checklist_collapsed();
-        assert!(chat.checklist_collapsed);
-
-        chat.toggle_checklist_collapsed();
-        assert!(!chat.checklist_collapsed);
-    }
-
-    #[test]
-    fn checklist_scroll_uses_scroll_state() {
-        let mut chat = ChatState::default();
-
-        chat.checklist_scroll.offset = 20.0;
-
-        assert_eq!(chat.checklist_scroll.offset, 20.0);
     }
 
     #[test]

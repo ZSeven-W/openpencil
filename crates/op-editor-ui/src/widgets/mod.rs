@@ -186,7 +186,6 @@ mod agent_settings_switch;
 #[cfg(test)]
 mod agent_settings_switch_style_tests;
 pub mod agent_settings_system;
-mod ai_chat_checklist;
 mod ai_chat_hit;
 pub(crate) mod ai_chat_input_text;
 pub mod ai_chat_model_picker;

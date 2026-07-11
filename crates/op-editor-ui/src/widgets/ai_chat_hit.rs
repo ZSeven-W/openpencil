@@ -87,12 +87,6 @@ pub enum AIChatHit {
     ApplyDesignBlock(usize, String),
     /// Press on selectable transcript text.
     SelectTranscriptText(usize, usize),
-    /// Click on the fixed "Pencil it out" checklist header — host
-    /// toggles the checklist body between expanded and collapsed.
-    ToggleChecklist,
-    /// Click on a checklist row's detail-expand chevron — host toggles
-    /// `ChatState::set_checklist_item_expanded` for that row index.
-    ToggleChecklistItem(usize),
     /// Click on tab `i`'s body (but not its × close button) — host
     /// calls `state.chat.switch_to(i)`. Wired in MT.3.
     SwitchTab(usize),

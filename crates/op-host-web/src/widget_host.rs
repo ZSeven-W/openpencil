@@ -773,42 +773,6 @@ impl WidgetHost {
         true
     }
 
-    fn try_scroll_chat_checklist(
-        &mut self,
-        x: f32,
-        y: f32,
-        delta: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        let point = Point2D::new(x, y);
-        let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) else {
-            return false;
-        };
-        let (checklist, max) = {
-            let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
-                &self.editor_state,
-                self.now_ms,
-            );
-            let Some(checklist) = panel.fixed_checklist_bounds(chat_rect) else {
-                return false;
-            };
-            (checklist, panel.fixed_checklist_scroll_max())
-        };
-        if !(checklist).contains(point) {
-            return false;
-        }
-        let before = self.editor_state.chat.checklist_scroll.offset;
-        self.editor_state
-            .chat
-            .checklist_scroll
-            .scroll_by(-delta, max, 0.0);
-        if self.editor_state.chat.checklist_scroll.offset != before {
-            self.mark_dirty();
-        }
-        true
-    }
-
     /// Scroll the chat transcript message list when a wheel / trackpad
     /// pan lands over the panel body — pinned-to-bottom auto-follow
     /// resumes once the user scrolls back to the bottom. Mirrors the
@@ -910,9 +874,6 @@ impl WidgetHost {
                 return true;
             }
         }
-        if self.try_scroll_chat_checklist(x, y, delta_y, viewport_width, viewport_height) {
-            return true;
-        }
         if self.try_scroll_chat_transcript(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
@@ -978,9 +939,6 @@ impl WidgetHost {
             return true;
         }
         if self.try_scroll_icon_picker(x, y, dy, viewport_width, viewport_height) {
-            return true;
-        }
-        if self.try_scroll_chat_checklist(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         if self.try_scroll_chat_transcript(x, y, dy, viewport_width, viewport_height) {
