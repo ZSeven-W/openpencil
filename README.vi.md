@@ -400,12 +400,16 @@ Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết v
 - [x] Nhập Figma `.fig`
 - [x] Phép toán Boolean (hợp nhất, trừ, giao)
 - [x] Hồ sơ năng lực đa mô hình
-- [x] Tái cấu trúc monorepo với các gói tái sử dụng
+- [x] Workspace Cargo với các crate Rust và gói Web SDK có thể tái sử dụng
+- [x] Trình chỉnh sửa Rust cho desktop và Web
 - [x] Công cụ CLI (`op`) điều khiển từ terminal
-- [x] SDK tác nhân AI tích hợp sẵn với hỗ trợ đa nhà cung cấp
+- [x] Rust Agent Runtime tích hợp sẵn với hỗ trợ đa nhà cung cấp
 - [x] i18n — 15 ngôn ngữ
+- [x] Viewer SDK dựa trên wasm cho JavaScript, React và Vue
+- [x] Style Guides với đối sánh theo tag và công cụ MCP
+- [x] Concurrent Agent Teams với khả năng ủy quyền và chỉ báo trên canvas
 - [x] Tích hợp Git (clone, branch, push/pull, merge ba chiều chế độ thư mục)
-- [x] Xuất raster canvas (PNG / JPEG / WEBP / PDF)
+- [x] Xuất canvas (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] Chỉnh sửa cộng tác
 - [ ] Hệ thống plugin
 

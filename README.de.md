@@ -400,12 +400,16 @@ Beiträge sind willkommen! Siehe [CLAUDE.md](./CLAUDE.md) für Architekturdetail
 - [x] Figma-`.fig`-Import
 - [x] Boolesche Operationen (Vereinigung, Subtraktion, Schnittmenge)
 - [x] Multi-Modell-Fähigkeitsprofile
-- [x] Monorepo-Umstrukturierung mit wiederverwendbaren Paketen
+- [x] Cargo-Workspace mit wiederverwendbaren Rust-Crates und Web-SDK-Paketen
+- [x] Rust-Editor für Desktop und Web
 - [x] CLI-Tool (`op`) für Terminal-Steuerung
-- [x] Integriertes KI-Agenten-SDK mit Multi-Anbieter-Unterstützung
+- [x] Integrierte Rust-Agenten-Laufzeit mit Multi-Anbieter-Unterstützung
 - [x] i18n — 15 Sprachen
+- [x] Wasm-gestützte Viewer-SDKs für JavaScript, React und Vue
+- [x] Style Guides mit tag-basierter Zuordnung und MCP-Tools
+- [x] Gleichzeitige Agent Teams mit Delegation und Canvas-Indikatoren
 - [x] Git-Integration (Klonen, Branches, Push/Pull, Ordnermodus-Dreiwege-Merge)
-- [x] Canvas-Rasterexport (PNG / JPEG / WEBP / PDF)
+- [x] Canvas-Export (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] Kollaboratives Bearbeiten
 - [ ] Plugin-System
 

@@ -400,12 +400,16 @@ cd packages && bun run bump <version>             # Sync SDK package.json versio
 - [x] Figma `.fig` 가져오기
 - [x] 불리언 연산 (합치기, 빼기, 교차)
 - [x] 멀티 모델 역량 프로파일
-- [x] 재사용 가능한 패키지를 포함한 모노레포 구조 변경
+- [x] 재사용 가능한 Rust crate 및 Web SDK 패키지를 포함한 Cargo workspace
+- [x] 데스크톱 및 Web용 Rust 에디터
 - [x] CLI 도구 (`op`) 터미널 제어
-- [x] 내장 AI 에이전트 SDK (멀티 제공자 지원)
+- [x] 내장 Rust Agent Runtime (멀티 제공자 지원)
 - [x] i18n — 15개 언어
+- [x] JavaScript, React 및 Vue용 wasm 기반 Viewer SDK
+- [x] 태그 기반 매칭 및 MCP 도구를 제공하는 Style Guides
+- [x] 위임 및 캔버스 표시기를 제공하는 Concurrent Agent Teams
 - [x] Git 통합 (클론, 브랜치, 푸시/풀, 폴더 모드 3방향 병합)
-- [x] 캔버스 래스터 내보내기 (PNG / JPEG / WEBP / PDF)
+- [x] 캔버스 내보내기 (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] 공동 편집
 - [ ] 플러그인 시스템
 

@@ -400,12 +400,16 @@ Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitekt
 - [x] Impor Figma `.fig`
 - [x] Operasi boolean (gabung, kurangi, potong)
 - [x] Profil kemampuan multi-model
-- [x] Restrukturisasi monorepo dengan paket yang dapat digunakan ulang
+- [x] Workspace Cargo dengan crate Rust dan paket SDK web yang dapat digunakan ulang
+- [x] Editor Rust untuk desktop dan web
 - [x] Alat CLI (`op`) kontrol terminal
-- [x] SDK agen AI bawaan dengan dukungan multi-penyedia
+- [x] Runtime agen Rust bawaan dengan dukungan multi-penyedia
 - [x] i18n — 15 bahasa
+- [x] SDK viewer berbasis wasm untuk JavaScript, React, dan Vue
+- [x] Style Guides dengan pencocokan berbasis tag dan alat MCP
+- [x] Agent Teams serentak dengan delegasi dan indikator kanvas
 - [x] Integrasi Git (clone, branch, push/pull, merge tiga arah mode folder)
-- [x] Ekspor raster kanvas (PNG / JPEG / WEBP / PDF)
+- [x] Ekspor kanvas (SVG / PNG / JPEG / WEBP / PDF)
 - [ ] Pengeditan kolaboratif
 - [ ] Sistem plugin
 
