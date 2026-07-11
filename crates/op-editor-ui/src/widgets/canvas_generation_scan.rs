@@ -59,12 +59,22 @@ pub(super) fn generating_descendant_ids(
 }
 
 fn collect_descendants(nodes: &[SceneNode], root_area: f32, ids: &mut HashSet<String>) {
+    // Work-order gate: within each container only the FIRST empty shell
+    // (document order) is "on deck" and washes; later empty siblings wait
+    // their turn. Pencil never lights a section that work has not reached
+    // — a right-column skeleton glowing while the sidebar is still being
+    // output read as noise (user report, 2026-07-12).
+    let mut deck_taken = false;
     for node in nodes {
-        let b = node.aggregate_bounds();
-        let dominant_empty_region = node.kind == NodeKind::Frame
-            && node.children.is_empty()
-            && (b.size.x * b.size.y) / root_area > MAX_PLACEHOLDER_ROOT_FRACTION;
-        if !dominant_empty_region {
+        let empty_frame = node.kind == NodeKind::Frame && node.children.is_empty();
+        if empty_frame {
+            let b = node.aggregate_bounds();
+            let dominant = (b.size.x * b.size.y) / root_area > MAX_PLACEHOLDER_ROOT_FRACTION;
+            if !dominant && !deck_taken {
+                ids.insert(node.id.clone());
+            }
+            deck_taken = true;
+        } else {
             ids.insert(node.id.clone());
         }
         collect_descendants(&node.children, root_area, ids);
