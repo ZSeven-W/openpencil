@@ -46,22 +46,57 @@ const FALLBACK_COLOR: Color = Color {
 /// Pencil-silhouette pointer, TIP at the origin pointing up-left, body
 /// extending down-right at 45°, in screen px (zoom-independent). The
 /// brand cursor: the working agent literally draws with a pencil —
-/// agent-colour body, white outline, white sharpened tip wedge (see
+/// agent-colour body, white outline, white rounded tip wedge (see
 /// `PENCIL_TIP_POINTS`). Anatomy mirrors Pencil's multiplayer cursor
 /// (solid tinted pointer + name pill) without copying its arrow.
-const PENCIL_BODY_POINTS: [(f32, f32); 5] = [
-    (0.0, 0.0),   // graphite tip (hotspot)
-    (8.1, 2.1),   // right flank of the sharpened collar
-    (21.1, 15.3), // body end, right corner
-    (15.3, 21.1), // body end, left corner (flat eraser butt)
-    (2.1, 8.1),   // left flank of the sharpened collar
+///
+/// ROUNDED variant (user-picked "B", 2026-07-12): every corner of the
+/// straight-edged silhouette is a quadratic arc — round shoulders at the
+/// eraser butt, a curved collar, a soft tip wedge. The arcs are baked
+/// as dense polygon samples so the existing polygon painters render
+/// them smoothly with no new backend primitive.
+const PENCIL_BODY_POINTS: [(f32, f32); 19] = [
+    (0.00, 0.00), // graphite tip (hotspot)
+    (7.60, 2.00),
+    (8.11, 2.18),
+    (8.58, 2.44),
+    (9.00, 2.80),
+    (20.00, 13.80),
+    (20.60, 14.63),
+    (20.80, 15.50),
+    (20.60, 16.43),
+    (20.00, 17.40),
+    (17.40, 20.00),
+    (16.43, 20.60),
+    (15.50, 20.80),
+    (14.62, 20.60),
+    (13.80, 20.00),
+    (2.80, 9.00),
+    (2.44, 8.58),
+    (2.18, 8.11),
+    (2.00, 7.60),
 ];
 
-/// White wedge over the tip — the sharpened-graphite highlight.
-const PENCIL_TIP_POINTS: [(f32, f32); 3] = [(0.0, 0.0), (4.1, 1.1), (1.1, 4.1)];
+/// White wedge over the tip — the sharpened-graphite highlight, with a
+/// curved base matching the rounded collar.
+const PENCIL_TIP_POINTS: [(f32, f32); 6] = [
+    (0.00, 0.00),
+    (4.40, 1.20),
+    (3.53, 1.92),
+    (2.70, 2.70),
+    (1.92, 3.53),
+    (1.20, 4.40),
+];
 
-/// Collar seam between the sharpened cone and the painted body.
-const PENCIL_COLLAR: ((f32, f32), (f32, f32)) = ((2.1, 8.1), (8.1, 2.1));
+/// Collar seam between the sharpened cone and the painted body — a soft
+/// arc sampled as a short polyline.
+const PENCIL_COLLAR_POINTS: [(f32, f32); 5] = [
+    (2.00, 7.60),
+    (3.48, 6.12),
+    (4.90, 4.70),
+    (6.27, 3.32),
+    (7.60, 2.00),
+];
 
 /// A scheduled placement the cursor must reach: one generated node's
 /// reveal start, at that node's centre, plus the node's screen rect for
@@ -441,13 +476,15 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64) {
         &at(&PENCIL_TIP_POINTS),
         Color::WHITE.with_alpha(0.95 * sprite.alpha),
     );
-    let (c0, c1) = PENCIL_COLLAR;
-    cx.backend.stroke_line(
-        Point2D::new(sprite.pos.x + c0.0, sprite.pos.y + c0.1),
-        Point2D::new(sprite.pos.x + c1.0, sprite.pos.y + c1.1),
-        Color::WHITE.with_alpha(0.8 * sprite.alpha),
-        1.2,
-    );
+    let collar = at(&PENCIL_COLLAR_POINTS);
+    for seam in collar.windows(2) {
+        cx.backend.stroke_line(
+            seam[0],
+            seam[1],
+            Color::WHITE.with_alpha(0.8 * sprite.alpha),
+            1.2,
+        );
+    }
     if let Some(name) = &sprite.name {
         paint_name_pill(cx, sprite, name);
     }
