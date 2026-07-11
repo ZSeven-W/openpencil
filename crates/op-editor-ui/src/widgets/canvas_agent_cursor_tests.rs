@@ -602,7 +602,7 @@ mod paint_tests {
 
 mod scan_gate_tests {
     use crate::layout_scene::{NodeKind, SceneNode};
-    use crate::widgets::canvas_generation_scan::generating_descendant_ids;
+    use crate::widgets::canvas_generation_scan::generating_paint_sets;
     use crate::Rect;
     use op_editor_core::agent_indicators::AgentIndicators;
 
@@ -634,7 +634,8 @@ mod scan_gate_tests {
                 name: "Kiki".into(),
             },
         );
-        let ids = generating_descendant_ids(&roots, Some(&ind)).expect("active run");
+        let sets = generating_paint_sets(&roots, Some(&ind)).expect("active run");
+        let ids = &sets.scan;
         assert!(
             !ids.contains("main"),
             "the dominant empty region stays plain background"
@@ -662,7 +663,8 @@ mod scan_gate_tests {
         let mut root2 = SceneNode::leaf("root", NodeKind::Frame);
         root2.bounds = Rect::xywh(0.0, 0.0, 1440.0, 900.0);
         root2.children = vec![filled_header, sidebar2, main2];
-        let ids = generating_descendant_ids(&[root2], Some(&ind)).expect("active run");
+        let sets = generating_paint_sets(&[root2], Some(&ind)).expect("active run");
+        let ids = &sets.scan;
         assert!(
             ids.contains("main"),
             "the main column washes once it is the first empty shell"
@@ -692,11 +694,20 @@ mod scan_gate_tests {
                 name: "Kiki".into(),
             },
         );
-        let ids = generating_descendant_ids(&roots, Some(&ind)).expect("active run");
+        let sets = generating_paint_sets(&roots, Some(&ind)).expect("active run");
+        let ids = &sets.scan;
         assert!(ids.contains("shell-a"), "the on-deck shell scans");
         assert!(
             !ids.contains("shell-b"),
             "a queued later shell stays plain until its turn"
+        );
+        assert!(
+            sets.suppressed.contains("shell-b"),
+            "the queued shell paints NOTHING (layout slot only)"
+        );
+        assert!(
+            !sets.suppressed.contains("shell-a"),
+            "the on-deck shell is visible"
         );
     }
 }

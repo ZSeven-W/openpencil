@@ -35,42 +35,56 @@ pub(super) fn is_placeholder_section(node: &SceneNode) -> bool {
     node.kind == NodeKind::Frame && node.children.is_empty()
 }
 
-pub(super) fn generating_descendant_ids(
-    roots: &[SceneNode],
-    indicators: Option<&AgentIndicators>,
-) -> Option<HashSet<String>> {
-    let indicators = indicators.filter(|value| value.run_active && !value.frames.is_empty())?;
-    let mut ids = HashSet::new();
-    for root in roots {
-        if indicators.frames.contains_key(&root.id) {
-            collect_descendants(&root.children, &mut ids);
-        }
-    }
-    Some(ids)
+/// Scan-eligible ids + QUEUED shells to suppress entirely.
+pub(super) struct GenerationPaintSets {
+    /// Nodes allowed to paint the placeholder wash (the on-deck shells and
+    /// all worked content).
+    pub scan: HashSet<String>,
+    /// Empty shells whose turn has NOT come: they keep their layout slot
+    /// but paint NOTHING — Pencil shows plain canvas where work has not
+    /// reached, not a stack of dark author-filled slabs (user report
+    /// 2026-07-12: "下面的黑块是什么？先隐藏？").
+    pub suppressed: HashSet<String>,
 }
 
-fn collect_descendants(nodes: &[SceneNode], ids: &mut HashSet<String>) {
+pub(super) fn generating_paint_sets(
+    roots: &[SceneNode],
+    indicators: Option<&AgentIndicators>,
+) -> Option<GenerationPaintSets> {
+    let indicators = indicators.filter(|value| value.run_active && !value.frames.is_empty())?;
+    let mut sets = GenerationPaintSets {
+        scan: HashSet::new(),
+        suppressed: HashSet::new(),
+    };
+    for root in roots {
+        if indicators.frames.contains_key(&root.id) {
+            collect_descendants(&root.children, &mut sets);
+        }
+    }
+    Some(sets)
+}
+
+fn collect_descendants(nodes: &[SceneNode], sets: &mut GenerationPaintSets) {
     // Work-order gate: within each container only the FIRST empty shell
     // (document order) is "on deck" and washes; later empty siblings wait
-    // their turn. Pencil never lights a section that work has not reached
-    // — a right-column skeleton glowing while the sidebar is still being
-    // output read as noise, and conversely the column MUST light up once
-    // the sidebar is done and it becomes the next target (both measured,
-    // user reports 2026-07-12). Work order alone expresses both; a
-    // size-based exclusion kept the dashboard's main column dark even
-    // while its own subtask was running.
+    // their turn INVISIBLY (layout slot kept, paint suppressed). Pencil
+    // never lights — or even shows — a section that work has not reached,
+    // and conversely a region must light up the moment it becomes the
+    // next target (all measured, user reports 2026-07-12).
     let mut deck_taken = false;
     for node in nodes {
         let empty_frame = node.kind == NodeKind::Frame && node.children.is_empty();
         if empty_frame {
             if !deck_taken {
-                ids.insert(node.id.clone());
+                sets.scan.insert(node.id.clone());
+            } else {
+                sets.suppressed.insert(node.id.clone());
             }
             deck_taken = true;
         } else {
-            ids.insert(node.id.clone());
+            sets.scan.insert(node.id.clone());
         }
-        collect_descendants(&node.children, ids);
+        collect_descendants(&node.children, sets);
     }
 }
 

@@ -7,9 +7,10 @@
 pub const AGENT_COLORS: [&str; 6] = [
     "#FF6B6B", // coral red
     "#4ECDC4", // teal
-    "#FFD93D", // golden yellow
-    "#6C5CE7", // purple
-    "#A8E6CF", // mint green
+    // Cobalt blue — replaced the golden yellow: the name pill renders its
+    // label in white, which was unreadable on yellow (user report).
+    "#5B8DEF", "#6C5CE7", // purple
+    "#51C878", // emerald - replaced pale mint for the same white-label reason
     "#FF8A5C", // warm orange
 ];
 
@@ -63,7 +64,7 @@ mod tests {
         assert_eq!(ids.len(), 3);
         assert_eq!(ids[0].color, "#FF6B6B");
         assert_eq!(ids[1].color, "#4ECDC4");
-        assert_eq!(ids[2].color, "#FFD93D");
+        assert_eq!(ids[2].color, "#5B8DEF");
         assert_ne!(ids[0].name, ids[1].name);
         assert_ne!(ids[1].name, ids[2].name);
     }
