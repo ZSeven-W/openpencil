@@ -247,17 +247,30 @@ pub(super) fn paint_image_node(
                 cx.backend.fill_rect(world_rect, fill);
             }
         }
-        // Missing / undecodable / still-fetching source — TS
-        // `drawImageFallback` parity: dashed border + a centred
-        // picture glyph so the node reads as "image placeholder",
-        // not a plain grey box. A remote source paints this while
-        // the host fetch is in flight, and keeps it permanently
-        // when the fetch fails (negative cache above).
-        const PLACEHOLDER: Color = Color {
-            r: 0.6,
-            g: 0.6,
-            b: 0.6,
-            a: 1.0,
+        // Missing / undecodable / still-fetching source — dashed border +
+        // a centred picture glyph so the node reads as "image placeholder",
+        // not a plain grey box. Also the terminal look for a FAILED image
+        // search (`placeholder://` sentinel src). Placeholder art adapts to
+        // the slot's own fill: a readable mid-grey on light slots, a lifted
+        // grey on dark ones — one fixed grey was invisible on dark designs.
+        let luminance = node
+            .fill
+            .map(|fill| 0.299 * fill.r + 0.587 * fill.g + 0.114 * fill.b)
+            .unwrap_or(0.9);
+        let placeholder = if luminance >= 0.5 {
+            Color {
+                r: 0.45,
+                g: 0.48,
+                b: 0.53,
+                a: 1.0,
+            }
+        } else {
+            Color {
+                r: 0.55,
+                g: 0.58,
+                b: 0.64,
+                a: 1.0,
+            }
         };
         // Honor the node's corner radius like the real-image path
         // below: clip the placeholder art into the rounded rect (the
@@ -267,8 +280,8 @@ pub(super) fn paint_image_node(
             cx.backend.save();
             cx.backend.clip_round_rect(world_rect, r);
         }
-        super::canvas_viewport::paint_dashed_rect(cx, world_rect, PLACEHOLDER, 1.0);
-        paint_picture_glyph(cx, world_rect, PLACEHOLDER);
+        super::canvas_viewport::paint_dashed_rect(cx, world_rect, placeholder, 1.0);
+        paint_picture_glyph(cx, world_rect, placeholder);
         if use_round {
             cx.backend.restore();
         }
