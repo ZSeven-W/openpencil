@@ -393,11 +393,27 @@ impl EditorState {
     /// Translate every node in the selection set by `(dx, dy)` doc
     /// px. Containers carry their subtree (child coords are parent-
     /// relative); an ancestor-already-in-set dedup stops descendants
-    /// shifting twice.
+    /// shifting twice. A child of an auto-layout (flex) parent is
+    /// engine-positioned; materializing x/y here flips it to
+    /// `Position::Absolute` in jian-core and detaches it from flex
+    /// flow, so such a node is skipped (a free drag of it is a no-op).
+    ///
+    /// Single recursive walk over `active_children` (Task 10):
+    /// previously this ran three full-tree walks (`is_flow_child_of_flex`
+    /// / `is_ancestor_in_set` / `find_node_mut`) PER selected id —
+    /// O(|selection| × nodes), near-quadratic on select-all. The editable
+    /// set is collected once into a `HashSet<&str>` and
+    /// [`walkers::translate_editable_subtree`] threads both skip
+    /// conditions down the recursion as it descends, so the whole tree
+    /// is visited exactly once regardless of selection size.
     pub fn translate_selected(&mut self, dx: f64, dy: f64) -> bool {
         if self.selection.set.is_empty() || (dx == 0.0 && dy == 0.0) {
             return false;
         }
+        // Owned, not borrowed from `self.selection` — the `HashSet<&str>`
+        // built below borrows these local `NodeId`s instead, so it can
+        // coexist with the `&mut self` borrow `active_children_mut()`
+        // needs.
         let editable: Vec<NodeId> = self
             .selection
             .set
@@ -408,25 +424,9 @@ impl EditorState {
         if editable.is_empty() {
             return false;
         }
+        let editable_set: HashSet<&str> = editable.iter().map(NodeId::as_str).collect();
         let children = self.active_children_mut();
-        let mut moved = false;
-        for target in &editable {
-            // A child of an auto-layout (flex) parent is engine-positioned;
-            // materializing x/y here flips it to Position::Absolute in
-            // jian-core and detaches it from flex flow. A free drag of
-            // such a node is a no-op (it cannot move independently of the
-            // layout engine). Checked before the ancestor dedup.
-            if walkers::is_flow_child_of_flex(children, target) {
-                continue;
-            }
-            if !walkers::is_ancestor_in_set(children, target, &editable) {
-                if let Some(node) = find_node_mut(children, target) {
-                    walkers::translate_subtree(node, dx, dy);
-                    moved = true;
-                }
-            }
-        }
-        moved
+        walkers::translate_editable_subtree(children, &editable_set, dx, dy, false, false)
     }
 
     // --- Tree ops ----------------------------------------------------

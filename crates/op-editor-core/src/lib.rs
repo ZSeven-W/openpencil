@@ -155,6 +155,8 @@ mod tests_geometry;
 mod tests_mutators;
 #[cfg(test)]
 mod tests_pages;
+#[cfg(test)]
+mod translate_equivalence_tests;
 
 pub use agent_settings::{
     AcpAgentConfig, AcpAgentConnectOutcome, AcpAgentConnectPhase, AcpAgentConnection,

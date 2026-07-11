@@ -433,6 +433,78 @@ pub fn is_ancestor_in_set(children: &[PenNode], target: &NodeId, set: &[NodeId])
     false
 }
 
+/// Single-pass replacement for the old `is_flow_child_of_flex` +
+/// `is_ancestor_in_set` + `find_node_mut` triple (one full-tree walk
+/// PER selected id). This descends the forest exactly once, carrying
+/// two contexts down the recursion instead of recomputing them from
+/// scratch for every id:
+///
+/// - `parent_is_flex` — whether the CURRENT node's immediate parent is
+///   an auto-layout (flex) container. Mirrors `is_flow_child_of_flex`,
+///   which only cares about the immediate parent, not any ancestor —
+///   so this is recomputed fresh (from the node just visited) at each
+///   recursion level, never accumulated.
+/// - `ancestor_in_set` — whether ANY proper ancestor's id is in
+///   `editable`. Mirrors `is_ancestor_in_set`'s top-down ancestor-chain
+///   search. Accumulates via OR as the recursion descends, and is
+///   evaluated BEFORE folding in the current node's own membership (a
+///   node is never its own ancestor).
+///
+/// A node translates iff its id is in `editable` AND neither guard
+/// applies — matching `translate_selected`'s per-id skip order (flex
+/// check first, then the ancestor dedup) exactly. `editable` already
+/// reflects the `is_editable` pre-filter (hidden / locked ids excluded
+/// by the caller), so this walk never re-checks visibility / lock
+/// state itself.
+///
+/// Recursion is gated on the IMMUTABLE [`PenNodeExt::children`] check
+/// first, only reaching for [`PenNodeExt::children_mut`] when that
+/// already reports `Some`. `children_mut` eagerly upgrades a
+/// container-capable node's `children: None` to `Some(vec![])`
+/// (`Option::get_or_insert_with`) — harmless for the few nodes
+/// `find_node_mut`'s per-id search happened to pass over in the old
+/// three-walk body, but this walk visits every node in the forest
+/// exactly once, so calling `children_mut` unconditionally here would
+/// silently materialize an empty `children` list on every leaf
+/// Rectangle/Frame in the document on every drag frame — bloating the
+/// in-memory doc and any subsequent `.op` serialization. A node with
+/// no children has nothing left to translate inside it either way, so
+/// skipping it is both cheaper and correct.
+pub fn translate_editable_subtree(
+    children: &mut [PenNode],
+    editable: &HashSet<&str>,
+    dx: f64,
+    dy: f64,
+    parent_is_flex: bool,
+    ancestor_in_set: bool,
+) -> bool {
+    let mut moved = false;
+    for child in children.iter_mut() {
+        let in_set = editable.contains(child.id_str());
+        if in_set && !parent_is_flex && !ancestor_in_set {
+            translate_subtree(child, dx, dy);
+            moved = true;
+        }
+        let child_is_flex = child.is_auto_layout_container();
+        let child_ancestor_in_set = ancestor_in_set || in_set;
+        if child.children().is_some() {
+            if let Some(grand) = child.children_mut() {
+                if translate_editable_subtree(
+                    grand,
+                    editable,
+                    dx,
+                    dy,
+                    child_is_flex,
+                    child_ancestor_in_set,
+                ) {
+                    moved = true;
+                }
+            }
+        }
+    }
+    moved
+}
+
 /// First duplicate id found in the forest, or `None` when all ids
 /// are unique.
 pub fn find_duplicate(children: &[PenNode], seen: &mut HashSet<String>) -> Option<NodeId> {
