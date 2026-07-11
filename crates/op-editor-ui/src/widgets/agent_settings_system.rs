@@ -23,11 +23,38 @@ const CARD_GAP: f32 = 12.0;
 pub enum SystemHit {
     ToggleAutoUpdate,
     ToggleExperimental,
+    /// Click on one of the pencil-cursor swatches.
+    SelectPencilCursor(op_editor_core::PencilCursorStyle),
     None,
 }
 
+/// Pencil-cursor picker card metrics.
+const CURSOR_CARD_H: f32 = 108.0;
+const CURSOR_SWATCH: f32 = 52.0;
+const CURSOR_SWATCH_GAP: f32 = 10.0;
+
 pub(super) fn content_height() -> f32 {
-    12.0 + TITLE_H + CARD_H + CARD_GAP + CARD_H + 24.0
+    12.0 + TITLE_H + CARD_H + CARD_GAP + CARD_H + CARD_GAP + CURSOR_CARD_H + 24.0
+}
+
+fn cursor_card_rect(content: Rect) -> Rect {
+    let prev = experimental_card_rect(content);
+    Rect {
+        origin: Point2D::new(content.origin.x, prev.origin.y + CARD_H + CARD_GAP),
+        size: Point2D::new(content.size.x, CURSOR_CARD_H),
+    }
+}
+
+/// Swatch rect for style index `i` inside the cursor card. Shared by
+/// paint + hit-test.
+fn cursor_swatch_rect(card: Rect, i: usize) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            card.origin.x + 16.0 + i as f32 * (CURSOR_SWATCH + CURSOR_SWATCH_GAP),
+            card.origin.y + 42.0,
+        ),
+        size: Point2D::new(CURSOR_SWATCH, CURSOR_SWATCH),
+    }
 }
 
 fn auto_update_card_rect(content: Rect) -> Rect {
@@ -77,6 +104,12 @@ pub fn hit_test(content: Rect, scrolled: Point2D) -> SystemHit {
     if switch_rect_for(experimental_card_rect(content)).contains(scrolled) {
         return SystemHit::ToggleExperimental;
     }
+    let cursor_card = cursor_card_rect(content);
+    for (i, style) in op_editor_core::PencilCursorStyle::ALL.iter().enumerate() {
+        if cursor_swatch_rect(cursor_card, i).contains(scrolled) {
+            return SystemHit::SelectPencilCursor(*style);
+        }
+    }
     SystemHit::None
 }
 
@@ -120,6 +153,55 @@ pub(super) fn paint_system_tab(
         "settings.experimentalDesc",
         settings.experimental_features_enabled,
     );
+    paint_cursor_card(cx, theme, ui, cursor_card_rect(content));
+}
+
+/// The pencil-cursor picker: a labelled card with one swatch per style,
+/// each drawing its real silhouette at half scale; the active style gets
+/// an accent ring.
+fn paint_cursor_card(cx: &mut PaintCx<'_>, theme: &Theme, ui: &EditorUiState, card: Rect) {
+    Card {
+        fill: Some(theme.muted),
+        border: Some(theme.border),
+        radius: 10.0,
+    }
+    .paint(cx.backend, card, &tokens_from_theme(theme));
+
+    let label = TextLayout::single_run(
+        "Pencil cursor",
+        "system-ui",
+        13.0,
+        (theme.foreground).to_jian(),
+        Point2D::new(0.0, 0.0),
+    );
+    cx.backend.draw_text(
+        &label,
+        Point2D::new(card.origin.x + 16.0, card.origin.y + 24.0),
+    );
+
+    for (i, style) in op_editor_core::PencilCursorStyle::ALL.iter().enumerate() {
+        let swatch = cursor_swatch_rect(card, i);
+        let active = ui.pencil_cursor_style == *style;
+        cx.backend.fill_round_rect(
+            swatch,
+            8.0,
+            if active {
+                theme.row_selected_primary
+            } else {
+                theme.button_hover
+            },
+        );
+        if active {
+            cx.backend
+                .stroke_round_rect(swatch, 8.0, theme.primary, 1.5);
+        }
+        crate::widgets::canvas_agent_cursor::paint_cursor_swatch(
+            cx,
+            *style,
+            Point2D::new(swatch.origin.x + 15.0, swatch.origin.y + 13.0),
+            theme.primary,
+        );
+    }
 }
 
 /// Paint one labelled toggle card: rounded background, title row, muted

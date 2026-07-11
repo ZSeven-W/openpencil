@@ -533,7 +533,15 @@ mod paint_tests {
         let mut cx = PaintCx {
             backend: &mut backend,
         };
-        paint_agent_cursors(&mut cx, &roots, Point2D::new(0.0, 0.0), 1.0, 1_050, &ind);
+        paint_agent_cursors(
+            &mut cx,
+            &roots,
+            Point2D::new(0.0, 0.0),
+            1.0,
+            1_050,
+            &ind,
+            Default::default(),
+        );
         assert_eq!(
             backend.polygons.len(),
             3,
@@ -572,7 +580,15 @@ mod paint_tests {
         let mut cx = PaintCx {
             backend: &mut backend,
         };
-        paint_agent_cursors(&mut cx, &roots, Point2D::ZERO, 1.0, 1_050, &ind);
+        paint_agent_cursors(
+            &mut cx,
+            &roots,
+            Point2D::ZERO,
+            1.0,
+            1_050,
+            &ind,
+            Default::default(),
+        );
         assert_eq!(backend.polygons.len(), 3, "fallback pencil still paints");
         let (_, color) = &backend.polygons[1];
         assert!(
@@ -595,7 +611,15 @@ mod paint_tests {
         let mut cx = PaintCx {
             backend: &mut backend,
         };
-        paint_agent_cursors(&mut cx, &roots, Point2D::ZERO, 1.0, 1_000, &ind);
+        paint_agent_cursors(
+            &mut cx,
+            &roots,
+            Point2D::ZERO,
+            1.0,
+            1_000,
+            &ind,
+            Default::default(),
+        );
         assert!(
             backend.polygons.is_empty()
                 && backend.round_fills.is_empty()

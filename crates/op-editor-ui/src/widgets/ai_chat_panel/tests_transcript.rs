@@ -14,6 +14,7 @@ fn hit_test_resolves_individual_tool_card_header_toggle() {
     message.tool_calls.push(op_editor_core::ChatToolCall {
         name: "snapshot_layout".into(),
         args: r#"{"args":{"pageId":"page-1"}}"#.into(),
+        content_offset: None,
     });
     s.chat.messages.push(message);
 

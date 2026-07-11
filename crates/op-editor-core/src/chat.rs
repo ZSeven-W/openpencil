@@ -163,6 +163,11 @@ pub enum ChatRole {
 pub struct ChatToolCall {
     pub name: String,
     pub args: String,
+    /// Byte offset into the owning message's `content` at the moment this
+    /// call landed — the transcript uses it to interleave narration prose
+    /// with per-call verb chips in chronological order (Pencil's reading
+    /// flow). `None` on plain chat turns keeps the aggregated panel.
+    pub content_offset: Option<u32>,
 }
 
 /// One image carried inside a chat message — a copy of an image
@@ -1217,6 +1222,7 @@ mod tests {
         msg.tool_calls.push(ChatToolCall {
             name: "snapshot_layout".into(),
             args: "{}".into(),
+            content_offset: None,
         });
         chat.messages.push(msg);
 

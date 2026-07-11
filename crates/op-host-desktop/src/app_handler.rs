@@ -158,6 +158,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // time) so the user isn't greeted by five "Connect" buttons on
         // every launch.
         self.restore_remembered_connections();
+        if let Some(style) = crate::ui_prefs::load_pencil_cursor() {
+            self.host.editor_state_mut().editor_ui.pencil_cursor_style = style;
+        }
 
         if let Some(window) = self.window.as_ref() {
             let size = window.inner_size();
@@ -708,6 +711,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 // lands (or the turn dies with nothing produced).
                 let session_running = self.current_chat.is_some() || self.current_design.is_some();
                 self.persist_connection_changes();
+                self.persist_ui_pref_changes();
                 if crate::chat_session::reconcile_starter_ghost(
                     self.host.editor_state_mut(),
                     session_running,

@@ -34,8 +34,189 @@ const ENTRY_OFFSET_Y: f32 = -20.0;
 /// them. The threshold is in document-space square pixels.
 const MIN_STANDALONE_WAYPOINT_AREA: f32 = 2_000.0;
 
+const CLASSIC_BODY: [(f32, f32); 5] = [
+    (0.00, 0.00),
+    (8.10, 2.10),
+    (21.10, 15.30),
+    (15.30, 21.10),
+    (2.10, 8.10),
+];
+
+const CLASSIC_TIP: [(f32, f32); 3] = [(0.00, 0.00), (4.10, 1.10), (1.10, 4.10)];
+
+const CLASSIC_COLLAR: [(f32, f32); 2] = [(2.10, 8.10), (8.10, 2.10)];
+
+const CHUBBY_BODY: [(f32, f32); 21] = [
+    (0.00, 0.00),
+    (9.50, 3.20),
+    (10.07, 3.44),
+    (10.57, 3.78),
+    (11.00, 4.20),
+    (18.40, 11.60),
+    (19.10, 12.50),
+    (19.46, 13.46),
+    (19.46, 14.46),
+    (19.10, 15.50),
+    (18.40, 16.60),
+    (16.60, 18.40),
+    (15.50, 19.10),
+    (14.46, 19.46),
+    (13.46, 19.46),
+    (12.50, 19.10),
+    (11.60, 18.40),
+    (4.20, 11.00),
+    (3.78, 10.57),
+    (3.44, 10.07),
+    (3.20, 9.50),
+];
+
+const CHUBBY_TIP: [(f32, f32); 6] = [
+    (0.00, 0.00),
+    (5.20, 1.70),
+    (4.16, 2.41),
+    (3.22, 3.23),
+    (2.41, 4.16),
+    (1.70, 5.20),
+];
+
+const CHUBBY_COLLAR: [(f32, f32); 3] = [(3.20, 9.50), (6.30, 6.30), (9.50, 3.20)];
+
+const CHUBBY_ERASER: [(f32, f32); 13] = [
+    (15.20, 15.20),
+    (18.40, 11.60),
+    (19.10, 12.50),
+    (19.46, 13.46),
+    (19.46, 14.46),
+    (19.10, 15.50),
+    (18.40, 16.60),
+    (16.60, 18.40),
+    (15.50, 19.10),
+    (14.46, 19.46),
+    (13.46, 19.46),
+    (12.50, 19.10),
+    (11.60, 18.40),
+];
+
+const CRAYON_BODY: [(f32, f32); 20] = [
+    (0.00, 0.00),
+    (2.01, -0.01),
+    (3.72, 0.28),
+    (5.16, 0.84),
+    (6.30, 1.70),
+    (19.00, 14.40),
+    (19.68, 15.31),
+    (19.90, 16.23),
+    (19.68, 17.16),
+    (19.00, 18.10),
+    (18.10, 19.00),
+    (17.16, 19.68),
+    (16.23, 19.90),
+    (15.31, 19.68),
+    (14.40, 19.00),
+    (1.70, 6.30),
+    (0.84, 5.16),
+    (0.28, 3.72),
+    (-0.01, 2.01),
+    (0.00, 0.00),
+];
+
+const CRAYON_TIP: [(f32, f32); 11] = [
+    (0.00, 0.00),
+    (2.07, 0.04),
+    (3.73, 0.44),
+    (5.00, 1.20),
+    (3.86, 1.74),
+    (2.85, 2.55),
+    (1.96, 3.64),
+    (1.20, 5.00),
+    (0.44, 3.73),
+    (0.04, 2.07),
+    (0.00, 0.00),
+];
+
+const MARKER_BODY: [(f32, f32); 18] = [
+    (4.60, 0.90),
+    (19.60, 13.40),
+    (20.40, 14.33),
+    (20.70, 15.30),
+    (20.50, 16.32),
+    (19.80, 17.40),
+    (17.40, 19.80),
+    (16.32, 20.50),
+    (15.30, 20.70),
+    (14.32, 20.40),
+    (13.40, 19.60),
+    (0.90, 4.60),
+    (0.50, 3.80),
+    (0.50, 3.00),
+    (0.90, 2.20),
+    (2.18, 1.00),
+    (3.40, 0.00),
+    (4.60, 0.90),
+];
+
+/// One selectable cursor look: baked point sets plus its two style quirks.
+pub(crate) struct Silhouette {
+    body: &'static [(f32, f32)],
+    tip: &'static [(f32, f32)],
+    collar: &'static [(f32, f32)],
+    /// Chubby only: the pink eraser butt overlay.
+    eraser: Option<&'static [(f32, f32)]>,
+    /// Marker only: the tip is a white DOT, not a wedge.
+    round_tip_dot: Option<(f32, f32, f32)>,
+}
+
+pub(crate) fn silhouette_for(style: op_editor_core::PencilCursorStyle) -> Silhouette {
+    use op_editor_core::PencilCursorStyle as S;
+    match style {
+        S::Classic => Silhouette {
+            body: &CLASSIC_BODY,
+            tip: &CLASSIC_TIP,
+            collar: &CLASSIC_COLLAR,
+            eraser: None,
+            round_tip_dot: None,
+        },
+        S::Rounded => Silhouette {
+            body: &ROUNDED_BODY,
+            tip: &ROUNDED_TIP,
+            collar: &ROUNDED_COLLAR,
+            eraser: None,
+            round_tip_dot: None,
+        },
+        S::Chubby => Silhouette {
+            body: &CHUBBY_BODY,
+            tip: &CHUBBY_TIP,
+            collar: &CHUBBY_COLLAR,
+            eraser: Some(&CHUBBY_ERASER),
+            round_tip_dot: None,
+        },
+        S::Crayon => Silhouette {
+            body: &CRAYON_BODY,
+            tip: &CRAYON_TIP,
+            collar: &[],
+            eraser: None,
+            round_tip_dot: None,
+        },
+        S::Marker => Silhouette {
+            body: &MARKER_BODY,
+            tip: &[],
+            collar: &[],
+            eraser: None,
+            round_tip_dot: Some((2.7, 2.7, 2.1)),
+        },
+    }
+}
+
 /// Fallback for reveals not owned by any tagged agent (the same red the
 /// retired dashed-reveal border used as its untagged default).
+/// Chubby variant's eraser butt.
+const PENCIL_ERASER_PINK: Color = Color {
+    r: 1.0,
+    g: 0.62,
+    b: 0.70,
+    a: 1.0,
+};
+
 const FALLBACK_COLOR: Color = Color {
     r: 1.0,
     g: 0.419,
@@ -55,7 +236,7 @@ const FALLBACK_COLOR: Color = Color {
 /// eraser butt, a curved collar, a soft tip wedge. The arcs are baked
 /// as dense polygon samples so the existing polygon painters render
 /// them smoothly with no new backend primitive.
-const PENCIL_BODY_POINTS: [(f32, f32); 19] = [
+const ROUNDED_BODY: [(f32, f32); 19] = [
     (0.00, 0.00), // graphite tip (hotspot)
     (7.60, 2.00),
     (8.11, 2.18),
@@ -79,7 +260,7 @@ const PENCIL_BODY_POINTS: [(f32, f32); 19] = [
 
 /// White wedge over the tip — the sharpened-graphite highlight, with a
 /// curved base matching the rounded collar.
-const PENCIL_TIP_POINTS: [(f32, f32); 6] = [
+const ROUNDED_TIP: [(f32, f32); 6] = [
     (0.00, 0.00),
     (4.40, 1.20),
     (3.53, 1.92),
@@ -90,7 +271,7 @@ const PENCIL_TIP_POINTS: [(f32, f32); 6] = [
 
 /// Collar seam between the sharpened cone and the painted body — a soft
 /// arc sampled as a short polyline.
-const PENCIL_COLLAR_POINTS: [(f32, f32); 5] = [
+const ROUNDED_COLLAR: [(f32, f32); 5] = [
     (2.00, 7.60),
     (3.48, 6.12),
     (4.90, 4.70),
@@ -425,16 +606,51 @@ pub(crate) fn paint_agent_cursors(
     zoom: f32,
     now_ms: u64,
     indicators: &AgentIndicators,
+    style: op_editor_core::PencilCursorStyle,
 ) {
+    let silhouette = silhouette_for(style);
     for sprite in cursor_sprites(roots, indicators, viewport_origin, zoom, now_ms) {
-        paint_sprite(cx, &sprite, now_ms);
+        paint_sprite(cx, &sprite, now_ms, &silhouette);
     }
 }
 
 /// Slow breathing cycle for the current-element border.
 const BREATH_PERIOD_MS: u64 = 1_800;
 
-fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64) {
+/// Draw one style's silhouette at settings-swatch scale (unanimated,
+/// theme-primary body) — the Settings > System picker's preview.
+pub(crate) fn paint_cursor_swatch(
+    cx: &mut PaintCx<'_>,
+    style: op_editor_core::PencilCursorStyle,
+    origin: Point2D,
+    color: Color,
+) {
+    let silhouette = silhouette_for(style);
+    let at = |points: &[(f32, f32)]| -> Vec<Point2D> {
+        points
+            .iter()
+            .map(|(dx, dy)| Point2D::new(origin.x + dx, origin.y + dy))
+            .collect()
+    };
+    cx.backend.fill_polygon(&at(silhouette.body), color);
+    cx.backend
+        .stroke_polygon(&at(silhouette.body), Color::WHITE.with_alpha(0.9), 1.2);
+    if let Some(eraser) = silhouette.eraser {
+        cx.backend.fill_polygon(&at(eraser), PENCIL_ERASER_PINK);
+    }
+    if let Some((dx, dy, r)) = silhouette.round_tip_dot {
+        cx.backend.fill_oval(
+            Rect::xywh(origin.x + dx - r, origin.y + dy - r, r * 2.0, r * 2.0),
+            Color::WHITE.with_alpha(0.95),
+        );
+    }
+    if !silhouette.tip.is_empty() {
+        cx.backend
+            .fill_polygon(&at(silhouette.tip), Color::WHITE.with_alpha(0.95));
+    }
+}
+
+fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhouette: &Silhouette) {
     if sprite.alpha <= 0.0 {
         return;
     }
@@ -459,7 +675,7 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64) {
             .map(|(dx, dy)| Point2D::new(sprite.pos.x + dx, sprite.pos.y + dy))
             .collect()
     };
-    let body = at(&PENCIL_BODY_POINTS);
+    let body = at(silhouette.body);
     // Soft contact shadow first so the pencil lifts off the canvas.
     let shadow: Vec<Point2D> = body
         .iter()
@@ -471,12 +687,37 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64) {
         .fill_polygon(&body, sprite.color.with_alpha(sprite.alpha));
     cx.backend
         .stroke_polygon(&body, Color::WHITE.with_alpha(0.9 * sprite.alpha), 1.5);
-    // Sharpened tip: white graphite wedge + collar seam.
-    cx.backend.fill_polygon(
-        &at(&PENCIL_TIP_POINTS),
-        Color::WHITE.with_alpha(0.95 * sprite.alpha),
-    );
-    let collar = at(&PENCIL_COLLAR_POINTS);
+    // Style quirks first (they paint OVER the body):
+    // Chubby's pink eraser butt, Marker's white nib dot.
+    if let Some(eraser) = silhouette.eraser {
+        cx.backend
+            .fill_polygon(&at(eraser), PENCIL_ERASER_PINK.with_alpha(sprite.alpha));
+        cx.backend.stroke_polygon(
+            &at(eraser),
+            Color::WHITE.with_alpha(0.9 * sprite.alpha),
+            1.2,
+        );
+    }
+    if let Some((dx, dy, r)) = silhouette.round_tip_dot {
+        cx.backend.fill_oval(
+            Rect::xywh(
+                sprite.pos.x + dx - r,
+                sprite.pos.y + dy - r,
+                r * 2.0,
+                r * 2.0,
+            ),
+            Color::WHITE.with_alpha(0.95 * sprite.alpha),
+        );
+    }
+    // Sharpened tip: white graphite wedge + collar seam (skipped by
+    // styles whose point sets are empty).
+    if !silhouette.tip.is_empty() {
+        cx.backend.fill_polygon(
+            &at(silhouette.tip),
+            Color::WHITE.with_alpha(0.95 * sprite.alpha),
+        );
+    }
+    let collar = at(silhouette.collar);
     for seam in collar.windows(2) {
         cx.backend.stroke_line(
             seam[0],

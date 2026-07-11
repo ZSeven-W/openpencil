@@ -135,23 +135,33 @@ pub fn apply_poll_to_message(message: &mut ChatMessage, poll: &ChatPoll) {
 /// free-text `text` goes to the collapsed thinking area instead of the visible
 /// content — the tool-call checklist carries the progress, so the raw chatter
 /// is noise. Errors ALWAYS surface in `content` regardless.
-pub fn apply_poll_to_message_with(
-    message: &mut ChatMessage,
-    poll: &ChatPoll,
-    fold_narration_into_thinking: bool,
-) {
+pub fn apply_poll_to_message_with(message: &mut ChatMessage, poll: &ChatPoll, design_loop: bool) {
     if let Some(err) = &poll.error {
         message.content = format!("error: {err}");
-    } else if fold_narration_into_thinking {
-        message.thinking.push_str(&poll.text);
     } else {
+        // Design-loop narration used to fold into the collapsed thinking
+        // area — the panel then showed nothing but "Thinking / N tool
+        // calls" while Pencil streams the designer's running commentary
+        // as first-class prose (user report 2026-07-12). Narration stays
+        // in `content` for every turn now.
         message.content.push_str(&poll.text);
     }
     message.thinking.push_str(&poll.thinking);
     if poll.tool_calls.iter().any(tool_call_defaults_open) {
         message.tools_collapsed = false;
     }
-    message.tool_calls.extend(poll.tool_calls.iter().cloned());
+    // Stamp where each call landed in the narration so the transcript can
+    // interleave prose and per-call verb chips chronologically. Only
+    // design-loop turns interleave; plain chat keeps the aggregated panel.
+    let offset = message.content.len() as u32;
+    message
+        .tool_calls
+        .extend(poll.tool_calls.iter().cloned().map(|mut call| {
+            if design_loop {
+                call.content_offset = Some(offset);
+            }
+            call
+        }));
     if poll.finished {
         message.streaming = false;
     }
@@ -311,7 +321,11 @@ impl ChatSession {
                 Ok(ChatDelta::TextDelta(s)) => text.push_str(&s),
                 Ok(ChatDelta::Thinking(s)) => thinking.push_str(&s),
                 Ok(ChatDelta::ToolUse { name, args }) => {
-                    tool_calls.push(ChatToolCall { name, args });
+                    tool_calls.push(ChatToolCall {
+                        name,
+                        args,
+                        content_offset: None,
+                    });
                 }
                 Ok(ChatDelta::Error(msg)) => {
                     if error.is_none() {

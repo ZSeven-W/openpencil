@@ -62,6 +62,7 @@ mod single_instance;
 mod sub_agent_session;
 mod tcc_selftest;
 mod theme_preset_host;
+mod ui_prefs;
 mod update_check;
 mod window_resize;
 mod window_state;
@@ -229,6 +230,8 @@ struct DesktopApp {
     provider_connect_job: Option<provider_probe_host::ProviderConnectJob>,
     /// Startup reconnect replay queue (see `agent_connect_store`).
     provider_reconnect_queue: Vec<op_editor_core::AgentProvider>,
+    /// Last persisted pencil-cursor style (see `ui_prefs`).
+    last_saved_pencil_cursor: Option<op_editor_core::PencilCursorStyle>,
     /// Last persisted `connected` flags — any change (Connect landing,
     /// Disconnect press in the widget layer) writes through to the store.
     last_saved_connections: Option<[bool; 5]>,
@@ -412,6 +415,7 @@ impl DesktopApp {
             provider_connect_job: None,
             provider_reconnect_queue: Vec::new(),
             last_saved_connections: None,
+            last_saved_pencil_cursor: None,
             acp_agent_connect_job: None,
             initial_file,
             app_menu: None,

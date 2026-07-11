@@ -828,6 +828,54 @@ pub enum PreviewDeviceKind {
 /// The *editor-state* subset of `UiState` (focused property field +
 /// drafts, pen-tool path, color picker, text-edit drafts, variable
 /// caches, active page index) lives on [`crate::ui_draft::UiDraftState`]
+/// Pencil-cursor silhouette variants (Settings > System > Pencil cursor).
+/// `Rounded` is the shipped default (user-picked, 2026-07-12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PencilCursorStyle {
+    Classic,
+    #[default]
+    Rounded,
+    Chubby,
+    Crayon,
+    Marker,
+}
+
+impl PencilCursorStyle {
+    pub const ALL: [PencilCursorStyle; 5] = [
+        PencilCursorStyle::Classic,
+        PencilCursorStyle::Rounded,
+        PencilCursorStyle::Chubby,
+        PencilCursorStyle::Crayon,
+        PencilCursorStyle::Marker,
+    ];
+
+    /// Stable id for persistence.
+    pub fn id(self) -> &'static str {
+        match self {
+            PencilCursorStyle::Classic => "classic",
+            PencilCursorStyle::Rounded => "rounded",
+            PencilCursorStyle::Chubby => "chubby",
+            PencilCursorStyle::Crayon => "crayon",
+            PencilCursorStyle::Marker => "marker",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|style| style.id() == id)
+    }
+
+    /// Display label for the settings row.
+    pub fn label(self) -> &'static str {
+        match self {
+            PencilCursorStyle::Classic => "Classic",
+            PencilCursorStyle::Rounded => "Rounded",
+            PencilCursorStyle::Chubby => "Chubby",
+            PencilCursorStyle::Crayon => "Crayon",
+            PencilCursorStyle::Marker => "Marker",
+        }
+    }
+}
+
 /// and is not duplicated here.
 #[derive(Debug, Clone)]
 pub struct EditorUiState {
@@ -1242,6 +1290,9 @@ pub struct EditorUiState {
     /// drag release. View-only transient state: never serialized,
     /// never part of the undo snapshot.
     pub active_guides: Vec<crate::align_guides::AlignmentGuide>,
+    /// Which pencil-cursor silhouette the generation overlay draws.
+    /// User-selectable in Settings > System; persisted across launches.
+    pub pencil_cursor_style: PencilCursorStyle,
     /// Ghost of the blank starter frame `(x, y, w, h)` in doc px. Set when a
     /// design prompt clears the pristine starter; the canvas keeps painting
     /// it until the generated design's sized root lands (or the turn ends),
@@ -1481,6 +1532,7 @@ impl Default for EditorUiState {
             last_canvas_click: None,
             last_variable_name_click: None,
             active_guides: Vec::new(),
+            pencil_cursor_style: PencilCursorStyle::default(),
             starter_ghost: None,
             canvas_drop_indicator: None,
             update_status: UpdateStatus::Idle,

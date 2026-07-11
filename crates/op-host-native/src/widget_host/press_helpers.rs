@@ -288,6 +288,9 @@ impl WidgetHostNative {
                     .auto_update_enabled;
                 *v = !*v;
             }
+            AgentSettingsHit::SelectPencilCursor(style) => {
+                self.editor_state.editor_ui.pencil_cursor_style = style;
+            }
             AgentSettingsHit::ToggleExperimental => {
                 let enabled = {
                     let v = &mut self

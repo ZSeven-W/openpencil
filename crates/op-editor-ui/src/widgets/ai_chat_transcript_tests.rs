@@ -956,10 +956,12 @@ fn tool_calls_block_header_label_counts_the_calls() {
         ChatToolCall {
             name: "insert_node".into(),
             args: "{}".into(),
+            content_offset: None,
         },
         ChatToolCall {
             name: "set_fill_hex".into(),
             args: "{}".into(),
+            content_offset: None,
         },
     ];
     let items = build_transcript(
@@ -982,6 +984,7 @@ fn expanded_tool_card_surfaces_status_source_and_result() {
     m.tool_calls = vec![ChatToolCall {
         name: "batch_design".into(),
         args: r#"{"source":"designer-1","status":"error","args":{"dsl":"I(\"root\",{})"},"result":{"success":false,"error":"node not found"}}"#.into(),
+        content_offset: None,
     }];
 
     let items = build_transcript(
@@ -1020,6 +1023,7 @@ fn streaming_tool_card_falls_back_to_running_status() {
     m.tool_calls = vec![ChatToolCall {
         name: "snapshot_layout".into(),
         args: "{}".into(),
+        content_offset: None,
     }];
 
     let items = build_transcript(
@@ -1043,11 +1047,13 @@ fn paint_expanded_tool_calls_as_individual_cards_like_ts() {
         ChatToolCall {
             name: "batch_design".into(),
             args: r#"{"args":{"dsl":"I(\"root\",{})"},"status":"running"}"#.into(),
+            content_offset: None,
         },
         ChatToolCall {
             name: "delete_node".into(),
             args: r#"{"args":{"id":"old-node"},"result":{"success":false,"error":"missing"}}"#
                 .into(),
+            content_offset: None,
         },
     ];
     let mut backend = TranscriptPaintBackend::default();
@@ -1078,10 +1084,12 @@ fn mixed_tool_calls_expand_only_write_level_card_bodies_like_ts() {
         ChatToolCall {
             name: "snapshot_layout".into(),
             args: r#"{"args":{"pageId":"page-1"}}"#.into(),
+            content_offset: None,
         },
         ChatToolCall {
             name: "batch_design".into(),
             args: r#"{"args":{"dsl":"I(\"root\",{})"}}"#.into(),
+            content_offset: None,
         },
     ];
 

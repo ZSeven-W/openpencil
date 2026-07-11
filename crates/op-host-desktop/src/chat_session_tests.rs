@@ -96,6 +96,7 @@ fn apply_poll_appends_text_thinking_tools_and_clears_streaming_on_finish() {
             tool_calls: vec![ChatToolCall {
                 name: "t".into(),
                 args: "{}".into(),
+                content_offset: None,
             }],
             error: None,
             finished: false,
@@ -133,6 +134,7 @@ fn apply_poll_expands_modify_tool_process_like_ts_cards() {
             tool_calls: vec![ChatToolCall {
                 name: "batch_design".into(),
                 args: "{}".into(),
+                content_offset: None,
             }],
             error: None,
             finished: false,
@@ -157,6 +159,7 @@ fn apply_poll_keeps_read_tool_process_collapsed_like_ts_cards() {
             tool_calls: vec![ChatToolCall {
                 name: "snapshot_layout".into(),
                 args: "{}".into(),
+                content_offset: None,
             }],
             error: None,
             finished: false,
@@ -420,6 +423,7 @@ fn attach_tool_result_updates_running_card_envelope() {
     msg.tool_calls.push(ChatToolCall {
         name: "update_node".into(),
         args: r#"{"level":"modify","args":{"nodeId":"n1"},"status":"running"}"#.into(),
+        content_offset: None,
     });
     chat.messages.push(msg);
 
@@ -456,6 +460,7 @@ fn attach_tool_result_marks_error_status() {
     msg.tool_calls.push(ChatToolCall {
         name: "delete_node".into(),
         args: r#"{"level":"delete","args":{"nodeId":"n9"},"status":"running"}"#.into(),
+        content_offset: None,
     });
     chat.messages.push(msg);
     attach_tool_result_to_transcript(
