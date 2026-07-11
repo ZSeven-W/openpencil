@@ -455,18 +455,21 @@ pub(crate) fn paint_bottom_toolbar(
             (widget.theme.border).with_alpha(0.6),
             1.0,
         );
-        // Rounded-square stop glyph at the center (8px).
-        let stop_glyph_size = 8.0;
-        draw_icon(
-            cx.backend,
-            Icon::Square,
-            Point2D::new(
-                stop_rect.origin.x + (FOOTER_CIRCLE_D - stop_glyph_size) / 2.0,
-                stop_rect.origin.y + (FOOTER_CIRCLE_D - stop_glyph_size) / 2.0,
-            ),
-            stop_glyph_size,
-            widget.theme.muted_foreground,
-            1.4,
+        // Filled red stop square at the center — the universal "recording /
+        // running, press to stop" affordance; a muted 8px outline read as a
+        // mystery dot (user feedback 2026-07-12).
+        let stop_glyph_size = 12.0;
+        let stop_red = Color::rgba_u8(0xef, 0x44, 0x44, 1.0);
+        cx.backend.fill_round_rect(
+            Rect {
+                origin: Point2D::new(
+                    stop_rect.origin.x + (FOOTER_CIRCLE_D - stop_glyph_size) / 2.0,
+                    stop_rect.origin.y + (FOOTER_CIRCLE_D - stop_glyph_size) / 2.0,
+                ),
+                size: Point2D::new(stop_glyph_size, stop_glyph_size),
+            },
+            2.5,
+            stop_red,
         );
     }
 

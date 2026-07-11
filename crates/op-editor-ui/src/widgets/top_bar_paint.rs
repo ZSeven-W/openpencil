@@ -308,9 +308,9 @@ impl TopBar {
         let show_dot = status_text.is_some();
         let chip_text: &str = status_text.as_deref().unwrap_or(self.label_agents_and_mcp);
         let dot_w = if show_dot { 6.0 + 6.0 } else { 0.0 };
-        let icons_w = self.agent_icons_width();
+        let icons_span = self.agent_icons_span();
         let text_w = cx.backend.measure_text(chip_text, 11.0);
-        let chip_w = 8.0 + icons_w + 6.0 + dot_w + text_w + 12.0;
+        let chip_w = 8.0 + icons_span + dot_w + text_w + 12.0;
         // Leave room for the chip↔globe divider (4 px gap + 1 px + 4 px).
         let chip_rect = Rect {
             origin: Point2D::new(
@@ -378,7 +378,7 @@ impl TopBar {
                 ix += step;
             }
         }
-        let mut text_x = chip_rect.origin.x + 8.0 + icons_w + 6.0;
+        let mut text_x = chip_rect.origin.x + 8.0 + icons_span;
         if show_dot {
             // emerald-500 (#10b981) — matches the TS status dot.
             let dot_color = Color {

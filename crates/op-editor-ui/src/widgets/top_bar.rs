@@ -197,9 +197,18 @@ impl TopBar {
         // The chip reflects what the user set up in Settings: one
         // brand icon per connected provider, plus the enabled-MCP
         // count. All-zero paints the "Agents & MCP" set-up
-        // affordance instead.
+        // affordance instead. Built-in (API-key) agents count too —
+        // a ready MiniMax/GLM entry is as much an agent as a
+        // connected CLI provider (icons stay per-CLI-provider; the
+        // count is the honest total).
         let connected = ui.agent_settings.verified_connected_mask();
-        let agent_count = connected.iter().filter(|&&c| c).count() as u32;
+        let builtin_ready = ui
+            .agent_settings
+            .builtin_agents
+            .iter()
+            .filter(|agent| agent.ready())
+            .count() as u32;
+        let agent_count = connected.iter().filter(|&&c| c).count() as u32 + builtin_ready;
         let mcp_count = ui
             .agent_settings
             .mcp_cli_enabled
@@ -288,10 +297,30 @@ impl TopBar {
     /// active state. Paint + hit-test both size the chip off this.
     pub(super) fn agent_icons_width(&self) -> f32 {
         if self.agent_count == 0 {
-            ICON_SIZE
+            return ICON_SIZE;
+        }
+        // Only CONNECTED CLI providers paint a brand chip — built-in
+        // (API-key) agents count toward the label but have no logo. Sizing
+        // off `agent_count` reserved a blank icon cluster whenever builtins
+        // outnumbered CLI providers (measured: "4 agents · 2 MCP" with zero
+        // CLI providers painted a chip half-full of empty space).
+        let painted = self.connected.iter().filter(|&&c| c).count();
+        if painted == 0 {
+            return 0.0;
+        }
+        let n = painted as f32;
+        AGENT_ICON_CHIP + (n - 1.0) * (AGENT_ICON_CHIP - AGENT_ICON_OVERLAP)
+    }
+
+    /// The icon cluster plus its trailing 6px gap — 0 when no icon paints,
+    /// so the chip hugs `[pad][dot][text][pad]` with no phantom hole. Paint
+    /// and hit-test both walk the chip off this single span.
+    pub(super) fn agent_icons_span(&self) -> f32 {
+        let icons = self.agent_icons_width();
+        if icons <= 0.0 {
+            0.0
         } else {
-            let n = self.agent_count.max(1) as f32;
-            AGENT_ICON_CHIP + (n - 1.0) * (AGENT_ICON_CHIP - AGENT_ICON_OVERLAP)
+            icons + 6.0
         }
     }
 
@@ -609,7 +638,7 @@ impl TopBar {
         });
         // Same geometry as `paint_chrome`'s chip: 8 (lead pad) + icons + 6
         // (gap) + dot + text + 12 (trail pad). No extra slop.
-        let chip_w = 8.0 + self.agent_icons_width() + 6.0 + dot_w + text_w + 12.0;
+        let chip_w = 8.0 + self.agent_icons_span() + dot_w + text_w + 12.0;
         let chip_rect = Rect {
             origin: Point2D::new(
                 globe.origin.x - chip_w - (DIVIDER_GAP * 2.0 + DIVIDER_W),

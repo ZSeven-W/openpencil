@@ -1,6 +1,7 @@
 use op_editor_core::chat::ChatToolCall;
 use serde_json::Value;
 
+use super::ai_chat_tool_verbs::verb_for_tool;
 use super::ai_chat_transcript::wrap_units;
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -415,7 +416,14 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
     };
     let label_x = card.header.origin.x + CARD_LABEL_X;
     let label_baseline = card.header.origin.y + CARD_HEADER_H / 2.0 + 4.0;
-    draw_line(cx, &card.name, label_x, label_baseline, 11.0, text_color);
+    draw_line(
+        cx,
+        verb_for_tool(&card.name),
+        label_x,
+        label_baseline,
+        11.0,
+        text_color,
+    );
 
     // Source badge — sits just left of the status icon when present.
     if let Some(source) = card.source.as_deref() {

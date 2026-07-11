@@ -245,3 +245,56 @@ fn compound_icon_button_grays_at_rest_and_darkens_on_hover() {
         "folder + chevron should darken to foreground on hover"
     );
 }
+
+#[test]
+fn agent_chip_counts_ready_builtin_agents() {
+    // A ready API-key builtin (MiniMax/GLM) is as much an agent as a
+    // connected CLI provider — the chip's count must include it.
+    use op_editor_core::agent_settings::{BuiltinAgentConfig, BuiltinAgentKind};
+    use op_editor_core::agent_settings_builtin_presets::BuiltinAgentPresetKey;
+    let mut ui = EditorUiState::default();
+    ui.agent_settings.builtin_agents.push(BuiltinAgentConfig {
+        id: "bi-1".into(),
+        preset: BuiltinAgentPresetKey::Custom,
+        display_name: "MiniMax M3".into(),
+        kind: BuiltinAgentKind::OpenAiCompat,
+        api_key: "sk-test".into(),
+        model: "MiniMax-M3".into(),
+        base_url: "https://api.minimaxi.com/v1".into(),
+        enabled: true,
+    });
+    // A second builtin that is NOT ready (no key) must not count.
+    ui.agent_settings.builtin_agents.push(BuiltinAgentConfig {
+        id: "bi-2".into(),
+        preset: BuiltinAgentPresetKey::Custom,
+        display_name: "Unconfigured".into(),
+        kind: BuiltinAgentKind::OpenAiCompat,
+        api_key: "".into(),
+        model: "x".into(),
+        base_url: "".into(),
+        enabled: true,
+    });
+    let bar = TopBar::for_editor_ui(&ui);
+    assert_eq!(
+        bar.agent_count, 1,
+        "one ready builtin counts; the unconfigured one does not"
+    );
+}
+
+/// Built-in (API-key) agents count toward the chip label but paint no brand
+/// icon — the chip must hug `[pad][dot][text][pad]` with no phantom icon
+/// cluster (measured: "4 agents · 2 MCP" with zero CLI providers reserved a
+/// blank 4-icon span, user screenshot 2026-07-11).
+#[test]
+fn chip_with_only_builtin_agents_reserves_no_icon_cluster() {
+    let mut bar = TopBar::new("test.op");
+    bar.agent_count = 4;
+    bar.connected = [false; 5];
+    assert_eq!(bar.agent_icons_span(), 0.0, "no painted icons, no span");
+
+    bar.connected = [true, false, false, false, false];
+    assert!(
+        bar.agent_icons_span() > 0.0,
+        "a connected CLI provider brings the cluster back"
+    );
+}
