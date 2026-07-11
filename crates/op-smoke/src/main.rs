@@ -38,6 +38,7 @@
 
 use std::sync::Arc;
 
+mod audit_rubric;
 mod loop_mode;
 mod loop_seed;
 
@@ -472,7 +473,9 @@ async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
     eprintln!("[SMOKE] mode=loop seed={seed} model={model} base_url={base_url}");
     eprintln!("[SMOKE] prompt={prompt:?} thinking={thinking:?} max_tokens={max_tokens}");
 
-    let system_prompt = op_ai_skills::design_agent_system_prompt().to_string();
+    // Protocol base + prompt-matched domain depth — mirrors the desktop
+    // design-loop launch so headless A/B runs measure the same supply.
+    let system_prompt = op_ai_skills::design_agent_system_prompt_with_skills(&prompt);
     // `OPENPENCIL_SMOKE_LIBRARY` is honored here too: the path is threaded into
     // `run_loop`, which merges the harvested library into the live `EditorState`
     // before the agentic loop runs (so its `batch_design` ref nodes can target
@@ -707,6 +710,10 @@ async fn main() -> std::process::ExitCode {
             "roots": roots,
             "issueCount": issues.len(),
             "issues": issues,
+            // Chrome completeness / node-vocabulary / density metrics — the
+            // dimensions raw geometry issues miss (see ab-g3 07-04 lesson).
+            // Informational: exit code stays keyed on geometry issues alone.
+            "rubric": audit_rubric::rubric_report(&state),
         });
         println!(
             "{}",
