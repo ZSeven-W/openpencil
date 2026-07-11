@@ -32,7 +32,8 @@ use super::{EditorCommand, McpTool, ToolOutcome};
 pub struct BatchDesign {
     /// Full editor-state snapshot — the multi-op DSL program executor
     /// (`batch_program.rs`) simulates each program line against a clone
-    /// of this to mirror TS's per-line best-effort semantics.
+    /// of this; any failing line rolls back the whole batch (the
+    /// agent-facing transactional contract).
     state: EditorState,
     pages: Vec<PageNodes>,
     active_page_id: String,
@@ -74,9 +75,10 @@ impl McpTool for BatchDesign {
             // and returns the existing command-per-op shape).
             Ok(ParsedOperations::Direct(_)) => dispatch_batch_design(args, None),
             // Everything else — multi-line MIXED programs, per-line parse
-            // failures — runs the TS DSL program executor, which collects
-            // per-line errors and applies the surviving lines (TS
-            // `runBatchDesignDsl` best-effort semantics).
+            // failures — runs the DSL program executor. Transactional by
+            // default (any failing line rolls back the whole batch);
+            // internal callers may opt into TS best-effort via
+            // `_line_policy` (see `batch_program.rs` module docs).
             Err(_) => super::batch_program::run_batch_design_program(&self.state, operations, args),
         }
     }

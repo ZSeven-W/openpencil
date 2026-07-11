@@ -28,6 +28,27 @@ fn call_operations(
     }
 }
 
+/// Drive the executor with the internal best-effort policy (the
+/// orchestrator's script-gen path) — for tests exercising per-line
+/// semantics that need failing lines DROPPED rather than rolling back
+/// the batch.
+fn call_operations_best_effort(
+    state: &op_editor_core::EditorState,
+    operations: &str,
+) -> (Value, Option<EditorCommand>) {
+    let tool = batch_design_snapshot(state);
+    let mut args = BTreeMap::new();
+    args.insert("operations".into(), operations.into());
+    args.insert("_line_policy".into(), "best_effort".into());
+    match tool.call(&args) {
+        ToolOutcome::OkJson(json) => (serde_json::from_str(&json).expect("json"), None),
+        ToolOutcome::OkJsonWithCommand(json, cmd) => {
+            (serde_json::from_str(&json).expect("json"), Some(cmd))
+        }
+        other => panic!("expected a TS result envelope, got {other:?}"),
+    }
+}
+
 fn binding_id(envelope: &Value, binding: &str) -> String {
     envelope["results"]
         .as_array()
@@ -168,15 +189,20 @@ button=K("shadcn/btn-primary", root, {"descendants":{"shadcn-btn-primary-label":
 }
 
 #[test]
-fn failing_line_is_collected_and_execution_continues() {
-    // TS `runBatchDesignDsl`: a thrown line lands in errors[] (with a
-    // line preview) and the remaining lines still execute.
-    let mut state = sample();
+fn failing_line_rolls_back_the_whole_batch() {
+    // Transactional contract (Pencil parity): a failing line means NO
+    // line of the batch applies — no command ships, the envelope carries
+    // errors[] + applied:false + a resend hint, and bindings/results are
+    // dropped (their ids never land, so reporting them would invite the
+    // model to reference phantom nodes).
+    let state = sample();
+    let before = serde_json::to_string(state.active_children()).expect("snapshot");
     let program = r##"a=I("n10", {"type":"rectangle","name":"A","width":10,"height":10})
 U("missing-node", {"x":5})
 b=I("n10", {"type":"rectangle","name":"B","width":10,"height":10})"##;
 
     let (envelope, cmd) = call_operations(&state, program);
+    assert!(cmd.is_none(), "a failing line must roll back every command");
     let errors = envelope["errors"].as_array().expect("errors present");
     assert_eq!(errors.len(), 1, "{envelope}");
     assert_eq!(errors[0]["error"], "Update target not found: missing-node");
@@ -184,6 +210,32 @@ b=I("n10", {"type":"rectangle","name":"B","width":10,"height":10})"##;
         errors[0]["line"], r##"U("missing-node", {"x":5})"##,
         "{envelope}"
     );
+    assert_eq!(envelope["applied"], Value::Bool(false), "{envelope}");
+    assert_eq!(envelope["results"], serde_json::json!([]), "{envelope}");
+    let hint = envelope["hint"].as_str().expect("hint present");
+    assert!(hint.contains("rolled back"), "{hint}");
+    assert!(hint.contains("resend"), "{hint}");
+    // No command was handed to the host, so the live doc is untouched.
+    assert_eq!(
+        serde_json::to_string(state.active_children()).expect("snapshot"),
+        before,
+        "document must be unchanged after a rolled-back batch"
+    );
+}
+
+#[test]
+fn best_effort_policy_keeps_ts_survivor_semantics_for_internal_callers() {
+    // The orchestrator's script-gen path (`program_gen.rs`) opts back
+    // into TS `runBatchDesignDsl` best-effort: the thrown line lands in
+    // errors[] and the remaining lines still execute.
+    let mut state = sample();
+    let program = r##"a=I("n10", {"type":"rectangle","name":"A","width":10,"height":10})
+U("missing-node", {"x":5})
+b=I("n10", {"type":"rectangle","name":"B","width":10,"height":10})"##;
+
+    let (envelope, cmd) = call_operations_best_effort(&state, program);
+    let errors = envelope["errors"].as_array().expect("errors present");
+    assert_eq!(errors.len(), 1, "{envelope}");
     let results = envelope["results"].as_array().expect("results");
     assert_eq!(results.len(), 2);
 
@@ -347,10 +399,12 @@ fn failed_insert_line_does_not_leak_merge_app_state() {
     // so `parse_operations` can't take the single-shot Insert-only fast
     // path and this program is guaranteed to run through the mixed-DSL
     // executor (`run_batch_design_program`) this fix targets.
+    // Best-effort policy: survivors only ship on the internal script-gen
+    // path now (the agent surface rolls the whole batch back instead).
     let mut state = sample();
     let program = r##"a=I("nonexistent-parent", {"type":"frame","name":"Ghost","width":100,"height":50,"state":{"n":{"type":"int","default":0}}})
 U("n11", {"name":"Renamed"})"##;
-    let (envelope, cmd) = call_operations(&state, program);
+    let (envelope, cmd) = call_operations_best_effort(&state, program);
     let errors = envelope["errors"].as_array().expect("errors present");
     assert_eq!(errors.len(), 1, "{envelope}");
     assert!(
@@ -389,6 +443,9 @@ fn failed_replace_line_does_not_leak_merge_app_state() {
     let tool = batch_design_snapshot(&sample());
     let mut args = BTreeMap::new();
     args.insert("pageId".into(), "does-not-exist".into());
+    // Best-effort keeps the survivor window open (the agent surface
+    // would roll the whole batch back and never ship ANY command).
+    args.insert("_line_policy".into(), "best_effort".into());
     args.insert(
         "operations".into(),
         r##"swap=R("n13", {"type":"frame","name":"Ghost","width":100,"height":50,"state":{"n":{"type":"int","default":0}}})
@@ -424,11 +481,14 @@ D("ghost")"##
 
 #[test]
 fn image_op_requires_ts_quoted_syntax_and_resolves_binding_parents() {
+    // Best-effort policy: the deliberately-bad third line must be
+    // dropped (not roll back the batch) so the G() parse + binding
+    // resolution of the good lines stays observable.
     let mut state = sample();
     let program = r##"wrap=I(null, {"type":"frame","name":"Wrap","x":500,"y":0,"width":400,"height":300,"children":[{"type":"text","name":"caption","content":"x","width":10,"height":10}]})
 img=G("wrap", "search", "sunset photo")
 G(wrap, "search", "bad syntax")"##;
-    let (envelope, cmd) = call_operations(&state, program);
+    let (envelope, cmd) = call_operations_best_effort(&state, program);
     let errors = envelope["errors"].as_array().expect("errors");
     assert_eq!(errors.len(), 1, "{envelope}");
     assert!(

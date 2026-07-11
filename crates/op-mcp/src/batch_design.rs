@@ -13,6 +13,10 @@ use super::batch_page::{command_with_outer_page_id, optional_page_id};
 use super::write_tools::{validate_hex, ALLOWED_KINDS};
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 
+#[path = "batch_design_fill_normalize.rs"]
+mod fill_normalize;
+use fill_normalize::normalize_fill;
+
 // First-party `batch_design` tool — insert N leaf nodes on the
 // active page in one atomic shot. Mirrors TS `batch_design` for
 // the leaf subset.
@@ -926,19 +930,6 @@ fn normalize_padding(value: &mut serde_json::Value) {
     }
 }
 
-fn normalize_fill(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::String(color) => {
-            *value = serde_json::json!([{ "type": "solid", "color": color }]);
-        }
-        serde_json::Value::Object(_) => {
-            let single = std::mem::take(value);
-            *value = serde_json::Value::Array(vec![single]);
-        }
-        _ => {}
-    }
-}
-
 fn normalize_stroke(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::String(color) => {
@@ -954,6 +945,21 @@ fn normalize_stroke(value: &mut serde_json::Value) {
             }
             if let Some(fill) = obj.get_mut("fill") {
                 normalize_fill(fill);
+            }
+            // `thickness` is REQUIRED by the schema, but models write
+            // `{color}` / `{width}` / `{weight}` stroke objects without it —
+            // and one rejected node cascades into "parent not found" for its
+            // whole subtree (measured: a DeepSeek V4 run dropped 60+ lines
+            // and shipped one empty section, 2026-07-12). Alias the common
+            // spellings, then default to a hairline.
+            if !obj.contains_key("thickness") {
+                let aliased = ["width", "weight", "strokeWeight"]
+                    .iter()
+                    .find_map(|alias| obj.remove(*alias));
+                obj.insert(
+                    "thickness".into(),
+                    aliased.unwrap_or_else(|| serde_json::json!(1)),
+                );
             }
         }
         _ => {}
