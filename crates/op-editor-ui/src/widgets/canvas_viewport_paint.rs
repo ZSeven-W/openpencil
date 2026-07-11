@@ -276,6 +276,9 @@ struct PaintNodeOptions<'a, 'generation> {
     now_ms: u64,
     generating_descendant_ids: Option<&'generation HashSet<String>>,
     generation_accent: Option<Color>,
+    /// Queued empty shells: keep the layout slot, paint nothing (see
+    /// `canvas_generation_scan::GenerationPaintSets::suppressed`).
+    suppressed_shell_ids: Option<&'generation HashSet<String>>,
 }
 
 use super::canvas_overlay_transform::OverlayTransform;
@@ -394,6 +397,7 @@ pub(crate) fn paint_node_with_options<'a>(
         0,
         None,
         None,
+        None,
     )
 }
 
@@ -413,6 +417,7 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
     now_ms: u64,
     generating_descendant_ids: Option<&HashSet<String>>,
     generation_accent: Option<Color>,
+    suppressed_shell_ids: Option<&HashSet<String>>,
 ) -> PaintNodeHits<'a> {
     let options = PaintNodeOptions {
         viewport_origin,
@@ -427,6 +432,7 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
         now_ms,
         generating_descendant_ids,
         generation_accent,
+        suppressed_shell_ids,
     };
     paint_node_inner(cx, node, &options, &mut Vec::new())
 }
@@ -490,6 +496,15 @@ fn paint_node_inner<'a>(
         .map(|schedule| reveal_paint_state(schedule, &node.id))
         .unwrap_or(RevealPaintState::Idle);
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
+        return PaintNodeHits::default();
+    }
+    // Queued generation shell: its turn has not come — keep the layout
+    // slot, paint nothing (Pencil shows plain canvas where work has not
+    // reached, not dark author-filled slabs).
+    if options
+        .suppressed_shell_ids
+        .is_some_and(|ids| ids.contains(&node.id))
+    {
         return PaintNodeHits::default();
     }
     let world_rect = Rect {

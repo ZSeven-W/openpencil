@@ -48,6 +48,7 @@ pub fn paint_scene_page_with(
             0,
             None,
             None,
+            None,
         );
     }
 }
@@ -86,6 +87,7 @@ pub fn paint_scene_subtree(
         None,
         None,
         0,
+        None,
         None,
         None,
     );

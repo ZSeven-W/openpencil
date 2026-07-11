@@ -1,6 +1,4 @@
-use super::canvas_generation_scan::{
-    generating_descendant_ids, is_placeholder_section, scan_phase,
-};
+use super::canvas_generation_scan::{generating_paint_sets, is_placeholder_section, scan_phase};
 use crate::layout_scene::{NodeKind, SceneNode};
 use op_editor_core::agent_indicators::{AgentIndicators, AgentTag};
 
@@ -43,7 +41,7 @@ fn generating_descendants_exclude_the_claimed_root_and_skip_idle_allocation() {
     root.children.push(nested);
 
     let mut indicators = AgentIndicators::default();
-    assert!(generating_descendant_ids(&[root.clone()], Some(&indicators)).is_none());
+    assert!(generating_paint_sets(&[root.clone()], Some(&indicators)).is_none());
 
     indicators.run_active = true;
     indicators.frames.insert(
@@ -53,7 +51,9 @@ fn generating_descendants_exclude_the_claimed_root_and_skip_idle_allocation() {
             name: "Mochi".into(),
         },
     );
-    let ids = generating_descendant_ids(&[root], Some(&indicators)).unwrap();
+    let ids = generating_paint_sets(&[root], Some(&indicators))
+        .unwrap()
+        .scan;
     assert!(!ids.contains("root"));
     assert!(ids.contains("section"));
     assert!(ids.contains("content"));

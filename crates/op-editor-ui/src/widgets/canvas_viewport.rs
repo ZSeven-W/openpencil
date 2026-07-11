@@ -655,11 +655,10 @@ impl<'a> Widget for CanvasViewport<'a> {
                 .node_drag_overlay
                 .as_ref()
                 .map(|overlay| overlay.node_id.as_str());
-            let generating_descendant_ids =
-                super::canvas_generation_scan::generating_descendant_ids(
-                    &page.children,
-                    indicators.as_ref(),
-                );
+            let generation_sets = super::canvas_generation_scan::generating_paint_sets(
+                &page.children,
+                indicators.as_ref(),
+            );
             // Starter ghost: after a design prompt clears the blank starter
             // frame, keep painting its silhouette (white artboard + name
             // label) until the generated design's root lands — the canvas
@@ -705,10 +704,11 @@ impl<'a> Widget for CanvasViewport<'a> {
                     self.pen_in_progress.as_deref(),
                     hidden_drag_node,
                     self.now_ms,
-                    generating_descendant_ids.as_ref(),
-                    generating_descendant_ids
+                    generation_sets.as_ref().map(|sets| &sets.scan),
+                    generation_sets
                         .as_ref()
                         .map(|_| super::canvas_generation_scan::SKELETON_BLUE),
+                    generation_sets.as_ref().map(|sets| &sets.suppressed),
                 );
                 paint_hits.merge_missing(child_hits);
             }
