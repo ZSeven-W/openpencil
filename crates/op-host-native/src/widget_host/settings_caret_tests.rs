@@ -70,3 +70,17 @@ fn next_animation_deadline_tracks_agent_reveals() {
     assert_eq!(host.next_animation_deadline_ms(), Some(1_400));
     op_editor_core::agent_indicators::end_if_epoch(epoch);
 }
+
+#[test]
+fn next_animation_deadline_ticks_for_generating_frame_without_reveals() {
+    let _guard = INDICATOR_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    let epoch = op_editor_core::agent_indicators::begin();
+    op_editor_core::agent_indicators::add_frame(epoch, "frame", "#4ECDC4", "Mochi");
+    let mut host = WidgetHostNative::new();
+    host.set_now_ms(1_000);
+
+    assert_eq!(host.next_animation_deadline_ms(), Some(1_016));
+    op_editor_core::agent_indicators::end_if_epoch(epoch);
+}

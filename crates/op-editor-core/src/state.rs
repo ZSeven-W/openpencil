@@ -77,6 +77,10 @@ pub struct EditorState {
     /// undo/restore, so an edit made after undoing past the save point
     /// can never reuse the saved revision value (false-clean guard).
     pub(crate) revision_counter: u64,
+    /// Monotonic count of snapshots pushed onto `history.past`.
+    /// Instance-write scopes use the delta to identify newly pushed
+    /// snapshots even when the 100-entry deque evicts from the front.
+    pub(crate) history_push_count: u64,
     /// Cross-action clipboard buffer. Copy / cut fill it; paste
     /// drains it (clones, so repeated paste works). Not part of the
     /// `.op` file — transient editor state.
@@ -121,6 +125,11 @@ pub struct EditorState {
     /// here; they are owned by the file and are never overwritten.
     /// Transient — not serialized, reset on document replace.
     pub app_state_owner: std::collections::BTreeMap<String, usize>,
+    /// Virtual child currently swapped into an authored Ref slot by
+    /// the synchronous instance-write scope. Lets generic mutators
+    /// treat the child as editable after the Ref-level lock gate has
+    /// already passed. Never serialized or copied into history.
+    pub(crate) instance_write_virtual_anchor: Option<crate::NodeId>,
 }
 
 impl EditorState {
@@ -140,6 +149,7 @@ impl EditorState {
             revision: 0,
             saved_revision: 0,
             revision_counter: 0,
+            history_push_count: 0,
             clipboard: Vec::new(),
             ui: UiDraftState::new(),
             editor_ui: EditorUiState::new(),
@@ -150,6 +160,7 @@ impl EditorState {
             theme_presets: Vec::new(),
             theme_presets_dirty: false,
             app_state_owner: std::collections::BTreeMap::new(),
+            instance_write_virtual_anchor: None,
         }
     }
 
@@ -192,11 +203,13 @@ impl EditorState {
         self.revision = 0;
         self.saved_revision = 0;
         self.revision_counter = 0;
+        self.history_push_count = 0;
         self.ui = UiDraftState::new();
         self.editor_ui.clear_document_derived();
         self.sync_dirty_flag();
         // Generation-run ownership is doc-scoped; clear on whole-doc replace.
         self.app_state_owner.clear();
+        self.instance_write_virtual_anchor = None;
         drop_document_after_replace(old_doc);
     }
 
@@ -220,6 +233,7 @@ impl EditorState {
         self.editor_ui.clear_document_derived();
         // Generation-run ownership is doc-scoped; clear on whole-doc replace.
         self.app_state_owner.clear();
+        self.instance_write_virtual_anchor = None;
         self.sync_dirty_flag();
         drop_document_after_replace(old_doc);
     }

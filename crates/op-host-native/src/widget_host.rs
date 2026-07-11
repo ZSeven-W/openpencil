@@ -1368,6 +1368,11 @@ impl WidgetHostNative {
     /// the caret blink phase. `None` = no animation pending.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
         let mut next = op_editor_core::agent_indicators::next_reveal_deadline_ms(self.now_ms);
+        if let Some(deadline) =
+            op_editor_core::agent_indicators::next_generation_scan_deadline_ms(self.now_ms)
+        {
+            next = Some(next.map_or(deadline, |current| current.min(deadline)));
+        }
         if let Some(transition) = self.layout_transition.as_ref() {
             if let Some(deadline) = transition.next_deadline_ms(self.now_ms) {
                 next = Some(next.map_or(deadline, |current| current.min(deadline)));

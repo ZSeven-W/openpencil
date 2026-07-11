@@ -29,6 +29,13 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 use serde_json::{Map, Value};
 
+/// Build the render-only id used for a component instance child.
+/// Keep every producer and parser on this helper so the virtual-id
+/// convention cannot drift between canvas expansion and editing.
+pub(crate) fn instance_child_virtual_id(ref_id: &str, child_id: &str) -> String {
+    format!("{ref_id}__{child_id}")
+}
+
 /// Expand every `Ref` node in `doc` into its resolved component
 /// subtree. Unresolvable refs (unknown target, cycle) are dropped —
 /// TS `resolveRefs` returns `[]` for them.
@@ -215,7 +222,8 @@ fn remap_ids_typed(node: &mut PenNode, ref_id: &str) {
     if let Some(children) = crate::pen_node_ext::PenNodeExt::children_mut(node) {
         for child in children {
             let original = crate::pen_node_ext::PenNodeExt::base(child).id.clone();
-            crate::pen_node_ext::PenNodeExt::base_mut(child).id = format!("{ref_id}__{original}");
+            crate::pen_node_ext::PenNodeExt::base_mut(child).id =
+                instance_child_virtual_id(ref_id, &original);
             remap_ids_typed(child, ref_id);
         }
     }
@@ -243,7 +251,7 @@ fn remap_ids(child: &Value, ref_id: &str, overrides: Option<&Map<String, Value>>
     }
     mapped.insert(
         "id".into(),
-        Value::String(format!("{ref_id}__{original_id}")),
+        Value::String(instance_child_virtual_id(ref_id, original_id)),
     );
     if let Some(Value::Array(children)) = mapped.clone().get("children") {
         let remapped: Vec<Value> = children

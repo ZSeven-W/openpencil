@@ -92,10 +92,20 @@ impl EditorState {
     /// Hidden (`visible == Some(false)`) + locked nodes are not
     /// editable; everything else is.
     pub fn is_editable(&self, id: &NodeId) -> bool {
-        let Some(node) = find_node(self.active_children(), id) else {
+        if self.instance_write_virtual_anchor.as_ref() == Some(id) {
+            return true;
+        }
+        if let Some(node) = find_node(self.active_children(), id) {
+            return node_editable(node);
+        }
+        let Some((ref_id, _child_id)) =
+            crate::instance_override::split_instance_child_anchor(id, &self.doc)
+        else {
             return false;
         };
-        node_editable(node)
+        find_node(self.active_children(), &ref_id)
+            .filter(|node| matches!(node, PenNode::Ref(_)))
+            .is_some_and(node_editable)
     }
 
     /// Stricter form of [`EditorState::is_editable`] — every
@@ -158,10 +168,10 @@ impl EditorState {
             return false;
         }
         let children = self.active_children();
-        self.selection
-            .set
-            .iter()
-            .any(|id| find_node(children, id).is_some())
+        self.selection.set.iter().any(|id| {
+            find_node(children, id).is_some()
+                || crate::instance_override::split_instance_child_anchor(id, &self.doc).is_some()
+        })
     }
 
     /// True when any widget occupies the right rail: currently only
@@ -299,6 +309,7 @@ impl EditorState {
 
     /// Push a snapshot onto the undo stack + clear redo. Cap = 100.
     pub fn history_push_past(&mut self, snap: EditorSnapshot) {
+        self.history_push_count = self.history_push_count.saturating_add(1);
         self.history.past.push_back(snap);
         if self.history.past.len() > HISTORY_CAP {
             self.history.past.pop_front();

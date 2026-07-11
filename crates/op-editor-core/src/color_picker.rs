@@ -61,31 +61,41 @@ impl EditorState {
     /// stroke colour. Editable-gated. Returns true when the write
     /// landed. Mirrors shell-core's `set_selected_color`.
     pub fn set_selected_color(&mut self, is_fill: bool, hex: &str) -> bool {
+        let instance_scope = self.begin_instance_write_for_anchor();
         let sel = self.selection.anchor.clone();
-        if !sel.is_real() || !self.is_editable(&sel) {
-            return false;
-        }
-        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
-            return false;
-        };
-        if is_fill {
-            set_primary_fill_hex(node, hex)
+        let wrote = if !sel.is_real() || !self.is_editable(&sel) {
+            false
+        } else if let Some(node) = find_node_mut(self.active_children_mut(), &sel) {
+            if is_fill {
+                set_primary_fill_hex(node, hex)
+            } else {
+                set_primary_stroke_hex(node, hex)
+            }
         } else {
-            set_primary_stroke_hex(node, hex)
+            false
+        };
+        if let Some(scope) = instance_scope {
+            self.finish_instance_write(scope);
         }
+        wrote
     }
 
     /// Write the anchor node's primary-fill opacity, in `[0.0, 1.0]`.
     /// Editable-gated. Drives the Fill section's `100 %` input.
     pub fn set_selected_fill_opacity(&mut self, opacity: f32) -> bool {
+        let instance_scope = self.begin_instance_write_for_anchor();
         let sel = self.selection.anchor.clone();
-        if !sel.is_real() || !self.is_editable(&sel) {
-            return false;
-        }
-        let Some(node) = find_node_mut(self.active_children_mut(), &sel) else {
-            return false;
+        let wrote = if !sel.is_real() || !self.is_editable(&sel) {
+            false
+        } else if let Some(node) = find_node_mut(self.active_children_mut(), &sel) {
+            crate::fills::set_primary_fill_opacity(node, opacity)
+        } else {
+            false
         };
-        crate::fills::set_primary_fill_opacity(node, opacity)
+        if let Some(scope) = instance_scope {
+            self.finish_instance_write(scope);
+        }
+        wrote
     }
 
     /// Append a default drop-shadow effect to the anchor node.
@@ -153,19 +163,30 @@ impl EditorState {
         if !sel.is_real() || !self.is_editable(&sel) {
             return false;
         }
-        let Some(node) = self.selected_node() else {
-            return false;
-        };
-        // A Ref anchor seeds from the merged instance display node so
-        // the picker opens on the override-effective colour instead of
-        // the Ref's (always-empty) own fill (#000000 fallback).
+        // A Ref root or virtual child seeds from its effective display
+        // node so the picker opens on the override-effective colour.
         let display_node;
-        let node = match crate::instance_override::resolve_instance_display_node(&self.doc, node) {
-            Some(display) => {
+        let node = match self.selected_node() {
+            Some(node) => {
+                match crate::instance_override::resolve_instance_display_node(&self.doc, node) {
+                    Some(display) => {
+                        display_node = display;
+                        &display_node
+                    }
+                    None => node,
+                }
+            }
+            None => {
+                let Some(display) =
+                    crate::instance_override::resolve_instance_display_node_for_anchor(
+                        &self.doc, &sel,
+                    )
+                else {
+                    return false;
+                };
                 display_node = display;
                 &display_node
             }
-            None => node,
         };
         let current_hex = match target {
             ColorTarget::Fill => indexed_solid_fill_hex(node, fill_index),
@@ -343,6 +364,12 @@ impl EditorState {
             }
             return true;
         }
+        // Keyboard hex/RGB edits call this method directly, outside the
+        // native host's pointer-drag dispatch scope. Route the complete
+        // node-target match here so indexed fills, gradient stops, and
+        // effect colours receive the same instance-child override handling
+        // as primary fill/stroke.
+        let instance_scope = self.begin_instance_write_for_anchor();
         match target {
             ColorTarget::Fill => {
                 // The primary fill (index 0) keeps `set_selected_color`,
@@ -373,6 +400,9 @@ impl EditorState {
                     });
                 }
             }
+        }
+        if let Some(scope) = instance_scope {
+            self.finish_instance_write(scope);
         }
         true
     }
@@ -418,16 +448,23 @@ impl EditorState {
             let before = snapshot_variable_hex(&snap, name, &self.ui.variables.active_theme);
             let after = self.resolve_variable(name).and_then(scalar_as_hex);
             before != after
-        } else if matches!(
-            self.selected_node(),
-            Some(jian_ops_schema::node::PenNode::Ref(_))
-        ) {
+        } else if let Some(ref_id) = match self.selected_node() {
+            Some(jian_ops_schema::node::PenNode::Ref(_)) => Some(self.selection.anchor.clone()),
+            _ => crate::instance_override::split_instance_child_anchor(
+                &self.selection.anchor,
+                &self.doc,
+            )
+            .map(|(ref_id, _child_id)| ref_id),
+        } {
             // Instance anchors keep their colours in `descendants`
             // overrides — the per-target colour readers see `None` on
             // a Ref, so compare the whole node instead. An override
             // edit must still land exactly one undo entry.
-            let sel = self.selection.anchor.clone();
-            snapshot_find_node(&snap, &sel) != self.selected_node()
+            // Ours: the anchor may be a VIRTUAL instance-child id
+            // (`ref::child`) that no walker can find — compare the REF
+            // node resolved from the split instead of the raw anchor.
+            snapshot_find_node(&snap, &ref_id)
+                != crate::walkers::find_node(self.active_children(), &ref_id)
         } else {
             let sel = self.selection.anchor.clone();
             let fill_index = state.fill_index;

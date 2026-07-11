@@ -18,7 +18,10 @@ const COMPONENT_DOC: &str = r##"{
      "fill":[{"type":"solid","color":"#222222"}],
      "children":[{"type":"text","id":"title","name":"Title","content":"Hello"}]},
     {"type":"ref","id":"inst1","ref":"card","x":300,"y":50,
-     "descendants":{"card":{"fill":[{"type":"solid","color":"#ff8800"}]}}}
+     "descendants":{
+       "card":{"fill":[{"type":"solid","color":"#ff8800"}]},
+       "title":{"fill":[{"type":"solid","color":"#00aa55"}]}
+     }}
   ]
 }"##;
 
@@ -47,6 +50,23 @@ fn instance_snapshot_merges_display_node_and_flags_instance() {
         snap.kind_variant,
         crate::layout_scene::NodeKind::Frame
     ));
+}
+
+#[test]
+fn virtual_child_snapshot_shows_effective_descendant_values() {
+    let panel = panel_for("inst1__title");
+    let snap = &panel.snapshot;
+    assert_eq!(snap.name, "Title");
+    assert!(matches!(
+        snap.kind_variant,
+        crate::layout_scene::NodeKind::Text
+    ));
+    let fill = snap.fill.expect("descendant override fill shown");
+    assert!(fill.g > 0.55 && fill.r < 0.2, "#00aa55, got {fill:?}");
+    assert!(
+        !snap.is_instance,
+        "instance lifecycle actions belong to the Ref root, not its virtual child"
+    );
 }
 
 #[test]
