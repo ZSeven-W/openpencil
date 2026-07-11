@@ -93,6 +93,9 @@ misaligned or missing elements) and return ONLY a JSON object of the shape \
 {\"issues\":[string],\"fixes\":[{\"nodeId\":string,\"property\":string,\"value\":any}],\
 \"structuralFixes\":[{\"action\":\"removeNode\"|\"addChild\",...}],\"qualityScore\":number} \
 where qualityScore is 1-10. Use the real node IDs from the provided tree. \
+Treat layout=horizontal clip=true as an intentional horizontal scroller; preserve its \
+fixed item widths and partial right-edge item instead of changing layout geometry. \
+Do not add borders to chart bars, bar tracks, columns, or other data marks. \
 Return an empty fixes array and a high qualityScore when the design looks good.";
 
 /// Real `ScreenshotProvider` — renders the live document's active page
@@ -241,6 +244,24 @@ mod tests {
     use op_ai::chat_provider::StopReason;
     use op_editor_core::EditorState;
     use std::sync::Mutex;
+
+    #[test]
+    fn validation_prompt_preserves_intentional_horizontal_scrollers() {
+        let prompt = validation_system_prompt();
+        assert!(
+            prompt.contains("clip=true") && prompt.contains("intentional horizontal scroller"),
+            "validation prompt must distinguish scroll intent from overflow: {prompt}"
+        );
+    }
+
+    #[test]
+    fn validation_prompt_does_not_outline_chart_marks() {
+        let prompt = validation_system_prompt();
+        assert!(
+            prompt.contains("chart bars") && prompt.contains("Do not add borders"),
+            "validation prompt must distinguish chart marks from card surfaces: {prompt}"
+        );
+    }
 
     // ── RealScreenshotProvider ───────────────────────────────────────────────
 

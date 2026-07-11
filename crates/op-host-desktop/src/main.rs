@@ -12,6 +12,7 @@
 
 mod a11y;
 mod acp_agent_probe_host;
+mod agent_connect_store;
 mod app_handler;
 mod bundled_fonts;
 mod chat_acp;
@@ -139,6 +140,15 @@ struct DesktopApp {
     /// design-loop turn is running; populated by `pump_indicator` in
     /// `RedrawRequested` whenever `chat.agents_running.0 > 0`.
     design_loop_indicator: Option<design_loop_indicator::DesignLoopIndicator>,
+    /// Design-orchestrator canvas indicator — the same glow/badge/scan
+    /// tracking as `design_loop_indicator` above, but driven by
+    /// `current_design.is_some()` instead of `chat.agents_running` so the
+    /// CLI-orchestrator and builtin-provider design turns (which never set
+    /// `agents_running`) also animate their generated frames. `None` when
+    /// no design-orchestrator turn is running; populated by
+    /// `design_loop_indicator::pump_design_session_indicator` in
+    /// `RedrawRequested`, right after `design_session::pump_progress`.
+    design_session_indicator: Option<design_loop_indicator::DesignLoopIndicator>,
     /// Sub-agent design loops launched by `spawn_agents` (Task 3.1).
     /// Empty unless the top-level design loop called `spawn_agents`.
     /// Pumped SEQUENTIALLY — `active_sub_agent` indexes the one running
@@ -217,6 +227,11 @@ struct DesktopApp {
     /// Connect) — spawned from the `pending_provider_connect`
     /// request seam, drained by `drain_provider_connect`.
     provider_connect_job: Option<provider_probe_host::ProviderConnectJob>,
+    /// Startup reconnect replay queue (see `agent_connect_store`).
+    provider_reconnect_queue: Vec<op_editor_core::AgentProvider>,
+    /// Last persisted `connected` flags — any change (Connect landing,
+    /// Disconnect press in the widget layer) writes through to the store.
+    last_saved_connections: Option<[bool; 5]>,
     /// In-flight ACP-agent connect probe (Settings → Agents → ACP
     /// Connect), drained by `drain_acp_agent_connect`.
     acp_agent_connect_job: Option<acp_agent_probe_host::AcpAgentConnectJob>,
@@ -373,6 +388,7 @@ impl DesktopApp {
             current_path: None,
             error: None,
             design_loop_indicator: None,
+            design_session_indicator: None,
             sub_agents: Vec::new(),
             active_sub_agent: 0,
             current_chat: None,
@@ -394,6 +410,8 @@ impl DesktopApp {
             iconify_job: None,
             kit_browser_open_persisted,
             provider_connect_job: None,
+            provider_reconnect_queue: Vec::new(),
+            last_saved_connections: None,
             acp_agent_connect_job: None,
             initial_file,
             app_menu: None,
@@ -1007,6 +1025,13 @@ fn init_tracing() {
 }
 
 fn main() {
+    // FIRST, before any thread exists: graft the login-shell PATH onto this
+    // process. A Dock/Finder launch inherits launchd's minimal PATH — CLI
+    // agents (codex is a node-shebang script) and the Claude agent SDK's
+    // env baseline all need the user's real PATH, and the SDK's
+    // dangerous-env blocklist forbids passing PATH per-request, so the
+    // process env is the only correct carrier.
+    op_host_services::chat_spawn::repair_gui_process_path();
     // Register the brand-logo catalog (omitted from the wasm bundle, embedded in
     // this binary) BEFORE any path that can render natively — the GUI app, the
     // headless `--render-shots` rasterizer below, MCP — so they resolve

@@ -5,7 +5,7 @@
 //! provider routing plus UI-thread tool execution against `WidgetHostNative`.
 
 use op_ai::chat_provider::ChatToolResult;
-use op_editor_core::{ChatState, EditorState};
+use op_editor_core::{ChatMessage, ChatRole, ChatState, EditorState};
 pub use op_editor_host_core::chat::ChatSession;
 #[cfg(test)]
 pub use op_editor_host_core::chat::{apply_poll_to_message, ChatPoll};
@@ -20,6 +20,7 @@ use op_host_services::design_agent_tools::execute_agent_tool;
 mod launch;
 #[cfg(test)]
 pub(crate) use launch::builtin_provider_with_tools;
+pub(crate) use launch::reconcile_starter_ghost;
 pub use launch::{drain_new_chat_request, drain_stop_request, launch_if_pending};
 pub(crate) use launch::{provider_for_selected_model, selected_cli_model_id};
 // Sub-agent launcher (Task 3.1) reuses the design-toolset provider builder
@@ -35,10 +36,14 @@ pub(crate) use launch::launch_design::{
 /// the deltas land in THAT tab's transcript even after the user switches the
 /// active tab, so a streaming run never corrupts the now-active (wrong) tab.
 /// `None` (or a stale/out-of-range index) falls back to the active tab.
+/// `agent_identity` stamps sub-agent output without coupling lower-level chat
+/// data to the orchestrator's `AgentIdentity` type.
 pub fn pump(
     host: &mut WidgetHostNative,
     current: &mut Option<ChatSession>,
     running_tab: Option<usize>,
+    agent_identity: Option<(&str, &str)>,
+    viewport_size: (f32, f32),
 ) -> bool {
     let Some(session) = current.as_mut() else {
         return false;
@@ -46,13 +51,17 @@ pub fn pump(
     let poll = session.poll();
     let mut changed = false;
     if !poll.is_idle() {
-        if let Some(msg) = host
+        let messages = &mut host
             .editor_state_mut()
             .chat
             .run_tab_mut(running_tab)
-            .messages
-            .last_mut()
-        {
+            .messages;
+        if let Some(index) = agent_message_index(messages, agent_identity) {
+            let msg = &mut messages[index];
+            if let Some((name, color)) = agent_identity {
+                msg.agent_name = Some(name.to_string());
+                msg.agent_color = Some(color.to_string());
+            }
             op_editor_host_core::chat::apply_poll_to_message_with(
                 msg,
                 &poll,
@@ -61,16 +70,82 @@ pub fn pump(
             changed = true;
         }
     }
-    if drain_tool_requests(host.editor_state_mut(), session, running_tab) {
+    if drain_tool_requests(
+        host.editor_state_mut(),
+        session,
+        running_tab,
+        agent_identity,
+    ) {
         changed = true;
+        // Keep the design in view while it generates:
+        //  - first fit when the first SIZED root lands ("the artboard sits
+        //    roughly centered when output starts");
+        //  - after that, refit ONLY when a growth batch pushed content out
+        //    of the visible canvas — a design that still fits never yanks
+        //    the user's own pan/zoom framing.
+        if session.is_design_loop() {
+            let (vw, vh) = viewport_size;
+            let state = host.editor_state_mut();
+            if !session.viewport_fitted() {
+                let has_sized_root = state.active_children().iter().any(|node| {
+                    op_editor_core::PenNodeExt::width_px(node).is_some()
+                        && op_editor_core::PenNodeExt::height_px(node).is_some()
+                });
+                if has_sized_root {
+                    op_host_services::design_session::fit_design_viewport_to_content(state, vw, vh);
+                    session.mark_viewport_fitted();
+                }
+            } else if !op_host_services::design_session::design_content_fits_viewport(state, vw, vh)
+            {
+                op_host_services::design_session::fit_design_viewport_to_content(state, vw, vh);
+            }
+        }
     }
     if changed {
         host.mark_editor_state_dirty();
     }
     if poll.finished {
+        // Backstop: a design loop that died early (429 / quota / abort)
+        // never sent its finalize op — run the structural passes anyway so
+        // the canvas isn't left with the mid-run debris a clean finish
+        // would have repaired (measured: empty 68px TabBar shell + empty
+        // MiniPlayer survived an aborted run, test0711-22).
+        if let Some(session) = current.as_ref() {
+            if session.is_design_loop() && !session.loop_finalized() {
+                op_orchestrator::apply_loop_finalize(host.editor_state_mut());
+                host.mark_editor_state_dirty();
+            }
+        }
         *current = None;
     }
     changed
+}
+
+fn agent_message_index(
+    messages: &[ChatMessage],
+    agent_identity: Option<(&str, &str)>,
+) -> Option<usize> {
+    let matching = |message: &&ChatMessage| {
+        message.role == ChatRole::Assistant
+            && match agent_identity {
+                Some((name, color)) => {
+                    message.agent_name.as_deref() == Some(name)
+                        && message.agent_color.as_deref() == Some(color)
+                }
+                None => message.agent_color.is_none(),
+            }
+    };
+    messages
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, message)| matching(message))
+        .map(|(index, _)| index)
+        .or_else(|| {
+            messages
+                .iter()
+                .rposition(|message| message.role == ChatRole::Assistant)
+        })
 }
 
 /// Drain every pending canvas tool request from the in-flight turn and execute
@@ -84,6 +159,7 @@ fn drain_tool_requests(
     state: &mut EditorState,
     session: &mut ChatSession,
     running_tab: Option<usize>,
+    agent_identity: Option<(&str, &str)>,
 ) -> bool {
     let requests = session.drain_tool_requests();
     if requests.is_empty() {
@@ -103,6 +179,7 @@ fn drain_tool_requests(
                 continue;
             }
             op_orchestrator::apply_loop_finalize(state);
+            session.mark_loop_finalized();
             changed = true;
             let _ = req.ack.send(ChatToolResult {
                 content: serde_json::json!({ "success": true }).to_string(),
@@ -117,10 +194,11 @@ fn drain_tool_requests(
         // unchanged; the launch happens in `app_handler` post-pump.
         if req.name == "spawn_agents" {
             let result = handle_spawn_agents(&req.args_json);
-            if attach_tool_result_to_transcript(
+            if attach_tool_result_to_transcript_with(
                 state.chat.run_tab_mut(running_tab),
                 &req.name,
                 &result,
+                agent_identity,
             ) {
                 changed = true;
             }
@@ -146,8 +224,12 @@ fn drain_tool_requests(
         if mutated {
             changed = true;
         }
-        if attach_tool_result_to_transcript(state.chat.run_tab_mut(running_tab), &req.name, &result)
-        {
+        if attach_tool_result_to_transcript_with(
+            state.chat.run_tab_mut(running_tab),
+            &req.name,
+            &result,
+            agent_identity,
+        ) {
             changed = true;
         }
         let _ = req.ack.send(result);
@@ -208,18 +290,25 @@ fn handle_spawn_agents(args_json: &str) -> ChatToolResult {
 }
 
 /// Record an executed tool call's result on its transcript card.
+#[cfg(test)]
 fn attach_tool_result_to_transcript(
     chat: &mut ChatState,
     name: &str,
     result: &ChatToolResult,
 ) -> bool {
-    let Some(msg) = chat
-        .messages
-        .last_mut()
-        .filter(|m| m.role == op_editor_core::ChatRole::Assistant)
-    else {
+    attach_tool_result_to_transcript_with(chat, name, result, None)
+}
+
+fn attach_tool_result_to_transcript_with(
+    chat: &mut ChatState,
+    name: &str,
+    result: &ChatToolResult,
+    agent_identity: Option<(&str, &str)>,
+) -> bool {
+    let Some(index) = agent_message_index(&chat.messages, agent_identity) else {
         return false;
     };
+    let msg = &mut chat.messages[index];
     for call in msg.tool_calls.iter_mut().rev() {
         if call.name != name {
             continue;
@@ -250,6 +339,10 @@ fn attach_tool_result_to_transcript(
 #[cfg(test)]
 #[path = "chat_session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "chat_session_identity_tests.rs"]
+mod identity_tests;
 
 #[cfg(test)]
 #[path = "chat_session_reveal_tests.rs"]

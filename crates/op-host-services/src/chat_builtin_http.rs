@@ -34,7 +34,17 @@ pub const DESIGN_LOOP_MAX_TURNS: usize = 28;
 pub const DESIGN_LOOP_MAX_OUTPUT_TOKENS: u32 = 6_144;
 
 const BUILTIN_HTTP_DEFAULT_MIN_GAP: Duration = Duration::from_millis(350);
-const BUILTIN_HTTP_MAX_RETRIES: u32 = 3;
+// 5 retries at 1/2/4/8/16s covers ~31s — enough to outlast a per-minute
+// account frequency window (GLM "AccountRateLimitExceeded" killed a run
+// that 3 retries / 7s could not ride out, measured 2026-07-12).
+const BUILTIN_HTTP_MAX_RETRIES: u32 = 5;
+/// Extra inter-request gap added after each 429, halved after each
+/// success — the throttle adapts to the account's real ceiling instead of
+/// hammering at the configured floor.
+static BUILTIN_HTTP_ADAPTIVE_GAP_MS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+const ADAPTIVE_GAP_START_MS: u64 = 1_000;
+const ADAPTIVE_GAP_MAX_MS: u64 = 5_000;
 const RETRY_AFTER_MAX: Duration = Duration::from_secs(30);
 const BACKOFF_MAX: Duration = Duration::from_secs(8);
 
@@ -289,8 +299,26 @@ fn throttle_wait(last: Option<Instant>, now: Instant, min_gap: Duration) -> Dura
         .unwrap_or(Duration::ZERO)
 }
 
+fn widen_adaptive_gap() {
+    use std::sync::atomic::Ordering;
+    let current = BUILTIN_HTTP_ADAPTIVE_GAP_MS.load(Ordering::Relaxed);
+    let next = (current * 2).clamp(ADAPTIVE_GAP_START_MS, ADAPTIVE_GAP_MAX_MS);
+    BUILTIN_HTTP_ADAPTIVE_GAP_MS.store(next, Ordering::Relaxed);
+}
+
+fn relax_adaptive_gap() {
+    use std::sync::atomic::Ordering;
+    let current = BUILTIN_HTTP_ADAPTIVE_GAP_MS.load(Ordering::Relaxed);
+    if current > 0 {
+        BUILTIN_HTTP_ADAPTIVE_GAP_MS.store(current / 2, Ordering::Relaxed);
+    }
+}
+
 async fn throttle_builtin_http_request() {
-    let min_gap = builtin_http_min_gap();
+    let adaptive = Duration::from_millis(
+        BUILTIN_HTTP_ADAPTIVE_GAP_MS.load(std::sync::atomic::Ordering::Relaxed),
+    );
+    let min_gap = builtin_http_min_gap() + adaptive;
     if min_gap.is_zero() {
         return;
     }
@@ -340,9 +368,15 @@ async fn send_with_backoff(
     for attempt in 0..=BUILTIN_HTTP_MAX_RETRIES {
         throttle_builtin_http_request().await;
         match build().send().await {
-            Ok(resp) if resp.status().is_success() => return Ok(resp),
+            Ok(resp) if resp.status().is_success() => {
+                relax_adaptive_gap();
+                return Ok(resp);
+            }
             Ok(resp) => {
                 let status = resp.status();
+                if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    widen_adaptive_gap();
+                }
                 if is_retryable_status(status) && attempt < BUILTIN_HTTP_MAX_RETRIES {
                     let delay =
                         parse_retry_after(resp.headers()).unwrap_or_else(|| backoff_delay(attempt));
@@ -351,6 +385,14 @@ async fn send_with_backoff(
                     continue;
                 }
                 let body = resp.text().await.unwrap_or_default();
+                if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    // Raw provider JSON reads as gibberish in the chat
+                    // transcript — say what happened and what to do.
+                    return Err(format!(
+                        "The model provider is rate-limiting this account (429) and the run                          could not ride it out after {BUILTIN_HTTP_MAX_RETRIES} retries. Wait                          a moment, then send the prompt again to continue. ({label}: {})",
+                        body.trim()
+                    ));
+                }
                 return Err(format!("{label} http {status}: {}", body.trim()));
             }
             Err(e) => {

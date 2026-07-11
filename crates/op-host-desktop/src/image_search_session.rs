@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use jian_ops_schema::node::{PenNode, TextContent};
@@ -12,6 +13,35 @@ use op_editor_core::{walkers, EditorState, NodeId, PenNodeExt as _};
 use reqwest::header::CONTENT_TYPE;
 
 const MAX_EMBEDDED_IMAGE_BYTES: usize = 4 * 1024 * 1024;
+
+/// Sentinel `src` written when EVERY search avenue failed (junk-only
+/// results, network error, empty corpus). The canvas paints it as the
+/// theme-adaptive dashed placeholder (see `canvas_viewport_image`), so a
+/// failed slot reads as "image goes here" instead of a bare grey box. The
+/// bound query stays on the node for manual re-search.
+pub(crate) const SEARCH_FAILED_PLACEHOLDER_SRC: &str = "placeholder://image-search-failed";
+/// Design-artifact words that are pure noise against a PHOTO library: an
+/// open-license corpus has no "album covers" or "playlist art" — those are
+/// design deliverables, not photographed subjects. Stripping them turns
+/// "synthwave album cover neon" into "synthwave neon", which the corpus DOES
+/// cover (measured: the artifact words matched magazine covers, flowers and
+/// a van sticker across a whole music screen, test0711-22). The full prompt
+/// stays on the node for the image-GEN path, which wants the artifact words.
+const IMAGE_SEARCH_ARTIFACT_WORDS: &[&str] = &[
+    "album",
+    "cover",
+    "playlist",
+    "artwork",
+    "poster",
+    "thumbnail",
+    "logo",
+    "icon",
+    "banner",
+    "mockup",
+    "screenshot",
+    "wallpaper",
+];
+
 const IMAGE_SEARCH_STOP_WORDS: &[&str] = &[
     "a",
     "an",
@@ -194,6 +224,11 @@ pub(crate) struct ImageSearchSession {
     /// target is already known via `in_flight`/`completed`).
     #[cfg(test)]
     scan_count: u32,
+    /// Result URLs already used this session — similar queries ("playlist
+    /// cover daily mix" / "... chill vibes" / "... discover weekly") share
+    /// their Openverse top hit, which filled three different cards with the
+    /// SAME photo (measured: test0711-22). Selection skips these best-effort.
+    used_urls: Arc<Mutex<HashSet<String>>>,
 }
 
 impl ImageSearchSession {
@@ -218,6 +253,7 @@ impl ImageSearchSession {
         self.completed.clear();
         self.jobs.clear();
         self.invalidate_scan_gate();
+        self.used_urls.lock().unwrap().clear();
     }
 
     pub(crate) fn is_pending(&self) -> bool {
@@ -276,7 +312,7 @@ impl ImageSearchSession {
             self.in_flight.insert(id);
             let job = match &gen_profile {
                 Some(profile) => spawn_gen_job(target, profile.clone()),
-                None => spawn_job(target, credentials.clone()),
+                None => spawn_job(target, credentials.clone(), Arc::clone(&self.used_urls)),
             };
             self.jobs.push(job);
         }
@@ -300,10 +336,12 @@ impl ImageSearchSession {
                     // revision, but the gate invalidation still covers the
                     // failure path.)
                     self.last_scanned = None;
-                    if let Some(url) = url {
-                        if apply_result(state, &job.node_id, &url) {
-                            changed = true;
-                        } else {
+                    // Ours: a failed search lands the theme-adaptive dashed
+                    // placeholder (sentinel src) instead of a bare grey box.
+                    let url = url.unwrap_or_else(|| SEARCH_FAILED_PLACEHOLDER_SRC.to_string());
+                    if apply_result(state, &job.node_id, &url) {
+                        changed = true;
+                        if url == SEARCH_FAILED_PLACEHOLDER_SRC {
                             self.completed.insert(id);
                         }
                     } else {
@@ -331,6 +369,7 @@ impl ImageSearchSession {
 fn spawn_job(
     target: ImageSearchTarget,
     credentials: Option<OpenverseCredentials>,
+    used_urls: Arc<Mutex<HashSet<String>>>,
 ) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
@@ -340,6 +379,7 @@ fn spawn_job(
             &target.query,
             aspect_ratio,
             credentials.as_ref(),
+            &used_urls,
         ));
     });
     ImageSearchJob { node_id, rx }
@@ -385,8 +425,25 @@ fn collect_from_children(
     targets: &mut Vec<ImageSearchTarget>,
     parent_names: &[String],
 ) {
+    // Sibling text of a bare anonymous slot IS its subject ("Blinding
+    // Lights" next to a nameless 120px square = that track's cover).
+    let sibling_text: Vec<String> = children
+        .iter()
+        .filter_map(|c| match c {
+            PenNode::Text(t) => match &t.content {
+                TextContent::Plain(text) if !text.trim().is_empty() => {
+                    Some(text.trim().to_string())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .take(2)
+        .collect();
     for node in children {
-        if let Some(target) = image_search_target_for(node, known_node_ids, parent_names) {
+        if let Some(target) =
+            image_search_target_for(node, known_node_ids, parent_names, &sibling_text)
+        {
             targets.push(target);
         }
 
@@ -409,23 +466,51 @@ fn image_search_target_for(
     node: &PenNode,
     known_node_ids: &HashSet<String>,
     parent_names: &[String],
+    sibling_text: &[String],
 ) -> Option<ImageSearchTarget> {
     let id = node.base().id.as_str();
     if known_node_ids.contains(id) {
         return None;
     }
 
+    // Anonymous EMPTY solid square (>=48px, rounded/clipping) whose card
+    // carries text siblings — DeepSeek V4 builds whole album grids this
+    // way with no names and no G() bindings (measured test0711-2-ds); the
+    // sibling text is the only, and a good, subject source.
+    let bare_slot_with_context = !sibling_text.is_empty() && is_bare_anonymous_slot(node);
     let needs_image = match node {
         PenNode::Image(image) => is_placeholder_src(&image.src),
-        PenNode::Frame(_) => is_frame_placeholder_still_unfilled(node),
-        PenNode::Rectangle(_) => is_image_area_rectangle_by_heuristic(node),
+        PenNode::Frame(_) => is_frame_placeholder_still_unfilled(node) || bare_slot_with_context,
+        PenNode::Rectangle(_) => {
+            is_image_area_rectangle_by_heuristic(node)
+                || is_unnamed_media_slot_in_context(node, parent_names)
+                || bare_slot_with_context
+        }
         _ => false,
     };
     if !needs_image {
         return None;
     }
 
-    let query = extract_query_for_node(node, parent_names);
+    let mut query = extract_query_for_node(node, parent_names);
+    if bare_slot_with_context {
+        // The generic name-derived fallback ("placeholder") loses to the
+        // card's own text; an EXPLICIT imageSearchQuery binding still wins.
+        let explicit = match node {
+            PenNode::Frame(f) => f
+                .image_search_query
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .to_string(),
+            _ => String::new(),
+        };
+        query = if explicit.is_empty() {
+            sibling_text.join(" ")
+        } else {
+            explicit
+        };
+    }
     if query.is_empty() {
         return None;
     }
@@ -485,7 +570,9 @@ fn is_image_area_frame_by_heuristic(node: &PenNode) -> bool {
     if !has_image_area_keyword(name) {
         return false;
     }
-    if !is_image_area_size(&frame.container.width, &frame.container.height) {
+    if !is_image_area_size(&frame.container.width, &frame.container.height)
+        && !is_small_thumb_size(&frame.container.width, &frame.container.height)
+    {
         return false;
     }
     if !matches!(frame.container.fill.as_deref(), Some([PenFill::Solid(_)])) {
@@ -495,6 +582,92 @@ fn is_image_area_frame_by_heuristic(node: &PenNode) -> bool {
         return true;
     };
     matches!(children.as_slice(), [] | [PenNode::IconFont(_)])
+        || matches!(children.as_slice(), [only] if is_empty_unfilled_frame(only))
+}
+
+/// A bare structural stub inside a media slot (an empty fill×fill frame the
+/// model left as "where the picture goes") must not disqualify the slot.
+fn is_empty_unfilled_frame(node: &PenNode) -> bool {
+    let PenNode::Frame(frame) = node else {
+        return false;
+    };
+    frame.container.fill.is_none()
+        && frame
+            .children
+            .as_ref()
+            .is_none_or(|children| children.is_empty())
+}
+
+/// An UNNAMED small square solid rectangle inside a media-named ancestor
+/// ("Mini Player" > bare 44×44 rectangle, measured test0711-2-ds) — the
+/// name-keyword gate lives on the ANCESTOR chain, so the artwork slot the
+/// model left anonymous still enriches. The query is derived from the
+/// surrounding names/labels as usual.
+/// Nameless, childless, solid, rounded/clipping, roughly-square slot of at
+/// least thumbnail size — the shape signature of a cover box. Only ever
+/// consulted when TEXT SIBLINGS exist to supply the subject.
+fn is_bare_anonymous_slot(node: &PenNode) -> bool {
+    let (base, container) = match node {
+        PenNode::Frame(f) => (&f.base, &f.container),
+        PenNode::Rectangle(r) => (&r.base, &r.container),
+        _ => return false,
+    };
+    if base.name.as_deref().is_some_and(|n| !n.trim().is_empty()) {
+        return false;
+    }
+    let rounded = container.corner_radius.is_some() || container.clip_content == Some(true);
+    if !rounded {
+        return false;
+    }
+    let (Some(w), Some(h)) = (
+        dimension_number(&container.width),
+        dimension_number(&container.height),
+    ) else {
+        return false;
+    };
+    if w < 48.0 || h < 48.0 || w / h > 1.6 || h / w > 1.6 {
+        return false;
+    }
+    if !matches!(container.fill.as_deref(), Some([PenFill::Solid(_)])) {
+        return false;
+    }
+    node.children().is_none_or(|c| c.is_empty())
+}
+
+fn is_unnamed_media_slot_in_context(node: &PenNode, parent_names: &[String]) -> bool {
+    let PenNode::Rectangle(rect) = node else {
+        return false;
+    };
+    if rect
+        .base
+        .name
+        .as_deref()
+        .is_some_and(|name| !name.trim().is_empty())
+    {
+        return false;
+    }
+    if !is_small_thumb_size(&rect.container.width, &rect.container.height) {
+        return false;
+    }
+    if !matches!(rect.container.fill.as_deref(), Some([PenFill::Solid(_)])) {
+        return false;
+    }
+    if rect
+        .children
+        .as_ref()
+        .is_some_and(|children| !children.is_empty())
+    {
+        return false;
+    }
+    const CONTEXT_WORDS: [&str; 6] = ["player", "art", "cover", "album", "media", "track"];
+    parent_names.iter().any(|name| {
+        let lowered = name.to_ascii_lowercase();
+        CONTEXT_WORDS.iter().any(|word| {
+            lowered
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .any(|token| token == *word)
+        })
+    })
 }
 
 fn is_image_area_rectangle_by_heuristic(node: &PenNode) -> bool {
@@ -523,6 +696,16 @@ fn is_image_area_size(width: &Option<SizingBehavior>, height: &Option<SizingBeha
     let (width_ok, width_concrete) = image_area_dimension_ok(width, 80.0);
     let (height_ok, height_concrete) = image_area_dimension_ok(height, 60.0);
     width_ok && height_ok && (width_concrete || height_concrete)
+}
+
+/// Small keyword-named media slots — a 44×44 mini-player "Art" square sits
+/// well below the generic 80×60 floor but is unmistakably an image slot
+/// (measured: the mini-player artwork routinely shipped as an empty grey
+/// square, test0711-22). Keyword gating keeps random small frames out.
+fn is_small_thumb_size(width: &Option<SizingBehavior>, height: &Option<SizingBehavior>) -> bool {
+    let (width_ok, width_concrete) = image_area_dimension_ok(width, 32.0);
+    let (height_ok, height_concrete) = image_area_dimension_ok(height, 32.0);
+    width_ok && height_ok && width_concrete && height_concrete
 }
 
 fn image_area_dimension_ok(size: &Option<SizingBehavior>, min_px: f64) -> (bool, bool) {
@@ -578,6 +761,10 @@ fn has_image_area_keyword(name: &str) -> bool {
                     | "picture"
                     | "banner"
                     | "poster"
+                    | "art"
+                    | "artwork"
+                    | "album"
+                    | "avatar"
             )
         })
 }
@@ -790,6 +977,7 @@ fn fetch_first_image_url_blocking(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
     credentials: Option<&OpenverseCredentials>,
+    used_urls: &Mutex<HashSet<String>>,
 ) -> Option<String> {
     let query = query.trim();
     if query.is_empty() {
@@ -799,13 +987,23 @@ fn fetch_first_image_url_blocking(
         .enable_all()
         .build()
         .ok()?;
-    runtime.block_on(fetch_first_image_url(query, aspect_ratio, credentials))
+    let picked = runtime.block_on(fetch_first_image_url(
+        query,
+        aspect_ratio,
+        credentials,
+        used_urls,
+    ));
+    if let Some(url) = picked.as_ref() {
+        used_urls.lock().unwrap().insert(url.clone());
+    }
+    picked
 }
 
 async fn fetch_first_image_url(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
     credentials: Option<&OpenverseCredentials>,
+    used_urls: &Mutex<HashSet<String>>,
 ) -> Option<String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
@@ -813,13 +1011,16 @@ async fn fetch_first_image_url(
         .build()
         .ok()?;
     let query = simplify_search_query(query);
-    if let Some(url) = fetch_openverse(&client, &query, aspect_ratio, credentials).await {
+    if let Some(url) = fetch_openverse(&client, &query, aspect_ratio, credentials, used_urls).await
+    {
         return Some(url);
     }
     let words: Vec<&str> = query.split_whitespace().filter(|w| !w.is_empty()).collect();
     if words.len() > 2 {
         let truncated = words[..2].join(" ");
-        if let Some(url) = fetch_openverse(&client, &truncated, aspect_ratio, credentials).await {
+        if let Some(url) =
+            fetch_openverse(&client, &truncated, aspect_ratio, credentials, used_urls).await
+        {
             return Some(url);
         }
         if let Some(url) = fetch_wikimedia(&client, &truncated).await {
@@ -841,8 +1042,23 @@ pub(crate) fn simplify_search_query(prompt: &str) -> String {
     let keywords: Vec<&str> = normalized
         .split_whitespace()
         .filter(|word| word.len() > 2 && !IMAGE_SEARCH_STOP_WORDS.contains(word))
-        .take(4)
+        .take(6)
         .collect();
+    // Drop artifact words ONLY when aesthetic words remain — "logo" alone
+    // must not become an empty query.
+    let non_artifact: Vec<&str> = keywords
+        .iter()
+        .copied()
+        .filter(|word| !IMAGE_SEARCH_ARTIFACT_WORDS.contains(word))
+        .collect();
+    let keywords: Vec<&str> = if non_artifact.is_empty() {
+        keywords
+    } else {
+        non_artifact
+    }
+    .into_iter()
+    .take(4)
+    .collect();
     if keywords.is_empty() {
         prompt.chars().take(30).collect()
     } else {
@@ -855,6 +1071,7 @@ async fn fetch_openverse(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
     credentials: Option<&OpenverseCredentials>,
+    used_urls: &Mutex<HashSet<String>>,
 ) -> Option<String> {
     let url = openverse_search_url(query, aspect_ratio)?;
     let mut request = client.get(url);
@@ -868,7 +1085,9 @@ async fn fetch_openverse(
         return None;
     }
     let json: serde_json::Value = resp.json().await.ok()?;
-    let result = json.get("results")?.as_array()?.first()?;
+    let results = json.get("results")?.as_array()?;
+    let used = used_urls.lock().unwrap().clone();
+    let result = select_openverse_result(results, query, &used)?;
     let mut candidates = Vec::new();
     push_candidate_url(
         &mut candidates,
@@ -881,6 +1100,73 @@ async fn fetch_openverse(
     first_renderable_image_src(client, candidates).await
 }
 
+/// Titles that mark a result as noise no matter how well it ranks — the
+/// classic is a literal "File not found" artwork Openverse serves for
+/// weakly-matching queries (measured: it landed in a music-app card,
+/// test0711-22). Junk-titled results are skipped; if EVERY result is junk
+/// the slot stays empty rather than filling with a meaningless picture.
+const JUNK_TITLE_MARKERS: [&str; 8] = [
+    "not found",
+    "404",
+    "placeholder",
+    "no image",
+    "missing",
+    "error",
+    "broken",
+    "deleted",
+];
+
+fn result_title(result: &serde_json::Value) -> String {
+    result
+        .get("title")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_lowercase()
+}
+
+/// Pick the best of the returned results instead of blindly trusting rank 1:
+/// drop junk-titled entries, then prefer the first whose title shares a word
+/// with the query (Openverse relevance degrades fast on niche queries), then
+/// the first non-junk entry.
+pub(crate) fn select_openverse_result<'results>(
+    results: &'results [serde_json::Value],
+    query: &str,
+    used_urls: &HashSet<String>,
+) -> Option<&'results serde_json::Value> {
+    let is_used = |result: &serde_json::Value| {
+        ["url", "thumbnail"].iter().any(|key| {
+            result
+                .get(*key)
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|url| used_urls.contains(url))
+        })
+    };
+    let non_junk: Vec<&serde_json::Value> = results
+        .iter()
+        .filter(|result| {
+            let title = result_title(result);
+            !is_used(result)
+                && !JUNK_TITLE_MARKERS
+                    .iter()
+                    .any(|marker| title.contains(marker))
+        })
+        .collect();
+    let query_words: Vec<String> = query
+        .to_lowercase()
+        .split_whitespace()
+        .filter(|w| w.len() > 2)
+        .map(str::to_string)
+        .collect();
+    non_junk
+        .iter()
+        .find(|result| {
+            let title = result_title(result);
+            query_words.iter().any(|word| title.contains(word.as_str()))
+        })
+        .copied()
+        .or_else(|| non_junk.first().copied())
+}
+
 fn openverse_search_url(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
@@ -888,7 +1174,7 @@ fn openverse_search_url(
     let query = simplify_search_query(query);
     let mut url = reqwest::Url::parse_with_params(
         "https://api.openverse.org/v1/images/",
-        &[("q", query.as_str()), ("page_size", "1")],
+        &[("q", query.as_str()), ("page_size", "10")],
     )
     .ok()?;
     if let Some(aspect_ratio) = aspect_ratio {

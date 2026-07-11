@@ -114,7 +114,17 @@ pub fn pump_progress(
                     ));
                 }
                 Err(e) => {
-                    msg.content = format!("error: {e}");
+                    let raw = e.to_string();
+                    msg.content = match friendly_quota_error(&raw) {
+                        Some(friendly) => {
+                            // Raw provider JSON stays available in the
+                            // collapsible thinking block for debugging.
+                            msg.thinking.push_str("\n\n");
+                            msg.thinking.push_str(&raw);
+                            friendly
+                        }
+                        None => format!("error: {raw}"),
+                    };
                 }
             }
             msg.streaming = false;
@@ -249,3 +259,58 @@ fn format_subtask_skills(
 #[cfg(test)]
 #[path = "design_session_tests.rs"]
 mod tests;
+
+/// Render a provider quota-exhaustion error (HTTP 429 with an
+/// `AccountQuotaExceeded`-style body) as one human sentence instead of
+/// raw JSON. Extracts the reset timestamp when the provider names one
+/// ("It will reset at 2026-07-10 16:59:53 +0800 CST."). `None` for
+/// every other error so the raw message keeps rendering unchanged.
+fn friendly_quota_error(raw: &str) -> Option<String> {
+    let quota_shaped = raw.contains("AccountQuotaExceeded")
+        || (raw.contains("429") && raw.to_ascii_lowercase().contains("quota"));
+    if !quota_shaped {
+        return None;
+    }
+    let reset = raw.find("reset at ").map(|i| {
+        let tail = &raw[i + "reset at ".len()..];
+        let end = tail
+            .find(". ")
+            .or_else(|| tail.find('"'))
+            .unwrap_or_else(|| tail.find('.').unwrap_or(tail.len()));
+        tail[..end].trim().to_string()
+    });
+    Some(match reset {
+        Some(when) if !when.is_empty() => format!(
+            "Model quota exhausted — the provider's usage window is used up. It resets at \
+             {when}; generation will work again after that, or switch to another model for now."
+        ),
+        _ => "Model quota exhausted — the provider's usage window is used up. Wait for the \
+              quota to reset, or switch to another model for now."
+            .to_string(),
+    })
+}
+
+#[cfg(test)]
+mod quota_error_tests {
+    use super::friendly_quota_error;
+
+    #[test]
+    fn ark_quota_json_renders_one_friendly_sentence_with_reset_time() {
+        let raw = r#"orchestration failed: openai-compatible http 429 Too Many Requests: {"error":{"code":"AccountQuotaExceeded","message":"You have exceeded the 5-hour usage quota. It will reset at 2026-07-10 16:59:53 +0800 CST. We recommend upgrading your plan for more quota, or waiting for the reset. Request id: 0217","param":"","type":"TooManyRequests"}}"#;
+        let friendly = friendly_quota_error(raw).expect("quota-shaped error");
+        assert!(
+            friendly.contains("2026-07-10 16:59:53 +0800 CST"),
+            "{friendly}"
+        );
+        assert!(
+            !friendly.contains('{'),
+            "no raw JSON in the friendly line: {friendly}"
+        );
+    }
+
+    #[test]
+    fn non_quota_errors_pass_through() {
+        assert!(friendly_quota_error("orchestration failed: http 500 internal").is_none());
+        assert!(friendly_quota_error("parse error in subtask").is_none());
+    }
+}

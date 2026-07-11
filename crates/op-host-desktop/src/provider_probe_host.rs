@@ -118,8 +118,58 @@ impl DesktopApp {
             });
         }
         es.rebuild_chat_models();
+        // Remember the connection across launches (flags only — the model
+        // catalog is re-probed on restore, keys don't exist for CLIs).
+        let connected_now = es.editor_ui.agent_settings.connected;
+        crate::agent_connect_store::save(&connected_now);
+        self.last_saved_connections = Some(connected_now);
         self.host.mark_editor_state_dirty();
+        // Startup restore replays one silent probe per remembered
+        // provider; queue the next one as each outcome lands.
+        if let Some(next) = self.provider_reconnect_queue.pop() {
+            self.host
+                .editor_state_mut()
+                .editor_ui
+                .agent_settings
+                .pending_provider_connect = Some(next);
+        }
         true
+    }
+
+    /// Write the connection flags through to the store whenever they
+    /// change — the Disconnect button mutates state in the widget layer,
+    /// which cannot reach the store itself. Cheap ([bool;5] compare),
+    /// called once per frame.
+    pub(crate) fn persist_connection_changes(&mut self) {
+        let connected = self.host.editor_state().editor_ui.agent_settings.connected;
+        if self.last_saved_connections == Some(connected) {
+            return;
+        }
+        // First frame: adopt without writing (nothing changed yet).
+        if self.last_saved_connections.is_none() {
+            self.last_saved_connections = Some(connected);
+            return;
+        }
+        crate::agent_connect_store::save(&connected);
+        self.last_saved_connections = Some(connected);
+    }
+
+    /// Begin the startup reconnect replay for providers remembered as
+    /// connected last session. The first probe starts immediately; the
+    /// rest ride the landing hook above, one at a time.
+    pub(crate) fn restore_remembered_connections(&mut self) {
+        let mut remembered = crate::agent_connect_store::load();
+        if remembered.is_empty() {
+            return;
+        }
+        let first = remembered.remove(0);
+        remembered.reverse();
+        self.provider_reconnect_queue = remembered;
+        self.host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .pending_provider_connect = Some(first);
     }
 
     /// Whether a probe worker is in flight — keeps the idle event

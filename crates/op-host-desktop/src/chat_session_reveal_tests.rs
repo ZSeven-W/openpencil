@@ -74,7 +74,7 @@ fn pump_defers_loop_finalize_until_registered_reveals_drain() {
     ));
 
     for _ in 0..200 {
-        pump(&mut host, &mut current, None);
+        pump(&mut host, &mut current, None, None, (1200.0, 800.0));
         if op_editor_core::agent_indicators::latest_reveal_end_ms(epoch).is_some() {
             break;
         }
@@ -84,7 +84,7 @@ fn pump_defers_loop_finalize_until_registered_reveals_drain() {
         .expect("batch_design should register reveals before finalize");
 
     for _ in 0..20 {
-        pump(&mut host, &mut current, None);
+        pump(&mut host, &mut current, None, None, (1200.0, 800.0));
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
     let header = header_node(&host).expect("Header frame inserted");
@@ -99,7 +99,7 @@ fn pump_defers_loop_finalize_until_registered_reveals_drain() {
         std::thread::sleep(std::time::Duration::from_millis(reveal_end - now + 20));
     }
     for _ in 0..200 {
-        pump(&mut host, &mut current, None);
+        pump(&mut host, &mut current, None, None, (1200.0, 800.0));
         if current.is_none() {
             break;
         }

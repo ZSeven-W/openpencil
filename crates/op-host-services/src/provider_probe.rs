@@ -273,9 +273,13 @@ fn claude_env_var(name: &str) -> Option<String> {
 /// lower tiers even when its value is blank (a blank value reads as
 /// absent, like the TS falsy check at the use site).
 fn claude_env_var_resolved(name: &str) -> Option<String> {
-    if let Some(value) = std::env::var_os(name) {
-        let value = value.to_string_lossy().into_owned();
-        return (!value.trim().is_empty()).then_some(value);
+    // Process env first, then the captured login-shell env — a GUI
+    // (Dock) launch misses shell-rc exports like ANTHROPIC_API_KEY,
+    // which silently flips the transport to the subscription OAuth
+    // credential (→ 403 Request not allowed on non-Claude-Code-shaped
+    // requests). See `chat_spawn::login_shell_env`.
+    if let Some(value) = crate::chat_spawn::env_var_with_login_shell(name) {
+        return Some(value);
     }
     let dir = dirs::home_dir()?.join(".claude");
     for file in ["settings.local.json", "settings.json"] {

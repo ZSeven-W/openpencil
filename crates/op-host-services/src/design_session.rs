@@ -286,6 +286,31 @@ pub fn active_content_bounds(state: &EditorState) -> Option<DocRect> {
 
 /// The visible canvas region (width, height) given the current sidebar /
 /// right-rail state. Public for the desktop residual's viewport-fit tests.
+/// True when the active page's content is FULLY visible in the canvas
+/// region at the current viewport — used by the design-loop host to decide
+/// whether a growth batch pushed the design out of view (refit) or the
+/// user's current framing still covers it (leave the viewport alone).
+pub fn design_content_fits_viewport(
+    state: &EditorState,
+    viewport_width: f32,
+    viewport_height: f32,
+) -> bool {
+    let Some(bounds) = active_content_bounds(state) else {
+        return true;
+    };
+    let (canvas_w, canvas_h) = design_canvas_size(state, viewport_width, viewport_height);
+    if canvas_w <= 1.0 || canvas_h <= 1.0 {
+        return true;
+    }
+    let zoom = state.viewport.zoom;
+    let left = bounds.x as f32 * zoom + state.viewport.pan_x;
+    let top = bounds.y as f32 * zoom + state.viewport.pan_y;
+    let right = left + bounds.w as f32 * zoom;
+    let bottom = top + bounds.h as f32 * zoom;
+    const MARGIN: f32 = 2.0;
+    left >= -MARGIN && top >= -MARGIN && right <= canvas_w + MARGIN && bottom <= canvas_h + MARGIN
+}
+
 pub fn design_canvas_size(
     state: &EditorState,
     viewport_width: f32,
@@ -472,5 +497,48 @@ mod spawn_worker_tests {
         // the UI thread mints. The orchestrator-core test
         // (`spawn_concurrent_tests::run_spawned_agents_invokes_real_runner…`)
         // proves real id capture against an immediate-apply `VecDocSink`.
+    }
+}
+
+#[cfg(test)]
+mod viewport_fit_tests {
+    use super::*;
+
+    fn state_with_root(height: f64) -> EditorState {
+        let doc: jian_ops_schema::PenDocument = serde_json::from_str(&format!(
+            r##"{{ "version": "1.0", "children": [{{
+                "type": "frame", "id": "root", "name": "Screen",
+                "width": 390, "height": {height}, "layout": "vertical",
+                "fill": [{{ "type": "solid", "color": "#FFFFFF" }}]
+            }}] }}"##
+        ))
+        .expect("doc");
+        EditorState::from_document(doc)
+    }
+
+    #[test]
+    fn growth_past_the_viewport_triggers_refit_and_refit_restores_visibility() {
+        let mut state = state_with_root(844.0);
+        // Frame the initial root.
+        assert!(fit_design_viewport_to_content(&mut state, 1200.0, 800.0));
+        assert!(design_content_fits_viewport(&state, 1200.0, 800.0));
+
+        // The design grows past the framed height — no longer fully visible.
+        let mut grown = state_with_root(2000.0);
+        grown.viewport = state.viewport;
+        assert!(
+            !design_content_fits_viewport(&grown, 1200.0, 800.0),
+            "grown content must report out-of-view"
+        );
+
+        // Refit restores full visibility.
+        assert!(fit_design_viewport_to_content(&mut grown, 1200.0, 800.0));
+        assert!(design_content_fits_viewport(&grown, 1200.0, 800.0));
+    }
+
+    #[test]
+    fn zero_viewport_reports_fitting_so_headless_paths_never_loop() {
+        let state = state_with_root(844.0);
+        assert!(design_content_fits_viewport(&state, 0.0, 0.0));
     }
 }
