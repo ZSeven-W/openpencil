@@ -475,7 +475,13 @@ fn build_two_column_root_node(
         "id": format!("{root_id}-content"),
         "name": CONTENT_COLUMN_NAME,
         "width": "fill_container",
-        "height": "fit_content",
+        // fill, not fit: the root now presets a full artboard height, and
+        // an EMPTY fit_content column collapsed to its padding (a 940x64
+        // strip next to a full-height sidebar - user report 2026-07-12).
+        // fill stretches the empty column to the artboard from frame one;
+        // the height-adjust finalize pass still sizes the root off the
+        // column's CONTENT once sections land.
+        "height": "fill_container",
         "layout": "vertical",
         "gap": gap,
         // Outer page gutter [vertical, horizontal] so sections don't run
