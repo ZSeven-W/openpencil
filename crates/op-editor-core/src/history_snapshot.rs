@@ -172,21 +172,14 @@ impl SharedComponents {
     /// prototypes (id + deep-equality gated).
     pub fn capture(lib: &ComponentLibrary, anchor: Option<&SharedComponents>) -> Self {
         SharedComponents {
-            components: share_components(
-                &lib.components,
-                anchor.map(|a| a.components.as_slice()),
-            ),
+            components: share_components(&lib.components, anchor.map(|a| a.components.as_slice())),
         }
     }
 
     /// Rebuild an owned [`ComponentLibrary`].
     pub fn materialize(&self) -> ComponentLibrary {
         ComponentLibrary {
-            components: self
-                .components
-                .iter()
-                .map(|a| a.as_ref().clone())
-                .collect(),
+            components: self.components.iter().map(|a| a.as_ref().clone()).collect(),
         }
     }
 
@@ -271,10 +264,7 @@ fn share_children(current: &[PenNode], prev: Option<&[Arc<PenNode>]>) -> Vec<Arc
 }
 
 /// [`share_children`] for component prototypes, keyed by `Component::id`.
-fn share_components(
-    current: &[Component],
-    prev: Option<&[Arc<Component>]>,
-) -> Vec<Arc<Component>> {
+fn share_components(current: &[Component], prev: Option<&[Arc<Component>]>) -> Vec<Arc<Component>> {
     let Some(prev) = prev else {
         return current.iter().map(|c| Arc::new(c.clone())).collect();
     };
@@ -324,7 +314,8 @@ fn repair_entry(entry: &mut Arc<PenNode>, id: &NodeId, replacement: &PenNode) {
         let found = if node.id_str() == id.as_str() {
             Some(node)
         } else {
-            node.children().and_then(|c| crate::walkers::find_node(c, id))
+            node.children()
+                .and_then(|c| crate::walkers::find_node(c, id))
         };
         matches!(found, Some(n) if !matches!(n, PenNode::Ref(_)))
     };

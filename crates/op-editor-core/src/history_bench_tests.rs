@@ -70,7 +70,15 @@ fn huge_frame(width: usize, depth: usize) -> PenNode {
         .collect();
     let mut node = frame("huge", "Huge", 0.0, 0.0, 1000.0, 1000.0, leaves);
     for d in 0..depth {
-        node = frame(&format!("wrap{d}"), "W", 0.0, 0.0, 1000.0, 1000.0, vec![node]);
+        node = frame(
+            &format!("wrap{d}"),
+            "W",
+            0.0,
+            0.0,
+            1000.0,
+            1000.0,
+            vec![node],
+        );
     }
     node
 }
@@ -138,8 +146,14 @@ fn bench_one_huge_frame_deep_leaf_changed() {
     let tl = t1.elapsed();
 
     // No sharing on the single huge entry, either way.
-    assert!(!Arc::ptr_eq(&snap1.root_children()[0], &snap_early.root_children()[0]));
-    assert!(!Arc::ptr_eq(&snap1.root_children()[0], &snap_late.root_children()[0]));
+    assert!(!Arc::ptr_eq(
+        &snap1.root_children()[0],
+        &snap_early.root_children()[0]
+    ));
+    assert!(!Arc::ptr_eq(
+        &snap1.root_children()[0],
+        &snap_late.root_children()[0]
+    ));
     // Materialization is still lossless.
     assert_eq!(snap_early.materialize(), early);
     assert_eq!(snap_late.materialize(), late);
@@ -180,7 +194,10 @@ fn bench_large_reordered_sibling_list() {
         assert_eq!(snap2.root_children()[i].id_str(), node.id_str());
     }
     eprintln!("bench_reorder: {N} nodes reordered, shared={shared}, t={reorder:?}");
-    assert_eq!(shared, N, "the id-map fallback recovers full sharing under reorder");
+    assert_eq!(
+        shared, N,
+        "the id-map fallback recovers full sharing under reorder"
+    );
 }
 
 #[test]

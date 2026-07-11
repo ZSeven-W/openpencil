@@ -431,13 +431,12 @@ impl EditorState {
         } else {
             let sel = self.selection.anchor.clone();
             let fill_index = state.fill_index;
-            let before =
-                snapshot_find_node(&snap, &sel).and_then(|n| match state.target {
-                    ColorTarget::Fill => indexed_solid_fill_hex(n, fill_index),
-                    ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
-                    ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
-                    ColorTarget::EffectColor(i) => effect_color_hex(n, i),
-                });
+            let before = snapshot_find_node(&snap, &sel).and_then(|n| match state.target {
+                ColorTarget::Fill => indexed_solid_fill_hex(n, fill_index),
+                ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
+                ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),
+                ColorTarget::EffectColor(i) => effect_color_hex(n, i),
+            });
             let after = self.selected_node().and_then(|n| match state.target {
                 ColorTarget::Fill => indexed_solid_fill_hex(n, fill_index),
                 ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),

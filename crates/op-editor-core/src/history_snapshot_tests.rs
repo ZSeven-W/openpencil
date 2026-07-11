@@ -326,7 +326,9 @@ fn undo_redo_transitions_share_arcs_with_the_destination() {
     let undo_entry = state.history.past.back().unwrap();
     let d2 = dest2.doc.root_children();
     let u = undo_entry.doc.root_children();
-    let shared2 = (0..d2.len()).filter(|&i| Arc::ptr_eq(&d2[i], &u[i])).count();
+    let shared2 = (0..d2.len())
+        .filter(|&i| Arc::ptr_eq(&d2[i], &u[i]))
+        .count();
     assert!(
         shared2 >= d2.len() - 1,
         "redo's parked entry should share all-but-the-changed subtree with the destination"
@@ -335,8 +337,8 @@ fn undo_redo_transitions_share_arcs_with_the_destination() {
 
 #[test]
 fn unchanged_component_prototypes_share_arcs() {
-    use crate::history_snapshot::SharedComponents;
     use crate::components::{Component, ComponentLibrary};
+    use crate::history_snapshot::SharedComponents;
 
     let mut lib = ComponentLibrary::default();
     lib.insert(Component {
@@ -357,8 +359,14 @@ fn unchanged_component_prototypes_share_arcs() {
 
     let a = snap1.components();
     let b = snap2.components();
-    assert!(Arc::ptr_eq(&a[0], &b[0]), "unchanged prototype c0 must share");
-    assert!(!Arc::ptr_eq(&a[1], &b[1]), "changed prototype c1 must be fresh");
+    assert!(
+        Arc::ptr_eq(&a[0], &b[0]),
+        "unchanged prototype c0 must share"
+    );
+    assert!(
+        !Arc::ptr_eq(&a[1], &b[1]),
+        "changed prototype c1 must be fresh"
+    );
 }
 
 // --- COW isolation (repair_swap) -------------------------------------
@@ -386,8 +394,14 @@ fn repair_swap_is_copy_on_write_and_does_not_contaminate_a_shared_sibling_snapsh
     let snap_a = SharedDoc::capture(&doc, None);
     // snap_b shares both entries with snap_a (anchored, no change).
     let mut snap_b = SharedDoc::capture(&doc, Some(&snap_a));
-    assert!(Arc::ptr_eq(&snap_a.root_children()[0], &snap_b.root_children()[0]));
-    assert!(Arc::ptr_eq(&snap_a.root_children()[1], &snap_b.root_children()[1]));
+    assert!(Arc::ptr_eq(
+        &snap_a.root_children()[0],
+        &snap_b.root_children()[0]
+    ));
+    assert!(Arc::ptr_eq(
+        &snap_a.root_children()[1],
+        &snap_b.root_children()[1]
+    ));
 
     // Repair snap_b: swap the contaminated "inst1" for a real Ref.
     let replacement = ref_node("inst1", "card");
@@ -395,7 +409,10 @@ fn repair_swap_is_copy_on_write_and_does_not_contaminate_a_shared_sibling_snapsh
 
     // snap_b now holds the Ref; snap_a is untouched (still the rect).
     let b_inst = &snap_b.root_children()[1];
-    assert!(matches!(b_inst.as_ref(), PenNode::Ref(_)), "snap_b repaired");
+    assert!(
+        matches!(b_inst.as_ref(), PenNode::Ref(_)),
+        "snap_b repaired"
+    );
     let a_inst = &snap_a.root_children()[1];
     assert!(
         matches!(a_inst.as_ref(), PenNode::Rectangle(_)),
