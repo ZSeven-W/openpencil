@@ -97,7 +97,7 @@ pub(crate) fn snapshot_variable_hex(
     name: &str,
     active_theme: &std::collections::BTreeMap<String, String>,
 ) -> Option<String> {
-    let def = snap.doc.variables.as_ref()?.get(name)?;
+    let def = snap.doc.variables()?.get(name)?;
     if !matches!(def.kind, jian_ops_schema::variable::VariableKind::Color) {
         return None;
     }
@@ -128,16 +128,14 @@ fn resolve_snapshot_value<'a>(
     }
 }
 
-/// The active page's children inside a history snapshot — mirrors
-/// [`crate::state::EditorState::active_children`] but reads from a snapshot.
-pub(crate) fn snapshot_active_children(
-    snap: &crate::history::EditorSnapshot,
-) -> &[jian_ops_schema::node::PenNode] {
-    match snap.doc.pages.as_ref() {
-        Some(pages) => match pages.get(snap.active_page_index) {
-            Some(page) => &page.children,
-            None => &[],
-        },
-        None => &snap.doc.children,
-    }
+/// Find a node by id on the active page inside a history snapshot —
+/// mirrors [`crate::state::EditorState::active_children`] + `find_node`
+/// but reads from the snapshot's shared (`Arc`) document. The snapshot
+/// document no longer exposes a `&[PenNode]` slice (its top-level nodes
+/// are `Arc<PenNode>`), so the lookup is folded into one call.
+pub(crate) fn snapshot_find_node<'a>(
+    snap: &'a crate::history::EditorSnapshot,
+    id: &crate::node_id::NodeId,
+) -> Option<&'a jian_ops_schema::node::PenNode> {
+    snap.doc.snapshot_find_node(snap.active_page_index, id)
 }

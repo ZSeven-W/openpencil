@@ -22,8 +22,8 @@
 //! undo only when the colour actually changed.
 
 use crate::color_picker_snapshot::{
-    effect_color_hex, gradient_stop_hex, scalar_as_hex, snapshot_active_children,
-    snapshot_variable_hex, splice_alpha, variant_scalar,
+    effect_color_hex, gradient_stop_hex, scalar_as_hex, snapshot_find_node, snapshot_variable_hex,
+    splice_alpha, variant_scalar,
 };
 use crate::fills::{
     first_solid_fill_hex, first_solid_stroke_hex, push_drop_shadow, set_primary_fill_hex,
@@ -427,14 +427,12 @@ impl EditorState {
             // a Ref, so compare the whole node instead. An override
             // edit must still land exactly one undo entry.
             let sel = self.selection.anchor.clone();
-            let snap_children = snapshot_active_children(&snap);
-            crate::walkers::find_node(snap_children, &sel) != self.selected_node()
+            snapshot_find_node(&snap, &sel) != self.selected_node()
         } else {
             let sel = self.selection.anchor.clone();
-            let snap_children = snapshot_active_children(&snap);
             let fill_index = state.fill_index;
             let before =
-                crate::walkers::find_node(snap_children, &sel).and_then(|n| match state.target {
+                snapshot_find_node(&snap, &sel).and_then(|n| match state.target {
                     ColorTarget::Fill => indexed_solid_fill_hex(n, fill_index),
                     ColorTarget::Stroke => first_solid_stroke_hex(n).map(str::to_string),
                     ColorTarget::GradientStop(i) => gradient_stop_hex(n, i),

@@ -14,7 +14,7 @@
 //! Mutators push onto `past` BEFORE a transactional edit; this task is
 //! types-only (Task 4.5 ports the mutator `impl`s).
 
-use crate::components::ComponentLibrary;
+use crate::history_snapshot::{SharedComponents, SharedDoc};
 use crate::selection::SelectionState;
 use std::collections::VecDeque;
 
@@ -24,22 +24,27 @@ pub const HISTORY_CAP: usize = 100;
 
 /// Snapshot of the editor state covered by undo / redo.
 ///
-/// Holds a full `PenDocument` clone (node tree + pages + variables +
-/// themes) plus transient registries whose behavior depends on document
-/// edits. A variable-table edit can therefore be undone the same way a
-/// node edit can, and component promotion stays in sync with the
-/// persisted `reusable` flag.
+/// Holds a **structurally-shared** view of the canonical document
+/// ([`SharedDoc`] — top-level nodes shared by `Arc` across adjacent
+/// snapshots) and the component prototypes ([`SharedComponents`]) plus
+/// the transient registries whose behavior depends on document edits.
+/// A variable-table edit can therefore be undone the same way a node
+/// edit can, and component promotion stays in sync with the persisted
+/// `reusable` flag. See [`crate::history_snapshot`] for the sharing +
+/// copy-on-write rules; snapshots materialize back to an owned
+/// `PenDocument` on every restore.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EditorSnapshot {
-    /// The canonical document at snapshot time.
-    pub doc: jian_ops_schema::PenDocument,
+    /// The canonical document at snapshot time, shared at top-level-node
+    /// granularity.
+    pub doc: SharedDoc,
     /// Selection at snapshot time.
     pub selection: SelectionState,
     /// Active page index at snapshot time.
     pub active_page_index: usize,
     /// Runtime component registry mirrored from reusable document nodes
-    /// and explicit component commands.
-    pub components: ComponentLibrary,
+    /// and explicit component commands, shared by `Arc` per prototype.
+    pub components: SharedComponents,
     /// `MergeAppState` ownership map (`key → owning plan_idx`) at
     /// snapshot time. Must travel with the snapshot: doc.state is
     /// restored on undo / batch rollback, so ownership left behind
