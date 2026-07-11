@@ -282,15 +282,14 @@ impl TopBar {
         );
         rx -= GLOBE_BUTTON_WIDTH;
 
-        // i18n globe + chevron-down (single hit-target).
-        let globe_button = Rect {
-            origin: Point2D::new(rx, center_y - ICON_BUTTON / 2.0),
-            size: Point2D::new(GLOBE_BUTTON_WIDTH, ICON_BUTTON),
-        };
-        paint_compound_icon_button(
+        // i18n globe — plain icon button like its Sun/Maximize siblings
+        // (the trailing chevron was dropped: it added noise without
+        // information, the dropdown affordance is the click itself).
+        paint_icon_button(
             cx,
             &self.theme,
-            globe_button,
+            rx + (GLOBE_BUTTON_WIDTH - ICON_BUTTON) / 2.0,
+            center_y,
             Icon::Globe,
             self.is_hovered(TopBarButton::ToggleLocale),
             self.is_pressed(TopBarButton::ToggleLocale),
@@ -410,12 +409,7 @@ impl TopBar {
 
         // Divider between the agent chip and the globe button — groups
         // the status chip apart from the locale/theme/fullscreen controls.
-        paint_divider(
-            cx,
-            &self.theme,
-            globe_button.origin.x - DIVIDER_GAP - DIVIDER_W,
-            center_y,
-        );
+        paint_divider(cx, &self.theme, rx - DIVIDER_GAP - DIVIDER_W, center_y);
     }
 }
 
