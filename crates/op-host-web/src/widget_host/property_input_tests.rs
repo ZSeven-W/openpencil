@@ -1,5 +1,6 @@
 use super::WidgetHost;
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::style::PenFill;
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
 use op_editor_core::editor_ui_state::EffectParamFocus;
 use op_editor_core::ui_draft::PropertyFocus;
@@ -16,6 +17,42 @@ fn seed(host: &mut WidgetHost, json: &str) {
         .value;
     host.editor_state = op_editor_core::EditorState::from_document(doc);
     host.editor_state_dirty = true;
+}
+
+#[test]
+fn web_move_fill_action_dispatches_as_one_undoable_edit() {
+    let mut host = WidgetHost::new();
+    seed(
+        &mut host,
+        r##"{"version":"0.8.0","children":[{
+          "type":"rectangle","id":"rect","name":"Rect",
+          "x":0,"y":0,"width":10,"height":10,
+          "fill":[
+            {"type":"solid","color":"#111111"},
+            {"type":"solid","color":"#222222"},
+            {"type":"solid","color":"#333333"}
+          ]
+        }]}"##,
+    );
+    host.editor_state.set_single_selection(NodeId::new("rect"));
+
+    host.apply_property_action(PropertyPanelAction::MoveFill { from: 2, to: 0 });
+
+    let node = op_editor_core::walkers::find_node(
+        host.editor_state.active_children(),
+        &NodeId::new("rect"),
+    )
+    .expect("rect exists");
+    let colors: Vec<_> = op_editor_core::fills::node_fills(node)
+        .expect("fills exist")
+        .iter()
+        .map(|fill| match fill {
+            PenFill::Solid(body) => body.color.as_str(),
+            other => panic!("expected solid, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(colors, ["#333333", "#111111", "#222222"]);
+    assert_eq!(host.editor_state.history.past.len(), 1);
 }
 
 fn point_for_property_focus(host: &WidgetHost, want: PropertyFocus) -> (f32, f32) {

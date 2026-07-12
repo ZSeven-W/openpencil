@@ -7,6 +7,7 @@
 
 use super::WidgetHostNative;
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::style::PenFill;
 use op_editor_core::{NodeId, PenNodeExt};
 
 const COMPONENT_DOC: &str = r##"{
@@ -32,6 +33,90 @@ fn seeded_host() -> WidgetHostNative {
     host.editor_state_mut()
         .set_single_selection(NodeId::new("inst1"));
     host
+}
+
+#[test]
+fn native_move_fill_action_dispatches_as_one_undoable_edit() {
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"0.8.0","children":[{
+          "type":"rectangle","id":"rect","name":"Rect",
+          "x":0,"y":0,"width":10,"height":10,
+          "fill":[
+            {"type":"solid","color":"#111111"},
+            {"type":"solid","color":"#222222"},
+            {"type":"solid","color":"#333333"}
+          ]
+        }]}"##,
+    )
+    .expect("fixture parses")
+    .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("rect"));
+
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::MoveFill {
+        from: 2,
+        to: 0,
+    });
+
+    let node = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("rect"),
+    )
+    .expect("rect exists");
+    let colors: Vec<_> = op_editor_core::fills::node_fills(node)
+        .expect("fills exist")
+        .iter()
+        .map(|fill| match fill {
+            PenFill::Solid(body) => body.color.as_str(),
+            other => panic!("expected solid, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(colors, ["#333333", "#111111", "#222222"]);
+    assert_eq!(host.editor_state().history.past.len(), 1);
+}
+
+#[test]
+fn native_instance_move_fill_undo_restores_the_original_ref() {
+    let mut host = WidgetHostNative::new();
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"0.8.0","children":[
+          {"type":"rectangle","id":"master","name":"Master","reusable":true,
+           "x":0,"y":0,"width":10,"height":10,
+           "fill":[
+             {"type":"solid","color":"#111111"},
+             {"type":"solid","color":"#222222"},
+             {"type":"solid","color":"#333333"}
+           ]},
+          {"type":"ref","id":"inst","ref":"master","x":20,"y":0}
+        ]}"##,
+    )
+    .expect("fixture parses")
+    .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("inst"));
+
+    host.apply_property_action(op_editor_ui::widgets::PropertyPanelAction::MoveFill {
+        from: 2,
+        to: 0,
+    });
+    assert_eq!(host.editor_state().history.past.len(), 1);
+    assert!(host.editor_state_mut().undo());
+
+    let node = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("inst"),
+    )
+    .expect("instance exists after undo");
+    let PenNode::Ref(reference) = node else {
+        panic!("undo must restore a Ref, got {node:?}");
+    };
+    assert!(
+        reference.descendants.is_none(),
+        "undo must remove the fill-order override"
+    );
 }
 
 fn ref_node(host: &WidgetHostNative) -> &jian_ops_schema::node::RefNode {
