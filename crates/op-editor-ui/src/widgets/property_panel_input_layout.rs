@@ -4,7 +4,7 @@
 //! and input-rect walker stay under the repository file-size cap.
 
 use crate::widgets::property_panel::{FillSummary, PropertyPanelAction};
-use crate::widgets::property_panel_fill::fill_row_body_height;
+use crate::widgets::property_panel_fill::{fill_head_rects, fill_row_body_height};
 use crate::widgets::property_panel_fill_picker::{
     fill_type_at, fill_type_picker_rect, FILL_TYPE_COUNT, FILL_TYPE_ROW_HEIGHT,
 };
@@ -223,10 +223,7 @@ pub fn editable_input_rects(
             // Head row: per-fill opacity input (the `%` box).
             rects.push((
                 PropertyFocus::FillOpacity(fi),
-                Rect {
-                    origin: Point2D::new(x0 + w - PAD_X - 78.0, y),
-                    size: Point2D::new(50.0, INPUT_HEIGHT),
-                },
+                fill_head_rects(x0, y, w).opacity,
             ));
             y += INPUT_HEIGHT + 6.0;
             match fill_type {
@@ -361,20 +358,29 @@ pub(crate) fn push_fill_action_rects(
     for (fi, fill) in fills.iter().enumerate() {
         let is_primary = fi == 0;
         let fill_type = fill.fill_type;
-        // Head row: type dropdown + opacity input + ×.
-        let dropdown_rect = Rect {
-            origin: Point2D::new(x0 + PAD_X + 22.0 + 6.0, y),
-            size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
-        };
+        // Head row: type dropdown + opacity + adjacent reorder / remove controls.
+        let head = fill_head_rects(x0, y, w);
+        let dropdown_rect = head.dropdown;
         out.push((PropertyPanelAction::ToggleFillTypePicker(fi), dropdown_rect));
-        // The × sits to the right of the opacity box on the head row.
-        out.push((
-            PropertyPanelAction::RemoveFill(fi),
-            Rect {
-                origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
-                size: Point2D::new(28.0, INPUT_HEIGHT),
-            },
-        ));
+        if fi > 0 {
+            out.push((
+                PropertyPanelAction::MoveFill {
+                    from: fi,
+                    to: fi - 1,
+                },
+                head.move_up,
+            ));
+        }
+        if fi + 1 < fills.len() {
+            out.push((
+                PropertyPanelAction::MoveFill {
+                    from: fi,
+                    to: fi + 1,
+                },
+                head.move_down,
+            ));
+        }
+        out.push((PropertyPanelAction::RemoveFill(fi), head.remove));
         // This fill's open type-picker overlay rows.
         if fill_picker_open && fill_type_picker_index == fi {
             let picker_rect = fill_type_picker_rect(dropdown_rect);

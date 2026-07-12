@@ -30,6 +30,22 @@ fn selected_rect_state() -> op_editor_core::EditorState {
     state
 }
 
+fn selected_three_fill_state() -> op_editor_core::EditorState {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"rectangle","id":"rect","name":"Rect",
+               "x":40,"y":40,"width":160,"height":100,
+               "fill":[
+                 {"type":"solid","color":"#112233"},
+                 {"type":"solid","color":"#445566"},
+                 {"type":"solid","color":"#778899"}
+               ]}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("rect"));
+    state
+}
+
 fn panel_for(state: &op_editor_core::EditorState) -> PropertyPanel {
     PropertyPanel::for_selection(state).expect("rectangle panel")
 }
@@ -155,6 +171,63 @@ fn stacked_fills_emit_add_and_per_index_remove_actions() {
     assert!(actions.contains(&PropertyPanelAction::AddFill));
     assert!(actions.contains(&PropertyPanelAction::RemoveFill(0)));
     assert!(actions.contains(&PropertyPanelAction::RemoveFill(1)));
+}
+
+#[test]
+fn three_fill_rows_emit_exact_boundary_move_actions_in_row_order() {
+    let state = selected_three_fill_state();
+    let panel = panel_for(&state);
+
+    let moves: Vec<_> = sections::action_button_rects(
+        panel_rect(),
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        &panel.snapshot.fills,
+    )
+    .into_iter()
+    .filter_map(|(action, _)| {
+        matches!(action, PropertyPanelAction::MoveFill { .. }).then_some(action)
+    })
+    .collect();
+
+    assert_eq!(
+        moves,
+        vec![
+            PropertyPanelAction::MoveFill { from: 0, to: 1 },
+            PropertyPanelAction::MoveFill { from: 1, to: 0 },
+            PropertyPanelAction::MoveFill { from: 1, to: 2 },
+            PropertyPanelAction::MoveFill { from: 2, to: 1 },
+        ],
+        "first has down only, middle has up then down, last has up only"
+    );
+}
+
+#[test]
+fn fill_move_action_rect_centres_hit_the_exact_emitted_actions() {
+    let state = selected_three_fill_state();
+    let panel = panel_for(&state);
+    let move_rects: Vec<_> = sections::action_button_rects(
+        panel_rect(),
+        visible_for(&panel),
+        &panel.snapshot.effects,
+        &panel.snapshot.fills,
+    )
+    .into_iter()
+    .filter(|(action, _)| matches!(action, PropertyPanelAction::MoveFill { .. }))
+    .collect();
+
+    assert_eq!(move_rects.len(), 4);
+    for (expected, rect) in move_rects {
+        let centre = Point2D::new(
+            rect.origin.x + rect.size.x / 2.0,
+            rect.origin.y + rect.size.y / 2.0,
+        );
+        assert_eq!(
+            panel.hit_test_action(panel_rect(), centre),
+            Some(expected),
+            "the painted move control's action rect must be its hit region"
+        );
+    }
 }
 
 #[test]

@@ -31,6 +31,63 @@ pub use jian_widgets::components::select::SelectHit;
 use jian_widgets::components::select::{Select, SelectItem, SelectState};
 use op_editor_core::PropertyFocus;
 
+const FILL_SWATCH_SIZE: f32 = 22.0;
+const FILL_HEAD_GAP: f32 = 6.0;
+const FILL_OPACITY_WIDTH: f32 = 50.0;
+const FILL_MOVE_WIDTH: f32 = 20.0;
+const FILL_REMOVE_WIDTH: f32 = 22.0;
+
+/// Shared head-row geometry used by paint and every input/action walker.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct FillHeadRects {
+    pub(crate) swatch: Rect,
+    pub(crate) dropdown: Rect,
+    pub(crate) opacity: Rect,
+    pub(crate) move_up: Rect,
+    pub(crate) move_down: Rect,
+    pub(crate) remove: Rect,
+}
+
+pub(crate) fn fill_head_rects(x: f32, y: f32, width: f32) -> FillHeadRects {
+    let right = x + width - PAD_X;
+    let remove = Rect {
+        origin: Point2D::new(right - FILL_REMOVE_WIDTH, y),
+        size: Point2D::new(FILL_REMOVE_WIDTH, INPUT_HEIGHT),
+    };
+    let move_down = Rect {
+        origin: Point2D::new(remove.origin.x - FILL_MOVE_WIDTH, y),
+        size: Point2D::new(FILL_MOVE_WIDTH, INPUT_HEIGHT),
+    };
+    let move_up = Rect {
+        origin: Point2D::new(move_down.origin.x - FILL_MOVE_WIDTH, y),
+        size: Point2D::new(FILL_MOVE_WIDTH, INPUT_HEIGHT),
+    };
+    let opacity = Rect {
+        origin: Point2D::new(move_up.origin.x - FILL_HEAD_GAP - FILL_OPACITY_WIDTH, y),
+        size: Point2D::new(FILL_OPACITY_WIDTH, INPUT_HEIGHT),
+    };
+    let swatch = Rect {
+        origin: Point2D::new(x + PAD_X, y + 2.0),
+        size: Point2D::new(FILL_SWATCH_SIZE, FILL_SWATCH_SIZE),
+    };
+    let dropdown_x = swatch.origin.x + swatch.size.x + FILL_HEAD_GAP;
+    let dropdown = Rect {
+        origin: Point2D::new(dropdown_x, y),
+        size: Point2D::new(
+            (opacity.origin.x - FILL_HEAD_GAP - dropdown_x).max(0.0),
+            INPUT_HEIGHT,
+        ),
+    };
+    FillHeadRects {
+        swatch,
+        dropdown,
+        opacity,
+        move_up,
+        move_down,
+        remove,
+    }
+}
+
 /// Display label for a fill-type variant (Solid / Gradient /
 /// Image), localised against `locale` via the `fill.*` keys.
 pub fn fill_type_label(
@@ -219,12 +276,9 @@ fn paint_one_fill(
 ) -> f32 {
     let mut y = y;
     let fill_type = fill.fill_type;
-    let usable_w = width - PAD_X * 2.0;
     let fill_color = fill.color;
-    let swatch_rect = Rect {
-        origin: Point2D::new(x + PAD_X, y + 2.0),
-        size: Point2D::new(22.0, 22.0),
-    };
+    let head = fill_head_rects(x, y, width);
+    let swatch_rect = head.swatch;
     // Swatch icon depends on the fill type so the head row reads
     // as a small preview of what's rendered below.
     use op_editor_core::FillType;
@@ -317,10 +371,7 @@ fn paint_one_fill(
             );
         }
     }
-    let dropdown_rect = Rect {
-        origin: Point2D::new(swatch_rect.origin.x + swatch_rect.size.x + 6.0, y),
-        size: Point2D::new(usable_w - 22.0 - 6.0 - 50.0 - 22.0 - 12.0, INPUT_HEIGHT),
-    };
+    let dropdown_rect = head.dropdown;
     jian_widgets::components::select_trigger::SelectTrigger {
         icon_paths: None,
         label: fill_type_label(locale, fill_type),
@@ -337,10 +388,7 @@ fn paint_one_fill(
         &crate::widgets::button::tokens_from_theme(theme),
     );
     let opacity_focus = PropertyFocus::FillOpacity(fill_index);
-    let pct_rect = Rect {
-        origin: Point2D::new(dropdown_rect.origin.x + dropdown_rect.size.x + 6.0, y),
-        size: Point2D::new(50.0, INPUT_HEIGHT),
-    };
+    let pct_rect = head.opacity;
     cx.backend
         .fill_round_rect(pct_rect, INPUT_RADIUS, theme.muted);
     let opacity_focused = edit.focus == Some(opacity_focus);
@@ -412,16 +460,39 @@ fn paint_one_fill(
             pct_rect.origin.y + 19.0,
         ),
     );
+    let move_icon_size = 12.0;
+    if fill_index > 0 {
+        draw_icon(
+            cx.backend,
+            Icon::ArrowUp,
+            Point2D::new(
+                head.move_up.origin.x + (head.move_up.size.x - move_icon_size) / 2.0,
+                head.move_up.origin.y + (head.move_up.size.y - move_icon_size) / 2.0,
+            ),
+            move_icon_size,
+            theme.muted_foreground,
+            1.4,
+        );
+    }
+    if fill_index + 1 < snapshot.fills.len() {
+        draw_icon(
+            cx.backend,
+            Icon::ArrowDown,
+            Point2D::new(
+                head.move_down.origin.x + (head.move_down.size.x - move_icon_size) / 2.0,
+                head.move_down.origin.y + (head.move_down.size.y - move_icon_size) / 2.0,
+            ),
+            move_icon_size,
+            theme.muted_foreground,
+            1.4,
+        );
+    }
     draw_icon(
         cx.backend,
         Icon::Close,
-        // Centre the 14px glyph inside the RemoveFill hover-wash cell
-        // (origin x + width - PAD_X - 22, size 28×30 — see the action
-        // walker), instead of chaining off the opacity input, so the
-        // icon sits centred in the gray wash on hover.
         Point2D::new(
-            x + width - PAD_X - 22.0 + (28.0 - 14.0) / 2.0,
-            y + (INPUT_HEIGHT - 14.0) / 2.0,
+            head.remove.origin.x + (head.remove.size.x - 14.0) / 2.0,
+            head.remove.origin.y + (head.remove.size.y - 14.0) / 2.0,
         ),
         14.0,
         theme.muted_foreground,

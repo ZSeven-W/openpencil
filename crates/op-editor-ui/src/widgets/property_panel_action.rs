@@ -194,6 +194,11 @@ pub enum PropertyPanelAction {
     /// User clicked fill `index`'s row remove button — removes that
     /// fill.
     RemoveFill(usize),
+    /// User moved one fill layer to an adjacent final index.
+    MoveFill {
+        from: usize,
+        to: usize,
+    },
     /// User clicked the gradient-stops header "+".
     AddGradientStop,
     /// User clicked a gradient stop row remove button.

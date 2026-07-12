@@ -476,6 +476,8 @@ mod tests {
             active_page_index: 0,
             components: crate::history_snapshot::SharedComponents::default(),
             app_state_owner: std::collections::BTreeMap::new(),
+            fill_refs: std::collections::HashMap::new(),
+            stroke_refs: std::collections::HashMap::new(),
             revision: s.revision,
         });
         s.ui.pen_in_progress = Some(crate::NodeId::new("n7"));

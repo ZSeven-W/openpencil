@@ -47,6 +47,7 @@ pub mod drag_mutators;
 pub mod editor_ui_state;
 pub mod export_dialog_state;
 pub mod figma_import_state;
+pub mod fill_order;
 pub mod fills;
 pub mod geometry;
 pub mod git_button_state;
@@ -219,6 +220,7 @@ pub use editor_ui_state::{
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use figma_import_state::FigmaImportButton;
+pub use fill_order::move_fill;
 pub use fills::{
     first_fill_type, first_image_fill_summary, first_solid_fill_hex, first_solid_fill_opacity,
     first_solid_stroke_hex, node_effects, ImageFillSummary,
