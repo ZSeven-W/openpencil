@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -295,15 +295,17 @@ $env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpen
 
 ```bash
 op start                     # Launch desktop app
+op start --headless --file design.op # Launch headless file-backed server
 op design @landing.txt       # Batch design from file
-op insert '{"type":"RECT"}'  # Insert a node
+op design @ui.js             # Sandboxed JavaScript with loops
+op insert '{"type":"rectangle"}' # Insert a node
 op import:figma design.fig   # Import Figma file
 cat design.dsl | op design - # Pipe from stdin
 ```
 
-Supports three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin). Works with desktop app or web dev server. See [CLI README](./crates/op-cli) for full command reference.
+Supports three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin). Works with the desktop app, web server, or headless file-backed server. See the [CLI command reference](./crates/op-cli/src/usage.txt) for all commands.
 
-**LLM Skill** — install the [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) plugin to teach AI agents (Claude Code, Cursor, Codex, Gemini CLI, etc.) how to design with `op`.
+**LLM Skill** — install the [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) plugin to teach AI agents how to design with `op`. Run `op install` for detected agents, or target one explicitly with `op install --target codex`.
 
 ## Features
 

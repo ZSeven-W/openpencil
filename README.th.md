@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # เปิดแอปเดสก์ท็อป
+op start --headless --file design.op # เริ่มเซิร์ฟเวอร์แบบ headless
 op design @landing.txt       # ออกแบบแบบ batch จากไฟล์
-op insert '{"type":"RECT"}'  # แทรก node
+op design @ui.js             # JavaScript แบบ sandbox พร้อม loop
+op insert '{"type":"rectangle"}' # แทรก node
 op import:figma design.fig   # นำเข้าไฟล์ Figma
 cat design.dsl | op design - # Pipe จาก stdin
 ```
 
-รองรับ 3 วิธีการป้อนข้อมูล: สตริงแบบ inline, `@filepath` (อ่านจากไฟล์) หรือ `-` (อ่านจาก stdin) ทำงานร่วมกับแอปเดสก์ท็อปหรือ web dev server ดู [CLI README](./crates/op-cli) สำหรับคู่มือคำสั่งฉบับเต็ม
+รองรับสตริง inline, `@filepath` และ stdin (`-`) ทำงานร่วมกับแอปเดสก์ท็อป เว็บเซิร์ฟเวอร์ หรือเซิร์ฟเวอร์ headless ที่ใช้ไฟล์ ดูคำสั่งทั้งหมดใน [คู่มือคำสั่ง CLI](./crates/op-cli/src/usage.txt)
 
-**LLM Skill** — ติดตั้งปลั๊กอิน [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) เพื่อสอน AI agent (Claude Code, Cursor, Codex, Gemini CLI ฯลฯ) ออกแบบด้วย `op`
+**LLM Skill** — ติดตั้งปลั๊กอิน [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) เพื่อสอน AI agent ออกแบบด้วย `op` ใช้ `op install` สำหรับ agent ที่ตรวจพบ หรือ `op install --target codex` เพื่อระบุเป้าหมาย
 
 ## ฟีเจอร์
 

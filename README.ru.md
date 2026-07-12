@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # Запустить десктопное приложение
+op start --headless --file design.op # Запустить headless-сервер
 op design @landing.txt       # Пакетный дизайн из файла
-op insert '{"type":"RECT"}'  # Вставить узел
+op design @ui.js             # Изолированный JavaScript с циклами
+op insert '{"type":"rectangle"}' # Вставить узел
 op import:figma design.fig   # Импортировать файл Figma
 cat design.dsl | op design - # Передача через stdin
 ```
 
-Поддерживает три метода ввода: строка, `@filepath` (чтение из файла) или `-` (чтение из stdin). Работает с десктопным приложением или веб-сервером разработки. Подробнее в [CLI README](./crates/op-cli).
+Поддерживает строку, `@filepath` и stdin (`-`). Работает с десктопным приложением, веб-сервером или файловым headless-сервером. Все команды перечислены в [справочнике CLI](./crates/op-cli/src/usage.txt).
 
-**LLM-навык** — установите плагин [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill), чтобы научить ИИ-агентов (Claude Code, Cursor, Codex, Gemini CLI и др.) проектировать с помощью `op`.
+**LLM-навык** — установите плагин [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill), чтобы научить ИИ-агентов проектировать с помощью `op`. Используйте `op install` для обнаруженных агентов или `op install --target codex` для конкретной цели.
 
 ## Возможности
 

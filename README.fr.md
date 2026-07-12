@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # Lancer l'app de bureau
+op start --headless --file design.op # Lancer le serveur headless
 op design @landing.txt       # Design par lots depuis un fichier
-op insert '{"type":"RECT"}'  # Insérer un nœud
+op design @ui.js             # JavaScript isolé avec boucles
+op insert '{"type":"rectangle"}' # Insérer un nœud
 op import:figma design.fig   # Importer un fichier Figma
 cat design.dsl | op design - # Pipe depuis stdin
 ```
 
-Supporte trois méthodes d'entrée : chaîne en ligne, `@filepath` (lecture depuis un fichier), ou `-` (lecture depuis stdin). Fonctionne avec l'app de bureau ou le serveur de développement web. Voir le [README du CLI](./crates/op-cli) pour la référence complète des commandes.
+Prend en charge les chaînes en ligne, `@filepath` et stdin (`-`). Fonctionne avec l'app de bureau, le serveur web ou le serveur headless adossé à un fichier. Consultez la [référence des commandes CLI](./crates/op-cli/src/usage.txt).
 
-**Compétence LLM** — installez le plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) pour apprendre aux agents IA (Claude Code, Cursor, Codex, Gemini CLI, etc.) à concevoir avec `op`.
+**Compétence LLM** — installez le plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) pour apprendre aux agents IA à concevoir avec `op`. Utilisez `op install` pour les agents détectés ou `op install --target codex` pour une cible précise.
 
 ## Fonctionnalités
 

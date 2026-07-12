@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # Jalankan aplikasi desktop
+op start --headless --file design.op # Jalankan server headless
 op design @landing.txt       # Desain batch dari file
-op insert '{"type":"RECT"}'  # Sisipkan sebuah node
+op design @ui.js             # JavaScript sandbox dengan loop
+op insert '{"type":"rectangle"}' # Sisipkan sebuah node
 op import:figma design.fig   # Impor file Figma
 cat design.dsl | op design - # Pipe dari stdin
 ```
 
-Mendukung tiga metode input: string inline, `@filepath` (baca dari file), atau `-` (baca dari stdin). Bekerja dengan aplikasi desktop atau web dev server. Lihat [CLI README](./crates/op-cli) untuk referensi perintah lengkap.
+Mendukung string inline, `@filepath`, dan stdin (`-`). Bekerja dengan aplikasi desktop, server web, atau server headless berbasis file. Lihat [referensi perintah CLI](./crates/op-cli/src/usage.txt).
 
-**LLM Skill** — instal plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) untuk mengajarkan agen AI (Claude Code, Cursor, Codex, Gemini CLI, dll.) mendesain dengan `op`.
+**LLM Skill** — instal plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) untuk mengajarkan agen AI mendesain dengan `op`. Jalankan `op install` untuk agen yang terdeteksi atau `op install --target codex` untuk target tertentu.
 
 ## Fitur
 

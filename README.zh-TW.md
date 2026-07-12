@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # 啟動桌面應用程式
+op start --headless --file design.op # 啟動無頭伺服器
 op design @landing.txt       # 從檔案批次設計
-op insert '{"type":"RECT"}'  # 插入節點
+op design @ui.js             # 支援迴圈的沙箱 JavaScript
+op insert '{"type":"rectangle"}' # 插入節點
 op import:figma design.fig   # 匯入 Figma 檔案
 cat design.dsl | op design - # 從 stdin 管道輸入
 ```
 
-支援三種輸入方式：內嵌字串、`@filepath`（從檔案讀取）、`-`（從 stdin 讀取）。可搭配桌面應用程式或 Web 開發伺服器使用。完整命令參考請查閱 [CLI README](./crates/op-cli)。
+支援內嵌字串、`@filepath` 與 stdin（`-`），可搭配桌面應用程式、Web 伺服器或檔案型無頭伺服器使用。所有命令請查閱 [CLI 命令參考](./crates/op-cli/src/usage.txt)。
 
-**LLM 技能** — 安裝 [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 外掛，教 AI 智慧體（Claude Code、Cursor、Codex、Gemini CLI 等）使用 `op` 進行設計。
+**LLM 技能** — 安裝 [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 外掛，教 AI 智慧體使用 `op` 進行設計。可執行 `op install` 為偵測到的 Agent 安裝，或使用 `op install --target codex` 指定目標。
 
 ## 功能特色
 

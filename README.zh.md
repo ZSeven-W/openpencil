@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # 启动桌面应用
+op start --headless --file design.op # 启动无头服务器
 op design @landing.txt       # 从文件批量设计
-op insert '{"type":"RECT"}'  # 插入节点
+op design @ui.js             # 支持循环的沙箱 JavaScript
+op insert '{"type":"rectangle"}' # 插入节点
 op import:figma design.fig   # 导入 Figma 文件
 cat design.dsl | op design - # 从 stdin 管道输入
 ```
 
-支持三种输入方式：内联字符串、`@filepath`（从文件读取）、`-`（从 stdin 读取）。可搭配桌面应用或 Web 开发服务器使用。完整命令参考请查阅 [CLI README](./crates/op-cli)。
+支持内联字符串、`@filepath` 与 stdin（`-`），可搭配桌面应用、Web 服务器或文件型无头服务器使用。所有命令请查阅 [CLI 命令参考](./crates/op-cli/src/usage.txt)。
 
-**LLM 技能** — 安装 [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 插件，教 AI 智能体（Claude Code、Cursor、Codex、Gemini CLI 等）使用 `op` 进行设计。
+**LLM 技能** — 安装 [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 插件，教 AI 智能体使用 `op` 进行设计。可运行 `op install` 为检测到的 Agent 安装，或使用 `op install --target codex` 指定目标。
 
 ## 功能特性
 
