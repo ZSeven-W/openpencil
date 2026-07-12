@@ -55,6 +55,8 @@ pub mod history;
 pub mod history_snapshot;
 pub mod hoist_app_state;
 pub mod host_support;
+#[cfg(test)]
+mod host_support_tests;
 pub mod icon_picker_state;
 pub mod image_node_props;
 pub mod image_panel_state;

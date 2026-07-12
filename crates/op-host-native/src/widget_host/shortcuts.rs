@@ -5,6 +5,48 @@ use super::WidgetHostNative;
 use op_editor_core::ReorderDirection;
 
 impl WidgetHostNative {
+    /// True when a non-chat text surface owns keyboard input. Plain-string
+    /// host inputs are checked explicitly; `TextInputState` owners share the
+    /// canonical editor-core resolver.
+    pub fn non_chat_input_owns_keyboard_pub(&self) -> bool {
+        let editor_ui = &self.editor_state.editor_ui;
+        if self.preview.is_some()
+            || editor_ui.font_picker.open
+            || editor_ui.image_panel.search_open
+            || editor_ui.image_panel.generate_open
+            || self.variables_search_active()
+            || editor_ui.preset_name_input_active()
+            || editor_ui.icon_picker.open
+            || editor_ui.component_browser_open
+            // `active_text_input()` resolves chat before Git. Visible Git /
+            // clone inputs must therefore claim ownership before the pointer
+            // comparison below when a stale chat-focus bit coexists.
+            || self.git_commit_focus_active()
+            || self.git_remote_focus_active()
+            || self.git_https_focus_active()
+            || self.git_branch_create_focus_active()
+            || self.git_author_focus_active()
+            || self.git_clone_input_active()
+        {
+            return true;
+        }
+        if self.editor_state.chat.focused {
+            self.editor_state
+                .active_text_input()
+                .is_some_and(|active| !std::ptr::eq(active, &self.editor_state.chat.input))
+        } else {
+            // The host predicate applies the visibility gates for Git /
+            // clone inputs; the plain-string omissions are covered above.
+            self.input_active()
+        }
+    }
+
+    /// True only when the chat input, rather than a higher-priority
+    /// non-chat surface, owns keyboard input.
+    pub fn chat_input_owns_keyboard_pub(&self) -> bool {
+        self.editor_state.chat.focused && !self.non_chat_input_owns_keyboard_pub()
+    }
+
     /// Cmd-C — copy selection to clipboard.
     pub fn apply_copy(&mut self) -> bool {
         if self.editor_state.chat.focused {
