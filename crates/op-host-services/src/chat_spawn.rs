@@ -119,7 +119,11 @@ pub fn repair_gui_process_path() {
 /// Split out of [`effective_path_env`] so the merge is unit-testable
 /// without spawning a real login shell.
 fn merge_path_lists(login: &str, current: &str) -> String {
-    let sep = if cfg!(windows) { ';' } else { ':' };
+    // A login-shell PATH is only collected on Unix; Windows returns `None`
+    // from `login_shell_env` and keeps its registry-provided PATH unchanged.
+    // Keep this merge target-independent so its Unix inputs are not parsed as
+    // semicolon-delimited merely because the test binary runs on Windows.
+    let sep = ':';
     let mut seen = std::collections::BTreeSet::new();
     let mut merged: Vec<&str> = Vec::new();
     for dir in login.split(sep).chain(current.split(sep)) {
