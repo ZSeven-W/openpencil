@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # Iniciar la app de escritorio
+op start --headless --file design.op # Iniciar servidor headless
 op design @landing.txt       # Diseño por lotes desde archivo
-op insert '{"type":"RECT"}'  # Insertar un nodo
+op design @ui.js             # JavaScript aislado con bucles
+op insert '{"type":"rectangle"}' # Insertar un nodo
 op import:figma design.fig   # Importar archivo de Figma
 cat design.dsl | op design - # Entrada por pipe desde stdin
 ```
 
-Soporta tres métodos de entrada: cadena inline, `@filepath` (leer desde archivo), o `-` (leer desde stdin). Funciona con la app de escritorio o el servidor de desarrollo web. Consulta el [README del CLI](./crates/op-cli) para la referencia completa de comandos.
+Admite cadenas inline, `@filepath` y stdin (`-`). Funciona con la app de escritorio, el servidor web o el servidor headless basado en archivos. Consulta la [referencia de comandos CLI](./crates/op-cli/src/usage.txt).
 
-**Habilidad LLM** — instala el plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) para enseñar a agentes IA (Claude Code, Cursor, Codex, Gemini CLI, etc.) a diseñar con `op`.
+**Habilidad LLM** — instala el plugin [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) para enseñar a agentes IA a diseñar con `op`. Usa `op install` para los agentes detectados o `op install --target codex` para un destino específico.
 
 ## Características
 

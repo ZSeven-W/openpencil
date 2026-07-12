@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # डेस्कटॉप ऐप लॉन्च करें
+op start --headless --file design.op # हेडलेस सर्वर चलाएँ
 op design @landing.txt       # फ़ाइल से बैच डिज़ाइन
-op insert '{"type":"RECT"}'  # एक नोड डालें
+op design @ui.js             # लूप के साथ सैंडबॉक्स JavaScript
+op insert '{"type":"rectangle"}' # एक नोड डालें
 op import:figma design.fig   # Figma फ़ाइल इम्पोर्ट करें
 cat design.dsl | op design - # stdin से पाइप करें
 ```
 
-तीन इनपुट विधियाँ समर्थित हैं: इनलाइन स्ट्रिंग, `@filepath` (फ़ाइल से पढ़ें), या `-` (stdin से पढ़ें)। डेस्कटॉप ऐप या वेब डेव सर्वर के साथ काम करता है। पूर्ण कमांड संदर्भ के लिए [CLI README](./crates/op-cli) देखें।
+इनलाइन स्ट्रिंग, `@filepath` और stdin (`-`) समर्थित हैं। यह डेस्कटॉप ऐप, वेब सर्वर या फ़ाइल-आधारित हेडलेस सर्वर के साथ काम करता है। सभी कमांड के लिए [CLI कमांड संदर्भ](./crates/op-cli/src/usage.txt) देखें।
 
-**LLM स्किल** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) प्लगइन इंस्टॉल करें ताकि AI एजेंट (Claude Code, Cursor, Codex, Gemini CLI आदि) `op` से डिज़ाइन करना सीख सकें।
+**LLM स्किल** — AI एजेंट को `op` से डिज़ाइन सिखाने के लिए [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) प्लगइन इंस्टॉल करें। पहचाने गए एजेंट के लिए `op install` या किसी खास लक्ष्य के लिए `op install --target codex` चलाएँ।
 
 ## विशेषताएँ
 

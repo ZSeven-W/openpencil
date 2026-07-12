@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # 데스크톱 앱 실행
+op start --headless --file design.op # 헤드리스 서버 실행
 op design @landing.txt       # 파일에서 배치 디자인
-op insert '{"type":"RECT"}'  # 노드 삽입
+op design @ui.js             # 반복문을 지원하는 샌드박스 JavaScript
+op insert '{"type":"rectangle"}' # 노드 삽입
 op import:figma design.fig   # Figma 파일 가져오기
 cat design.dsl | op design - # stdin에서 파이프 입력
 ```
 
-세 가지 입력 방식을 지원합니다: 인라인 문자열, `@filepath` (파일에서 읽기), `-` (stdin에서 읽기). 데스크톱 앱 또는 웹 개발 서버와 연동됩니다. 전체 명령어 레퍼런스는 [CLI README](./crates/op-cli)를 참고하세요.
+인라인 문자열, `@filepath`, stdin(`-`)을 지원하며 데스크톱 앱, 웹 서버 또는 파일 기반 헤드리스 서버와 연동됩니다. 전체 명령은 [CLI 명령 레퍼런스](./crates/op-cli/src/usage.txt)를 참고하세요.
 
-**LLM 스킬** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) 플러그인을 설치하면 AI 에이전트(Claude Code, Cursor, Codex, Gemini CLI 등)에게 `op`를 사용한 디자인을 교육할 수 있습니다.
+**LLM 스킬** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill)을 설치해 AI 에이전트가 `op`로 디자인하도록 안내하세요. 감지된 에이전트에는 `op install`, 특정 대상에는 `op install --target codex`를 실행합니다.
 
 ## 기능
 

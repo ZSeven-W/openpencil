@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # デスクトップアプリを起動
+op start --headless --file design.op # ヘッドレスサーバーを起動
 op design @landing.txt       # ファイルからバッチデザイン
-op insert '{"type":"RECT"}'  # ノードを挿入
+op design @ui.js             # ループ対応のサンドボックス JavaScript
+op insert '{"type":"rectangle"}' # ノードを挿入
 op import:figma design.fig   # Figma ファイルをインポート
 cat design.dsl | op design - # stdin からパイプ入力
 ```
 
-3つの入力方法に対応：インライン文字列、`@filepath`（ファイルから読み込み）、`-`（stdin から読み込み）。デスクトップアプリまたは Web 開発サーバーと連携。完全なコマンドリファレンスは [CLI README](./crates/op-cli) を参照。
+インライン文字列、`@filepath`、stdin（`-`）に対応し、デスクトップアプリ、Web サーバー、ファイルベースのヘッドレスサーバーと連携します。全コマンドは [CLI コマンドリファレンス](./crates/op-cli/src/usage.txt) を参照してください。
 
-**LLM スキル** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) プラグインをインストールすると、AIエージェント（Claude Code、Cursor、Codex、Gemini CLI など）に `op` を使ったデザインを教えられます。
+**LLM スキル** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) をインストールして、AIエージェントに `op` を使ったデザインを教えます。検出済みのエージェントには `op install`、対象を指定する場合は `op install --target codex` を実行します。
 
 ## 機能
 

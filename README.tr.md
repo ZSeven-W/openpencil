@@ -16,8 +16,8 @@
 <p align="center">
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&color=cfb537" alt="Stars" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ZSeven-W/openpencil?color=64748b" alt="License" /></a>
-  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/ci.yml?branch=main&label=CI" alt="CI" /></a>
-  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/discord/1476517942949580952?label=Discord&logo=discord&logoColor=white&color=5865F2" alt="Discord" /></a>
+  <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/rust-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/rust-check.yml?label=CI" alt="CI" /></a>
+  <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 <br />
@@ -190,15 +190,17 @@ brew install zseven-w/openpencil/op
 
 ```bash
 op start                     # Masaüstü uygulamayı başlat
+op start --headless --file design.op # Headless sunucuyu başlat
 op design @landing.txt       # Dosyadan toplu tasarım
-op insert '{"type":"RECT"}'  # Bir düğüm ekle
+op design @ui.js             # Döngülü sandbox JavaScript
+op insert '{"type":"rectangle"}' # Bir düğüm ekle
 op import:figma design.fig   # Figma dosyasını içe aktar
 cat design.dsl | op design - # stdin'den pipe ile besle
 ```
 
-Üç giriş yöntemini destekler: satır içi metin, `@filepath` (dosyadan oku) veya `-` (stdin'den oku). Masaüstü uygulama veya web geliştirme sunucusuyla çalışır. Tam komut referansı için [CLI README](./crates/op-cli) dosyasına bakın.
+Satır içi metni, `@filepath` ve stdin'i (`-`) destekler. Masaüstü uygulama, web sunucusu veya dosya tabanlı headless sunucuyla çalışır. Tüm komutlar için [CLI komut referansına](./crates/op-cli/src/usage.txt) bakın.
 
-**LLM Becerisi** — [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) eklentisini kurarak AI ajanlarına (Claude Code, Cursor, Codex, Gemini CLI vb.) `op` ile tasarım yapmayı öğretin.
+**LLM Becerisi** — AI ajanlarına `op` ile tasarım yapmayı öğretmek için [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) eklentisini kurun. Algılanan ajanlar için `op install`, belirli bir hedef için `op install --target codex` çalıştırın.
 
 ## Özellikler
 
