@@ -221,20 +221,9 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     if let Some(s) = payload.theme.as_deref() {
         eui.theme_mode = str_to_theme(s);
     }
-    // Locale precedence: persisted user choice > detected system
-    // locale > the EditorState default (EnUs). Without this fallback
-    // a fresh install on a Chinese system would still pop English
-    // dialogs / chrome until the user manually picked a locale.
-    if let Some(s) =
-        payload
-            .locale
-            .as_deref()
-            .and_then(|s| if s.is_empty() { None } else { str_to_locale(s) })
-    {
-        eui.locale = s;
-    } else if let Some(detected) = detect_system_locale() {
-        eui.locale = detected;
-    }
+    // `load` seeds the current locale from the OS; only a valid
+    // persisted user choice may override that seed.
+    eui.locale = resolve_persisted_locale(eui.locale, payload.locale.as_deref());
     if let Some(port) = payload.mcp_port {
         eui.agent_settings.mcp_server.port = port.max(1024);
     }
@@ -638,6 +627,11 @@ fn str_to_locale(s: &str) -> Option<Locale> {
         _ => return None,
     })
 }
+
+fn resolve_persisted_locale(current: Locale, persisted: Option<&str>) -> Locale {
+    persisted.and_then(str_to_locale).unwrap_or(current)
+}
+
 #[cfg(test)]
 #[path = "settings_io_tests.rs"]
 mod settings_io_tests;
