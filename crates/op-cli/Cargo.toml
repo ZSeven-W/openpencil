@@ -15,6 +15,7 @@ path = "src/main.rs"
 op-ai-skills = { path = "../op-ai-skills" }
 op-config-store = { path = "../op-config-store" }
 op-figma = { path = "../op-figma" }
+op-pen-loader = { path = "../op-pen-loader" }
 op-process-io = { path = "../op-process-io" }
 op-rpc-transport = { path = "../op-rpc-transport" }
 serde_json = { workspace = true }
