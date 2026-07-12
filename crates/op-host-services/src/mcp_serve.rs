@@ -457,6 +457,7 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("spawn_agents", spawn_agents_snapshot());
     register_tool!("ToolSearch", tool_search_snapshot(schemas::TOOL_SCHEMAS));
     register_tool!("get_screenshot", get_screenshot_snapshot(doc));
+    register_tool!("export_item", export_item_snapshot(doc));
     register_tool!("export_nodes", export_nodes_snapshot(doc));
     register_tool!("get_active_theme", get_active_theme_snapshot(doc));
     register_tool!("list_components", list_components_snapshot(doc));
@@ -779,6 +780,9 @@ use screenshot_tool::get_screenshot_snapshot;
 
 pub(crate) mod export_tool;
 use export_tool::export_nodes_snapshot;
+
+pub(crate) mod export_item_tool;
+use export_item_tool::export_item_snapshot;
 
 #[cfg(test)]
 mod codegen_wire_tests;
