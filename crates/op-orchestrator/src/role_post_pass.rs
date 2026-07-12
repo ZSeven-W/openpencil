@@ -751,14 +751,32 @@ fn normalize_nested_search_shell(node: &mut Value) {
     {
         return;
     }
+    // The shell shape this pass exists for is a WRAPPER around a search
+    // input CONTAINER and a filter button CONTAINER. A search bar whose
+    // children are bare icon/text leaves IS the input itself — clearing
+    // its chrome stripped the authored background, repainted the search
+    // icon white (invisible on a light field) and re-inked the filter
+    // glyph with a dangling `$color-accent` (measured: test0711-1-ds).
+    if node.get("role").and_then(Value::as_str) == Some("search-bar") {
+        return;
+    }
 
     let Some(children) = node.get("children").and_then(Value::as_array) else {
         return;
     };
-    let search_child_count = children.iter().filter(|c| is_search_input_child(c)).count();
+    let container_child = |c: &Value| {
+        matches!(
+            c.get("type").and_then(Value::as_str),
+            Some("frame" | "text_input")
+        )
+    };
+    let search_child_count = children
+        .iter()
+        .filter(|c| container_child(c) && is_search_input_child(c))
+        .count();
     let has_filter = children
         .iter()
-        .any(|c| !is_search_input_child(c) && is_filter_button_child(c));
+        .any(|c| container_child(c) && !is_search_input_child(c) && is_filter_button_child(c));
     if search_child_count != 1 || !has_filter {
         return;
     }
@@ -772,15 +790,33 @@ fn normalize_nested_search_shell(node: &mut Value) {
         return;
     };
     for child in children {
+        if !matches!(
+            child.get("type").and_then(Value::as_str),
+            Some("frame" | "text_input")
+        ) {
+            continue;
+        }
         if is_search_input_child(child) {
             child["fill"] = solid_fill("#FFFFFF");
             child["stroke"] = neutral_stroke("#E5E7EB");
             child["cornerRadius"] = json!(8);
         } else if is_filter_button_child(child) {
+            // The button's own saturated fill IS the design's accent — move
+            // it onto the glyph instead of a symbolic `$color-accent`,
+            // which dangled on variable-less documents and rendered the
+            // fallback blue (measured: test0711-1-ds).
+            let demoted_accent = child
+                .get("fill")
+                .and_then(|f| f.pointer("/0/color"))
+                .and_then(Value::as_str)
+                .filter(|hex| hex.starts_with('#'))
+                .map(str::to_string);
             child["fill"] = solid_fill("#FFFFFF");
             child["stroke"] = neutral_stroke("#E5E7EB");
             child["cornerRadius"] = json!(8);
-            set_subtree_foreground(child, "$color-accent");
+            if let Some(accent) = demoted_accent {
+                set_subtree_foreground(child, &accent);
+            }
         }
     }
 }

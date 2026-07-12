@@ -545,6 +545,28 @@ fn non_ascii_color_does_not_panic() {
 }
 
 #[test]
+fn leaf_children_search_bar_keeps_its_authored_chrome() {
+    // test0711-1-ds: the search bar ITSELF is the input (bare icon/text
+    // leaves inside role=search-bar). The nested-shell normalizer used to
+    // misfire here: shell fill stripped, search glyph painted white
+    // (invisible on the light field), filter glyph re-inked with a
+    // dangling $color-accent that rendered fallback blue.
+    let mut bar = json!({
+        "type":"frame","role":"search-bar","layout":"horizontal",
+        "fill":[{"type":"solid","color":"#F4EDE3"}],
+        "padding":[0,16],
+        "children":[
+            {"type":"icon_font","iconFontName":"search","fill":[{"type":"solid","color":"#9A8F80"}]},
+            {"type":"text","content":"Where to?","fill":[{"type":"solid","color":"#0F172A"}]},
+            {"type":"icon_font","name":"Filter","iconFontName":"filter","fill":[{"type":"solid","color":"#F97316"}]}
+        ]
+    });
+    let before = bar.clone();
+    normalize_nested_search_shell(&mut bar);
+    assert_eq!(bar, before, "a leaf-children search bar is untouched");
+}
+
+#[test]
 fn search_filter_button_uses_neutral_surface_with_accent_icon() {
     let mut row = json!({
         "type":"frame","layout":"horizontal","fill":[{"type":"solid","color":"#FFFFFF"}],
@@ -571,8 +593,8 @@ fn search_filter_button_uses_neutral_surface_with_accent_icon() {
     );
     assert_eq!(
         row["children"][1]["children"][0]["fill"],
-        json!([{"type":"solid","color":"$color-accent"}]),
-        "filter icon carries the accent without flooding the control"
+        json!([{"type":"solid","color":"#FF5A1F"}]),
+        "filter icon carries the button's own demoted accent (concrete hex, never a dangling $ref)"
     );
 }
 
@@ -598,8 +620,8 @@ fn search_filter_detects_icon_only_sliders_control() {
     );
     assert_eq!(
         row["children"][1]["children"][0]["fill"],
-        json!([{"type":"solid","color":"$color-accent"}]),
-        "only the icon carries the brand accent"
+        json!([{"type":"solid","color":"#FF5A1F"}]),
+        "only the icon carries the brand accent - the button's own demoted hex"
     );
 }
 
