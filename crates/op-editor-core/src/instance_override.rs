@@ -36,8 +36,10 @@
 //! the color-picker HSV drag sites and the keyboard property-step
 //! path. Mutators that push history inside the scope would snapshot
 //! the swapped tree; `finish_instance_write` repairs any snapshot
-//! captured during the scope by swapping the original Ref back in.
+//! captured during the scope by routing each captured display state back
+//! onto the original Ref.
 
+use crate::history::EditorSnapshot;
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
@@ -240,173 +242,198 @@ impl EditorState {
     /// direct props onto the Ref base, everything else into
     /// `descendants[target]`. Returns true when any write was routed.
     pub fn finish_instance_write(&mut self, scope: InstanceWriteScope) -> bool {
-        let InstanceWriteScope {
-            ref_id,
-            display_id,
-            target_id,
-            route_direct_props,
-            original_ref,
-            display_before,
-            history_push_count_before,
-        } = scope;
-        let routed = self.route_display_diff(
-            &display_id,
-            &target_id,
-            route_direct_props,
-            original_ref,
-            &display_before,
-        );
-        if self.instance_write_virtual_anchor.as_ref() == Some(&display_id) {
+        let routed = self.route_display_diff(&scope);
+        if self.instance_write_virtual_anchor.as_ref() == Some(&scope.display_id) {
             self.instance_write_virtual_anchor = None;
         }
-        self.repair_scope_snapshots(&ref_id, &display_id, history_push_count_before);
+        self.repair_scope_snapshots(&scope);
         routed
     }
 
-    fn route_display_diff(
-        &mut self,
-        display_id: &NodeId,
-        target_id: &str,
-        route_direct_props: bool,
-        original_ref: PenNode,
-        before: &Map<String, Value>,
-    ) -> bool {
-        let Some(slot) = find_node_mut(self.active_children_mut(), display_id) else {
+    fn route_display_diff(&mut self, scope: &InstanceWriteScope) -> bool {
+        let Some(slot) = find_node_mut(self.active_children_mut(), &scope.display_id) else {
             // The node vanished during the scope (host-level delete);
             // nothing to restore into.
             return false;
         };
-        let after = match serde_json::to_value(&*slot) {
-            Ok(Value::Object(map)) => map,
-            _ => {
-                *slot = original_ref;
-                return false;
-            }
-        };
-        // Collect changed / removed top-level keys.
-        let mut direct: Vec<(String, Option<Value>)> = Vec::new();
-        let mut overrides: Map<String, Value> = Map::new();
-        let mut keys: Vec<&String> = before.keys().chain(after.keys()).collect();
-        keys.sort();
-        keys.dedup();
-        for key in keys {
-            if STRUCTURAL_KEYS.contains(&key.as_str()) {
-                continue;
-            }
-            let old = before.get(key);
-            let new = after.get(key);
-            if old == new {
-                continue;
-            }
-            if route_direct_props && INSTANCE_DIRECT_PROPS.contains(&key.as_str()) {
-                direct.push((key.clone(), new.cloned()));
-            } else {
-                // Removed keys persist as explicit nulls so the
-                // override can CLEAR a component value.
-                overrides.insert(key.clone(), new.cloned().unwrap_or(Value::Null));
-            }
-        }
-        if direct.is_empty() && overrides.is_empty() {
-            *slot = original_ref;
-            return false;
-        }
-        // Rebuild the RefNode JSON with the routed updates.
-        let mut ref_map = match serde_json::to_value(&original_ref) {
-            Ok(Value::Object(map)) => map,
-            _ => {
-                *slot = original_ref;
-                return false;
-            }
-        };
-        for (key, value) in direct {
-            match value {
-                Some(v) => {
-                    ref_map.insert(key, v);
-                }
-                None => {
-                    ref_map.remove(&key);
-                }
-            }
-        }
-        if !overrides.is_empty() {
-            let descendants = ref_map
-                .entry("descendants")
-                .or_insert_with(|| Value::Object(Map::new()));
-            if let Value::Object(d) = descendants {
-                let entry = d
-                    .entry(target_id.to_string())
-                    .or_insert_with(|| Value::Object(Map::new()));
-                if let Value::Object(existing) = entry {
-                    for (key, value) in overrides {
-                        existing.insert(key, value);
-                    }
-                }
-            }
-        }
-        match serde_json::from_value::<PenNode>(Value::Object(ref_map)) {
-            Ok(updated) if matches!(updated, PenNode::Ref(_)) => {
-                *slot = updated;
-                true
-            }
-            _ => {
-                // A routed update the schema rejects must not erase
-                // the instance — restore it untouched.
-                *slot = original_ref;
-                false
-            }
-        }
+        let (updated, routed) = route_display_state(
+            &scope.original_ref,
+            &scope.target_id,
+            scope.route_direct_props,
+            &scope.display_before,
+            slot,
+        );
+        *slot = updated;
+        routed
     }
 
     /// Any history snapshot pushed DURING the scope captured the
-    /// swapped display node in place of the Ref — undo would restore
-    /// a silently-detached instance. Swap the live (routed) Ref back
-    /// into those snapshots. Pre-scope snapshots are left untouched.
-    fn repair_scope_snapshots(
-        &mut self,
-        ref_id: &NodeId,
-        display_id: &NodeId,
-        history_push_count_before: u64,
-    ) {
-        let Some(live_ref) = find_node(self.active_children(), ref_id).cloned() else {
-            return;
-        };
-        if !matches!(live_ref, PenNode::Ref(_)) {
+    /// swapped display node in place of the Ref — undo would restore a
+    /// silently-detached instance. Route each snapshot's own display state
+    /// back into a Ref so compound edits preserve every intermediate state.
+    fn repair_scope_snapshots(&mut self, scope: &InstanceWriteScope) {
+        if !matches!(scope.original_ref, PenNode::Ref(_)) {
             return;
         }
-        // Snapshot docs are `Arc`-shared at top-level granularity (remote's
-        // structurally-shared undo refactor), so this in-place fix is
-        // copy-on-write: `SharedDoc::repair_swap` `Arc::make_mut`s only the
-        // affected top-level entry, never contaminating a sibling snapshot.
-        // Ours: window the repair by PUSH COUNT (robust when the history
-        // cap evicted entries mid-scope) and sweep BOTH ids — the routed
-        // display node's id can differ from the Ref's for virtual
-        // instance-child anchors; `repair_swap` is a no-op when the id
-        // resolves to a healthy Ref, so the double sweep is idempotent.
-        let pushed = self
+        let pushes_in_scope = self
             .history_push_count
-            .saturating_sub(history_push_count_before) as usize;
-        for snap in self.history.past.iter_mut().rev().take(pushed) {
-            snap.doc.repair_swap(ref_id, &live_ref);
-            if display_id != ref_id {
-                snap.doc.repair_swap(display_id, &live_ref);
-            }
+            .saturating_sub(scope.history_push_count_before);
+        let repair_count = pushes_in_scope.min(self.history.past.len() as u64) as usize;
+        for snap in self.history.past.iter_mut().rev().take(repair_count) {
+            repair_scope_snapshot(
+                snap,
+                &scope.ref_id,
+                &scope.display_id,
+                &scope.target_id,
+                scope.route_direct_props,
+                &scope.original_ref,
+                &scope.display_before,
+            );
         }
         // Pending pre-edit snapshots (colour picker / text edit) taken
         // inside the scope carry the same contamination signature — a
         // non-Ref node at the instance id — and the same repair.
         if let Some(snap) = self.ui.pending_color_history.as_mut() {
-            snap.doc.repair_swap(ref_id, &live_ref);
-            if display_id != ref_id {
-                snap.doc.repair_swap(display_id, &live_ref);
-            }
+            repair_scope_snapshot(
+                snap,
+                &scope.ref_id,
+                &scope.display_id,
+                &scope.target_id,
+                scope.route_direct_props,
+                &scope.original_ref,
+                &scope.display_before,
+            );
         }
         if let Some(snap) = self.ui.pending_text_edit_history.as_mut() {
-            snap.doc.repair_swap(ref_id, &live_ref);
-            if display_id != ref_id {
-                snap.doc.repair_swap(display_id, &live_ref);
+            repair_scope_snapshot(
+                snap,
+                &scope.ref_id,
+                &scope.display_id,
+                &scope.target_id,
+                scope.route_direct_props,
+                &scope.original_ref,
+                &scope.display_before,
+            );
+        }
+    }
+}
+
+/// Route one display-node state onto the original Ref. This pure helper is
+/// shared by the live scope finish and history-snapshot repair so both apply
+/// identical direct-prop and descendants-override semantics.
+fn route_display_state(
+    original_ref: &PenNode,
+    target_id: &str,
+    route_direct_props: bool,
+    before: &Map<String, Value>,
+    display_after: &PenNode,
+) -> (PenNode, bool) {
+    let after = match serde_json::to_value(display_after) {
+        Ok(Value::Object(map)) => map,
+        _ => return (original_ref.clone(), false),
+    };
+    let mut direct: Vec<(String, Option<Value>)> = Vec::new();
+    let mut overrides: Map<String, Value> = Map::new();
+    let mut keys: Vec<&String> = before.keys().chain(after.keys()).collect();
+    keys.sort();
+    keys.dedup();
+    for key in keys {
+        if STRUCTURAL_KEYS.contains(&key.as_str()) {
+            continue;
+        }
+        let old = before.get(key);
+        let new = after.get(key);
+        if old == new {
+            continue;
+        }
+        if route_direct_props && INSTANCE_DIRECT_PROPS.contains(&key.as_str()) {
+            direct.push((key.clone(), new.cloned()));
+        } else {
+            // Removed keys persist as explicit nulls so the override can
+            // clear a component value.
+            overrides.insert(key.clone(), new.cloned().unwrap_or(Value::Null));
+        }
+    }
+    if direct.is_empty() && overrides.is_empty() {
+        return (original_ref.clone(), false);
+    }
+    let mut ref_map = match serde_json::to_value(original_ref) {
+        Ok(Value::Object(map)) => map,
+        _ => return (original_ref.clone(), false),
+    };
+    for (key, value) in direct {
+        match value {
+            Some(value) => {
+                ref_map.insert(key, value);
+            }
+            None => {
+                ref_map.remove(&key);
             }
         }
     }
+    if !overrides.is_empty() {
+        let descendants = ref_map
+            .entry("descendants")
+            .or_insert_with(|| Value::Object(Map::new()));
+        if let Value::Object(descendants) = descendants {
+            let entry = descendants
+                .entry(target_id.to_string())
+                .or_insert_with(|| Value::Object(Map::new()));
+            if let Value::Object(existing) = entry {
+                for (key, value) in overrides {
+                    existing.insert(key, value);
+                }
+            }
+        }
+    }
+    match serde_json::from_value::<PenNode>(Value::Object(ref_map)) {
+        Ok(updated) if matches!(updated, PenNode::Ref(_)) => (updated, true),
+        _ => (original_ref.clone(), false),
+    }
+}
+
+fn repair_scope_snapshot(
+    snapshot: &mut EditorSnapshot,
+    ref_id: &NodeId,
+    display_id: &NodeId,
+    target_id: &str,
+    route_direct_props: bool,
+    pre_scope_ref: &PenNode,
+    display_before: &Map<String, Value>,
+) {
+    let snapshot_node_id = if snapshot
+        .doc
+        .snapshot_find_node(snapshot.active_page_index, display_id)
+        .is_some()
+    {
+        display_id
+    } else if snapshot
+        .doc
+        .snapshot_find_node(snapshot.active_page_index, ref_id)
+        .is_some()
+    {
+        ref_id
+    } else {
+        return;
+    };
+    let replacement = {
+        let display_at_snapshot = snapshot
+            .doc
+            .snapshot_find_node(snapshot.active_page_index, snapshot_node_id)
+            .expect("snapshot node checked above");
+        if matches!(display_at_snapshot, PenNode::Ref(_)) {
+            return;
+        }
+        route_display_state(
+            pre_scope_ref,
+            target_id,
+            route_direct_props,
+            display_before,
+            display_at_snapshot,
+        )
+        .0
+    };
+    snapshot.doc.repair_swap(snapshot_node_id, &replacement);
 }
 
 /// Run `write` (the same prop-write the panel would do) routed as an
@@ -422,6 +449,10 @@ pub fn apply_instance_override<R>(
     state.finish_instance_write(scope);
     Some(result)
 }
+
+#[cfg(test)]
+#[path = "instance_override_history_tests.rs"]
+mod history_tests;
 
 #[cfg(test)]
 mod tests {
@@ -705,24 +736,6 @@ mod tests {
             expanded.container.width,
             Some(jian_ops_schema::sizing::SizingBehavior::Number(320.0)),
             "the size override renders"
-        );
-    }
-
-    #[test]
-    fn history_pushed_inside_scope_is_repaired_to_hold_the_ref() {
-        let mut s = state();
-        apply_instance_override(&mut s, &NodeId::new("inst1"), |s| {
-            // Mirrors host arms that push history around the write.
-            s.commit_history();
-            s.set_selected_color(true, "#00ff00")
-        });
-        let snap = s.history.past.back().expect("history entry pushed");
-        let snap_doc = snap.doc.materialize();
-        let in_snap = crate::walkers::find_node(&snap_doc.children, &NodeId::new("inst1"))
-            .expect("inst1 in snapshot");
-        assert!(
-            matches!(in_snap, PenNode::Ref(_)),
-            "scope snapshot repaired — undo must restore a Ref, not the display node"
         );
     }
 
