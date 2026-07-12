@@ -20,6 +20,10 @@ COMMON COMMANDS:
   op uninstall [--target T]                uninstall openpencil-skill
   op skill:export <skill> [--out DIR]       export embedded skill as DIR/<skill>/SKILL.md
   op status                               check whether MCP HTTP is reachable
+  op export [--item ID|--selection] --output PATH [--format png] [--scale N]
+                                          export a page, arbitrary node, or the
+                                          current Live Canvas selection; omitting
+                                          --item is equivalent to --selection
   op get [--type T] [--name N] [--id ID] [--depth N] [--parent P]
   op selection                            get current selection
   op insert <json|@file|-> [--parent P] [--page PAGE] [--post-process]

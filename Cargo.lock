@@ -3101,6 +3101,7 @@ dependencies = [
 name = "op-cli"
 version = "0.8.0"
 dependencies = [
+ "base64",
  "op-ai-skills",
  "op-config-store",
  "op-figma",
