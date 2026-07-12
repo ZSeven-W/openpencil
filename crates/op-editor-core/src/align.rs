@@ -14,7 +14,7 @@
 //! because child coords are parent-relative — exactly like drag-move.
 //! An ancestor-already-in-set dedup stops a descendant moving twice.
 
-use crate::geometry::{aggregate_bounds, union_aggregate_bounds, DocRect};
+use crate::geometry::{aggregate_bounds, union_aggregate_bounds, union_of, DocRect};
 use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::walkers::{find_node, is_ancestor_in_set, translate_subtree};
@@ -205,14 +205,25 @@ fn apply_distribute(children: &mut [PenNode], editable: &[NodeId], action: Align
 }
 
 /// Walk `children` for the node whose own `children` vec holds
-/// `target`, returning that parent's aggregate bounds. `None` when
-/// `target` is top-level or absent.
+/// `target`, returning that parent's aggregate bounds in the child's
+/// local coordinate space. Each authored parent dimension spans
+/// `0..size`; a missing dimension derives that axis from the
+/// parent-relative child union. `None` when `target` is top-level or
+/// absent.
 fn parent_aggregate_bounds(children: &[PenNode], target: &NodeId) -> Option<DocRect> {
     use crate::pen_node_ext::PenNodeExt;
     for child in children {
         if let Some(grand) = child.children() {
             if grand.iter().any(|c| c.id_str() == target.as_str()) {
-                return Some(aggregate_bounds(child));
+                let derived = union_of(grand.iter().map(aggregate_bounds));
+                let width = child.width_px();
+                let height = child.height_px();
+                return Some(DocRect {
+                    x: if width.is_some() { 0.0 } else { derived.x },
+                    y: if height.is_some() { 0.0 } else { derived.y },
+                    w: width.unwrap_or(derived.w),
+                    h: height.unwrap_or(derived.h),
+                });
             }
             if let Some(rect) = parent_aggregate_bounds(grand, target) {
                 return Some(rect);
@@ -226,6 +237,7 @@ fn parent_aggregate_bounds(children: &[PenNode], target: &NodeId) -> Option<DocR
 mod tests {
     use super::*;
     use crate::geometry::aggregate_bounds;
+    use crate::pen_node_ext::PenNodeExt;
     use crate::test_support::{frame, rect, state_with};
     use crate::walkers::find_node;
 
@@ -249,6 +261,21 @@ mod tests {
 
     fn bx(s: &EditorState, id: &str) -> DocRect {
         aggregate_bounds(find_node(s.active_children(), &NodeId::new(id)).unwrap())
+    }
+
+    fn child_in_offset_parent_frame() -> EditorState {
+        let child = rect("n20", "c", 15.0, 25.0, 40.0, 30.0);
+        let parent = frame("n10", "f", 320.0, 240.0, 200.0, 120.0, vec![child]);
+        let mut state = state_with(vec![parent]);
+        state.set_single_selection(NodeId::new("n20"));
+        state
+    }
+
+    fn authored_local_position(state: &EditorState, id: &str) -> (f64, f64) {
+        let base = find_node(state.active_children(), &NodeId::new(id))
+            .unwrap()
+            .base();
+        (base.x.unwrap(), base.y.unwrap())
     }
 
     #[test]
@@ -356,6 +383,74 @@ mod tests {
         s.set_single_selection(NodeId::new("n20"));
         assert!(s.align_selected(AlignAction::Left));
         assert_eq!(bx(&s, "n20").x, 0.0);
+    }
+
+    #[test]
+    fn single_select_center_h_uses_parent_local_content_center_with_one_undo_step() {
+        let mut s = child_in_offset_parent_frame();
+
+        assert!(s.align_selected(AlignAction::CenterH));
+        assert_eq!(authored_local_position(&s, "n20"), (80.0, 25.0));
+        assert_eq!(s.history.past.len(), 1);
+
+        assert!(s.undo());
+        assert_eq!(authored_local_position(&s, "n20"), (15.0, 25.0));
+        assert!(s.redo());
+        assert_eq!(authored_local_position(&s, "n20"), (80.0, 25.0));
+    }
+
+    #[test]
+    fn single_select_center_v_uses_parent_local_content_center_with_one_undo_step() {
+        let mut s = child_in_offset_parent_frame();
+
+        assert!(s.align_selected(AlignAction::CenterV));
+        assert_eq!(authored_local_position(&s, "n20"), (15.0, 45.0));
+        assert_eq!(s.history.past.len(), 1);
+
+        assert!(s.undo());
+        assert_eq!(authored_local_position(&s, "n20"), (15.0, 25.0));
+        assert!(s.redo());
+        assert_eq!(authored_local_position(&s, "n20"), (15.0, 45.0));
+    }
+
+    #[test]
+    fn single_select_center_v_uses_child_union_for_width_only_parent() {
+        let child = rect("n20", "c", 15.0, 10.0, 40.0, 20.0);
+        let sibling = rect("n21", "s", 100.0, 100.0, 20.0, 20.0);
+        let mut parent = frame("n10", "f", 320.0, 240.0, 200.0, 120.0, vec![child, sibling]);
+        let PenNode::Frame(frame_node) = &mut parent else {
+            unreachable!();
+        };
+        frame_node.container.height = None;
+        let mut s = state_with(vec![parent]);
+        s.set_single_selection(NodeId::new("n20"));
+
+        assert!(s.align_selected(AlignAction::CenterV));
+        assert_eq!(authored_local_position(&s, "n20"), (15.0, 55.0));
+        assert_eq!(s.history.past.len(), 1);
+
+        assert!(s.undo());
+        assert_eq!(authored_local_position(&s, "n20"), (15.0, 10.0));
+    }
+
+    #[test]
+    fn single_select_center_h_uses_child_union_for_height_only_parent() {
+        let child = rect("n20", "c", 10.0, 15.0, 20.0, 30.0);
+        let sibling = rect("n21", "s", 100.0, 80.0, 20.0, 20.0);
+        let mut parent = frame("n10", "f", 320.0, 240.0, 200.0, 120.0, vec![child, sibling]);
+        let PenNode::Frame(frame_node) = &mut parent else {
+            unreachable!();
+        };
+        frame_node.container.width = None;
+        let mut s = state_with(vec![parent]);
+        s.set_single_selection(NodeId::new("n20"));
+
+        assert!(s.align_selected(AlignAction::CenterH));
+        assert_eq!(authored_local_position(&s, "n20"), (55.0, 15.0));
+        assert_eq!(s.history.past.len(), 1);
+
+        assert!(s.undo());
+        assert_eq!(authored_local_position(&s, "n20"), (10.0, 15.0));
     }
 
     #[test]
