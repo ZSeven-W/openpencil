@@ -1,6 +1,6 @@
 //! In-process design tool surface for the AI design agent loop.
 //!
-//! Mirrors `chat_canvas_tools.rs` for the 14-tool design toolset (vs the
+//! Mirrors `chat_canvas_tools.rs` for the 15-tool design toolset (vs the
 //! 7-tool CRUD set). Schema definitions for every tool are derived from
 //! `mcp_serve::schemas::TOOL_SCHEMAS` — the same source the MCP server
 //! advertises — so the in-process and MCP surfaces stay byte-equal as JSON.
@@ -24,7 +24,7 @@ use op_mcp::ToolRegistry;
 use crate::chat_canvas_tools::{execute_chat_tool, execute_with_registry};
 use crate::mcp_serve::schemas;
 
-/// The 14-tool design toolset with auth levels.
+/// The 15-tool design toolset with auth levels.
 /// Reads = "read"; batch_design / set_variables / spawn_agents /
 /// export_nodes = "create".
 pub const DESIGN_TOOLS: &[(&str, &str)] = &[
@@ -34,6 +34,7 @@ pub const DESIGN_TOOLS: &[(&str, &str)] = &[
     ("get_style_guide", "read"),
     ("get_variables", "read"),
     ("set_variables", "create"),
+    ("apply_design_system", "create"),
     ("batch_get", "read"),
     ("snapshot_layout", "read"),
     ("find_empty_space", "read"),
@@ -623,6 +624,7 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
         "get_style_guide" => r.register(Box::new(op_mcp::get_style_guide_snapshot())),
         "get_variables" => r.register(Box::new(op_mcp::get_variables_snapshot(state))),
         "set_variables" => r.register(Box::new(op_mcp::set_variables_snapshot())),
+        "apply_design_system" => r.register(Box::new(op_mcp::apply_design_system_snapshot())),
         "batch_get" => r.register(Box::new(op_mcp::batch_get_snapshot(state))),
         "snapshot_layout" => r.register(Box::new(op_mcp::snapshot_layout_snapshot(state))),
         "find_empty_space" => r.register(Box::new(op_mcp::find_empty_space_snapshot(state))),
@@ -1220,8 +1222,8 @@ mod tests {
     fn design_tool_defs_cover_all_14_tools_with_schema_parity() {
         let defs = design_tool_defs();
 
-        // All 14 tools are present, every one MCP-sourced.
-        assert_eq!(defs.len(), 14, "expected 14 design tool defs");
+        // All 15 tools are present, every one MCP-sourced.
+        assert_eq!(defs.len(), 15, "expected 15 design tool defs");
         for (name, _) in DESIGN_TOOLS {
             assert!(
                 defs.iter().any(|d| d.name == *name),

@@ -221,7 +221,7 @@ pub(crate) fn build_item(
         let display_content = strip_tool_call_xml(&msg.content);
         let extracted = extract_step_blocks(&display_content, msg.streaming);
         progress_steps.extend(extracted.steps);
-        extracted.visible_text
+        normalize_narration_markdown(&extracted.visible_text)
     };
     let design_applied =
         !is_user && (msg.content.contains("<!-- APPLIED -->") || msg.content.contains('\u{2705}'));
@@ -484,6 +484,38 @@ fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
     } else {
         ACTION_STEP_H + ACTION_DETAIL_GAP + detail_count as f32 * ACTION_DETAIL_LINE_H
     }
+}
+
+/// Light markdown normalization for streamed narration — the panel paints
+/// plain text, so raw `**bold**` markers and back-to-back bold headings
+/// ("**Batch 1**" glued straight onto "**Batch 2**") rendered as asterisk
+/// soup (measured 2026-07-12). Full markdown is out of scope; this strips
+/// emphasis/backtick markers, re-breaks adjacent bold headings onto their
+/// own lines, and turns `- ` bullets into `• `.
+pub(crate) fn normalize_narration_markdown(text: &str) -> String {
+    // Adjacent closing/opening bold with nothing between = two headings the
+    // stream glued together; give the second its own paragraph.
+    let mut out = text.replace("****", "**\n**");
+    // A bold opener directly after a colon or period also reads as a new
+    // heading in the measured streams.
+    out = out.replace(":**", ":\n**");
+    // Strip the emphasis/code markers themselves.
+    out = out.replace("**", "").replace('`', "");
+    // Bullets.
+    let mut lines: Vec<String> = Vec::new();
+    for line in out.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            let indent = &line[..line.len() - trimmed.len()];
+            lines.push(format!("{indent}\u{2022} {rest}"));
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    lines.join(
+        "
+",
+    )
 }
 
 /// Total height (px) of the full transcript laid out from the body top.

@@ -1132,3 +1132,19 @@ fn user_message_images_get_one_thumbnail_rect_each() {
     let (a, b) = (items[0].images[0], items[0].images[1]);
     assert!(a.origin.x != b.origin.x || a.origin.y != b.origin.y);
 }
+
+#[test]
+fn narration_markdown_normalizes_to_readable_prose() {
+    use super::normalize_narration_markdown;
+    // The measured stream: batch headings glued back-to-back plus raw
+    // emphasis markers and dash bullets.
+    let raw = "**Batch 1 — Skeleton****Batch 2 — Header**\nThe design features:**Header**\n- `Explore` title\n- Search input";
+    let out = normalize_narration_markdown(raw);
+    assert!(!out.contains("**"), "emphasis markers stripped: {out}");
+    assert!(!out.contains('`'), "backticks stripped: {out}");
+    assert!(
+        out.contains("Batch 1 — Skeleton\nBatch 2 — Header"),
+        "glued headings re-break onto their own lines: {out}"
+    );
+    assert!(out.contains("\u{2022} Explore title"), "bullets: {out}");
+}

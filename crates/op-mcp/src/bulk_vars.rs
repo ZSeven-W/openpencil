@@ -122,3 +122,74 @@ fn parse_replace(args: &BTreeMap<String, String>) -> Result<bool, String> {
         Some(other) => Err(format!("replace must be true or false, got {other:?}")),
     }
 }
+
+/// One-call design-system bootstrap: applies a bundled preset's full
+/// variable table (shadcn vocabulary, Light+Dark themed) plus the `Mode`
+/// theme axis as ONE undoable batch. The model then references tokens as
+/// `$--primary` / `$--card` etc. and the design themes for free.
+pub struct ApplyDesignSystem;
+
+impl McpTool for ApplyDesignSystem {
+    fn name(&self) -> &str {
+        "apply_design_system"
+    }
+
+    fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        let Some(name) = args.get("name") else {
+            return ToolOutcome::Err(ToolErrorCode::MissingArgument, "name is required".into());
+        };
+        let Some(preset) = op_ai_skills::design_systems::design_system_preset(name) else {
+            let known: Vec<&str> = op_ai_skills::design_systems::design_system_presets()
+                .iter()
+                .map(|p| p.name)
+                .collect();
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!(
+                    "unknown design system `{name}` - available: {}",
+                    known.join(", ")
+                ),
+            );
+        };
+        let variables: BTreeMap<String, VariableDefinition> =
+            match serde_json::from_str(&preset.variables_json) {
+                Ok(v) => v,
+                Err(e) => {
+                    return ToolOutcome::Err(
+                        ToolErrorCode::Internal,
+                        format!("bundled preset `{}` failed to parse: {e}", preset.name),
+                    );
+                }
+            };
+        let themes: BTreeMap<String, Vec<String>> =
+            serde_json::from_str(op_ai_skills::design_systems::design_system_themes_json())
+                .expect("bundled themes json parses");
+        let mut out = BTreeMap::new();
+        out.insert("applied".into(), preset.name.to_string());
+        out.insert("variable_count".into(), preset.variable_count.to_string());
+        out.insert(
+            "hint".into(),
+            "reference tokens as $--primary / $--card / $--muted-foreground etc.;              theme axis `Mode` has Light and Dark"
+                .into(),
+        );
+        ToolOutcome::OkWithCommand(
+            out,
+            EditorCommand::Batch {
+                commands: vec![
+                    EditorCommand::SetVariables {
+                        variables,
+                        replace: false,
+                    },
+                    EditorCommand::SetThemes {
+                        themes,
+                        replace: false,
+                    },
+                ],
+            },
+        )
+    }
+}
+
+pub fn apply_design_system_snapshot() -> ApplyDesignSystem {
+    ApplyDesignSystem
+}

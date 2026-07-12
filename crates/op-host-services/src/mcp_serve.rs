@@ -16,22 +16,23 @@ use std::path::{Path, PathBuf};
 
 use op_editor_core::{EditorCommand, EditorState};
 use op_mcp::{
-    add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot, batch_design_snapshot,
-    batch_get_snapshot, clear_selection_snapshot, codegen_assemble_snapshot,
-    codegen_clean_snapshot, codegen_plan_snapshot, codegen_submit_chunk_snapshot,
-    conversion_status_snapshot, copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot,
-    create_component_snapshot, create_variable_snapshot, cut_selected_snapshot,
-    cycle_active_axis_value_snapshot, debug_tools_enabled, delete_component_snapshot,
-    delete_node_snapshot, delete_page_snapshot, delete_selected_snapshot, delete_variable_snapshot,
-    design_content_snapshot, design_refine_snapshot, design_skeleton_snapshot,
-    document_info_snapshot, duplicate_page_snapshot, duplicate_selected_snapshot,
-    export_design_md_snapshot, find_empty_space_snapshot, find_node_by_name_snapshot,
-    get_active_theme_snapshot, get_canvas_bounds_snapshot, get_component_snapshot,
-    get_design_md_snapshot, get_design_prompt_snapshot, get_editor_state_snapshot,
-    get_guidelines_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
-    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
-    get_style_guide_snapshot, get_style_guide_tags_snapshot, get_variables_snapshot,
-    get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    add_node_effect_snapshot, add_page_snapshot, align_selected_snapshot,
+    apply_design_system_snapshot, batch_design_snapshot, batch_get_snapshot,
+    clear_selection_snapshot, codegen_assemble_snapshot, codegen_clean_snapshot,
+    codegen_plan_snapshot, codegen_submit_chunk_snapshot, conversion_status_snapshot,
+    copy_node_snapshot, copy_selected_snapshot, count_nodes_snapshot, create_component_snapshot,
+    create_variable_snapshot, cut_selected_snapshot, cycle_active_axis_value_snapshot,
+    debug_tools_enabled, delete_component_snapshot, delete_node_snapshot, delete_page_snapshot,
+    delete_selected_snapshot, delete_variable_snapshot, design_content_snapshot,
+    design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
+    duplicate_page_snapshot, duplicate_selected_snapshot, export_design_md_snapshot,
+    find_empty_space_snapshot, find_node_by_name_snapshot, get_active_theme_snapshot,
+    get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
+    get_design_prompt_snapshot, get_editor_state_snapshot, get_guidelines_snapshot,
+    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
+    get_node_snapshot, get_selection_set_snapshot, get_style_guide_snapshot,
+    get_style_guide_tags_snapshot, get_variables_snapshot, get_viewport_snapshot,
+    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
     instantiate_component_snapshot, lint_document_snapshot, list_components_snapshot,
     list_node_kinds_snapshot, list_pages_snapshot, list_theme_presets_snapshot,
     list_variables_snapshot, load_theme_preset_snapshot, move_node_snapshot,
@@ -556,6 +557,7 @@ fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegi
     register_tool!("set_variable_boolean", set_variable_boolean_snapshot(doc));
     register_tool!("set_variables", set_variables_snapshot());
     register_tool!("set_themes", set_themes_snapshot());
+    register_tool!("apply_design_system", apply_design_system_snapshot());
     register_tool!("create_variable", create_variable_snapshot(doc));
     register_tool!("delete_variable", delete_variable_snapshot(doc));
     register_tool!("rename_variable", rename_variable_snapshot(doc));

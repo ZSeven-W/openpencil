@@ -152,8 +152,8 @@ pub use batch_design_result::{batch_design_snapshot, BatchDesign};
 pub use batch_get::{batch_get_snapshot, BatchGet};
 pub use batch_program_objects::parse_program_objects;
 pub use bulk_vars::{
-    get_variables_snapshot, set_themes_snapshot, set_variables_snapshot, GetVariables, SetThemes,
-    SetVariables,
+    apply_design_system_snapshot, get_variables_snapshot, set_themes_snapshot,
+    set_variables_snapshot, GetVariables, SetThemes, SetVariables,
 };
 pub use codegen_tools::{
     codegen_assemble_snapshot, codegen_clean_snapshot, codegen_plan_snapshot,
