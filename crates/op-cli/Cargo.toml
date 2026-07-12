@@ -12,6 +12,7 @@ name = "op"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
 op-ai-skills = { path = "../op-ai-skills" }
 op-config-store = { path = "../op-config-store" }
 op-figma = { path = "../op-figma" }

@@ -9,6 +9,8 @@ use std::io::{self, Read};
 mod app_control_cli;
 mod cli_conversion;
 mod codegen_cli;
+mod command_helpers;
+mod export_cli;
 mod figma_cli;
 mod mcp_http_cli;
 mod page_theme_cli;
@@ -16,6 +18,9 @@ mod path_args;
 mod skill_export_cli;
 mod skill_install_cli;
 
+use command_helpers::{
+    flag_value, pair, push_file_path, tool_call, tool_call_with_file, version_json,
+};
 use mcp_http_cli::{
     args_to_json, json_escape, post, pretty_json, status_json, tool_call_body, tools_list_body,
 };
@@ -62,6 +67,7 @@ fn run(args: &[String]) -> Result<String, String> {
             | Command::ToolsList
             | Command::ToolCall { .. }
             | Command::ToolCallJson { .. }
+            | Command::Export { .. }
     );
     let target_port = if port_explicit || !needs_server {
         port
@@ -100,6 +106,19 @@ fn run(args: &[String]) -> Result<String, String> {
         Command::ToolCallJson { tool, args_json } => {
             post(target_port, &tool_call_body(&tool, &args_json))?
         }
+        Command::Export {
+            item_id,
+            selection: _,
+            output,
+            format,
+            scale,
+        } => export_cli::run_export(
+            target_port,
+            item_id.as_deref(),
+            &output,
+            &format,
+            scale.as_deref(),
+        )?,
     };
     Ok(if pretty { pretty_json(&out) } else { out })
 }
@@ -152,6 +171,13 @@ enum Command {
     ToolCallJson {
         tool: String,
         args_json: String,
+    },
+    Export {
+        item_id: Option<String>,
+        selection: bool,
+        output: String,
+        format: String,
+        scale: Option<String>,
     },
 }
 
@@ -274,6 +300,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
             })
         }
         "stop" => Ok(Command::StopMcp),
+        "export" => export_cli::map_export(flags),
         "skill:export" => Ok(Command::SkillExport {
             name: required_pos(
                 positionals,
@@ -741,41 +768,12 @@ fn required_pos(positionals: &[String], index: usize, usage: &str) -> Result<Str
         .ok_or_else(|| usage.to_string())
 }
 
-fn flag_value(flags: &Flags, key: &str) -> Option<String> {
-    flags.get(key).and_then(Clone::clone)
-}
-
-fn push_file_path(pairs: &mut Vec<(String, String)>, flags: &Flags) {
-    if let Some(file) = flag_value(flags, "file") {
-        pairs.push(pair("filePath", resolve_file_path_arg(&file)));
-    }
-}
-
-fn pair(k: impl Into<String>, v: impl Into<String>) -> (String, String) {
-    (k.into(), v.into())
-}
-
-fn tool_call_with_file(tool: &str, flags: &Flags) -> Result<Command, String> {
-    let mut pairs = Vec::new();
-    push_file_path(&mut pairs, flags);
-    tool_call(tool, pairs)
-}
-
-fn tool_call(tool: &str, args: Vec<(String, String)>) -> Result<Command, String> {
-    Ok(Command::ToolCall {
-        tool: tool.to_string(),
-        args,
-    })
-}
-
-fn version_json() -> String {
-    format!(r#"{{"version":"{}"}}"#, env!("CARGO_PKG_VERSION"))
-}
-
 #[cfg(test)]
 mod cli_conversion_tests;
 #[cfg(test)]
 mod cli_design_tests;
+#[cfg(test)]
+mod cli_export_tests;
 #[cfg(test)]
 mod cli_file_flag_tests;
 #[cfg(test)]
