@@ -182,19 +182,45 @@ pub fn render_node_raster_bytes(
     format: RasterFormat,
     scale: f32,
 ) -> Result<Vec<u8>, String> {
-    let scale = clamp_scale(scale);
     let Some(page) = scene.active_page() else {
         return Err("no active page".into());
     };
+    render_node_on_page_raster_bytes(page, node_id, format, scale)
+}
+
+/// Render one resolved page to encoded raster bytes without changing or
+/// consulting [`LayoutScene::active_page_index`].
+pub fn render_page_raster_bytes(
+    page: &ScenePage,
+    format: RasterFormat,
+    scale: f32,
+) -> Result<Vec<u8>, String> {
+    let bounds = page_bounds(page)
+        .ok_or_else(|| format!("page {} has no visible content to export", page.id))?;
+    render_raster_bytes(bounds, format, clamp_scale(scale), MARGIN, |canvas| {
+        paint_nodes(canvas, &page.children);
+    })
+}
+
+/// Render one node from its resolved containing page to encoded raster bytes.
+pub fn render_node_on_page_raster_bytes(
+    page: &ScenePage,
+    node_id: &str,
+    format: RasterFormat,
+    scale: f32,
+) -> Result<Vec<u8>, String> {
     let node = page
         .find(node_id)
-        .ok_or_else(|| format!("node {node_id} not found on the active page"))?;
+        .ok_or_else(|| format!("node {node_id} not found on page {}", page.id))?;
+    if node.hidden {
+        return Err(format!("node {node_id} is hidden and cannot be exported"));
+    }
     let mut acc = BoundsAcc::new();
     collect_bounds(node, glam::Affine2::IDENTITY, &mut acc);
     let bounds = acc
         .into_rect()
         .ok_or_else(|| format!("node {node_id} paints nothing"))?;
-    render_raster_bytes(bounds, format, scale, MARGIN, |canvas| {
+    render_raster_bytes(bounds, format, clamp_scale(scale), MARGIN, |canvas| {
         paint_node(canvas, node);
     })
 }

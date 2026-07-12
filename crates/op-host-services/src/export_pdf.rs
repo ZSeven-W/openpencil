@@ -12,10 +12,61 @@
 //! `export/scene_painter.rs`), so PDF / PNG / screenshots stay in
 //! lockstep with the editor canvas.
 
-use op_editor_ui::layout_scene::LayoutScene;
+use op_editor_ui::layout_scene::{LayoutScene, ScenePage};
+use op_editor_ui::Rect;
 use std::path::Path as StdPath;
 
 const PDF_MARGIN: f32 = 16.0;
+
+fn render_pdf_item(
+    bounds: Rect,
+    paint: impl FnOnce(&skia_safe::Canvas),
+) -> Result<Vec<u8>, String> {
+    let mut buf = Vec::new();
+    {
+        let mut pdf = skia_safe::pdf::new_document(&mut buf, None);
+        let page_size = skia_safe::Size::new(
+            bounds.size.x + PDF_MARGIN * 2.0,
+            bounds.size.y + PDF_MARGIN * 2.0,
+        );
+        let mut page = pdf.begin_page(page_size, None);
+        let canvas = page.canvas();
+        canvas.translate((PDF_MARGIN - bounds.origin.x, PDF_MARGIN - bounds.origin.y));
+        paint(canvas);
+        pdf = page.end_page();
+        pdf.close();
+    }
+    if buf.is_empty() {
+        Err("PDF encoder returned no bytes".into())
+    } else {
+        Ok(buf)
+    }
+}
+
+/// Render one resolved page as a single tightly cropped PDF page.
+pub fn render_page_pdf_bytes(page: &ScenePage) -> Result<Vec<u8>, String> {
+    let bounds = crate::export::page_bounds(page)
+        .ok_or_else(|| format!("page {} has no visible content to export", page.id))?;
+    render_pdf_item(bounds, |canvas| {
+        crate::export::paint_nodes(canvas, &page.children)
+    })
+}
+
+/// Render one node from its resolved containing page as a single PDF page.
+pub fn render_node_on_page_pdf_bytes(page: &ScenePage, node_id: &str) -> Result<Vec<u8>, String> {
+    let node = page
+        .find(node_id)
+        .ok_or_else(|| format!("node {node_id} not found on page {}", page.id))?;
+    if node.hidden {
+        return Err(format!("node {node_id} is hidden and cannot be exported"));
+    }
+    let mut acc = crate::export::BoundsAcc::new();
+    crate::export::collect_bounds(node, glam::Affine2::IDENTITY, &mut acc);
+    let bounds = acc
+        .into_rect()
+        .ok_or_else(|| format!("node {node_id} paints nothing"))?;
+    render_pdf_item(bounds, |canvas| crate::export::paint_node(canvas, node))
+}
 
 /// In-memory PDF variant: render each requested node as one PDF page
 /// (cropped to that node's painted bounds). Returns the raw PDF bytes
@@ -120,6 +171,53 @@ mod tests {
     use op_editor_ui::layout_scene::NodeKind;
     use op_editor_ui::layout_scene::{SceneNode, ScenePage};
     use op_editor_ui::{Color, Rect};
+
+    fn two_page_scene() -> LayoutScene {
+        LayoutScene {
+            pages: vec![
+                ScenePage {
+                    id: "page-one".into(),
+                    name: "Page One".into(),
+                    children: vec![filled_rect(
+                        "page-one-node",
+                        0.0,
+                        0.0,
+                        20.0,
+                        20.0,
+                        Color::BLACK,
+                    )],
+                },
+                ScenePage {
+                    id: "page-two".into(),
+                    name: "Page Two".into(),
+                    children: vec![filled_rect(
+                        "page-two-node",
+                        100.0,
+                        120.0,
+                        40.0,
+                        30.0,
+                        Color::BLACK,
+                    )],
+                },
+            ],
+            active_page_index: 0,
+        }
+    }
+
+    #[test]
+    fn render_page_pdf_bytes_crops_one_resolved_page() {
+        let scene = two_page_scene();
+        let bytes = render_page_pdf_bytes(&scene.pages[1]).expect("page PDF");
+        assert_eq!(&bytes[..5], b"%PDF-");
+    }
+
+    #[test]
+    fn render_node_on_page_pdf_bytes_accepts_non_active_page() {
+        let scene = two_page_scene();
+        let bytes =
+            render_node_on_page_pdf_bytes(&scene.pages[1], "page-two-node").expect("node PDF");
+        assert_eq!(&bytes[..5], b"%PDF-");
+    }
 
     #[test]
     fn pdf_export_emits_one_page_per_scene_page() {
