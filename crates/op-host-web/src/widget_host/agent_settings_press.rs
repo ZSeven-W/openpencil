@@ -253,6 +253,9 @@ impl WidgetHost {
                     .agent_settings
                     .auto_update_enabled ^= true;
             }
+            AgentSettingsHit::SelectPencilCursor(style) => {
+                self.editor_state.editor_ui.pencil_cursor_style = style;
+            }
             AgentSettingsHit::ToggleExperimental => {
                 self.editor_state
                     .editor_ui

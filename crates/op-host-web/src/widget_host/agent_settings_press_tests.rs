@@ -3,7 +3,7 @@ use op_editor_core::agent_settings::{
     AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageTestStatus,
     ProviderConnectPhase, SettingsFocus,
 };
-use op_editor_core::{AgentProvider, AgentSettingsButton, ButtonPressTarget};
+use op_editor_core::{AgentProvider, AgentSettingsButton, ButtonPressTarget, PencilCursorStyle};
 use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
 use op_editor_ui::Point2D;
 
@@ -43,6 +43,31 @@ fn first_hit_point(
         y += 4.0;
     }
     None
+}
+
+#[test]
+fn web_system_pencil_cursor_selection_updates_style() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings.tab = AgentSettingsTab::System;
+    assert_eq!(
+        host.editor_state.editor_ui.pencil_cursor_style,
+        PencilCursorStyle::Rounded
+    );
+
+    let panel = AgentSettingsPanel::for_web_editor(&host.editor_state);
+    let rect = panel.rect(1200.0, 800.0);
+    let point = first_hit_point(
+        &panel,
+        rect,
+        AgentSettingsHit::SelectPencilCursor(PencilCursorStyle::Classic),
+    )
+    .expect("classic pencil cursor swatch should be clickable");
+
+    assert!(host.dispatch_agent_settings_press(point.x, point.y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state.editor_ui.pencil_cursor_style,
+        PencilCursorStyle::Classic
+    );
 }
 
 #[test]
