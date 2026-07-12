@@ -204,6 +204,40 @@ pub fn open_path(
     }
 }
 
+/// Build the layout-resolved scene from the live editor state and
+/// dispatch its configured export format to `path`.
+fn export_editor_state_to_path(state: &EditorState, path: &std::path::Path) -> Result<(), String> {
+    use op_editor_core::editor_ui_state::ExportFormat as Fmt;
+
+    let fmt = state.editor_ui.export_format;
+    let scale = state.editor_ui.export_scale;
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
+    // A single selected node scopes raster and SVG exports to that
+    // subtree. PDF remains page-level.
+    let single_node = if state.selection_count() == 1 && state.selection.anchor.is_real() {
+        Some(state.selection.anchor.as_str())
+    } else {
+        None
+    };
+    let raster = |rf: op_host_services::export::RasterFormat| -> Result<(), String> {
+        match single_node {
+            Some(id) => op_host_services::export::export_node_raster(&scene, id, path, rf, scale),
+            None => op_host_services::export::export_raster(&scene, path, rf, scale),
+        }
+    };
+
+    match fmt {
+        Fmt::Png => raster(op_host_services::export::RasterFormat::Png),
+        Fmt::Jpeg => raster(op_host_services::export::RasterFormat::Jpeg),
+        Fmt::Webp => raster(op_host_services::export::RasterFormat::Webp),
+        Fmt::Svg => match single_node {
+            Some(id) => op_host_services::export::export_node_svg(&scene, id, path),
+            None => op_host_services::export::export_svg(&scene, path),
+        },
+        Fmt::Pdf => op_host_services::export_pdf::export_pdf(&scene, path),
+    }
+}
+
 /// Route a `FileAction` raised by the file-menu dispatcher to the
 /// matching dialog flow. The returned [`ActionOutcome`] tells the
 /// runner which post-action bookkeeping to run — see its variant
@@ -247,7 +281,6 @@ pub fn run_action(
         FileAction::ExportImageConfirm => {
             use op_editor_core::editor_ui_state::ExportFormat as Fmt;
             let fmt = host.editor_state().editor_ui.export_format;
-            let scale = host.editor_state().editor_ui.export_scale;
             let (filter_label, filter_exts): (&str, &[&str]) = match fmt {
                 Fmt::Png => ("PNG", &["png"]),
                 Fmt::Jpeg => ("JPEG", &["jpg", "jpeg"]),
@@ -265,41 +298,7 @@ pub fn run_action(
                 .set_file_name(&default_name)
                 .save_file()
             {
-                // The export renderers consume a layout-resolved
-                // `LayoutScene` — build one from the live editor state
-                // (runs jian's flex pass + `$ref` fill resolution).
-                let scene = op_pen_loader::editor_state_to_layout_scene(host.editor_state());
-                let scene = &scene;
-                // When exactly one node is selected, raster export
-                // crops to that layer (TS parity: exportLayerToRaster);
-                // otherwise the whole active page is exported. SVG uses
-                // the same selected-subtree rule; PDF stays page-level.
-                let single_node: Option<String> = {
-                    let st = host.editor_state();
-                    if st.selection_count() == 1 && st.selection.anchor.is_real() {
-                        Some(st.selection.anchor.as_str().to_string())
-                    } else {
-                        None
-                    }
-                };
-                let raster = |rf: op_host_services::export::RasterFormat| -> Result<(), String> {
-                    match &single_node {
-                        Some(id) => op_host_services::export::export_node_raster(
-                            scene, id, &path, rf, scale,
-                        ),
-                        None => op_host_services::export::export_raster(scene, &path, rf, scale),
-                    }
-                };
-                let result: Result<(), String> = match fmt {
-                    Fmt::Png => raster(op_host_services::export::RasterFormat::Png),
-                    Fmt::Jpeg => raster(op_host_services::export::RasterFormat::Jpeg),
-                    Fmt::Webp => raster(op_host_services::export::RasterFormat::Webp),
-                    Fmt::Svg => match &single_node {
-                        Some(id) => op_host_services::export::export_node_svg(scene, id, &path),
-                        None => op_host_services::export::export_svg(scene, &path),
-                    },
-                    Fmt::Pdf => op_host_services::export_pdf::export_pdf(scene, &path),
-                };
+                let result = export_editor_state_to_path(host.editor_state(), &path);
                 if let Err(e) = result {
                     eprintln!("[export-image] {e}");
                     show_error_dialog(host, ErrorKind::Export, Some(&path), &e);
@@ -598,6 +597,49 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(sidecar_path(&path));
+    }
+
+    #[test]
+    fn selected_node_svg_export_routes_through_desktop_dispatch() {
+        let doc = jian_ops_schema::load_str(
+            r##"{
+              "version":"1.0.0",
+              "pages":[{"id":"page","name":"Page","children":[
+                {"type":"text","id":"selected-card","name":"Selected Card",
+                 "x":10,"y":20,"width":120,"height":24,"content":"Selected Card"},
+                {"type":"text","id":"sibling-card","name":"Sibling Card",
+                 "x":300,"y":400,"width":100,"height":24,"content":"Sibling Card"}
+              ]}],
+              "children":[]
+            }"##,
+        )
+        .expect("fixture JSON parses")
+        .value;
+        let mut state = EditorState::from_document(doc);
+        state.editor_ui.export_format = op_editor_core::editor_ui_state::ExportFormat::Svg;
+        state.set_single_selection(op_editor_core::NodeId::new("selected-card"));
+        let path = temp_op_path("desktop-selected-svg-route").with_extension("svg");
+
+        export_editor_state_to_path(&state, &path).expect("desktop SVG export succeeds");
+
+        let svg = std::fs::read_to_string(&path).expect("desktop SVG export writes a file");
+        assert!(
+            svg.contains("selected-card"),
+            "selected node missing: {svg}"
+        );
+        assert!(
+            svg.contains("Selected Card"),
+            "selected name missing: {svg}"
+        );
+        assert!(
+            !svg.contains("sibling-card"),
+            "unselected sibling leaked into export: {svg}"
+        );
+        assert!(
+            !svg.contains("Sibling Card"),
+            "unselected sibling name leaked into export: {svg}"
+        );
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
