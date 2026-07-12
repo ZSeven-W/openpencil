@@ -4,6 +4,7 @@
 //! clicks and drop indicators land on the rows the user sees.
 
 use super::layer_panel::*;
+use super::layer_panel_paint::layer_trailing_icon_xs;
 use super::layer_panel_walkers::row_index_at;
 use crate::{Point2D, Rect};
 
@@ -156,13 +157,12 @@ impl LayerPanel {
                 origin: Point2D::new(row.origin.x + 6.0, y + 2.0),
                 size: Point2D::new(row.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
             };
-            let trailing_right = inner.origin.x + inner.size.x - 8.0;
-            let lock_x = trailing_right - 14.0;
-            let eye_x = lock_x - 22.0;
+            let (eye_x, lock_x) = layer_trailing_icon_xs(inner);
             let icon_y = inner.origin.y + 6.0;
             let slop = 4.0;
             let row_hovered = self.is_row_hovered(&item.node_id);
             if row_hovered
+                && !item.renaming
                 && point.x >= lock_x - slop
                 && point.x <= lock_x + 14.0 + slop
                 && point.y >= icon_y - slop
@@ -171,6 +171,7 @@ impl LayerPanel {
                 return Some(LayerPanelHit::ToggleLocked(item.node_id.clone()));
             }
             if row_hovered
+                && !item.renaming
                 && point.x >= eye_x - slop
                 && point.x <= eye_x + 14.0 + slop
                 && point.y >= icon_y - slop

@@ -5,7 +5,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::draw_icon;
 use crate::widgets::property_panel_text_input::paint_text_input_view_value;
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use jian_core::text_input::TextInputState;
 
 use super::layer_panel::{LayerItem, LAYER_ROW_HEIGHT, ROW_PAD_X};
@@ -34,6 +34,68 @@ pub(super) fn truncate_to_fit(s: &str, font_size: f32, max_w: f32) -> String {
     }
     let kept: String = s.chars().take(max_chars).collect();
     format!("{}…", kept)
+}
+
+pub(super) fn truncate_to_fit_measured(
+    backend: &mut dyn RenderBackend,
+    s: &str,
+    font_size: f32,
+    max_w: f32,
+) -> String {
+    const FONT_FAMILY: &str = "system-ui";
+    if backend.measure_text_family(s, font_size, FONT_FAMILY) <= max_w {
+        return s.to_string();
+    }
+    if backend.measure_text_family("…", font_size, FONT_FAMILY) > max_w {
+        return "…".to_string();
+    }
+
+    let mut boundaries: Vec<usize> = s.char_indices().map(|(byte, _)| byte).collect();
+    boundaries.push(s.len());
+    let mut low = 0;
+    let mut high = boundaries.len() - 1;
+    while low < high {
+        let mid = (low + high).div_ceil(2);
+        let candidate = format!("{}…", &s[..boundaries[mid]]);
+        if backend.measure_text_family(&candidate, font_size, FONT_FAMILY) <= max_w {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    format!("{}…", &s[..boundaries[low]])
+}
+
+pub(super) fn layer_trailing_icon_xs(row: Rect) -> (f32, f32) {
+    let trailing_right = row.origin.x + row.size.x - 8.0;
+    let lock_x = trailing_right - 14.0;
+    let eye_x = lock_x - 22.0;
+    (eye_x, lock_x)
+}
+
+pub(super) fn layer_content_clip_rect(row: Rect, renaming: bool) -> Rect {
+    let (eye_x, _) = layer_trailing_icon_xs(row);
+    let right_edge = if renaming {
+        row.origin.x + row.size.x - 8.0
+    } else {
+        eye_x - 6.0
+    };
+    Rect {
+        origin: row.origin,
+        size: Point2D::new((right_edge - row.origin.x).max(0.0), row.size.y),
+    }
+}
+
+pub(super) fn layer_label_available_width(
+    row: Rect,
+    label_x: f32,
+    horizontal_offset: f32,
+    renaming: bool,
+) -> f32 {
+    let screen_label_x = label_x - horizontal_offset;
+    let clip = layer_content_clip_rect(row, renaming);
+    let right_edge = clip.origin.x + clip.size.x - if renaming { 2.0 } else { 0.0 };
+    (right_edge - screen_label_x).max(0.0)
 }
 
 pub(super) fn paint_drag_ghost(
@@ -90,7 +152,10 @@ pub(super) fn paint_rename_input(
     available_w: f32,
     now_ms: u64,
 ) {
-    let input_w = available_w.max(40.0);
+    if available_w <= 0.0 {
+        return;
+    }
+    let input_w = available_w;
     let input_h = LAYER_ROW_HEIGHT - 4.0;
     let rect = Rect {
         origin: Point2D::new(x - 2.0, row_y),
