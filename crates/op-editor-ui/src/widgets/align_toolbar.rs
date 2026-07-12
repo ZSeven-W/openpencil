@@ -486,6 +486,26 @@ mod tests {
     }
 
     #[test]
+    fn explicit_center_buttons_hit_test_to_center_h_and_center_v_actions() {
+        let doc = doc_with_n_selected(2);
+        let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
+
+        let center_h_rect = tb.button_rect(1);
+        let center_h_point = Point2D::new(
+            center_h_rect.origin.x + center_h_rect.size.x / 2.0,
+            center_h_rect.origin.y + center_h_rect.size.y / 2.0,
+        );
+        assert_eq!(tb.hit_test(center_h_point), Some(AlignAction::CenterH));
+
+        let center_v_rect = tb.button_rect(4);
+        let center_v_point = Point2D::new(
+            center_v_rect.origin.x + center_v_rect.size.x / 2.0,
+            center_v_rect.origin.y + center_v_rect.size.y / 2.0,
+        );
+        assert_eq!(tb.hit_test(center_v_point), Some(AlignAction::CenterV));
+    }
+
+    #[test]
     fn hit_test_misses_outside_toolbar() {
         let doc = doc_with_n_selected(2);
         let tb = AlignToolbar::for_canvas_region(canvas(), &doc).unwrap();
