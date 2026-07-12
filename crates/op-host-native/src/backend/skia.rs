@@ -560,6 +560,10 @@ pub fn enumerate_system_font_families() -> Vec<String> {
 #[path = "skia/tests.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "skia/font_fallback_tests.rs"]
+mod font_fallback_tests;
+
 // Gated off Windows: exercises `jian_skia::register_imported_font` (skia
 // `FontMgr::new_from_data`, DirectWrite on Windows) from parallel test-worker
 // threads, which segfaults in Windows CI. Production resolves fonts on the
