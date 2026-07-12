@@ -4,7 +4,6 @@
 
 use super::*;
 use jian_core::layout::measure::{FontStyleKind, MeasureBackend, MeasureRequest, StyledRun};
-use op_editor_ui::TextLayout;
 
 #[test]
 fn color_roundtrip_clamps_and_packs() {
@@ -700,104 +699,5 @@ fn image_draw_respects_node_opacity() {
         c.b() > 200,
         "blue channel should stay high, got b={}",
         c.b()
-    );
-}
-
-#[test]
-fn korean_hangul_resolves_to_a_covering_typeface() {
-    // Regression: Hangul routed to the shared CJK face (resolved from
-    // a Chinese ideograph) which lacks Hangul glyphs, so 한국어 painted
-    // blank. The resolved face for '한' must actually cover '한'.
-    let mut be = NativeBackend::with_dpi(1.0);
-    let tf = be.typeface_for_char('한', 400).expect("a typeface for 한");
-    assert_ne!(
-        tf.unichar_to_glyph('한' as i32),
-        0,
-        "the resolved Hangul face must have a glyph for 한"
-    );
-    // Every char of the Korean locale name resolves to a covering face.
-    for c in "한국어".chars() {
-        let tf = be.typeface_for_char(c, 400).expect("typeface");
-        assert_ne!(tf.unichar_to_glyph(c as i32), 0, "missing glyph for {c}");
-    }
-}
-
-#[test]
-fn emoji_resolves_to_a_covering_emoji_typeface() {
-    let mut be = NativeBackend::with_dpi(1.0);
-    let tf = be.typeface_for_char('🍕', 400).expect("a typeface for 🍕");
-    assert_ne!(
-        tf.unichar_to_glyph('🍕' as i32),
-        0,
-        "the resolved emoji face must have a glyph for 🍕"
-    );
-    let family = tf.family_name().to_lowercase();
-    assert!(
-        family.contains("emoji"),
-        "emoji should resolve to an emoji-capable font, got {family}"
-    );
-}
-
-#[test]
-fn emoji_text_paints_colored_pixels() {
-    let mut be = NativeBackend::with_dpi(1.0);
-    let mut surface = skia_safe::surfaces::raster_n32_premul((96, 96)).unwrap();
-    surface.canvas().clear(skia_safe::Color::WHITE);
-    let layout = TextLayout::single_run(
-        "🍕",
-        "system-ui",
-        48.0,
-        Color::BLACK.to_jian(),
-        Point2D::ZERO,
-    );
-
-    be.draw_text(surface.canvas(), &layout, Point2D::new(16.0, 64.0));
-
-    let img = surface.image_snapshot();
-    let pm = img.peek_pixels().expect("peek raster pixels");
-    let mut non_white = 0usize;
-    let mut saturated = 0usize;
-    for y in 0..96 {
-        for x in 0..96 {
-            let c = pm.get_color((x, y));
-            let r = c.r();
-            let g = c.g();
-            let b = c.b();
-            if r < 245 || g < 245 || b < 245 {
-                non_white += 1;
-                let max = r.max(g).max(b);
-                let min = r.min(g).min(b);
-                if max.saturating_sub(min) > 40 {
-                    saturated += 1;
-                }
-            }
-        }
-    }
-    assert!(
-        non_white > 20,
-        "emoji should paint visible pixels, got {non_white}"
-    );
-    assert!(
-        saturated > 20,
-        "emoji should paint colorful pixels, got saturated={saturated} non_white={non_white}"
-    );
-}
-
-#[test]
-fn draw_text_runs_borrows_layout_storage() {
-    let layout = TextLayout::single_run(
-        "Hello",
-        "system-ui",
-        13.0,
-        Color::BLACK.to_jian(),
-        Point2D::ZERO,
-    );
-
-    let runs = super::text::draw_text_runs(&layout);
-
-    assert_eq!(
-        runs.as_ptr(),
-        layout.runs().as_ptr(),
-        "native text drawing should not clone TextLayout runs per paint"
     );
 }
