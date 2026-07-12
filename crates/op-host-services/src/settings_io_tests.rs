@@ -1,6 +1,69 @@
 use super::*;
 
 #[test]
+fn persisted_locale_overrides_system_locale_seed() {
+    assert_eq!(
+        resolve_persisted_locale(Locale::Ru, Some("en-US")),
+        Locale::EnUs
+    );
+}
+
+#[test]
+fn missing_or_invalid_persisted_locale_preserves_system_locale_seed() {
+    for persisted in [None, Some(""), Some("unknown")] {
+        assert_eq!(
+            resolve_persisted_locale(Locale::Ru, persisted),
+            Locale::Ru,
+            "persisted locale {persisted:?} must preserve the caller's seed"
+        );
+    }
+}
+
+#[test]
+fn apply_payload_persisted_locale_overrides_system_locale_seed() {
+    let payload: SettingsPayload =
+        serde_json::from_str(r#"{"version":1,"locale":"en-US"}"#).unwrap();
+    let mut state = EditorState::new();
+    state.editor_ui.locale = Locale::Ru;
+
+    apply_payload(&mut state, payload);
+
+    assert_eq!(state.editor_ui.locale, Locale::EnUs);
+}
+
+#[test]
+fn apply_payload_missing_or_invalid_locale_preserves_system_locale_seed() {
+    for json in [
+        r#"{"version":1}"#,
+        r#"{"version":1,"locale":""}"#,
+        r#"{"version":1,"locale":"unknown"}"#,
+    ] {
+        let payload: SettingsPayload = serde_json::from_str(json).unwrap();
+        let mut state = EditorState::new();
+        state.editor_ui.locale = Locale::Ru;
+
+        apply_payload(&mut state, payload);
+
+        assert_eq!(
+            state.editor_ui.locale,
+            Locale::Ru,
+            "payload {json} must preserve the caller's seed"
+        );
+    }
+}
+
+#[test]
+fn locale_change_updates_settings_fingerprint() {
+    let mut state = EditorState::new();
+    state.editor_ui.locale = Locale::Ru;
+    let before = fingerprint(&state);
+
+    state.editor_ui.locale = Locale::Ja;
+
+    assert_ne!(before, fingerprint(&state));
+}
+
+#[test]
 fn imported_agents_are_excluded_from_persistence() {
     // A user-entered agent must persist; an auto-imported (e.g. Zode)
     // agent must NOT, so its API key never lands in settings.json.
