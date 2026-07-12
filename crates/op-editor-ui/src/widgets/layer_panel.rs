@@ -41,7 +41,8 @@ pub(crate) const LAYER_ROW_HEIGHT: f32 = 28.0;
 pub(crate) const ROW_PAD_X: f32 = 12.0;
 pub(crate) const SECTION_GAP: f32 = 8.0;
 use crate::widgets::layer_panel_paint::{
-    paint_drag_ghost, paint_rename_input, paint_section_header, truncate_to_fit, ROW_FONT,
+    layer_content_clip_rect, layer_label_available_width, layer_trailing_icon_xs, paint_drag_ghost,
+    paint_rename_input, paint_section_header, truncate_to_fit, truncate_to_fit_measured, ROW_FONT,
 };
 
 /// One row in the layers tree — flat depth-walked view.
@@ -452,7 +453,7 @@ impl Widget for LayerPanel {
                     self.rename_input.as_ref().expect("renaming row has input"),
                     label_x,
                     y + 2.0,
-                    available_w,
+                    available_w.max(40.0),
                     self.now_ms,
                 );
             } else {
@@ -568,8 +569,9 @@ impl Widget for LayerPanel {
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
             };
+            let content_clip = layer_content_clip_rect(row, item.renaming);
             cx.backend.save();
-            cx.backend.clip_rect(row);
+            cx.backend.clip_rect(content_clip);
             cx.backend
                 .translate(Point2D::new(-r.layers.horizontal_offset, 0.0));
             if item.has_children {
@@ -604,8 +606,12 @@ impl Widget for LayerPanel {
                 dim(self.theme.card_foreground, dim_factor)
             };
             let label_x = icon_x + 20.0;
-            let label_max_x = row.origin.x + r.layers.content_width - 16.0;
-            let available_w = (label_max_x - label_x).max(0.0);
+            let available_w = layer_label_available_width(
+                row,
+                label_x,
+                r.layers.horizontal_offset,
+                item.renaming,
+            );
             if item.renaming {
                 paint_rename_input(
                     cx,
@@ -617,7 +623,8 @@ impl Widget for LayerPanel {
                     self.now_ms,
                 );
             } else {
-                let display = truncate_to_fit(&item.label, ROW_FONT, available_w);
+                let display =
+                    truncate_to_fit_measured(cx.backend, &item.label, ROW_FONT, available_w);
                 let label = TextLayout::single_run(
                     &display,
                     "system-ui",
@@ -629,9 +636,7 @@ impl Widget for LayerPanel {
                     .draw_text(&label, Point2D::new(label_x, row.origin.y + 17.0));
             }
             cx.backend.restore();
-            let trailing_right = row.origin.x + row.size.x - 8.0;
-            let lock_x = trailing_right - 14.0;
-            let eye_x = lock_x - 22.0;
+            let (eye_x, lock_x) = layer_trailing_icon_xs(row);
             let eye_icon = if item.hidden { Icon::EyeOff } else { Icon::Eye };
             let lock_icon = if item.locked {
                 Icon::Lock
@@ -659,8 +664,8 @@ impl Widget for LayerPanel {
             let trailing_size = 12.0;
             let trailing_stroke = 1.2;
             let trailing_y = row.origin.y + 7.0;
-            let show_eye = hovered;
-            let show_lock = hovered;
+            let show_eye = hovered && !item.renaming;
+            let show_lock = hovered && !item.renaming;
             // Opaque backing behind the hover icon cluster: a long label
             // runs right up to the row edge and the eye/lock glyphs were
             // drawn straight over its letters. Rebuild the row surface
