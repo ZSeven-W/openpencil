@@ -441,7 +441,7 @@ pub async fn run_anthropic_agent_loop(
                 .expect("anthropic request body is object")
                 .insert("system".into(), json!(cfg.system_prompt));
         }
-        let resp = reqwest::Client::new()
+        let resp = crate::chat_builtin_http::builtin_http_client()?
             .post(&cfg.url)
             .header("x-api-key", &cfg.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -686,7 +686,7 @@ pub async fn run_openai_agent_loop(
                 obj.insert("thinking".into(), json!({ "type": "disabled" }));
             }
         }
-        let resp = reqwest::Client::new()
+        let resp = crate::chat_builtin_http::builtin_http_client()?
             .post(&cfg.url)
             .bearer_auth(&cfg.api_key)
             .json(&body)
