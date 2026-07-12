@@ -45,6 +45,8 @@ static BUILTIN_HTTP_ADAPTIVE_GAP_MS: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 const ADAPTIVE_GAP_START_MS: u64 = 1_000;
 const ADAPTIVE_GAP_MAX_MS: u64 = 5_000;
+const BUILTIN_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const BUILTIN_HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
 const RETRY_AFTER_MAX: Duration = Duration::from_secs(30);
 const BACKOFF_MAX: Duration = Duration::from_secs(8);
 
@@ -68,14 +70,33 @@ pub struct ConfiguredBuiltinProvider {
     /// provider; regular chat leaves it false so an ordinary tool-using
     /// chat turn never mutates an existing design (Track-1 Step 4 scope).
     finalize_on_exit: bool,
+    construction_error: Option<String>,
+    http_client: Option<reqwest::Client>,
+    max_retries: u32,
+    min_gap: Duration,
 }
 
 impl ConfiguredBuiltinProvider {
     pub fn from_builtin_agent(config: &BuiltinAgentConfig) -> Option<Self> {
-        let base_url = if config.base_url.trim().is_empty() {
+        let configured_base = if config.base_url.trim().is_empty() {
             config.kind.default_base_url()
         } else {
             config.base_url.trim()
+        };
+        let (base_url, mut construction_error) = match normalize_provider_base_url(configured_base)
+        {
+            Ok(base_url) => (base_url, None),
+            Err(error) => (
+                configured_base.trim_end_matches('/').to_string(),
+                Some(error),
+            ),
+        };
+        let http_client = match builtin_http_client() {
+            Ok(client) => Some(client),
+            Err(error) => {
+                construction_error.get_or_insert(error);
+                None
+            }
         };
         let label = if config.display_name.trim().is_empty() {
             config.model.trim()
@@ -86,11 +107,15 @@ impl ConfiguredBuiltinProvider {
             kind: config.kind,
             api_key: config.api_key.trim().to_string(),
             model: config.model.trim().to_string(),
-            base_url: base_url.to_string(),
+            base_url,
             label: label.to_string(),
             tools: Vec::new(),
             executor: None,
             finalize_on_exit: false,
+            construction_error,
+            http_client,
+            max_retries: BUILTIN_HTTP_MAX_RETRIES,
+            min_gap: builtin_http_min_gap(),
         })
     }
 
@@ -141,6 +166,17 @@ impl ChatProvider for ConfiguredBuiltinProvider {
     }
 
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        if let Some(error) = &self.construction_error {
+            return Box::new(
+                [
+                    ChatDelta::Error(error.clone()),
+                    ChatDelta::Done {
+                        stop_reason: StopReason::Aborted,
+                    },
+                ]
+                .into_iter(),
+            );
+        }
         let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
             &request.user_message,
             &request.attachments,
@@ -314,11 +350,11 @@ fn relax_adaptive_gap() {
     }
 }
 
-async fn throttle_builtin_http_request() {
+async fn throttle_builtin_http_request(base_min_gap: Duration) {
     let adaptive = Duration::from_millis(
         BUILTIN_HTTP_ADAPTIVE_GAP_MS.load(std::sync::atomic::Ordering::Relaxed),
     );
-    let min_gap = builtin_http_min_gap() + adaptive;
+    let min_gap = base_min_gap + adaptive;
     if min_gap.is_zero() {
         return;
     }
@@ -363,10 +399,12 @@ fn backoff_delay(attempt: u32) -> Duration {
 async fn send_with_backoff(
     label: &str,
     url: &str,
+    max_retries: u32,
+    min_gap: Duration,
     build: impl Fn() -> reqwest::RequestBuilder,
 ) -> Result<reqwest::Response, String> {
-    for attempt in 0..=BUILTIN_HTTP_MAX_RETRIES {
-        throttle_builtin_http_request().await;
+    for attempt in 0..=max_retries {
+        throttle_builtin_http_request(min_gap).await;
         match build().send().await {
             Ok(resp) if resp.status().is_success() => {
                 relax_adaptive_gap();
@@ -377,7 +415,7 @@ async fn send_with_backoff(
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                     widen_adaptive_gap();
                 }
-                if is_retryable_status(status) && attempt < BUILTIN_HTTP_MAX_RETRIES {
+                if is_retryable_status(status) && attempt < max_retries {
                     let delay =
                         parse_retry_after(resp.headers()).unwrap_or_else(|| backoff_delay(attempt));
                     drop(resp);
@@ -389,14 +427,17 @@ async fn send_with_backoff(
                     // Raw provider JSON reads as gibberish in the chat
                     // transcript — say what happened and what to do.
                     return Err(format!(
-                        "The model provider is rate-limiting this account (429) and the run                          could not ride it out after {BUILTIN_HTTP_MAX_RETRIES} retries. Wait                          a moment, then send the prompt again to continue. ({label}: {})",
+                        "The model provider is rate-limiting this account (429) and the run could not ride it out after {max_retries} retries. Wait a moment, then send the prompt again to continue. ({label}: {})",
                         body.trim()
                     ));
                 }
                 return Err(format!("{label} http {status}: {}", body.trim()));
             }
             Err(e) => {
-                if attempt < BUILTIN_HTTP_MAX_RETRIES {
+                if e.is_timeout() {
+                    return Err(format!("{label} POST {url} timed out: {e}"));
+                }
+                if attempt < max_retries {
                     tokio::time::sleep(backoff_delay(attempt)).await;
                     continue;
                 }
@@ -450,12 +491,17 @@ async fn run_openai_chat(
             obj.insert("thinking".into(), json!({ "type": "disabled" }));
         }
     }
-    let resp = send_with_backoff("openai-compatible", &url, || {
-        builtin_http_client()
-            .post(&url)
-            .bearer_auth(&provider.api_key)
-            .json(&body)
-    })
+    let client = provider
+        .http_client
+        .clone()
+        .ok_or_else(|| "Provider HTTP client is unavailable".to_string())?;
+    let resp = send_with_backoff(
+        "openai-compatible",
+        &url,
+        provider.max_retries,
+        provider.min_gap,
+        || client.post(&url).bearer_auth(&provider.api_key).json(&body),
+    )
     .await?;
     pump_sse_response(resp, tx, parse_openai_sse_data).await
 }
@@ -468,12 +514,12 @@ async fn run_openai_chat(
 /// in-flight request). These deadlines surface the stall as an error so the
 /// planning loop falls back instead of hanging. 300s is generous enough not to
 /// kill a slow-but-live generation.
-fn builtin_http_client() -> reqwest::Client {
+pub(crate) fn builtin_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(15))
-        .timeout(std::time::Duration::from_secs(300))
+        .connect_timeout(BUILTIN_HTTP_CONNECT_TIMEOUT)
+        .timeout(BUILTIN_HTTP_REQUEST_TIMEOUT)
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+        .map_err(|error| format!("Failed to configure provider HTTP client: {error}"))
 }
 
 async fn run_anthropic_chat(
@@ -503,13 +549,23 @@ async fn run_anthropic_chat(
             .expect("anthropic request body is object")
             .insert("system".into(), json!(system_prompt));
     }
-    let resp = send_with_backoff("anthropic", &url, || {
-        builtin_http_client()
-            .post(&url)
-            .header("x-api-key", &provider.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .json(&body)
-    })
+    let client = provider
+        .http_client
+        .clone()
+        .ok_or_else(|| "Provider HTTP client is unavailable".to_string())?;
+    let resp = send_with_backoff(
+        "anthropic",
+        &url,
+        provider.max_retries,
+        provider.min_gap,
+        || {
+            client
+                .post(&url)
+                .header("x-api-key", &provider.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .json(&body)
+        },
+    )
     .await?;
     pump_sse_response(resp, tx, parse_anthropic_sse_data).await
 }
@@ -626,6 +682,26 @@ fn provider_endpoint(base_url: &str, path: &str) -> String {
     format!("{base}{path}")
 }
 
+fn normalize_provider_base_url(base_url: &str) -> Result<String, String> {
+    let url = reqwest::Url::parse(base_url)
+        .map_err(|error| format!("Invalid provider endpoint: {error}"))?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(format!(
+            "Invalid provider endpoint: unsupported URL scheme '{}'",
+            url.scheme()
+        ));
+    }
+    if url.host_str().is_none() {
+        return Err("Invalid provider endpoint: URL must include a host".to_string());
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(
+            "Invalid provider endpoint: query strings and fragments are not allowed".to_string(),
+        );
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
 fn parse_openai_sse_data(data: &str) -> Option<ChatDelta> {
     let data = data.trim();
     if data == "[DONE]" {
@@ -718,206 +794,5 @@ pub fn map_openai_stop_reason(reason: &str) -> StopReason {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::{Read, Write};
-    use std::net::{TcpListener, TcpStream};
-    use std::sync::mpsc as std_mpsc;
-    use std::time::Duration;
-
-    fn read_http_request(stream: &mut TcpStream) -> String {
-        let mut buf = Vec::new();
-        let mut chunk = [0_u8; 4096];
-        loop {
-            let n = stream.read(&mut chunk).expect("read request");
-            if n == 0 {
-                break;
-            }
-            buf.extend_from_slice(&chunk[..n]);
-            let Some(header_end) = buf.windows(4).position(|w| w == b"\r\n\r\n") else {
-                continue;
-            };
-            let headers = String::from_utf8_lossy(&buf[..header_end]);
-            let content_len = headers
-                .lines()
-                .find_map(|line| {
-                    let (key, value) = line.split_once(':')?;
-                    key.eq_ignore_ascii_case("content-length")
-                        .then(|| value.trim().parse::<usize>().ok())
-                        .flatten()
-                })
-                .unwrap_or(0);
-            if buf.len() >= header_end + 4 + content_len {
-                break;
-            }
-        }
-        String::from_utf8_lossy(&buf).to_string()
-    }
-
-    #[test]
-    fn parse_openai_sse_data_extracts_text_delta() {
-        let data = r#"{"choices":[{"delta":{"content":"hello"}}]}"#;
-        assert_eq!(
-            parse_openai_sse_data(data),
-            Some(ChatDelta::TextDelta("hello".into()))
-        );
-    }
-
-    #[test]
-    fn parse_anthropic_sse_data_extracts_text_delta() {
-        let data = r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}"#;
-        assert_eq!(
-            parse_anthropic_sse_data(data),
-            Some(ChatDelta::TextDelta("hello".into()))
-        );
-    }
-
-    #[test]
-    fn is_minimax_model_gates_thinking_field() {
-        // 仅 MiniMax 模型加 `thinking:{type:disabled}`;别的 provider 不加。
-        assert!(is_minimax_model("MiniMax-M3"));
-        assert!(is_minimax_model("MiniMax-M2.7"));
-        assert!(is_minimax_model("abab6.5s-chat"));
-        assert!(!is_minimax_model("deepseek-v4-pro"));
-        assert!(!is_minimax_model("qwen3-coder-plus"));
-        assert!(!is_minimax_model("ark-code-latest"));
-    }
-
-    #[test]
-    fn is_retryable_status_flags_provider_rate_limit_and_overload() {
-        assert!(is_retryable_status(reqwest::StatusCode::TOO_MANY_REQUESTS));
-        assert!(is_retryable_status(
-            reqwest::StatusCode::SERVICE_UNAVAILABLE
-        ));
-        assert!(is_retryable_status(
-            reqwest::StatusCode::from_u16(529).expect("status 529")
-        ));
-
-        assert!(!is_retryable_status(reqwest::StatusCode::OK));
-        assert!(!is_retryable_status(reqwest::StatusCode::BAD_REQUEST));
-        assert!(!is_retryable_status(reqwest::StatusCode::UNAUTHORIZED));
-        assert!(!is_retryable_status(reqwest::StatusCode::NOT_FOUND));
-        assert!(!is_retryable_status(
-            reqwest::StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS
-        ));
-    }
-
-    #[test]
-    fn parse_retry_after_accepts_integer_seconds_and_caps_large_values() {
-        let mut headers = reqwest::header::HeaderMap::new();
-        assert_eq!(parse_retry_after(&headers), None);
-
-        headers.insert(
-            reqwest::header::RETRY_AFTER,
-            reqwest::header::HeaderValue::from_static("3"),
-        );
-        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(3)));
-
-        headers.insert(
-            reqwest::header::RETRY_AFTER,
-            reqwest::header::HeaderValue::from_static("0"),
-        );
-        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(0)));
-
-        headers.insert(
-            reqwest::header::RETRY_AFTER,
-            reqwest::header::HeaderValue::from_static("abc"),
-        );
-        assert_eq!(parse_retry_after(&headers), None);
-
-        headers.insert(
-            reqwest::header::RETRY_AFTER,
-            reqwest::header::HeaderValue::from_static("3600"),
-        );
-        assert_eq!(parse_retry_after(&headers), Some(Duration::from_secs(30)));
-    }
-
-    #[test]
-    fn backoff_delay_exponentially_increases_and_caps() {
-        assert_eq!(backoff_delay(0), Duration::from_secs(1));
-        assert_eq!(backoff_delay(1), Duration::from_secs(2));
-        assert_eq!(backoff_delay(2), Duration::from_secs(4));
-        assert_eq!(backoff_delay(3), Duration::from_secs(8));
-        assert_eq!(backoff_delay(99), Duration::from_secs(8));
-    }
-
-    #[test]
-    fn throttle_wait_respects_reserved_last_request_slot() {
-        let now = std::time::Instant::now();
-        let min_gap = Duration::from_millis(350);
-
-        assert_eq!(throttle_wait(None, now, min_gap), Duration::ZERO);
-        assert_eq!(throttle_wait(Some(now), now, min_gap), min_gap);
-        assert_eq!(
-            throttle_wait(Some(now - Duration::from_millis(400)), now, min_gap),
-            Duration::ZERO
-        );
-    }
-
-    #[test]
-    fn openai_sse_error_finishes_aborted() {
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind local SSE server");
-        let addr = listener.local_addr().expect("local addr");
-        let (req_tx, req_rx) = std_mpsc::channel();
-        let server = std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().expect("accept request");
-            stream
-                .set_read_timeout(Some(Duration::from_secs(2)))
-                .expect("set read timeout");
-            let request = read_http_request(&mut stream);
-            req_tx.send(request).expect("send request capture");
-
-            let body = "data: {\"error\":{\"message\":\"bad key\"}}\n\n";
-            let response = format!(
-                "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            stream
-                .write_all(response.as_bytes())
-                .expect("write SSE response");
-        });
-        let provider = ConfiguredBuiltinProvider::from_builtin_agent(&BuiltinAgentConfig {
-            id: "builtin-1".into(),
-            preset: op_editor_core::BuiltinAgentPresetKey::Custom,
-            display_name: "Mock OpenAI".into(),
-            kind: BuiltinAgentKind::OpenAiCompat,
-            api_key: "sk-test".into(),
-            model: "gpt-test".into(),
-            base_url: format!("http://{addr}"),
-            enabled: true,
-        })
-        .expect("ready provider");
-
-        let deltas: Vec<ChatDelta> = provider
-            .send(ChatRequest {
-                user_message: "hello".into(),
-                max_output_tokens: 64,
-                ..Default::default()
-            })
-            .collect();
-        server.join().expect("server thread exits");
-        let request = req_rx
-            .recv()
-            .expect("captured request")
-            .to_ascii_lowercase();
-
-        assert!(request.starts_with("post /chat/completions "));
-        assert!(request.contains("authorization: bearer sk-test"));
-        assert!(
-            deltas
-                .iter()
-                .any(|d| matches!(d, ChatDelta::Error(message) if message == "bad key")),
-            "expected upstream error delta, got {deltas:?}"
-        );
-        assert!(
-            matches!(
-                deltas.last(),
-                Some(ChatDelta::Done {
-                    stop_reason: StopReason::Aborted
-                })
-            ),
-            "SSE errors must terminate as aborted, got {deltas:?}"
-        );
-    }
-}
+#[path = "chat_builtin_http_tests.rs"]
+mod tests;
