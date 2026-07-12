@@ -4,7 +4,9 @@
 
 use super::test_support::{filled_rect, scene_with};
 use super::*;
-use op_editor_ui::layout_scene::{NodeKind, SceneNode, SceneStroke, SceneStrokeAlign};
+use op_editor_ui::layout_scene::{
+    LayoutScene, NodeKind, SceneNode, ScenePage, SceneStroke, SceneStrokeAlign,
+};
 use op_editor_ui::{Color, Rect};
 
 #[test]
@@ -67,6 +69,61 @@ fn export_raster_writes_png_for_minimal_scene() {
         &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
     );
     let _ = std::fs::remove_file(&tmp);
+}
+
+fn two_page_scene() -> LayoutScene {
+    LayoutScene {
+        pages: vec![
+            ScenePage {
+                id: "page-one".into(),
+                name: "Page One".into(),
+                children: vec![filled_rect(
+                    "page-one-node",
+                    0.0,
+                    0.0,
+                    20.0,
+                    20.0,
+                    Color::BLACK,
+                )],
+            },
+            ScenePage {
+                id: "page-two".into(),
+                name: "Page Two".into(),
+                children: vec![filled_rect(
+                    "page-two-node",
+                    100.0,
+                    120.0,
+                    40.0,
+                    30.0,
+                    Color::BLACK,
+                )],
+            },
+        ],
+        active_page_index: 0,
+    }
+}
+
+#[test]
+fn render_page_raster_bytes_does_not_depend_on_active_page() {
+    let scene = two_page_scene();
+    let bytes = render_page_raster_bytes(&scene.pages[1], RasterFormat::Png, 1.0)
+        .expect("render second page");
+    assert_eq!(
+        &bytes[..8],
+        &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
+    );
+}
+
+#[test]
+fn render_node_on_page_raster_bytes_uses_resolved_page() {
+    let scene = two_page_scene();
+    let bytes =
+        render_node_on_page_raster_bytes(&scene.pages[1], "page-two-node", RasterFormat::Png, 1.0)
+            .expect("render node on second page");
+    assert_eq!(
+        &bytes[..8],
+        &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]
+    );
 }
 
 #[test]
