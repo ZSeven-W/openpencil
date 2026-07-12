@@ -432,6 +432,107 @@ fn canvaskit_browser_text_raster_key_drops_color_and_alpha() {
 }
 
 #[test]
+fn canvaskit_text_rasters_refresh_at_effective_scale() {
+    let source = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+
+    let scale_fn = source
+        .find("const effectiveTextScale = () =>")
+        .expect("effective text scale helper exists");
+    let image_fn = source
+        .find("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) =>")
+        .expect("browserTextImage exists");
+    let image_end = source[image_fn..]
+        .find("const TINT_FILTER_CACHE_CAP = 64;")
+        .expect("browserTextImage ends before the tint-filter cache")
+        + image_fn;
+    let scale_body = &source[scale_fn..image_fn];
+    let image_body = &source[image_fn..image_end];
+    for marker in [
+        "const m = canvas.getTotalMatrix();",
+        "const xScale = Math.hypot(m[0], m[3]);",
+        "const yScale = Math.hypot(m[1], m[4]);",
+        "return Math.max(1, xScale, yScale);",
+    ] {
+        assert!(
+            scale_body.contains(marker),
+            "effective text scale must preserve `{marker}` for rotated/non-uniform transforms"
+        );
+    }
+    assert!(
+        image_body.contains("const ss = effectiveTextScale();"),
+        "browserTextImage must supersample at the current CanvasKit transform scale"
+    );
+    for forbidden in ["clearBrowserTextCache()", "browserTextCache.clear()"] {
+        assert!(
+            !scale_body.contains(forbidden) && !image_body.contains(forbidden),
+            "effective-scale changes must partition the LRU by `ss`, not call `{forbidden}` per draw"
+        );
+    }
+
+    for marker in [
+        "['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\\n')",
+        ": [t, sz, weight, italic ? 1 : 0, ss].join('\\n');",
+    ] {
+        assert!(
+            image_body.contains(marker),
+            "text raster key must preserve `{marker}`"
+        );
+    }
+    assert!(
+        !image_body.contains("[t, sz, weight, italic ? 1 : 0, r, g, b, a, ss]"),
+        "ordinary text raster keys must remain colour-independent"
+    );
+
+    let clear_fn = source
+        .find("const clearBrowserTextCache = () =>")
+        .expect("browser text cache cleanup helper exists");
+    let text_dpr = source[clear_fn..]
+        .find("let textDpr = 1;")
+        .expect("cache cleanup helper ends before textDpr state")
+        + clear_fn;
+    let clear_body = &source[clear_fn..text_dpr];
+    let delete = clear_body
+        .find("entry.image.delete()")
+        .expect("cache cleanup deletes CanvasKit image handles");
+    let clear = clear_body[delete..]
+        .find("browserTextCache.clear();")
+        .expect("cache cleanup clears the map")
+        + delete;
+    let set_dpr = source.find("setDpr(v)").expect("setDpr bridge exists");
+    let set_dpr_end = source[set_dpr..]
+        .find("\n    },")
+        .expect("setDpr method has a local end boundary")
+        + set_dpr;
+    let set_dpr_body = &source[set_dpr..set_dpr_end];
+    let clear_call = set_dpr_body
+        .find("clearBrowserTextCache();")
+        .expect("DPR changes clear stale text rasters");
+    assert!(delete < clear && clear_call < set_dpr_body.len());
+    assert_eq!(
+        source.matches("clearBrowserTextCache();").count(),
+        1,
+        "setDpr must be the only call site that clears all browser text rasters"
+    );
+    assert_eq!(
+        source.matches("browserTextCache.clear();").count(),
+        1,
+        "only the handle-safe cleanup helper may clear the browser text raster map"
+    );
+
+    let eviction = image_body
+        .find("if (browserTextCache.size > 512)")
+        .expect("browser text raster cache remains bounded");
+    assert!(
+        image_body[eviction..].contains("old.image.delete()"),
+        "LRU eviction must keep deleting the evicted CanvasKit image handle"
+    );
+}
+
+#[test]
 fn canvaskit_browser_text_cache_is_lru() {
     let source = std::fs::read_to_string(format!(
         "{}/src/op_ck_bridge.js",

@@ -67,12 +67,14 @@ export async function opCkInit(canvasId) {
   const browserTextCanvas = document.createElement('canvas');
   const browserTextCtx = browserTextCanvas.getContext('2d', { willReadFrequently: true });
   const browserTextCache = new Map();
-  // Device-pixel-ratio for the offscreen text raster. Glyph bitmaps are drawn
-  // onto the CanvasKit surface while a `scale(dpr, dpr)` transform is active, so
-  // a 1x raster would be magnified `dpr`x and read blurry on HiDPI displays. We
-  // supersample the offscreen canvas by `textDpr` and composite it back at
-  // `1 / textDpr` so glyphs land at native device resolution. Driven from Rust
-  // via `setDpr` on mount + every display resize.
+  const clearBrowserTextCache = () => {
+    for (const entry of browserTextCache.values()) {
+      if (entry && entry.image && entry.image.delete) entry.image.delete();
+    }
+    browserTextCache.clear();
+  };
+  // Retain DPR so display changes can immediately invalidate stale handles;
+  // per-draw supersampling comes from the current CanvasKit transform below.
   let textDpr = 1;
   const browserTextFontStack = [
     '-apple-system',
@@ -202,32 +204,19 @@ export async function opCkInit(canvasId) {
     browserTextCtx.font = browserTextFont(sz, weight, italic);
     return browserTextCtx.measureText(t).width;
   };
-  // Rasterize a glyph run to a coverage bitmap. TEXT segments raster a WHITE
-  // (full-alpha) mask keyed on (text, size, weight, italic, supersample) — NO
-  // color / alpha in the key — and are recoloured at DRAW time via a SrcIn blend
-  // ColorFilter with opacity riding the paint (see `drawBrowserText`), so the
-  // same glyphs in N colours reuse ONE raster instead of thrashing this cache
-  // (the old key baked RGBA → >512 distinct colours re-rasterized + re-uploaded
-  // every pan/zoom frame). Canvas-2D fillText AA is grayscale coverage
-  // (transparent backdrop → no LCD subpixel path), so a white mask tinted
-  // `SrcIn(color)` reproduces `color × coverage` exactly — mathematically
-  // identical to the old per-colour raster.
-  //
-  // EMOJI / symbol segments are the exception: colour-emoji glyphs render with
-  // their EMBEDDED colours and ignore `fillStyle`, so a "white" mask is really
-  // native-coloured and `SrcIn` would flatten it to a solid block. Those
-  // segments therefore keep the exact legacy path — bake the requested colour
-  // into `fillStyle` (rgba, alpha too), key on rgba, and draw UNTINTED — which
-  // is byte-identical to the pre-change behaviour for the whole emoji-classified
-  // class (both colour glyphs and fillStyle-honouring monochrome symbols).
-  // Emoji were never the thrash source (nobody renders an emoji in 512 colours),
-  // so the colour-keyed cache for them costs nothing.
-  //
-  // LRU: a cache hit re-inserts the entry so the 512-cap eviction drops the
-  // least-recently-used run instead of the oldest-inserted (FIFO).
+  const effectiveTextScale = () => {
+    const m = canvas.getTotalMatrix();
+    const xScale = Math.hypot(m[0], m[3]);
+    const yScale = Math.hypot(m[1], m[4]);
+    return Math.max(1, xScale, yScale);
+  };
+  // Text uses a white coverage mask keyed without colour/alpha, then receives
+  // a SrcIn tint at draw time so differently coloured runs share a bitmap.
+  // Emoji retain their legacy RGBA-keyed, untinted raster path because colour
+  // glyphs can ignore fillStyle. Cache-hit reinsertion keeps eviction LRU.
   const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) => {
     if (!browserTextCtx) return null;
-    const ss = Math.max(1, textDpr);
+    const ss = effectiveTextScale();
     const key = emoji
       ? ['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\n')
       : [t, sz, weight, italic ? 1 : 0, ss].join('\n');
@@ -848,11 +837,7 @@ export async function opCkInit(canvasId) {
       const next = Number.isFinite(v) && v > 0 ? Math.max(1, v) : 1;
       if (next === textDpr) return;
       textDpr = next;
-      // Prior bitmaps were baked at the old ratio; drop them so they re-raster.
-      for (const entry of browserTextCache.values()) {
-        if (entry && entry.image && entry.image.delete) entry.image.delete();
-      }
-      browserTextCache.clear();
+      clearBrowserTextCache();
     },
   };
 }
