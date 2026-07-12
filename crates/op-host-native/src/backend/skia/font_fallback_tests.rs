@@ -54,7 +54,7 @@ fn cyrillic_design_text_uses_covering_fallback_and_shared_resolver() {
         .collect();
     assert_eq!(rendered, TEXT, "segmentation must preserve the full text");
     for segment in &segments {
-        if segment.text.chars().any(|c| !c.is_ascii()) {
+        if !segment.text.is_ascii() {
             for c in segment.text.chars() {
                 assert_ne!(
                     segment.typeface.unichar_to_glyph(c as i32),
