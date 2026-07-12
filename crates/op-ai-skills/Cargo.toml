@@ -7,6 +7,7 @@ license.workspace = true
 description = "OpenPencil AI skill engine — phase-driven prompt-skill resolution, ported from the TS pen-ai-skills package"
 
 [dependencies]
+serde_json = { workspace = true }
 # Embeds the skill / style-guide markdown corpus into the crate at
 # compile time so the engine ships self-contained — no runtime file
 # IO, and the crate stays usable on wasm32 targets. Pure Rust.

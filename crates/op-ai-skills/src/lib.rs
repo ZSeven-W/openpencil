@@ -21,6 +21,7 @@ use include_dir::{include_dir, Dir};
 pub mod budget;
 pub mod color;
 pub mod compose;
+pub mod design_systems;
 pub mod frontmatter;
 pub mod loader;
 pub mod memory;
