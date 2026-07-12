@@ -221,7 +221,7 @@ pub(crate) fn build_item(
         let display_content = strip_tool_call_xml(&msg.content);
         let extracted = extract_step_blocks(&display_content, msg.streaming);
         progress_steps.extend(extracted.steps);
-        normalize_narration_markdown(&extracted.visible_text)
+        extracted.visible_text
     };
     let design_applied =
         !is_user && (msg.content.contains("<!-- APPLIED -->") || msg.content.contains('\u{2705}'));
@@ -237,7 +237,13 @@ pub(crate) fn build_item(
         } else {
             extracted.blocks
         };
-        (extracted.visible_text, blocks)
+        // Markdown normalization comes AFTER the design-block extraction:
+        // stripping backticks earlier destroyed the ```json fences the
+        // extractor keys on.
+        (
+            normalize_narration_markdown(&extracted.visible_text),
+            blocks,
+        )
     };
     if design_applied {
         for block in &mut pending_design_blocks {
