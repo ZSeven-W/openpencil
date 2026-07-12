@@ -3,7 +3,25 @@
 //! under the repo's 800-line-per-file cap.
 
 use crate::{chat_session, persistence, DesktopApp};
+use base64::Engine as _;
 use winit::keyboard::{Key, NamedKey};
+
+/// Snapshot of every system-clipboard flavour relevant to Cmd/Ctrl+V.
+/// Tests inject this directly so paste precedence is deterministic and
+/// never depends on the developer machine's clipboard contents.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ClipboardPayload {
+    pub(crate) text: Option<String>,
+    pub(crate) html: Option<String>,
+    pub(crate) image: Option<crate::clipboard::ClipboardImage>,
+}
+
+impl ClipboardPayload {
+    fn read_system() -> Self {
+        let (text, html, image) = crate::clipboard::read_paste_flavours();
+        Self { text, html, image }
+    }
+}
 
 impl DesktopApp {
     /// Dispatch a pressed key (`logical_key` + its `text`) — the
@@ -382,28 +400,40 @@ impl DesktopApp {
     /// pastes Figma clipboard HTML or the document node clipboard onto
     /// the canvas. `pub(crate)` for the Edit-menu path.
     pub(crate) fn handle_cmd_paste(&mut self) -> bool {
+        self.handle_paste_payload(ClipboardPayload::read_system())
+    }
+
+    /// Input-aware paste router over an already-read clipboard snapshot.
+    /// Keeping OS access outside this seam makes precedence directly
+    /// testable and guarantees one clipboard handle per paste gesture.
+    pub(crate) fn handle_paste_payload(&mut self, mut payload: ClipboardPayload) -> bool {
         // Non-chat text inputs (settings, git, rename, etc.) are
         // checked first so that opening a modal (e.g. agent settings
         // via Cmd+,) while the chat input is focused routes the paste
         // to the modal's field instead of the chat.
-        if self.host.input_active_pub() && !self.host.editor_state().chat.focused {
-            if let Some(text) = crate::clipboard::get_text() {
-                self.host.apply_input_paste(&text);
+        if self.host.non_chat_input_owns_keyboard_pub() {
+            if let Some(text) = payload.text.as_deref() {
+                self.host.apply_input_paste(text);
             }
             return true;
         }
-        if self.host.editor_state().chat.focused {
+        if self.host.chat_input_owns_keyboard_pub() {
             // Clipboard image data wins over text when pasting into the
             // chat input; the paste is consumed either way.
-            if !self.try_paste_image_into_chat() {
-                if let Some(text) = crate::clipboard::get_text() {
-                    self.host.chat_input_paste(&text);
-                }
+            if let Some(image) = payload.image.take() {
+                self.paste_image_into_chat(image);
+            } else if let Some(text) = payload.text.as_deref() {
+                self.host.chat_input_paste(text);
             }
             return true;
         }
-        if let Some(result) = self.try_figma_clipboard_paste() {
-            return result;
+        if let Some(html) = payload.html.take() {
+            if let Some(result) = self.try_figma_clipboard_paste(html) {
+                return result;
+            }
+        }
+        if let Some(image) = payload.image {
+            return self.paste_image_to_canvas(image);
         }
         self.host.apply_paste()
     }
@@ -414,12 +444,7 @@ impl DesktopApp {
     /// and the paste is consumed even when nothing stages — TS
     /// filters oversized files after `preventDefault()`, and
     /// `add_attachment` enforces the same 4 × 5 MB caps here.
-    /// Returns false when the clipboard holds no image (caller falls
-    /// through to the text paste).
-    fn try_paste_image_into_chat(&mut self) -> bool {
-        let Some(png) = crate::clipboard::get_image() else {
-            return false;
-        };
+    fn paste_image_into_chat(&mut self, image: crate::clipboard::ClipboardImage) {
         // TS names pasted clipboard images "pasted-image.png".
         self.host
             .editor_state_mut()
@@ -427,9 +452,27 @@ impl DesktopApp {
             .add_attachment(op_editor_core::chat::ChatAttachment {
                 name: "pasted-image.png".to_string(),
                 media_type: "image/png".to_string(),
-                data: png,
+                data: image.png,
             });
-        true
+    }
+
+    fn paste_image_to_canvas(&mut self, image: crate::clipboard::ClipboardImage) -> bool {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&image.png);
+        let src = format!("data:image/png;base64,{encoded}");
+        let inserted = self
+            .host
+            .editor_state_mut()
+            .insert_image_node_at_viewport_sized(
+                "pasted-image.png",
+                &src,
+                image.width,
+                image.height,
+            )
+            .is_some();
+        if inserted {
+            self.host.mark_editor_state_dirty();
+        }
+        inserted
     }
 
     /// Probe the system clipboard for Figma HTML (Cmd+C in Figma) and
@@ -439,8 +482,7 @@ impl DesktopApp {
     /// marker; `pump_figma_clipboard_paste` applies the parsed nodes
     /// on a later frame. `None` when the clipboard holds no Figma
     /// payload (caller falls back to the internal node clipboard).
-    fn try_figma_clipboard_paste(&mut self) -> Option<bool> {
-        let html = crate::clipboard::get_html()?;
+    fn try_figma_clipboard_paste(&mut self, html: String) -> Option<bool> {
         if !op_figma::is_figma_clipboard_html(&html) {
             return None;
         }
@@ -590,3 +632,7 @@ impl DesktopApp {
         self.host.mark_editor_state_dirty();
     }
 }
+
+#[cfg(test)]
+#[path = "keyboard_input_tests.rs"]
+mod tests;

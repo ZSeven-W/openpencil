@@ -214,11 +214,41 @@ impl EditorState {
     /// Returns the new node id on success; `None` when the id allocator is
     /// exhausted.
     pub fn insert_image_node_at_viewport(&mut self, name: &str, src: &str) -> Option<NodeId> {
+        self.insert_image_node_at_viewport_with_dimensions(name, src, 300.0, 200.0)
+    }
+
+    /// Insert an Image node centred on the current viewport, preserving the
+    /// source bitmap's aspect ratio. The largest side is capped at 300
+    /// document pixels and smaller bitmaps are not enlarged.
+    pub fn insert_image_node_at_viewport_sized(
+        &mut self,
+        name: &str,
+        src: &str,
+        pixel_width: u32,
+        pixel_height: u32,
+    ) -> Option<NodeId> {
+        if pixel_width == 0 || pixel_height == 0 {
+            return None;
+        }
+        let scale = (300.0 / f64::from(pixel_width.max(pixel_height))).min(1.0);
+        self.insert_image_node_at_viewport_with_dimensions(
+            name,
+            src,
+            f64::from(pixel_width) * scale,
+            f64::from(pixel_height) * scale,
+        )
+    }
+
+    fn insert_image_node_at_viewport_with_dimensions(
+        &mut self,
+        name: &str,
+        src: &str,
+        width: f64,
+        height: f64,
+    ) -> Option<NodeId> {
         use jian_ops_schema::node::image::ImageNode;
         use jian_ops_schema::node::PenNode;
         use jian_ops_schema::sizing::SizingBehavior;
-        const W: f64 = 300.0;
-        const H: f64 = 200.0;
         let pan_x = self.viewport.pan_x as f64;
         let pan_y = self.viewport.pan_y as f64;
         let zoom = self.viewport.zoom.max(0.001) as f64;
@@ -226,21 +256,20 @@ impl EditorState {
         let centre_y = -pan_y / zoom;
         let safe = self.max_node_id().checked_add(1)?;
         let id = NodeId::new(format!("n{}", safe));
-        let mut next_id = safe.checked_add(1)?;
-        let _ = &mut next_id;
+        let _next_id = safe.checked_add(1)?;
         self.commit_history();
         let node = PenNode::Image(ImageNode {
             base: jian_ops_schema::node::base::PenNodeBase {
                 id: id.as_str().to_string(),
                 name: Some(name.to_string()),
-                x: Some(centre_x - W / 2.0),
-                y: Some(centre_y - H / 2.0),
+                x: Some(centre_x - width / 2.0),
+                y: Some(centre_y - height / 2.0),
                 ..Default::default()
             },
             src: src.into(),
             object_fit: None,
-            width: Some(SizingBehavior::Number(W)),
-            height: Some(SizingBehavior::Number(H)),
+            width: Some(SizingBehavior::Number(width)),
+            height: Some(SizingBehavior::Number(height)),
             corner_radius: None,
             effects: None,
             exposure: None,
