@@ -209,6 +209,15 @@ pub(crate) fn silhouette_for(style: op_editor_core::PencilCursorStyle) -> Silhou
 
 /// Fallback for reveals not owned by any tagged agent (the same red the
 /// retired dashed-reveal border used as its untagged default).
+/// O4 outline halo — near-black slate, drawn wide and translucent
+/// OUTSIDE the white rim.
+const PENCIL_HALO: Color = Color {
+    r: 0.067,
+    g: 0.094,
+    b: 0.153,
+    a: 1.0,
+};
+
 /// Chubby variant's eraser butt.
 const PENCIL_ERASER_PINK: Color = Color {
     r: 1.0,
@@ -231,52 +240,53 @@ const FALLBACK_COLOR: Color = Color {
 /// `PENCIL_TIP_POINTS`). Anatomy mirrors Pencil's multiplayer cursor
 /// (solid tinted pointer + name pill) without copying its arrow.
 ///
-/// ROUNDED variant (user-picked "B", 2026-07-12): every corner of the
+/// ROUNDED variant (user-picked "B", then fattened 1.28x across the
+/// pencil axis with the tip hotspot fixed - "加胖更可爱", 2026-07-12): every corner of the
 /// straight-edged silhouette is a quadratic arc — round shoulders at the
 /// eraser butt, a curved collar, a soft tip wedge. The arcs are baked
 /// as dense polygon samples so the existing polygon painters render
 /// them smoothly with no new backend primitive.
 const ROUNDED_BODY: [(f32, f32); 19] = [
-    (0.00, 0.00), // graphite tip (hotspot)
-    (7.60, 2.00),
-    (8.11, 2.18),
-    (8.58, 2.44),
-    (9.00, 2.80),
-    (20.00, 13.80),
-    (20.60, 14.63),
-    (20.80, 15.50),
-    (20.60, 16.43),
-    (20.00, 17.40),
-    (17.40, 20.00),
-    (16.43, 20.60),
-    (15.50, 20.80),
-    (14.62, 20.60),
-    (13.80, 20.00),
-    (2.80, 9.00),
-    (2.44, 8.58),
-    (2.18, 8.11),
-    (2.00, 7.60),
+    (0.00, 0.00),
+    (8.38, 1.22),
+    (8.94, 1.35),
+    (9.44, 1.58),
+    (9.87, 1.93),
+    (20.87, 12.93),
+    (21.44, 13.79),
+    (21.54, 14.76),
+    (21.18, 15.85),
+    (20.36, 17.04),
+    (17.04, 20.36),
+    (15.85, 21.18),
+    (14.76, 21.54),
+    (13.78, 21.44),
+    (12.93, 20.87),
+    (1.93, 9.87),
+    (1.58, 9.44),
+    (1.35, 8.94),
+    (1.22, 8.38),
 ];
 
 /// White wedge over the tip — the sharpened-graphite highlight, with a
 /// curved base matching the rounded collar.
 const ROUNDED_TIP: [(f32, f32); 6] = [
     (0.00, 0.00),
-    (4.40, 1.20),
-    (3.53, 1.92),
+    (4.85, 0.75),
+    (3.76, 1.69),
     (2.70, 2.70),
-    (1.92, 3.53),
-    (1.20, 4.40),
+    (1.69, 3.76),
+    (0.75, 4.85),
 ];
 
 /// Collar seam between the sharpened cone and the painted body — a soft
 /// arc sampled as a short polyline.
 const ROUNDED_COLLAR: [(f32, f32); 5] = [
-    (2.00, 7.60),
-    (3.48, 6.12),
-    (4.90, 4.70),
-    (6.27, 3.32),
-    (7.60, 2.00),
+    (1.22, 8.38),
+    (3.11, 6.49),
+    (4.93, 4.67),
+    (6.68, 2.91),
+    (8.38, 1.22),
 ];
 
 /// A scheduled placement the cursor must reach: one generated node's
@@ -632,6 +642,8 @@ pub(crate) fn paint_cursor_swatch(
             .map(|(dx, dy)| Point2D::new(origin.x + dx, origin.y + dy))
             .collect()
     };
+    cx.backend
+        .stroke_polygon(&at(silhouette.body), PENCIL_HALO.with_alpha(0.28), 4.5);
     cx.backend.fill_polygon(&at(silhouette.body), color);
     cx.backend
         .stroke_polygon(&at(silhouette.body), Color::WHITE.with_alpha(0.9), 1.2);
@@ -682,7 +694,13 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhou
         .map(|p| Point2D::new(p.x + 1.0, p.y + 1.5))
         .collect();
     cx.backend
-        .fill_polygon(&shadow, Color::BLACK.with_alpha(0.18 * sprite.alpha));
+        .fill_polygon(&shadow, Color::BLACK.with_alpha(0.14 * sprite.alpha));
+    // Dark halo OUTSIDE the white outline (user-picked "O4", the macOS
+    // pointer treatment): a pure-white outline vanished on light designs;
+    // the wide low-alpha dark ring keeps the silhouette readable on any
+    // ground while the white rim keeps it crisp on dark ones.
+    cx.backend
+        .stroke_polygon(&body, PENCIL_HALO.with_alpha(0.28 * sprite.alpha), 5.4);
     cx.backend
         .fill_polygon(&body, sprite.color.with_alpha(sprite.alpha));
     cx.backend
