@@ -173,8 +173,28 @@ pub fn load_editor_state(
             .unwrap_or(1)
             .max(1);
         state.ui.active_page_index = meta.active_page_index.min(page_count - 1);
+    } else {
+        state.ui.active_page_index = first_page_with_content(&state);
     }
     Ok(state)
+}
+
+/// Which page to land on when the file carries no editor metadata. Page 0 is
+/// the obvious answer — unless it is EMPTY and a later page is not: a 16-page
+/// document whose first page is a blank cover then opened onto plain canvas
+/// with a "content bbox None" and looked broken (measured: zwiki-ui-states.op).
+/// A file that is empty everywhere still lands on page 0.
+fn first_page_with_content(state: &EditorState) -> usize {
+    let Some(pages) = state.doc.pages.as_ref() else {
+        return 0;
+    };
+    if pages.first().is_some_and(|page| !page.children.is_empty()) {
+        return 0;
+    }
+    pages
+        .iter()
+        .position(|page| !page.children.is_empty())
+        .unwrap_or(0)
 }
 
 fn split_editor_meta(src: &str) -> (Option<EditorMeta>, Cow<'_, str>) {
@@ -493,6 +513,67 @@ mod tests {
             op_i18n::translate(op_editor_core::Locale::EnUs, "dialog.loadErrorOldVersion")
         );
 
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A multi-page document whose FIRST page is an empty cover opened onto
+    /// plain canvas ("content bbox None") and read as a broken file — the
+    /// content was on page 2 (measured: zwiki-ui-states.op, 16 pages).
+    #[test]
+    fn a_file_with_an_empty_first_page_opens_on_the_first_page_with_content() {
+        let path = temp_op_path("empty-first-page");
+        std::fs::write(
+            &path,
+            r##"{ "version": "1.0", "children": [], "pages": [
+                { "id": "p1", "name": "Cover", "children": [] },
+                { "id": "p2", "name": "States", "children": [
+                    { "type": "frame", "id": "n1", "name": "Screen",
+                      "width": 390, "height": 844 }
+                ]}
+            ]}"##,
+        )
+        .expect("write");
+        let state = load_editor_state(&path, op_editor_core::Locale::EnUs).expect("loads");
+        assert_eq!(
+            state.ui.active_page_index, 1,
+            "the blank cover is skipped — the file opens where the design is"
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_file_whose_first_page_has_content_still_opens_on_it() {
+        let path = temp_op_path("first-page-content");
+        std::fs::write(
+            &path,
+            r##"{ "version": "1.0", "children": [], "pages": [
+                { "id": "p1", "name": "Home", "children": [
+                    { "type": "frame", "id": "n1", "width": 390, "height": 844 }
+                ]},
+                { "id": "p2", "name": "Detail", "children": [
+                    { "type": "frame", "id": "n2", "width": 390, "height": 844 }
+                ]}
+            ]}"##,
+        )
+        .expect("write");
+        let state = load_editor_state(&path, op_editor_core::Locale::EnUs).expect("loads");
+        assert_eq!(state.ui.active_page_index, 0);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn an_entirely_empty_file_still_lands_on_page_zero() {
+        let path = temp_op_path("all-empty");
+        std::fs::write(
+            &path,
+            r##"{ "version": "1.0", "children": [], "pages": [
+                { "id": "p1", "name": "A", "children": [] },
+                { "id": "p2", "name": "B", "children": [] }
+            ]}"##,
+        )
+        .expect("write");
+        let state = load_editor_state(&path, op_editor_core::Locale::EnUs).expect("loads");
+        assert_eq!(state.ui.active_page_index, 0);
         let _ = std::fs::remove_file(&path);
     }
 }
