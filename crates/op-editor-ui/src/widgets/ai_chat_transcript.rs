@@ -25,7 +25,8 @@ use super::ai_chat_transcript_design::{
     applied_design_block_label, extract_design_json_blocks, paint_design_block,
     place_design_blocks, DesignBlock,
 };
-use super::ai_chat_transcript_flow::{build_flow, should_interleave};
+pub(crate) use super::ai_chat_transcript_flow::normalize_narration_markdown;
+use super::ai_chat_transcript_flow::{build_flow, paint_flow, should_interleave};
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
 use super::ai_chat_transcript_identity::{
     layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
@@ -86,7 +87,7 @@ const USER_BUBBLE_MAX_FRAC: f32 = 0.78;
 /// Minimum user bubble width so very short prompts still read as a chip.
 const USER_BUBBLE_MIN_W: f32 = 56.0;
 
-fn streaming_caret_visible(now_ms: u64) -> bool {
+pub(crate) fn streaming_caret_visible(now_ms: u64) -> bool {
     jian_core::anim::blink_visible(now_ms, 0, jian_core::text_input::CARET_BLINK_PERIOD_MS)
 }
 
@@ -519,38 +520,6 @@ fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
     }
 }
 
-/// Light markdown normalization for streamed narration — the panel paints
-/// plain text, so raw `**bold**` markers and back-to-back bold headings
-/// ("**Batch 1**" glued straight onto "**Batch 2**") rendered as asterisk
-/// soup (measured 2026-07-12). Full markdown is out of scope; this strips
-/// emphasis/backtick markers, re-breaks adjacent bold headings onto their
-/// own lines, and turns `- ` bullets into `• `.
-pub(crate) fn normalize_narration_markdown(text: &str) -> String {
-    // Adjacent closing/opening bold with nothing between = two headings the
-    // stream glued together; give the second its own paragraph.
-    let mut out = text.replace("****", "**\n**");
-    // A bold opener directly after a colon or period also reads as a new
-    // heading in the measured streams.
-    out = out.replace(":**", ":\n**");
-    // Strip the emphasis/code markers themselves.
-    out = out.replace("**", "").replace('`', "");
-    // Bullets.
-    let mut lines: Vec<String> = Vec::new();
-    for line in out.lines() {
-        let trimmed = line.trim_start();
-        if let Some(rest) = trimmed.strip_prefix("- ") {
-            let indent = &line[..line.len() - trimmed.len()];
-            lines.push(format!("{indent}\u{2022} {rest}"));
-        } else {
-            lines.push(line.to_string());
-        }
-    }
-    lines.join(
-        "
-",
-    )
-}
-
 /// Total height (px) of the full transcript laid out from the body top.
 /// Served from the shared per-frame cache — no separate layout pass. The
 /// production max-scroll clamp (`AIChatPlaceholder::transcript_scroll_max`) now
@@ -669,44 +638,7 @@ pub(crate) fn paint_transcript_with_selection(
         if let Some(block) = &item.tools {
             paint_tool_panel(cx, theme, block);
         }
-        // Interleaved flow: prose paragraphs + headerless tool panels, all
-        // pre-placed at absolute rects by `build_flow`.
-        for (flow_index, bubble) in item.flow_bubbles.iter().enumerate() {
-            cx.backend.save();
-            cx.backend.clip_rect(bubble.rect);
-            let mut baseline = bubble.rect.origin.y + 11.0;
-            for line in &bubble.lines {
-                draw_line(
-                    cx,
-                    line,
-                    bubble.rect.origin.x,
-                    baseline,
-                    BODY_FONT,
-                    theme.foreground,
-                );
-                baseline += LINE_H;
-            }
-            if item.streaming
-                && flow_index + 1 == item.flow_bubbles.len()
-                && streaming_caret_visible(now_ms)
-            {
-                let last = bubble.lines.last().map(String::as_str).unwrap_or("");
-                let units: u32 = last.chars().map(char_display_units).sum();
-                cx.backend.fill_rect(
-                    Rect::xywh(
-                        bubble.rect.origin.x + units as f32 * CHAR_UNIT_PX,
-                        baseline - LINE_H - 9.0,
-                        2.0,
-                        13.0,
-                    ),
-                    theme.foreground,
-                );
-            }
-            cx.backend.restore();
-        }
-        for panel in &item.flow_panels {
-            paint_tool_panel(cx, theme, panel);
-        }
+        paint_flow(cx, theme, item, now_ms);
         for (block_index, block) in item.design_blocks.iter().enumerate() {
             // Design-hover is paint-only: it reveals the per-block copy icon and
             // never moves a rect, so it stays out of the layout cache and is
