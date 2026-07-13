@@ -212,6 +212,7 @@ pub(crate) mod ai_chat_transcript_identity;
 #[cfg(test)]
 mod ai_chat_transcript_identity_tests;
 pub(crate) mod ai_chat_transcript_paint_parts;
+pub(crate) mod ai_chat_transcript_richtext;
 pub(crate) mod ai_chat_transcript_selection;
 pub(crate) mod ai_chat_transcript_steps;
 pub(crate) mod ai_chat_transcript_text;
