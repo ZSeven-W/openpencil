@@ -47,6 +47,7 @@ pub mod append;
 pub(crate) mod avatar_repair;
 #[cfg(test)]
 mod avatar_repair_tests;
+pub(crate) mod broken_ref_repair;
 pub(crate) mod chip_repair;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;

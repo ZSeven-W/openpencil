@@ -1523,6 +1523,9 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
     // A stray photo rejoins the empty slot that was waiting for it BEFORE the
     // twin-stub sweep, so the slot no longer reads as an empty decorated stub.
     crate::stray_image_adopt::adopt_stray_images_for_all_roots(sink);
+    // A reference to a variable that does not exist must not render as an
+    // invisible glyph — repair it against the surface it sits on.
+    crate::broken_ref_repair::repair_broken_variable_refs(sink);
     crate::avatar_repair::remove_empty_twin_stubs_beside_images_for_all_roots(sink);
     crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);
 
