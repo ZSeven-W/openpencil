@@ -35,16 +35,16 @@ pub(super) fn is_placeholder_section(node: &SceneNode) -> bool {
     node.kind == NodeKind::Frame && node.children.is_empty()
 }
 
-/// Scan-eligible ids + QUEUED shells to suppress entirely.
+/// The two generation states an empty shell can be in.
 pub(super) struct GenerationPaintSets {
-    /// Nodes allowed to paint the placeholder wash (the on-deck shells and
-    /// all worked content).
+    /// The shell being worked RIGHT NOW (first empty in fill order) plus all
+    /// worked content: the full radar treatment — wash + sweeping band.
     pub scan: HashSet<String>,
-    /// Empty shells whose turn has NOT come: they keep their layout slot
-    /// but paint NOTHING — Pencil shows plain canvas where work has not
-    /// reached, not a stack of dark author-filled slabs (user report
-    /// 2026-07-12: "下面的黑块是什么？先隐藏？").
-    pub suppressed: HashSet<String>,
+    /// Shells still QUEUED: they keep their slot and show the skeleton, but
+    /// as a quiet static wireframe — no wash to read as a dark slab, no sweep
+    /// to claim they are being worked. The skeleton stays visible everywhere
+    /// (user: "骨架先行效果还是要的"); only ONE shell may look active.
+    pub queued: HashSet<String>,
 }
 
 pub(super) fn generating_paint_sets(
@@ -54,7 +54,7 @@ pub(super) fn generating_paint_sets(
     let indicators = indicators.filter(|value| value.run_active && !value.frames.is_empty())?;
     let mut sets = GenerationPaintSets {
         scan: HashSet::new(),
-        suppressed: HashSet::new(),
+        queued: HashSet::new(),
     };
     for root in roots {
         if indicators.frames.contains_key(&root.id) {
@@ -67,28 +67,51 @@ pub(super) fn generating_paint_sets(
 }
 
 fn collect_descendants(nodes: &[SceneNode], sets: &mut GenerationPaintSets, deck_taken: &mut bool) {
-    // Work-order gate: across the WHOLE generating root only the FIRST
-    // empty shell in document (pre-order) position is "on deck" and washes;
-    // every other empty shell waits its turn INVISIBLY (layout slot kept,
-    // paint suppressed). The gate was per-container at first, which lit the
-    // root's trailing bottom-nav shell while the model was narrating "fill
-    // the Header" — the fill order is document order, so the deck must be
-    // global to the root (user report 2026-07-12). Pencil never lights a
-    // section work has not reached, and a region must light up the moment
-    // it becomes the next target.
+    // Work-order gate: across the WHOLE generating root, the FIRST empty
+    // shell in document (pre-order) position is "on deck" and gets the active
+    // radar; every later empty shell still SHOWS its skeleton, but as a quiet
+    // wireframe. Two earlier shapes were both wrong: a per-container gate lit
+    // the root's trailing bottom-nav while the model was filling the header
+    // nested in the content wrapper, and suppressing the queue entirely left
+    // holes in the middle of the skeleton. Fill order is document order, so
+    // the deck is global — and exactly one shell may look active.
     for node in nodes {
         let empty_frame = node.kind == NodeKind::Frame && node.children.is_empty();
         if empty_frame {
             if !*deck_taken {
                 sets.scan.insert(node.id.clone());
             } else {
-                sets.suppressed.insert(node.id.clone());
+                sets.queued.insert(node.id.clone());
             }
             *deck_taken = true;
         } else {
             sets.scan.insert(node.id.clone());
         }
         collect_descendants(&node.children, sets, deck_taken);
+    }
+}
+
+/// A queued shell's skeleton: the wireframe outline and a whisper of wash —
+/// present, clearly a placeholder, and unmistakably NOT the one being worked.
+pub(super) fn paint_queued_skeleton(
+    cx: &mut PaintCx<'_>,
+    node: &SceneNode,
+    bounds: Rect,
+    zoom: f32,
+    accent: Color,
+) {
+    if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+        return;
+    }
+    let radius = node.corner_radius * zoom;
+    if radius > 0.5 {
+        cx.backend
+            .fill_round_rect(bounds, radius, accent.with_alpha(0.035));
+        cx.backend
+            .stroke_round_rect(bounds, radius, accent.with_alpha(0.3), 1.0);
+    } else {
+        cx.backend.fill_rect(bounds, accent.with_alpha(0.035));
+        cx.backend.stroke_rect(bounds, accent.with_alpha(0.3), 1.0);
     }
 }
 
