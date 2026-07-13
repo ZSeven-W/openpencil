@@ -220,12 +220,24 @@ pub(crate) fn paint_rich(cx: &mut PaintCx<'_>, theme: &Theme, lines: &[RichLine]
         }
         let mut x = origin.x + line.inset;
         for span in &line.spans {
-            let units: u32 = span.text.chars().map(char_display_units).sum();
-            let width = units as f32 * CHAR_UNIT_PX;
             let (color, weight) = match span.style {
                 SpanStyle::Body => (theme.muted_foreground, 400),
                 SpanStyle::Strong => (theme.foreground, 700),
                 SpanStyle::Code => (theme.foreground, 400),
+            };
+            // Advance by the REAL glyph width, not the wrap estimate: paint
+            // used the same 6.6px-per-unit budget the wrapper does, so every
+            // span after the first sat at a slightly wrong x — code chips
+            // drifted off their words and the sentence read as fragments
+            // (user report 2026-07-12). Wrapping stays estimate-based (it must
+            // be backend-free and deterministic); only paint measures.
+            let measured = cx
+                .backend
+                .measure_text_weighted(&span.text, BODY_FONT, weight);
+            let width = if measured > 0.0 {
+                measured
+            } else {
+                span.text.chars().map(char_display_units).sum::<u32>() as f32 * CHAR_UNIT_PX
             };
             if span.style == SpanStyle::Code {
                 cx.backend.fill_round_rect(

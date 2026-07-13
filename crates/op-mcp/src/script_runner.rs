@@ -426,12 +426,29 @@ pub(crate) fn repair_truncated_script(script: &str) -> Option<String> {
     Some(repaired)
 }
 
+/// A bare "x is not defined" tells the model nothing about WHY. Every script
+/// runs in a FRESH sandbox, so a variable that held a node in an earlier batch
+/// is gone — the model must reference that node by its id STRING. Say so
+/// (measured 2026-07-12: a batch died on `header is not defined`, where
+/// `header` was a `const` from the previous batch's script).
+fn explain_reference_error(msg: &str) -> Option<String> {
+    let name = msg.strip_suffix(" is not defined")?;
+    Some(format!(
+        "script error: {msg}. Each script runs in a FRESH sandbox — a variable \
+         from an earlier batch no longer exists. Reference nodes created in an \
+         earlier batch by their id STRING instead: I(\"n12\", {{…}}), not I({name}, {{…}})."
+    ))
+}
+
 fn describe_js_error(ctx: &rquickjs::Ctx<'_>, err: rquickjs::Error) -> String {
     if err.is_exception() {
         let caught = ctx.catch();
         if let Some(exc) = caught.as_exception() {
             let msg = exc.message().unwrap_or_default();
             if !msg.is_empty() {
+                if let Some(explained) = explain_reference_error(&msg) {
+                    return explained;
+                }
                 return format!("script error: {msg}");
             }
         }
