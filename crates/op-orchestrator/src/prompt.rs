@@ -82,6 +82,9 @@ data array. PREFER a loop over copy-pasting near-identical I(...) calls.
 Each node object starts with type ("frame"/"text"/"rectangle"/"ellipse"/"path"/"icon_font")
 and uses camelCase props (cornerRadius, fontSize, fontWeight, justifyContent, alignItems,
 clipContent). Do NOT set x/y on children inside layout frames.
+Each script runs in a FRESH sandbox: variables from an EARLIER batch do not exist. To attach
+to a node an earlier batch created, pass its id STRING — I("n12", {...}) — never a `const` from
+that batch. Ids come back in the batch result.
 EVERY frame with children MUST declare layout ("vertical" or "horizontal"; "none" for an
 absolute stack). A section that holds a title and a card rail is layout:"vertical" — omitting
 it stacks by default, but say it, because a row is only ever a row when you write it.
