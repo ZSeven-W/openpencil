@@ -1134,19 +1134,58 @@ fn user_message_images_get_one_thumbnail_rect_each() {
 }
 
 #[test]
-fn narration_markdown_normalizes_to_readable_prose() {
+fn narration_markdown_keeps_its_markers_and_re_breaks_glued_headings() {
     use super::normalize_narration_markdown;
-    // The measured stream: batch headings glued back-to-back plus raw
-    // emphasis markers and dash bullets.
-    let raw = "**Batch 1 — Skeleton****Batch 2 — Header**\nThe design features:**Header**\n- `Explore` title\n- Search input";
+    // The measured stream: batch headings glued back-to-back. The MARKERS stay
+    // — the transcript renders them as typography now (bold labels, code chips,
+    // bullets), so stripping them here would throw the styling away.
+    let raw = "**Batch 1 — Skeleton****Batch 2 — Header**\nThe design features:**Header**";
     let out = normalize_narration_markdown(raw);
-    assert!(!out.contains("**"), "emphasis markers stripped: {out}");
-    assert!(!out.contains('`'), "backticks stripped: {out}");
     assert!(
-        out.contains("Batch 1 — Skeleton\nBatch 2 — Header"),
+        out.contains("**Batch 1 — Skeleton**\n**Batch 2 — Header**"),
         "glued headings re-break onto their own lines: {out}"
     );
-    assert!(out.contains("\u{2022} Explore title"), "bullets: {out}");
+    assert!(
+        out.contains("features:\n**Header**"),
+        "a heading opening after a colon starts its own line: {out}"
+    );
+}
+
+#[test]
+fn narration_renders_as_typed_markdown_not_a_grey_wall() {
+    use crate::widgets::ai_chat_transcript_richtext::{layout_rich, SpanStyle};
+
+    let lines = layout_rich(
+        "**Layout** — a page (`#F4F5F7`) with a card\n- 5-tab bottom navigation",
+        60,
+    );
+    let first = &lines[0];
+    assert_eq!(first.spans[0].text, "Layout");
+    assert_eq!(first.spans[0].style, SpanStyle::Strong, "the label is bold");
+    assert!(
+        first
+            .spans
+            .iter()
+            .any(|s| s.style == SpanStyle::Code && s.text == "#F4F5F7"),
+        "the hex reads as code: {:?}",
+        first.spans
+    );
+    let bullet = lines.iter().find(|l| l.bullet).expect("a bullet line");
+    assert!(bullet.inset > 0.0, "bullet text hangs off the dot");
+    assert!(
+        bullet.spans[0].text.starts_with("5-tab"),
+        "the dash marker is consumed by the bullet, not printed: {:?}",
+        bullet.spans
+    );
+}
+
+#[test]
+fn an_unclosed_marker_stays_literal() {
+    use crate::widgets::ai_chat_transcript_richtext::{parse_spans, SpanStyle};
+    let spans = parse_spans("a ** dangling marker");
+    assert_eq!(spans.len(), 1);
+    assert_eq!(spans[0].style, SpanStyle::Body);
+    assert_eq!(spans[0].text, "a ** dangling marker");
 }
 
 // ── interleaved narration ↔ tool-chip flow ──

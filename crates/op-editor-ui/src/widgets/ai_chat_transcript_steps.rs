@@ -293,6 +293,42 @@ fn find_ascii_ci(haystack: &str, needle: &str, start: usize) -> Option<usize> {
     hay.find(&needle).map(|idx| start + idx)
 }
 
+fn progress_failed(label: &str) -> bool {
+    let lower = label.to_ascii_lowercase();
+    lower.contains("failed") || lower.starts_with("error:")
+}
+
+fn progress_terminal(label: &str) -> bool {
+    let lower = label.to_ascii_lowercase();
+    progress_failed(label)
+        || lower.contains(" done")
+        || lower.ends_with("done")
+        || lower.contains("ready")
+        || lower.contains("applied")
+        || lower.contains("captured")
+        || lower.contains("skipped")
+}
+
+pub(crate) fn step_state(
+    step: &ParsedStep,
+    streaming: bool,
+    index: usize,
+    total: usize,
+) -> (bool, bool, bool) {
+    match step.status {
+        Some(ParsedStepStatus::Done) => (true, false, false),
+        Some(ParsedStepStatus::Error) => (true, false, true),
+        Some(ParsedStepStatus::Streaming) => (false, streaming, false),
+        Some(ParsedStepStatus::Pending) => (false, false, false),
+        None => {
+            let failed = progress_failed(&step.title);
+            let done = failed || !streaming || index + 1 < total || progress_terminal(&step.title);
+            let active = streaming && index + 1 == total && !done;
+            (done, active, failed)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

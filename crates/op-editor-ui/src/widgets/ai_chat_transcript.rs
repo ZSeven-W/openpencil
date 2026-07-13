@@ -32,10 +32,11 @@ use super::ai_chat_transcript_identity::{
     layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
 };
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
+use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
 pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
 use super::ai_chat_transcript_steps::{
-    extract_step_blocks, split_design_progress, strip_tool_call_xml, ParsedStep, ParsedStepStatus,
+    extract_step_blocks, split_design_progress, step_state, strip_tool_call_xml, ParsedStep,
 };
 use super::ai_chat_transcript_text::char_display_units;
 pub(crate) use super::ai_chat_transcript_text::wrap_units;
@@ -119,6 +120,10 @@ pub(crate) struct ActionStep {
 pub(crate) struct TextBubble {
     pub rect: Rect,
     pub lines: Vec<String>,
+    /// Assistant narration keeps its markdown typography (bold labels, code
+    /// chips, real bullets); `lines` stays the plain fallback used by the
+    /// user bubble, the typing pill and the selection/copy paths.
+    pub rich: Vec<super::ai_chat_transcript_richtext::RichLine>,
     pub typing: bool,
     pub completion: Option<CompletionSummary>,
 }
@@ -161,42 +166,6 @@ fn typing_dots_width() -> f32 {
 
 fn typing_pill_width() -> f32 {
     2.0 * TYPING_PAD_X + text_unit_width(TYPING_LABEL) + TYPING_LABEL_DOT_GAP + typing_dots_width()
-}
-
-fn progress_failed(label: &str) -> bool {
-    let lower = label.to_ascii_lowercase();
-    lower.contains("failed") || lower.starts_with("error:")
-}
-
-fn progress_terminal(label: &str) -> bool {
-    let lower = label.to_ascii_lowercase();
-    progress_failed(label)
-        || lower.contains(" done")
-        || lower.ends_with("done")
-        || lower.contains("ready")
-        || lower.contains("applied")
-        || lower.contains("captured")
-        || lower.contains("skipped")
-}
-
-fn step_state(
-    step: &ParsedStep,
-    streaming: bool,
-    index: usize,
-    total: usize,
-) -> (bool, bool, bool) {
-    match step.status {
-        Some(ParsedStepStatus::Done) => (true, false, false),
-        Some(ParsedStepStatus::Error) => (true, false, true),
-        Some(ParsedStepStatus::Streaming) => (false, streaming, false),
-        Some(ParsedStepStatus::Pending) => (false, false, false),
-        None => {
-            let failed = progress_failed(&step.title);
-            let done = failed || !streaming || index + 1 < total || progress_terminal(&step.title);
-            let active = streaming && index + 1 == total && !done;
-            (done, active, failed)
-        }
-    }
 }
 
 /// Place one message starting at `top`. Returns the item and the
@@ -429,6 +398,7 @@ pub(crate) fn build_item(
         Some(TextBubble {
             rect: r,
             lines: Vec::new(),
+            rich: Vec::new(),
             typing: true,
             completion: None,
         })
@@ -439,6 +409,7 @@ pub(crate) fn build_item(
         Some(TextBubble {
             rect: r,
             lines,
+            rich: Vec::new(),
             typing: false,
             completion: None,
         })
@@ -448,24 +419,31 @@ pub(crate) fn build_item(
         Some(TextBubble {
             rect: r,
             lines: Vec::new(),
+            rich: Vec::new(),
             typing: false,
             completion: Some(summary),
         })
     } else if !visible_content.is_empty() && !interleave {
-        let lines = user_bubble_lines
-            .take()
-            .unwrap_or_else(|| wrap_units(&visible_content, budget));
-        let h = if is_user {
+        // The user's own words are plain; the assistant's narration keeps its
+        // markdown typography (bold labels, code chips, bulleted lists).
+        let (lines, rich, h) = if is_user {
+            let lines = user_bubble_lines
+                .take()
+                .unwrap_or_else(|| wrap_units(&visible_content, budget));
             // #27 restyle: generous 14px padding for the user bubble.
-            lines.len() as f32 * LINE_H + 2.0 * USER_BUBBLE_PAD
+            let h = lines.len() as f32 * LINE_H + 2.0 * USER_BUBBLE_PAD;
+            (lines, Vec::new(), h)
         } else {
-            lines.len() as f32 * LINE_H
+            let rich = layout_rich(&visible_content, budget);
+            let h = rich_height(&rich);
+            (wrap_units(&visible_content, budget), rich, h)
         };
         let r = Rect::xywh(x, y, bubble_w, h);
         y += h;
         Some(TextBubble {
             rect: r,
             lines,
+            rich,
             typing: false,
             completion: None,
         })
@@ -703,16 +681,31 @@ pub(crate) fn paint_transcript_with_selection(
                         ChatRole::User => USER_BUBBLE_PAD + 11.0,
                         ChatRole::Assistant => 11.0,
                     };
-                for line in &bubble.lines {
-                    draw_line(cx, line, text_x, baseline, BODY_FONT, fg);
-                    baseline += LINE_H;
+                // The assistant's narration paints as typed markdown; the
+                // user's own words stay plain.
+                if bubble.rich.is_empty() {
+                    for line in &bubble.lines {
+                        draw_line(cx, line, text_x, baseline, BODY_FONT, fg);
+                        baseline += LINE_H;
+                    }
+                } else {
+                    paint_rich(
+                        cx,
+                        theme,
+                        &bubble.rich,
+                        Point2D::new(text_x, bubble.rect.origin.y),
+                    );
+                    baseline += bubble.rich.len() as f32 * LINE_H;
                 }
-                // Streaming caret — a blinking bar after the last
-                // line's (estimated) end. Same unit metric as wrap.
+                // Streaming caret — a blinking bar after the last line's end.
                 if item.streaming && streaming_caret_visible(now_ms) {
-                    let last = bubble.lines.last().map(String::as_str).unwrap_or("");
-                    let units: u32 = last.chars().map(char_display_units).sum();
-                    let caret_x = text_x + units as f32 * CHAR_UNIT_PX;
+                    let caret_x = if bubble.rich.is_empty() {
+                        let last = bubble.lines.last().map(String::as_str).unwrap_or("");
+                        let units: u32 = last.chars().map(char_display_units).sum();
+                        text_x + units as f32 * CHAR_UNIT_PX
+                    } else {
+                        text_x + bubble.rich.last().map(rich_line_width).unwrap_or(0.0)
+                    };
                     let caret_y = baseline - LINE_H - 9.0;
                     cx.backend
                         .fill_rect(Rect::xywh(caret_x, caret_y, 2.0, 13.0), fg);
