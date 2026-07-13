@@ -70,6 +70,10 @@ pub(crate) struct ToolCallCard {
     pub header: Rect,
     pub body: Rect,
     pub expanded: bool,
+    /// Index into the message's FULL `tool_calls` — the interleaved flow
+    /// splits calls across several panels, so a per-panel enumerate would
+    /// toggle the wrong call's expand override.
+    pub index: usize,
     pub name: String,
     source: Option<String>,
     status: String,
@@ -98,6 +102,9 @@ pub(crate) struct ToolPanelLayout<'a> {
     pub budget: u32,
     pub default_status: &'a str,
     pub expanded_overrides: &'a [Option<bool>],
+    /// Index of `calls[0]` within the message's full `tool_calls` (0 for the
+    /// whole-message panel; the group's start for interleaved segments).
+    pub first_index: usize,
 }
 
 /// Format tool-call process cards with the same high-level semantics
@@ -135,6 +142,7 @@ pub(crate) fn build_tool_panel(
         budget,
         default_status,
         expanded_overrides,
+        first_index,
     } = layout;
     if calls.is_empty() {
         return (None, y);
@@ -159,9 +167,11 @@ pub(crate) fn build_tool_panel(
     let body_top = y;
     let mut cards = Vec::new();
     for (index, call) in calls.iter().enumerate() {
+        let index = first_index + index;
         let expanded_override = expanded_overrides.get(index).copied().flatten();
-        let (card, next_y) =
+        let (mut card, next_y) =
             layout_tool_card(call, x, y, width, budget, default_status, expanded_override);
+        card.index = index;
         cards.push(card);
         y = next_y + CARD_GAP;
     }
@@ -287,6 +297,7 @@ fn layout_tool_card(
             header,
             body,
             expanded,
+            index: 0,
             name: call.name.clone(),
             source: fields.source,
             status: fields.status,
@@ -364,6 +375,17 @@ fn push_wrapped_tool_line(
 }
 
 pub(crate) fn paint_tool_panel(cx: &mut PaintCx<'_>, theme: &Theme, panel: &ToolPanel) {
+    // Interleaved-flow panels are headerless (zero-height header rect): the
+    // cards sit directly between narration paragraphs, Pencil-style.
+    if panel.header.size.y > 0.0 {
+        paint_tool_panel_header(cx, theme, panel);
+    }
+    for card in &panel.cards {
+        paint_tool_card(cx, theme, card);
+    }
+}
+
+fn paint_tool_panel_header(cx: &mut PaintCx<'_>, theme: &Theme, panel: &ToolPanel) {
     cx.backend.fill_round_rect(panel.header, 6.0, theme.muted);
     let icon = if panel.collapsed {
         Icon::ChevronRight
@@ -389,9 +411,6 @@ pub(crate) fn paint_tool_panel(cx: &mut PaintCx<'_>, theme: &Theme, panel: &Tool
         11.0,
         theme.muted_foreground,
     );
-    for card in &panel.cards {
-        paint_tool_card(cx, theme, card);
-    }
 }
 
 fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
@@ -648,6 +667,7 @@ mod tests {
             header: Rect::xywh(10.0, 10.0, 100.0, 24.0),
             body: Rect::xywh(10.0, 34.0, 100.0, 0.0),
             expanded: false,
+            index: 0,
             name: "update_node".into(),
             source: None,
             status: status.into(),
@@ -664,6 +684,7 @@ mod tests {
             header: Rect::xywh(10.0, 10.0, 100.0, 24.0),
             body: Rect::xywh(10.0, 34.0, 100.0, 26.0),
             expanded: true,
+            index: 0,
             name: "update_node".into(),
             source: None,
             status: "done".into(),

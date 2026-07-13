@@ -25,6 +25,7 @@ use super::ai_chat_transcript_design::{
     applied_design_block_label, extract_design_json_blocks, paint_design_block,
     place_design_blocks, DesignBlock,
 };
+use super::ai_chat_transcript_flow::{build_flow, should_interleave};
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
 use super::ai_chat_transcript_identity::{
     layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
@@ -130,6 +131,12 @@ pub(crate) struct TranscriptItem {
     pub steps: Vec<ActionStep>,
     pub thinking: Option<Collapsible>,
     pub tools: Option<ToolPanel>,
+    /// Interleaved design-loop flow: narration paragraphs and headerless
+    /// tool panels alternating in document order (both carry absolute
+    /// rects, so paint/hit order is irrelevant). When non-empty, `tools`
+    /// and `bubble` are None — the flow replaces them.
+    pub flow_bubbles: Vec<TextBubble>,
+    pub flow_panels: Vec<ToolPanel>,
     pub design_blocks: Vec<DesignBlock>,
     pub bubble: Option<TextBubble>,
     /// Absolute thumbnail rects, parallel to `messages[i].images`
@@ -278,9 +285,10 @@ pub(crate) fn build_item(
         unit_budget(bubble_w - 2.0 * BUBBLE_PAD)
     };
     let has_progress_steps = !progress_steps.is_empty();
-    let completion_summary = (!is_user)
-        .then(|| parse_completion_summary(&visible_content))
-        .flatten();
+    let completion_summary = (!is_user
+        && !msg.tool_calls.iter().any(|c| c.content_offset.is_some()))
+    .then(|| parse_completion_summary(&visible_content))
+    .flatten();
 
     let build_collapsible = |present: bool,
                              collapsed: bool,
@@ -353,21 +361,36 @@ pub(crate) fn build_item(
         &|| wrap_units(&thinking_text, budget),
         &mut y,
     );
-    let (tools, next_y) = build_tool_panel(
-        &msg.tool_calls,
-        ToolPanelLayout {
-            collapsed: msg.tools_collapsed,
-            label: op_i18n::translate(locale, "ai.toolCalls")
-                .replace("{{count}}", &msg.tool_calls.len().to_string()),
-            x,
-            y,
-            width: bubble_w,
-            budget,
-            default_status: if msg.streaming { "running" } else { "done" },
-            expanded_overrides: &msg.tool_call_expanded_overrides,
-        },
-    );
-    y = next_y;
+    let interleave = !is_user && should_interleave(msg);
+    let (mut flow_bubbles, mut flow_panels) = (Vec::new(), Vec::new());
+    let tools = if interleave {
+        // Pencil-style flow: narration paragraphs and per-call verb chips
+        // alternate at the stamped content offsets; no grouped
+        // "N tool calls" header, nothing collapsed away.
+        let (bubbles, panels, next_y) = build_flow(msg, x, y, bubble_w, budget);
+        flow_bubbles = bubbles;
+        flow_panels = panels;
+        y = next_y;
+        None
+    } else {
+        let (tools, next_y) = build_tool_panel(
+            &msg.tool_calls,
+            ToolPanelLayout {
+                collapsed: msg.tools_collapsed,
+                label: op_i18n::translate(locale, "ai.toolCalls")
+                    .replace("{{count}}", &msg.tool_calls.len().to_string()),
+                x,
+                y,
+                width: bubble_w,
+                budget,
+                default_status: if msg.streaming { "running" } else { "done" },
+                expanded_overrides: &msg.tool_call_expanded_overrides,
+                first_index: 0,
+            },
+        );
+        y = next_y;
+        tools
+    };
     let (design_blocks, next_y) = place_design_blocks(
         pending_design_blocks,
         x,
@@ -383,7 +406,8 @@ pub(crate) fn build_item(
         && steps.is_empty()
         && !has_progress_steps
         && thinking.is_none()
-        && tools.is_none();
+        && tools.is_none()
+        && flow_panels.is_empty();
     let automated_placeholder = !is_user
         && !msg.streaming
         && !msg.content.trim().is_empty()
@@ -391,7 +415,8 @@ pub(crate) fn build_item(
         && steps.is_empty()
         && !has_progress_steps
         && thinking.is_none()
-        && tools.is_none();
+        && tools.is_none()
+        && !interleave;
     let bubble = if typing {
         let r = Rect::xywh(
             x,
@@ -425,7 +450,7 @@ pub(crate) fn build_item(
             typing: false,
             completion: Some(summary),
         })
-    } else if !visible_content.is_empty() {
+    } else if !visible_content.is_empty() && !interleave {
         let lines = user_bubble_lines
             .take()
             .unwrap_or_else(|| wrap_units(&visible_content, budget));
@@ -475,6 +500,8 @@ pub(crate) fn build_item(
             steps,
             thinking,
             tools,
+            flow_bubbles,
+            flow_panels,
             design_blocks,
             bubble,
             images,
@@ -641,6 +668,44 @@ pub(crate) fn paint_transcript_with_selection(
         }
         if let Some(block) = &item.tools {
             paint_tool_panel(cx, theme, block);
+        }
+        // Interleaved flow: prose paragraphs + headerless tool panels, all
+        // pre-placed at absolute rects by `build_flow`.
+        for (flow_index, bubble) in item.flow_bubbles.iter().enumerate() {
+            cx.backend.save();
+            cx.backend.clip_rect(bubble.rect);
+            let mut baseline = bubble.rect.origin.y + 11.0;
+            for line in &bubble.lines {
+                draw_line(
+                    cx,
+                    line,
+                    bubble.rect.origin.x,
+                    baseline,
+                    BODY_FONT,
+                    theme.foreground,
+                );
+                baseline += LINE_H;
+            }
+            if item.streaming
+                && flow_index + 1 == item.flow_bubbles.len()
+                && streaming_caret_visible(now_ms)
+            {
+                let last = bubble.lines.last().map(String::as_str).unwrap_or("");
+                let units: u32 = last.chars().map(char_display_units).sum();
+                cx.backend.fill_rect(
+                    Rect::xywh(
+                        bubble.rect.origin.x + units as f32 * CHAR_UNIT_PX,
+                        baseline - LINE_H - 9.0,
+                        2.0,
+                        13.0,
+                    ),
+                    theme.foreground,
+                );
+            }
+            cx.backend.restore();
+        }
+        for panel in &item.flow_panels {
+            paint_tool_panel(cx, theme, panel);
         }
         for (block_index, block) in item.design_blocks.iter().enumerate() {
             // Design-hover is paint-only: it reveals the per-block copy icon and
