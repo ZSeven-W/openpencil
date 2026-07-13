@@ -544,10 +544,10 @@ mod paint_tests {
         );
         assert_eq!(
             backend.polygons.len(),
-            3,
-            "pencil paints shadow + body + tip wedge"
+            6,
+            "pencil paints 4 halo feather layers + body + tip wedge"
         );
-        let (pts, color) = &backend.polygons[1];
+        let (pts, color) = &backend.polygons[4];
         assert_eq!(
             pts.len(),
             19,
@@ -589,8 +589,8 @@ mod paint_tests {
             &ind,
             Default::default(),
         );
-        assert_eq!(backend.polygons.len(), 3, "fallback pencil still paints");
-        let (_, color) = &backend.polygons[1];
+        assert_eq!(backend.polygons.len(), 6, "fallback pencil still paints");
+        let (_, color) = &backend.polygons[4];
         assert!(
             (color.r - 1.0).abs() < 0.01 && (color.g - 0.419).abs() < 0.01,
             "fallback red fill"
@@ -685,7 +685,12 @@ mod scan_gate_tests {
         filled_header.children = vec![SceneNode::leaf("h-child", NodeKind::Text)];
         let mut sidebar2 = SceneNode::leaf("sidebar", NodeKind::Frame);
         sidebar2.bounds = Rect::xywh(0.0, 0.0, 260.0, 900.0);
-        sidebar2.children = vec![SceneNode::leaf("nav2", NodeKind::Frame)];
+        // Filled through: the deck is GLOBAL in document order, so a still-
+        // empty shell nested in the sidebar would legitimately outrank the
+        // main column (it comes first in the fill order).
+        let mut nav2 = SceneNode::leaf("nav2", NodeKind::Frame);
+        nav2.children = vec![SceneNode::leaf("nav2-child", NodeKind::Text)];
+        sidebar2.children = vec![nav2];
         let mut main2 = SceneNode::leaf("main", NodeKind::Frame);
         main2.bounds = Rect::xywh(260.0, 0.0, 1180.0, 900.0);
         let mut root2 = SceneNode::leaf("root", NodeKind::Frame);
@@ -699,11 +704,61 @@ mod scan_gate_tests {
         );
     }
 
-    /// Work-order gate: only the FIRST empty shell per container is "on
+    /// The deck is GLOBAL to the generating root, in document (pre-order)
+    /// position — NOT per container. A per-container gate lit the root's
+    /// trailing bottom-nav shell while the model was still filling the
+    /// header nested inside the content wrapper (user report 2026-07-12:
+    /// the bottom band glowed and took the cursor first).
+    #[test]
+    fn deck_follows_document_order_across_containers_not_per_container() {
+        let mut header = SceneNode::leaf("header", NodeKind::Frame);
+        header.bounds = Rect::xywh(0.0, 60.0, 390.0, 80.0);
+        let mut search = SceneNode::leaf("search", NodeKind::Frame);
+        search.bounds = Rect::xywh(0.0, 150.0, 390.0, 60.0);
+        let mut wrapper = SceneNode::leaf("wrapper", NodeKind::Frame);
+        wrapper.bounds = Rect::xywh(0.0, 60.0, 390.0, 700.0);
+        wrapper.children = vec![header, search];
+
+        let mut status = SceneNode::leaf("status", NodeKind::Frame);
+        status.bounds = Rect::xywh(0.0, 0.0, 390.0, 44.0);
+        status.children = vec![SceneNode::leaf("clock", NodeKind::Text)];
+        let mut bottom_nav = SceneNode::leaf("bottom-nav", NodeKind::Frame);
+        bottom_nav.bounds = Rect::xywh(0.0, 770.0, 390.0, 74.0);
+
+        let mut root = SceneNode::leaf("root", NodeKind::Frame);
+        root.bounds = Rect::xywh(0.0, 0.0, 390.0, 844.0);
+        root.children = vec![status, wrapper, bottom_nav];
+
+        let mut ind = AgentIndicators::default();
+        ind.run_active = true;
+        ind.frames.insert(
+            "root".into(),
+            op_editor_core::agent_indicators::AgentTag {
+                color: "#FF6B6B".into(),
+                name: "Fern".into(),
+            },
+        );
+        let sets = generating_paint_sets(&[root], Some(&ind)).expect("active run");
+        assert!(
+            sets.scan.contains("header"),
+            "the header is first in fill order — it is on deck"
+        );
+        assert!(
+            sets.suppressed.contains("bottom-nav"),
+            "the trailing nav shell waits INVISIBLY, even though it is its \
+             container's first empty child"
+        );
+        assert!(
+            sets.suppressed.contains("search"),
+            "a queued sibling of the deck stays hidden too"
+        );
+    }
+
+    /// Work-order gate: only the FIRST empty shell in fill order is "on
     /// deck" — a queued sibling shell must not glow while an earlier one
     /// still awaits its content.
     #[test]
-    fn only_the_first_empty_shell_per_container_scans() {
+    fn only_the_first_empty_shell_in_fill_order_scans() {
         let mut shell_a = SceneNode::leaf("shell-a", NodeKind::Frame);
         shell_a.bounds = Rect::xywh(0.0, 0.0, 390.0, 200.0);
         let mut shell_b = SceneNode::leaf("shell-b", NodeKind::Frame);
