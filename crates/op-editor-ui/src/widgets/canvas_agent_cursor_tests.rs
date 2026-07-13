@@ -544,10 +544,10 @@ mod paint_tests {
         );
         assert_eq!(
             backend.polygons.len(),
-            6,
-            "pencil paints 4 halo feather layers + body + tip wedge"
+            7,
+            "4 halo feather layers + the white rim + body + tip wedge"
         );
-        let (pts, color) = &backend.polygons[4];
+        let (pts, color) = &backend.polygons[5];
         assert_eq!(
             pts.len(),
             19,
@@ -558,9 +558,22 @@ mod paint_tests {
             (pts[0].x - 40.0).abs() < 0.01 && (pts[0].y - 60.0).abs() < 0.01,
             "pencil tip sits on the current element's centre"
         );
+        // The rim is FILLED geometry, not a stroke: the trait's fallback
+        // polygon stroke drew each edge as its own capped segment, which
+        // notched every vertex of the densely-sampled arc (user report
+        // 2026-07-12: "不要有锯齿感"). It must still be white, and sit
+        // between the halo and the body.
+        let (rim_pts, rim_color) = &backend.polygons[4];
         assert!(
-            !backend.polygon_strokes.is_empty(),
-            "white outline strokes the arrow"
+            (rim_color.r - 1.0).abs() < 0.01
+                && (rim_color.g - 1.0).abs() < 0.01
+                && (rim_color.b - 1.0).abs() < 0.01,
+            "the rim is white: {rim_color:?}"
+        );
+        assert_eq!(
+            rim_pts.len(),
+            pts.len(),
+            "the rim is the body silhouette, outset — same vertex count"
         );
         assert!(
             backend.round_strokes.is_empty(),
@@ -589,8 +602,8 @@ mod paint_tests {
             &ind,
             Default::default(),
         );
-        assert_eq!(backend.polygons.len(), 6, "fallback pencil still paints");
-        let (_, color) = &backend.polygons[4];
+        assert_eq!(backend.polygons.len(), 7, "fallback pencil still paints");
+        let (_, color) = &backend.polygons[5];
         assert!(
             (color.r - 1.0).abs() < 0.01 && (color.g - 0.419).abs() < 0.01,
             "fallback red fill"

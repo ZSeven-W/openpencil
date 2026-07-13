@@ -642,10 +642,10 @@ pub(crate) fn paint_cursor_swatch(
             .map(|(dx, dy)| Point2D::new(origin.x + dx, origin.y + dy))
             .collect()
     };
-    paint_soft_halo(cx, &at(silhouette.body), 1.0);
-    cx.backend.fill_polygon(&at(silhouette.body), color);
-    cx.backend
-        .stroke_polygon(&at(silhouette.body), Color::WHITE.with_alpha(0.9), 1.2);
+    let body = at(silhouette.body);
+    paint_soft_halo(cx, &body, 1.0);
+    paint_rim(cx, &body, 0.95);
+    cx.backend.fill_polygon(&body, color);
     if let Some(eraser) = silhouette.eraser {
         cx.backend.fill_polygon(&at(eraser), PENCIL_ERASER_PINK);
     }
@@ -661,6 +661,32 @@ pub(crate) fn paint_cursor_swatch(
     }
 }
 
+/// Uniformly outset a silhouette by `offset` px about its centroid. Used for
+/// both the halo layers and the white rim: a filled outset paints the rim as
+/// GEOMETRY, so its width is exact everywhere and no stroke joins can notch it
+/// (the trait's fallback polygon stroke drew each edge as its own capped
+/// segment — every vertex of the densely-sampled arc showed a jaggy).
+fn outset(body: &[Point2D], offset: f32, drop: f32) -> Vec<Point2D> {
+    let n = body.len() as f32;
+    let (mut sum_x, mut sum_y) = (0.0f32, 0.0f32);
+    for p in body {
+        sum_x += p.x;
+        sum_y += p.y;
+    }
+    let (cx, cy) = (sum_x / n, sum_y / n);
+    let radius = body
+        .iter()
+        .map(|p| ((p.x - cx).powi(2) + (p.y - cy).powi(2)).sqrt())
+        .fold(1.0f32, f32::max);
+    let k = 1.0 + offset / radius;
+    body.iter()
+        .map(|p| Point2D::new(cx + (p.x - cx) * k, cy + (p.y - cy) * k + drop))
+        .collect()
+}
+
+/// Width of the white rim (px of outset beyond the body silhouette).
+const RIM: f32 = 1.6;
+
 /// Soft halo as concentric FILLED expansions of the silhouette, largest
 /// first with per-layer alpha stacking smoothly toward the body. Filled
 /// polygons have no stroke joins, so sharp silhouette corners cannot spike
@@ -668,31 +694,24 @@ pub(crate) fn paint_cursor_swatch(
 /// 2026-07-12, twice). The slight downward bias doubles as the contact
 /// shadow, replacing the old hard-edged offset copy.
 fn paint_soft_halo(cx: &mut PaintCx<'_>, body: &[Point2D], alpha_scale: f32) {
-    let n = body.len() as f32;
-    let (mut sum_x, mut sum_y) = (0.0f32, 0.0f32);
-    for p in body {
-        sum_x += p.x;
-        sum_y += p.y;
-    }
-    let (center_x, center_y) = (sum_x / n, sum_y / n);
-    let radius = body
-        .iter()
-        .map(|p| ((p.x - center_x).powi(2) + (p.y - center_y).powi(2)).sqrt())
-        .fold(1.0f32, f32::max);
-    for (offset, alpha) in [(3.2, 0.030), (2.4, 0.040), (1.6, 0.050), (0.8, 0.060)] {
-        let k = 1.0 + offset / radius;
-        let ring: Vec<Point2D> = body
-            .iter()
-            .map(|p| {
-                Point2D::new(
-                    center_x + (p.x - center_x) * k + 0.4,
-                    center_y + (p.y - center_y) * k + 0.7,
-                )
-            })
-            .collect();
+    // The halo sits OUTSIDE the white rim, so every layer clears it.
+    for (offset, alpha) in [
+        (RIM + 3.2, 0.030),
+        (RIM + 2.4, 0.040),
+        (RIM + 1.6, 0.050),
+        (RIM + 0.8, 0.060),
+    ] {
+        let ring = outset(body, offset, 0.7);
         cx.backend
             .fill_polygon(&ring, PENCIL_HALO.with_alpha(alpha * alpha_scale));
     }
+}
+
+/// The white rim, painted as a filled outset the body then covers — a solid
+/// ring of exactly `RIM` px with no stroke joins to notch it.
+fn paint_rim(cx: &mut PaintCx<'_>, body: &[Point2D], alpha: f32) {
+    cx.backend
+        .fill_polygon(&outset(body, RIM, 0.0), Color::WHITE.with_alpha(alpha));
 }
 
 fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhouette: &Silhouette) {
@@ -724,10 +743,9 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhou
     // Dark soft halo OUTSIDE the white rim (user-picked "O4", the macOS
     // pointer treatment) - filled-expansion feather, see paint_soft_halo.
     paint_soft_halo(cx, &body, sprite.alpha);
+    paint_rim(cx, &body, 0.95 * sprite.alpha);
     cx.backend
         .fill_polygon(&body, sprite.color.with_alpha(sprite.alpha));
-    cx.backend
-        .stroke_polygon(&body, Color::WHITE.with_alpha(0.9 * sprite.alpha), 1.5);
     // Style quirks first (they paint OVER the body):
     // Chubby's pink eraser butt, Marker's white nib dot.
     if let Some(eraser) = silhouette.eraser {

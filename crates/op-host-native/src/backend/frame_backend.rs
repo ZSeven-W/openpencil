@@ -181,6 +181,10 @@ impl<'a> RenderBackend for NativeFrameBackend<'a> {
         self.inner.fill_polygon(self.canvas, points, color);
     }
 
+    fn stroke_polygon(&mut self, points: &[Point2D], color: Color, width: f32) {
+        self.inner.stroke_polygon(self.canvas, points, color, width);
+    }
+
     fn fill_dots(&mut self, centers: &[Point2D], radius: f32, color: Color) {
         self.inner.fill_dots(self.canvas, centers, radius, color);
     }
