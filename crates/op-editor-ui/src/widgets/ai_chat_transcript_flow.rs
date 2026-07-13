@@ -13,10 +13,17 @@ use op_editor_core::chat::ChatMessage;
 
 use crate::Rect;
 
-use super::ai_chat_transcript::{normalize_narration_markdown, TextBubble, LINE_H};
+use super::ai_chat_transcript::{
+    draw_line, streaming_caret_visible, TextBubble, TranscriptItem, BODY_FONT, CHAR_UNIT_PX, LINE_H,
+};
 use super::ai_chat_transcript_steps::strip_tool_call_xml;
+use super::ai_chat_transcript_text::char_display_units;
 use super::ai_chat_transcript_text::wrap_units;
-use super::ai_chat_transcript_tools::{build_tool_panel, ToolPanel, ToolPanelLayout};
+use super::ai_chat_transcript_tools::{
+    build_tool_panel, paint_tool_panel, ToolPanel, ToolPanelLayout,
+};
+use crate::theme::Theme;
+use crate::widgets::PaintCx;
 
 /// Gap between a prose segment and the adjacent tool panel.
 const FLOW_GAP: f32 = 6.0;
@@ -149,4 +156,74 @@ fn clamp_to_char_boundary(s: &str, mut offset: usize) -> usize {
         offset -= 1;
     }
     offset
+}
+
+/// Paint the interleaved flow: prose paragraphs (with the streaming caret on
+/// the last one) and headerless tool panels, all pre-placed at absolute rects.
+pub(crate) fn paint_flow(cx: &mut PaintCx<'_>, theme: &Theme, item: &TranscriptItem, now_ms: u64) {
+    for (flow_index, bubble) in item.flow_bubbles.iter().enumerate() {
+        cx.backend.save();
+        cx.backend.clip_rect(bubble.rect);
+        let mut baseline = bubble.rect.origin.y + 11.0;
+        for line in &bubble.lines {
+            draw_line(
+                cx,
+                line,
+                bubble.rect.origin.x,
+                baseline,
+                BODY_FONT,
+                theme.foreground,
+            );
+            baseline += LINE_H;
+        }
+        if item.streaming
+            && flow_index + 1 == item.flow_bubbles.len()
+            && streaming_caret_visible(now_ms)
+        {
+            let last = bubble.lines.last().map(String::as_str).unwrap_or("");
+            let units: u32 = last.chars().map(char_display_units).sum();
+            cx.backend.fill_rect(
+                Rect::xywh(
+                    bubble.rect.origin.x + units as f32 * CHAR_UNIT_PX,
+                    baseline - LINE_H - 9.0,
+                    2.0,
+                    13.0,
+                ),
+                theme.foreground,
+            );
+        }
+        cx.backend.restore();
+    }
+    for panel in &item.flow_panels {
+        paint_tool_panel(cx, theme, panel);
+    }
+}
+
+/// Light markdown normalization for streamed narration — the panel paints
+/// plain text, so raw `**bold**` markers and back-to-back bold headings
+/// ("**Batch 1**" glued straight onto "**Batch 2**") rendered as asterisk
+/// soup (measured 2026-07-12). Full markdown is out of scope; this strips
+/// emphasis/backtick markers, re-breaks adjacent bold headings onto their
+/// own lines, and turns `- ` bullets into `\u{2022} `.
+pub(crate) fn normalize_narration_markdown(text: &str) -> String {
+    // Adjacent closing/opening bold with nothing between = two headings the
+    // stream glued together; give the second its own paragraph.
+    let mut out = text.replace("****", "**\n**");
+    // A bold opener directly after a colon or period also reads as a new
+    // heading in the measured streams.
+    out = out.replace(":**", ":\n**");
+    // Strip the emphasis/code markers themselves.
+    out = out.replace("**", "").replace('`', "");
+    // Bullets.
+    let mut lines: Vec<String> = Vec::new();
+    for line in out.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("- ") {
+            let indent = &line[..line.len() - trimmed.len()];
+            lines.push(format!("{indent}\u{2022} {rest}"));
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    lines.join("\n")
 }
