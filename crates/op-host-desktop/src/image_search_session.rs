@@ -799,6 +799,18 @@ fn has_image_area_keyword(name: &str) -> bool {
                     | "artwork"
                     | "album"
                     | "avatar"
+                    // The abbreviations weak models actually write: MiniMax-M3
+                    // built every destination card around a rectangle named
+                    // "img" (and a "ph" placeholder inside a frame named
+                    // "img"), so a page of grey boxes shipped with no images at
+                    // all (measured test0711-1-m3, 2026-07-12).
+                    | "img"
+                    | "pic"
+                    | "media"
+                    | "graphic"
+                    | "illustration"
+                    | "placeholder"
+                    | "ph"
             )
         })
 }
@@ -910,6 +922,13 @@ fn is_generic_placeholder_name(name: &str) -> bool {
             | "image placeholder"
             | "placeholder icon"
             | "placeholder"
+            // A slot named "img" / "ph" carries no subject of its own — the
+            // picture it wants is named by the card AROUND it ("Santorini").
+            | "img"
+            | "ph"
+            | "pic"
+            | "media"
+            | "graphic"
             | "card image"
             | "card photo"
             | "product image"
