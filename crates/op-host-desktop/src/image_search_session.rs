@@ -1,6 +1,6 @@
 //! Background image-search enrichment for generated image nodes.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -229,6 +229,21 @@ pub(crate) struct ImageSearchSession {
     /// their Openverse top hit, which filled three different cards with the
     /// SAME photo (measured: test0711-22). Selection skips these best-effort.
     used_urls: Arc<Mutex<HashSet<String>>>,
+    /// Query → the photo that query already resolved to, this session.
+    ///
+    /// The dedup above must NOT fire when the SAME subject comes back: the
+    /// model rebuilds a section mid-run (fresh node ids), the same query
+    /// ("Bali Indonesia") searches again, and its own good photo is now in
+    /// `used_urls` — so the second search skipped it and took a junk result
+    /// instead (measured 2026-07-12: a real Bali temple photo turned into a
+    /// plain blue sky halfway through a run). One subject, one photo: a repeat
+    /// query resolves from this memo with no network call at all.
+    resolved: Arc<Mutex<HashMap<String, String>>>,
+}
+
+/// Memo key — the subject, not its spelling.
+fn query_key(query: &str) -> String {
+    query.trim().to_ascii_lowercase()
 }
 
 impl ImageSearchSession {
@@ -254,6 +269,7 @@ impl ImageSearchSession {
         self.jobs.clear();
         self.invalidate_scan_gate();
         self.used_urls.lock().unwrap().clear();
+        self.resolved.lock().unwrap().clear();
     }
 
     pub(crate) fn is_pending(&self) -> bool {
@@ -312,7 +328,12 @@ impl ImageSearchSession {
             self.in_flight.insert(id);
             let job = match &gen_profile {
                 Some(profile) => spawn_gen_job(target, profile.clone()),
-                None => spawn_job(target, credentials.clone(), Arc::clone(&self.used_urls)),
+                None => spawn_job(
+                    target,
+                    credentials.clone(),
+                    Arc::clone(&self.used_urls),
+                    Arc::clone(&self.resolved),
+                ),
             };
             self.jobs.push(job);
         }
@@ -370,17 +391,30 @@ fn spawn_job(
     target: ImageSearchTarget,
     credentials: Option<OpenverseCredentials>,
     used_urls: Arc<Mutex<HashSet<String>>>,
+    resolved: Arc<Mutex<HashMap<String, String>>>,
 ) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     let aspect_ratio = target.aspect_ratio;
+    let key = query_key(&target.query);
+    // One subject, one photo: a query this session already answered resolves
+    // from the memo — no network, and (crucially) no dedup-forced downgrade
+    // when a rebuilt section asks for the same picture again.
+    if let Some(url) = resolved.lock().unwrap().get(&key).cloned() {
+        let _ = tx.send(Some(url));
+        return ImageSearchJob { node_id, rx };
+    }
     std::thread::spawn(move || {
-        let _ = tx.send(fetch_first_image_url_blocking(
+        let url = fetch_first_image_url_blocking(
             &target.query,
             aspect_ratio,
             credentials.as_ref(),
             &used_urls,
-        ));
+        );
+        if let Some(found) = url.as_ref() {
+            resolved.lock().unwrap().insert(key, found.clone());
+        }
+        let _ = tx.send(url);
     });
     ImageSearchJob { node_id, rx }
 }

@@ -1015,3 +1015,45 @@ fn anonymous_cover_slot_uses_sibling_text_as_query() {
         slot.query
     );
 }
+
+/// The measured churn: the model rebuilds a section mid-run, the same subject
+/// searches again, and the session-wide dedup skips the very photo it picked
+/// the first time — so a real Bali temple photo became a plain blue sky. One
+/// subject, one photo: a repeat query resolves from the memo, and the dedup
+/// only ever guards DIFFERENT subjects from sharing a picture.
+#[test]
+fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
+    use super::{query_key, spawn_job, ImageSearchTarget};
+    use std::collections::{HashMap, HashSet};
+    use std::sync::{Arc, Mutex};
+
+    let used_urls: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
+    let resolved: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    // The first search already answered "Bali Indonesia" and marked its photo used.
+    let good = "https://example.org/bali-temple.jpg".to_string();
+    resolved
+        .lock()
+        .unwrap()
+        .insert(query_key("Bali Indonesia"), good.clone());
+    used_urls.lock().unwrap().insert(good.clone());
+
+    // The rebuilt card asks again — differently spelled, same subject.
+    let target = ImageSearchTarget {
+        node_id: op_editor_core::NodeId::new("n99".to_string()),
+        query: "  bali indonesia ".to_string(),
+        prompt: None,
+        aspect_ratio: None,
+        width: None,
+        height: None,
+    };
+    let job = spawn_job(target, None, Arc::clone(&used_urls), Arc::clone(&resolved));
+    let answer = job
+        .rx
+        .recv_timeout(std::time::Duration::from_secs(1))
+        .expect("the memo answers without touching the network");
+    assert_eq!(
+        answer,
+        Some(good),
+        "the rebuilt card gets ITS photo back, not the next-best junk result"
+    );
+}
