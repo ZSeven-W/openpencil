@@ -406,6 +406,37 @@ impl NativeBackend {
         canvas.draw_path(&path, &paint);
     }
 
+    /// Stroke a closed polygon as ONE antialiased path with round joins.
+    /// The trait default walks the edges as separate line segments, so every
+    /// vertex of a densely-sampled arc (the pencil cursor's rim) showed a
+    /// notch where two caps butted together and the rim's width visibly
+    /// wobbled — the jaggies the cursor outline was reported for.
+    pub fn stroke_polygon(
+        &self,
+        canvas: &skia_safe::Canvas,
+        points: &[Point2D],
+        color: Color,
+        width: f32,
+    ) {
+        if points.len() < 2 {
+            return;
+        }
+        let mut builder = skia_safe::PathBuilder::new();
+        builder.move_to((points[0].x, points[0].y));
+        for p in &points[1..] {
+            builder.line_to((p.x, p.y));
+        }
+        builder.close();
+        let path = builder.detach();
+        let mut paint = skia_safe::Paint::new(jian_color_to_color4f(color), None);
+        paint.set_anti_alias(true);
+        paint.set_stroke(true);
+        paint.set_stroke_width(width);
+        paint.set_stroke_join(skia_safe::PaintJoin::Round);
+        paint.set_stroke_cap(skia_safe::PaintCap::Round);
+        canvas.draw_path(&path, &paint);
+    }
+
     /// Fill a batch of identical round dots in one draw call.
     /// `PointMode::Points` with a round stroke cap paints each point
     /// as a filled circle of diameter `2 * radius` — so the canvas
