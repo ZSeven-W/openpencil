@@ -188,7 +188,7 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
             collect_oversized_image_fixes(&v, &mut cmds);
             collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
-            collect_image_slot_fixes(&v, &mut cmds);
+            collect_image_slot_fixes(&v, &rects, &mut cmds);
             collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
             collect_starved_rail_card_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
@@ -1126,6 +1126,17 @@ fn collect_grow_to_fit_fixes(
 /// cards straight back to fill_container.
 const RAIL_STARVE_EPS: f64 = 12.0;
 const RAIL_MIN_CARDS: usize = 3;
+/// A card is only STARVED when it is genuinely unusable — the measured case
+/// was 58px cards around 160px photos. A card that merely CROPS an oversized
+/// photo (a 400x300 plate clipped into a 170px card) looks right and is not
+/// starved; widening it to the plate would blow one card across the whole
+/// screen. That happened (user report 2026-07-12: "自检又违背设计意图了").
+const RAIL_CARD_STARVED_W: f64 = 120.0;
+/// …and the demand is only credible as an INTENT if the resulting cards still
+/// read as a scroll rail (the next card peeks). A "demand" wider than this
+/// share of the rail is an oversized image, not a width intent — that class
+/// belongs to `collect_oversized_image_fixes`, which shrinks the image.
+const RAIL_CARD_MAX_FRACTION: f64 = 0.72;
 
 /// The widest fixed-width DESCENDANT plus the card's own side padding — the
 /// width this card provably needs to show its authored content. Descendants,
@@ -1169,14 +1180,23 @@ fn collect_starved_rail_card_fixes(
                     && c.get("width").and_then(Value::as_str) == Some("fill_container")
             })
             .collect();
-        if cards.len() >= RAIL_MIN_CARDS {
+        let rail_w = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+            .map(|r| r.w)
+            .unwrap_or(0.0);
+        if cards.len() >= RAIL_MIN_CARDS && rail_w > 0.0 {
             let all_starved = cards.iter().all(|c| {
                 let demand = fixed_content_demand(c);
                 demand > 0.0
+                    && demand <= rail_w * RAIL_CARD_MAX_FRACTION
                     && c.get("id")
                         .and_then(Value::as_str)
                         .and_then(|id| rects.get(id))
-                        .is_some_and(|r| demand > r.w + RAIL_STARVE_EPS)
+                        .is_some_and(|r| {
+                            r.w < RAIL_CARD_STARVED_W && demand > r.w + RAIL_STARVE_EPS
+                        })
             });
             if all_starved {
                 for c in &cards {
@@ -1290,6 +1310,9 @@ fn collect_absolute_fill_image_fixes(
 ///    height. (A wrapper that already fits, or crops only mildly, is left
 ///    alone - intentional letterboxing stays intentional.)
 const IMAGE_BAND_MIN_VISIBLE_FRACTION: f64 = 0.5;
+/// Tallest a grown photo band may be relative to its own width — a card photo
+/// is at most mildly portrait; beyond this the "photo" is an oversized plate.
+const IMAGE_BAND_MAX_ASPECT: f64 = 1.2;
 
 fn is_image_filled_frame(v: &Value) -> bool {
     matches!(
@@ -1315,7 +1338,11 @@ fn fixed_height(v: &Value) -> Option<f64> {
     }
 }
 
-fn collect_image_slot_fixes(v: &Value, cmds: &mut Vec<EditorCommand>) {
+fn collect_image_slot_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
     let kids = children(v);
     let image_nodes: Vec<&Value> = kids
         .iter()
@@ -1353,7 +1380,19 @@ fn collect_image_slot_fixes(v: &Value, cmds: &mut Vec<EditorCommand>) {
                 .filter_map(|f| fixed_height(f))
                 .fold(0.0, f64::max)
         };
-        if photo_h > 0.0 && band < photo_h * IMAGE_BAND_MIN_VISIBLE_FRACTION {
+        // The photo's declared height is only a credible BAND height if the
+        // band would still read as a card photo. A plate taller than its own
+        // band is wide is an oversized image (a 400x300 plate in a phone
+        // card), not art direction — growing the band to it left Deals cards
+        // with a wall of empty space (user report 2026-07-12).
+        let band_w = v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+            .map(|r| r.w)
+            .unwrap_or(0.0);
+        let plausible = band_w > 0.0 && photo_h <= band_w * IMAGE_BAND_MAX_ASPECT;
+        if photo_h > 0.0 && plausible && band < photo_h * IMAGE_BAND_MIN_VISIBLE_FRACTION {
             if let Some(id) = v.get("id").and_then(Value::as_str) {
                 cmds.push(EditorCommand::UpdateNode {
                     node_id: NodeId::new(id.to_string()),
@@ -1369,7 +1408,7 @@ fn collect_image_slot_fixes(v: &Value, cmds: &mut Vec<EditorCommand>) {
         }
     }
     for c in kids {
-        collect_image_slot_fixes(c, cmds);
+        collect_image_slot_fixes(c, rects, cmds);
     }
 }
 
