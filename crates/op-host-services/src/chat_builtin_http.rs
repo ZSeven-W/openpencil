@@ -576,7 +576,6 @@ async fn run_anthropic_chat(
     pump_sse_response(resp, tx, parse_anthropic_sse_data).await
 }
 
-
 async fn pump_sse_response(
     resp: reqwest::Response,
     tx: &mpsc::Sender<ChatDelta>,
