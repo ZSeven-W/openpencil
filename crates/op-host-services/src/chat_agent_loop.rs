@@ -29,7 +29,7 @@ use op_ai::chat_provider::{
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
-use crate::chat_builtin_http::{ensure_success, map_anthropic_stop_reason, map_openai_stop_reason};
+use crate::chat_builtin_http::{map_anthropic_stop_reason, map_openai_stop_reason};
 
 /// Everything one agent-loop run needs. `max_turns` is the TS
 /// `maxTurns` cap (20 in production; tests shrink it).
@@ -441,15 +441,22 @@ pub async fn run_anthropic_agent_loop(
                 .expect("anthropic request body is object")
                 .insert("system".into(), json!(cfg.system_prompt));
         }
-        let resp = crate::chat_builtin_http::builtin_http_client()?
-            .post(&cfg.url)
-            .header("x-api-key", &cfg.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("anthropic POST {}: {e}", cfg.url))?;
-        let resp = ensure_success(resp, "anthropic").await?;
+        let client = crate::chat_builtin_http::builtin_http_client()?;
+        let (max_retries, min_gap) = crate::chat_builtin_http::default_backoff_knobs();
+        let resp = crate::chat_builtin_http::send_with_backoff(
+            "anthropic",
+            &cfg.url,
+            max_retries,
+            min_gap,
+            || {
+                client
+                    .post(&cfg.url)
+                    .header("x-api-key", &cfg.api_key)
+                    .header("anthropic-version", "2023-06-01")
+                    .json(&body)
+            },
+        )
+        .await?;
         let mut collector = AnthropicCollector::default();
         pump_sse(resp, tx, &mut collector).await?;
         if tx.is_closed() {
@@ -686,14 +693,20 @@ pub async fn run_openai_agent_loop(
                 obj.insert("thinking".into(), json!({ "type": "disabled" }));
             }
         }
-        let resp = crate::chat_builtin_http::builtin_http_client()?
-            .post(&cfg.url)
-            .bearer_auth(&cfg.api_key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("openai-compatible POST {}: {e}", cfg.url))?;
-        let resp = ensure_success(resp, "openai-compatible").await?;
+        // Through the shared throttle/backoff: this tool-loop path used
+        // to post raw, so a provider rate limit killed the design run with
+        // no retries and a raw JSON error (measured: glm-5.2, 429
+        // AccountRateLimitExceeded, 2026-07-12).
+        let client = crate::chat_builtin_http::builtin_http_client()?;
+        let (max_retries, min_gap) = crate::chat_builtin_http::default_backoff_knobs();
+        let resp = crate::chat_builtin_http::send_with_backoff(
+            "openai-compatible",
+            &cfg.url,
+            max_retries,
+            min_gap,
+            || client.post(&cfg.url).bearer_auth(&cfg.api_key).json(&body),
+        )
+        .await?;
         let mut collector = OpenAiCollector::default();
         pump_sse(resp, tx, &mut collector).await?;
         if tx.is_closed() {

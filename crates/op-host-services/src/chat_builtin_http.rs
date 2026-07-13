@@ -396,7 +396,13 @@ fn backoff_delay(attempt: u32) -> Duration {
     Duration::from_secs(delay).min(BACKOFF_MAX)
 }
 
-async fn send_with_backoff(
+/// Default retry/throttle knobs for callers without a per-provider
+/// profile (the design tool-loop's own HTTP path).
+pub(crate) fn default_backoff_knobs() -> (u32, Duration) {
+    (BUILTIN_HTTP_MAX_RETRIES, builtin_http_min_gap())
+}
+
+pub(crate) async fn send_with_backoff(
     label: &str,
     url: &str,
     max_retries: u32,
@@ -570,17 +576,6 @@ async fn run_anthropic_chat(
     pump_sse_response(resp, tx, parse_anthropic_sse_data).await
 }
 
-pub async fn ensure_success(
-    resp: reqwest::Response,
-    provider_label: &str,
-) -> Result<reqwest::Response, String> {
-    if resp.status().is_success() {
-        return Ok(resp);
-    }
-    let status = resp.status();
-    let body = resp.text().await.unwrap_or_default();
-    Err(format!("{provider_label} http {status}: {}", body.trim()))
-}
 
 async fn pump_sse_response(
     resp: reqwest::Response,
