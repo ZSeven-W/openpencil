@@ -322,8 +322,7 @@ fn attach_tool_result_to_transcript_with(
         if obj.get("status").and_then(serde_json::Value::as_str) != Some("running") {
             continue;
         }
-        let result_value = serde_json::from_str::<serde_json::Value>(&result.content)
-            .unwrap_or_else(|_| serde_json::Value::String(result.content.clone()));
+        let result_value = transcript_result_value(name, result);
         obj.insert("result".into(), result_value);
         let status = if result.is_error { "error" } else { "done" };
         obj.insert(
@@ -336,9 +335,74 @@ fn attach_tool_result_to_transcript_with(
     false
 }
 
+/// Keep screenshot bytes on the live executor acknowledgement, but never copy
+/// them into the long-lived UI transcript. The agent loop still receives the
+/// original [`ChatToolResult`]; only the tool-card display value is summarized.
+fn transcript_result_value(name: &str, result: &ChatToolResult) -> serde_json::Value {
+    let mut value = serde_json::from_str::<serde_json::Value>(&result.content)
+        .unwrap_or_else(|_| serde_json::Value::String(result.content.clone()));
+    if name != "get_screenshot" || result.is_error {
+        return value;
+    }
+    if value.get("success").and_then(serde_json::Value::as_bool) == Some(false) {
+        return value;
+    }
+
+    let payload = if value.get("data").is_some_and(serde_json::Value::is_object) {
+        value
+            .get_mut("data")
+            .and_then(serde_json::Value::as_object_mut)
+    } else {
+        value.as_object_mut()
+    };
+    let Some(payload) = payload else {
+        return value;
+    };
+    let Some(serde_json::Value::String(encoded)) = payload.remove("image_base64") else {
+        return value;
+    };
+
+    let encoded_chars = encoded.len();
+    payload.insert(
+        "image_summary".into(),
+        serde_json::Value::String(
+            "Screenshot rendered; binary payload omitted from the UI transcript.".into(),
+        ),
+    );
+    payload.insert("image_base64_chars".into(), encoded_chars.into());
+    if let Some(decoded_bytes) = standard_base64_decoded_len(&encoded) {
+        payload.insert("image_bytes".into(), decoded_bytes.into());
+    }
+    value
+}
+
+/// Exact decoded length for canonical padded base64 without allocating a
+/// second screenshot-sized buffer. Production `get_screenshot` uses this form.
+fn standard_base64_decoded_len(encoded: &str) -> Option<usize> {
+    if encoded.is_empty() || !encoded.len().is_multiple_of(4) {
+        return None;
+    }
+    let padding = encoded
+        .as_bytes()
+        .iter()
+        .rev()
+        .take_while(|byte| **byte == b'=')
+        .count()
+        .min(2);
+    encoded
+        .len()
+        .checked_div(4)?
+        .checked_mul(3)?
+        .checked_sub(padding)
+}
+
 #[cfg(test)]
 #[path = "chat_session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "chat_session_transcript_tests.rs"]
+mod transcript_tests;
 
 #[cfg(test)]
 #[path = "chat_session_identity_tests.rs"]

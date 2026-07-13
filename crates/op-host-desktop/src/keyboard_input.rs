@@ -549,12 +549,24 @@ impl DesktopApp {
     /// Drain a New Chat request (the widget handler already opened the fresh
     /// tab). Aborts any in-flight worker and clears the now-stale tab binding.
     pub(crate) fn drain_new_chat(&mut self) -> bool {
+        let running_tab = self.chat_running_tab;
         let drained = chat_session::drain_new_chat_request(
             &mut self.host,
             &mut self.current_chat,
             &mut self.current_design,
         );
         if drained {
+            crate::sub_agent_session::abort_all(&mut self.sub_agents, &mut self.active_sub_agent);
+            if let Some(chat) =
+                running_tab.and_then(|idx| self.host.editor_state_mut().chat.tab_mut(idx))
+            {
+                chat.agents_running = (0, 0);
+                chat.pending_send = None;
+                chat.pending_stop_chat = false;
+                for message in &mut chat.messages {
+                    message.streaming = false;
+                }
+            }
             self.chat_running_tab = None;
         }
         drained
@@ -569,6 +581,8 @@ impl DesktopApp {
             &mut self.current_design,
         );
         if drained {
+            crate::sub_agent_session::abort_all(&mut self.sub_agents, &mut self.active_sub_agent);
+            self.host.editor_state_mut().chat.agents_running = (0, 0);
             self.chat_running_tab = None;
         }
         drained

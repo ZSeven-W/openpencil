@@ -178,6 +178,8 @@ pub(crate) fn build_sub_agent_prompt(spec: &SpawnSpec, context_brief: Option<&st
         }
     }
 
+    op_ai_skills::append_image_self_check_scope(&mut prompt);
+
     prompt
 }
 
@@ -261,6 +263,11 @@ pub(crate) fn abort_all(subs: &mut Vec<SubAgentSession>, active: &mut usize) {
             agent_indicators::end_if_epoch(ind.epoch);
         }
     }
+    // A spawn request can be stashed by the parent one frame before the host
+    // launches it. Stop/New Chat must cancel that queued batch too, otherwise
+    // it starts after the user has already ended the turn.
+    PENDING_SPAWN.lock().unwrap().take();
+    SUB_AGENT_ACTIVE.store(false, Ordering::SeqCst);
     subs.clear();
     *active = 0;
 }

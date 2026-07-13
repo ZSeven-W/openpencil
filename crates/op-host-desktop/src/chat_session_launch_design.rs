@@ -213,6 +213,7 @@ pub(super) fn launch_design_loop_turn(
     {
         system_prompt.push_str("\n\n---\n\n");
         system_prompt.push_str(&brief);
+        op_ai_skills::append_image_self_check_scope(&mut system_prompt);
     }
     let req = ChatRequest {
         system_prompt,

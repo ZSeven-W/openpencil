@@ -204,11 +204,40 @@ pub(super) fn pump_design_session_indicator(
                 .into_iter()
                 .next()
                 .expect("assign_agent_identities(1) always yields one");
+            // The transcript is the source of truth for a single-agent
+            // design turn. CLI turns are stamped by `ChatState::begin_send`
+            // (for example "Claude Code"), while builtin turns use their
+            // provider display name. Reusing that label keeps the canvas
+            // cursor and chat bubble from presenting two different agents.
+            // A persona remains the fallback for harnesses that do not seed
+            // a streaming assistant message; its colour also supplies the
+            // canvas accent when the transcript has no orchestrated colour.
+            let (name, color) = state
+                .chat
+                .messages
+                .iter()
+                .rev()
+                .find(|message| {
+                    message.role == op_editor_core::ChatRole::Assistant && message.streaming
+                })
+                .map(|message| {
+                    (
+                        message
+                            .agent_name
+                            .clone()
+                            .unwrap_or_else(|| id.name.clone()),
+                        message
+                            .agent_color
+                            .clone()
+                            .unwrap_or_else(|| id.color.clone()),
+                    )
+                })
+                .unwrap_or((id.name, id.color));
             let initial = collect_top_level_frame_ids(state);
             *indicator = Some(DesignLoopIndicator {
                 epoch,
-                color: id.color,
-                name: id.name,
+                color,
+                name,
                 initial_frame_ids: initial,
             });
         }
@@ -405,6 +434,26 @@ mod tests {
         assert!(
             agent_indicators::is_frame_generating("frame-1"),
             "a frame added during the turn must be tagged as generating"
+        );
+    }
+
+    #[test]
+    fn design_session_indicator_reuses_streaming_transcript_identity() {
+        let _guard = lock_agent_indicators();
+        agent_indicators::clear();
+        let mut state = make_state();
+        let mut message = op_editor_core::ChatMessage::assistant_streaming();
+        message.agent_name = Some("Claude Code".into());
+        state.chat.messages.push(message);
+        let (session, _epoch) = design_session_with_epoch();
+        let current = Some(session);
+        let mut indicator: Option<DesignLoopIndicator> = None;
+
+        pump_design_session_indicator(&mut indicator, &current, &state);
+
+        assert_eq!(
+            indicator.as_ref().map(|value| value.name.as_str()),
+            Some("Claude Code")
         );
     }
 

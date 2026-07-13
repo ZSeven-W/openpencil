@@ -231,3 +231,93 @@ fn internal_node_clipboard_remains_the_canvas_fallback() {
         Some(PenNode::Image(_))
     ));
 }
+
+#[test]
+fn stop_chat_aborts_sub_agents_and_clears_the_running_counter() {
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    op_editor_core::agent_indicators::clear();
+
+    let mut app = DesktopApp::new(None);
+    let (_hold_tx, rx) = std::sync::mpsc::channel();
+    app.sub_agents
+        .push(crate::sub_agent_session::SubAgentSession {
+            session: Some(crate::chat_session::ChatSession::from_channels(rx, None)),
+            identity: op_orchestrator::agent_identity::AgentIdentity {
+                color: "#5B8DEF".into(),
+                name: "Fern".into(),
+            },
+            indicator: None,
+            root_seed_mobile: true,
+        });
+    app.active_sub_agent = 0;
+    app.host.editor_state_mut().chat.agents_running = (1, 1);
+    app.host
+        .editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+
+    assert!(app.host.editor_state_mut().chat.stop_streaming());
+    assert!(app.drain_stop_chat());
+
+    assert!(app.sub_agents.is_empty());
+    assert_eq!(app.active_sub_agent, 0);
+    assert_eq!(app.host.editor_state().chat.agents_running, (0, 0));
+    assert!(
+        app.host
+            .editor_state()
+            .chat
+            .messages
+            .iter()
+            .all(|message| !message.streaming),
+        "Stop must leave no hidden streaming bubble behind"
+    );
+    op_editor_core::agent_indicators::clear();
+}
+
+#[test]
+fn new_chat_aborts_the_old_running_tab_without_dirtying_the_fresh_tab() {
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    op_editor_core::agent_indicators::clear();
+
+    let mut app = DesktopApp::new(None);
+    let (_hold_tx, rx) = std::sync::mpsc::channel();
+    app.sub_agents
+        .push(crate::sub_agent_session::SubAgentSession {
+            session: Some(crate::chat_session::ChatSession::from_channels(rx, None)),
+            identity: op_orchestrator::agent_identity::AgentIdentity {
+                color: "#5B8DEF".into(),
+                name: "Fern".into(),
+            },
+            indicator: None,
+            root_seed_mobile: true,
+        });
+    app.active_sub_agent = 0;
+    app.chat_running_tab = Some(0);
+    {
+        let old_tab = app.host.editor_state_mut().chat.tab_mut(0).unwrap();
+        old_tab.agents_running = (1, 1);
+        old_tab
+            .messages
+            .push(op_editor_core::ChatMessage::assistant_streaming());
+    }
+
+    let fresh = app.host.editor_state_mut().chat.new_tab();
+    app.host.editor_state_mut().chat.pending_new_chat = true;
+    assert_eq!(fresh, 1);
+    assert!(app.drain_new_chat());
+
+    assert!(app.sub_agents.is_empty());
+    assert_eq!(app.active_sub_agent, 0);
+    assert_eq!(app.chat_running_tab, None);
+    let tabs = app.host.editor_state().chat.tabs();
+    assert_eq!(tabs[0].agents_running, (0, 0));
+    assert!(tabs[0].messages.iter().all(|message| !message.streaming));
+    assert_eq!(tabs[1].agents_running, (0, 0));
+    assert!(tabs[1].messages.is_empty());
+    op_editor_core::agent_indicators::clear();
+}
