@@ -744,13 +744,13 @@ mod scan_gate_tests {
             "the header is first in fill order — it is on deck"
         );
         assert!(
-            sets.suppressed.contains("bottom-nav"),
-            "the trailing nav shell waits INVISIBLY, even though it is its \
-             container's first empty child"
+            sets.queued.contains("bottom-nav"),
+            "the trailing nav shell shows a QUIET skeleton and waits, even \
+             though it is its container's first empty child"
         );
         assert!(
-            sets.suppressed.contains("search"),
-            "a queued sibling of the deck stays hidden too"
+            sets.queued.contains("search"),
+            "a queued sibling of the deck keeps its skeleton, quietly"
         );
     }
 
@@ -782,14 +782,14 @@ mod scan_gate_tests {
         assert!(ids.contains("shell-a"), "the on-deck shell scans");
         assert!(
             !ids.contains("shell-b"),
-            "a queued later shell stays plain until its turn"
+            "a queued later shell does not take the ACTIVE radar"
         );
         assert!(
-            sets.suppressed.contains("shell-b"),
-            "the queued shell paints NOTHING (layout slot only)"
+            sets.queued.contains("shell-b"),
+            "the queued shell still shows its skeleton — as a quiet wireframe"
         );
         assert!(
-            !sets.suppressed.contains("shell-a"),
+            !sets.queued.contains("shell-a"),
             "the on-deck shell is visible"
         );
     }

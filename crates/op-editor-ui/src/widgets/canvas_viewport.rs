@@ -712,7 +712,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                     generation_sets
                         .as_ref()
                         .map(|_| super::canvas_generation_scan::SKELETON_BLUE),
-                    generation_sets.as_ref().map(|sets| &sets.suppressed),
+                    generation_sets.as_ref().map(|sets| &sets.queued),
                 );
                 paint_hits.merge_missing(child_hits);
             }

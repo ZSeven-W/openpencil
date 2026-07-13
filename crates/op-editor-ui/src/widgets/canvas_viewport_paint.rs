@@ -276,9 +276,10 @@ struct PaintNodeOptions<'a, 'generation> {
     now_ms: u64,
     generating_descendant_ids: Option<&'generation HashSet<String>>,
     generation_accent: Option<Color>,
-    /// Queued empty shells: keep the layout slot, paint nothing (see
-    /// `canvas_generation_scan::GenerationPaintSets::suppressed`).
-    suppressed_shell_ids: Option<&'generation HashSet<String>>,
+    /// Queued empty shells: the skeleton shows, but as a quiet wireframe —
+    /// only the on-deck shell gets the active radar (see
+    /// `canvas_generation_scan::GenerationPaintSets::queued`).
+    queued_shell_ids: Option<&'generation HashSet<String>>,
 }
 
 use super::canvas_overlay_transform::OverlayTransform;
@@ -417,7 +418,7 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
     now_ms: u64,
     generating_descendant_ids: Option<&HashSet<String>>,
     generation_accent: Option<Color>,
-    suppressed_shell_ids: Option<&HashSet<String>>,
+    queued_shell_ids: Option<&HashSet<String>>,
 ) -> PaintNodeHits<'a> {
     let options = PaintNodeOptions {
         viewport_origin,
@@ -432,7 +433,7 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
         now_ms,
         generating_descendant_ids,
         generation_accent,
-        suppressed_shell_ids,
+        queued_shell_ids,
     };
     paint_node_inner(cx, node, &options, &mut Vec::new())
 }
@@ -496,15 +497,6 @@ fn paint_node_inner<'a>(
         .map(|schedule| reveal_paint_state(schedule, &node.id))
         .unwrap_or(RevealPaintState::Idle);
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
-        return PaintNodeHits::default();
-    }
-    // Queued generation shell: its turn has not come — keep the layout
-    // slot, paint nothing (Pencil shows plain canvas where work has not
-    // reached, not dark author-filled slabs).
-    if options
-        .suppressed_shell_ids
-        .is_some_and(|ids| ids.contains(&node.id))
-    {
         return PaintNodeHits::default();
     }
     let world_rect = Rect {
@@ -641,21 +633,29 @@ fn paint_node_inner<'a>(
             // panels; paint the minimal tab-bar visual over the frame
             // fill, then the children render normally below.
             paint_widget_visual(cx, node, world_rect, zoom);
-            if let (true, Some(accent)) = (
-                super::canvas_generation_scan::is_placeholder_section(node)
-                    && options
+            if let Some(accent) = options.generation_accent {
+                if super::canvas_generation_scan::is_placeholder_section(node) {
+                    let on_deck = options
                         .generating_descendant_ids
-                        .is_some_and(|ids| ids.contains(&node.id)),
-                options.generation_accent,
-            ) {
-                super::canvas_generation_scan::paint_generation_scan(
-                    cx,
-                    node,
-                    world_rect,
-                    zoom,
-                    options.now_ms,
-                    accent,
-                );
+                        .is_some_and(|ids| ids.contains(&node.id));
+                    let queued = options
+                        .queued_shell_ids
+                        .is_some_and(|ids| ids.contains(&node.id));
+                    if on_deck {
+                        super::canvas_generation_scan::paint_generation_scan(
+                            cx,
+                            node,
+                            world_rect,
+                            zoom,
+                            options.now_ms,
+                            accent,
+                        );
+                    } else if queued {
+                        super::canvas_generation_scan::paint_queued_skeleton(
+                            cx, node, world_rect, zoom, accent,
+                        );
+                    }
+                }
             }
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
