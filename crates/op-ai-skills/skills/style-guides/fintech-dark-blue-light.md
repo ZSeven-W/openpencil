@@ -153,7 +153,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 240px wide, white background, right border #E2E8F0, vertical, gap 4
-- Content area: fill_container, vertical, gap 24, padding [24, 24]
+- Content area: width fill_container, height fit_content, vertical, gap 24, padding [24, 24]
 - Metric cards: horizontal row, fill_container children, gap 20
 - Chart panels: full width, height 300-400px, padding 24
 - Tables: full width, alternating row backgrounds (#F8FAFC / #FFFFFF)

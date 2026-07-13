@@ -145,7 +145,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 64px wide, vertical, space_between, black background
-- Content area: fill_container, vertical, gap 28-48, padding [32, 40]
+- Content area: width fill_container, height fit_content, vertical, gap 28-48, padding [32, 40]
 - Cards use stroke (#E8E8E8, thickness 1) rather than shadows
 
 ## Corner Radius

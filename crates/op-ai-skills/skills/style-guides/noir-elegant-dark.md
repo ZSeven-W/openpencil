@@ -142,7 +142,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 260px wide, vertical, space_between, icon + text nav
-- Content area: fill_container, vertical, gap 28-48, padding [32, 48]
+- Content area: width fill_container, height fit_content, vertical, gap 28-48, padding [32, 48]
 - Decorative gold rule: 1px horizontal divider in #D4AF37 between major sections
 - Sidebar indicator: 3px left border in gold on active item
 

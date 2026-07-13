@@ -153,7 +153,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 240px wide, vertical, space_between, icon + text nav with section headers
-- Content area: fill_container, vertical, gap 24-32, padding [24, 32]
+- Content area: width fill_container, height fit_content, vertical, gap 24-32, padding [24, 32]
 - Metric grid: 3-4 columns, gap 24, compact metric cards
 - Chart row: 2 columns, gap 24, equal-width chart containers
 - Table section: full-width card with 12px row padding

@@ -151,7 +151,7 @@ The four vertex colours Gouraud-interpolate into a smooth violet→cyan→void b
 
 - Screen width: 1440px
 - Sidebar: 260px wide, vertical, space_between, icon + text nav
-- Content area: fill_container, vertical, gap 32-48, padding [32, 40]
+- Content area: width fill_container, height fit_content, vertical, gap 32-48, padding [32, 40]
 - Gradient accent bar: 4px left border with violet-to-cyan gradient on featured items
 - Card grid: 2-3 columns, gap 24
 

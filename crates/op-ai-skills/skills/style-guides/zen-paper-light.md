@@ -143,7 +143,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 220px wide, vertical, parchment (#F5F1EB) with stone-gray active indicators
-- Content area: fill_container, vertical, gap 32-48, padding [40, 48]
+- Content area: width fill_container, height fit_content, vertical, gap 32-48, padding [40, 48]
 - Cards use 1px stroke (#E7E5E4) with no shadow (paper-flat surfaces)
 - Header bar: 56px height, parchment background, bottom border #E7E5E4
 - Generous vertical spacing between all elements — whitespace is the primary design element

@@ -53,7 +53,7 @@ DESIGN GUIDELINES:
 - PAIRED CONTROLS ARE TWINS: a stepper's −/+ buttons (guest count, quantity), prev/next arrows, and any increment/decrement pair MUST share identical width, height, cornerRadius, and icon size — only the fill emphasis may differ (e.g. minus = surface + border, plus = accent fill). A 56px rounded-square minus next to a 32px circular plus reads as broken, never as intentional.
 - Inputs: height 44px, light bg, subtle border, width="fill_container" in forms.
 - Cards: cornerRadius 12-16, clipContent: true, subtle shadows.
-- CARD ROW ALIGNMENT: sibling cards in horizontal layout ALL use width/height="fill_container".
+- CARD ROW ALIGNMENT: sibling cards in horizontal layout use width="fill_container" and height="fit_content" by default. Full Height is an explicit equal-height cross-axis choice, not a blanket card rule.
 - Navigation: justifyContent="space_between", 3 groups (logo | links | CTA), padding=[0,80].
 - Phone mockup: ONE "frame", width 260-300, height 520-580, cornerRadius 32. NEVER ellipse.
 - Decorative shapes: ellipse is fine for circles / rings / pie / gauge (use innerRadius + start/sweepAngle); use frame/rectangle with cornerRadius for rounded rects.

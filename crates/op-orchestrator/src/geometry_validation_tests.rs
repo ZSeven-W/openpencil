@@ -638,7 +638,7 @@ fn real_layout_equalizes_luxe_cut_metric_card_row_heights() {
     let root: PenNode = serde_json::from_value(json!({
         "type":"frame","id":"root","name":"LUXE CUT Dashboard","width":960,"height":"fit_content","layout":"vertical","gap":24,"children":[
             {"type":"frame","id":"metrics","name":"Key Metrics","layout":"horizontal","gap":16,
-             "width":"fill_container","height":"fit_content","children":[
+             "width":"fill_container","height":"fit_content","alignItems":"stretch","children":[
                 card("card1", "Metric Card 1", "Revenue"),
                 card("card2", "Metric Card 2", "Average revenue per client visit this month"),
                 card("card3", "Metric Card 3", "Bookings"),
@@ -693,6 +693,26 @@ fn real_layout_equalizes_luxe_cut_metric_card_row_heights() {
     assert!(
         after_max - after_min <= 1.0,
         "cards must resolve to equal heights after repair, got {after:?}"
+    );
+}
+
+#[test]
+fn ragged_card_row_without_explicit_stretch_keeps_hug_height() {
+    let row = json!({
+        "type":"frame","id":"row","name":"Cards","layout":"horizontal","children":[
+            stroked_card_json("c1", json!("fit_content")),
+            stroked_card_json("c2", json!("fit_content")),
+            stroked_card_json("c3", json!("fit_content"))
+        ]
+    });
+    let rects = card_row_rects([140.0, 180.0, 142.0]);
+    let mut cmds = Vec::new();
+
+    collect_card_row_height_fixes(&row, &rects, &mut cmds, false);
+
+    assert!(
+        cmds.is_empty(),
+        "Hug is the default without explicit stretch: {cmds:?}"
     );
 }
 
@@ -2066,522 +2086,51 @@ fn slightly_short_fixed_frame_grows_to_fit_its_children() {
     }
 }
 
-// ── starved rail-card fixes ──
-
-fn rail_card(id: &str, card_w: serde_json::Value, inner_w: f64) -> serde_json::Value {
-    json!({
-        "type": "frame", "id": id, "name": id, "width": card_w,
-        "height": "fill_container", "layout": "vertical", "clipContent": true,
-        "children": [
-            { "type": "frame", "id": format!("{id}-img"), "width": inner_w, "height": 190 },
-            { "type": "frame", "id": format!("{id}-label"), "width": inner_w + 28.0, "height": 56 }
-        ]
-    })
-}
-
-/// The measured test0711-1-glm shape: a 5-card horizontal rail, every card
-/// width fill_container (~58px share) while carrying 160px fixed content.
-fn starved_rail() -> serde_json::Value {
-    let cards: Vec<serde_json::Value> = (0..5)
-        .map(|i| rail_card(&format!("card{i}"), json!("fill_container"), 160.0))
-        .collect();
-    json!({
-        "type": "frame", "id": "rail", "name": "PD Rail", "width": "fill_container",
-        "layout": "horizontal", "gap": 12, "justifyContent": "space_between",
-        "children": cards
-    })
-}
-
-fn starved_rail_rects() -> std::collections::HashMap<String, Rect> {
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "rail".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 342.0,
-            h: 254.0,
-        },
-    );
-    for i in 0..5 {
-        rects.insert(
-            format!("card{i}"),
-            Rect {
-                x: i as f64 * 70.0,
-                y: 0.0,
-                w: 58.0,
-                h: 254.0,
-            },
-        );
-    }
-    rects
-}
-
 #[test]
-fn starved_rail_cards_take_their_demand_and_the_rail_becomes_a_scroller() {
-    let mut cmds = Vec::new();
-    collect_starved_rail_card_fixes(&starved_rail(), &starved_rail_rects(), &mut cmds);
-    let sized: Vec<(&str, i32)> = cmds
-        .iter()
-        .filter_map(|c| match c {
-            EditorCommand::UpdateNode {
-                node_id,
-                width: Some(w),
-                ..
-            } => Some((node_id.as_str(), *w)),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(
-        sized.len(),
-        5,
-        "all five cards take a definite width: {cmds:?}"
-    );
-    assert!(
-        sized.iter().all(|(_, w)| *w == 188),
-        "each card takes its widest fixed content as its width: {sized:?}"
-    );
-    let rail_clipped = cmds.iter().any(|c| {
-        matches!(c,
-        EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Bool(true) }
-            if node_id.as_str() == "rail" && property == "clipContent")
-    });
-    assert!(
-        rail_clipped,
-        "rail marked scroller so the overfull flexifier skips it"
-    );
-    let spread_dropped = cmds.iter().any(|c| {
-        matches!(c,
-        EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
-            if node_id.as_str() == "rail" && property == "justifyContent" && k == "start")
-    });
-    assert!(spread_dropped, "space_between falls back to start+gap");
-}
-
-#[test]
-fn two_fill_columns_with_fitting_content_are_untouched() {
-    // An app-shell's two fill columns whose fixed content FITS the share —
-    // and below RAIL_MIN_CARDS anyway. Must not become a scroller.
-    let cols: Vec<serde_json::Value> = (0..2)
-        .map(|i| rail_card(&format!("col{i}"), json!("fill_container"), 300.0))
-        .collect();
-    let shell = json!({
-        "type": "frame", "id": "shell", "width": "fill_container",
-        "layout": "horizontal", "gap": 24, "children": cols
-    });
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "shell".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 800.0,
-            h: 600.0,
-        },
-    );
-    for i in 0..2 {
-        rects.insert(
-            format!("col{i}"),
-            Rect {
-                x: i as f64 * 400.0,
-                y: 0.0,
-                w: 388.0,
-                h: 600.0,
-            },
-        );
-    }
-    let mut cmds = Vec::new();
-    collect_starved_rail_card_fixes(&shell, &rects, &mut cmds);
-    assert!(cmds.is_empty(), "fitting columns untouched: {cmds:?}");
-}
-
-#[test]
-fn already_clipped_rail_is_left_alone() {
-    let mut rail = starved_rail();
-    rail["clipContent"] = json!(true);
-    let mut cmds = Vec::new();
-    collect_starved_rail_card_fixes(&rail, &starved_rail_rects(), &mut cmds);
-    assert!(
-        cmds.is_empty(),
-        "an authored scroller is intentional: {cmds:?}"
-    );
-}
-
-#[test]
-fn rail_with_one_flexible_card_is_not_forced_to_hug() {
-    // One card has NO fixed content (a genuine flex spacer/card) — the
-    // all-starved gate must hold the repair back.
-    let mut rail = starved_rail();
-    rail["children"][2]["children"] = json!([]);
-    let mut cmds = Vec::new();
-    collect_starved_rail_card_fixes(&rail, &starved_rail_rects(), &mut cmds);
-    assert!(cmds.is_empty(), "mixed rail left to the echo: {cmds:?}");
-}
-
-// ── one image per slot + un-cropped photo band ──
-
-/// The measured test0711-1-glm card: a 56px image band holding BOTH a
-/// 200x130 image-filled plate and the real image node.
-fn double_image_slot() -> serde_json::Value {
-    json!({
-        "type": "frame", "id": "band", "name": "Dest Image Bali",
-        "width": "fill_container", "height": 56, "layout": "horizontal",
-        "clipContent": true,
-        "children": [
-            { "type": "frame", "id": "plate", "name": "Dest Image Fill Bali",
-              "width": 200, "height": 130, "x": 0, "y": 0,
-              "fill": [{ "type": "image", "url": "data:image/jpeg;base64,AAAA" }] },
-            { "type": "icon_font", "id": "heart", "width": 22, "height": 22, "x": 165, "y": 10 },
-            { "type": "image", "id": "photo", "name": "Bali temple rice terraces",
-              "width": "fill_container", "height": "fill_container",
-              "src": "data:image/jpeg;base64,BBBB" }
-        ]
-    })
-}
-
-#[test]
-fn duplicate_image_plate_is_dropped_and_the_band_keeps_the_photo_height() {
-    let mut cmds = Vec::new();
-    let slot = double_image_slot();
-    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
-
-    assert!(
-        cmds.iter().any(|c| matches!(c,
-            EditorCommand::DeleteNode { node_id, .. } if node_id.as_str() == "plate")),
-        "the childless image plate is the duplicate — the image node wins: {cmds:?}"
-    );
-    assert!(
-        !cmds.iter().any(|c| matches!(c,
-            EditorCommand::DeleteNode { node_id, .. } if node_id.as_str() == "photo")),
-        "the real image node survives"
-    );
-    let grown = cmds.iter().find_map(|c| match c {
-        EditorCommand::UpdateNode {
-            node_id, height, ..
-        } if node_id.as_str() == "band" => *height,
-        _ => None,
-    });
-    assert_eq!(
-        grown,
-        Some(130),
-        "a 56px band cropped a 130px photo to its sky — the band takes the photo's height"
-    );
-}
-
-#[test]
-fn a_lone_image_filled_plate_is_never_deleted() {
-    // No image node in the slot — the plate IS the image. Untouched.
-    let slot = json!({
-        "type": "frame", "id": "band", "width": "fill_container", "height": 130,
-        "children": [
-            { "type": "frame", "id": "plate", "width": 200, "height": 130,
-              "fill": [{ "type": "image", "url": "data:image/jpeg;base64,AAAA" }] }
-        ]
-    });
-    let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
-    assert!(
-        cmds.is_empty(),
-        "the only image in the slot stays: {cmds:?}"
-    );
-}
-
-#[test]
-fn an_image_filled_hero_with_content_on_it_is_not_a_duplicate_plate() {
-    // A filled frame that CARRIES content is a real container (hero with a
-    // headline), not a stray twin — even beside an image node.
-    let slot = json!({
-        "type": "frame", "id": "band", "width": "fill_container", "height": 200,
-        "children": [
-            { "type": "frame", "id": "hero", "width": 200, "height": 200,
-              "fill": [{ "type": "image", "url": "data:image/jpeg;base64,AAAA" }],
-              "children": [{ "type": "text", "id": "headline", "content": "Explore" }] },
-            { "type": "image", "id": "photo", "width": 80, "height": 80,
-              "src": "data:image/jpeg;base64,BBBB" }
-        ]
-    });
-    let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
-    assert!(
-        !cmds
-            .iter()
-            .any(|c| matches!(c, EditorCommand::DeleteNode { .. })),
-        "a hero container is not deleted: {cmds:?}"
-    );
-}
-
-#[test]
-fn a_mild_crop_stays_intentional() {
-    // 130px photo in a 100px band — letterboxing the model may well have
-    // meant. Only a band that hides MORE than half the photo is repaired.
-    let slot = json!({
-        "type": "frame", "id": "band", "width": "fill_container", "height": 100,
-        "clipContent": true,
-        "children": [
-            { "type": "image", "id": "photo", "width": 200, "height": 130,
-              "src": "data:image/jpeg;base64,BBBB" }
-        ]
-    });
-    let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
-    assert!(cmds.is_empty(), "a mild crop is left alone: {cmds:?}");
-}
-
-/// Resolved rects for a slot fixture: the band spans a 200px card, children
-/// take their authored size (enough for the aspect guard to reason about).
-fn slot_rects(slot: &serde_json::Value) -> std::collections::HashMap<String, Rect> {
-    fn walk(v: &serde_json::Value, out: &mut std::collections::HashMap<String, Rect>, w: f64) {
-        if let Some(id) = v.get("id").and_then(|x| x.as_str()) {
-            let cw = v.get("width").and_then(|x| x.as_f64()).unwrap_or(w);
-            let ch = v.get("height").and_then(|x| x.as_f64()).unwrap_or(120.0);
-            out.insert(
-                id.to_string(),
-                Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    w: cw,
-                    h: ch,
-                },
-            );
-        }
-        for c in v
-            .get("children")
-            .and_then(|c| c.as_array())
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
-        {
-            walk(c, out, w);
-        }
-    }
-    let mut out = std::collections::HashMap::new();
-    walk(slot, &mut out, 200.0);
-    out
-}
-
-/// The regression that wrecked a GOOD design: a 400x300 plate cropped inside a
-/// phone card is an oversized image, NOT the card's width intent. Widening the
-/// cards to it blew one card across the whole screen and clipped the rest.
-#[test]
-fn an_oversized_plate_is_not_a_width_intent_for_the_rail() {
-    let cards: Vec<serde_json::Value> = (0..4)
-        .map(|i| {
-            json!({
-                "type": "frame", "id": format!("card{i}"), "width": "fill_container",
-                "height": "fill_container", "layout": "vertical", "clipContent": true,
-                "children": [
-                    { "type": "frame", "id": format!("img{i}"), "width": "fill_container",
-                      "height": 200, "clipContent": true, "children": [
-                        { "type": "image", "id": format!("plate{i}"), "width": 400, "height": 300,
-                          "src": "data:image/jpeg;base64,AAAA" }
-                      ]}
-                ]
-            })
-        })
-        .collect();
-    let rail = json!({
-        "type": "frame", "id": "rail", "width": "fill_container",
-        "layout": "horizontal", "gap": 12, "children": cards
-    });
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "rail".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 390.0,
-            h: 260.0,
-        },
-    );
-    for i in 0..4 {
-        // Healthy cards: two visible per screen, the rest scroll.
-        rects.insert(
-            format!("card{i}"),
-            Rect {
-                x: i as f64 * 182.0,
-                y: 0.0,
-                w: 170.0,
-                h: 260.0,
-            },
-        );
-    }
-    let mut cmds = Vec::new();
-    collect_starved_rail_card_fixes(&rail, &rects, &mut cmds);
-    assert!(
-        cmds.is_empty(),
-        "a 170px card cropping a 400px plate is fine — leave it alone: {cmds:?}"
-    );
-}
-
-/// Same guard on the band: growing a 200px band to a 300px plate's height
-/// left a wall of empty space under the photo in every deal card.
-#[test]
-fn an_oversized_plate_does_not_stretch_the_photo_band() {
-    let slot = json!({
-        "type": "frame", "id": "band", "width": "fill_container", "height": 120,
-        "clipContent": true,
-        "children": [
-            { "type": "image", "id": "plate", "width": 400, "height": 300,
-              "src": "data:image/jpeg;base64,AAAA" }
-        ]
-    });
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "band".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 170.0,
-            h: 120.0,
-        },
-    );
-    rects.insert(
-        "plate".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 400.0,
-            h: 300.0,
-        },
-    );
-    let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &rects, &mut cmds);
-    assert!(
-        cmds.is_empty(),
-        "a 300px plate in a 170px-wide band is oversized, not a band height: {cmds:?}"
-    );
-}
-
-/// The measured destination card: a 56px band wrapping a 160x180 photo BOX
-/// (the photo is a grandchild, not a direct child) — every card painted a
-/// blue sliver of sky.
-#[test]
-fn a_band_takes_the_height_of_a_photo_nested_one_level_down() {
-    let slot = json!({
-        "type": "frame", "id": "band", "width": 192, "height": 56,
-        "layout": "horizontal", "clipContent": true,
-        "children": [
-            { "type": "frame", "id": "destimg", "width": 160, "height": 180,
-              "clipContent": true, "x": 0, "y": 0, "children": [
-                { "type": "image", "id": "photo", "width": 160, "height": 180,
-                  "src": "data:image/jpeg;base64,AAAA" }
-              ]},
-            { "type": "frame", "id": "heart", "width": 32, "height": 32, "x": 8, "y": 8 }
-        ]
-    });
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "band".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 192.0,
-            h: 56.0,
-        },
-    );
-    let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &rects, &mut cmds);
-    let grown = cmds.iter().find_map(|c| match c {
-        EditorCommand::UpdateNode {
-            node_id, height, ..
-        } if node_id.as_str() == "band" => *height,
-        _ => None,
-    });
-    assert_eq!(
-        grown,
-        Some(180),
-        "the band takes the nested photo's height: {cmds:?}"
-    );
-}
-
-/// The measured header: a painted row named "Avatar" holding a 44px bell, a
-/// 44px stub and a 44px photo, given fill_container width — it stretched
-/// across the header and painted as one beige capsule around the controls.
-#[test]
-fn a_painted_row_of_fixed_controls_hugs_instead_of_stretching() {
+fn narrow_value_and_chip_row_is_not_stacked_when_it_fits() {
     let row = json!({
-        "type": "frame", "id": "actions", "name": "Avatar", "width": "fill_container",
-        "height": 44, "layout": "horizontal", "gap": 8, "cornerRadius": 22,
-        "fill": [{ "type": "solid", "color": "#FFE7CF" }],
-        "children": [
-            { "type": "frame", "id": "bell", "width": 44, "height": 44 },
-            { "type": "frame", "id": "avatar", "width": 44, "height": 44 }
+        "type":"frame", "id":"row", "layout":"horizontal", "width":240, "height":48,
+        "gap":8, "children":[
+            {"type":"text", "id":"value", "content":"$48K", "fontSize":32, "width":100, "height":40},
+            {"type":"frame", "id":"chip", "width":60, "height":28,
+             "fill":[{"type":"solid","color":"#DCFCE7"}]}
         ]
     });
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "actions".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 220.0,
-            h: 44.0,
-        },
-    );
-    let mut cmds = Vec::new();
-    collect_overwide_control_row_fixes(&row, &rects, &mut cmds);
-    assert!(
-        cmds.iter().any(|c| matches!(c,
-            EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
-                if node_id.as_str() == "actions" && property == "width" && k == "fit_content")),
-        "the control cluster hugs its controls: {cmds:?}"
-    );
-}
+    let rects = HashMap::from([
+        (
+            "row".to_string(),
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 240.0,
+                h: 48.0,
+            },
+        ),
+        (
+            "value".to_string(),
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 100.0,
+                h: 40.0,
+            },
+        ),
+        (
+            "chip".to_string(),
+            Rect {
+                x: 108.0,
+                y: 0.0,
+                w: 60.0,
+                h: 28.0,
+            },
+        ),
+    ]);
+    let mut commands = Vec::new();
 
-#[test]
-fn a_bottom_nav_of_flex_tabs_is_not_a_control_row() {
-    let nav = json!({
-        "type": "frame", "id": "nav", "width": "fill_container", "height": 74,
-        "layout": "horizontal", "fill": [{ "type": "solid", "color": "#FFFFFF" }],
-        "children": [
-            { "type": "frame", "id": "t1", "width": "fill_container", "height": 74 },
-            { "type": "frame", "id": "t2", "width": "fill_container", "height": 74 },
-            { "type": "frame", "id": "t3", "width": "fill_container", "height": 74 }
-        ]
-    });
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "nav".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 390.0,
-            h: 74.0,
-        },
-    );
-    let mut cmds = Vec::new();
-    collect_overwide_control_row_fixes(&nav, &rects, &mut cmds);
-    assert!(
-        cmds.is_empty(),
-        "flex tabs are meant to span the bar: {cmds:?}"
-    );
-}
+    collect_row_overfull_fixes(&row, &rects, &mut commands, false);
 
-#[test]
-fn an_unpainted_row_of_controls_is_left_alone() {
-    // No fill — a fill_container width paints nothing and is often just how
-    // the model right-aligns a group. Nothing to repair.
-    let row = json!({
-        "type": "frame", "id": "row", "width": "fill_container", "height": 44,
-        "layout": "horizontal", "justifyContent": "end",
-        "children": [
-            { "type": "frame", "id": "a", "width": 44, "height": 44 },
-            { "type": "frame", "id": "b", "width": 44, "height": 44 }
-        ]
-    });
-    let mut rects = std::collections::HashMap::new();
-    rects.insert(
-        "row".to_string(),
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 300.0,
-            h: 44.0,
-        },
-    );
-    let mut cmds = Vec::new();
-    collect_overwide_control_row_fixes(&row, &rects, &mut cmds);
     assert!(
-        cmds.is_empty(),
-        "an invisible row stretches harmlessly: {cmds:?}"
+        commands.is_empty(),
+        "narrow is not the same as overfull: {commands:?}"
     );
 }

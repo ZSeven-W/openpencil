@@ -1018,6 +1018,10 @@ fn is_icon_label_category_item(node: &Value) -> bool {
     node.get("type").and_then(Value::as_str) == Some("frame")
         && has_descendant_type(node, "icon_font")
         && has_text_descendant(node)
+        // A product/travel card commonly contains a favorite icon over a
+        // photo plus text. That does not make the whole card an icon+label
+        // category chip; treating it as one shrank 140px photos to 56px tiles.
+        && !has_descendant_type(node, "image")
 }
 
 fn is_category_item_like_child(node: &Value) -> bool {
@@ -1065,7 +1069,17 @@ fn should_normalize_mobile_category_row(node: &Value, canvas_width: f64) -> bool
         return false;
     };
     let loose_spacing = has_loose_category_spacing(node, canvas_width);
-    if !is_category_row_label(&semantic_label(node)) && !loose_spacing {
+    let explicitly_category = is_category_row_label(&semantic_label(node))
+        || node
+            .get("children")
+            .and_then(Value::as_array)
+            .is_some_and(|children| {
+                children.iter().all(|child| {
+                    matches!(role_of(child), Some("chip") | Some("tag") | Some("pill"))
+                        || is_category_row_label(&semantic_label(child))
+                })
+            });
+    if !explicitly_category {
         return false;
     }
     item_count >= 4 || loose_spacing
@@ -1541,8 +1555,8 @@ fn fix_input_sibling_consistency(node: &mut Value) {
 
 // ── I4: layout-property fixes (no layout recompute / no font metrics) ───────
 
-/// Equalize a row of fixed-width card frames to `fill_container` so they stretch
-/// evenly (port of `equalizeCardRow` AND the near-identical
+/// Equalize the widths of fixed-width card frames so they share a row evenly
+/// (port of `equalizeCardRow` AND the near-identical
 /// `equalizeHorizontalSiblings` in design-canvas-ops.ts — the dashboard 等宽
 /// pass; the badge/pill/tag exclusions come from the latter). Pure property fix
 /// — taffy then lays out.
@@ -1625,7 +1639,6 @@ fn equalize_card_row(node: &mut Value) {
     };
     for &i in &fixed {
         children[i]["width"] = json!("fill_container");
-        children[i]["height"] = json!("fill_container");
     }
 }
 

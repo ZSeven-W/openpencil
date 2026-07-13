@@ -149,7 +149,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Navigation: top bar (64px) or 220px sidebar, clean with minimal chrome
-- Content area: fill_container, vertical, gap 24, padding [24, 28]
+- Content area: width fill_container, height fit_content, vertical, gap 24, padding [24, 28]
 - Cards use subtle multi-layer shadow (0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03))
 - Optional 1px border (#E5E7EB) on cards for additional definition
 - Tables: clean rows with hover state (#F3F4F6), no visible row borders

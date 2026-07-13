@@ -216,6 +216,12 @@ fn build_vision_request_round1_no_reference() {
     assert_eq!(req.image_base64, "base64img==");
     assert_eq!(req.timeout, Duration::from_millis(VALIDATION_TIMEOUT_MS));
     assert!(req.message.contains("node-tree-dump"));
+    assert!(req
+        .message
+        .contains("Image review is limited to rendering integrity"));
+    assert!(req
+        .message
+        .contains("Do not judge or replace image content"));
     assert!(!req.message.contains("validation round"));
     assert!(!req.message.contains("REFERENCE DESIGN"));
 }
@@ -237,6 +243,9 @@ fn build_vision_request_timeout_doubled_with_reference() {
         Duration::from_millis(VALIDATION_TIMEOUT_MS * 2)
     );
     assert!(req.message.contains("REFERENCE DESIGN"));
+    assert!(req
+        .message
+        .contains("Ignore differences in photographic or generated image content"));
 }
 
 /// Round > 1: "This is validation round N" instruction injected.

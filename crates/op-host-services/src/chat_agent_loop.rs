@@ -1,23 +1,8 @@
-//! Tool-executing agent loop for the builtin (API-key) chat providers.
-//!
-//! Mirrors the TS agent pipeline (`apps/web/server/api/ai/agent.ts` +
-//! the Zig engine behind it): the request carries canvas tool
-//! definitions, `tool_use` comes back in the SSE stream, the host
-//! executes the call against the live document, and the result rides
-//! a follow-up request as `tool_result` — looping until the model
-//! stops calling tools or the turn cap is reached (TS `maxTurns: 20`).
-//!
-//! Both builtin wires are covered:
-//! - **Anthropic** `/v1/messages` — `tools[]` + `tool_use` content
-//!   blocks (`input_json_delta` accumulation) + `tool_result` blocks.
-//! - **OpenAI-compatible** `/chat/completions` — `tools[]` function
-//!   defs + streamed `delta.tool_calls` fragments + `role:"tool"`
-//!   result messages.
-//!
-//! Execution itself goes through the [`ChatToolExecutor`] the caller
-//! injected (production: `chat_canvas_tools::UiChatToolExecutor`,
-//! which forwards to the UI thread). The loop is transport-pure and
-//! testable against a loopback mock server with a scripted executor.
+//! Tool-executing loops for builtin Anthropic and OpenAI-compatible providers.
+//! Canvas tool calls stream from the model, execute through the injected
+//! [`ChatToolExecutor`], and ride the next request as correlated results until
+//! the model stops or the turn cap is reached. Production uses the UI-thread
+//! bridge; loopback tests keep this transport layer deterministic.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -29,6 +14,12 @@ use op_ai::chat_provider::{
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
+#[cfg(test)]
+use crate::chat_agent_context::screenshot_image_base64;
+use crate::chat_agent_context::{
+    elide_inline_screenshots, prepare_screenshot_for_context, PreparedScreenshot,
+    OMITTED_SCREENSHOT_TEXT, TEXT_ONLY_SCREENSHOT_TEXT,
+};
 use crate::chat_builtin_http::{map_anthropic_stop_reason, map_openai_stop_reason};
 
 /// Everything one agent-loop run needs. `max_turns` is the TS
@@ -44,22 +35,11 @@ pub struct AgentLoopConfig {
     pub tools: Vec<ChatToolDef>,
     pub executor: Arc<dyn ChatToolExecutor>,
     pub max_turns: usize,
-    /// When true, run the deterministic structural-quality backstop
-    /// ([`run_loop_finalize`] → `op_orchestrator::apply_loop_finalize`)
-    /// once at loop end. Set ONLY for the gated design-generation loop;
-    /// the regular tool-using chat loop leaves this `false` so an ordinary
-    /// chat turn never re-runs the Class-A passes over — and mutates — an
-    /// existing design (Track-1 Step 4 scoping fix). The agent loop is the
-    /// shared execution path for BOTH regular builtin chat and the design
-    /// loop, so the finalize side-effect MUST be opt-in per provider.
+    /// Opt-in structural backstop at design-loop exit. Plain chat must keep
+    /// this false because finalization mutates the live document.
     pub finalize_on_exit: bool,
-    /// When true AND the model is a MiniMax / GLM reasoning model, send
-    /// `thinking:{type:"disabled"}` in the OpenAI-compat body. Without it a
-    /// reasoning model (glm-5.2) streams tens of thousands of hidden reasoning
-    /// tokens per turn — measured 94k thinking chars vs 4k of actual
-    /// `batch_design` DSL — which burns the per-turn `max_output_tokens` and
-    /// truncates the design mid-build. The single-shot builtin chat path
-    /// already gates this on the same flag; the loop body was missing it.
+    /// Disable MiniMax / GLM hidden reasoning for structured design output;
+    /// otherwise it can consume the whole output allowance before tool JSON.
     pub disable_thinking: bool,
 }
 
@@ -99,33 +79,6 @@ fn normalized_args(args_json: &str) -> String {
     } else {
         trimmed.to_string()
     }
-}
-
-/// If a tool result is a `get_screenshot` payload, pull out the base64 PNG
-/// so it can be replayed to the model as a real image content block.
-///
-/// `get_screenshot` (see `mcp_serve::screenshot_tool.rs`) returns its result
-/// as a JSON object `{"image_base64": <b64>, "format": "png"}`. Without this
-/// the base64 rides the follow-up request as an opaque text string and the
-/// model literally cannot see the render — defeating the self-correction
-/// loop. We detect the screenshot result by tool name AND the structured
-/// marker (`format == "png"` + a non-empty `image_base64`) so a tool that
-/// happened to be renamed, or an error envelope, falls back to plain text.
-///
-/// Returns `Some(base64)` only for a successful, non-error screenshot result.
-fn screenshot_image_base64(tool_name: &str, result: &ChatToolResult) -> Option<String> {
-    if tool_name != "get_screenshot" || result.is_error {
-        return None;
-    }
-    let v = serde_json::from_str::<Value>(&result.content).ok()?;
-    if v.get("format").and_then(Value::as_str) != Some("png") {
-        return None;
-    }
-    let b64 = v.get("image_base64").and_then(Value::as_str)?;
-    if b64.is_empty() {
-        return None;
-    }
-    Some(b64.to_string())
 }
 
 /// Run one tool call through the executor on a blocking thread (the
@@ -495,11 +448,22 @@ pub async fn run_anthropic_agent_loop(
                 })
                 .await;
             let result = execute_tool(&cfg.executor, &call.name, &call.args_json).await;
-            // When the result is a `get_screenshot` PNG, feed it back as a
-            // real Anthropic image content block instead of an opaque base64
-            // text string — otherwise the model can never see the render.
-            let content: Value = match screenshot_image_base64(&call.name, &result) {
-                Some(b64) => json!([
+            // Send screenshots as images only when the model supports them.
+            let content: Value = match prepare_screenshot_for_context(
+                &cfg.model,
+                cfg.max_output_tokens,
+                &call.name,
+                &result,
+            ) {
+                Some(PreparedScreenshot::Inline(b64)) => {
+                    // Keep only the newest visual observation.
+                    for message in &mut messages {
+                        elide_inline_screenshots(message);
+                    }
+                    for prior_result in &mut results {
+                        elide_inline_screenshots(prior_result);
+                    }
+                    json!([
                     { "type": "text", "text": "Rendered screenshot of the current design:" },
                     {
                         "type": "image",
@@ -509,7 +473,14 @@ pub async fn run_anthropic_agent_loop(
                             "data": b64,
                         },
                     },
-                ]),
+                    ])
+                }
+                Some(PreparedScreenshot::TextOnly) => {
+                    Value::String(TEXT_ONLY_SCREENSHOT_TEXT.to_string())
+                }
+                Some(PreparedScreenshot::OverBudget) => {
+                    Value::String(OMITTED_SCREENSHOT_TEXT.to_string())
+                }
                 None => Value::String(result.content),
             };
             results.push(json!({
@@ -762,14 +733,18 @@ pub async fn run_openai_agent_loop(
                 })
                 .await;
             let result = execute_tool(&cfg.executor, &call.name, &call.args_json).await;
-            // OpenAI `role:"tool"` messages only accept a string `content`,
-            // so an image can't ride the tool result directly. When the
-            // result is a `get_screenshot` PNG, send a short text ack as the
-            // tool result and follow it with a `role:"user"` message carrying
-            // the render as an `image_url` data URL — the only OpenAI-wire
-            // way to make the model actually see the screenshot.
-            match screenshot_image_base64(&call.name, &result) {
-                Some(b64) => {
+            // OpenAI images follow the short role:tool acknowledgement.
+            match prepare_screenshot_for_context(
+                &cfg.model,
+                cfg.max_output_tokens,
+                &call.name,
+                &result,
+            ) {
+                Some(PreparedScreenshot::Inline(b64)) => {
+                    // Elide older images; keep intent, tool ids, and text.
+                    for message in &mut messages {
+                        elide_inline_screenshots(message);
+                    }
                     messages.push(json!({
                         "role": "tool",
                         "tool_call_id": call.id,
@@ -786,6 +761,16 @@ pub async fn run_openai_agent_loop(
                         ],
                     }));
                 }
+                Some(PreparedScreenshot::TextOnly) => messages.push(json!({
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": TEXT_ONLY_SCREENSHOT_TEXT,
+                })),
+                Some(PreparedScreenshot::OverBudget) => messages.push(json!({
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": OMITTED_SCREENSHOT_TEXT,
+                })),
                 None => {
                     messages.push(json!({
                         "role": "tool",

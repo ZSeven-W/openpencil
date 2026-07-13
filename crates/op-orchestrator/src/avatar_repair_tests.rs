@@ -66,7 +66,7 @@ fn correct_avatars_and_large_pills_are_untouched() {
                 { "type": "frame", "id": "hero", "name": "Hero Card",
                   "width": 358, "height": 200, "cornerRadius": 100,
                   "children": [
-                    { "type": "image", "id": "himg", "name": "beach sunset",
+                    { "type": "image", "id": "himg", "name": "doctor portrait headshot",
                       "src": "", "width": 358, "height": 200 }
                   ] }
             ]
@@ -81,6 +81,33 @@ fn correct_avatars_and_large_pills_are_untouched() {
         serde_json::to_string(state.active_children()).expect("snapshot"),
         before,
         "no-op on healthy avatars and non-avatar pills"
+    );
+}
+
+#[test]
+fn square_clipped_avatar_with_zero_radius_becomes_round() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [{
+            "type":"frame", "id":"root", "name":"Screen", "width":390, "height":844,
+            "layout":"vertical", "children":[{
+                "type":"frame", "id":"slot", "name":"Avatar", "width":44, "height":44,
+                "cornerRadius":0, "clipContent":true, "children":[{
+                    "type":"image", "id":"img", "name":"face headshot", "src":"",
+                    "width":"fill_container", "height":"fill_container"
+                }]
+            }]
+        }] }"##,
+    )
+    .expect("doc");
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+
+    crate::avatar_repair::repair_avatar_slots_for_all_roots(&mut sink);
+
+    let slot = find_by_id(&state.active_children()[0], "slot").expect("slot");
+    assert_eq!(
+        serde_json::to_value(slot).expect("slot json")["cornerRadius"],
+        serde_json::json!(22.0)
     );
 }
 
@@ -188,8 +215,8 @@ fn fill_container_row_thumbnail_is_squared_but_numeric_wide_thumb_is_kept() {
 
 /// test0711-22 00:25 shape: "AvatarImg" slot authored fill×fill holding a
 /// fill×300 headshot — resolved as a 42×300 strip down the screen. The
-/// avatar-query NAME on the image is the contract signal; the slot becomes
-/// a 44px clipped circle regardless of its own (useless) sizing.
+/// explicit AvatarImg SLOT name is the contract signal; the slot becomes a
+/// 44px clipped circle regardless of its own (useless) sizing.
 #[test]
 fn fill_by_fill_slot_with_avatar_named_image_becomes_a_circle() {
     let doc: jian_ops_schema::PenDocument = serde_json::from_str(
@@ -226,50 +253,4 @@ fn fill_by_fill_slot_with_avatar_named_image_becomes_a_circle() {
         img.height_px().is_none(),
         "300px headshot switches to fill_container"
     );
-}
-
-/// test0711-22 "Midnight Drive" shape: the model laid `[empty stub frame,
-/// image]` as SIBLINGS inside the Art slot, so the photo rendered beside an
-/// empty box. The stub is dropped, the image takes the slot. A scrim
-/// overlay ([image, frame] order) is untouched.
-#[test]
-fn empty_twin_stub_beside_image_is_removed_but_scrim_overlay_is_kept() {
-    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
-        r##"{ "version": "1.0", "children": [{
-            "type": "frame", "id": "root", "name": "Screen",
-            "width": 402, "height": 874, "layout": "vertical",
-            "children": [
-                { "type": "frame", "id": "art", "name": "Art",
-                  "width": 140, "height": 140, "clipContent": true,
-                  "children": [
-                    { "type": "frame", "id": "stub", "width": 70, "height": 140,
-                      "fill": [{ "type": "solid", "color": "#1A1A1A" }] },
-                    { "type": "image", "id": "img", "name": "neon city night drive",
-                      "src": "", "width": 70, "height": 140 }
-                  ] },
-                { "type": "frame", "id": "heroic", "name": "Hero",
-                  "width": 358, "height": 200,
-                  "children": [
-                    { "type": "image", "id": "himg", "name": "beach", "src": "",
-                      "width": "fill_container", "height": "fill_container" },
-                    { "type": "frame", "id": "scrim", "width": "fill_container",
-                      "height": "fill_container",
-                      "fill": [{ "type": "solid", "color": "#00000080" }] }
-                  ] }
-            ]
-        }] }"##,
-    )
-    .expect("doc");
-    let mut state = op_editor_core::EditorState::from_document(doc);
-    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
-    crate::avatar_repair::remove_empty_twin_stubs_beside_images_for_all_roots(&mut sink);
-
-    let root = &state.active_children()[0];
-    assert!(find_by_id(root, "stub").is_none(), "stub removed");
-    let img = find_by_id(root, "img").expect("img");
-    assert!(
-        img.width_px().is_none() && img.height_px().is_none(),
-        "image takes the slot"
-    );
-    assert!(find_by_id(root, "scrim").is_some(), "scrim overlay kept");
 }

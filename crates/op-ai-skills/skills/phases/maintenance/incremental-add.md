@@ -21,7 +21,7 @@ CONTEXT AWARENESS:
 
 SIBLING CONSISTENCY:
 
-- New cards in a card row MUST match existing cards' width/height strategy (typically fill_container).
+- New cards in a card row MUST match the existing width and height strategies independently: width is typically fill_container, while height is usually fit_content unless the row explicitly uses cross-axis Full Height.
 - New inputs in a form MUST match existing inputs' width and height.
 - New sections MUST use the same padding and gap patterns as existing sections.
 

@@ -35,6 +35,42 @@ fn frame_json(id: &str, children: serde_json::Value) -> PenNode {
     serde_json::from_value(frame_json_value(id, children)).expect("frame json")
 }
 
+#[test]
+fn explicit_mobile_viewport_contract_accepts_all_container_variants() {
+    for root_type in ["frame", "group", "rectangle"] {
+        for viewport_type in ["frame", "group", "rectangle"] {
+            let root: PenNode = serde_json::from_value(json!({
+                "type": root_type,
+                "id": format!("{root_type}-root"),
+                "width": 390,
+                "height": 844,
+                "layout": "vertical",
+                "children": [{
+                    "type": viewport_type,
+                    "id": format!("{viewport_type}-viewport"),
+                    "role": "viewport",
+                    "width": "fill_container",
+                    "height": "fill_container",
+                    "layout": "vertical",
+                    "clipContent": true,
+                    "children": [{
+                        "type": "frame",
+                        "id": "content",
+                        "width": "fill_container",
+                        "height": 1200
+                    }]
+                }]
+            }))
+            .expect("valid container contract");
+
+            assert!(
+                has_explicit_mobile_viewport_contract(&root),
+                "{root_type} root with {viewport_type} viewport must preserve its height"
+            );
+        }
+    }
+}
+
 fn plan() -> OrchestratorPlan {
     OrchestratorPlan {
         root_frame: RootFrameSpec {
@@ -214,16 +250,15 @@ fn run_cleanup_passes_callable_on_empty_root() {
 }
 
 #[test]
-fn cleanup_collapses_dead_space_under_a_tall_scrolling_mobile_root() {
-    // A scrolling screen whose content (well over a phone viewport) sits inside
-    // an even taller fixed frame leaves dead space at the bottom ("下面太长").
-    // Cleanup must switch the root to fit_content so the layout engine sizes it
-    // exactly to the content. Fixed-height children sum to ~1080 here (> 812).
+fn cleanup_preserves_authored_fit_content_mobile_root() {
+    // A fit-content mobile root is an explicit long-form/scroll-surface choice.
+    // Even when its current content is shorter than a device viewport, cleanup
+    // must not infer that the model meant a numeric artboard instead.
     let mut sink = VecDocSink::new();
     let mut children = vec![json!(
         {"type": "frame", "id": "status", "name": "Status Bar", "width": "fill_container", "height": 62}
     )];
-    for i in 0..6 {
+    for i in 0..2 {
         children.push(json!({
             "type": "frame",
             "id": format!("section{i}"),
@@ -239,7 +274,7 @@ fn cleanup_collapses_dead_space_under_a_tall_scrolling_mobile_root() {
         "x": 80,
         "y": 40,
         "width": 375,
-        "height": 1209,
+        "height": "fit_content",
         "layout": "vertical",
         "gap": 16,
         "children": children
@@ -255,13 +290,6 @@ fn cleanup_collapses_dead_space_under_a_tall_scrolling_mobile_root() {
 
     run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
 
-    assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::SetNodeLayoutProp { property, .. } if property == "height"
-        )),
-        "a tall scrolling root with dead space must be set to fit_content"
-    );
     let root = sink
         .state
         .active_children()
@@ -271,27 +299,29 @@ fn cleanup_collapses_dead_space_under_a_tall_scrolling_mobile_root() {
     assert_eq!(
         root.height_px(),
         None,
-        "fit_content height has no fixed pixel value"
+        "the authored fit_content sizing mode must survive cleanup"
     );
 }
 
 #[test]
-fn cleanup_does_not_shrink_fixed_mobile_root_to_partial_child_sum() {
+fn cleanup_preserves_fixed_844_mobile_root_with_tall_content() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({
         "type": "frame",
         "id": "root",
-        "name": "Mobile Root",
+        "name": "Result",
         "x": 80,
         "y": 40,
         "width": 390,
         "height": 844,
         "layout": "vertical",
         "children": [
-            {"type": "frame", "id": "status", "name": "Status Bar", "width": "fill_container", "height": 32},
-            {"type": "frame", "id": "section", "name": "Fit Content Section", "width": "fill_container", "height": "fit_content", "children": [
-                {"type": "frame", "id": "card", "name": "Card", "width": "fill_container", "height": 120}
-            ]}
+            {"type":"frame", "id":"status", "name":"Status Bar", "width":"fill_container", "height":62},
+            {"type":"frame", "id":"viewport", "name":"Scroll Viewport", "role":"viewport",
+             "width":"fill_container", "height":"fill_container", "layout":"vertical", "clipContent":true,
+             "children":[{"type":"frame", "id":"long", "name":"Long Content", "width":"fill_container", "height":1000}]},
+            {"type":"frame", "id":"nav", "name":"Bottom Tab Bar", "role":"bottom-tab-bar",
+             "width":390, "height":72, "layout":"horizontal"}
         ]
     }))
     .expect("mobile root json");
@@ -305,19 +335,100 @@ fn cleanup_does_not_shrink_fixed_mobile_root_to_partial_child_sum() {
 
     run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
 
-    assert!(
-        sink.applied
-            .iter()
-            .all(|c| !matches!(c, EditorCommand::UpdateNode { .. })),
-        "cleanup must not shrink a fixed mobile root from 844 to the visible status-bar-only sum"
-    );
     let root = sink
         .state
         .active_children()
         .iter()
         .find(|n| n.id_str() == root_id)
         .expect("root survives cleanup");
-    assert_eq!(root.height_px(), Some(844.0));
+    assert_eq!(
+        root.height_px(),
+        Some(844.0),
+        "an explicit clipped fill-height viewport must preserve its numeric root"
+    );
+}
+
+#[test]
+fn cleanup_grows_390x844_poster_despite_mobile_geometry_and_status_bar() {
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Summer Festival Poster",
+        "width": 390,
+        "height": 844,
+        "layout": "vertical",
+        "gap": 16,
+        "children": [
+            // A status bar can be inherited from an earlier width-only mobile
+            // classification, so it is not sufficient proof of viewport intent.
+            {"type":"frame", "id":"status", "name":"Status Bar", "width":"fill_container", "height":62},
+            {"type":"frame", "id":"hero", "name":"Poster Hero", "width":"fill_container", "height":420},
+            {"type":"frame", "id":"lineup", "name":"Lineup", "width":"fill_container", "height":420}
+        ]
+    }))
+    .expect("poster root json");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|node| node.base().name.as_deref() == Some("Summer Festival Poster"))
+        .expect("poster survives cleanup");
+    assert!(
+        root.height_px().is_some_and(|height| height > 844.0),
+        "390x844 alone, even with an inherited status bar, must not freeze a poster root"
+    );
+}
+
+#[test]
+fn cleanup_grows_narrow_non_mobile_artboards_instead_of_freezing_them() {
+    for name in ["Narrow Artboard", "Component Board"] {
+        let mut sink = VecDocSink::new();
+        let tree: PenNode = serde_json::from_value(json!({
+            "type": "frame",
+            "id": "root",
+            "name": name,
+            "width": 390,
+            "height": 844,
+            "layout": "vertical",
+            "gap": 20,
+            "children": [
+                {"type":"frame", "id":"states-a", "name":"State Set A", "width":"fill_container", "height":430},
+                {"type":"frame", "id":"states-b", "name":"State Set B", "width":"fill_container", "height":430}
+            ]
+        }))
+        .expect("narrow artboard json");
+        sink.state.apply(EditorCommand::InsertSubtree {
+            nodes: vec![tree],
+            parent_id: NodeId::NONE,
+            page_id: None,
+        });
+        let root_id = sink.state.active_children()[0].id_str().to_string();
+        sink.applied.clear();
+
+        run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+
+        let root = sink
+            .state
+            .active_children()
+            .iter()
+            .find(|node| node.base().name.as_deref() == Some(name))
+            .expect("narrow artboard survives cleanup");
+        assert!(
+            root.height_px().is_some_and(|height| height > 844.0),
+            "{name} is not a mobile viewport without explicit mobile semantics"
+        );
+    }
 }
 
 #[test]
@@ -589,7 +700,7 @@ fn cleanup_recolors_white_bottom_nav_to_tinted_mobile_root_surface() {
 }
 
 #[test]
-fn cleanup_repairs_mobile_section_padding_and_overwide_children() {
+fn cleanup_preserves_authored_mobile_section_padding_and_width() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({
         "type": "frame",
@@ -634,31 +745,18 @@ fn cleanup_repairs_mobile_section_padding_and_overwide_children() {
     run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
 
     assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::SetNodeLayoutProp {
-                property,
-                value: op_editor_core::LayoutPropValue::NumberArray(values),
-                ..
-            } if property == "padding" && values == &vec![0.0, 24.0, 0.0, 24.0]
+        !sink.applied.iter().any(|command| matches!(
+            command,
+            EditorCommand::SetNodeLayoutProp { node_id, property, .. }
+                if (node_id.as_str() == "popular-section" && property == "padding")
+                    || (node_id.as_str() == "restaurant-card" && property == "width")
         )),
-        "mobile content sections need horizontal padding so headings/cards do not hug the screen edge"
-    );
-    assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::SetNodeLayoutProp {
-                property,
-                value: op_editor_core::LayoutPropValue::Keyword(value),
-                ..
-            } if property == "width" && value == "fill_container"
-        )),
-        "overwide children inside padded mobile sections should be converted to fill_container"
+        "mobile padding and full-bleed width are design intent"
     );
 }
 
 #[test]
-fn cleanup_clamps_mobile_absolute_overflow_inside_sections() {
+fn cleanup_preserves_authored_absolute_mobile_position() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({
         "type": "frame",
@@ -707,19 +805,17 @@ fn cleanup_clamps_mobile_absolute_overflow_inside_sections() {
     run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
 
     assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::UpdateNode {
-                x: Some(x),
-                ..
-            } if *x <= 286
+        !sink.applied.iter().any(|command| matches!(
+            command,
+            EditorCommand::UpdateNode { node_id, x: Some(_), .. }
+                if node_id.as_str() == "promo-icon-tile"
         )),
-        "absolute-positioned mobile children that exceed section width should be clamped back inside"
+        "an absolute decoration is not repositioned from a guessed content inset"
     );
 }
 
 #[test]
-fn cleanup_recolors_blank_gray_mobile_placeholders() {
+fn cleanup_preserves_blank_gray_mobile_surface_color() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({
         "type": "frame",
@@ -764,16 +860,16 @@ fn cleanup_recolors_blank_gray_mobile_placeholders() {
     run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
 
     assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::SetNodeFillHex { hex, .. } if hex == "#FF6B00"
+        !sink.applied.iter().any(|command| matches!(
+            command,
+            EditorCommand::SetNodeFillHex { node_id, .. } if node_id.as_str() == "tile"
         )),
-        "blank gray mobile food placeholders should be turned into colored icon/media tiles"
+        "a neutral surface is not recolored from its dimensions"
     );
 }
 
 #[test]
-fn cleanup_squares_mobile_icon_and_placeholder_tiles() {
+fn cleanup_preserves_authored_mobile_tile_shapes() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({
         "type": "frame",
@@ -836,26 +932,12 @@ fn cleanup_squares_mobile_icon_and_placeholder_tiles() {
     run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
 
     assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::UpdateNode {
-                width: Some(52),
-                height: Some(52),
-                ..
-            }
+        !sink.applied.iter().any(|command| matches!(
+            command,
+            EditorCommand::UpdateNode { node_id, width: Some(_), height: Some(_), .. }
+                if matches!(node_id.as_str(), "filter-button" | "restaurant-media")
         )),
-        "icon-only filter buttons should be normalized back to square controls"
-    );
-    assert!(
-        sink.applied.iter().any(|c| matches!(
-            c,
-            EditorCommand::UpdateNode {
-                width: Some(82),
-                height: Some(82),
-                ..
-            }
-        )),
-        "blank mobile media placeholders should be normalized back to square tiles"
+        "generic mobile geometry does not imply square controls or media"
     );
 }
 

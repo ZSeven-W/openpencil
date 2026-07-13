@@ -4,7 +4,7 @@ description: Auto-layout engine rules (flexbox-based positioning)
 phase: [generation]
 trigger: null
 priority: 10
-budget: 1700
+budget: 2000
 category: base
 ---
 
@@ -12,13 +12,16 @@ LAYOUT ENGINE (flexbox-based):
 
 - Frames with layout: "vertical"/"horizontal" auto-position children via gap, padding, justifyContent, alignItems.
 - NEVER set x/y on children inside layout containers.
-- CHILD SIZE RULE: child width must be <= parent content area. Use "fill_container" when in doubt.
-- In vertical layout: "fill_container" width stretches horizontally. In horizontal: fills remaining space.
+- CHILD WIDTH RULE: child width must be <= parent content area. Use `width="fill_container"` when in doubt; this advice is for WIDTH only.
+- HEIGHT DEFAULT: content-bearing frames, sections, cards, and wrappers use `height="fit_content"` (Hug). Use `height="fill_container"` only for an explicitly designated remainder consumer under a definite-height parent (for example a desktop sidebar/work surface or a clipped scroll viewport), or for cross-axis stretch inside a fixed-height horizontal control/row.
+- `space_between`, uneven card content, short page content, or a desire to remove bottom whitespace are NOT sufficient reasons to switch a content container to Full Height. Do not make every sibling card Full Height merely to equalize a row.
+- In vertical layout, `width="fill_container"` stretches horizontally. In horizontal layout it fills remaining width; a child's `height="fill_container"` stretches only across that row's definite cross-axis height.
 - CLIP CONTENT: clipContent: true clips overflowing children. ALWAYS use on cards with cornerRadius + image.
+- ABSOLUTE-STACK Z-ORDER: `layout: "none"` children are front-to-back by array index — `children[0]` is TOPMOST because canvas paint walks the array in reverse. Put badges/labels/controls/scrims BEFORE the full-bleed media or background they must cover. Keep the media as a separate EMPTY frame/rectangle slot for strict `G(...)`; never use the badge-owning stack itself as the image slot.
 - CARD HEIGHT: cards holding text + a CTA (promo banners, offer/info cards) MUST use height="fit_content" — NEVER a fixed pixel height. A fixed height + clipContent clips the bottom child (the CTA shows half / not at all). Reserve fixed heights for image-only cards with a known aspect ratio.
 - justifyContent: "space_between" (navbars), "center", "start"/"end", "space_around".
 - WIDTH CONSISTENCY: siblings must use same width strategy. Don't mix fixed-px and fill_container.
-- NEVER use "fill_container" on children of "fit_content" parent — circular dependency.
+- Never create a main-axis circular dependency by making a child Full Height solely under a Hug Height vertical parent.
 - Two-column: horizontal frame - two child frames each "fill_container" width.
 - Keep hierarchy shallow: no pointless wrappers. Only use wrappers with visual purpose (fill, padding).
 - Section root: width="fill_container", height="fit_content", layout="vertical".

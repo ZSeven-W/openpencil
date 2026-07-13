@@ -5,7 +5,7 @@ phase: [generation]
 trigger:
   keywords: [mobile, phone, ios, android, 移动, 手机]
 priority: 25
-budget: 1700
+budget: 2000
 category: domain
 ---
 
@@ -14,7 +14,7 @@ MOBILE APP — MANDATORY THREE-SECTION ARCHITECTURE:
 Every mobile screen is composed as a vertical stack of exactly three sections.
 You MUST define all three before generating any content.
 
-Screen-height contract: the root frame is width=390-393, height="fit_content" seeded at 844. The screen resizes to fit its content — it does NOT lock to a real device height. Never pad to fill an artificial 844px column.
+Screen-height contract: use numeric 390-393×844 as a temporary construction seed so an empty skeleton is visible. Before finishing, a normal content-driven mobile page switches its root to `height="fit_content"` (Hug), matching its completed flow. Keep a numeric viewport only when the user explicitly requested that viewport/device frame or the design deliberately contains one clipped viewport body that must consume remaining height.
 
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
@@ -29,6 +29,8 @@ The status bar (time, signal, wifi, battery) is **automatically pre-inserted** b
 Chip rows (filter/date/guests pills): each chip HUGS (width fit_content, single-line text, height 36-44, cornerRadius=full); the ROW clips overflow (clipContent) instead of squeezing chips — never let a pill's text wrap. A badge/pill/button frame ALWAYS carries its content (text or icon) — an empty decorated frame renders as a mystery blob.
 
 ALL content elements must sit inside ONE wrapper container (vertical stack).
+
+The ordinary content wrapper is `width="fill_container"`, `height="fit_content"`, `layout="vertical"`. Its child sections/cards also Hug Height. Only a deliberately clipped scroll viewport under an explicit fixed-height root may use `height="fill_container"`; in that case it is the ONE named remainder consumer, not a sizing mode copied onto its sections.
 
 Wrapper provides:
 
@@ -58,7 +60,7 @@ Rules:
 - Exact user mobile tokens win: "圆角 8px / 间距 12px" means ordinary radius=8 and repeated gaps=12.
 - Title font size must be uniform across ALL screens in the app
 - Design for one-handed use: primary actions in lower half
-- Single vertical scroll (avoid nested scrolls)
+- When the screen is explicitly a fixed viewport, use at most one clipped content viewport; otherwise keep the content wrapper Hug Height. Avoid nested scrolls.
 - Touch targets: minimum 44x44px
 - Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards. Choose a distinct concept for the domain and make one signature moment carry the personality.
 

@@ -143,7 +143,7 @@ Key aesthetics:
 - Screen width: 1440px
 - Activity bar: 48px wide, vertical, icon-only, centered icons
 - Sidebar panel: 240px wide, vertical, gap 0 (items use padding)
-- Content area: fill_container, vertical, gap 24-32, padding [24, 32]
+- Content area: width fill_container, height fit_content, vertical, gap 24-32, padding [24, 32]
 - Tab underline indicator: 2px bottom border in accent blue
 
 ## Corner Radius

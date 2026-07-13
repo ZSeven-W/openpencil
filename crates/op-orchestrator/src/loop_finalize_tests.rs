@@ -50,6 +50,35 @@ fn fill_of(state: &EditorState, name: &str) -> Option<serde_json::Value> {
     Some(v.get("fill").cloned().unwrap_or(json!(null)))
 }
 
+#[test]
+fn loop_finalize_preserves_explicit_mobile_viewport_with_tall_content() {
+    let mut state = state_with_forest(json!([{
+        "type": "frame",
+        "id": "root",
+        "name": "Result",
+        "width": 390,
+        "height": 844,
+        "layout": "vertical",
+        "children": [
+            {"type":"frame", "id":"status", "name":"Status Bar", "width":"fill_container", "height":62},
+            {"type":"frame", "id":"viewport", "name":"Scroll Viewport", "role":"viewport",
+             "width":"fill_container", "height":"fill_container", "layout":"vertical", "clipContent":true,
+             "children":[{"type":"frame", "id":"long", "name":"Long Content", "width":"fill_container", "height":1000}]},
+            {"type":"frame", "id":"nav", "name":"Bottom Tab Bar", "role":"bottom-tab-bar",
+             "width":390, "height":72, "layout":"horizontal"}
+        ]
+    }]));
+
+    apply_loop_finalize(&mut state);
+
+    let root = find_by_name(state.active_children(), "Result").expect("root survives");
+    assert_eq!(
+        root.height_px(),
+        Some(844.0),
+        "an explicit clipped fill-height viewport keeps its numeric root"
+    );
+}
+
 /// `apply_loop_finalize` on a small whole-doc forest must run the Class-A
 /// sequence: it resolves semantic roles (proving `resolve_forest_roles` ran)
 /// AND strips a white structural-wrapper fill (proving `post_pass_forest`'s
@@ -435,4 +464,160 @@ fn theme_polarity_split_variables_are_healed() {
         tp.eq_ignore_ascii_case("#FAFAFA"),
         "correctly-opposite text variable untouched, got {tp}"
     );
+}
+
+#[test]
+fn loop_finalize_does_not_delete_or_resize_ambiguous_image_layers() {
+    let mut state = state_with_forest(serde_json::from_str(r##"[{
+        "type": "frame", "id": "root", "name": "Travel Page", "width": 800, "height": 600,
+        "layout": "vertical", "children": [{
+            "type": "frame", "id": "section", "name": "Popular", "width": "fill_container",
+            "height": 260, "layout": "vertical", "children": [{
+                "type": "frame", "id": "rail", "name": "Destination Rail", "width": "fill_container",
+                "height": 220, "layout": "horizontal", "children": [{
+                    "type": "frame", "id": "card", "name": "Bali Card", "width": 200,
+                    "height": 210, "layout": "vertical", "children": [{
+                        "type": "frame", "id": "band", "name": "Bali Media", "width": 200,
+                        "height": 56, "layout": "none", "clipContent": true, "children": [
+                            {"type":"frame","id":"plate","name":"Bali Image Plate","x":0,"y":0,
+                             "width":200,"height":130,"fill":[{"type":"image","url":"data:image/png;base64,AAAA"}]},
+                            {"type":"image","id":"photo","name":"Bali Photo","x":0,"y":0,
+                             "width":200,"height":130,"src":"data:image/png;base64,BBBB"}
+                        ]
+                    }]
+                }]
+            }]
+        }]
+    }]"##).expect("valid image-layer fixture"));
+
+    apply_loop_finalize(&mut state);
+
+    let band = find_by_name(state.active_children(), "Bali Media").expect("band survives");
+    assert_eq!(
+        band.height_px(),
+        Some(56.0),
+        "a clipped band stays authored; image height is not design intent"
+    );
+    assert!(
+        find_by_name(state.active_children(), "Bali Image Plate").is_some(),
+        "an image-filled layer is not deleted merely because an image node shares its parent"
+    );
+    let photo = find_by_name(state.active_children(), "Bali Photo").expect("photo survives");
+    assert_eq!(
+        photo.height_px(),
+        Some(56.0),
+        "the image may conform to the explicit slot, but the slot never expands from image defaults"
+    );
+}
+
+#[test]
+fn loop_finalize_does_not_turn_image_cards_into_category_chips() {
+    let mut state = state_with_forest(serde_json::from_str(r##"[{
+        "type":"frame", "id":"root", "name":"Travel", "width":375, "height":800,
+        "layout":"vertical", "children":[{
+            "type":"frame", "id":"popular", "name":"Popular Destinations",
+            "width":"fill_container", "height":"fit_content", "layout":"vertical",
+            "children":[{
+                "type":"frame", "id":"row", "name":"Cards Row", "layout":"horizontal",
+                "width":"fit_content", "height":"fit_content", "gap":12,
+                "justifyContent":"space_between", "children":[
+                    {"type":"frame", "id":"c1", "name":"Santorini Card", "layout":"vertical",
+                     "width":"fill_container", "height":"fill_container", "gap":12,
+                     "cornerRadius":16, "children":[
+                        {"type":"frame", "id":"p1", "name":"Santorini Photo Wrap",
+                         "layout":"none", "width":"fill_container", "height":140,
+                         "clipContent":true, "children":[
+                            {"type":"image", "id":"i1", "name":"Santorini Photo", "src":"",
+                             "imagePrompt":"Santorini Greece", "width":"fill_container", "height":140},
+                            {"type":"frame", "id":"f1", "name":"Favorite", "children":[
+                                {"type":"icon_font", "id":"h1", "iconFontName":"heart", "width":18, "height":18}
+                            ]}
+                         ]},
+                        {"type":"text", "id":"t1", "content":"Santorini", "width":"fit_content", "height":"fit_content"}
+                     ]},
+                    {"type":"frame", "id":"c2", "name":"Kyoto Card", "layout":"vertical",
+                     "width":"fill_container", "height":"fill_container", "gap":12,
+                     "cornerRadius":16, "children":[
+                        {"type":"frame", "id":"p2", "name":"Kyoto Photo Wrap",
+                         "layout":"none", "width":"fill_container", "height":140,
+                         "clipContent":true, "children":[
+                            {"type":"image", "id":"i2", "name":"Kyoto Photo", "src":"",
+                             "imagePrompt":"Kyoto temple", "width":"fill_container", "height":140},
+                            {"type":"frame", "id":"f2", "name":"Favorite", "children":[
+                                {"type":"icon_font", "id":"h2", "iconFontName":"heart", "width":18, "height":18}
+                            ]}
+                         ]},
+                        {"type":"text", "id":"t2", "content":"Kyoto", "width":"fit_content", "height":"fit_content"}
+                     ]},
+                    {"type":"frame", "id":"c3", "name":"Lisbon Card", "layout":"vertical",
+                     "width":"fill_container", "height":"fill_container", "gap":12,
+                     "cornerRadius":16, "children":[
+                        {"type":"frame", "id":"p3", "name":"Lisbon Photo Wrap",
+                         "layout":"none", "width":"fill_container", "height":140,
+                         "clipContent":true, "children":[
+                            {"type":"image", "id":"i3", "name":"Lisbon Photo", "src":"",
+                             "imagePrompt":"Lisbon Portugal", "width":"fill_container", "height":140},
+                            {"type":"frame", "id":"f3", "name":"Favorite", "children":[
+                                {"type":"icon_font", "id":"h3", "iconFontName":"heart", "width":18, "height":18}
+                            ]}
+                         ]},
+                        {"type":"text", "id":"t3", "content":"Lisbon", "width":"fit_content", "height":"fit_content"}
+                     ]}
+                ]
+            }]
+        }]
+    }]"##).expect("valid image-card rail fixture"));
+
+    apply_loop_finalize(&mut state);
+
+    let card = find_by_name(state.active_children(), "Santorini Card").expect("card survives");
+    let card_json = serde_json::to_value(card).expect("card json");
+    assert_eq!(card_json["cornerRadius"], json!(16.0));
+    let media = find_by_name(state.active_children(), "Santorini Photo Wrap")
+        .expect("media wrapper survives");
+    let media_json = serde_json::to_value(media).expect("media json");
+    assert_eq!(media_json["height"], json!(140.0));
+    assert_eq!(media_json["layout"], json!("none"));
+}
+
+#[test]
+fn loop_finalize_preserves_fixed_cards_in_explicit_scroller() {
+    let card = |id: &str, name: &str| {
+        json!({
+            "type":"frame", "id":id, "name":name, "layout":"vertical",
+            "width":210, "height":240, "children":[
+                {"type":"image", "id":format!("{id}-image"), "name":format!("{name} Photo"),
+                 "src":"https://example.com/photo.jpg", "width":210, "height":140},
+                {"type":"icon_font", "id":format!("{id}-heart"), "iconFontName":"heart",
+                 "width":18, "height":18},
+                {"type":"text", "id":format!("{id}-label"), "content":name,
+                 "width":"fit_content", "height":20}
+            ]
+        })
+    };
+    let forest = json!([{
+        "type":"frame", "id":"root", "name":"Travel", "width":390, "height":844,
+        "layout":"vertical", "children":[{
+            "type":"frame", "id":"rail", "name":"Popular Scroller",
+            "width":"fill_container", "height":"fit_content", "layout":"horizontal",
+            "justifyContent":"start", "clipContent":true, "gap":12,
+            "children":[card("c1", "Santorini"), card("c2", "Kyoto"), card("c3", "Banff")]
+        }]
+    }]);
+    let mut state = state_with_forest(serde_json::from_value(forest).expect("valid scroller"));
+
+    apply_loop_finalize(&mut state);
+
+    let rail = find_by_name(state.active_children(), "Popular Scroller").expect("rail survives");
+    let rail_json = serde_json::to_value(rail).expect("rail json");
+    assert_eq!(rail_json["justifyContent"], json!("start"));
+    assert_eq!(rail_json["clipContent"], json!(true));
+    for name in ["Santorini", "Kyoto", "Banff"] {
+        let card = find_by_name(state.active_children(), name).expect("card survives");
+        assert_eq!(
+            serde_json::to_value(card).expect("card json")["width"],
+            json!(210.0),
+            "fixed card width is the authored overflow intent"
+        );
+    }
 }

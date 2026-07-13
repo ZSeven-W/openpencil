@@ -278,30 +278,24 @@ pub fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) 
     }
 }
 
-/// Content bounding box of the active page (min_x, min_y, max_x,
-/// max_y) in document coordinates, or `None` for an empty page. Public
-/// because both the carved load path and the desktop residual's
-/// `load_into_host` log it (codex Issue 4 — shared helper).
+/// Layout-resolved content bounding box of the active page (min_x, min_y,
+/// max_x, max_y) in document coordinates, or `None` for an empty page.
+///
+/// The canonical document can store keyword sizing such as `fit_content`, so
+/// raw authored bounds are insufficient here: a content-sized root has a raw
+/// height of zero even though the canvas lays it out to its children's height.
+/// Keep open diagnostics on the same resolved scene geometry used by canvas
+/// framing and raster export.
 pub fn active_page_bbox(state: &EditorState) -> Option<(f64, f64, f64, f64)> {
-    use op_editor_core::geometry::own_bounds;
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-    for n in state.active_children() {
-        let r = own_bounds(n);
-        if r.w > 0.0 || r.h > 0.0 {
-            min_x = min_x.min(r.x);
-            min_y = min_y.min(r.y);
-            max_x = max_x.max(r.x + r.w);
-            max_y = max_y.max(r.y + r.h);
-        }
-    }
-    if min_x.is_finite() {
-        Some((min_x, min_y, max_x, max_y))
-    } else {
-        None
-    }
+    let bounds = op_pen_loader::editor_state_to_layout_scene(state).content_bounds()?;
+    let min_x = f64::from(bounds.origin.x);
+    let min_y = f64::from(bounds.origin.y);
+    Some((
+        min_x,
+        min_y,
+        min_x + f64::from(bounds.size.x),
+        min_y + f64::from(bounds.size.y),
+    ))
 }
 
 /// Whether `path` carries a document extension this build opens
@@ -470,6 +464,36 @@ mod tests {
             document_fingerprint(&mutated),
             "a structural change moves the fingerprint"
         );
+    }
+
+    #[test]
+    fn active_page_bbox_resolves_fit_content_root_height() {
+        let doc = jian_ops_schema::load_str(
+            r#"{
+              "version":"0.8.0",
+              "children":[{
+                "type":"frame", "id":"root", "name":"Explore",
+                "x":12, "y":24, "width":390, "height":"fit_content",
+                "layout":"vertical",
+                "children":[
+                  {"type":"frame", "id":"header", "width":"fill_container", "height":62},
+                  {"type":"frame", "id":"content", "width":"fill_container", "height":616},
+                  {"type":"frame", "id":"tabs", "width":"fill_container", "height":72}
+                ]
+              }]
+            }"#,
+        )
+        .expect("fixture parses")
+        .value;
+        let state = EditorState::from_document(doc);
+
+        let (min_x, min_y, max_x, max_y) =
+            active_page_bbox(&state).expect("fit-content root has resolved bounds");
+
+        assert!((min_x - 12.0).abs() < 0.01, "min_x={min_x}");
+        assert!((min_y - 24.0).abs() < 0.01, "min_y={min_y}");
+        assert!((max_x - 402.0).abs() < 0.01, "max_x={max_x}");
+        assert!((max_y - 774.0).abs() < 0.01, "max_y={max_y}");
     }
 
     #[test]

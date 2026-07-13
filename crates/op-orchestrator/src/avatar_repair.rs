@@ -1,8 +1,9 @@
 //! Avatar / row-thumbnail slot contract repair.
 //!
-//! An avatar is a fixed SQUARE circle: `width == height`, `cornerRadius` ≥
-//! half the size, `clipContent: true`, with its image child filling both
-//! axes. Models routinely violate the shape half of that contract (measured:
+//! An explicitly named/role-tagged avatar is a fixed SQUARE circle:
+//! `width == height`, `cornerRadius` ≥ half the size, `clipContent: true`,
+//! with its image child filling both axes. Models routinely violate that
+//! contract (measured:
 //! GLM-5.2 test0711-2.op built an 88×44 pill holding a 44×44 image — on
 //! canvas it reads as an empty grey circle NEXT TO a square photo). The
 //! shape is a CONTRACT (a round avatar slot is round), so it is repaired
@@ -24,50 +25,6 @@ use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 /// A pill-radius frame taller than this is a hero/banner, not an avatar.
 const MAX_AVATAR_SIDE: f64 = 72.0;
 
-/// A media slot holding `[empty stub frame, image]` as SIBLINGS — the model
-/// laid a placeholder frame first, then put the real image NEXT TO it
-/// instead of inside, so the photo renders beside an empty box (measured:
-/// "Midnight Drive" cover, test0711-22 00:5x). The stub (FIRST child, no
-/// children of its own) is dropped and the image takes the slot. A scrim
-/// overlay is the reverse order ([image, frame]) and is never touched.
-pub(crate) fn remove_empty_twin_stubs_beside_images_for_all_roots(sink: &mut dyn DocSink) {
-    let repairs: Vec<(NodeId, NodeId)> = {
-        let mut out = Vec::new();
-        fn walk(node: &PenNode, out: &mut Vec<(NodeId, NodeId)>) {
-            if let Some(children) = node.children() {
-                if let [stub, image] = children.as_slice() {
-                    let stub_is_empty_frame = matches!(stub, PenNode::Frame(_))
-                        && stub.children().is_none_or(|c| c.is_empty());
-                    if stub_is_empty_frame && matches!(image, PenNode::Image(_)) {
-                        out.push((
-                            NodeId::new(stub.id_str().to_string()),
-                            NodeId::new(image.id_str().to_string()),
-                        ));
-                    }
-                }
-                for child in children {
-                    walk(child, out);
-                }
-            }
-        }
-        for root in sink.state().active_children() {
-            walk(root, &mut out);
-        }
-        out
-    };
-    for (stub_id, image_id) in repairs {
-        sink.apply(EditorCommand::DeleteNode {
-            node_id: stub_id,
-            page_id: None,
-        });
-        sink.apply(EditorCommand::PatchNodeData {
-            node_id: image_id,
-            patch_json: r#"{"width":"fill_container","height":"fill_container"}"#.to_string(),
-            page_id: None,
-        });
-    }
-}
-
 pub(crate) fn repair_avatar_slots_for_all_roots(sink: &mut dyn DocSink) {
     let repairs: Vec<(NodeId, String)> = {
         let mut out = Vec::new();
@@ -85,19 +42,46 @@ pub(crate) fn repair_avatar_slots_for_all_roots(sink: &mut dyn DocSink) {
     }
 }
 
-/// Avatar-query vocabulary — WE teach the model to bind these words into
-/// avatar image search queries, so an image named with them is an avatar by
-/// our own contract.
-const AVATAR_NAME_WORDS: [&str; 4] = ["face", "headshot", "avatar", "portrait"];
+fn is_explicit_avatar_slot(node: &PenNode) -> bool {
+    node.base()
+        .role
+        .as_deref()
+        .is_some_and(|role| matches!(role.to_ascii_lowercase().as_str(), "avatar" | "user-avatar"))
+        || node.base().name.as_deref().is_some_and(|name| {
+            name.chars()
+                .filter(|character| character.is_ascii_alphanumeric())
+                .collect::<String>()
+                .to_ascii_lowercase()
+                .contains("avatar")
+        })
+}
 
-fn is_avatar_named_image(node: &PenNode) -> bool {
-    let PenNode::Image(image) = node else {
+fn is_explicit_row_media_slot(node: &PenNode) -> bool {
+    if node.base().role.as_deref() == Some("image-placeholder") {
+        return true;
+    }
+    let Some(name) = node.base().name.as_deref() else {
         return false;
     };
-    image.base.name.as_deref().is_some_and(|name| {
-        let lowered = name.to_ascii_lowercase();
-        AVATAR_NAME_WORDS.iter().any(|word| lowered.contains(word))
-    })
+    let compact = name
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    [
+        "art",
+        "artwork",
+        "cover",
+        "thumb",
+        "thumbnail",
+        "avatar",
+        "img",
+        "image",
+        "photo",
+        "media",
+    ]
+    .iter()
+    .any(|suffix| compact.ends_with(suffix))
 }
 
 fn collect(node: &PenNode, out: &mut Vec<(NodeId, String)>) {
@@ -115,9 +99,9 @@ fn collect(node: &PenNode, out: &mut Vec<(NodeId, String)>) {
 }
 
 /// Returns `(slot patch, optional image-child patch)` when `node` is a
-/// mis-shaped avatar slot (small pill-radius frame whose only child is an
-/// image but isn't a clipping square) or, inside a horizontal row, a row
-/// thumbnail whose `fill_container` width steals the row.
+/// mis-shaped explicitly named avatar slot or, inside a horizontal row, an
+/// explicitly named media thumbnail whose `fill_container` width steals the
+/// row.
 fn avatar_slot_repair(
     node: &PenNode,
     in_horizontal_row: bool,
@@ -132,20 +116,28 @@ fn avatar_slot_repair(
     if !matches!(only_child, PenNode::Image(_)) {
         return None;
     }
-    // Avatar-named image branch: the slot ITSELF may carry no numeric
+    let radius = match frame.container.corner_radius.as_ref() {
+        Some(CornerRadius::Uniform(radius)) => *radius,
+        Some(CornerRadius::PerCorner(corners)) => corners.iter().copied().fold(f64::MAX, f64::min),
+        None => 0.0,
+    };
+    // Explicit-avatar branch: the slot ITSELF may carry no numeric
     // height at all (measured: an "AvatarImg" slot authored fill×fill
     // holding a fill×300 headshot resolved as a 42×300 strip down the
-    // screen, test0711-22 00:25) — the image's avatar-query NAME is the
-    // contract signal, and the whole slot is normalized to a 44px circle.
-    if is_avatar_named_image(only_child) {
-        let side = node
-            .height_px()
-            .filter(|h| *h > 0.0 && *h <= MAX_AVATAR_SIDE)
-            .unwrap_or(44.0);
-        let oversized_image = only_child.width_px().is_some_and(|w| w > MAX_AVATAR_SIDE)
-            || only_child.height_px().is_some_and(|h| h > MAX_AVATAR_SIDE);
+    // screen, test0711-22 00:25). The slot's authored Avatar name/role is the
+    // contract signal; image words such as "portrait" are not sufficient
+    // because a hero image can also be a portrait.
+    if is_explicit_avatar_slot(node) {
+        let side = match node.height_px() {
+            Some(height) if height > 0.0 && height <= MAX_AVATAR_SIDE => height,
+            Some(_) => return None,
+            None => 44.0,
+        };
+        let clips = frame.container.clip_content == Some(true);
+        let image_fills = image_fills_both_axes(only_child);
         let slot_not_square = node.width_px() != Some(side) || node.height_px() != Some(side);
-        if oversized_image || slot_not_square {
+        let slot_not_round = radius + f64::EPSILON < side / 2.0;
+        if !clips || !image_fills || slot_not_square || slot_not_round {
             let slot_patch = format!(
                 r#"{{"width":{side},"height":{side},"clipContent":true,"cornerRadius":{radius}}}"#,
                 side = side.round(),
@@ -162,25 +154,21 @@ fn avatar_slot_repair(
     if height <= 0.0 || height > MAX_AVATAR_SIDE {
         return None;
     }
-    let radius = match frame.container.corner_radius.as_ref() {
-        Some(CornerRadius::Uniform(r)) => *r,
-        Some(CornerRadius::PerCorner(corners)) => corners.iter().copied().fold(f64::MAX, f64::min),
-        None => 0.0,
-    };
     let width = node.width_px();
-    let pill = radius >= height / 2.0 - 1.0;
     // Row-thumb branch: only the unbounded flex-steal shape (width
     // fill_container) qualifies — a deliberately wide numeric thumb is a
-    // design decision and stays untouched.
+    // design decision and stays untouched. A media name/role is required;
+    // clipping geometry alone does not prove that a small surface is a thumb.
     let row_thumb = in_horizontal_row
-        && width_is_fill_container(&frame.container.width)
+        && sizing_is_fill_container(&frame.container.width)
+        && is_explicit_row_media_slot(node)
         && (radius > 0.0 || frame.container.clip_content == Some(true));
-    if !pill && !row_thumb {
+    if !row_thumb {
         return None;
     }
     let square = width == Some(height);
     let clips = frame.container.clip_content == Some(true);
-    let image_fills = only_child.width_px().is_none() && only_child.height_px().is_none();
+    let image_fills = image_fills_both_axes(only_child);
     if square && clips && image_fills {
         return None;
     }
@@ -208,7 +196,12 @@ fn node_layout_is_horizontal(node: &PenNode) -> bool {
     matches!(layout, Some(LayoutMode::Horizontal))
 }
 
-fn width_is_fill_container(width: &Option<jian_ops_schema::sizing::SizingBehavior>) -> bool {
+fn image_fills_both_axes(node: &PenNode) -> bool {
+    matches!(node, PenNode::Image(image)
+        if sizing_is_fill_container(&image.width) && sizing_is_fill_container(&image.height))
+}
+
+fn sizing_is_fill_container(width: &Option<jian_ops_schema::sizing::SizingBehavior>) -> bool {
     use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
     matches!(
         width,

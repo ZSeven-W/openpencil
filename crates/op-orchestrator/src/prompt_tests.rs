@@ -215,7 +215,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
         false,
     );
 
-    let required = "Page sections:|Food Categories [category chips]|\"fill_container\"|\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE SECTION CHROME|MOBILE VERTICAL RHYTHM|MOBILE TOP RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE QUALITY|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|MOBILE NAV SHADOW|NO FIXED FOOD TEMPLATE|Do not default to the same search + categories + orange promo + two product cards composition|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE|SIGNATURE MOMENT|WOW FACTOR|COMPOSITIONAL CONTRAST|PREMIUM DETAIL|NO DECORATION SPAM";
+    let required = "Page sections:|Food Categories [category chips]|\"fill_container\"|\"fit_content\"|Generate enough elements|MOBILE STATUS BAR|time, signal, wifi, battery|NO PHONE MOCKUP WRAPPER|MOBILE WIDTH SAFETY|MOBILE SINGLE CONTENT RAIL|MOBILE SEARCH BAR|MOBILE SECTION CHROME|MOBILE VERTICAL RHYTHM|MOBILE TOP RHYTHM|MOBILE GRID ALIGNMENT|MOBILE CARD OVERLAYS|MOBILE IMAGE PRESENTATION|verify only rendering integrity|Do not judge or replace a displayed image during self-check based on subject relevance|explicit user-requested image edit remains allowed|NO BLANK PLACEHOLDERS|MOBILE NAV SURFACE|MOBILE NAV SHADOW|NO FIXED FOOD TEMPLATE|Do not default to the same search + categories + orange promo + two product cards composition|TYPOGRAPHY HIERARCHY|DENSITY|VISUAL HIERARCHY|SPACING CONSISTENCY|CRAFT POLISH|MEDIA CONSISTENCY|ICON SCALE|SIGNATURE MOMENT|WOW FACTOR|COMPOSITIONAL CONTRAST|PREMIUM DETAIL|NO DECORATION SPAM";
     // Mobile UI guardrails now load via the `mobile-ui` skill (system prompt);
     // section + quality markers stay in the user prompt. Accept either. The
     // `"fill_container"` / `"fit_content"` markers are quote-only (no
@@ -230,6 +230,8 @@ fn subagent_prompt_carries_ts_layout_contract() {
             "missing {required}"
         );
     }
+    assert!(!cr.system_prompt.contains("MOBILE IMAGE QUALITY"));
+    assert!(!cr.user_prompt.contains("MOBILE IMAGE QUALITY"));
 }
 
 #[test]

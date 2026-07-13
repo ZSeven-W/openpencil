@@ -152,7 +152,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 240px wide, vertical, near-black (#0A0A0A) with red active indicators and glow effects
-- Content area: fill_container, vertical, gap 20-24, padding [24, 32]
+- Content area: width fill_container, height fit_content, vertical, gap 20-24, padding [24, 32]
 - Cards use 1px stroke (#262626) with no shadow (flat dark surfaces, glow accents instead)
 - Header bar: 60px height, #0A0A0A background, bottom border #262626
 - Featured panels may use gradient borders (red-to-orange) or subtle glow (#EF444410 background)

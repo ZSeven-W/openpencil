@@ -188,10 +188,7 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
             collect_oversized_image_fixes(&v, &mut cmds);
             collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
-            collect_image_slot_fixes(&v, &rects, &mut cmds);
-            collect_overwide_control_row_fixes(&v, &rects, &mut cmds);
             collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
-            collect_starved_rail_card_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
             collect_card_row_height_fixes(&v, &rects, &mut cmds, false);
             collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
@@ -578,10 +575,10 @@ fn collect_row_gap_fixes(v: &Value, rects: &HashMap<String, Rect>, cmds: &mut Ve
 /// Max tolerated resolved height delta inside a KPI/stat card row.
 const CARD_ROW_HEIGHT_EPS: f64 = 6.0;
 
-/// A horizontal row of painted KPI/stat cards whose authored card heights all
-/// hug content but whose real layout is visibly ragged. Equalize by making each
-/// card fill the row cross-axis; jian resolves fill-of-hug to the row content
-/// height, guarded by `real_layout_fill_of_hug_parent_resolves_to_content_not_collapse`.
+/// A horizontal row of painted KPI/stat cards whose parent explicitly requests
+/// cross-axis stretch. Jian currently renders `alignItems:"stretch"` as start,
+/// so implement that authored intent by making each Hug card fill the row's
+/// cross axis. A ragged row without explicit stretch remains content-sized.
 fn collect_card_row_height_fixes(
     v: &Value,
     rects: &HashMap<String, Rect>,
@@ -589,7 +586,8 @@ fn collect_card_row_height_fixes(
     in_table: bool,
 ) {
     let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
-    if layout_str(v) == Some("horizontal") && !clips && !in_table {
+    let explicitly_stretched = v.get("alignItems").and_then(Value::as_str) == Some("stretch");
+    if layout_str(v) == Some("horizontal") && explicitly_stretched && !clips && !in_table {
         let kids = children(v);
         if kids.len() >= 3
             && kids.iter().all(is_colored_frame_card)
@@ -732,19 +730,20 @@ fn collect_row_overfull_fixes(
                 let gap = num(v, "gap");
                 let sum: f64 = kid_rects.iter().flatten().map(|r| r.w).sum::<f64>()
                     + gap * (kids.len().saturating_sub(1)) as f64;
+                let is_overfull = sum > inner + ROW_OVERFULL_EPS;
                 // NARROW-CARD anatomy guard, independent of the text measure:
                 // a display value + a painted chip can't share a ~200px line
                 // even when a lossy measure claims they fit (the estimate
                 // backend under-reads 40px display digits; the PAINT
                 // overlapped — measured). Reference metric cards stack them.
-                let stacked = if inner <= 260.0 {
+                let stacked = if is_overfull && inner <= 260.0 {
                     let before = cmds.len();
                     stack_overfull_value_chip_row(v, &kids, rects, cmds);
                     cmds.len() > before
                 } else {
                     false
                 };
-                if !stacked && sum > inner + ROW_OVERFULL_EPS {
+                if !stacked && is_overfull {
                     // Widest rigid child ≥120px, containers before text.
                     let candidate = kids
                         .iter()
@@ -900,6 +899,7 @@ pub fn geometry_diagnostics(state: &EditorState) -> Vec<String> {
             break;
         }
         if let Ok(v) = serde_json::to_value(root) {
+            bottom_nav_root_containment_diagnostic(&v, &rects, &mut out);
             bottom_nav_order_diagnostic(&v, &mut out);
             collect_diagnostics(&v, &rects, &mut out);
         }
@@ -946,6 +946,75 @@ fn bottom_nav_order_diagnostic(root: &Value, out: &mut Vec<String>) {
             diag_label(late)
         ));
     }
+}
+
+/// A direct, in-flow bottom tab bar must resolve inside its mobile artboard.
+///
+/// `clipContent` normally suppresses overflow diagnostics because clipping is
+/// often deliberate (avatars, cover images, carousels). A bottom navigation
+/// that the root's own flow places below the root is different: clipping hides
+/// required app chrome. Keep this exception deliberately narrow — mobile root,
+/// direct child, bottom-specific semantics, and no authored absolute position.
+fn bottom_nav_root_containment_diagnostic(
+    root: &Value,
+    rects: &HashMap<String, Rect>,
+    out: &mut Vec<String>,
+) {
+    const MOBILE_ROOT_MAX_WIDTH: f64 = 480.0;
+    const BOUNDS_EPS: f64 = 1.0;
+
+    if out.len() >= MAX_DIAGNOSTICS {
+        return;
+    }
+    let Some(root_rect) = root
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| rects.get(id))
+    else {
+        return;
+    };
+    if root_rect.w > MOBILE_ROOT_MAX_WIDTH
+        || root_rect.h < 500.0
+        || root.get("layout").and_then(Value::as_str) != Some("vertical")
+    {
+        return;
+    }
+
+    let Some(nav) = children(root).last().filter(|child| {
+        let is_bottom_nav = child.get("role").and_then(Value::as_str) == Some("bottom-tab-bar")
+            || child
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| {
+                    let name = name.to_ascii_lowercase();
+                    name.contains("bottom tab")
+                        || name.contains("bottom nav")
+                        || name.contains("bottom navigation")
+                });
+        is_bottom_nav && !has_authored_position(child)
+    }) else {
+        return;
+    };
+    let Some(nav_rect) = nav
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| rects.get(id))
+    else {
+        return;
+    };
+
+    let root_bottom = root_rect.y + root_rect.h;
+    let nav_bottom = nav_rect.y + nav_rect.h;
+    if nav_bottom <= root_bottom + BOUNDS_EPS {
+        return;
+    }
+
+    out.push(format!(
+        "mobile-root-bottom-nav-overflow: {} is a direct flow bottom tab bar whose resolved bottom is {:.0}px past {}'s bottom. Keep the content wrapper Hug Height or grow the mobile root so the bottom navigation remains inside the artboard.",
+        diag_label(nav),
+        nav_bottom - root_bottom,
+        diag_label(root)
+    ));
 }
 
 /// `Name (id)` label for a diagnostic line.
@@ -1115,132 +1184,6 @@ fn collect_grow_to_fit_fixes(
     }
 }
 
-/// A horizontal rail whose fill-width cards resolved SKINNIER than their own
-/// fixed-width content (a 5-card destination rail where every fill card got a
-/// ~58px share while carrying a 160px image + 188px label row — the images
-/// painted as clipped slivers and every city name truncated, measured
-/// test0711-1-glm). The authored fixed content is proof of the intended card
-/// width, so the repair follows it: cards hug their content, the rail becomes
-/// an overflowing scroller, and `space_between` (meaningless once overfull)
-/// falls back to start+gap. Marking the rail `clipContent` is load-bearing —
-/// it is what keeps the next round's overfull-row flexifier from flipping the
-/// cards straight back to fill_container.
-const RAIL_STARVE_EPS: f64 = 12.0;
-const RAIL_MIN_CARDS: usize = 3;
-/// A card is only STARVED when it is genuinely unusable — the measured case
-/// was 58px cards around 160px photos. A card that merely CROPS an oversized
-/// photo (a 400x300 plate clipped into a 170px card) looks right and is not
-/// starved; widening it to the plate would blow one card across the whole
-/// screen. That happened (user report 2026-07-12: "自检又违背设计意图了").
-const RAIL_CARD_STARVED_W: f64 = 120.0;
-/// …and the demand is only credible as an INTENT if the resulting cards still
-/// read as a scroll rail (the next card peeks). A "demand" wider than this
-/// share of the rail is an oversized image, not a width intent — that class
-/// belongs to `collect_oversized_image_fixes`, which shrinks the image.
-const RAIL_CARD_MAX_FRACTION: f64 = 0.72;
-
-/// The widest fixed-width DESCENDANT plus the card's own side padding — the
-/// width this card provably needs to show its authored content. Descendants,
-/// not just direct children: a destination card's photo is often an
-/// absolutely-positioned 200px plate two levels down, and that number is
-/// still the card's authored width intent (measured test0711-1-glm, where a
-/// direct-children-only scan saw nothing and left the cards at 79px).
-fn fixed_content_demand(card: &Value) -> f64 {
-    fn widest_fixed(v: &Value, depth: usize) -> f64 {
-        if depth == 0 {
-            return 0.0;
-        }
-        children(v)
-            .iter()
-            .map(|c| {
-                fixed_width(c)
-                    .unwrap_or(0.0)
-                    .max(widest_fixed(c, depth - 1))
-            })
-            .fold(0.0_f64, f64::max)
-    }
-    let widest = widest_fixed(card, 3);
-    if widest == 0.0 {
-        0.0
-    } else {
-        widest + horizontal_padding(card)
-    }
-}
-
-fn collect_starved_rail_card_fixes(
-    v: &Value,
-    rects: &HashMap<String, Rect>,
-    cmds: &mut Vec<EditorCommand>,
-) {
-    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
-    if layout_str(v) == Some("horizontal") && !clips {
-        let cards: Vec<&Value> = children(v)
-            .iter()
-            .filter(|c| {
-                !has_authored_position(c)
-                    && c.get("width").and_then(Value::as_str) == Some("fill_container")
-            })
-            .collect();
-        let rail_w = v
-            .get("id")
-            .and_then(Value::as_str)
-            .and_then(|id| rects.get(id))
-            .map(|r| r.w)
-            .unwrap_or(0.0);
-        if cards.len() >= RAIL_MIN_CARDS && rail_w > 0.0 {
-            let all_starved = cards.iter().all(|c| {
-                let demand = fixed_content_demand(c);
-                demand > 0.0
-                    && demand <= rail_w * RAIL_CARD_MAX_FRACTION
-                    && c.get("id")
-                        .and_then(Value::as_str)
-                        .and_then(|id| rects.get(id))
-                        .is_some_and(|r| {
-                            r.w < RAIL_CARD_STARVED_W && demand > r.w + RAIL_STARVE_EPS
-                        })
-            });
-            if all_starved {
-                for c in &cards {
-                    if let Some(id) = c.get("id").and_then(Value::as_str) {
-                        // The card takes its DEMAND as a definite width, not
-                        // fit_content: an absolutely-positioned photo plate is
-                        // out of flow, so hugging would size the card to its
-                        // text alone and starve the photo all over again
-                        // (measured: hug gave 126px against a 200px plate).
-                        cmds.push(EditorCommand::UpdateNode {
-                            node_id: NodeId::new(id.to_string()),
-                            x: None,
-                            y: None,
-                            width: Some(fixed_content_demand(c).round() as i32),
-                            height: None,
-                            name: None,
-                            fill_hex: None,
-                            page_id: None,
-                        });
-                    }
-                }
-                if let Some(id) = v.get("id").and_then(Value::as_str) {
-                    cmds.push(EditorCommand::SetNodeLayoutProp {
-                        node_id: NodeId::new(id.to_string()),
-                        property: "clipContent".to_string(),
-                        value: LayoutPropValue::Bool(true),
-                    });
-                    if v.get("justifyContent").and_then(Value::as_str) == Some("space_between") {
-                        cmds.push(EditorCommand::SetNodeLayoutProp {
-                            node_id: NodeId::new(id.to_string()),
-                            property: "justifyContent".to_string(),
-                            value: LayoutPropValue::Keyword("start".to_string()),
-                        });
-                    }
-                }
-            }
-        }
-    }
-    for c in children(v) {
-        collect_starved_rail_card_fixes(c, rects, cmds);
-    }
-}
-
 /// A `fill_container`-sized IMAGE inside a `layout: "none"` (absolute)
 /// container — `fill_container` has no meaning without a flex parent, so
 /// the engine falls back to the bitmap's own aspect and the "cover" paints
@@ -1289,207 +1232,6 @@ fn collect_absolute_fill_image_fixes(
     for c in children(v) {
         collect_absolute_fill_image_fixes(c, rects, cmds);
     }
-}
-
-/// TWO images in one slot, and a photo band cropped to a sliver.
-///
-/// Measured (test0711-1-glm): a destination card's image wrapper was authored
-/// `height: 56` and held BOTH an absolutely-positioned 200x130 frame whose
-/// FILL is the photo AND a sibling image NODE carrying the same slot's photo -
-/// two images stacked in one box, of which only the top 56px survived the
-/// wrapper's clip. Every card's surviving 56px was that photo's sky, so five
-/// different photos rendered as five identical blue bands (user report: "最近
-/// 怎么经常有这种情况").
-///
-/// Two repairs, both provable from the authored tree:
-/// 1. **One image per slot** - when a wrapper holds an image-filled frame AND
-///    an image node, the image NODE wins (it is what the image pipeline fills
-///    and re-searches); the duplicate fill-frame is deleted.
-/// 2. **The band keeps the photo's height** - the photo the model authored for
-///    the slot declares a definite height; a wrapper shorter than half of it is
-///    an authoring slip, not art direction, so the wrapper grows to the photo's
-///    height. (A wrapper that already fits, or crops only mildly, is left
-///    alone - intentional letterboxing stays intentional.)
-const IMAGE_BAND_MIN_VISIBLE_FRACTION: f64 = 0.5;
-/// Tallest a grown photo band may be relative to its own width — a card photo
-/// is at most mildly portrait; beyond this the "photo" is an oversized plate.
-const IMAGE_BAND_MAX_ASPECT: f64 = 1.2;
-
-fn is_image_filled_frame(v: &Value) -> bool {
-    matches!(
-        v.get("type").and_then(Value::as_str),
-        Some("frame" | "group" | "rectangle")
-    ) && v
-        .get("fill")
-        .and_then(Value::as_array)
-        .is_some_and(|fills| {
-            fills.iter().any(|f| {
-                f.get("type").and_then(Value::as_str) == Some("image")
-                    || f.get("url").is_some()
-                    || f.get("src").is_some()
-            })
-        })
-}
-
-fn fixed_height(v: &Value) -> Option<f64> {
-    match v.get("height") {
-        Some(Value::Number(n)) => n.as_f64(),
-        Some(Value::String(s)) => s.parse::<f64>().ok(),
-        _ => None,
-    }
-}
-
-fn collect_image_slot_fixes(
-    v: &Value,
-    rects: &HashMap<String, Rect>,
-    cmds: &mut Vec<EditorCommand>,
-) {
-    let kids = children(v);
-    let image_nodes: Vec<&Value> = kids
-        .iter()
-        .filter(|c| c.get("type").and_then(Value::as_str) == Some("image"))
-        .collect();
-    let filled_frames: Vec<&Value> = kids.iter().filter(|c| is_image_filled_frame(c)).collect();
-
-    // (1) One image per slot: the node wins, the duplicate fill-frame goes.
-    // Only a CHILDLESS plate qualifies — a filled frame that carries content
-    // (a hero with a headline on it) is a real container, not a stray twin.
-    if !image_nodes.is_empty() {
-        for frame in filled_frames.iter().filter(|f| children(f).is_empty()) {
-            if let Some(id) = frame.get("id").and_then(Value::as_str) {
-                cmds.push(EditorCommand::DeleteNode {
-                    node_id: NodeId::new(id.to_string()),
-                    page_id: None,
-                });
-            }
-        }
-    }
-
-    // (2) The band keeps the photo's height. The photo's own declared height
-    // is the model's intent for the slot; take it from whichever carrier is
-    // surviving repair (1).
-    if let Some(band) = fixed_height(v) {
-        // The photo may sit a level or two down (a `DestImg` box holding the
-        // image, measured test0711-1-glm) — take the tallest DEFINITE height
-        // among the image carriers anywhere in the band.
-        let photo_h = tallest_photo_height(v, 3);
-        // The photo's declared height is only a credible BAND height if the
-        // band would still read as a card photo. A plate taller than its own
-        // band is wide is an oversized image (a 400x300 plate in a phone
-        // card), not art direction — growing the band to it left Deals cards
-        // with a wall of empty space (user report 2026-07-12).
-        let band_w = v
-            .get("id")
-            .and_then(Value::as_str)
-            .and_then(|id| rects.get(id))
-            .map(|r| r.w)
-            .unwrap_or(0.0);
-        let plausible = band_w > 0.0 && photo_h <= band_w * IMAGE_BAND_MAX_ASPECT;
-        if photo_h > 0.0 && plausible && band < photo_h * IMAGE_BAND_MIN_VISIBLE_FRACTION {
-            if let Some(id) = v.get("id").and_then(Value::as_str) {
-                cmds.push(EditorCommand::UpdateNode {
-                    node_id: NodeId::new(id.to_string()),
-                    x: None,
-                    y: None,
-                    width: None,
-                    height: Some(photo_h.round() as i32),
-                    name: None,
-                    fill_hex: None,
-                    page_id: None,
-                });
-            }
-        }
-    }
-    for c in kids {
-        collect_image_slot_fixes(c, rects, cmds);
-    }
-}
-
-/// Tallest definite height among the image carriers (image nodes and
-/// image-filled plates) inside `v`, searched a few levels down.
-fn tallest_photo_height(v: &Value, depth: usize) -> f64 {
-    if depth == 0 {
-        return 0.0;
-    }
-    children(v)
-        .iter()
-        .map(|c| {
-            let own = if c.get("type").and_then(Value::as_str) == Some("image")
-                || is_image_filled_frame(c)
-                || carries_image(c)
-            {
-                fixed_height(c).unwrap_or(0.0)
-            } else {
-                0.0
-            };
-            own.max(tallest_photo_height(c, depth - 1))
-        })
-        .fold(0.0, f64::max)
-}
-
-/// A box whose own content is (only) an image — the `DestImg` wrapper shape.
-fn carries_image(v: &Value) -> bool {
-    let kids = children(v);
-    !kids.is_empty()
-        && kids
-            .iter()
-            .all(|c| c.get("type").and_then(Value::as_str) == Some("image"))
-}
-
-/// A horizontal cluster of FIXED-size controls (a header's bell + avatar)
-/// given `fill_container` width stretches across the header and — with a fill
-/// and a pill radius — paints as one giant capsule around the controls
-/// (measured test0711-1-glm: a frame named "Avatar" holding a 44px bell, a
-/// 44px stub and a 44px photo). The row's own content proves its width: it
-/// hugs. Only a PAINTED row of all-numeric children qualifies; a nav bar
-/// (fill_container tabs) and an unpainted spacer row are untouched.
-const CONTROL_ROW_SLACK: f64 = 1.4;
-const CONTROL_ROW_MIN_SLACK_PX: f64 = 24.0;
-
-fn collect_overwide_control_row_fixes(
-    v: &Value,
-    rects: &HashMap<String, Rect>,
-    cmds: &mut Vec<EditorCommand>,
-) {
-    if layout_str(v) == Some("horizontal")
-        && v.get("width").and_then(Value::as_str) == Some("fill_container")
-        && has_visible_fill(v)
-    {
-        let kids: Vec<&Value> = children(v)
-            .iter()
-            .filter(|c| !has_authored_position(c))
-            .collect();
-        let all_fixed = kids.len() >= 2 && kids.iter().all(|c| fixed_width(c).is_some());
-        if all_fixed {
-            let content: f64 = kids.iter().filter_map(|c| fixed_width(c)).sum::<f64>()
-                + num(v, "gap") * (kids.len() - 1) as f64
-                + horizontal_padding(v);
-            if let Some(r) = v
-                .get("id")
-                .and_then(Value::as_str)
-                .and_then(|id| rects.get(id))
-            {
-                if r.w > content * CONTROL_ROW_SLACK && r.w > content + CONTROL_ROW_MIN_SLACK_PX {
-                    if let Some(id) = v.get("id").and_then(Value::as_str) {
-                        cmds.push(EditorCommand::SetNodeLayoutProp {
-                            node_id: NodeId::new(id.to_string()),
-                            property: "width".to_string(),
-                            value: LayoutPropValue::Keyword("fit_content".to_string()),
-                        });
-                    }
-                }
-            }
-        }
-    }
-    for c in children(v) {
-        collect_overwide_control_row_fixes(c, rects, cmds);
-    }
-}
-
-fn has_visible_fill(v: &Value) -> bool {
-    v.get("fill")
-        .and_then(Value::as_array)
-        .is_some_and(|fills| !fills.is_empty())
 }
 
 /// A frame declaring a NUMERIC height but resolving MUCH taller — an

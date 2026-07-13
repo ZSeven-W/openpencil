@@ -64,11 +64,11 @@ Interactive roles:
 
 Display roles:
 
-- card: layout=vertical, gap=12, cornerRadius=12, clipContent=true. In horizontal layout: width=fill_container, height=fill_container
-- stat-card: layout=vertical, gap=8, padding=[24,24], cornerRadius=12. In horizontal layout: width=fill_container, height=fill_container
-- pricing-card: layout=vertical, gap=16, padding=[32,24], cornerRadius=16, clipContent=true. In horizontal layout: width=fill_container, height=fill_container
+- card: layout=vertical, gap=12, cornerRadius=12, clipContent=true, height=fit_content. In horizontal layout: width=fill_container; keep height=fit_content unless equal-height cross-axis stretch is an explicit design choice
+- stat-card: layout=vertical, gap=8, padding=[24,24], cornerRadius=12, height=fit_content. In horizontal layout: width=fill_container
+- pricing-card: layout=vertical, gap=16, padding=[32,24], cornerRadius=16, clipContent=true, height=fit_content. In horizontal layout: width=fill_container
 - image-card: layout=vertical, gap=0, cornerRadius=12, clipContent=true
-- feature-card: layout=vertical, gap=12, padding=[24,24], cornerRadius=12. In horizontal layout: width=fill_container, height=fill_container
+- feature-card: layout=vertical, gap=12, padding=[24,24], cornerRadius=12, height=fit_content. In horizontal layout: width=fill_container
 
 Media roles:
 

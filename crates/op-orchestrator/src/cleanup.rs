@@ -11,7 +11,7 @@ use crate::cleanup_typography::repair_overbold_text_hierarchy;
 use crate::plan::OrchestratorPlan;
 use crate::types::DocSink;
 use jian_ops_schema::node::{
-    container::{ContainerProps, JustifyContent, LayoutMode, Padding},
+    container::{AlignItems, ContainerProps, JustifyContent, LayoutMode, Padding},
     PenNode,
 };
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
@@ -26,8 +26,7 @@ mod cleanup_desktop_dashboard;
 #[path = "cleanup_mobile_chrome.rs"]
 mod cleanup_mobile_chrome;
 pub(crate) use cleanup_mobile_chrome::{
-    anchor_bottom_nav_last_for_all_roots, fill_empty_bottom_nav_shells_for_all_roots,
-    repair_mobile_structural_chrome_for_all_roots,
+    anchor_bottom_nav_last_for_all_roots, repair_mobile_structural_chrome_for_all_roots,
 };
 #[path = "cleanup_mobile_dense.rs"]
 mod cleanup_mobile_dense;
@@ -57,7 +56,7 @@ pub fn descendant_count(state: &EditorState, root_id: &str) -> usize {
 }
 
 /// 名称 / id 命中即视为"状态栏"节点。
-fn is_status_bar(node: &PenNode) -> bool {
+pub(crate) fn is_status_bar(node: &PenNode) -> bool {
     let name = node.base().name.as_deref().unwrap_or("").to_lowercase();
     let id = node.id_str().to_lowercase();
     let hay = format!("{id} {name}");
@@ -338,7 +337,16 @@ fn collect_bottom_nav_tab_distribution_repairs(
 
 fn bottom_nav_tab_distribution_repair(node: &PenNode) -> Option<BottomNavTabDistributionRepair> {
     let props = frame_container_props(node)?;
-    if props.layout.as_ref() != Some(&LayoutMode::Horizontal) {
+    if props.layout.as_ref() != Some(&LayoutMode::Horizontal)
+        // `clipContent: true` on a horizontal row is an explicit scrolling
+        // contract. Product cards often contain both a favorite icon and text,
+        // so shape alone must never turn such a rail into distributed nav tabs.
+        || props.clip_content == Some(true)
+        // This pass used to recurse over every icon+label row. Require the row
+        // itself to carry bottom-nav semantics; unnamed structural navs are
+        // handled (with bottom-position context) by mobile-chrome repair.
+        || !is_bottom_nav_section(node)
+    {
         return None;
     }
     let children = node.children()?;
@@ -397,9 +405,13 @@ fn collect_icon_label_descendants(node: &PenNode, has_icon: &mut bool, has_text:
     }
 }
 
-/// Fixed-height vertical mobile artboards must keep direct content sections
-/// content-driven; fill-height direct children can consume all leftover space
-/// when a sibling subtask emits zero nodes.
+/// A fixed-height vertical artboard's direct content sections are content-sized
+/// by default. A content-bearing `fill_container` child consumes the remaining
+/// main-axis space and creates the large blank tail seen in `0713-1-ds.op`.
+///
+/// Keep the repair deliberately shallow: horizontal cross-axis stretch (for
+/// example a desktop sidebar), nested layout contracts, explicit scroll
+/// viewports, and empty flexible spacers are authored sizing decisions.
 fn collapse_fill_container_content_sections(sink: &mut dyn DocSink, root_id: &str) {
     let repairs: Vec<NodeId> = {
         let Some(root) = find_root(sink.state(), root_id) else {
@@ -413,7 +425,7 @@ fn collapse_fill_container_content_sections(sink: &mut dyn DocSink, root_id: &st
         };
         children
             .iter()
-            .filter(|child| is_fill_height_content_frame(child))
+            .filter(|child| is_ordinary_fill_height_content_frame(child))
             .map(|child| NodeId::new(child.id_str().to_string()))
             .collect()
     };
@@ -431,24 +443,60 @@ fn is_fixed_height_vertical_root(root: &PenNode) -> bool {
     let Some(props) = frame_container_props(root) else {
         return false;
     };
-    props
-        .layout
-        .as_ref()
-        .is_some_and(|layout| layout == &LayoutMode::Vertical)
+    props.layout.as_ref() == Some(&LayoutMode::Vertical)
         && matches!(props.height.as_ref(), Some(SizingBehavior::Number(_)))
 }
 
-fn is_fill_height_content_frame(node: &PenNode) -> bool {
+fn is_ordinary_fill_height_content_frame(node: &PenNode) -> bool {
     let Some(props) = frame_container_props(node) else {
         return false;
     };
     matches!(
         props.height.as_ref(),
         Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))
-    ) && node
-        .children()
-        .map(|children| !children.is_empty())
-        .unwrap_or(false)
+    ) && node.children().is_some_and(|children| !children.is_empty())
+        && !is_explicit_remaining_height_consumer(node, props)
+}
+
+fn is_explicit_remaining_height_consumer(node: &PenNode, props: &ContainerProps) -> bool {
+    if props.clip_content == Some(true) {
+        return true;
+    }
+
+    let role = node
+        .base()
+        .role
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if matches!(
+        role.as_str(),
+        "main"
+            | "scroll"
+            | "viewport"
+            | "scroll-area"
+            | "scroll-viewport"
+            | "workspace"
+            | "work-surface"
+    ) {
+        return true;
+    }
+
+    contains_any(
+        &node_identity_haystack(node),
+        &[
+            "main content",
+            "scroll",
+            "viewport",
+            "workspace",
+            "work surface",
+            "work-surface",
+            "滚动",
+            "视口",
+            "工作区",
+        ],
+    )
 }
 
 fn equalize_horizontal_card_heights(sink: &mut dyn DocSink, root_id: &str) {
@@ -488,7 +536,9 @@ fn collect_horizontal_card_height_repairs(node: &PenNode, repairs: &mut Vec<Card
 
 fn horizontal_card_height_repairs(node: &PenNode) -> Option<Vec<CardHeightRepair>> {
     let props = frame_container_props(node)?;
-    if props.layout.as_ref() != Some(&LayoutMode::Horizontal) {
+    if props.layout.as_ref() != Some(&LayoutMode::Horizontal)
+        || props.align_items.as_ref() != Some(&AlignItems::Stretch)
+    {
         return None;
     }
 
@@ -497,6 +547,12 @@ fn horizontal_card_height_repairs(node: &PenNode) -> Option<Vec<CardHeightRepair
         let Some(child_props) = frame_container_props(child) else {
             continue;
         };
+        // Equal height is a card-row convention, not a generic horizontal-row
+        // convention. An unnamed title/location group beside a rating group has
+        // the same fill-width + fit-height shape but must remain content-sized.
+        if !has_explicit_card_semantics(child) {
+            return None;
+        }
         if child
             .children()
             .map(|children| children.is_empty())
@@ -523,6 +579,20 @@ fn horizontal_card_height_repairs(node: &PenNode) -> Option<Vec<CardHeightRepair
             })
             .collect()
     })
+}
+
+fn has_explicit_card_semantics(node: &PenNode) -> bool {
+    matches!(
+        node.base().role.as_deref().map(str::trim),
+        Some(
+            "card"
+                | "image-card"
+                | "product-card"
+                | "restaurant-card"
+                | "menu-card"
+                | "feature-card"
+        )
+    ) || contains_any(&node_identity_haystack(node), &["card", "卡片"])
 }
 
 fn expand_absolute_container_to_children(sink: &mut dyn DocSink, root_id: &str) {
@@ -714,8 +784,19 @@ fn padding_sides(padding: &Padding) -> [f64; 4] {
     }
 }
 
-fn is_bottom_nav_section(node: &PenNode) -> bool {
+pub(crate) fn is_bottom_nav_section(node: &PenNode) -> bool {
     cleanup_mobile_chrome::bottom_nav_surface_target(node, false).is_some()
+}
+
+/// Position-gated bottom-nav recognition for a root's literal last child.
+///
+/// Unlike [`is_bottom_nav_section`], this may use the strict structural
+/// fallback (3-5 icon+label tabs). Keeping that fallback at the call site that
+/// has already proven "last mobile root child" avoids turning an ordinary top
+/// tab row into bottom chrome.
+pub(crate) fn is_trailing_bottom_nav_section(node: &PenNode) -> bool {
+    cleanup_mobile_chrome::bottom_nav_surface_target(node, true).is_some()
+        || cleanup_mobile_chrome::is_pencil_trailing_tab_section(node)
 }
 
 fn compare_bottom_nav_position(
@@ -767,146 +848,34 @@ struct NavSurfaceRepair {
     fill_hex: String,
 }
 
-const MOBILE_CONTENT_SIDE_PADDING: f64 = 24.0;
-
-/// Pass ③:移动端内容 section 的安全内边距/宽度纠偏。
-///
-/// 弱模型经常生成 `root > section > card(width:390)` 或无 padding 的
-/// section,导致标题贴边、卡片越出 390px 屏幕。这里只处理 root 的
-/// 直接非 chrome 子 frame,保留 status/nav 全宽。
-fn repair_mobile_content_sections(sink: &mut dyn DocSink, root_id: &str) {
-    let repairs: MobileSectionRepairs = {
-        let Some(root) = find_root(sink.state(), root_id) else {
-            return;
-        };
-        if !is_mobile_root(root) {
-            return;
-        }
-        let Some(children) = root.children() else {
-            return;
-        };
-        let max_content_width =
-            (root.width_px().unwrap_or(0.0) - MOBILE_CONTENT_SIDE_PADDING * 2.0).max(1.0);
-        let mut repairs = MobileSectionRepairs::default();
-
-        for child in children {
-            if !is_mobile_content_section(child) {
-                continue;
-            }
-            if !crate::cleanup_scroller_guard::subtree_contains_intentional_horizontal_scroller(
-                child,
-            ) && !has_horizontal_padding_at_least(child, 16.0)
-            {
-                repairs
-                    .pad_sections
-                    .push(NodeId::new(child.id_str().to_string()));
-            }
-            collect_overwide_mobile_descendants(child, max_content_width, &mut repairs);
-        }
-
-        repairs
-    };
-
-    for node_id in repairs.pad_sections {
-        sink.apply(EditorCommand::SetNodeLayoutProp {
-            node_id,
-            property: "padding".to_string(),
-            value: LayoutPropValue::NumberArray(vec![
-                0.0,
-                MOBILE_CONTENT_SIDE_PADDING,
-                0.0,
-                MOBILE_CONTENT_SIDE_PADDING,
-            ]),
-        });
-    }
-    for node_id in repairs.width_fill {
-        sink.apply(EditorCommand::SetNodeLayoutProp {
-            node_id,
-            property: "width".to_string(),
-            value: LayoutPropValue::Keyword("fill_container".to_string()),
-        });
-    }
-    for (node_id, x) in repairs.clamp_x {
-        sink.apply(EditorCommand::UpdateNode {
-            node_id,
-            x: Some(x),
-            y: None,
-            width: None,
-            height: None,
-            name: None,
-            fill_hex: None,
-            page_id: None,
-        });
-    }
-    for node_id in repairs.placeholder_tiles {
-        sink.apply(EditorCommand::SetNodeFillHex {
-            node_id,
-            hex: "#FF6B00".to_string(),
-        });
-    }
-    for (node_id, side) in repairs.square_tiles {
-        sink.apply(EditorCommand::UpdateNode {
-            node_id,
-            x: None,
-            y: None,
-            width: Some(side),
-            height: Some(side),
-            name: None,
-            fill_hex: None,
-            page_id: None,
-        });
-    }
-}
-
-#[derive(Debug, Default)]
-struct MobileSectionRepairs {
-    pad_sections: Vec<NodeId>,
-    width_fill: Vec<NodeId>,
-    clamp_x: Vec<(NodeId, i32)>,
-    placeholder_tiles: Vec<NodeId>,
-    square_tiles: Vec<(NodeId, i32)>,
-}
-
-/// Pass ③:根 frame 高度自适应到内容。把根 frame 的高度设为其
-/// 直接子节点的内容高度之和；`fit_content` 容器会按子节点估算。
-/// 对齐 TS `adjustRootFrameHeightToContent`。
-fn adjust_root_height_to_content(sink: &mut dyn DocSink, root_id: &str) {
-    let (total, current_height, mobile, has_fill_height_child) = {
-        let Some(root) = find_root(sink.state(), root_id) else {
-            return;
-        };
-        (
-            root_content_height(root),
-            root.height_px(),
-            is_mobile_root(root),
-            root_has_fill_height_child(root),
-        )
-    };
-
-    // A tall, scrolling mobile screen should hug its content. When the content
-    // genuinely exceeds a standard phone viewport, a fixed frame height that
-    // sits ABOVE the content leaves dead space at the bottom ("下面太长").
-    // Switching the root to `fit_content` lets the layout engine size it
-    // exactly (it measures real text/images, so it never clips). Gated on
-    // content > a phone viewport so a SPARSE screen keeps its phone-height
-    // frame instead of collapsing to a tiny estimate. Skip when a direct child
-    // fills height (`fit_content` parent + `fill_container` child is circular).
-    const STANDARD_MOBILE_VIEWPORT: f64 = 812.0;
-    if mobile
-        && !has_fill_height_child
-        && total.is_some_and(|content| f64::from(content) > STANDARD_MOBILE_VIEWPORT)
-    {
-        sink.apply(EditorCommand::SetNodeLayoutProp {
-            node_id: NodeId::new(root_id.to_string()),
-            property: "height".to_string(),
-            value: LayoutPropValue::Keyword("fit_content".to_string()),
-        });
+/// Grow roots whose authored numeric height cannot contain the estimated
+/// content. `preserve_root_height` is computed from an explicit sizing mode or
+/// mobile-screen semantics; narrow geometry alone is never enough to freeze a
+/// poster, component board, or narrow desktop artboard.
+fn adjust_root_height_to_content(
+    sink: &mut dyn DocSink,
+    root_id: &str,
+    preserve_root_height: bool,
+) {
+    if preserve_root_height {
         return;
     }
+    let (total, current_height) = {
+        let Some(root) = find_root(sink.state(), root_id) else {
+            return;
+        };
+        // `fit_content` is already an explicit authored sizing mode. Replacing
+        // it with a measured number would be an intent-changing conversion,
+        // independent of whether the artboard is mobile.
+        if root_has_explicit_fit_content_height(root) {
+            return;
+        }
+        (root_content_height(root), root.height_px())
+    };
 
-    // Desktop / fill-height roots: only GROW a too-short fixed height to fit
-    // overflowing content. Never shrink here — a desktop dashboard root's
-    // height is `max(region heights)` on purpose.
+    // Non-mobile roots only GROW a too-short fixed height to fit overflowing
+    // content. Never shrink here — a desktop dashboard root's height is
+    // `max(region heights)` on purpose.
     if let Some(height) = total.filter(|height| {
         current_height
             .map(|current| f64::from(*height) > current)
@@ -925,26 +894,46 @@ fn adjust_root_height_to_content(sink: &mut dyn DocSink, root_id: &str) {
     }
 }
 
-/// True when any DIRECT child of `root` sizes its height as `fill_container` —
-/// making a `fit_content` parent a circular layout dependency.
-fn root_has_fill_height_child(root: &PenNode) -> bool {
-    root.children()
-        .map(|children| children.iter().any(height_is_fill_container))
-        .unwrap_or(false)
+/// Geometry validation may grow a slightly overflowing fixed-height frame.
+/// That is correct for cards and ordinary content frames, but not for an
+/// explicit `fit_content` root or a semantically-authored mobile viewport.
+/// Filter only height writes targeting that root while forwarding every
+/// descendant repair unchanged.
+struct PreserveRootHeightSink<'a> {
+    inner: &'a mut dyn DocSink,
+    root_id: &'a str,
 }
 
-fn height_is_fill_container(node: &PenNode) -> bool {
-    use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
-    let height = match node {
-        PenNode::Frame(n) => n.container.height.as_ref(),
-        PenNode::Group(n) => n.container.height.as_ref(),
-        PenNode::Rectangle(n) => n.container.height.as_ref(),
-        _ => return false,
-    };
-    matches!(
-        height,
-        Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))
-    )
+impl DocSink for PreserveRootHeightSink<'_> {
+    fn state(&self) -> &EditorState {
+        self.inner.state()
+    }
+
+    fn apply(&mut self, cmd: EditorCommand) -> bool {
+        let rewrites_root_height = match &cmd {
+            EditorCommand::UpdateNode {
+                node_id,
+                height: Some(_),
+                ..
+            } => node_id.as_str() == self.root_id,
+            EditorCommand::SetNodeLayoutProp {
+                node_id, property, ..
+            } => node_id.as_str() == self.root_id && property == "height",
+            _ => false,
+        };
+        if rewrites_root_height {
+            return false;
+        }
+        self.inner.apply(cmd)
+    }
+
+    fn begin_undo_batch(&mut self) {
+        self.inner.begin_undo_batch();
+    }
+
+    fn end_undo_batch(&mut self) {
+        self.inner.end_undo_batch();
+    }
 }
 
 fn is_light_mobile_root(root: &PenNode) -> bool {
@@ -970,152 +959,69 @@ fn is_mobile_root(root: &PenNode) -> bool {
     width <= 480.0 && tall_enough
 }
 
-fn is_mobile_content_section(node: &PenNode) -> bool {
-    node.is_container()
-        && node
-            .children()
-            .map(|children| !children.is_empty())
-            .unwrap_or(false)
-        && !is_status_bar(node)
-        && nav_surface_target(node).is_none()
-}
-
-fn has_horizontal_padding_at_least(node: &PenNode, min: f64) -> bool {
-    let padding = match node {
-        PenNode::Frame(n) => n.container.padding.as_ref(),
-        PenNode::Group(n) => n.container.padding.as_ref(),
-        PenNode::Rectangle(n) => n.container.padding.as_ref(),
+fn root_has_explicit_fit_content_height(root: &PenNode) -> bool {
+    let height = match root {
+        PenNode::Frame(node) => node.container.height.as_ref(),
+        PenNode::Group(node) => node.container.height.as_ref(),
+        PenNode::Rectangle(node) => node.container.height.as_ref(),
         _ => None,
     };
-    match padding {
-        Some(Padding::Uniform(v)) => *v >= min,
-        Some(Padding::XY([_, x])) => *x >= min,
-        Some(Padding::LtrB([_, right, _, left])) => *right >= min && *left >= min,
-        Some(Padding::Expression(_)) | None => false,
-    }
+    matches!(
+        height,
+        Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
+    )
 }
 
-fn collect_overwide_mobile_descendants(
-    node: &PenNode,
-    max_width: f64,
-    repairs: &mut MobileSectionRepairs,
-) {
-    if crate::cleanup_scroller_guard::is_intentional_horizontal_scroller(node) {
-        return;
-    }
-    let Some(children) = node.children() else {
-        return;
-    };
-    for child in children {
-        if crate::cleanup_scroller_guard::is_intentional_horizontal_scroller(child) {
-            continue;
-        }
-        if is_status_bar(child) || nav_surface_target(child).is_some() {
-            continue;
-        }
-        if child
-            .width_px()
-            .map(|width| width > max_width + 1.0)
-            .unwrap_or(false)
-        {
-            repairs
-                .width_fill
-                .push(NodeId::new(child.id_str().to_string()));
-        } else if let (Some(x), Some(width)) = (child.base().x, child.width_px()) {
-            if width <= max_width && x + width > max_width + 1.0 {
-                let clamped = (max_width - width).max(0.0).round() as i32;
-                repairs
-                    .clamp_x
-                    .push((NodeId::new(child.id_str().to_string()), clamped));
-            }
-        }
-        if is_blank_gray_mobile_placeholder(child) {
-            repairs
-                .placeholder_tiles
-                .push(NodeId::new(child.id_str().to_string()));
-        }
-        if let Some(side) = mobile_square_tile_side(child) {
-            repairs
-                .square_tiles
-                .push((NodeId::new(child.id_str().to_string()), side));
-        }
-        collect_overwide_mobile_descendants(child, max_width, repairs);
-    }
-}
-
-fn is_blank_gray_mobile_placeholder(node: &PenNode) -> bool {
-    if node
-        .children()
-        .map(|children| !children.is_empty())
-        .unwrap_or(false)
-    {
-        return false;
-    }
-    let Some(width) = node.width_px() else {
+/// Whether a fixed root contains an explicitly-authored scroll viewport that
+/// consumes its remaining height.
+///
+/// A mobile/app/screen name is not a viewport contract: ordinary generated app
+/// pages must still grow when their content grows. Preservation requires a
+/// direct fill-height, clipped child whose role/name explicitly says scroll or
+/// viewport.
+fn has_explicit_mobile_viewport_contract(root: &PenNode) -> bool {
+    let Some(width) = root.width_px() else {
         return false;
     };
-    let Some(height) = node.height_px() else {
+    let Some(height) = root.height_px() else {
         return false;
     };
-    if !(36.0..=140.0).contains(&width) || !(36.0..=140.0).contains(&height) {
+    if width > 480.0 || height < 500.0 {
         return false;
     }
-    let ratio = width / height;
-    if !(0.65..=1.6).contains(&ratio) {
+
+    let Some(props) = viewport_contract_container_props(root) else {
         return false;
-    }
-    first_solid_fill_hex(node)
-        .map(is_soft_gray_placeholder_hex)
-        .unwrap_or(false)
-}
-
-fn mobile_square_tile_side(node: &PenNode) -> Option<i32> {
-    let width = node.width_px()?;
-    let height = node.height_px()?;
-    if !(36.0..=140.0).contains(&width) || !(36.0..=140.0).contains(&height) {
-        return None;
-    }
-    let ratio = width / height;
-    if (0.9..=1.1).contains(&ratio) || !(0.65..=1.6).contains(&ratio) {
-        return None;
-    }
-    if !is_blank_gray_mobile_placeholder(node) && !is_likely_square_icon_or_media_tile(node) {
-        return None;
-    }
-    Some(width.min(height).round() as i32)
-}
-
-fn is_likely_square_icon_or_media_tile(node: &PenNode) -> bool {
-    let hay = node_identity_haystack(node);
-    if contains_any(
-        &hay,
-        &[
-            "avatar",
-            "filter",
-            "icon button",
-            "icon-button",
-            "image",
-            "media",
-            "photo",
-            "sliders",
-            "thumbnail",
-            "thumb",
-            "tile",
-        ],
-    ) {
-        return true;
-    }
-    node.children()
-        .map(|children| {
-            !children.is_empty()
-                && children
-                    .iter()
-                    .any(|child| matches!(child, PenNode::IconFont(_)))
-                && !children
-                    .iter()
-                    .any(|child| matches!(child, PenNode::Text(_)))
+    };
+    props.layout.as_ref() == Some(&LayoutMode::Vertical)
+        && root.children().is_some_and(|children| {
+            children.iter().any(|child| {
+                let Some(child_props) = viewport_contract_container_props(child) else {
+                    return false;
+                };
+                child_props.clip_content == Some(true)
+                    && matches!(
+                        child_props.height.as_ref(),
+                        Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))
+                    )
+                    && crate::mobile_reflow::is_explicit_scroll_viewport(child)
+            })
         })
-        .unwrap_or(false)
+}
+
+/// Container access used only by the explicit viewport sizing contract.
+///
+/// Keep `frame_container_props` frame-only: its callers intentionally gate
+/// frame-specific cleanup (wrapper transparency, padding collapse, and similar
+/// visual rewrites). Sizing contracts, however, are valid on every container
+/// variant supported by the schema.
+fn viewport_contract_container_props(node: &PenNode) -> Option<&ContainerProps> {
+    match node {
+        PenNode::Frame(node) => Some(&node.container),
+        PenNode::Group(node) => Some(&node.container),
+        PenNode::Rectangle(node) => Some(&node.container),
+        _ => None,
+    }
 }
 
 fn node_identity_haystack(node: &PenNode) -> String {
@@ -1126,15 +1032,6 @@ fn node_identity_haystack(node: &PenNode) -> String {
     ]
     .join(" ")
     .to_lowercase()
-}
-
-fn is_soft_gray_placeholder_hex(hex: &str) -> bool {
-    let Some((r, g, b)) = parse_hex_rgb(hex) else {
-        return false;
-    };
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    max.saturating_sub(min) <= 8 && (190..=245).contains(&max)
 }
 
 fn contains_any(haystack: &str, needles: &[&str]) -> bool {
@@ -1488,8 +1385,12 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         equalize_horizontal_card_heights(sink, rid);
         collapse_fill_container_content_sections(sink, rid);
         repair_light_mobile_nav_surfaces(sink, rid);
-        repair_mobile_content_sections(sink, rid);
         cleanup_mobile_chrome::repair_mobile_structural_chrome(sink, rid);
+        // Normalize the late-nav construction shell before geometry validation
+        // can grow the root around the stale numeric wrapper and erase the
+        // evidence that the wrapper used to consume the entire viewport.
+        cleanup_mobile_chrome::anchor_bottom_nav_last(sink, rid);
+        crate::mobile_reflow::repair_mobile_trailing_nav_reflow_for_root_in_sink(sink, rid);
         cleanup_mobile_dense::repair_dense_mobile_rows(sink, rid);
         cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, rid);
         repair_overbold_text_hierarchy(sink, rid);
@@ -1514,19 +1415,25 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
                 }
             }
         }
-        crate::geometry_validation::geometry_validate_and_fix(sink, rid);
+        let preserve_root_height = find_root(sink.state(), rid).is_some_and(|root| {
+            root_has_explicit_fit_content_height(root)
+                || has_explicit_mobile_viewport_contract(root)
+                || crate::mobile_reflow::has_mobile_trailing_nav_reflow_contract(root)
+        });
+        if preserve_root_height {
+            let mut guarded = PreserveRootHeightSink {
+                inner: sink,
+                root_id: rid,
+            };
+            crate::geometry_validation::geometry_validate_and_fix(&mut guarded, rid);
+        } else {
+            crate::geometry_validation::geometry_validate_and_fix(sink, rid);
+        }
         debug_probe_child_height(sink, rid, "geometry");
-        adjust_root_height_to_content(sink, rid);
+        adjust_root_height_to_content(sink, rid, preserve_root_height);
         debug_probe_child_height(sink, rid, "adjust_root_height");
     }
 
-    // A stray photo rejoins the empty slot that was waiting for it BEFORE the
-    // twin-stub sweep, so the slot no longer reads as an empty decorated stub.
-    crate::stray_image_adopt::adopt_stray_images_for_all_roots(sink);
-    // A reference to a variable that does not exist must not render as an
-    // invisible glyph — repair it against the surface it sits on.
-    crate::broken_ref_repair::repair_broken_variable_refs(sink);
-    crate::avatar_repair::remove_empty_twin_stubs_beside_images_for_all_roots(sink);
     crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);
 
     // LAST: structural chrome contract — bottom nav is the mobile root's
@@ -1535,8 +1442,8 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
     // duplicates and flip which one dedup keeps). A late "catch-up" section
     // appended after the nav is repaired by moving the nav back to the end;
     // where that section belongs is intent — the geometry echo handles it.
-    cleanup_mobile_chrome::fill_empty_bottom_nav_shells_for_all_roots(sink);
     anchor_bottom_nav_last_for_all_roots(sink);
+    crate::mobile_reflow::repair_mobile_trailing_nav_reflow_in_sink(sink);
 }
 
 /// Apply a whole-root transform (the serialize → mutate → deserialize round-trip

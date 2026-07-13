@@ -29,14 +29,19 @@ select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_
 
 **Visual style for new or refreshed work:**
 - Early in the loop, also fetch one visual style with `get_guidelines(category:"style", name:"Atlas Grid", colorPalette:"Alloy Blue", roundness:"medium", elevation:"low", headings:"Inter", body:"Inter", captions:"Inter", data:"IBM Plex Mono")`; choose styles like Atlas Grid, Beacon Landing, or Console Board and palettes like Alloy Blue or Amber Field.
-- Treat the returned TokenMap as reference values only.
-- BAKE concrete values (fills, text colors, radius, font) from the style directly into nodes. Do NOT create document variables from the style, and Do NOT call `set_variables` for it — the style is reference guidance, not document state. (You may still reuse the document's own existing `$variables` per Step 4.)
+- Treat the returned TokenMap as visual-direction reference. In Step 4, choose one colour/token source of truth before drawing; do not mix this palette with an unrelated preset.
 
 ### Step 4 — Design variables and built-in design systems
 
 Call `get_variables` to see the existing design variables and themes. Reuse them by using `$variable` references in node properties instead of hardcoding color values or sizes.
 
-**Starting a NEW design on an empty canvas: apply a built-in design system FIRST.** One call to `apply_design_system(name)` installs a complete token table (Light + Dark themed) plus the `Mode` theme axis:
+Choose exactly ONE source of truth:
+
+1. **Existing project variables/design system:** preserve and reuse them. Do not install a preset on top.
+2. **New empty canvas where a built-in matches the requested visual direction:** call `apply_design_system(name)` ONCE, before creating visual nodes; then call `get_variables` again and use those tokens from the first batch onward.
+3. **No matching built-in:** keep the selected style guide's concrete palette/font/radius values. Do not install an unrelated preset and do not retroactively token-swap a visually approved screen.
+
+`apply_design_system(name)` installs a complete token table (Light + Dark themed) plus the `Mode` theme axis:
 
 - `halo` — clean SaaS blue, soft neutrals
 - `lunaris` — dark-first, muted violet
@@ -61,7 +66,7 @@ The single most common mistake: reaching for `$--accent` to make something the b
 
 Reference tokens instead of raw hex everywhere they fit: `fill: "$--card"`, borders `"$--border"`, sidebars the `$--sidebar-*` family, radii `$--radius-m`. A design built on tokens re-themes to Dark for free.
 
-**Only reference tokens that EXIST.** `get_variables` lists them. There is no `$--white`, `$--black`, `$--gray-100` — an unknown reference renders as an invisible glyph on its own background. Need white text on the brand colour? That is `$--primary-foreground`.
+**Only reference tokens that EXIST in `get_variables`.** The built-in systems currently include `$--white` and `$--black`; a custom document may not. `$--gray-100` is not guaranteed. An unknown fill reference falls back visibly (typically black), but it is still a broken design-system binding and must be replaced deliberately, never auto-guessed from nearby colours. For text/icons on the brand colour, prefer the semantic `$--primary-foreground` token.
 
 When you create your OWN variables, use the same shadcn vocabulary (`--background`, `--card`, `--primary`, `--muted-foreground`, …) — never invent parallel names like `$color-accent` for a concept the vocabulary already covers.
 
@@ -83,8 +88,10 @@ const id = I(parent, { ...node... });   // inserts a node, RETURNS its new id (a
 
 - `parent` is `null` for a top-level root, or an id returned by an earlier `I(...)` call — a node is a child of X only if you call `I(X, {...})`.
 - Use REAL JavaScript — `const`/`let`, arrays of data, `for...of` / `.forEach` loops — to generate repeated structure (table rows, nav items, cards, list items) by looping over a data array instead of copy-pasting near-identical `I(...)` calls. PREFER a loop over hand-repeated calls.
-- `C`, `U`, `D`, `M`, `R`, `G`, and `console` are bound inside a script but are harmless NO-OP stubs there — they do not copy, update, delete, move, replace, or fill anything, and `console.log`/`warn`/`error` are silently swallowed. `I(parent, obj)` is the ONLY call with real effect inside a script.
+- `C`, `U`, `D`, `M`, `R`, and `G` are unsupported in script mode. Calling one rejects the script with an instruction to use `operations`; it never reports success while silently dropping the edit. `console.log`/`warn`/`error` are swallowed. `I(parent, obj)` and `K(kitId, parent, overrides)` are the only design calls with real effect inside a script.
 - Each node object starts with `type` (`"frame"`/`"text"`/`"rectangle"`/`"ellipse"`/`"path"`/`"icon_font"`) and uses camelCase props (`cornerRadius`, `fontSize`, `fontWeight`, `justifyContent`, `alignItems`, `clipContent`). Do NOT set `x`/`y` on children inside layout frames. Inside a `layout: "none"` container the OPPOSITE holds: every child needs explicit NUMERIC `x`/`y`/`width`/`height` — `fill_container` has no meaning without a flex parent and renders skewed.
+- Every frame/group/rectangle with flow children MUST declare `layout: "vertical"` or `layout: "horizontal"`; use `layout: "none"` only for a deliberate absolute stack. Omission is ambiguous and will be reported as an `intentQuestion` rather than auto-corrected.
+- **Absolute-stack z-order is front-to-back by child index:** in `layout: "none"`, `children[0]` is TOPMOST because the canvas paints children in reverse. Put badges, labels, controls, scrims, and other overlays BEFORE the full-bleed image/background they must cover; repair a hidden overlay with `M(overlayId, stackId, 0)`. Keep media in a separate EMPTY frame/rectangle image slot and target that exact slot with strict `G(...)` — never target the stack container that also owns the overlay.
 - **Icons:** `iconFontName` is the GLYPH name (`"home"`, `"compass"`, `"heart"`, `"search"`), NEVER the font family. Correct: `{type:"icon_font", iconFontName:"compass", width:20, height:20, fill:"#78716C"}`. Writing `iconFontName:"lucide"` renders a tiny fallback dot — every icon in the design breaks.
 - **`$variable` refs only when they exist:** reference `$color-*` variables only after `get_variables` shows them (or you created them via `set_variables`). A `$ref` against an empty variable table renders as a fallback color.
 
@@ -102,19 +109,23 @@ batch_design(script="
 ")
 ```
 
-Fall back to the `operations` DSL (below) only for what a script's no-op stubs cannot express: editing existing nodes (`U`/`R`/`D`/`M` need the REAL DSL, not their script stubs), image fills (`G(...)`), component instances you already placed, or one-off bespoke primitives. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer). Generate section by section; do not emit a whole dashboard, landing page, or mobile screen in one giant batch.
+Fall back to the `operations` DSL (below) for editing existing nodes (`U`/`R`/`D`/`M`), image fills (`G(...)`), copies, or one-off bespoke primitives. Those calls are rejected in script mode so a requested edit can never disappear behind a false success. Work `batch_design` in batches of **≤ 25 operations**; split a large screen into logical, self-contained batches (e.g., navigation → hero → content sections → footer). Generate section by section; do not emit a whole dashboard, landing page, or mobile screen in one giant batch.
 
-**Skeleton first — your FIRST batch lays the page structure as EMPTY shells.** Batch 1 creates the root frame AND every top-level section as an empty, NAMED frame shell in final order (e.g. `Header`, `Search`, `Popular Destinations`, `Deals`, `Bottom Tab Bar`) each with an ESTIMATED NUMERIC height (e.g. header 90, card row 240, tab bar 72 — an empty `fit_content` shell collapses to 0px and shows nothing). Switch a shell to `fit_content` in the batch that fills it. Do NOT put content in batch 1. **NEVER include a status bar** — on mobile roots the host inserts the standard iOS status bar automatically as the first child; do not plan one, shell one, or fill one, ever (any status bar you create is deleted on the spot). Then fill ONE section per subsequent batch, top to bottom. The canvas renders unfilled shells as glowing placeholder panels — the user watches the page structure appear instantly and fill in progressively, instead of staring at a blank artboard.
+**Skeleton first — your FIRST batch lays the page structure as EMPTY shells.** Batch 1 creates the root frame AND every top-level section as an empty, NAMED frame shell in final order (e.g. `Header`, `Search`, `Popular Destinations`, `Deals`, `Bottom Tab Bar`) each with an ESTIMATED NUMERIC height (e.g. header 90, card row 240, tab bar 72 — an empty `fit_content` shell collapses to 0px and shows nothing). A numeric shell height is TEMPORARY: switch that shell to `fit_content` in the same batch that fills it, unless it is genuinely a fixed-height control/media viewport. Do NOT put content in batch 1. **NEVER include a status bar** — on mobile roots the host inserts the standard iOS status bar automatically as the first child; do not plan one, shell one, or fill one, ever (any status bar you create is deleted on the spot). Then fill ONE section per subsequent batch, top to bottom. The canvas renders unfilled shells as glowing placeholder panels — the user watches the page structure appear instantly and fill in progressively, instead of staring at a blank artboard.
 
-**Seed the artboard full-size in your FIRST batch.** The page root frame carries an explicit numeric width AND height from op one — desktop 1440x900, mobile 390x844 — then content fills it (grow the height later if content exceeds it). A root left at fit_content renders as a thin strip that jerks taller with every batch; the canvas must always look like a full artboard being filled in.
+**Seed the artboard full-size in your FIRST batch.** Start with an explicit numeric width AND height — desktop 1440x900, mobile 390x844 — so an empty canvas is visible while you build. This is a CONSTRUCTION seed, not automatically the final height. In the final content batch, switch an ordinary content-driven page root to `height:"fit_content"`; keep a numeric root only for an explicitly requested viewport/device frame or a deliberate fixed dashboard/app shell. A user-specified numeric viewport is authoritative. This gives progressive rendering without shipping a large artificial tail.
 
-**Misplaced sections: MOVE, never rebuild-and-abandon.** Every insert result echoes where the nodes landed — verify the parent is the one you meant (a content section inside the 240-280px sidebar column is almost always wrong). If you placed something under the wrong parent, relocate it with `M(nodeId, correctParent)` or delete the stale copy with `D(nodeId)` BEFORE rebuilding elsewhere; a rebuilt duplicate plus the abandoned original ships both.
+**Final sizing invariant.** Content-bearing sections, cards, lists, and ordinary content wrappers default to `height:"fit_content"` (Hug). `height:"fill_container"` is rare: use it only for one explicitly designated remainder consumer under a definite-height parent (sidebar, work surface, clipped scroll body), or for a child stretching across the definite cross-axis of a fixed-height horizontal control/row. `space_between`, unequal card copy, short content, and bottom whitespace do not by themselves authorize Full Height. Before finishing, search your own top-level shells: no temporary numeric height and no accidental Full Height may remain.
+
+**Preserve the last working visual state.** Every insert result echoes where the nodes landed — verify the parent is the one you meant. Repair existing content with local `U(...)` / `M(...)` operations whenever possible. NEVER delete a visible working section in one tool call and plan to recreate it in a later call: if a rebuild is truly necessary, create the replacement and delete the stale subtree in ONE transactional `batch_design` call, then verify it. During final self-check, an incomplete repair is worse than a known small defect; if time is short, keep the working section intact.
 
 **Act on `layoutIssues` immediately.** After every tool result, read the returned JSON before deciding the next action. Every `batch_design` result (script or DSL) may carry a `layoutIssues` list — the REAL resolved layout's defects (a collapsed fill container, table columns overflowing their row, text overflowing its block). These are measured facts, not suggestions: fix them with a follow-up `batch_design` (or `U(...)` updates) BEFORE building the next section. Do not carry a known layout defect forward.
 
 ### Step 8 — Verify with a screenshot
 
 Call `get_screenshot` with a nodeId or `"root"` to SEE your result. Iterate — fix overlaps, spacing, alignment, and contrast — until the screenshot reads as a polished, complete screen. The screenshot check is mandatory, not optional. Do not declare the design done without it.
+
+**Image self-check is presentation-only.** During automatic screenshot-driven self-check, verify that each intended photographic slot visibly renders exactly one image, with valid bounds, crop/fit, clipping, radius, and overlay order; a deliberately authored icon or illustration tile is also valid when it renders as intended. Once an image displays correctly, do NOT judge or replace it based on subject relevance, aesthetics, perceived quality, resolution, tone, stock-photo choice, or whether search/generation found a better-looking asset. This does not restrict initial asset selection or an explicit user request to replace, retarget, or restyle an image.
 
 ---
 
@@ -132,7 +143,7 @@ One operation per line. Bindings let later lines reference nodes created earlier
 | Replace | `R(idOrPath, {...node...})` | Replace a node in place. |
 | Delete | `D(id)` | Delete a node. |
 | Move | `M(id, parent, index)` | Move a node to a different parent at a specific child index. |
-| Image fill | `G(idOrBinding, "search"\|"generate", "prompt")` | Apply an image FILL to a frame or rectangle. Images are fills, never standalone nodes. |
+| Image | `G(idOrBinding, "search"\|"generate", "prompt"[, "append"])` | The default form fills an existing EMPTY frame/rectangle target. `"append"` creates a new child only under an explicit horizontal/vertical flow parent; it never overlays layout-none/omitted content. |
 
 Use slash paths (`binding/childName`) to target a named descendant inside a binding.
 
@@ -150,7 +161,7 @@ Do not force a fixed section count, a fixed stack order, or a fixed number of ca
 
 ### Spacing follows content
 
-If a row of items under-fills its container width, SPREAD them using space-between layout, do not bunch them at the start of the row. Do not leave a large empty tail at the bottom of a screen — size the root frame to its content rather than to an arbitrary height.
+If a row of items under-fills its container width, SPREAD them using space-between layout, do not bunch them at the start of the row. Do not leave a large empty tail at the bottom of a screen. Ordinary content-driven roots Hug their completed flow; only an explicitly requested fixed viewport should rebalance content inside an authored numeric height.
 
 ### Build complete, populated content — not a skeleton
 
@@ -173,7 +184,7 @@ Bottom navigation bars span the full screen width. Tabs are evenly spread across
 
 ### Every image slot gets a real image fill
 
-Any avatar, profile photo, client/user thumbnail, product image, hero, or logo slot MUST receive an image fill via `G(id, "search", "<subject>")` — never leave it as an empty frame or a flat colored square. The subject is 2–3 English keywords UNIQUE per image, derived from the surrounding row/card. For an AVATAR the subject MUST include `face` or `headshot` (`G(avatarFrame, "search", "man face headshot")`) — a bare "portrait" query returns torsos and cropped bodies. A dish card is `G(imgFrame, "search", "pasta plate")`. Emit the `G(...)` op in the SAME batch that creates the frame so no placeholder is left unfilled.
+Any avatar, profile photo, client/user thumbnail, product image, hero, or logo slot MUST receive an image via `G(id, "search", "<subject>")` — never leave it as an empty frame or a flat colored square. The subject is 2–3 English keywords UNIQUE per image, derived from the surrounding row/card. For an AVATAR the subject MUST include `face` or `headshot` (`G(avatarFrame, "search", "man face headshot")`) — a bare "portrait" query returns torsos and cropped bodies. A dish card is `G(imgFrame, "search", "pasta plate")`. If you build with the operations DSL, emit `I(...)` and `G(...)` in the same batch. If script mode created the slot, use its returned id in the immediately following operations batch; do not proceed while `imageSlots` still reports it. The 3-argument form is strict slot-fill: the target must exist and have zero children. Only when you deliberately want another gallery/rail flow child, use `img=G(rail, "search", "subject", "append")` on a parent that explicitly declares `layout: "horizontal"` or `layout: "vertical"`, then immediately set dimensions with `U(img, {"width":..., "height":...})` in that same batch. Append is rejected for layout-none or layout-omitted parents, so it can never create an accidental 0,0 overlay.
 
 An AVATAR slot is a fixed SQUARE: `width` = `height` = 40–48 (both NUMERIC, never `fill_container`), `cornerRadius` = half the size, `clipContent: true`; the image child inside is `fill_container` on BOTH axes. Never give an image a numeric height taller than its slot — a 300px image in a 42px avatar strip paints across half the screen. The same square rule applies to every ROW media thumbnail (mini-player artwork, track/list covers): fixed square `width` = `height` (e.g. 44×44), never `fill_container` width — that steals the whole row.
 

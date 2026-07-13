@@ -37,8 +37,8 @@ Build promise → proof → trust → action: what it is → why it works → wh
 
 ## Imagery
 
-- Every image is a scene from the visitor's future — people in the outcome state > product-in-context > product-in-environment > isolated product (use last sparingly).
-- Ask "would the visitor think 'I want to feel that way'?" If not, change it.
+- During initial image-query or image-prompt authoring, prefer scenes from the visitor's future — people in the outcome state > product-in-context > product-in-environment > isolated product (use last sparingly). Use "would the visitor want to feel that way?" only as an initial selection heuristic before inserting the image.
+- During automatic screenshot-driven self-check, a visibly rendered image is presentation-only: do not revisit or replace it merely because another subject, stock photo, search result, or generated image might feel more persuasive or attractive, unless the user explicitly requests an image edit.
 - Text over an image needs its own contrast treatment (overlay scrim, shadow, or text in a sibling container). NEVER set an AI image as a background fill with text on top — image and text are SIBLINGS, not layers. Never stretch or distort.
 
 ## Headline hierarchy (write strongest-down)

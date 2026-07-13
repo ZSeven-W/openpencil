@@ -51,9 +51,9 @@ card's texts/icons).
 Example (a horizontal row of two cards inside a section):
 {"_parent":null,"id":"<prefix>-root","type":"frame","name":"Section","width":"fill_container","height":"fit_content","layout":"vertical","gap":16}
 {"_parent":"<prefix>-root","id":"<prefix>-row","type":"frame","name":"Row","width":"fill_container","height":"fit_content","layout":"horizontal","gap":16}
-{"_parent":"<prefix>-row","id":"<prefix>-card1","type":"frame","name":"Card","width":"fill_container","height":"fill_container","layout":"vertical","cornerRadius":12}
+{"_parent":"<prefix>-row","id":"<prefix>-card1","type":"frame","name":"Card","width":"fill_container","height":"fit_content","layout":"vertical","cornerRadius":12}
 {"_parent":"<prefix>-card1","id":"<prefix>-card1-title","type":"text","name":"Title","content":"Revenue","fontSize":14}
-{"_parent":"<prefix>-row","id":"<prefix>-card2","type":"frame","name":"Card","width":"fill_container","height":"fill_container","layout":"vertical","cornerRadius":12}
+{"_parent":"<prefix>-row","id":"<prefix>-card2","type":"frame","name":"Card","width":"fill_container","height":"fit_content","layout":"vertical","cornerRadius":12}
 ALL field names are camelCase: cornerRadius, fontSize, fontWeight, justifyContent,
 alignItems, clipContent. Geometry fields are x, y, width, height. Never snake_case.
 Output ONLY the JSON lines."#;
@@ -86,8 +86,9 @@ Each script runs in a FRESH sandbox: variables from an EARLIER batch do not exis
 to a node an earlier batch created, pass its id STRING — I("n12", {...}) — never a `const` from
 that batch. Ids come back in the batch result.
 EVERY frame with children MUST declare layout ("vertical" or "horizontal"; "none" for an
-absolute stack). A section that holds a title and a card rail is layout:"vertical" — omitting
-it stacks by default, but say it, because a row is only ever a row when you write it.
+absolute stack). A section that holds a title and a card rail is layout:"vertical". Omitting
+layout is ambiguous and the current engine may place flow children in a row, so always choose it
+explicitly.
 Example:
   const sec = I(null, {type:"frame", name:"Clients", layout:"vertical", width:"fill_container", gap:0});
   const tbl = I(sec, {type:"frame", layout:"vertical", width:"fill_container"});

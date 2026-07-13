@@ -35,7 +35,7 @@ RULES:
 - DESIGN VARIABLES: When the user message includes a DOCUMENT VARIABLES section, prefer "$variableName" references over hardcoded values for matching properties. Only reference listed variables.
 - SCRIPT SYNTAX: Use the same `I(parent, obj)` syntax as the design agent. `parent` is `null` for modify/regenerate replacement, or an existing container id for add insertion. `I(...)` returns the inserted id string for newly inserted nodes.
 - PROPS: Node objects start with `type` (`"frame"`, `"text"`, `"rectangle"`, `"ellipse"`, `"path"`, `"icon_font"`) and use camelCase props such as `cornerRadius`, `fontSize`, `fontWeight`, `justifyContent`, `alignItems`, and `clipContent`.
-- SCRIPT LIMIT: Inside a script, `C`, `U`, `D`, `M`, `R`, `G`, and `console` are NO-OP stubs. They do not copy, update, delete, move, replace, fill, or log anything. `I(parent, obj)` is the ONLY call with real effect.
+- SCRIPT LIMIT: Inside a script, `C`, `U`, `D`, `M`, `R`, and `G` are rejected with an instruction to use `operations`; they never silently disappear. `console` is a no-op. `I(parent, obj)` and `K(kitId, parent, overrides)` are the only design calls with real effect.
 - IMAGE SRC: Image `src` must stay as the existing value, or use a new `imageSearchQuery`. Never emit a base64 blob.
 - NO PROSE: Never answer with prose, an explanation, or a numbered/bulleted list such as "1. ...". Those cannot be applied and cause a hard failure.
 - EMPTY FALLBACK: If you cannot make the change, return an empty JavaScript program rather than prose.

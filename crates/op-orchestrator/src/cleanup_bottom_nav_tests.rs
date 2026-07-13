@@ -350,3 +350,44 @@ fn non_tab_horizontal_row_untouched() {
 
     assert_eq!(node_json(&sink, "plain-row"), before);
 }
+
+#[test]
+fn clipped_image_card_scroller_is_not_distributed_as_bottom_nav() {
+    let mut sink = VecDocSink::new();
+    insert_tree(
+        &mut sink,
+        r##"{
+            "type": "frame", "id": "root", "name": "Mobile Root",
+            "width": 390, "height": 844, "layout": "vertical",
+            "children": [{
+                "type": "frame", "id": "rail", "name": "Popular Scroller",
+                "width": "fill_container", "height": "fit_content",
+                "layout": "horizontal", "justifyContent": "start",
+                "clipContent": true, "gap": 12,
+                "children": [
+                    {"type":"frame","id":"card-a","name":"Santorini","width":210,"height":240,"layout":"vertical","children":[
+                        {"type":"image","id":"image-a","src":"https://example.com/a.jpg","width":210,"height":140},
+                        {"type":"icon_font","id":"heart-a","iconFontName":"heart","width":18,"height":18},
+                        {"type":"text","id":"label-a","content":"Santorini","width":"fit_content","height":20}
+                    ]},
+                    {"type":"frame","id":"card-b","name":"Kyoto","width":210,"height":240,"layout":"vertical","children":[
+                        {"type":"image","id":"image-b","src":"https://example.com/b.jpg","width":210,"height":140},
+                        {"type":"icon_font","id":"heart-b","iconFontName":"heart","width":18,"height":18},
+                        {"type":"text","id":"label-b","content":"Kyoto","width":"fit_content","height":20}
+                    ]},
+                    {"type":"frame","id":"card-c","name":"Banff","width":210,"height":240,"layout":"vertical","children":[
+                        {"type":"image","id":"image-c","src":"https://example.com/c.jpg","width":210,"height":140},
+                        {"type":"icon_font","id":"heart-c","iconFontName":"heart","width":18,"height":18},
+                        {"type":"text","id":"label-c","content":"Banff","width":"fit_content","height":20}
+                    ]}
+                ]
+            }]
+        }"##,
+    );
+    let before = node_json(&sink, "rail");
+
+    distribute_bottom_nav_tabs(&mut sink, "root");
+
+    assert_eq!(node_json(&sink, "rail"), before);
+    assert!(sink.applied.is_empty());
+}

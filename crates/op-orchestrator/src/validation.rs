@@ -278,7 +278,8 @@ against the reference and fix any significant deviations in layout, spacing, pro
 or missing elements. The reference shows the intended design — the current screenshot \
 should match its structure, visual balance, and element completeness. If elements visible \
 in the reference are missing in the current design, use structuralFixes with addChild to \
-add them."
+add them. Ignore differences in photographic or generated image content; compare only \
+whether image slots render correctly."
     } else {
         ""
     };
@@ -298,6 +299,9 @@ Focus on remaining issues only — do NOT re-report issues that have already bee
         "Analyze this UI design screenshot. Here is the node tree structure:\n\n\
 ```\n{node_tree_dump}\n```\n\n\
 Cross-reference visual issues with the node IDs above. \
+Image review is limited to rendering integrity: presence, one image per intended slot, \
+bounds, crop/fit, clipping, radius, and overlay order. Do not judge or replace image \
+content, relevance, aesthetics, perceived quality, resolution, tone, search, or generation. \
 Return JSON fixes using real node IDs from the tree.\
 {reference_instruction}{round_instruction}"
     );
