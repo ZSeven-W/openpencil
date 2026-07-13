@@ -10,17 +10,15 @@ use crate::{Point2D, Rect, TextLayout};
 
 const GROUP_HEADER_H: f32 = 22.0;
 /// #27 restyle: comfortable 48px card header (was 24px).
-const CARD_HEADER_H: f32 = 48.0;
+const CARD_HEADER_H: f32 = 28.0;
 const CARD_GAP: f32 = 4.0;
 const CARD_PAD_X: f32 = 8.0;
 const CARD_PAD_Y: f32 = 6.0;
 const CARD_LINE_H: f32 = 14.0;
 /// Radius for the #27 rounded-rect card style (~10px per spec).
-const CARD_RADIUS: f32 = 10.0;
+const CARD_RADIUS: f32 = 6.0;
 /// X-offset of the left-aligned card label.
 const CARD_LABEL_X: f32 = 12.0;
-/// X-offset from the card right edge to the status ring center.
-const CARD_STATUS_RIGHT_OFFSET: f32 = 44.0;
 /// X-offset from the card right edge to the chevron top-left.
 const CARD_CHEVRON_RIGHT_OFFSET: f32 = 24.0;
 /// Radius of the ✓-ring that surrounds the check icon on completed cards.
@@ -503,8 +501,8 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
 fn paint_source_badge(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, source: &str) {
     let badge_w = (source.chars().count() as f32 * 5.5 + 10.0).min(96.0);
     let badge = Rect::xywh(
-        card.header.origin.x + card.header.size.x - badge_w - 34.0,
-        card.header.origin.y + 6.0,
+        card.header.origin.x + card.header.size.x - badge_w - 40.0,
+        card.header.origin.y + (CARD_HEADER_H - 12.0) / 2.0,
         badge_w,
         12.0,
     );
@@ -529,11 +527,15 @@ fn paint_source_badge(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, 
 /// For completed (done) cards: a thin-ring circle in success-green with
 /// the `check` glyph inside — matching the #27 reference look. For
 /// running/pending: a muted loader spinner. For error: a red ✕ icon.
-/// The icon top-left is placed at `(x + w - CARD_STATUS_RIGHT_OFFSET,
-/// y + (CARD_HEADER_H - 14) / 2)`.
 fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
+    // Reference anatomy: the status glyph sits INLINE right after the verb
+    // label ("Checked guidelines ✓"), not flushed to the right edge.
+    let label_units: u32 = verb_for_tool(&card.name)
+        .chars()
+        .map(super::ai_chat_transcript_text::char_display_units)
+        .sum();
     let icon_top_left = Point2D::new(
-        card.header.origin.x + card.header.size.x - CARD_STATUS_RIGHT_OFFSET,
+        card.header.origin.x + CARD_LABEL_X + label_units as f32 * 6.0 + 8.0,
         card.header.origin.y + (CARD_HEADER_H - 14.0) / 2.0,
     );
 
@@ -714,23 +716,21 @@ mod tests {
         }
         fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
         fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-        fn stroke_svg_path(&mut self, d: &str, at: Point2D, _: f32, color: Color, _: f32) {
-            // Status icon position after #27 restyle:
-            // X = header.origin.x + header.size.x - CARD_STATUS_RIGHT_OFFSET (44)
-            //   = 10 + 100 - 44 = 66
-            // Y = header.origin.y + (CARD_HEADER_H - 14) / 2
-            //   = 10 + (48 - 14) / 2 = 27
-            if (at.x - 66.0).abs() < 0.01 && (at.y - 27.0).abs() < 0.01 {
-                let path = Icon::Check
-                    .paths()
-                    .iter()
-                    .chain(Icon::Close.paths().iter())
-                    .chain(Icon::CheckCircle.paths().iter())
-                    .chain(Icon::XCircle.paths().iter())
-                    .chain(Icon::Loader.paths().iter())
-                    .copied()
-                    .find(|path| *path == d)
-                    .expect("status icon path should be static icon data");
+        fn stroke_svg_path(&mut self, d: &str, _at: Point2D, _: f32, color: Color, _: f32) {
+            // Record only glyphs from the STATUS icon set — the expander
+            // chevron also strokes an svg path but is not in the set, so a
+            // position anchor is no longer needed (the status glyph now
+            // floats inline after the label).
+            if let Some(path) = Icon::Check
+                .paths()
+                .iter()
+                .chain(Icon::Close.paths().iter())
+                .chain(Icon::CheckCircle.paths().iter())
+                .chain(Icon::XCircle.paths().iter())
+                .chain(Icon::Loader.paths().iter())
+                .copied()
+                .find(|path| *path == d)
+            {
                 self.status_paths.push(path);
                 if self.status_colors.last().copied() != Some(color) {
                     self.status_colors.push(color);

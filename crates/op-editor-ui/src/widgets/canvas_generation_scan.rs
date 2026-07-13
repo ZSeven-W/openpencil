@@ -58,33 +58,37 @@ pub(super) fn generating_paint_sets(
     };
     for root in roots {
         if indicators.frames.contains_key(&root.id) {
-            collect_descendants(&root.children, &mut sets);
+            // Per generating root (Team mode runs several concurrently).
+            let mut deck_taken = false;
+            collect_descendants(&root.children, &mut sets, &mut deck_taken);
         }
     }
     Some(sets)
 }
 
-fn collect_descendants(nodes: &[SceneNode], sets: &mut GenerationPaintSets) {
-    // Work-order gate: within each container only the FIRST empty shell
-    // (document order) is "on deck" and washes; later empty siblings wait
-    // their turn INVISIBLY (layout slot kept, paint suppressed). Pencil
-    // never lights — or even shows — a section that work has not reached,
-    // and conversely a region must light up the moment it becomes the
-    // next target (all measured, user reports 2026-07-12).
-    let mut deck_taken = false;
+fn collect_descendants(nodes: &[SceneNode], sets: &mut GenerationPaintSets, deck_taken: &mut bool) {
+    // Work-order gate: across the WHOLE generating root only the FIRST
+    // empty shell in document (pre-order) position is "on deck" and washes;
+    // every other empty shell waits its turn INVISIBLY (layout slot kept,
+    // paint suppressed). The gate was per-container at first, which lit the
+    // root's trailing bottom-nav shell while the model was narrating "fill
+    // the Header" — the fill order is document order, so the deck must be
+    // global to the root (user report 2026-07-12). Pencil never lights a
+    // section work has not reached, and a region must light up the moment
+    // it becomes the next target.
     for node in nodes {
         let empty_frame = node.kind == NodeKind::Frame && node.children.is_empty();
         if empty_frame {
-            if !deck_taken {
+            if !*deck_taken {
                 sets.scan.insert(node.id.clone());
             } else {
                 sets.suppressed.insert(node.id.clone());
             }
-            deck_taken = true;
+            *deck_taken = true;
         } else {
             sets.scan.insert(node.id.clone());
         }
-        collect_descendants(&node.children, sets);
+        collect_descendants(&node.children, sets, deck_taken);
     }
 }
 

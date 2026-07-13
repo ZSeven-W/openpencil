@@ -642,10 +642,7 @@ pub(crate) fn paint_cursor_swatch(
             .map(|(dx, dy)| Point2D::new(origin.x + dx, origin.y + dy))
             .collect()
     };
-    for (width, alpha) in [(5.4, 0.05), (3.8, 0.08), (2.5, 0.12)] {
-        cx.backend
-            .stroke_polygon(&at(silhouette.body), PENCIL_HALO.with_alpha(alpha), width);
-    }
+    paint_soft_halo(cx, &at(silhouette.body), 1.0);
     cx.backend.fill_polygon(&at(silhouette.body), color);
     cx.backend
         .stroke_polygon(&at(silhouette.body), Color::WHITE.with_alpha(0.9), 1.2);
@@ -661,6 +658,40 @@ pub(crate) fn paint_cursor_swatch(
     if !silhouette.tip.is_empty() {
         cx.backend
             .fill_polygon(&at(silhouette.tip), Color::WHITE.with_alpha(0.95));
+    }
+}
+
+/// Soft halo as concentric FILLED expansions of the silhouette, largest
+/// first with per-layer alpha stacking smoothly toward the body. Filled
+/// polygons have no stroke joins, so sharp silhouette corners cannot spike
+/// (three concentric STROKES read as a dirty banded ring - user feedback
+/// 2026-07-12, twice). The slight downward bias doubles as the contact
+/// shadow, replacing the old hard-edged offset copy.
+fn paint_soft_halo(cx: &mut PaintCx<'_>, body: &[Point2D], alpha_scale: f32) {
+    let n = body.len() as f32;
+    let (mut sum_x, mut sum_y) = (0.0f32, 0.0f32);
+    for p in body {
+        sum_x += p.x;
+        sum_y += p.y;
+    }
+    let (center_x, center_y) = (sum_x / n, sum_y / n);
+    let radius = body
+        .iter()
+        .map(|p| ((p.x - center_x).powi(2) + (p.y - center_y).powi(2)).sqrt())
+        .fold(1.0f32, f32::max);
+    for (offset, alpha) in [(3.2, 0.030), (2.4, 0.040), (1.6, 0.050), (0.8, 0.060)] {
+        let k = 1.0 + offset / radius;
+        let ring: Vec<Point2D> = body
+            .iter()
+            .map(|p| {
+                Point2D::new(
+                    center_x + (p.x - center_x) * k + 0.4,
+                    center_y + (p.y - center_y) * k + 0.7,
+                )
+            })
+            .collect();
+        cx.backend
+            .fill_polygon(&ring, PENCIL_HALO.with_alpha(alpha * alpha_scale));
     }
 }
 
@@ -690,22 +721,9 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhou
             .collect()
     };
     let body = at(silhouette.body);
-    // Soft contact shadow first so the pencil lifts off the canvas.
-    let shadow: Vec<Point2D> = body
-        .iter()
-        .map(|p| Point2D::new(p.x + 1.0, p.y + 1.5))
-        .collect();
-    cx.backend
-        .fill_polygon(&shadow, Color::BLACK.with_alpha(0.14 * sprite.alpha));
-    // Dark halo OUTSIDE the white outline (user-picked "O4", the macOS
-    // pointer treatment): a pure-white outline vanished on light designs.
-    // No blur primitive exists, so the glow is FEATHERED as three
-    // concentric strokes with falling alpha - a single wide 28% band read
-    // as a dirty grey ring (user feedback 2026-07-12).
-    for (width, alpha) in [(6.6, 0.05), (4.6, 0.08), (2.9, 0.12)] {
-        cx.backend
-            .stroke_polygon(&body, PENCIL_HALO.with_alpha(alpha * sprite.alpha), width);
-    }
+    // Dark soft halo OUTSIDE the white rim (user-picked "O4", the macOS
+    // pointer treatment) - filled-expansion feather, see paint_soft_halo.
+    paint_soft_halo(cx, &body, sprite.alpha);
     cx.backend
         .fill_polygon(&body, sprite.color.with_alpha(sprite.alpha));
     cx.backend
