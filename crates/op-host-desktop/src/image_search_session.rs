@@ -1,6 +1,7 @@
 //! Background image-search enrichment for generated image nodes.
 
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -145,12 +146,21 @@ pub(crate) struct ImageSearchTarget {
     /// AI-generation prompt bound to the node (`image_prompt`), if any. Used when
     /// an image-gen model is configured; falls back to `query`.
     pub prompt: Option<String>,
+    /// Explicit `G()` acquisition mode, or Auto for legacy/heuristic slots.
+    pub mode: ImageRequestMode,
     /// Resolved numeric dimensions (for the gen provider's aspect mapping).
     pub width: Option<f64>,
     pub height: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImageRequestMode {
+    Auto,
+    Search,
+    Generate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ImageAspectRatio {
     Wide,
     Tall,
@@ -191,7 +201,24 @@ impl OpenverseCredentials {
 
 struct ImageSearchJob {
     node_id: NodeId,
+    /// Exact node intent at enqueue time. Production jobs always set this;
+    /// hand-built unit jobs may omit it when testing unrelated bookkeeping.
+    intent: Option<String>,
     rx: Receiver<Option<String>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct SearchIntentKey {
+    query: String,
+    aspect_ratio: Option<ImageAspectRatio>,
+}
+
+enum SearchMemoEntry {
+    Pending {
+        request_id: u64,
+        waiters: Vec<mpsc::Sender<Option<String>>>,
+    },
+    Ready(String),
 }
 
 #[derive(Default)]
@@ -224,26 +251,64 @@ pub(crate) struct ImageSearchSession {
     /// target is already known via `in_flight`/`completed`).
     #[cfg(test)]
     scan_count: u32,
-    /// Result URLs already used this session — similar queries ("playlist
-    /// cover daily mix" / "... chill vibes" / "... discover weekly") share
-    /// their Openverse top hit, which filled three different cards with the
-    /// SAME photo (measured: test0711-22). Selection skips these best-effort.
+    /// Canonical provider identities plus compact content digests already used
+    /// this session. Similar queries otherwise share their Openverse top hit
+    /// and fill several cards with the same artwork (measured: test0711-22).
+    /// Never stores full embedded data URLs.
     used_urls: Arc<Mutex<HashSet<String>>>,
-    /// Query → the photo that query already resolved to, this session.
+    /// Full stock-search intent → pending waiters or the resolved photo.
     ///
     /// The dedup above must NOT fire when the SAME subject comes back: the
     /// model rebuilds a section mid-run (fresh node ids), the same query
     /// ("Bali Indonesia") searches again, and its own good photo is now in
-    /// `used_urls` — so the second search skipped it and took a junk result
+    /// the used-image set — so the second search skipped it and took a junk result
     /// instead (measured 2026-07-12: a real Bali temple photo turned into a
     /// plain blue sky halfway through a run). One subject, one photo: a repeat
     /// query resolves from this memo with no network call at all.
-    resolved: Arc<Mutex<HashMap<String, String>>>,
+    search_memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>>,
+    /// Monotonic identity for a memo fetch. It is deliberately not reset:
+    /// an old network thread may finish after `reset()` and after the new
+    /// document has enqueued the same intent. Matching the request id avoids
+    /// that old completion consuming the new waiters (the classic ABA race).
+    next_search_request_id: u64,
 }
 
-/// Memo key — the subject, not its spelling.
-fn query_key(query: &str) -> String {
-    query.trim().to_ascii_lowercase()
+/// Memo key for the authored stock-search intent.
+///
+/// This deliberately does NOT use `simplify_search_query`: that function is a
+/// lossy provider adapter (it drops words such as `album` / `cover` and caps
+/// the request at four keywords). Those transformations are useful for a
+/// photo corpus, but they must not make two distinct authored subjects share a
+/// cached image or make the stale-result guard treat a changed intent as the
+/// same intent. Case, punctuation, and repeated whitespace are canonicalized;
+/// every authored word remains part of identity. Aspect remains part of intent
+/// so a square cover never reuses a wide hero.
+fn search_intent_key(query: &str, aspect_ratio: Option<ImageAspectRatio>) -> SearchIntentKey {
+    SearchIntentKey {
+        query: canonical_search_intent_query(query),
+        aspect_ratio,
+    }
+}
+
+fn canonical_search_intent_query(query: &str) -> String {
+    let mut canonical = String::with_capacity(query.len());
+    let mut pending_separator = false;
+    for character in query.trim().to_lowercase().chars() {
+        if character.is_alphanumeric() {
+            if pending_separator && !canonical.is_empty() {
+                canonical.push(' ');
+            }
+            canonical.push(character);
+            pending_separator = false;
+        } else {
+            pending_separator = true;
+        }
+    }
+    if canonical.is_empty() {
+        query.trim().to_lowercase()
+    } else {
+        canonical
+    }
 }
 
 impl ImageSearchSession {
@@ -268,8 +333,11 @@ impl ImageSearchSession {
         self.completed.clear();
         self.jobs.clear();
         self.invalidate_scan_gate();
-        self.used_urls.lock().unwrap().clear();
-        self.resolved.lock().unwrap().clear();
+        // Replace the generations, do not merely clear them. Detached network
+        // threads still own the old Arcs and may finish after reset; writing to
+        // those abandoned maps must not contaminate the replacement document.
+        self.used_urls = Arc::new(Mutex::new(HashSet::new()));
+        self.search_memo = Arc::new(Mutex::new(HashMap::new()));
     }
 
     pub(crate) fn is_pending(&self) -> bool {
@@ -317,23 +385,30 @@ impl ImageSearchSession {
         if targets.is_empty() {
             return false;
         }
-        // Strategy: a configured image-GEN model wins (generate from the bound
-        // `image_prompt`); otherwise fall back to stock SEARCH (Openverse). The
-        // prompt/query stay on the node either way, so the UI can re-gen/re-search
-        // and a later config change re-resolves on the next enqueue.
+        // An explicit G(...,"search"|"generate",...) mode wins. Legacy and
+        // heuristic slots remain Auto: configured generation first, otherwise
+        // stock search. A generate request without a configured provider fails
+        // visibly; it is never silently changed into a stock-photo request.
         let gen_profile = crate::image_panel_host::active_image_gen_profile(state).cloned();
         let credentials = OpenverseCredentials::from_state(state);
         for target in targets {
             let id = target.node_id.as_str().to_string();
             self.in_flight.insert(id);
-            let job = match &gen_profile {
-                Some(profile) => spawn_gen_job(target, profile.clone()),
-                None => spawn_job(
-                    target,
-                    credentials.clone(),
-                    Arc::clone(&self.used_urls),
-                    Arc::clone(&self.resolved),
-                ),
+            let job = match (target.mode, &gen_profile) {
+                (ImageRequestMode::Generate, Some(profile))
+                | (ImageRequestMode::Auto, Some(profile)) => spawn_gen_job(target, profile.clone()),
+                (ImageRequestMode::Generate, None) => spawn_unavailable_gen_job(target),
+                (ImageRequestMode::Search, _) | (ImageRequestMode::Auto, None) => {
+                    let request_id = self.next_search_request_id;
+                    self.next_search_request_id = self.next_search_request_id.wrapping_add(1);
+                    spawn_job(
+                        target,
+                        credentials.clone(),
+                        Arc::clone(&self.used_urls),
+                        Arc::clone(&self.search_memo),
+                        request_id,
+                    )
+                }
             };
             self.jobs.push(job);
         }
@@ -357,6 +432,15 @@ impl ImageSearchSession {
                     // revision, but the gate invalidation still covers the
                     // failure path.)
                     self.last_scanned = None;
+                    if job.intent.as_ref().is_some_and(|expected| {
+                        current_intent_fingerprint(state, &job.node_id).as_ref() != Some(expected)
+                    }) {
+                        tracing::info!(
+                            node_id = %job.node_id,
+                            "discarding stale image result because the node's image intent changed"
+                        );
+                        continue;
+                    }
                     // Ours: a failed search lands the theme-adaptive dashed
                     // placeholder (sentinel src) instead of a bare grey box.
                     let url = url.unwrap_or_else(|| SEARCH_FAILED_PLACEHOLDER_SRC.to_string());
@@ -391,18 +475,46 @@ fn spawn_job(
     target: ImageSearchTarget,
     credentials: Option<OpenverseCredentials>,
     used_urls: Arc<Mutex<HashSet<String>>>,
-    resolved: Arc<Mutex<HashMap<String, String>>>,
+    search_memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>>,
+    request_id: u64,
 ) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     let aspect_ratio = target.aspect_ratio;
-    let key = query_key(&target.query);
-    // One subject, one photo: a query this session already answered resolves
-    // from the memo — no network, and (crucially) no dedup-forced downgrade
-    // when a rebuilt section asks for the same picture again.
-    if let Some(url) = resolved.lock().unwrap().get(&key).cloned() {
-        let _ = tx.send(Some(url));
-        return ImageSearchJob { node_id, rx };
+    let key = search_intent_key(&target.query, aspect_ratio);
+    let intent = Some(intent_fingerprint(&target, None));
+    // One full search intent, one in-flight request and one session result.
+    // Rebuilt nodes subscribe to the same pending request instead of racing
+    // duplicate searches; completed intents return from the memo.
+    {
+        let mut memo = search_memo.lock().unwrap();
+        match memo.get_mut(&key) {
+            Some(SearchMemoEntry::Ready(url)) => {
+                let _ = tx.send(Some(url.clone()));
+                return ImageSearchJob {
+                    node_id,
+                    intent,
+                    rx,
+                };
+            }
+            Some(SearchMemoEntry::Pending { waiters, .. }) => {
+                waiters.push(tx);
+                return ImageSearchJob {
+                    node_id,
+                    intent,
+                    rx,
+                };
+            }
+            None => {
+                memo.insert(
+                    key.clone(),
+                    SearchMemoEntry::Pending {
+                        request_id,
+                        waiters: vec![tx],
+                    },
+                );
+            }
+        }
     }
     std::thread::spawn(move || {
         let url = fetch_first_image_url_blocking(
@@ -411,12 +523,48 @@ fn spawn_job(
             credentials.as_ref(),
             &used_urls,
         );
-        if let Some(found) = url.as_ref() {
-            resolved.lock().unwrap().insert(key, found.clone());
-        }
-        let _ = tx.send(url);
+        publish_search_result(&search_memo, key, request_id, url);
     });
-    ImageSearchJob { node_id, rx }
+    ImageSearchJob {
+        node_id,
+        intent,
+        rx,
+    }
+}
+
+/// Publish only into the exact Pending entry that launched this request. A
+/// reset may remove it and a new document may insert the same key before the
+/// old thread returns; the request id keeps that old result isolated.
+fn publish_search_result(
+    search_memo: &Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>>,
+    key: SearchIntentKey,
+    request_id: u64,
+    url: Option<String>,
+) -> bool {
+    let waiters = {
+        let mut memo = search_memo.lock().unwrap();
+        let matches_request = matches!(
+            memo.get(&key),
+            Some(SearchMemoEntry::Pending {
+                request_id: pending_id,
+                ..
+            }) if *pending_id == request_id
+        );
+        if !matches_request {
+            return false;
+        }
+        let Some(SearchMemoEntry::Pending { waiters, .. }) = memo.remove(&key) else {
+            unreachable!("request identity was checked under the same lock")
+        };
+        if let Some(found) = url.as_ref() {
+            memo.insert(key, SearchMemoEntry::Ready(found.clone()));
+        }
+        waiters
+    };
+    for waiter in waiters {
+        let _ = waiter.send(url.clone());
+    }
+    true
 }
 
 /// Enrich via the configured image-GEN model instead of stock search. Prefers the
@@ -426,6 +574,7 @@ fn spawn_job(
 fn spawn_gen_job(target: ImageSearchTarget, profile: ImageGenProfile) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
+    let intent = Some(intent_fingerprint(&target, Some(&profile)));
     std::thread::spawn(move || {
         let prompt = target
             .prompt
@@ -441,44 +590,93 @@ fn spawn_gen_job(target: ImageSearchTarget, profile: ImageGenProfile) -> ImageSe
         .ok();
         let _ = tx.send(url);
     });
-    ImageSearchJob { node_id, rx }
+    ImageSearchJob {
+        node_id,
+        intent,
+        rx,
+    }
+}
+
+fn spawn_unavailable_gen_job(target: ImageSearchTarget) -> ImageSearchJob {
+    let (tx, rx) = mpsc::channel();
+    let node_id = target.node_id.clone();
+    let intent = Some(intent_fingerprint(&target, None));
+    let _ = tx.send(None);
+    ImageSearchJob {
+        node_id,
+        intent,
+        rx,
+    }
+}
+
+fn intent_fingerprint(target: &ImageSearchTarget, profile: Option<&ImageGenProfile>) -> String {
+    let generate = target.mode == ImageRequestMode::Generate
+        || (target.mode == ImageRequestMode::Auto && profile.is_some());
+    if generate {
+        let (profile_id, model) = profile
+            .map(|profile| (profile.id.as_str(), profile.model.as_str()))
+            .unwrap_or(("unconfigured", "unconfigured"));
+        format!(
+            "generate|{profile_id}|{model}|{}|{:?}|{:?}",
+            target
+                .prompt
+                .as_deref()
+                .filter(|prompt| !prompt.trim().is_empty())
+                .unwrap_or(target.query.as_str())
+                .trim(),
+            target.width.map(f64::to_bits),
+            target.height.map(f64::to_bits)
+        )
+    } else {
+        let key = search_intent_key(&target.query, target.aspect_ratio);
+        format!("search|{}|{:?}", key.query, key.aspect_ratio)
+    }
+}
+
+fn current_intent_fingerprint(state: &EditorState, node_id: &NodeId) -> Option<String> {
+    let target = collect_targets(state, &HashSet::new())
+        .into_iter()
+        .find(|target| &target.node_id == node_id)?;
+    let profile = crate::image_panel_host::active_image_gen_profile(state);
+    Some(intent_fingerprint(&target, profile))
 }
 
 pub(crate) fn collect_targets(
     state: &EditorState,
     known_node_ids: &HashSet<String>,
 ) -> Vec<ImageSearchTarget> {
-    let rects = resolved_sizes(state);
+    let resolved_sizes = resolved_node_sizes(state);
     let mut targets = Vec::new();
     collect_from_children(
         state.active_children(),
         known_node_ids,
-        &rects,
+        &resolved_sizes,
         &mut targets,
-        &[],
         &[],
     );
     targets
 }
 
-/// Every node's RESOLVED size, from the real layout pass.
-///
-/// Name-and-authored-size heuristics are blind to the shape weak models
-/// actually ship: DeepSeek built every card's photo area as an UNNAMED
-/// rectangle sized `fill_container` x `fill_container`, so it carried neither
-/// a keyword nor a number and the whole page came out as grey boxes (measured
-/// test0711-1-ds, 2026-07-12). What a slot IS is a question about geometry —
-/// so ask the layout.
-fn resolved_sizes(state: &EditorState) -> HashMap<String, (f32, f32)> {
+/// Resolved node dimensions from the real layout pass. This map is used only
+/// after a node has independently qualified as media; geometry never turns an
+/// anonymous surface into an image target. It lets a G()-created fill/fill
+/// child inherit the actual slot aspect for search, generation, and stale-job
+/// detection instead of losing that intent as `None`.
+fn resolved_node_sizes(state: &EditorState) -> HashMap<String, (f64, f64)> {
     let scene = op_pen_loader::editor_state_to_layout_scene(state);
     let mut out = HashMap::new();
     fn walk(
         nodes: &[op_editor_ui::layout_scene::SceneNode],
-        out: &mut HashMap<String, (f32, f32)>,
+        out: &mut HashMap<String, (f64, f64)>,
     ) {
         for node in nodes {
             let bounds = node.aggregate_bounds();
-            out.insert(node.id.clone(), (bounds.size.x, bounds.size.y));
+            if bounds.size.x > 0.0 && bounds.size.y > 0.0 {
+                out.insert(
+                    node.id.clone(),
+                    (f64::from(bounds.size.x), f64::from(bounds.size.y)),
+                );
+            }
             walk(&node.children, out);
         }
     }
@@ -488,78 +686,37 @@ fn resolved_sizes(state: &EditorState) -> HashMap<String, (f32, f32)> {
     out
 }
 
-/// The smallest box that reads as a picture rather than a swatch or a rule.
-const RESOLVED_SLOT_MIN_W: f32 = 80.0;
-const RESOLVED_SLOT_MIN_H: f32 = 60.0;
-
-/// An EMPTY, painted box that resolved to picture size, carries no name of its
-/// own (or only a generic one), and sits in a card that has words in it — the
-/// card's words say what the picture is. Geometry decides; the name is only
-/// allowed to VETO (a box called "Divider" is not a photo).
-fn is_resolved_media_slot(
-    node: &PenNode,
-    rects: &HashMap<String, (f32, f32)>,
-    sibling_text: &[String],
-) -> bool {
-    let (base, container) = match node {
-        PenNode::Frame(f) => (&f.base, &f.container),
-        PenNode::Rectangle(r) => (&r.base, &r.container),
-        _ => return false,
-    };
-    if sibling_text.is_empty() {
-        return false;
-    }
-    if node.children().is_some_and(|kids| !kids.is_empty()) {
-        return false;
-    }
-    if !matches!(container.fill.as_deref(), Some([PenFill::Solid(_)])) {
-        return false;
-    }
-    if let Some(name) = base.name.as_deref().map(str::trim) {
-        if !name.is_empty() && !is_generic_placeholder_name(name) && !has_image_area_keyword(name) {
-            return false;
-        }
-    }
-    rects
-        .get(base.id.as_str())
-        .is_some_and(|(w, h)| *w >= RESOLVED_SLOT_MIN_W && *h >= RESOLVED_SLOT_MIN_H)
-}
-
 fn collect_from_children(
     children: &[PenNode],
     known_node_ids: &HashSet<String>,
-    rects: &HashMap<String, (f32, f32)>,
+    resolved_sizes: &HashMap<String, (f64, f64)>,
     targets: &mut Vec<ImageSearchTarget>,
     parent_names: &[String],
-    inherited_text: &[String],
 ) {
-    // Sibling text of a bare anonymous slot IS its subject ("Blinding
-    // Lights" next to a nameless 120px square = that track's cover).
+    // Direct sibling text of a bare anonymous slot may name its subject
+    // ("Blinding Lights" next to a nameless 120px square = that track's
+    // cover). Do not search sibling container subtrees or inherit text across
+    // levels: at a rail/list boundary those words belong to cousin cards, not
+    // to this slot.
     for (index, node) in children.iter().enumerate() {
-        // The words that name a picture are rarely the slot's literal siblings:
-        // a card is [photo band, info frame] and the title lives INSIDE the
-        // info frame (measured test0711-1-ds — every photo area came out
-        // contextless and the page shipped as grey boxes). Take the words from
-        // the OTHER siblings' subtrees; a slot alone in its band inherits its
-        // card's words. Cousin cards are never consulted — that would name the
-        // Bali card's photo "Santorini".
-        let mut context: Vec<String> = Vec::new();
-        for (other_index, other) in children.iter().enumerate() {
-            if other_index == index {
-                continue;
-            }
-            collect_text_from_subtree(other, 3, &mut context);
-            if context.len() >= 2 {
-                break;
-            }
-        }
-        context.truncate(2);
-        if context.is_empty() {
-            context = inherited_text.to_vec();
-        }
+        let context: Vec<String> = children
+            .iter()
+            .enumerate()
+            .filter(|(other_index, _)| *other_index != index)
+            .filter_map(|(_, other)| match other {
+                PenNode::Text(text) => match &text.content {
+                    TextContent::Plain(value) if !value.trim().is_empty() => {
+                        Some(value.trim().to_string())
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .take(2)
+            .collect();
 
         if let Some(target) =
-            image_search_target_for(node, known_node_ids, rects, parent_names, &context)
+            image_search_target_for(node, known_node_ids, resolved_sizes, parent_names, &context)
         {
             targets.push(target);
         }
@@ -577,40 +734,18 @@ fn collect_from_children(
             collect_from_children(
                 grand,
                 known_node_ids,
-                rects,
+                resolved_sizes,
                 targets,
                 &child_parent_names,
-                &context,
             );
         }
-    }
-}
-
-fn collect_text_from_subtree(node: &PenNode, depth: usize, out: &mut Vec<String>) {
-    if out.len() >= 2 {
-        return;
-    }
-    if let PenNode::Text(t) = node {
-        if let TextContent::Plain(text) = &t.content {
-            let trimmed = text.trim();
-            if !trimmed.is_empty() {
-                out.push(trimmed.to_string());
-            }
-        }
-        return;
-    }
-    if depth == 0 {
-        return;
-    }
-    for child in node.children().into_iter().flatten() {
-        collect_text_from_subtree(child, depth - 1, out);
     }
 }
 
 fn image_search_target_for(
     node: &PenNode,
     known_node_ids: &HashSet<String>,
-    rects: &HashMap<String, (f32, f32)>,
+    resolved_sizes: &HashMap<String, (f64, f64)>,
     parent_names: &[String],
     sibling_text: &[String],
 ) -> Option<ImageSearchTarget> {
@@ -624,7 +759,8 @@ fn image_search_target_for(
     // way with no names and no G() bindings (measured test0711-2-ds); the
     // sibling text is the only, and a good, subject source.
     let bare_slot_with_context = !sibling_text.is_empty()
-        && (is_bare_anonymous_slot(node) || is_resolved_media_slot(node, rects, sibling_text));
+        && !has_non_media_context(parent_names)
+        && is_bare_anonymous_slot(node);
     let needs_image = match node {
         PenNode::Image(image) => is_placeholder_src(&image.src),
         PenNode::Frame(_) => is_frame_placeholder_still_unfilled(node) || bare_slot_with_context,
@@ -677,13 +813,62 @@ fn image_search_target_for(
         PenNode::Image(image) => image.image_prompt.clone(),
         _ => None,
     };
+    let mode = match node {
+        // Legacy / script-generated Image nodes intentionally carry both
+        // fields: generation uses the richer prompt when a profile exists,
+        // otherwise stock search falls back to the query. `G("search")` and
+        // `G("generate")` remain unambiguous because they emit only one field.
+        PenNode::Image(image)
+            if image
+                .image_prompt
+                .as_deref()
+                .is_some_and(|prompt| !prompt.trim().is_empty())
+                && image
+                    .image_search_query
+                    .as_deref()
+                    .is_some_and(|query| !query.trim().is_empty()) =>
+        {
+            ImageRequestMode::Auto
+        }
+        PenNode::Image(image)
+            if image
+                .image_prompt
+                .as_deref()
+                .is_some_and(|prompt| !prompt.trim().is_empty()) =>
+        {
+            ImageRequestMode::Generate
+        }
+        PenNode::Image(image)
+            if image
+                .image_search_query
+                .as_deref()
+                .is_some_and(|query| !query.trim().is_empty()) =>
+        {
+            ImageRequestMode::Search
+        }
+        PenNode::Frame(frame)
+            if frame
+                .image_search_query
+                .as_deref()
+                .is_some_and(|query| !query.trim().is_empty()) =>
+        {
+            ImageRequestMode::Search
+        }
+        _ => ImageRequestMode::Auto,
+    };
+    let (width, height) = resolved_sizes
+        .get(id)
+        .copied()
+        .map(|(width, height)| (Some(width), Some(height)))
+        .unwrap_or_else(|| (node.width_px(), node.height_px()));
     Some(ImageSearchTarget {
         node_id: NodeId::new(id),
         query,
-        aspect_ratio: infer_aspect_ratio(node),
+        aspect_ratio: infer_aspect_ratio(width, height),
         prompt,
-        width: node.width_px(),
-        height: node.height_px(),
+        mode,
+        width,
+        height,
     })
 }
 
@@ -794,6 +979,9 @@ fn is_unnamed_media_slot_in_context(node: &PenNode, parent_names: &[String]) -> 
     let PenNode::Rectangle(rect) = node else {
         return false;
     };
+    if has_non_media_context(parent_names) {
+        return false;
+    }
     if rect
         .base
         .name
@@ -823,6 +1011,40 @@ fn is_unnamed_media_slot_in_context(node: &PenNode, parent_names: &[String]) -> 
                 .split(|c: char| !c.is_ascii_alphanumeric())
                 .any(|token| token == *word)
         })
+    })
+}
+
+/// Explicit structural/control vocabulary vetoes the anonymous-slot fallback.
+/// These surfaces often have the same small rounded solid geometry as cover
+/// art, but filling a KPI, swatch, badge, or button with a photo is always a
+/// worse failure than leaving an ambiguous box untouched. Explicit image
+/// nodes, placeholder roles, and media-named slots do not depend on this
+/// fallback and remain eligible.
+fn has_non_media_context(parent_names: &[String]) -> bool {
+    const NON_MEDIA_WORDS: [&str; 18] = [
+        "kpi",
+        "metric",
+        "stat",
+        "stats",
+        "analytics",
+        "chart",
+        "graph",
+        "swatch",
+        "palette",
+        "button",
+        "control",
+        "badge",
+        "indicator",
+        "progress",
+        "separator",
+        "divider",
+        "toggle",
+        "status",
+    ];
+    parent_names.iter().any(|name| {
+        name.to_ascii_lowercase()
+            .split(|character: char| !character.is_ascii_alphanumeric())
+            .any(|token| NON_MEDIA_WORDS.contains(&token))
     })
 }
 
@@ -872,14 +1094,8 @@ fn image_area_dimension_ok(size: &Option<SizingBehavior>, min_px: f64) -> (bool,
     }
 }
 
-fn infer_aspect_ratio(node: &PenNode) -> Option<ImageAspectRatio> {
-    let (width, height) = match node {
-        PenNode::Image(image) => (&image.width, &image.height),
-        PenNode::Frame(frame) => (&frame.container.width, &frame.container.height),
-        PenNode::Rectangle(rect) => (&rect.container.width, &rect.container.height),
-        _ => return None,
-    };
-    let (Some(width), Some(height)) = (dimension_number(width), dimension_number(height)) else {
+fn infer_aspect_ratio(width: Option<f64>, height: Option<f64>) -> Option<ImageAspectRatio> {
+    let (Some(width), Some(height)) = (width, height) else {
         return None;
     };
     if width <= 0.0 || height <= 0.0 {
@@ -903,6 +1119,21 @@ fn dimension_number(size: &Option<SizingBehavior>) -> Option<f64> {
 }
 
 fn has_image_area_keyword(name: &str) -> bool {
+    let compact: String = name
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    if compact.ends_with("img")
+        || compact.ends_with("image")
+        || compact.ends_with("photo")
+        || compact.ends_with("cover")
+        || compact.ends_with("thumbnail")
+        || compact.ends_with("artwork")
+        || compact.ends_with("media")
+    {
+        return true;
+    }
     name.split(|c: char| !c.is_ascii_alphanumeric())
         .map(str::to_ascii_lowercase)
         .any(|word| {
@@ -1162,16 +1393,12 @@ fn fetch_first_image_url_blocking(
         .enable_all()
         .build()
         .ok()?;
-    let picked = runtime.block_on(fetch_first_image_url(
+    runtime.block_on(fetch_first_image_url(
         query,
         aspect_ratio,
         credentials,
         used_urls,
-    ));
-    if let Some(url) = picked.as_ref() {
-        used_urls.lock().unwrap().insert(url.clone());
-    }
-    picked
+    ))
 }
 
 async fn fetch_first_image_url(
@@ -1198,11 +1425,11 @@ async fn fetch_first_image_url(
         {
             return Some(url);
         }
-        if let Some(url) = fetch_wikimedia(&client, &truncated).await {
+        if let Some(url) = fetch_wikimedia(&client, &truncated, used_urls).await {
             return Some(url);
         }
     }
-    fetch_wikimedia(&client, &query).await
+    fetch_wikimedia(&client, &query, used_urls).await
 }
 
 pub(crate) fn simplify_search_query(prompt: &str) -> String {
@@ -1261,8 +1488,7 @@ async fn fetch_openverse(
     }
     let json: serde_json::Value = resp.json().await.ok()?;
     let results = json.get("results")?.as_array()?;
-    let used = used_urls.lock().unwrap().clone();
-    let result = select_openverse_result(results, query, &used)?;
+    let (result, identity) = claim_openverse_result(results, query, used_urls)?;
     let mut candidates = Vec::new();
     push_candidate_url(
         &mut candidates,
@@ -1272,7 +1498,8 @@ async fn fetch_openverse(
         &mut candidates,
         result.get("url").and_then(serde_json::Value::as_str),
     );
-    first_renderable_image_src(client, candidates).await
+    let outcome = first_unused_renderable_image_src(client, candidates, used_urls).await;
+    settle_provider_identity(used_urls, &identity, outcome)
 }
 
 /// Titles that mark a result as noise no matter how well it ranks — the
@@ -1309,12 +1536,15 @@ pub(crate) fn select_openverse_result<'results>(
     used_urls: &HashSet<String>,
 ) -> Option<&'results serde_json::Value> {
     let is_used = |result: &serde_json::Value| {
-        ["url", "thumbnail"].iter().any(|key| {
-            result
-                .get(*key)
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|url| used_urls.contains(url))
-        })
+        openverse_result_identity(result).is_some_and(|identity| used_urls.contains(&identity))
+            // Backward-compatible URL keys keep the pure selector useful to
+            // callers/tests, but production claims canonical result identity.
+            || ["url", "thumbnail"].iter().any(|key| {
+                result
+                    .get(*key)
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|url| used_urls.contains(url))
+            })
     };
     let non_junk: Vec<&serde_json::Value> = results
         .iter()
@@ -1340,6 +1570,36 @@ pub(crate) fn select_openverse_result<'results>(
         })
         .copied()
         .or_else(|| non_junk.first().copied())
+}
+
+fn openverse_result_identity(result: &serde_json::Value) -> Option<String> {
+    if let Some(id) = result.get("id") {
+        if let Some(id) = id.as_str().filter(|id| !id.trim().is_empty()) {
+            return Some(format!("openverse:{id}"));
+        }
+        if id.is_number() {
+            return Some(format!("openverse:{id}"));
+        }
+    }
+    ["url", "thumbnail"].iter().find_map(|field| {
+        result
+            .get(*field)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .map(|url| format!("openverse-url:{url}"))
+    })
+}
+
+fn claim_openverse_result<'results>(
+    results: &'results [serde_json::Value],
+    query: &str,
+    used_images: &Mutex<HashSet<String>>,
+) -> Option<(&'results serde_json::Value, String)> {
+    let mut used = used_images.lock().unwrap();
+    let result = select_openverse_result(results, query, &used)?;
+    let identity = openverse_result_identity(result)?;
+    used.insert(identity.clone()).then_some((result, identity))
 }
 
 fn openverse_search_url(
@@ -1384,7 +1644,11 @@ pub(crate) async fn fetch_openverse_token(
         .map(str::to_string)
 }
 
-async fn fetch_wikimedia(client: &reqwest::Client, query: &str) -> Option<String> {
+async fn fetch_wikimedia(
+    client: &reqwest::Client,
+    query: &str,
+    used_urls: &Mutex<HashSet<String>>,
+) -> Option<String> {
     let url = reqwest::Url::parse_with_params(
         "https://commons.wikimedia.org/w/api.php",
         &[
@@ -1408,26 +1672,53 @@ async fn fetch_wikimedia(client: &reqwest::Client, query: &str) -> Option<String
     let json: serde_json::Value = resp.json().await.ok()?;
     let pages = json.get("query")?.get("pages")?.as_object()?;
     for page in pages.values() {
-        if let Some(info) = page
-            .get("imageinfo")
-            .and_then(serde_json::Value::as_array)
-            .and_then(|items| items.first())
-        {
-            let mut candidates = Vec::new();
-            push_candidate_url(
-                &mut candidates,
-                info.get("thumburl").and_then(serde_json::Value::as_str),
-            );
-            push_candidate_url(
-                &mut candidates,
-                info.get("url").and_then(serde_json::Value::as_str),
-            );
-            if let Some(src) = first_renderable_image_src(client, candidates).await {
-                return Some(src);
-            }
+        let Some(identity) = wikimedia_page_identity(page) else {
+            continue;
+        };
+        if !used_urls.lock().unwrap().insert(identity.clone()) {
+            continue;
+        }
+        // An empty candidate list deliberately settles as Unavailable below,
+        // releasing the reservation for pages with missing/empty imageinfo.
+        let candidates = wikimedia_image_candidates(page);
+        let outcome = first_unused_renderable_image_src(client, candidates, used_urls).await;
+        if let Some(src) = settle_provider_identity(used_urls, &identity, outcome) {
+            return Some(src);
         }
     }
     None
+}
+
+fn wikimedia_page_identity(page: &serde_json::Value) -> Option<String> {
+    if let Some(page_id) = page.get("pageid") {
+        if page_id.is_number() || page_id.is_string() {
+            return Some(format!("wikimedia:{page_id}"));
+        }
+    }
+    page.get("title")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map(|title| format!("wikimedia-title:{title}"))
+}
+
+fn wikimedia_image_candidates(page: &serde_json::Value) -> Vec<String> {
+    let mut candidates = Vec::new();
+    if let Some(info) = page
+        .get("imageinfo")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|items| items.first())
+    {
+        push_candidate_url(
+            &mut candidates,
+            info.get("thumburl").and_then(serde_json::Value::as_str),
+        );
+        push_candidate_url(
+            &mut candidates,
+            info.get("url").and_then(serde_json::Value::as_str),
+        );
+    }
+    candidates
 }
 
 fn push_candidate_url(candidates: &mut Vec<String>, url: Option<&str>) {
@@ -1439,16 +1730,66 @@ fn push_candidate_url(candidates: &mut Vec<String>, url: Option<&str>) {
     }
 }
 
-async fn first_renderable_image_src(
-    client: &reqwest::Client,
-    candidates: Vec<String>,
+#[derive(Debug, PartialEq, Eq)]
+enum ImageCandidateClaim {
+    /// A renderable image won the session-wide content claim.
+    Claimed(String),
+    /// A renderable download matched content another provider result already
+    /// owns. The provider identity stays used because its artwork is known to
+    /// be a duplicate even though this request cannot return it.
+    Duplicate,
+    /// No candidate URL produced a renderable image. The provider reservation
+    /// must be released so a later request can retry a transient failure.
+    Unavailable,
+}
+
+fn settle_provider_identity(
+    used_urls: &Mutex<HashSet<String>>,
+    identity: &str,
+    outcome: ImageCandidateClaim,
 ) -> Option<String> {
-    for candidate in candidates {
-        if let Some(src) = fetch_image_data_url(client, &candidate).await {
-            return Some(src);
+    match outcome {
+        ImageCandidateClaim::Claimed(src) => Some(src),
+        ImageCandidateClaim::Duplicate => None,
+        ImageCandidateClaim::Unavailable => {
+            used_urls.lock().unwrap().remove(identity);
+            None
         }
     }
-    None
+}
+
+async fn first_unused_renderable_image_src(
+    client: &reqwest::Client,
+    candidates: Vec<String>,
+    used_urls: &Mutex<HashSet<String>>,
+) -> ImageCandidateClaim {
+    let mut found_duplicate = false;
+    for candidate in candidates {
+        if let Some(src) = fetch_image_data_url(client, &candidate).await {
+            // Claim the embedded result under one lock. Different queries run
+            // concurrently and may resolve to the same underlying image; a
+            // snapshot-then-insert check lets both win. The atomic claim lets
+            // the loser continue to another candidate/fallback instead.
+            if claim_unused_image_src(used_urls, &src) {
+                return ImageCandidateClaim::Claimed(src);
+            }
+            found_duplicate = true;
+        }
+    }
+    if found_duplicate {
+        ImageCandidateClaim::Duplicate
+    } else {
+        ImageCandidateClaim::Unavailable
+    }
+}
+
+fn claim_unused_image_src(used_urls: &Mutex<HashSet<String>>, src: &str) -> bool {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    src.hash(&mut hasher);
+    used_urls
+        .lock()
+        .unwrap()
+        .insert(format!("content:{:016x}", hasher.finish()))
 }
 
 pub(crate) async fn fetch_image_data_url(client: &reqwest::Client, url: &str) -> Option<String> {

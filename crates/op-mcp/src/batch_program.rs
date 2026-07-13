@@ -53,9 +53,10 @@
 //!   first, so override keys (source ids) never match — a no-op there,
 //!   an explicit skip here.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{ContainerProps, LayoutMode, PenNode};
+use jian_scene::layout_scene::SceneNode;
 use op_editor_core::command_node::remap_subtree_ids_mapping;
 use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use regex::Regex;
@@ -84,6 +85,7 @@ pub(crate) fn run_batch_design_program(
         .or_else(|| args.get("post_process"))
         .map(|raw| matches!(raw.trim(), "true" | "1"))
         .unwrap_or(false);
+    let lines = split_operations(operations);
     let mut ctx = ProgramCtx {
         sim: snapshot.clone(),
         page_id: page_id.clone(),
@@ -93,6 +95,8 @@ pub(crate) fn run_batch_design_program(
         commands: Vec::new(),
         post_process,
         auto_seq: 0,
+        current_line: 0,
+        explicitly_sized_append_lines: explicitly_sized_append_lines(&lines),
     };
     // Pin the sim's active page to the requested page so sim READS
     // (path lookups, node counts) see the same children every emitted
@@ -113,7 +117,8 @@ pub(crate) fn run_batch_design_program(
     let transactional = args.get("_line_policy").map(String::as_str) != Some("best_effort");
 
     let mut errors: Vec<Value> = Vec::new();
-    for line in split_operations(operations) {
+    for (line_index, line) in lines.into_iter().enumerate() {
+        ctx.current_line = line_index;
         if let Err(error) = execute_line(&line, &mut ctx) {
             errors.push(json!({ "line": line_preview(&line), "error": error }));
         }
@@ -174,6 +179,11 @@ struct ProgramCtx {
     post_process: bool,
     /// Monotonic counter for `_auto_*` bindless-line bindings.
     auto_seq: usize,
+    /// Index of the operation currently being executed.
+    current_line: usize,
+    /// Append G() lines whose result binding receives explicit positive
+    /// numeric width and height later in this same program.
+    explicitly_sized_append_lines: BTreeSet<usize>,
 }
 
 impl ProgramCtx {
@@ -263,6 +273,99 @@ fn execute_line(line: &str, ctx: &mut ProgramCtx) -> Result<(), String> {
         };
     }
     Err(format!("Cannot parse operation: {line}"))
+}
+
+/// Return append-G line indexes that are robustly sized by later U() calls in
+/// the same program. Parsing uses the DSL's top-level delimiter rules, so an
+/// '=' inside a quoted image prompt is never mistaken for a result binding.
+fn explicitly_sized_append_lines(lines: &[String]) -> BTreeSet<usize> {
+    let mut sized = BTreeSet::new();
+    for (index, line) in lines.iter().enumerate() {
+        let Some((Some(binding), 'G', args)) = parsed_operation(line) else {
+            continue;
+        };
+        let parts = split_top_level_args(args);
+        let is_append = parts.len() == 4
+            && matches!(
+                serde_json::from_str::<String>(parts[3].trim()),
+                Ok(placement) if placement == "append"
+            );
+        if !is_append {
+            continue;
+        }
+
+        let mut width_is_positive_number = false;
+        let mut height_is_positive_number = false;
+        for later in &lines[index + 1..] {
+            let Some((later_binding, op, later_args)) = parsed_operation(later) else {
+                continue;
+            };
+            // Rebinding closes this append's sizing window. A U() beyond it
+            // would target the newer node, not this image.
+            if later_binding == Some(binding) {
+                break;
+            }
+            if op != 'U' {
+                continue;
+            }
+            let Some(comma) = find_top_level_char(later_args, ',') else {
+                continue;
+            };
+            let target = strip_outer_quotes(later_args[..comma].trim());
+            if target != binding {
+                continue;
+            }
+            let Ok(value) = parse_json_arg(&later_args[comma + 1..]) else {
+                continue;
+            };
+            let Some(patch) = value.as_object() else {
+                continue;
+            };
+            if let Some(width) = patch.get("width") {
+                width_is_positive_number = positive_json_number(width);
+            }
+            if let Some(height) = patch.get("height") {
+                height_is_positive_number = positive_json_number(height);
+            }
+        }
+        if width_is_positive_number && height_is_positive_number {
+            sized.insert(index);
+        }
+    }
+    sized
+}
+
+/// Parse one complete DSL operation without splitting on delimiters nested in
+/// calls or quoted strings. Returns `(binding, opcode, argument body)`.
+fn parsed_operation(line: &str) -> Option<(Option<&str>, char, &str)> {
+    let line = line.trim().trim_end_matches(';').trim();
+    let (binding, call) = match find_top_level_char(line, '=') {
+        Some(eq) => {
+            let binding = line[..eq].trim();
+            if binding.is_empty()
+                || !binding
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            {
+                return None;
+            }
+            (Some(binding), line[eq + 1..].trim())
+        }
+        None => (None, line),
+    };
+    let mut chars = call.chars();
+    let op = chars.next()?;
+    let rest = chars.as_str();
+    if !rest.starts_with('(') || !call.ends_with(')') {
+        return None;
+    }
+    Some((binding, op, &rest[1..rest.len() - 1]))
+}
+
+fn positive_json_number(value: &Value) -> bool {
+    value
+        .as_f64()
+        .is_some_and(|number| number.is_finite() && number > 0.0)
 }
 
 fn execute_assign(op: &str, binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(), String> {
@@ -537,28 +640,138 @@ fn execute_replace(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()
     Ok(())
 }
 
-/// `binding=G(parent, mode, prompt)` — emit an image node. TS requires
-/// every argument quoted; `mode` must be `search` or `generate`. No
-/// fetcher at this layer — `src` stays empty (browser-caller parity);
+/// `binding=G(parent, mode, prompt[, placement])` — emit an image node. The
+/// parent accepts a binding or quoted existing id (`null` is rejected because
+/// both placements require a concrete target); `mode` must be `search` or
+/// `generate`. Placement defaults to `slot`; the explicit `append` escape
+/// hatch allows a new sibling only under a horizontal/vertical flow parent.
+/// No fetcher at this layer — `src` stays empty (browser-caller parity);
 /// the host's own image pipeline enriches later.
 fn execute_image(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(), String> {
-    let g = regex(r#"^"([^"]+)"\s*,\s*"(search|generate)"\s*,\s*"([^"]+)"$"#);
-    let Some(c) = g.captures(args.trim()) else {
+    let parts = split_top_level_args(args);
+    if !matches!(parts.len(), 3 | 4) {
         return Err(format!("Invalid G() syntax: {args}"));
+    }
+    let parent_raw = parts[0].trim();
+    let parent = if matches!(parent_raw, "null" | "undefined" | "0" | "\"\"" | "\"0\"") {
+        String::new()
+    } else {
+        resolve_path_expr(parent_raw, &ctx.bindings)
     };
-    let parent = resolve_ref(c.get(1).map_or("", |m| m.as_str()), &ctx.bindings);
-    let prompt = c.get(3).map_or("", |m| m.as_str());
+    let mode = serde_json::from_str::<String>(parts[1].trim())
+        .map_err(|_| format!("Invalid G() syntax: {args}"))?;
+    if !matches!(mode.as_str(), "search" | "generate") {
+        return Err(format!("G() mode must be search or generate: {mode}"));
+    }
+    let prompt = serde_json::from_str::<String>(parts[2].trim())
+        .map_err(|_| format!("Invalid G() syntax: {args}"))?;
+    let placement = match parts.get(3) {
+        None => "slot".to_string(),
+        Some(raw) => serde_json::from_str::<String>(raw.trim())
+            .map_err(|_| format!("Invalid G() syntax: {args}"))?,
+    };
+    if !matches!(placement.as_str(), "slot" | "append") {
+        return Err(format!(
+            "G() placement must be \"slot\" or \"append\", got {placement:?}"
+        ));
+    }
     let name: String = prompt.chars().take(40).collect();
-    let node: PenNode = serde_json::from_value(json!({
+    let mut value = json!({
         "type": "image",
         "id": "__op_tmp_image_1",
         "name": name,
-        "imagePrompt": prompt,
         "src": "",
+        "objectFit": "crop",
         "width": 400,
         "height": 300
-    }))
-    .map_err(|e| format!("invalid G() image node: {e}"))?;
+    });
+    if mode == "generate" {
+        value["imagePrompt"] = json!(prompt);
+    } else {
+        value["imageSearchQuery"] = json!(prompt);
+    }
+    if parent.trim().is_empty() || parent.trim() == "0" {
+        return Err(format!(
+            "G() placement {placement:?} requires an explicit frame/rectangle target id; create the target first instead of using null"
+        ));
+    }
+    let target = find_node_by_path(ctx.sim.active_children(), &parent, &ctx.alias)
+        .ok_or_else(|| format!("G() parent not found or not a container: {parent}"))?;
+    // `parent` may be a slash path or an authored id that `find_node_by_path`
+    // translated through `ctx.alias`. The emitted insert must target the live
+    // resolved node id, never the caller's path/alias spelling.
+    let target_id = target.id_str().to_string();
+    let container = node_container(target)
+        .ok_or_else(|| format!("G() parent not found or not a container: {parent}"))?;
+    // Placement is an explicit structural contract. Slot-fill accepts only an
+    // EMPTY target; append accepts only an explicitly-authored flow parent.
+    // Never recover intent from names, dimensions, child kinds, or position.
+    match placement.as_str() {
+        "slot" => {
+            let child_ids = target
+                .children()
+                .into_iter()
+                .flatten()
+                .map(PenNode::id_str)
+                .collect::<Vec<_>>();
+            if !child_ids.is_empty() {
+                return Err(format!(
+                    "G() slot target {} must be empty, but it has children [{}]. Pass the exact empty frame/rectangle slot id; use \"append\" only for an intentional child of an explicit horizontal/vertical flow parent",
+                    target.id_str(),
+                    child_ids.join(", ")
+                ));
+            }
+        }
+        "append" => {
+            if explicit_flow_layout(container).is_none() {
+                return Err(format!(
+                    "G() append target {} must declare layout \"horizontal\" or \"vertical\"; got {}. Append means a new flow sibling and is never an absolute overlay",
+                    target.id_str(),
+                    layout_label(container)
+                ));
+            }
+            if !ctx
+                .explicitly_sized_append_lines
+                .contains(&ctx.current_line)
+            {
+                return Err(
+                    "G() append requires a result binding followed in the same batch by U(binding, {\"width\": <positive number>, \"height\": <positive number>}); refusing an unsized flow child with default fill_container width and height"
+                        .into(),
+                );
+            }
+        }
+        _ => unreachable!("placement validated above"),
+    }
+    if matches!(container.layout, Some(LayoutMode::None)) {
+        let has_declared_size = container.width.is_some() && container.height.is_some();
+        let resolved = has_declared_size
+            .then(|| resolved_node_size(&ctx.sim, &target_id))
+            .flatten();
+        let width = target.width_px().or_else(|| resolved.map(|size| size.0));
+        let height = target.height_px().or_else(|| resolved.map(|size| size.1));
+        let (Some(width), Some(height)) = (width, height) else {
+            return Err(format!(
+                    "G() target {target_id} uses layout none, so it needs declared width and height that resolve above zero before an image can fill it"
+                ));
+        };
+        if width <= 0.0 || height <= 0.0 {
+            return Err(format!(
+                    "G() target {target_id} uses layout none, so it needs declared width and height that resolve above zero before an image can fill it"
+                ));
+        }
+        value["x"] = json!(0);
+        value["y"] = json!(0);
+        value["width"] = json!(width);
+        value["height"] = json!(height);
+    } else {
+        // A G() image serves its target slot; its intrinsic/search size is
+        // not evidence for card geometry. Flex sizing keeps the image
+        // inside the slot and lets crop/object-fit do the visual work.
+        value["width"] = json!("fill_container");
+        value["height"] = json!("fill_container");
+    }
+    let node: PenNode =
+        serde_json::from_value(value).map_err(|e| format!("invalid G() image node: {e}"))?;
     let mut nodes = vec![node];
     let map = ctx.remap(&mut nodes)?;
     let image_id = map
@@ -568,13 +781,60 @@ fn execute_image(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<(), 
     ctx.emit(
         EditorCommand::InsertAuthoredSubtree {
             nodes,
-            parent_id: parent_node_id(Some(&parent)),
+            parent_id: NodeId::new(&target_id),
             page_id: ctx.page_id.clone(),
         },
         &format!("G() parent not found or not a container: {parent}"),
     )?;
     ctx.bind(binding, &image_id);
     Ok(())
+}
+
+fn explicit_flow_layout(container: &ContainerProps) -> Option<&'static str> {
+    match container.layout {
+        Some(LayoutMode::Horizontal) => Some("horizontal"),
+        Some(LayoutMode::Vertical) => Some("vertical"),
+        _ => None,
+    }
+}
+
+fn layout_label(container: &ContainerProps) -> &'static str {
+    match container.layout {
+        Some(LayoutMode::Horizontal) => "horizontal",
+        Some(LayoutMode::Vertical) => "vertical",
+        Some(LayoutMode::None) => "none",
+        None => "omitted",
+    }
+}
+
+fn node_container(node: &PenNode) -> Option<&ContainerProps> {
+    match node {
+        PenNode::Frame(node) => Some(&node.container),
+        PenNode::Group(node) => Some(&node.container),
+        PenNode::Rectangle(node) => Some(&node.container),
+        _ => None,
+    }
+}
+
+fn resolved_node_size(state: &EditorState, node_id: &str) -> Option<(f64, f64)> {
+    fn find(nodes: &[SceneNode], node_id: &str) -> Option<(f64, f64)> {
+        for node in nodes {
+            if node.id == node_id {
+                let bounds = node.aggregate_bounds();
+                return Some((f64::from(bounds.size.x), f64::from(bounds.size.y)));
+            }
+            if let Some(size) = find(&node.children, node_id) {
+                return Some(size);
+            }
+        }
+        None
+    }
+
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
+    scene
+        .pages
+        .iter()
+        .find_map(|page| find(&page.children, node_id))
 }
 
 /// `U(path, data)` — shallow-patch the node at `path`. No result entry

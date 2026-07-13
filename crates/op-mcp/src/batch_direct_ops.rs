@@ -33,6 +33,18 @@ pub(crate) fn parse_single_direct_operation(line: &str) -> Result<Option<EditorC
     Ok(None)
 }
 
+/// Whether a legacy single-line operations payload is a `G()` call, with or
+/// without a result binding. Phase tools use this before the flat direct
+/// parser because they do not hold the document snapshot needed to enforce
+/// image placement and target geometry safely.
+pub(crate) fn is_direct_image_operation(line: &str) -> bool {
+    let line = line.trim().trim_end_matches(';').trim();
+    let operation = find_top_level_char(line, '=')
+        .map(|eq| line[eq + 1..].trim())
+        .unwrap_or(line);
+    operation.starts_with("G(")
+}
+
 fn strip_bound_direct_operation(line: &str) -> &str {
     let Some(eq) = find_top_level_char(line, '=') else {
         return line;
@@ -200,8 +212,8 @@ fn parse_replace_operation(body: &str) -> Result<EditorCommand, String> {
 
 fn parse_image_operation(body: &str) -> Result<EditorCommand, String> {
     let parts = split_top_level_args(body);
-    if parts.len() != 3 {
-        return Err("G() requires parent id, mode, and prompt".into());
+    if !matches!(parts.len(), 3 | 4) {
+        return Err("G() requires parent id, mode, prompt, and optional placement".into());
     }
     let parent_id = parse_parent_node_id(parts[0])?;
     let mode = parse_ref_token(parts[1])?;
@@ -211,17 +223,39 @@ fn parse_image_operation(body: &str) -> Result<EditorCommand, String> {
         ));
     }
     let prompt = parse_ref_token(parts[2])?;
+    if let Some(raw) = parts.get(3) {
+        let placement = parse_ref_token(raw)?;
+        if !matches!(placement.as_str(), "slot" | "append") {
+            return Err(format!(
+                "G() placement must be \"slot\" or \"append\", got {placement:?}"
+            ));
+        }
+    }
     let name = prompt.chars().take(40).collect::<String>();
-    let node: PenNode = serde_json::from_value(serde_json::json!({
+    let (width, height) = if parent_id.is_real() {
+        (
+            serde_json::json!("fill_container"),
+            serde_json::json!("fill_container"),
+        )
+    } else {
+        (serde_json::json!(400), serde_json::json!(300))
+    };
+    let mut value = serde_json::json!({
         "type": "image",
         "id": "__op_tmp_image_1",
         "name": name,
-        "imagePrompt": prompt,
         "src": "",
-        "width": 400,
-        "height": 300
-    }))
-    .map_err(|e| format!("invalid G() image node: {e}"))?;
+        "objectFit": "crop",
+        "width": width,
+        "height": height
+    });
+    if mode == "generate" {
+        value["imagePrompt"] = serde_json::json!(prompt);
+    } else {
+        value["imageSearchQuery"] = serde_json::json!(prompt);
+    }
+    let node: PenNode =
+        serde_json::from_value(value).map_err(|e| format!("invalid G() image node: {e}"))?;
     Ok(EditorCommand::InsertSubtree {
         nodes: vec![node],
         parent_id,

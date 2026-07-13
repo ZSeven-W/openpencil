@@ -72,7 +72,11 @@ fn get_design_prompt_elements_section_points_to_batch_design_operations() {
             assert!(prompt.contains("U(nodeId, patchJson)"));
             assert!(prompt.contains("C(sourceId, parent"));
             assert!(prompt.contains("R(nodeId, nodeJson)"));
-            assert!(prompt.contains("G(parent"));
+            assert!(prompt.contains("G(slotIdOrBinding"));
+            assert!(prompt.contains("target must exist and have zero children"));
+            assert!(prompt.contains("accepted only on a parent that declares layout"));
+            assert!(prompt.contains("never overlays"));
+            assert!(prompt.contains("Size the appended binding"));
             assert!(!prompt.contains("add_card_row_v1"));
         }
         other => panic!("expected prompt ok, got {other:?}"),

@@ -32,14 +32,17 @@ globalThis.I = function (parent, obj) {
 globalThis.K = function (kitComponentId, parent, overrides) {
   return __recordK(JSON.stringify(String(kitComponentId)), parent == null ? "null" : String(parent), JSON.stringify(overrides == null ? {} : overrides));
 };
-var __stubSeq = 0;
-function __opStub() { __stubSeq += 1; return "stub" + __stubSeq; }
-globalThis.C = __opStub;
-globalThis.U = __opStub;
-globalThis.D = __opStub;
-globalThis.M = __opStub;
-globalThis.R = __opStub;
-globalThis.G = __opStub;
+function __unsupported(op) {
+  return function () {
+    throw new Error("OP_SCRIPT_MODE_UNSUPPORTED: " + op + "() has no effect in script mode; use batch_design operations mode");
+  };
+}
+globalThis.C = __unsupported("C");
+globalThis.U = __unsupported("U");
+globalThis.D = __unsupported("D");
+globalThis.M = __unsupported("M");
+globalThis.R = __unsupported("R");
+globalThis.G = __unsupported("G");
 var __noop = function () {};
 globalThis.console = { log: __noop, warn: __noop, error: __noop, info: __noop, debug: __noop };
 "#;
@@ -191,6 +194,7 @@ fn eval_to_program(script: &str) -> Result<String, String> {
     }
     match outcome {
         Ok(()) => Ok(program),
+        Err(e) if e.contains("OP_SCRIPT_MODE_UNSUPPORTED") => Err(e),
         Err(e) if program.trim().is_empty() => Err(e),
         Err(e) => {
             tracing::warn!(

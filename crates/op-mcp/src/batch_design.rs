@@ -7,7 +7,7 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::promote::{promote_frame, widget_kind_for, PromoteNote};
 use op_editor_core::{NodeId, PenNodeExt};
 
-use super::batch_direct_ops::parse_single_direct_operation;
+use super::batch_direct_ops::{is_direct_image_operation, parse_single_direct_operation};
 use super::batch_layered::{dispatch_design_content, dispatch_design_skeleton};
 use super::batch_page::{command_with_outer_page_id, optional_page_id};
 use super::write_tools::{validate_hex, ALLOWED_KINDS};
@@ -61,9 +61,61 @@ pub(crate) fn carries_input(args: &BTreeMap<String, String>, key: &str) -> bool 
     })
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BatchInputKind {
+    Script,
+    Operations,
+    NodesJson,
+}
+
+pub(crate) type BatchInputError = (ToolErrorCode, String);
+
+/// Select the one non-empty write payload. Empty placeholders do not compete,
+/// but two real payloads are always an error regardless of argument order.
+pub(crate) fn select_batch_input(
+    args: &BTreeMap<String, String>,
+) -> Result<BatchInputKind, BatchInputError> {
+    let active: Vec<BatchInputKind> = [
+        ("script", BatchInputKind::Script),
+        ("operations", BatchInputKind::Operations),
+        ("nodes_json", BatchInputKind::NodesJson),
+    ]
+    .into_iter()
+    .filter_map(|(key, kind)| carries_input(args, key).then_some(kind))
+    .collect();
+    match active.as_slice() {
+        [kind] => Ok(*kind),
+        [] => {
+            // Preserve a lone slot's own parser error (`nodes_json:{}` is
+            // malformed, `script:""` is empty) while treating placeholders
+            // as absent whenever another slot carries the real input.
+            let present: Vec<BatchInputKind> = [
+                ("script", BatchInputKind::Script),
+                ("operations", BatchInputKind::Operations),
+                ("nodes_json", BatchInputKind::NodesJson),
+            ]
+            .into_iter()
+            .filter_map(|(key, kind)| args.contains_key(key).then_some(kind))
+            .collect();
+            match present.as_slice() {
+                [kind] => Ok(*kind),
+                _ => Err((
+                    ToolErrorCode::MissingArgument,
+                    "one non-empty input is required: script, operations, or nodes_json".into(),
+                )),
+            }
+        }
+        _ => Err((
+            ToolErrorCode::InvalidArgument,
+            "provide only one of script, operations, or nodes_json".into(),
+        )),
+    }
+}
+
 /// Expand a `script` arg into the `operations` DSL program the rest of
 /// `batch_design` already understands. Returns:
-/// - `None` — `args` carries no `script` key; caller proceeds unchanged.
+/// - `None` — the one active input is `operations` or `nodes_json`; an empty
+///   `script` placeholder does not steal the route.
 /// - `Some(Ok(rewritten))` — `script` removed, `operations` set to the
 ///   program the sandboxed runner recorded. Caller re-dispatches with the
 ///   rewritten args so BOTH the flat `dispatch_batch_design` path (used by
@@ -72,22 +124,17 @@ pub(crate) fn carries_input(args: &BTreeMap<String, String>, key: &str) -> bool 
 ///   (`BatchDesign::call`, which intercepts `operations` before ever
 ///   calling `dispatch_batch_design` — see `batch_design_result.rs`) see
 ///   the exact same expansion and report through their own native shape.
-/// - `Some(Err(outcome))` — `script` combined with `operations`/
-///   `nodes_json`, or (feature off) `script` used at all.
+/// - `Some(Err(outcome))` — zero/multiple real inputs, or (feature off) a real
+///   `script` input.
 pub(crate) fn expand_script_arg(
     args: &BTreeMap<String, String>,
 ) -> Option<Result<BTreeMap<String, String>, ToolOutcome>> {
-    let script = args.get("script")?;
-    // Only a COMPETING input is an error. Models routinely send the unused
-    // slots along as empty placeholders (`"operations": []`, `"nodes_json":
-    // ""`, a literal `null`) — rejecting those killed a whole batch over an
-    // empty field the caller never meant to fill (measured 2026-07-12).
-    if carries_input(args, "operations") || carries_input(args, "nodes_json") {
-        return Some(Err(ToolOutcome::Err(
-            ToolErrorCode::InvalidArgument,
-            "provide only one of script, operations, or nodes_json".into(),
-        )));
+    match select_batch_input(args) {
+        Ok(BatchInputKind::Script) => {}
+        Ok(BatchInputKind::Operations | BatchInputKind::NodesJson) => return None,
+        Err((code, message)) => return Some(Err(ToolOutcome::Err(code, message))),
     }
+    let script = args.get("script").expect("selected script exists");
     #[cfg(feature = "script")]
     {
         let program = match crate::script_runner::run_script_to_program(script) {
@@ -119,16 +166,21 @@ pub(crate) fn dispatch_batch_design(
             Err(outcome) => outcome,
         };
     }
+    let input = match select_batch_input(args) {
+        Ok(input) => input,
+        Err((code, message)) => return ToolOutcome::Err(code, message),
+    };
     let page_id = optional_page_id(args);
-    // An empty placeholder (`[]`, `""`, `null`) is not a choice of input: when
-    // the OTHER slot carries the real program, fall through to it. A lone empty
-    // slot still reports its own error (an empty descriptor list is a mistake,
-    // not a missing argument).
-    let nodes_json_is_real = carries_input(args, "nodes_json");
-    if let Some(operations) = args
-        .get("operations")
-        .filter(|_| carries_input(args, "operations") || !nodes_json_is_real)
-    {
+    if input == BatchInputKind::Operations {
+        let operations = args.get("operations").expect("selected operations exists");
+        if let Some(phase) = phase.filter(|_| is_direct_image_operation(operations)) {
+            return ToolOutcome::Err(
+                ToolErrorCode::InvalidArgument,
+                format!(
+                    "design_{phase} legacy operations cannot execute G() safely: this compatibility path has no document snapshot, so it cannot enforce G() placement or target geometry. Use batch_design with the same operations payload."
+                ),
+            );
+        }
         return match parse_operations(operations) {
             Ok(ParsedOperations::Insert {
                 parent_id,
@@ -171,12 +223,9 @@ pub(crate) fn dispatch_batch_design(
             Err(e) => ToolOutcome::Err(ToolErrorCode::InvalidArgument, e),
         };
     }
-    let Some(raw) = args.get("nodes_json") else {
-        return ToolOutcome::Err(
-            ToolErrorCode::MissingArgument,
-            "nodes_json or operations is required".into(),
-        );
-    };
+    let raw = args
+        .get("nodes_json")
+        .expect("selected nodes_json exists after script expansion");
     match parse_batch_items(raw) {
         Ok(items) if items.is_empty() => ToolOutcome::Err(
             ToolErrorCode::InvalidArgument,
@@ -645,7 +694,6 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     // correctly, then every `U(n1,{layout:{type:horizontal…}})` was rejected and
     // the tree thrashed to empty).
     normalize_layout_object(obj);
-    default_container_layout(obj);
     if let Some(fill) = obj.get_mut("fill") {
         normalize_fill(fill);
     }
@@ -919,42 +967,6 @@ fn normalize_text_growth(obj: &mut serde_json::Map<String, serde_json::Value>) {
         None => {
             obj.remove("textGrowth");
         }
-    }
-}
-
-/// A container with flow children and NO `layout` renders as a ROW — the
-/// engine's flex default. That is never what an omission means: a section
-/// whose children are [title row, card rail] wants them STACKED, and models
-/// that want a row always say so explicitly (measured test0711-1-ds: every
-/// section frame omitted `layout`, so each title landed to the LEFT of its
-/// rail and the cards ran off the screen). An omitted layout stacks.
-///
-/// Absolutely-positioned children are out of flow, so a frame whose children
-/// all carry `x`/`y` is left alone — its direction is irrelevant, and forcing
-/// one could contradict a `layout: none` the caller means to set later.
-fn default_container_layout(obj: &mut serde_json::Map<String, serde_json::Value>) {
-    const CONTAINERS: [&str; 3] = ["frame", "group", "rectangle"];
-    let is_container = obj
-        .get("type")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|t| CONTAINERS.contains(&t));
-    if !is_container || obj.contains_key("layout") {
-        return;
-    }
-    let flow_children = obj
-        .get("children")
-        .and_then(serde_json::Value::as_array)
-        .map(|kids| {
-            kids.iter()
-                .filter(|c| c.get("x").is_none_or(serde_json::Value::is_null))
-                .count()
-        })
-        .unwrap_or(0);
-    if flow_children >= 2 {
-        obj.insert(
-            "layout".to_string(),
-            serde_json::Value::String("vertical".to_string()),
-        );
     }
 }
 

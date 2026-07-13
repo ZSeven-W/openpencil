@@ -434,6 +434,7 @@ fn poll_into_applies_finished_job_to_placeholder_frame() {
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("photo"),
+            intent: None,
             rx,
         }],
         ..Default::default()
@@ -472,6 +473,7 @@ fn successful_apply_does_not_suppress_later_unfilled_retry() {
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("photo"),
+            intent: None,
             rx,
         }],
         ..Default::default()
@@ -529,6 +531,7 @@ fn poll_into_completion_invalidates_scan_gate() {
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
+            intent: None,
             rx,
         }],
         ..Default::default()
@@ -550,6 +553,96 @@ fn poll_into_completion_invalidates_scan_gate() {
     assert_eq!(
         session.scan_count, 2,
         "gate re-arms after the forced rescan"
+    );
+}
+
+#[test]
+fn poll_discards_a_result_when_the_nodes_image_intent_changed() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+    let original = collect_targets(&state, &HashSet::new())
+        .into_iter()
+        .next()
+        .expect("original target");
+    let expected = intent_fingerprint(&original, None);
+
+    let PenNode::Image(image) = &mut state.active_children_mut()[0] else {
+        panic!("image")
+    };
+    image.image_search_query = Some("latte cup".into());
+    state.mark_document_changed();
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(Some("https://stale.example.com/burger.jpg".to_string()))
+        .unwrap();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["img1".to_string()]),
+        jobs: vec![ImageSearchJob {
+            node_id: NodeId::new("img1"),
+            intent: Some(expected),
+            rx,
+        }],
+        ..Default::default()
+    };
+
+    assert!(!session.poll_into(&mut state));
+    let PenNode::Image(image) = &state.active_children()[0] else {
+        panic!("image")
+    };
+    assert!(image.src.is_empty(), "stale URL must not land");
+    assert!(!session.completed.contains("img1"));
+}
+
+#[test]
+fn poll_discards_a_result_when_only_provider_truncated_words_changed() {
+    let before = "santorini greece white buildings blue dome";
+    let after = "santorini greece white buildings sunset beach";
+    assert_eq!(
+        simplify_search_query(before),
+        simplify_search_query(after),
+        "the provider intentionally sees the same four-keyword request"
+    );
+
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some(before)));
+    let original = collect_targets(&state, &HashSet::new())
+        .into_iter()
+        .next()
+        .expect("original target");
+    let expected = intent_fingerprint(&original, None);
+
+    let PenNode::Image(image) = &mut state.active_children_mut()[0] else {
+        panic!("image")
+    };
+    image.image_search_query = Some(after.into());
+    state.mark_document_changed();
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(Some("https://stale.example.com/blue-dome.jpg".to_string()))
+        .unwrap();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["img1".to_string()]),
+        jobs: vec![ImageSearchJob {
+            node_id: NodeId::new("img1"),
+            intent: Some(expected),
+            rx,
+        }],
+        ..Default::default()
+    };
+
+    assert!(!session.poll_into(&mut state));
+    let PenNode::Image(image) = &state.active_children()[0] else {
+        panic!("image")
+    };
+    assert!(
+        image.src.is_empty(),
+        "the provider-level collision must not weaken authored intent identity"
     );
 }
 
@@ -737,6 +830,7 @@ fn document_replacement_reset_drops_stale_pending_job_so_it_cannot_apply_to_new_
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("photo"),
+            intent: None,
             rx,
         }],
         ..Default::default()
@@ -903,6 +997,7 @@ fn failed_search_writes_the_adaptive_placeholder_sentinel() {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
+            intent: None,
             rx,
         }],
         ..Default::default()
@@ -1016,6 +1111,81 @@ fn anonymous_cover_slot_uses_sibling_text_as_query() {
     );
 }
 
+#[test]
+fn anonymous_slot_does_not_borrow_text_from_a_cousin_card() {
+    let mut slot = frame_node("slot", "", None, Some(vec![solid_fill()]), vec![]);
+    if let PenNode::Frame(frame) = &mut slot {
+        frame.base.name = None;
+        frame.container.width = Some(SizingBehavior::Number(120.0));
+        frame.container.height = Some(SizingBehavior::Number(120.0));
+        frame.container.clip_content = Some(true);
+    }
+    let mut empty_card = frame_node("empty-card", "", None, None, vec![slot]);
+    if let PenNode::Frame(frame) = &mut empty_card {
+        frame.base.name = None;
+    }
+    let other_card = frame_node(
+        "other-card",
+        "Santorini Card",
+        None,
+        None,
+        vec![frame_node(
+            "other-info",
+            "Info",
+            None,
+            None,
+            vec![text_label("other-title", None, "Santorini, Greece")],
+        )],
+    );
+    let rail = frame_node(
+        "rail",
+        "Destination Rail",
+        None,
+        None,
+        vec![empty_card, other_card],
+    );
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(rail);
+
+    let targets = collect_targets(&state, &HashSet::new());
+    assert!(
+        targets
+            .iter()
+            .all(|target| target.node_id.as_str() != "slot"),
+        "an unlabelled card must stay empty, not borrow its cousin's title: {targets:?}"
+    );
+}
+
+#[test]
+fn rounded_kpi_tile_is_not_an_anonymous_image_slot() {
+    let mut tile = frame_node("tile", "", None, Some(vec![solid_fill()]), vec![]);
+    if let PenNode::Frame(frame) = &mut tile {
+        frame.base.name = None;
+        frame.container.width = Some(SizingBehavior::Number(64.0));
+        frame.container.height = Some(SizingBehavior::Number(64.0));
+        frame.container.corner_radius = Some(jian_ops_schema::node::CornerRadius::Uniform(16.0));
+    }
+    let card = frame_node(
+        "kpi",
+        "Revenue KPI Card",
+        None,
+        None,
+        vec![tile, text_label("label", None, "Monthly revenue")],
+    );
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(card);
+
+    let targets = collect_targets(&state, &HashSet::new());
+    assert!(
+        targets
+            .iter()
+            .all(|target| target.node_id.as_str() != "tile"),
+        "rounded KPI geometry plus a label is not media intent: {targets:?}"
+    );
+}
+
 /// The measured churn: the model rebuilds a section mid-run, the same subject
 /// searches again, and the session-wide dedup skips the very photo it picked
 /// the first time — so a real Bali temple photo became a plain blue sky. One
@@ -1023,30 +1193,40 @@ fn anonymous_cover_slot_uses_sibling_text_as_query() {
 /// only ever guards DIFFERENT subjects from sharing a picture.
 #[test]
 fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
-    use super::{query_key, spawn_job, ImageSearchTarget};
+    use super::{
+        search_intent_key, spawn_job, ImageSearchTarget, SearchIntentKey, SearchMemoEntry,
+    };
     use std::collections::{HashMap, HashSet};
     use std::sync::{Arc, Mutex};
 
     let used_urls: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
-    let resolved: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    let resolved: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>> =
+        Arc::new(Mutex::new(HashMap::new()));
     // The first search already answered "Bali Indonesia" and marked its photo used.
     let good = "https://example.org/bali-temple.jpg".to_string();
-    resolved
-        .lock()
-        .unwrap()
-        .insert(query_key("Bali Indonesia"), good.clone());
+    resolved.lock().unwrap().insert(
+        search_intent_key("Bali, Indonesia", None),
+        SearchMemoEntry::Ready(good.clone()),
+    );
     used_urls.lock().unwrap().insert(good.clone());
 
     // The rebuilt card asks again — differently spelled, same subject.
     let target = ImageSearchTarget {
         node_id: op_editor_core::NodeId::new("n99".to_string()),
-        query: "  bali indonesia ".to_string(),
+        query: "  bali indonesia  ".to_string(),
         prompt: None,
+        mode: ImageRequestMode::Search,
         aspect_ratio: None,
         width: None,
         height: None,
     };
-    let job = spawn_job(target, None, Arc::clone(&used_urls), Arc::clone(&resolved));
+    let job = spawn_job(
+        target,
+        None,
+        Arc::clone(&used_urls),
+        Arc::clone(&resolved),
+        1,
+    );
     let answer = job
         .rx
         .recv_timeout(std::time::Duration::from_secs(1))
@@ -1055,6 +1235,203 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
         answer,
         Some(good),
         "the rebuilt card gets ITS photo back, not the next-best junk result"
+    );
+}
+
+#[test]
+fn a_pending_search_intent_is_singleflight() {
+    use super::{
+        search_intent_key, spawn_job, ImageSearchTarget, SearchIntentKey, SearchMemoEntry,
+    };
+    use std::collections::{HashMap, HashSet};
+    use std::sync::{Arc, Mutex};
+
+    let key = search_intent_key("Bali Indonesia", None);
+    let memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>> =
+        Arc::new(Mutex::new(HashMap::from([(
+            key.clone(),
+            SearchMemoEntry::Pending {
+                request_id: 7,
+                waiters: Vec::new(),
+            },
+        )])));
+    let target = ImageSearchTarget {
+        node_id: NodeId::new("n100"),
+        query: "Bali, Indonesia".into(),
+        prompt: None,
+        mode: ImageRequestMode::Search,
+        aspect_ratio: None,
+        width: None,
+        height: None,
+    };
+    let job = spawn_job(
+        target,
+        None,
+        Arc::new(Mutex::new(HashSet::new())),
+        Arc::clone(&memo),
+        8,
+    );
+
+    let waiters = match memo.lock().unwrap().remove(&key) {
+        Some(SearchMemoEntry::Pending { waiters, .. }) => waiters,
+        _ => panic!("the second caller joins the pending intent"),
+    };
+    assert_eq!(waiters.len(), 1, "no second fetch thread was created");
+    waiters[0]
+        .send(Some("https://example.org/bali.jpg".into()))
+        .unwrap();
+    assert_eq!(
+        job.rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        Some("https://example.org/bali.jpg".into())
+    );
+}
+
+#[test]
+fn stale_pre_reset_request_cannot_publish_into_same_key_in_new_session() {
+    use super::{publish_search_result, search_intent_key, SearchIntentKey, SearchMemoEntry};
+    use std::collections::HashMap;
+    use std::sync::{mpsc, Arc, Mutex};
+
+    let key = search_intent_key("Bali Indonesia", None);
+    let memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let (old_tx, _old_rx) = mpsc::channel();
+    memo.lock().unwrap().insert(
+        key.clone(),
+        SearchMemoEntry::Pending {
+            request_id: 10,
+            waiters: vec![old_tx],
+        },
+    );
+
+    // reset(), followed by a new document asking for the same intent.
+    memo.lock().unwrap().clear();
+    let (new_tx, new_rx) = mpsc::channel();
+    memo.lock().unwrap().insert(
+        key.clone(),
+        SearchMemoEntry::Pending {
+            request_id: 11,
+            waiters: vec![new_tx],
+        },
+    );
+
+    assert!(!publish_search_result(
+        &memo,
+        key.clone(),
+        10,
+        Some("https://old.example/bali.jpg".into())
+    ));
+    assert!(matches!(new_rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(publish_search_result(
+        &memo,
+        key,
+        11,
+        Some("https://new.example/bali.jpg".into())
+    ));
+    assert_eq!(
+        new_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+        Some("https://new.example/bali.jpg".into())
+    );
+}
+
+#[test]
+fn reset_detaches_dedup_and_memo_generations_from_old_threads() {
+    let mut session = ImageSearchSession::default();
+    let old_used = std::sync::Arc::clone(&session.used_urls);
+    let old_memo = std::sync::Arc::clone(&session.search_memo);
+    old_used.lock().unwrap().insert("openverse:old".into());
+
+    session.reset();
+
+    assert!(!std::sync::Arc::ptr_eq(&old_used, &session.used_urls));
+    assert!(!std::sync::Arc::ptr_eq(&old_memo, &session.search_memo));
+    old_used
+        .lock()
+        .unwrap()
+        .insert("openverse:late-old-thread".into());
+    assert!(
+        session.used_urls.lock().unwrap().is_empty(),
+        "late old-document claims stay in the detached generation"
+    );
+}
+
+#[test]
+fn search_memo_separates_aspect_ratio_intents() {
+    use super::{search_intent_key, ImageAspectRatio};
+
+    assert_eq!(
+        search_intent_key("Bali, Indonesia", Some(ImageAspectRatio::Square)),
+        search_intent_key("bali indonesia", Some(ImageAspectRatio::Square)),
+        "fetch-equivalent spelling shares one intent"
+    );
+    assert_ne!(
+        search_intent_key("Bali Indonesia", Some(ImageAspectRatio::Square)),
+        search_intent_key("Bali Indonesia", Some(ImageAspectRatio::Wide)),
+        "a cover and hero must not share a cached crop"
+    );
+}
+
+#[test]
+fn memo_identity_keeps_lossy_provider_query_collisions_separate() {
+    let album = "album cover neon lights night";
+    let playlist = "playlist artwork neon lights night";
+    assert_eq!(
+        simplify_search_query(album),
+        simplify_search_query(playlist),
+        "both authored intents intentionally adapt to the same photo-corpus query"
+    );
+    assert_ne!(
+        search_intent_key(album, Some(ImageAspectRatio::Square)),
+        search_intent_key(playlist, Some(ImageAspectRatio::Square)),
+        "provider adaptation must not merge authored image identity"
+    );
+
+    let dome = "santorini greece white buildings blue dome";
+    let beach = "santorini greece white buildings sunset beach";
+    assert_eq!(simplify_search_query(dome), simplify_search_query(beach));
+    assert_ne!(
+        search_intent_key(dome, Some(ImageAspectRatio::Wide)),
+        search_intent_key(beach, Some(ImageAspectRatio::Wide)),
+        "words beyond the provider's four-keyword cap remain part of identity"
+    );
+}
+
+#[test]
+fn g_style_fill_image_uses_resolved_parent_slot_aspect() {
+    let state_for_slot = |width: f64, height: f64| {
+        let doc: jian_ops_schema::PenDocument = serde_json::from_value(serde_json::json!({
+            "version":"1.0", "children":[{
+                "type":"frame", "id":"root", "width":600, "height":400, "layout":"vertical",
+                "children":[{
+                    "type":"frame", "id":"slot", "name":"Bali Hero", "width":width,
+                    "height":height, "layout":"vertical", "clipContent":true, "children":[{
+                        "type":"image", "id":"photo", "name":"Bali Indonesia", "src":"",
+                        "imagePrompt":"Bali Indonesia", "width":"fill_container",
+                        "height":"fill_container", "objectFit":"crop"
+                    }]
+                }]
+            }]
+        }))
+        .expect("G-shaped document");
+        EditorState::from_document(doc)
+    };
+
+    let wide = collect_targets(&state_for_slot(320.0, 180.0), &HashSet::new())
+        .into_iter()
+        .find(|target| target.node_id.as_str() == "photo")
+        .expect("wide image target");
+    let square = collect_targets(&state_for_slot(180.0, 180.0), &HashSet::new())
+        .into_iter()
+        .find(|target| target.node_id.as_str() == "photo")
+        .expect("square image target");
+
+    assert_eq!(wide.aspect_ratio, Some(ImageAspectRatio::Wide));
+    assert_eq!(square.aspect_ratio, Some(ImageAspectRatio::Square));
+    assert_eq!((wide.width, wide.height), (Some(320.0), Some(180.0)));
+    assert_ne!(
+        intent_fingerprint(&wide, None),
+        intent_fingerprint(&square, None),
+        "a parent-slot aspect change invalidates the in-flight search"
     );
 }
 
@@ -1113,13 +1490,11 @@ fn m3_style_img_and_ph_rectangles_are_image_slots() {
     assert_eq!(by_id.get("img"), Some(&"Bali, Indonesia"));
 }
 
-/// DeepSeek builds a card's photo area as an UNNAMED rectangle sized
-/// `fill_container` x `fill_container` — no keyword, no number — so the
-/// name-and-authored-size heuristics saw nothing and the page shipped as grey
-/// boxes (measured test0711-1-ds, 2026-07-12). What a slot IS is a question
-/// about geometry: the resolved layout answers it.
+/// Geometry alone cannot distinguish a photo slot from a chart, swatch, or
+/// decorative surface. The in-loop diagnostic can ask the model about it, but
+/// background enrichment requires explicit media semantics.
 #[test]
-fn an_unnamed_fill_container_rectangle_in_a_card_is_an_image_slot() {
+fn an_unnamed_fill_container_rectangle_is_not_auto_filled_from_geometry() {
     let doc: jian_ops_schema::PenDocument = serde_json::from_str(
         r##"{ "version": "1.0", "children": [{
             "type": "frame", "id": "root", "width": 390, "height": 844, "layout": "vertical",
@@ -1142,14 +1517,11 @@ fn an_unnamed_fill_container_rectangle_in_a_card_is_an_image_slot() {
     .expect("parse");
     let state = op_editor_core::EditorState::from_document(doc);
     let targets = super::collect_targets(&state, &std::collections::HashSet::new());
-    let slot = targets
-        .iter()
-        .find(|t| t.node_id.as_str() == "slot")
-        .expect("the photo area is a slot: {targets:?}");
     assert!(
-        slot.query.contains("Santorini") || slot.query.contains("Card"),
-        "the card's own words say what the picture is: {}",
-        slot.query
+        targets
+            .iter()
+            .all(|target| target.node_id.as_str() != "slot"),
+        "an unnamed solid box needs an explicit role/name/query: {targets:?}"
     );
 }
 
@@ -1175,6 +1547,159 @@ fn a_thin_divider_rectangle_is_not_an_image_slot() {
     assert!(
         !targets.iter().any(|t| t.node_id.as_str() == "divider"),
         "a 1px rule is not a photo: {targets:?}"
+    );
+}
+
+#[test]
+fn image_fields_preserve_search_generate_and_legacy_auto_modes() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version":"1.0", "children":[{
+            "type":"frame", "id":"root", "width":390, "height":844, "layout":"vertical",
+            "children":[
+                {"type":"image", "id":"search", "name":"Search Photo", "src":"",
+                 "imageSearchQuery":"Kyoto temple", "width":160, "height":90},
+                {"type":"image", "id":"generate", "name":"Generated Art", "src":"",
+                 "imagePrompt":"surreal Kyoto at dusk", "width":160, "height":90},
+                {"type":"image", "id":"legacy-auto", "name":"Compatible Art", "src":"",
+                 "imageSearchQuery":"Kyoto dusk", "imagePrompt":"surreal Kyoto at dusk",
+                 "width":160, "height":90}
+            ]
+        }] }"##,
+    )
+    .expect("parse");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let targets = collect_targets(&state, &std::collections::HashSet::new());
+
+    assert_eq!(
+        targets
+            .iter()
+            .find(|target| target.node_id.as_str() == "search")
+            .expect("search target")
+            .mode,
+        ImageRequestMode::Search
+    );
+    assert_eq!(
+        targets
+            .iter()
+            .find(|target| target.node_id.as_str() == "generate")
+            .expect("generate target")
+            .mode,
+        ImageRequestMode::Generate
+    );
+    assert_eq!(
+        targets
+            .iter()
+            .find(|target| target.node_id.as_str() == "legacy-auto")
+            .expect("legacy auto target")
+            .mode,
+        ImageRequestMode::Auto
+    );
+}
+
+#[test]
+fn image_result_claim_is_atomic_across_queries() {
+    let used = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+    let winners = (0..8)
+        .map(|_| {
+            let used = std::sync::Arc::clone(&used);
+            std::thread::spawn(move || claim_unused_image_src(&used, "data:image/png;base64,SAME"))
+        })
+        .map(|thread| thread.join().expect("claim thread"))
+        .filter(|claimed| *claimed)
+        .count();
+
+    assert_eq!(winners, 1, "only one concurrent query may claim an image");
+    assert!(
+        used.lock()
+            .unwrap()
+            .iter()
+            .all(|key| key.starts_with("content:") && !key.contains("base64")),
+        "dedup stores compact digests, not multi-megabyte data URIs"
+    );
+}
+
+#[test]
+fn provider_identity_reservation_releases_only_unavailable_downloads() {
+    let used = std::sync::Mutex::new(std::collections::HashSet::from([
+        "openverse:unavailable".to_string(),
+        "openverse:claimed".to_string(),
+        "openverse:duplicate".to_string(),
+    ]));
+
+    assert_eq!(
+        settle_provider_identity(
+            &used,
+            "openverse:unavailable",
+            ImageCandidateClaim::Unavailable,
+        ),
+        None
+    );
+    assert_eq!(
+        settle_provider_identity(
+            &used,
+            "openverse:claimed",
+            ImageCandidateClaim::Claimed("data:image/png;base64,OK".into()),
+        ),
+        Some("data:image/png;base64,OK".into())
+    );
+    assert_eq!(
+        settle_provider_identity(&used, "openverse:duplicate", ImageCandidateClaim::Duplicate,),
+        None
+    );
+
+    let used = used.lock().unwrap();
+    assert!(!used.contains("openverse:unavailable"));
+    assert!(used.contains("openverse:claimed"));
+    assert!(
+        used.contains("openverse:duplicate"),
+        "a successfully downloaded duplicate remains excluded"
+    );
+}
+
+#[test]
+fn wikimedia_missing_or_empty_imageinfo_releases_the_page_reservation() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+    let client = reqwest::Client::new();
+    for page in [
+        serde_json::json!({"pageid": 41, "title": "Missing imageinfo"}),
+        serde_json::json!({"pageid": 42, "title": "Empty imageinfo", "imageinfo": []}),
+    ] {
+        let identity = wikimedia_page_identity(&page).expect("page identity");
+        let used = std::sync::Mutex::new(std::collections::HashSet::from([identity.clone()]));
+        let candidates = wikimedia_image_candidates(&page);
+        assert!(candidates.is_empty());
+
+        let outcome = runtime.block_on(first_unused_renderable_image_src(
+            &client, candidates, &used,
+        ));
+        assert_eq!(outcome, ImageCandidateClaim::Unavailable);
+        assert_eq!(settle_provider_identity(&used, &identity, outcome), None);
+        assert!(
+            !used.lock().unwrap().contains(&identity),
+            "an unusable page must remain retryable"
+        );
+    }
+}
+
+#[test]
+fn openverse_claim_uses_artwork_identity_not_thumbnail_variant() {
+    let used = std::sync::Mutex::new(std::collections::HashSet::new());
+    let first = vec![serde_json::json!({
+        "id":"art-42", "title":"Kyoto temple", "thumbnail":"https://x/thumb-400.jpg",
+        "url":"https://x/full.jpg"
+    })];
+    let resized = vec![serde_json::json!({
+        "id":"art-42", "title":"Kyoto temple", "thumbnail":"https://x/thumb-800.jpg",
+        "url":"https://x/full.jpg"
+    })];
+
+    assert!(claim_openverse_result(&first, "Kyoto temple", &used).is_some());
+    assert!(
+        claim_openverse_result(&resized, "Kyoto temple", &used).is_none(),
+        "one artwork id owns all thumbnail/full-size URL variants"
     );
 }
 
