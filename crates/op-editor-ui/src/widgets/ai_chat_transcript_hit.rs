@@ -37,11 +37,24 @@ pub(crate) fn transcript_hit(
             if (t.header).contains(p) {
                 return Some(TranscriptHit::ToggleToolCalls(item.msg_index));
             }
-            for (tool_index, card) in t.cards.iter().enumerate() {
+            for card in &t.cards {
                 if (card.header).contains(p) {
                     return Some(TranscriptHit::SetToolCallCardExpanded(
                         item.msg_index,
-                        tool_index,
+                        card.index,
+                        !card.expanded,
+                    ));
+                }
+            }
+        }
+        // Interleaved flow panels are headerless — only their cards toggle,
+        // via the ORIGINAL tool index each card carries.
+        for panel in &item.flow_panels {
+            for card in &panel.cards {
+                if (card.header).contains(p) {
+                    return Some(TranscriptHit::SetToolCallCardExpanded(
+                        item.msg_index,
+                        card.index,
                         !card.expanded,
                     ));
                 }

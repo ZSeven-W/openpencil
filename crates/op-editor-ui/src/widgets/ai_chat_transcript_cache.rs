@@ -208,6 +208,9 @@ fn fingerprint_messages(messages: &[ChatMessage]) -> u64 {
         for tc in &m.tool_calls {
             tc.name.hash(&mut h);
             tc.args.hash(&mut h);
+            // The interleaved flow keys card POSITIONS off the offset — a
+            // late-stamped offset must invalidate the cached build.
+            tc.content_offset.hash(&mut h);
         }
         // Only the thumbnail count feeds layout; the bytes are painted from the
         // live slice, so hashing the length is both sufficient and cheap.
