@@ -448,35 +448,118 @@ pub(crate) fn collect_targets(
     state: &EditorState,
     known_node_ids: &HashSet<String>,
 ) -> Vec<ImageSearchTarget> {
+    let rects = resolved_sizes(state);
     let mut targets = Vec::new();
-    collect_from_children(state.active_children(), known_node_ids, &mut targets, &[]);
+    collect_from_children(
+        state.active_children(),
+        known_node_ids,
+        &rects,
+        &mut targets,
+        &[],
+        &[],
+    );
     targets
+}
+
+/// Every node's RESOLVED size, from the real layout pass.
+///
+/// Name-and-authored-size heuristics are blind to the shape weak models
+/// actually ship: DeepSeek built every card's photo area as an UNNAMED
+/// rectangle sized `fill_container` x `fill_container`, so it carried neither
+/// a keyword nor a number and the whole page came out as grey boxes (measured
+/// test0711-1-ds, 2026-07-12). What a slot IS is a question about geometry —
+/// so ask the layout.
+fn resolved_sizes(state: &EditorState) -> HashMap<String, (f32, f32)> {
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
+    let mut out = HashMap::new();
+    fn walk(
+        nodes: &[op_editor_ui::layout_scene::SceneNode],
+        out: &mut HashMap<String, (f32, f32)>,
+    ) {
+        for node in nodes {
+            let bounds = node.aggregate_bounds();
+            out.insert(node.id.clone(), (bounds.size.x, bounds.size.y));
+            walk(&node.children, out);
+        }
+    }
+    for page in &scene.pages {
+        walk(&page.children, &mut out);
+    }
+    out
+}
+
+/// The smallest box that reads as a picture rather than a swatch or a rule.
+const RESOLVED_SLOT_MIN_W: f32 = 80.0;
+const RESOLVED_SLOT_MIN_H: f32 = 60.0;
+
+/// An EMPTY, painted box that resolved to picture size, carries no name of its
+/// own (or only a generic one), and sits in a card that has words in it — the
+/// card's words say what the picture is. Geometry decides; the name is only
+/// allowed to VETO (a box called "Divider" is not a photo).
+fn is_resolved_media_slot(
+    node: &PenNode,
+    rects: &HashMap<String, (f32, f32)>,
+    sibling_text: &[String],
+) -> bool {
+    let (base, container) = match node {
+        PenNode::Frame(f) => (&f.base, &f.container),
+        PenNode::Rectangle(r) => (&r.base, &r.container),
+        _ => return false,
+    };
+    if sibling_text.is_empty() {
+        return false;
+    }
+    if node.children().is_some_and(|kids| !kids.is_empty()) {
+        return false;
+    }
+    if !matches!(container.fill.as_deref(), Some([PenFill::Solid(_)])) {
+        return false;
+    }
+    if let Some(name) = base.name.as_deref().map(str::trim) {
+        if !name.is_empty() && !is_generic_placeholder_name(name) && !has_image_area_keyword(name) {
+            return false;
+        }
+    }
+    rects
+        .get(base.id.as_str())
+        .is_some_and(|(w, h)| *w >= RESOLVED_SLOT_MIN_W && *h >= RESOLVED_SLOT_MIN_H)
 }
 
 fn collect_from_children(
     children: &[PenNode],
     known_node_ids: &HashSet<String>,
+    rects: &HashMap<String, (f32, f32)>,
     targets: &mut Vec<ImageSearchTarget>,
     parent_names: &[String],
+    inherited_text: &[String],
 ) {
     // Sibling text of a bare anonymous slot IS its subject ("Blinding
     // Lights" next to a nameless 120px square = that track's cover).
-    let sibling_text: Vec<String> = children
-        .iter()
-        .filter_map(|c| match c {
-            PenNode::Text(t) => match &t.content {
-                TextContent::Plain(text) if !text.trim().is_empty() => {
-                    Some(text.trim().to_string())
-                }
-                _ => None,
-            },
-            _ => None,
-        })
-        .take(2)
-        .collect();
-    for node in children {
+    for (index, node) in children.iter().enumerate() {
+        // The words that name a picture are rarely the slot's literal siblings:
+        // a card is [photo band, info frame] and the title lives INSIDE the
+        // info frame (measured test0711-1-ds — every photo area came out
+        // contextless and the page shipped as grey boxes). Take the words from
+        // the OTHER siblings' subtrees; a slot alone in its band inherits its
+        // card's words. Cousin cards are never consulted — that would name the
+        // Bali card's photo "Santorini".
+        let mut context: Vec<String> = Vec::new();
+        for (other_index, other) in children.iter().enumerate() {
+            if other_index == index {
+                continue;
+            }
+            collect_text_from_subtree(other, 3, &mut context);
+            if context.len() >= 2 {
+                break;
+            }
+        }
+        context.truncate(2);
+        if context.is_empty() {
+            context = inherited_text.to_vec();
+        }
+
         if let Some(target) =
-            image_search_target_for(node, known_node_ids, parent_names, &sibling_text)
+            image_search_target_for(node, known_node_ids, rects, parent_names, &context)
         {
             targets.push(target);
         }
@@ -491,14 +574,43 @@ fn collect_from_children(
             let mut child_parent_names = Vec::with_capacity(parent_names.len() + 1);
             child_parent_names.push(node.base().name.clone().unwrap_or_default());
             child_parent_names.extend(parent_names.iter().cloned());
-            collect_from_children(grand, known_node_ids, targets, &child_parent_names);
+            collect_from_children(
+                grand,
+                known_node_ids,
+                rects,
+                targets,
+                &child_parent_names,
+                &context,
+            );
         }
+    }
+}
+
+fn collect_text_from_subtree(node: &PenNode, depth: usize, out: &mut Vec<String>) {
+    if out.len() >= 2 {
+        return;
+    }
+    if let PenNode::Text(t) = node {
+        if let TextContent::Plain(text) = &t.content {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                out.push(trimmed.to_string());
+            }
+        }
+        return;
+    }
+    if depth == 0 {
+        return;
+    }
+    for child in node.children().into_iter().flatten() {
+        collect_text_from_subtree(child, depth - 1, out);
     }
 }
 
 fn image_search_target_for(
     node: &PenNode,
     known_node_ids: &HashSet<String>,
+    rects: &HashMap<String, (f32, f32)>,
     parent_names: &[String],
     sibling_text: &[String],
 ) -> Option<ImageSearchTarget> {
@@ -511,10 +623,12 @@ fn image_search_target_for(
     // carries text siblings — DeepSeek V4 builds whole album grids this
     // way with no names and no G() bindings (measured test0711-2-ds); the
     // sibling text is the only, and a good, subject source.
-    let bare_slot_with_context = !sibling_text.is_empty() && is_bare_anonymous_slot(node);
+    let bare_slot_with_context = !sibling_text.is_empty()
+        && (is_bare_anonymous_slot(node) || is_resolved_media_slot(node, rects, sibling_text));
     let needs_image = match node {
         PenNode::Image(image) => is_placeholder_src(&image.src),
         PenNode::Frame(_) => is_frame_placeholder_still_unfilled(node) || bare_slot_with_context,
+        // (rectangles fall through to the arm below)
         PenNode::Rectangle(_) => {
             is_image_area_rectangle_by_heuristic(node)
                 || is_unnamed_media_slot_in_context(node, parent_names)
@@ -539,10 +653,18 @@ fn image_search_target_for(
                 .to_string(),
             _ => String::new(),
         };
-        query = if explicit.is_empty() {
-            sibling_text.join(" ")
-        } else {
+        // Precedence: an explicit binding, then the nearest ancestor that NAMES
+        // the subject (a card called "Bali, Indonesia"), and only then the
+        // words found around the slot. Context text is the last resort because
+        // it can only ever come from siblings — and a card with no words of its
+        // own would otherwise borrow its neighbour's ("Santorini" on the Bali
+        // card, measured while fixing this).
+        query = if !explicit.is_empty() {
             explicit
+        } else if let Some(name) = parent_semantic_name(parent_names) {
+            name
+        } else {
+            sibling_text.join(" ")
         };
     }
     if query.is_empty() {

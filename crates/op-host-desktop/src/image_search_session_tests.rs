@@ -1112,3 +1112,86 @@ fn m3_style_img_and_ph_rectangles_are_image_slots() {
     );
     assert_eq!(by_id.get("img"), Some(&"Bali, Indonesia"));
 }
+
+/// DeepSeek builds a card's photo area as an UNNAMED rectangle sized
+/// `fill_container` x `fill_container` — no keyword, no number — so the
+/// name-and-authored-size heuristics saw nothing and the page shipped as grey
+/// boxes (measured test0711-1-ds, 2026-07-12). What a slot IS is a question
+/// about geometry: the resolved layout answers it.
+#[test]
+fn an_unnamed_fill_container_rectangle_in_a_card_is_an_image_slot() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [{
+            "type": "frame", "id": "root", "width": 390, "height": 844, "layout": "vertical",
+            "children": [{
+                "type": "frame", "id": "card", "name": "Card",
+                "width": 200, "height": 260, "layout": "vertical",
+                "children": [
+                    { "type": "frame", "id": "band", "width": "fill_container", "height": 140,
+                      "layout": "vertical", "children": [
+                        { "type": "rectangle", "id": "slot",
+                          "width": "fill_container", "height": "fill_container",
+                          "fill": [{ "type": "solid", "color": "#F1F1F1" }] }
+                      ]},
+                    { "type": "text", "id": "title", "content": "Santorini" },
+                    { "type": "text", "id": "sub", "content": "Greece" }
+                ]
+            }]
+        }] }"##,
+    )
+    .expect("parse");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let targets = super::collect_targets(&state, &std::collections::HashSet::new());
+    let slot = targets
+        .iter()
+        .find(|t| t.node_id.as_str() == "slot")
+        .expect("the photo area is a slot: {targets:?}");
+    assert!(
+        slot.query.contains("Santorini") || slot.query.contains("Card"),
+        "the card's own words say what the picture is: {}",
+        slot.query
+    );
+}
+
+#[test]
+fn a_thin_divider_rectangle_is_not_an_image_slot() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [{
+            "type": "frame", "id": "root", "width": 390, "height": 844, "layout": "vertical",
+            "children": [{
+                "type": "frame", "id": "row", "width": "fill_container", "height": 60,
+                "layout": "vertical", "children": [
+                    { "type": "text", "id": "t", "content": "Section" },
+                    { "type": "rectangle", "id": "divider", "name": "divider",
+                      "width": "fill_container", "height": 1,
+                      "fill": [{ "type": "solid", "color": "#E5E5E5" }] }
+                ]
+            }]
+        }] }"##,
+    )
+    .expect("parse");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let targets = super::collect_targets(&state, &std::collections::HashSet::new());
+    assert!(
+        !targets.iter().any(|t| t.node_id.as_str() == "divider"),
+        "a 1px rule is not a photo: {targets:?}"
+    );
+}
+
+/// Forensic: `OP_SLOT_PROBE=<path.op>` prints every slot the enrichment pass
+/// would enqueue for a saved document, with the query it would search.
+#[test]
+#[ignore]
+fn slot_probe() {
+    let Ok(path) = std::env::var("OP_SLOT_PROBE") else {
+        return;
+    };
+    let src = std::fs::read_to_string(&path).expect("read");
+    let loaded = op_pen_loader::load_canonical(&src).expect("load");
+    let state = op_editor_core::EditorState::from_document(loaded.value);
+    let targets = super::collect_targets(&state, &std::collections::HashSet::new());
+    eprintln!("SLOTS ({}):", targets.len());
+    for t in &targets {
+        eprintln!("  {} -> {:?}", t.node_id.as_str(), t.query);
+    }
+}
