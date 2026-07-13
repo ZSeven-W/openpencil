@@ -32,9 +32,20 @@ select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_
 - Treat the returned TokenMap as reference values only.
 - BAKE concrete values (fills, text colors, radius, font) from the style directly into nodes. Do NOT create document variables from the style, and Do NOT call `set_variables` for it — the style is reference guidance, not document state. (You may still reuse the document's own existing `$variables` per Step 4.)
 
-### Step 4 — Read design variables
+### Step 4 — Design variables and built-in design systems
 
 Call `get_variables` to see the existing design variables and themes. Reuse them by using `$variable` references in node properties instead of hardcoding color values or sizes.
+
+**Starting a NEW design on an empty canvas: apply a built-in design system FIRST.** One call to `apply_design_system(name)` installs a complete token table (Light + Dark themed) plus the `Mode` theme axis:
+
+- `halo` — clean SaaS blue, soft neutrals
+- `lunaris` — dark-first, muted violet
+- `nitro` — high-energy, saturated accents
+- `shadcn` — neutral baseline, maximum flexibility
+
+Then reference tokens instead of raw hex everywhere they fit: `fill: "$--card"`, text `fill: "$--muted-foreground"`, buttons `"$--primary"` + `"$--primary-foreground"`, borders `"$--border"`, sidebars the `$--sidebar-*` family, radii `$--radius-m`. A design built on tokens re-themes to Dark for free.
+
+When you create your OWN variables, use the same shadcn vocabulary (`--background`, `--card`, `--primary`, `--muted-foreground`, …) — never invent parallel names like `$color-accent` for a concept the vocabulary already covers.
 
 ### Step 5 — Read components and existing structure
 
