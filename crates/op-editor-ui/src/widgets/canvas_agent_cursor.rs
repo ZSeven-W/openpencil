@@ -642,8 +642,10 @@ pub(crate) fn paint_cursor_swatch(
             .map(|(dx, dy)| Point2D::new(origin.x + dx, origin.y + dy))
             .collect()
     };
-    cx.backend
-        .stroke_polygon(&at(silhouette.body), PENCIL_HALO.with_alpha(0.28), 4.5);
+    for (width, alpha) in [(5.4, 0.05), (3.8, 0.08), (2.5, 0.12)] {
+        cx.backend
+            .stroke_polygon(&at(silhouette.body), PENCIL_HALO.with_alpha(alpha), width);
+    }
     cx.backend.fill_polygon(&at(silhouette.body), color);
     cx.backend
         .stroke_polygon(&at(silhouette.body), Color::WHITE.with_alpha(0.9), 1.2);
@@ -696,11 +698,14 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhou
     cx.backend
         .fill_polygon(&shadow, Color::BLACK.with_alpha(0.14 * sprite.alpha));
     // Dark halo OUTSIDE the white outline (user-picked "O4", the macOS
-    // pointer treatment): a pure-white outline vanished on light designs;
-    // the wide low-alpha dark ring keeps the silhouette readable on any
-    // ground while the white rim keeps it crisp on dark ones.
-    cx.backend
-        .stroke_polygon(&body, PENCIL_HALO.with_alpha(0.28 * sprite.alpha), 5.4);
+    // pointer treatment): a pure-white outline vanished on light designs.
+    // No blur primitive exists, so the glow is FEATHERED as three
+    // concentric strokes with falling alpha - a single wide 28% band read
+    // as a dirty grey ring (user feedback 2026-07-12).
+    for (width, alpha) in [(6.6, 0.05), (4.6, 0.08), (2.9, 0.12)] {
+        cx.backend
+            .stroke_polygon(&body, PENCIL_HALO.with_alpha(alpha * sprite.alpha), width);
+    }
     cx.backend
         .fill_polygon(&body, sprite.color.with_alpha(sprite.alpha));
     cx.backend
