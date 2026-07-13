@@ -66,6 +66,7 @@ pub mod scaffold;
 pub(crate) mod sidebar_archetype;
 pub mod spacing_repair;
 pub mod spawn_concurrent;
+pub(crate) mod stray_image_adopt;
 pub mod stub_repair;
 pub mod subagent;
 pub mod table_repair;

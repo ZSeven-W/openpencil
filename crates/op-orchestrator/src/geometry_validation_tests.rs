@@ -2450,3 +2450,138 @@ fn an_oversized_plate_does_not_stretch_the_photo_band() {
         "a 300px plate in a 170px-wide band is oversized, not a band height: {cmds:?}"
     );
 }
+
+/// The measured destination card: a 56px band wrapping a 160x180 photo BOX
+/// (the photo is a grandchild, not a direct child) — every card painted a
+/// blue sliver of sky.
+#[test]
+fn a_band_takes_the_height_of_a_photo_nested_one_level_down() {
+    let slot = json!({
+        "type": "frame", "id": "band", "width": 192, "height": 56,
+        "layout": "horizontal", "clipContent": true,
+        "children": [
+            { "type": "frame", "id": "destimg", "width": 160, "height": 180,
+              "clipContent": true, "x": 0, "y": 0, "children": [
+                { "type": "image", "id": "photo", "width": 160, "height": 180,
+                  "src": "data:image/jpeg;base64,AAAA" }
+              ]},
+            { "type": "frame", "id": "heart", "width": 32, "height": 32, "x": 8, "y": 8 }
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "band".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 192.0,
+            h: 56.0,
+        },
+    );
+    let mut cmds = Vec::new();
+    collect_image_slot_fixes(&slot, &rects, &mut cmds);
+    let grown = cmds.iter().find_map(|c| match c {
+        EditorCommand::UpdateNode {
+            node_id, height, ..
+        } if node_id.as_str() == "band" => *height,
+        _ => None,
+    });
+    assert_eq!(
+        grown,
+        Some(180),
+        "the band takes the nested photo's height: {cmds:?}"
+    );
+}
+
+/// The measured header: a painted row named "Avatar" holding a 44px bell, a
+/// 44px stub and a 44px photo, given fill_container width — it stretched
+/// across the header and painted as one beige capsule around the controls.
+#[test]
+fn a_painted_row_of_fixed_controls_hugs_instead_of_stretching() {
+    let row = json!({
+        "type": "frame", "id": "actions", "name": "Avatar", "width": "fill_container",
+        "height": 44, "layout": "horizontal", "gap": 8, "cornerRadius": 22,
+        "fill": [{ "type": "solid", "color": "#FFE7CF" }],
+        "children": [
+            { "type": "frame", "id": "bell", "width": 44, "height": 44 },
+            { "type": "frame", "id": "avatar", "width": 44, "height": 44 }
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "actions".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 220.0,
+            h: 44.0,
+        },
+    );
+    let mut cmds = Vec::new();
+    collect_overwide_control_row_fixes(&row, &rects, &mut cmds);
+    assert!(
+        cmds.iter().any(|c| matches!(c,
+            EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
+                if node_id.as_str() == "actions" && property == "width" && k == "fit_content")),
+        "the control cluster hugs its controls: {cmds:?}"
+    );
+}
+
+#[test]
+fn a_bottom_nav_of_flex_tabs_is_not_a_control_row() {
+    let nav = json!({
+        "type": "frame", "id": "nav", "width": "fill_container", "height": 74,
+        "layout": "horizontal", "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+        "children": [
+            { "type": "frame", "id": "t1", "width": "fill_container", "height": 74 },
+            { "type": "frame", "id": "t2", "width": "fill_container", "height": 74 },
+            { "type": "frame", "id": "t3", "width": "fill_container", "height": 74 }
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "nav".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 390.0,
+            h: 74.0,
+        },
+    );
+    let mut cmds = Vec::new();
+    collect_overwide_control_row_fixes(&nav, &rects, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "flex tabs are meant to span the bar: {cmds:?}"
+    );
+}
+
+#[test]
+fn an_unpainted_row_of_controls_is_left_alone() {
+    // No fill — a fill_container width paints nothing and is often just how
+    // the model right-aligns a group. Nothing to repair.
+    let row = json!({
+        "type": "frame", "id": "row", "width": "fill_container", "height": 44,
+        "layout": "horizontal", "justifyContent": "end",
+        "children": [
+            { "type": "frame", "id": "a", "width": 44, "height": 44 },
+            { "type": "frame", "id": "b", "width": 44, "height": 44 }
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "row".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 300.0,
+            h: 44.0,
+        },
+    );
+    let mut cmds = Vec::new();
+    collect_overwide_control_row_fixes(&row, &rects, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "an invisible row stretches harmlessly: {cmds:?}"
+    );
+}

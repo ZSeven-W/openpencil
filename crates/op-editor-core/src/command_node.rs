@@ -595,7 +595,12 @@ impl EditorState {
                 let Some(target) = walkers::find_node(children, target_parent) else {
                     return false;
                 };
-                if target.children().is_none() {
+                // A container that has never held a child carries NO `children`
+                // array — it is still a container, and `children_mut` mints the
+                // array on demand. Refusing it here made an empty media slot
+                // unreachable: a photo could not be moved into the very slot
+                // the design authored for it (measured test0711-1-glm).
+                if !target.is_container() {
                     return false;
                 }
             }
@@ -628,7 +633,8 @@ impl EditorState {
                 let Some(target) = walkers::find_node(children, target_parent) else {
                     return false;
                 };
-                if target.children().is_none() {
+                // Same rule as MoveNode: childless container, still a container.
+                if !target.is_container() {
                     return false;
                 }
             }

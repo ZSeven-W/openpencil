@@ -1520,6 +1520,9 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
         debug_probe_child_height(sink, rid, "adjust_root_height");
     }
 
+    // A stray photo rejoins the empty slot that was waiting for it BEFORE the
+    // twin-stub sweep, so the slot no longer reads as an empty decorated stub.
+    crate::stray_image_adopt::adopt_stray_images_for_all_roots(sink);
     crate::avatar_repair::remove_empty_twin_stubs_beside_images_for_all_roots(sink);
     crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);
 

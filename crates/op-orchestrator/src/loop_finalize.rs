@@ -451,6 +451,9 @@ pub fn apply_loop_finalize(state: &mut EditorState) {
         // previously ran only on the orchestrator path — the agentic loop's
         // hand-built navs shipped crooked (GLM-5.2 2026-07-11).
         crate::cleanup::repair_mobile_structural_chrome_for_all_roots(&mut sink);
+        // A stray photo rejoins the empty slot that was waiting for it BEFORE the
+        // twin-stub sweep, so the slot no longer reads as an empty decorated stub.
+        crate::stray_image_adopt::adopt_stray_images_for_all_roots(&mut sink);
         crate::avatar_repair::remove_empty_twin_stubs_beside_images_for_all_roots(&mut sink);
         crate::avatar_repair::repair_avatar_slots_for_all_roots(&mut sink);
         crate::cleanup::fill_empty_bottom_nav_shells_for_all_roots(&mut sink);
