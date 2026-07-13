@@ -11,7 +11,7 @@ use crate::{Point2D, Rect, TextLayout};
 const GROUP_HEADER_H: f32 = 22.0;
 /// #27 restyle: comfortable 48px card header (was 24px).
 const CARD_HEADER_H: f32 = 28.0;
-const CARD_GAP: f32 = 4.0;
+pub(crate) const CARD_GAP: f32 = 4.0;
 const CARD_PAD_X: f32 = 8.0;
 const CARD_PAD_Y: f32 = 6.0;
 const CARD_LINE_H: f32 = 14.0;
@@ -26,6 +26,10 @@ const CHECK_RING_R: f32 = 7.0;
 /// Status glyph box — deliberately smaller than the chevron: the check is a
 /// quiet confirmation beside the verb, not a second focal point.
 const STATUS_GLYPH: f32 = 11.0;
+/// Expander caret box. The collapsed state stacks two of them with an
+/// overlap (`EXPANDER_NUDGE`) so the pair reads as one select control.
+const EXPANDER_GLYPH: f32 = 11.0;
+const EXPANDER_NUDGE: f32 = 2.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolLevel {
@@ -453,23 +457,38 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
     // Status ring + icon: positioned before the chevron.
     paint_status_icon(cx, theme, card);
 
-    // Expand/collapse chevron at the far right, vertically centered.
-    let chevron_icon = if card.expanded {
-        Icon::ChevronDown
+    // Expander at the far right. Collapsed reads as a SELECT affordance (a
+    // stacked up/down caret pair, the reference treatment) rather than a
+    // navigational ">"; expanded collapses to a single down caret.
+    let expander_x = card.header.origin.x + card.header.size.x - CARD_CHEVRON_RIGHT_OFFSET;
+    let center_y = card.header.origin.y + CARD_HEADER_H / 2.0;
+    if card.expanded {
+        draw_icon(
+            cx.backend,
+            Icon::ChevronDown,
+            Point2D::new(expander_x, center_y - EXPANDER_GLYPH / 2.0),
+            EXPANDER_GLYPH,
+            theme.muted_foreground,
+            1.4,
+        );
     } else {
-        Icon::ChevronRight
-    };
-    draw_icon(
-        cx.backend,
-        chevron_icon,
-        Point2D::new(
-            card.header.origin.x + card.header.size.x - CARD_CHEVRON_RIGHT_OFFSET,
-            card.header.origin.y + (CARD_HEADER_H - 14.0) / 2.0,
-        ),
-        14.0,
-        theme.muted_foreground,
-        1.5,
-    );
+        draw_icon(
+            cx.backend,
+            Icon::ChevronUp,
+            Point2D::new(expander_x, center_y - EXPANDER_GLYPH + EXPANDER_NUDGE),
+            EXPANDER_GLYPH,
+            theme.muted_foreground,
+            1.4,
+        );
+        draw_icon(
+            cx.backend,
+            Icon::ChevronDown,
+            Point2D::new(expander_x, center_y - EXPANDER_NUDGE),
+            EXPANDER_GLYPH,
+            theme.muted_foreground,
+            1.4,
+        );
+    }
 
     if card.body.size.y > 0.0 {
         cx.backend.stroke_line(

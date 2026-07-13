@@ -1252,3 +1252,24 @@ fn trailing_calls_at_content_end_leave_no_empty_prose_segment() {
     assert_eq!(item.flow_panels.len(), 1);
     assert!(item.flow_bubbles[0].rect.origin.y < item.flow_panels[0].cards[0].rect.origin.y);
 }
+
+#[test]
+fn prose_sits_equally_far_above_and_below_a_tool_chip() {
+    let (item, _) = build_item(
+        &loop_message(),
+        0,
+        0.0,
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let b = &item.flow_bubbles;
+    let p = &item.flow_panels;
+    let first_card = &p[0].cards[0];
+    let last_card = p[0].cards.last().unwrap();
+    let above = first_card.rect.origin.y - (b[0].rect.origin.y + b[0].rect.size.y);
+    let below = b[1].rect.origin.y - (last_card.rect.origin.y + last_card.rect.size.y);
+    assert!(
+        (above - below).abs() < 0.01,
+        "a chip must belong to the story on BOTH sides equally: {above} above vs {below} below"
+    );
+}

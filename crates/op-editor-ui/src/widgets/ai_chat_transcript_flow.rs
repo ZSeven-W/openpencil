@@ -20,13 +20,17 @@ use super::ai_chat_transcript_steps::strip_tool_call_xml;
 use super::ai_chat_transcript_text::char_display_units;
 use super::ai_chat_transcript_text::wrap_units;
 use super::ai_chat_transcript_tools::{
-    build_tool_panel, paint_tool_panel, ToolPanel, ToolPanelLayout,
+    build_tool_panel, paint_tool_panel, ToolPanel, ToolPanelLayout, CARD_GAP,
 };
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
 
-/// Gap between a prose segment and the adjacent tool panel.
-const FLOW_GAP: f32 = 6.0;
+/// Breathing room between a prose paragraph and the adjacent tool panel.
+/// Applied SYMMETRICALLY: the panel builder already appends a trailing
+/// `CARD_GAP`, so the flow subtracts it before adding this — otherwise the
+/// gap below a chip ran 4px wider than the gap above it and the chip read as
+/// belonging to the paragraph BELOW it (user report 2026-07-12).
+const FLOW_GAP: f32 = 10.0;
 
 /// The interleaved flow applies when any call knows WHERE in the narration
 /// it happened. (User messages and non-loop assistant turns never stamp
@@ -104,7 +108,10 @@ pub(crate) fn build_flow(
             let header_h = panel.header.size.y;
             panel.header.size.y = 0.0;
             shift_panel_up(&mut panel, header_h);
-            y = next_y - header_h;
+            // The panel builder trails the last card with TWO CARD_GAPs (one
+            // from the per-card loop, one closing the body); drop both so
+            // FLOW_GAP alone sets the distance.
+            y = next_y - header_h - 2.0 * CARD_GAP;
             panels.push(panel);
         }
         y += FLOW_GAP;
