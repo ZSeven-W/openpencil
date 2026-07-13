@@ -1465,3 +1465,68 @@ fn a_lone_empty_operations_list_still_reports_its_own_error() {
         other => panic!("empty program silently accepted: {other:?}"),
     }
 }
+
+/// Measured test0711-1-ds: every section frame omitted `layout`, so the engine
+/// laid [title, card rail] out as a ROW — each section title sat to the LEFT of
+/// its cards and the rail ran off the screen. An omitted layout stacks.
+#[test]
+fn a_container_without_a_layout_stacks_its_children() {
+    let mut section = serde_json::json!({
+        "type": "frame", "id": "n6", "name": "Popular Destinations",
+        "width": "fill_container", "height": 240,
+        "children": [
+            { "type": "frame", "id": "n25", "name": "Section Header", "layout": "horizontal" },
+            { "type": "frame", "id": "n28", "name": "Rail", "layout": "horizontal" }
+        ]
+    });
+    crate::batch_design::normalize_node_shape(&mut section);
+    assert_eq!(
+        section.get("layout").and_then(|v| v.as_str()),
+        Some("vertical"),
+        "the section stacks its title above its rail"
+    );
+}
+
+#[test]
+fn an_authored_layout_and_an_absolute_stack_are_left_alone() {
+    let mut row = serde_json::json!({
+        "type": "frame", "id": "row", "layout": "horizontal",
+        "children": [
+            { "type": "frame", "id": "a" },
+            { "type": "frame", "id": "b" }
+        ]
+    });
+    crate::batch_design::normalize_node_shape(&mut row);
+    assert_eq!(
+        row.get("layout").and_then(|v| v.as_str()),
+        Some("horizontal")
+    );
+
+    // Absolute children are out of flow — direction is irrelevant, and the
+    // caller may mean `layout: none`.
+    let mut overlay = serde_json::json!({
+        "type": "frame", "id": "overlay",
+        "children": [
+            { "type": "frame", "id": "badge", "x": 8, "y": 8 },
+            { "type": "frame", "id": "heart", "x": 300, "y": 8 }
+        ]
+    });
+    crate::batch_design::normalize_node_shape(&mut overlay);
+    assert!(
+        overlay.get("layout").is_none(),
+        "an absolutely-positioned stack keeps its authored (absent) layout"
+    );
+}
+
+#[test]
+fn a_single_child_container_is_not_given_a_direction() {
+    let mut wrapper = serde_json::json!({
+        "type": "frame", "id": "w",
+        "children": [{ "type": "image", "id": "img", "src": "data:image/png;base64,AA" }]
+    });
+    crate::batch_design::normalize_node_shape(&mut wrapper);
+    assert!(
+        wrapper.get("layout").is_none(),
+        "one child has no direction to get wrong"
+    );
+}
