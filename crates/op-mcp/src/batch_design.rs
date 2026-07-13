@@ -645,6 +645,7 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     // correctly, then every `U(n1,{layout:{type:horizontal…}})` was rejected and
     // the tree thrashed to empty).
     normalize_layout_object(obj);
+    default_container_layout(obj);
     if let Some(fill) = obj.get_mut("fill") {
         normalize_fill(fill);
     }
@@ -918,6 +919,42 @@ fn normalize_text_growth(obj: &mut serde_json::Map<String, serde_json::Value>) {
         None => {
             obj.remove("textGrowth");
         }
+    }
+}
+
+/// A container with flow children and NO `layout` renders as a ROW — the
+/// engine's flex default. That is never what an omission means: a section
+/// whose children are [title row, card rail] wants them STACKED, and models
+/// that want a row always say so explicitly (measured test0711-1-ds: every
+/// section frame omitted `layout`, so each title landed to the LEFT of its
+/// rail and the cards ran off the screen). An omitted layout stacks.
+///
+/// Absolutely-positioned children are out of flow, so a frame whose children
+/// all carry `x`/`y` is left alone — its direction is irrelevant, and forcing
+/// one could contradict a `layout: none` the caller means to set later.
+fn default_container_layout(obj: &mut serde_json::Map<String, serde_json::Value>) {
+    const CONTAINERS: [&str; 3] = ["frame", "group", "rectangle"];
+    let is_container = obj
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|t| CONTAINERS.contains(&t));
+    if !is_container || obj.contains_key("layout") {
+        return;
+    }
+    let flow_children = obj
+        .get("children")
+        .and_then(serde_json::Value::as_array)
+        .map(|kids| {
+            kids.iter()
+                .filter(|c| c.get("x").is_none_or(serde_json::Value::is_null))
+                .count()
+        })
+        .unwrap_or(0);
+    if flow_children >= 2 {
+        obj.insert(
+            "layout".to_string(),
+            serde_json::Value::String("vertical".to_string()),
+        );
     }
 }
 
