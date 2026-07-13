@@ -1,4 +1,4 @@
-//! Canvas selection semantics (enter-group on double-click) + the
+//! Canvas selection semantics (one-level drill on double-click) + the
 //! node-drag release commit (auto-layout reorder / cross-container
 //! reparenting).
 //!
@@ -34,51 +34,64 @@ struct ContainerDropCandidate {
 }
 
 impl WidgetHostNative {
-    /// Select-tool press on a canvas node (the deepest hit). Routes
-    /// double-clicks to enter-group / text-edit, then applies the TS
-    /// click-resolution rules (`skia-interaction.ts:368-405`): promote
-    /// a nested hit to its outermost frame/group ancestor (unit
-    /// selection) unless the user entered that container; a hit on a
-    /// child of an already-selected node keeps the selection. Always
-    /// consumes the press.
+    /// Select-tool press over a resolved root-to-deepest hit path.
+    /// A plain click selects the current level's primary node; a
+    /// double-click drills exactly one level to the child under the
+    /// pointer. The primary then becomes the entered sibling scope.
+    /// This is the same hierarchy Pencil exposes with a solid primary
+    /// hover outline and dashed direct-child guides.
     pub(in crate::widget_host) fn apply_canvas_node_press(
         &mut self,
-        ec_id: NodeId,
+        hit_path: Vec<NodeId>,
         x: f32,
         y: f32,
         text_edit_was_active: bool,
         viewport_height: f32,
     ) -> bool {
-        use op_editor_core::selection_resolve::{
-            resolve_canvas_selection_target, SelectionResolution,
+        let Some(deepest) = hit_path.last().cloned() else {
+            return false;
         };
-        // Canvas double-click: 400 ms same-node → enter a selected
-        // container, else text-edit on Text nodes.
+        let Some(targets) = op_editor_core::selection_resolve::resolve_canvas_depth_targets(
+            &hit_path,
+            self.editor_state.editor_ui.entered_container.as_ref(),
+        ) else {
+            return false;
+        };
+        // Canvas double-click: 400 ms over the same deepest geometry.
+        // Shift and an existing multi-selection deliberately disable
+        // drill-down so a set-edit gesture cannot unexpectedly enter a
+        // container.
         let is_double = matches!(
             &self.editor_state.editor_ui.last_canvas_click,
-            Some((prev, t)) if *prev == ec_id
+            Some((prev, t)) if *prev == deepest
                 && self.now_ms.saturating_sub(*t) < 400
-        );
-        self.editor_state.editor_ui.last_canvas_click = Some((ec_id.clone(), self.now_ms));
+        ) && !self.shift_held
+            && self.editor_state.selection_count() <= 1;
+        self.editor_state.editor_ui.last_canvas_click = if self.shift_held || is_double {
+            None
+        } else {
+            Some((deepest, self.now_ms))
+        };
         if is_double && !text_edit_was_active {
-            // TS dblclick order (skia-interaction.ts:1279-1296):
-            // entering a selected frame/group wins over the
-            // text-edit fallback.
-            if self.try_enter_selected_container_on_double_click(&ec_id, viewport_height) {
+            if let Some(secondary) = targets.secondary_under_pointer {
+                self.editor_state.set_single_selection(secondary.clone());
+                self.editor_state.editor_ui.entered_container = Some(targets.primary);
+                // Rebase the stationary-pointer hover immediately. The
+                // native 3 px probe cache would otherwise retain the old
+                // level until the mouse moved again.
+                self.editor_state.editor_ui.canvas_hover_node = Some(secondary);
+                self.last_hover_probe = None;
+                self.scroll_layer_panel_selection_into_view(viewport_height);
+                self.mark_dirty();
                 return true;
             }
-            if self.editor_state.start_text_edit(ec_id.clone()) {
+            if self.editor_state.start_text_edit(targets.primary.clone()) {
                 self.editor_state.ui.text_edit_input.touch(self.now_ms);
                 self.mark_dirty();
                 return true;
             }
         }
-        let resolved = resolve_canvas_selection_target(
-            self.editor_state.active_children(),
-            &ec_id,
-            self.editor_state.editor_ui.entered_container.as_ref(),
-            &self.editor_state.selection.set,
-        );
+        let target = targets.primary;
         let fresh_drag = NodeDragState {
             last_screen_x: x,
             last_screen_y: y,
@@ -91,74 +104,42 @@ impl WidgetHostNative {
         };
         self.option_drag_source_ids.clear();
         if self.shift_held {
-            // Shift+click toggles set membership of the resolved
-            // target; a child of a selected node keeps the set and
-            // just drags it.
-            if let SelectionResolution::Select(target) = resolved {
-                let was_in_set = self.editor_state.is_selected(&target);
-                self.editor_state.toggle_selection(target);
-                self.editor_state.sync_entered_container_with_selection();
-                if !was_in_set {
-                    self.node_drag = Some(fresh_drag);
-                }
-            } else {
+            let was_in_set = self.editor_state.is_selected(&target);
+            self.editor_state.toggle_selection(target);
+            if !was_in_set {
                 self.node_drag = Some(fresh_drag);
+            }
+            if self
+                .editor_state
+                .editor_ui
+                .entered_container
+                .as_ref()
+                .is_some_and(|entered| !hit_path.contains(entered))
+            {
+                self.editor_state.editor_ui.entered_container = None;
             }
             self.scroll_layer_panel_selection_into_view(viewport_height);
             return true;
         }
-        // Plain click: keep a multi-set when clicking inside it (TS
-        // parity), else single-select the resolved target.
-        if let SelectionResolution::Select(target) = resolved {
-            let already_in_set = self.editor_state.is_selected(&target);
-            if !already_in_set || self.editor_state.selection_count() == 1 {
-                self.editor_state.set_single_selection(target);
-            }
+        // Plain click selects the solid-outline primary. Clicking a
+        // sibling inside an entered scope therefore moves selection at
+        // that level instead of dragging an arbitrary deepest leaf.
+        let already_in_set = self.editor_state.is_selected(&target);
+        if !already_in_set || self.editor_state.selection_count() == 1 {
+            self.editor_state.set_single_selection(target);
         }
-        self.editor_state.sync_entered_container_with_selection();
+        if self
+            .editor_state
+            .editor_ui
+            .entered_container
+            .as_ref()
+            .is_some_and(|entered| !hit_path.contains(entered))
+        {
+            self.editor_state.editor_ui.entered_container = None;
+        }
         self.scroll_layer_panel_selection_into_view(viewport_height);
         self.editor_state.commit_history();
         self.node_drag = Some(fresh_drag);
-        true
-    }
-
-    /// TS double-click enter-group (`skia-interaction.ts:1279-1294`):
-    /// when exactly one frame/group with children is selected, a
-    /// double-click selects the deepest hit under the cursor; when
-    /// that hit is inside the selected container, the container
-    /// becomes the entered context (promotion then stops at its
-    /// children). Returns `true` when the double-click was consumed.
-    pub(in crate::widget_host) fn try_enter_selected_container_on_double_click(
-        &mut self,
-        deepest: &NodeId,
-        viewport_height: f32,
-    ) -> bool {
-        if self.editor_state.selection_count() != 1 {
-            return false;
-        }
-        let anchor = self.editor_state.selection.anchor.clone();
-        if !anchor.is_real() || anchor == *deepest {
-            return false;
-        }
-        let children = self.editor_state.active_children();
-        let Some(node) = op_editor_core::walkers::find_node(children, &anchor) else {
-            return false;
-        };
-        if !matches!(node, PenNode::Frame(_) | PenNode::Group(_)) {
-            return false;
-        }
-        if node.children().map(|c| c.is_empty()).unwrap_or(true) {
-            return false;
-        }
-        let enters =
-            op_editor_core::selection_resolve::is_strict_descendant(children, &anchor, deepest);
-        if enters {
-            self.editor_state.editor_ui.entered_container = Some(anchor);
-        }
-        self.editor_state.set_single_selection(deepest.clone());
-        self.editor_state.sync_entered_container_with_selection();
-        self.scroll_layer_panel_selection_into_view(viewport_height);
-        self.mark_dirty();
         true
     }
 

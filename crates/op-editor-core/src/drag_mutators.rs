@@ -1,12 +1,13 @@
-//! Canvas-drag mutators: handle-resize (with descendant scaling) +
-//! drag-end auto-layout reorder / cross-container reparenting.
+//! Canvas-drag mutators: handle-resize + drag-end auto-layout reorder /
+//! cross-container reparenting.
 //!
-//! Ports the TS behavior from `skia-interaction.ts` (`handleResizeMove`
-//! / `handleDragEnd`) and pen-core `tree-utils.ts::scaleChildrenInPlace`.
+//! Resize follows Pencil's frame semantics: mutate the selected node's
+//! authored bounds only, then let the layout engine reflow Fill/Hug/flex
+//! descendants. It is deliberately not a subtree Scale operation.
 //! Split out of `mutators.rs` to keep that file under the 800-line
 //! ceiling.
 
-use crate::geometry::{own_bounds, DocRect};
+use crate::geometry::DocRect;
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
@@ -20,6 +21,27 @@ use jian_ops_schema::node::PenNode;
 pub enum FlexDirection {
     Vertical,
     Horizontal,
+}
+
+/// Authored dimensions affected by a selection-handle drag.
+///
+/// Edge handles freeze one axis to a number; corner handles freeze both.
+/// The untouched axis keeps its existing Number / Fill / Hug mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResizeAxes {
+    Width,
+    Height,
+    Both,
+}
+
+impl ResizeAxes {
+    fn width(self) -> bool {
+        matches!(self, Self::Width | Self::Both)
+    }
+
+    fn height(self) -> bool {
+        matches!(self, Self::Height | Self::Both)
+    }
 }
 
 /// Canonical drop destination for canvas node dragging. The host
@@ -79,32 +101,21 @@ pub fn parent_of(children: &[PenNode], target: &NodeId) -> Option<NodeId> {
     None
 }
 
-/// Recursively scale child relative positions and explicit pixel
-/// sizes by `(sx, sy)` — a faithful port of pen-core
-/// `tree-utils.ts::scaleChildrenInPlace`. Flex-flow children carry no
-/// authored `x` / `y`, so only their sizes scale and the layout
-/// engine reflows their positions, matching the TS semantics.
-pub fn scale_children_in_place(children: &mut [PenNode], sx: f64, sy: f64) {
-    for child in children.iter_mut() {
-        {
-            let base = child.base_mut();
-            if let Some(x) = base.x {
-                base.x = Some(x * sx);
-            }
-            if let Some(y) = base.y {
-                base.y = Some(y * sy);
-            }
-        }
-        if let Some(w) = child.width_px() {
-            child.set_width_px(w * sx);
-        }
-        if let Some(h) = child.height_px() {
-            child.set_height_px(h * sy);
-        }
-        if let Some(grand) = child.children_mut() {
-            scale_children_in_place(grand, sx, sy);
-        }
-    }
+/// A child participates in its parent's auto-layout flow only when the parent
+/// is flex and the child has no explicit position. Jian treats either `x` or
+/// `y` as an absolute-position contract, so overlays inside a flex container
+/// must still accept parent-relative left/top resize writes.
+fn selected_is_flow_child(children: &[PenNode], target: &NodeId) -> bool {
+    let Some((Some(parent_id), _)) = walkers::find_parent_and_index(children, target) else {
+        return false;
+    };
+    let Some(parent) = walkers::find_node(children, &parent_id) else {
+        return false;
+    };
+    let Some(node) = walkers::find_node(children, target) else {
+        return false;
+    };
+    parent.is_auto_layout_container() && node.base().x.is_none() && node.base().y.is_none()
 }
 
 impl EditorState {
@@ -112,46 +123,55 @@ impl EditorState {
     /// `x`/`y` + `width`/`height`). No-op when the node is locked /
     /// hidden / missing.
     ///
-    /// TS parity (`skia-interaction.ts:626-744` + pen-core
-    /// `scaleChildrenInPlace`): resizing a container scales the whole
-    /// subtree proportionally, and resizing an auto-grow text node
-    /// pins it to `textGrowth: fixed-width` so the new width sticks.
+    /// Convenience for operations that author a complete new rectangle
+    /// (shape creation and direct geometry tests). Handle drags should call
+    /// [`Self::resize_selected_bounds`] so an untouched Fill/Hug axis stays
+    /// authored as Fill/Hug.
     pub fn set_selected_bounds(&mut self, bounds: DocRect) {
+        self.resize_selected_bounds(bounds, ResizeAxes::Both, Some(bounds.x), Some(bounds.y));
+    }
+
+    /// Resize only the selected node. Descendant authored geometry is never
+    /// multiplied; normal layout re-resolution is solely responsible for
+    /// adapting Fill/Hug children, text wrapping, alignment, and flex gaps.
+    ///
+    /// `new_x` / `new_y` are parent-relative authored coordinates supplied
+    /// only when the dragged left/top edge moves. Flow children ignore them
+    /// and keep `x/y: None`; explicit overlays inside auto-layout are not flow
+    /// children and therefore retain correct relative positioning.
+    pub fn resize_selected_bounds(
+        &mut self,
+        bounds: DocRect,
+        axes: ResizeAxes,
+        new_x: Option<f64>,
+        new_y: Option<f64>,
+    ) {
         let sel = self.selection.anchor.clone();
         if !sel.is_real() || !self.is_editable(&sel) {
             return;
         }
-        let is_flow_child = walkers::is_flow_child_of_flex(self.active_children(), &sel);
+        let is_flow_child = selected_is_flow_child(self.active_children(), &sel);
         if let Some(node) = find_node_mut(self.active_children_mut(), &sel) {
-            // Only write a real rect — container nodes that derive
-            // their size from children keep deriving it.
-            let own = own_bounds(node);
-            if own.w > 0.0 || own.h > 0.0 {
-                if !is_flow_child {
-                    node.base_mut().x = Some(bounds.x);
-                    node.base_mut().y = Some(bounds.y);
+            if !is_flow_child {
+                if let Some(x) = new_x.filter(|value| value.is_finite()) {
+                    node.base_mut().x = Some(x);
                 }
+                if let Some(y) = new_y.filter(|value| value.is_finite()) {
+                    node.base_mut().y = Some(y);
+                }
+            }
+            if axes.width() && bounds.w.is_finite() && bounds.w > 0.0 {
                 node.set_width_px(bounds.w);
+            }
+            if axes.height() && bounds.h.is_finite() && bounds.h > 0.0 {
                 node.set_height_px(bounds.h);
+            }
+            if axes.width() {
                 if let PenNode::Text(text) = &mut *node {
                     if text.text_growth.is_none() {
                         text.text_growth = Some(TextGrowth::FixedWidth);
                     }
                 }
-                // Container resize carries the subtree with it. Each
-                // incremental drag step scales current → next, so the
-                // composition over the whole drag equals the total
-                // scale TS commits once at drag end.
-                let sx = if own.w > 0.0 { bounds.w / own.w } else { 1.0 };
-                let sy = if own.h > 0.0 { bounds.h / own.h } else { 1.0 };
-                if sx != 1.0 || sy != 1.0 {
-                    if let Some(children) = node.children_mut() {
-                        scale_children_in_place(children, sx, sy);
-                    }
-                }
-            } else if !is_flow_child {
-                node.base_mut().x = Some(bounds.x);
-                node.base_mut().y = Some(bounds.y);
             }
         }
     }

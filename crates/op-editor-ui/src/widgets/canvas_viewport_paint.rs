@@ -290,6 +290,10 @@ pub struct PaintNodeHits<'a> {
     /// Root→node transform chain active where the hovered node paints;
     /// empty when `hover_rect` is `None` or the chain is identity.
     pub(crate) hover_transforms: Vec<OverlayTransform>,
+    /// Direct visible children of the hovered focus node. Each child
+    /// keeps the transform chain active at its own paint site so the
+    /// dashed hierarchy hint follows rotated/flipped descendants.
+    pub(crate) hover_child_rects: Vec<(Rect, Vec<OverlayTransform>)>,
     pub(crate) selected_node: Option<&'a SceneNode>,
     pub(crate) selected_transforms: Vec<OverlayTransform>,
     pub(crate) pen_node: Option<&'a SceneNode>,
@@ -300,8 +304,13 @@ impl<'a> PaintNodeHits<'a> {
         node: &'a SceneNode,
         options: &PaintNodeOptions<'_, '_>,
         transforms: &[OverlayTransform],
+        parent_hovered: bool,
     ) -> Self {
-        let hover_rect = hovered_outline_rect(node, options);
+        let is_hovered = options.hovered == Some(node.id.as_str());
+        let outline_rect = (is_hovered || parent_hovered)
+            .then(|| node_outline_rect(node, options))
+            .flatten();
+        let hover_rect = is_hovered.then_some(outline_rect).flatten();
         let selected_node = (options.selected == Some(node.id.as_str())).then_some(node);
         Self {
             hover_transforms: if hover_rect.is_some() {
@@ -310,6 +319,13 @@ impl<'a> PaintNodeHits<'a> {
                 Vec::new()
             },
             hover_rect,
+            hover_child_rects: if parent_hovered {
+                outline_rect
+                    .map(|rect| vec![(rect, transforms.to_vec())])
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            },
             selected_transforms: if selected_node.is_some() {
                 transforms.to_vec()
             } else {
@@ -325,6 +341,7 @@ impl<'a> PaintNodeHits<'a> {
             self.hover_rect = child.hover_rect;
             self.hover_transforms = child.hover_transforms;
         }
+        self.hover_child_rects.extend(child.hover_child_rects);
         if self.selected_node.is_none() {
             self.selected_node = child.selected_node;
             self.selected_transforms = child.selected_transforms;
@@ -435,7 +452,7 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
         generation_accent,
         queued_shell_ids,
     };
-    paint_node_inner(cx, node, &options, &mut Vec::new())
+    paint_node_inner(cx, node, &options, &mut Vec::new(), false)
 }
 
 /// Paint a resolved scene page's node tree with the editor viewport
@@ -482,6 +499,7 @@ fn paint_node_inner<'a>(
     node: &'a SceneNode,
     options: &PaintNodeOptions<'_, '_>,
     transforms: &mut Vec<OverlayTransform>,
+    parent_hovered: bool,
 ) -> PaintNodeHits<'a> {
     if options.hidden == Some(node.id.as_str()) {
         return PaintNodeHits::default();
@@ -586,7 +604,8 @@ fn paint_node_inner<'a>(
             });
         }
     }
-    let mut hits = PaintNodeHits::for_node(node, options, transforms);
+    let is_hovered = options.hovered == Some(node.id.as_str());
+    let mut hits = PaintNodeHits::for_node(node, options, transforms, parent_hovered);
 
     // Gaussian layer blur (Figma "Layer blur"): capture the node's
     // whole rendered output — shadows, fill, stroke, children — into
@@ -659,7 +678,7 @@ fn paint_node_inner<'a>(
             }
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                let child_hover = paint_node_inner(cx, child, options, transforms);
+                let child_hover = paint_node_inner(cx, child, options, transforms, is_hovered);
                 hits.merge_missing(child_hover);
             }
             if clipped {
@@ -679,7 +698,7 @@ fn paint_node_inner<'a>(
             // every recursing container branch, not just Frame.
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                let child_hover = paint_node_inner(cx, child, options, transforms);
+                let child_hover = paint_node_inner(cx, child, options, transforms, is_hovered);
                 hits.merge_missing(child_hover);
             }
             if clipped {
@@ -713,7 +732,7 @@ fn paint_node_inner<'a>(
             // all rendered as blank cards).
             let clipped = push_clip_content(cx, node, world_rect, zoom);
             for child in node.children.iter().rev() {
-                let child_hover = paint_node_inner(cx, child, options, transforms);
+                let child_hover = paint_node_inner(cx, child, options, transforms, is_hovered);
                 hits.merge_missing(child_hover);
             }
             if clipped {
@@ -848,10 +867,7 @@ fn paint_node_inner<'a>(
     hits
 }
 
-fn hovered_outline_rect(node: &SceneNode, options: &PaintNodeOptions<'_, '_>) -> Option<Rect> {
-    if options.hovered != Some(node.id.as_str()) {
-        return None;
-    }
+fn node_outline_rect(node: &SceneNode, options: &PaintNodeOptions<'_, '_>) -> Option<Rect> {
     let bounds = node.aggregate_bounds();
     if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
         return None;

@@ -57,6 +57,8 @@ mod blur_inputs;
 mod blur_inputs_tests;
 #[cfg(test)]
 mod boolean_toolbar_tests;
+#[cfg(test)]
+mod canvas_hierarchy_tests;
 mod chat_design_apply;
 #[cfg(test)]
 mod chat_design_apply_tests;

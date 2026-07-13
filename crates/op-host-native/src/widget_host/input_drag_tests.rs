@@ -1,8 +1,9 @@
 //! Drag/release tests split from `input_tests.rs` so each test module
 //! stays under the repository file-size ceiling.
 
-use super::{NodeDragState, WidgetHostNative};
+use super::{HandleDragState, NodeDragState, WidgetHostNative};
 use op_editor_core::{NodeId, PenNodeExt};
+use op_editor_ui::{widgets::SelectionHandle, Point2D, Rect};
 
 /// Seed a host's `editor_state` from a canonical `.op` JSON snippet.
 fn seed(host: &mut WidgetHostNative, json: &str) {
@@ -28,6 +29,153 @@ fn three_rects(boxes: [(f64, f64, f64, f64); 3], ids: [&str; 3]) -> String {
         node(ids[1], boxes[1]),
         node(ids[2], boxes[2]),
     )
+}
+
+#[test]
+fn bottom_right_handle_resizes_only_selected_container() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{
+          "type":"frame","id":"frame","name":"frame","x":100,"y":80,
+          "width":200,"height":160,"layout":"none","children":[
+            {"type":"rectangle","id":"child","name":"child","x":12,"y":18,
+             "width":60,"height":30}
+          ]
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("frame"));
+    let child_before = authored_geometry(&host, "child");
+    host.handle_drag = Some(HandleDragState {
+        handle: SelectionHandle::BottomRight,
+        start_screen_x: 500.0,
+        start_screen_y: 500.0,
+        start_bounds: Rect {
+            origin: Point2D::new(100.0, 80.0),
+            size: Point2D::new(200.0, 160.0),
+        },
+        start_authored_x: Some(100.0),
+        start_authored_y: Some(80.0),
+    });
+
+    assert!(host.apply_cursor_move(540.0, 525.0));
+
+    assert_eq!(
+        authored_geometry(&host, "frame"),
+        (Some(100.0), Some(80.0), Some(240.0), Some(185.0))
+    );
+    assert_eq!(
+        authored_geometry(&host, "child"),
+        child_before,
+        "normal container resize must not scale or translate fixed descendants"
+    );
+}
+
+#[test]
+fn edge_handle_freezes_only_its_axis_and_preserves_descendants() {
+    for (handle, move_to, expected_width, expected_height) in [
+        (
+            SelectionHandle::Right,
+            Point2D::new(550.0, 500.0),
+            serde_json::json!(250.0),
+            serde_json::json!("fit_content"),
+        ),
+        (
+            SelectionHandle::Bottom,
+            Point2D::new(500.0, 540.0),
+            serde_json::json!("fill_container"),
+            serde_json::json!(120.0),
+        ),
+    ] {
+        let mut host = WidgetHostNative::new();
+        seed(
+            &mut host,
+            r#"{"version":"0.8.0","children":[{
+              "type":"frame","id":"frame","name":"frame","x":100,"y":80,
+              "width":"fill_container","height":"fit_content","layout":"vertical",
+              "children":[
+                {"type":"rectangle","id":"child","name":"child","x":12,"y":18,
+                 "width":60,"height":30}
+              ]
+            }]}"#,
+        );
+        host.editor_state_mut()
+            .set_single_selection(NodeId::new("frame"));
+        let child_before = authored_geometry(&host, "child");
+        host.handle_drag = Some(HandleDragState {
+            handle,
+            start_screen_x: 500.0,
+            start_screen_y: 500.0,
+            start_bounds: Rect {
+                origin: Point2D::new(100.0, 80.0),
+                size: Point2D::new(200.0, 80.0),
+            },
+            start_authored_x: Some(100.0),
+            start_authored_y: Some(80.0),
+        });
+
+        assert!(host.apply_cursor_move(move_to.x, move_to.y));
+
+        let frame = op_editor_core::walkers::find_node(
+            host.editor_state().active_children(),
+            &NodeId::new("frame"),
+        )
+        .expect("frame present");
+        let frame_json = serde_json::to_value(frame).expect("frame serializes");
+        assert_eq!(frame_json["width"], expected_width, "handle: {handle:?}");
+        assert_eq!(frame_json["height"], expected_height, "handle: {handle:?}");
+        assert_eq!(
+            authored_geometry(&host, "child"),
+            child_before,
+            "edge resize must leave fixed descendant geometry untouched; handle: {handle:?}"
+        );
+    }
+}
+
+#[test]
+fn fill_child_reflows_to_resized_parent_without_authored_mutation() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"0.8.0","children":[{
+          "type":"frame","id":"frame","name":"frame","x":100,"y":80,
+          "width":200,"height":160,"layout":"vertical","children":[
+            {"type":"rectangle","id":"child","name":"child",
+             "width":"fill_container","height":30}
+          ]
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("frame"));
+    host.handle_drag = Some(HandleDragState {
+        handle: SelectionHandle::Right,
+        start_screen_x: 500.0,
+        start_screen_y: 500.0,
+        start_bounds: Rect {
+            origin: Point2D::new(100.0, 80.0),
+            size: Point2D::new(200.0, 160.0),
+        },
+        start_authored_x: Some(100.0),
+        start_authored_y: Some(80.0),
+    });
+
+    assert!(host.apply_cursor_move(560.0, 500.0));
+    host.refresh_layout_scene();
+
+    let child = op_editor_core::walkers::find_node(
+        host.editor_state().active_children(),
+        &NodeId::new("child"),
+    )
+    .expect("child present");
+    assert_eq!(child.width_px(), None, "Fill keyword must stay authored");
+    let resolved = host
+        .layout_scene
+        .active_page()
+        .and_then(|page| page.find("child"))
+        .expect("resolved child present");
+    assert_eq!(resolved.bounds.size.x, 260.0);
+    assert_eq!(resolved.bounds.size.y, 30.0);
 }
 
 #[test]
@@ -452,6 +600,21 @@ fn scene_node_xy(host: &WidgetHostNative, id: &str) -> (f32, f32) {
         .and_then(|p| p.find(id))
         .expect("scene node present");
     (n.bounds.origin.x, n.bounds.origin.y)
+}
+
+fn authored_geometry(
+    host: &WidgetHostNative,
+    id: &str,
+) -> (Option<f64>, Option<f64>, Option<f64>, Option<f64>) {
+    let node =
+        op_editor_core::walkers::find_node(host.editor_state().active_children(), &NodeId::new(id))
+            .expect("node present");
+    (
+        node.base().x,
+        node.base().y,
+        node.width_px(),
+        node.height_px(),
+    )
 }
 
 /// Read a path anchor's `(x, y)` from the host's `editor_state.doc`.

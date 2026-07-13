@@ -37,6 +37,83 @@ pub(in crate::widget_host) struct NodeDragState {
 }
 
 impl WidgetHost {
+    /// Resolve a canvas press from the rendered root-to-deepest hit
+    /// path. Plain click selects the solid-outline primary; a second
+    /// press inside 400 ms drills exactly one level to the direct child
+    /// under the pointer and enters the primary as the sibling scope.
+    pub(in crate::widget_host) fn apply_canvas_node_press(
+        &mut self,
+        hit_path: Vec<NodeId>,
+        x: f32,
+        y: f32,
+        text_edit_was_active: bool,
+        viewport_height: f32,
+    ) -> bool {
+        let Some(deepest) = hit_path.last().cloned() else {
+            return false;
+        };
+        let Some(targets) = op_editor_core::selection_resolve::resolve_canvas_depth_targets(
+            &hit_path,
+            self.editor_state.editor_ui.entered_container.as_ref(),
+        ) else {
+            return false;
+        };
+        let is_double = matches!(
+            &self.editor_state.editor_ui.last_canvas_click,
+            Some((prev, t)) if *prev == deepest
+                && self.now_ms.saturating_sub(*t) < 400
+        ) && !self.shift_held
+            && self.editor_state.selection_count() <= 1;
+        self.editor_state.editor_ui.last_canvas_click = if self.shift_held || is_double {
+            None
+        } else {
+            Some((deepest, self.now_ms))
+        };
+        if is_double && !text_edit_was_active {
+            if let Some(secondary) = targets.secondary_under_pointer {
+                self.editor_state.set_single_selection(secondary.clone());
+                self.editor_state.editor_ui.entered_container = Some(targets.primary);
+                self.editor_state.editor_ui.canvas_hover_node = Some(secondary);
+                self.scroll_layer_panel_selection_into_view(viewport_height);
+                self.mark_dirty();
+                return true;
+            }
+            if self.editor_state.start_text_edit(targets.primary.clone()) {
+                self.editor_state.ui.text_edit_input.touch(self.now_ms);
+                self.mark_dirty();
+                return true;
+            }
+        }
+
+        let target = targets.primary;
+        let mut should_start_drag = true;
+        if self.shift_held {
+            let was_in_set = self.editor_state.is_selected(&target);
+            self.editor_state.toggle_selection(target);
+            should_start_drag = !was_in_set;
+        } else {
+            let already_in_set = self.editor_state.is_selected(&target);
+            if !already_in_set || self.editor_state.selection_count() == 1 {
+                self.editor_state.set_single_selection(target);
+            }
+        }
+        if self
+            .editor_state
+            .editor_ui
+            .entered_container
+            .as_ref()
+            .is_some_and(|entered| !hit_path.contains(entered))
+        {
+            self.editor_state.editor_ui.entered_container = None;
+        }
+        self.scroll_layer_panel_selection_into_view(viewport_height);
+        if should_start_drag {
+            self.start_node_drag(x, y);
+        }
+        self.mark_dirty();
+        true
+    }
+
     pub(in crate::widget_host) fn start_node_drag(&mut self, x: f32, y: f32) {
         self.editor_state.commit_history();
         self.option_drag_source_ids.clear();
@@ -68,6 +145,7 @@ impl WidgetHost {
         let total_dx = ((x - drag.press_screen_x) / zoom) as f64;
         let total_dy = ((y - drag.press_screen_y) / zoom) as f64;
         if !drag.moved {
+            self.editor_state.editor_ui.last_canvas_click = None;
             let option_source_ids: Vec<NodeId> = self.editor_state.selection.set.to_vec();
             if self.alt_held
                 && !option_source_ids.is_empty()

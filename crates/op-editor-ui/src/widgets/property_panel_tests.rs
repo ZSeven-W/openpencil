@@ -6,7 +6,8 @@
 
 use super::property_panel::{PropertyPanel, PropertyPanelAction};
 use super::property_panel_sections as sections;
-use super::property_panel_test_support::{state_from, visible_for};
+use super::property_panel_test_support::{state_from, visible_for, CountingBackend};
+use crate::layout_scene::{LayoutScene, NodeKind, SceneNode, ScenePage};
 use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, TextLayout};
 use jian_ops_schema::variable::{VariableKind, VariableScalar};
@@ -57,6 +58,62 @@ fn for_selection_with_real_node_builds_snapshot() {
     assert_eq!(panel.snapshot.y, 60);
     assert_eq!(panel.snapshot.width, 240);
     assert_eq!(panel.snapshot.height, 28);
+}
+
+#[test]
+fn scene_aware_panel_reports_resolved_fill_and_hug_dimensions() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"frame","id":"ff","name":"Frame",
+               "width":"fill_container","height":"fit_content","children":[]}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("ff"));
+    let mut resolved = SceneNode::leaf("ff", NodeKind::Frame);
+    resolved.bounds = Rect::xywh(0.0, 0.0, 390.0, 710.0);
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p1".into(),
+            name: "Page 1".into(),
+            children: vec![resolved],
+        }],
+        active_page_index: 0,
+    };
+
+    let panel = PropertyPanel::for_selection_with_scene(&state, &scene)
+        .expect("scene-aware fill/hug panel");
+    assert_eq!((panel.snapshot.width, panel.snapshot.height), (390, 710));
+    assert!(panel.snapshot.size_fill_width);
+    assert!(panel.snapshot.size_hug_height);
+}
+
+#[test]
+fn scene_aware_panel_keeps_unbounded_group_aggregate_dimensions() {
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"group","id":"g","name":"Group","children":[
+                {"type":"rectangle","id":"child","x":10,"y":20,
+                 "width":70,"height":30}
+              ]}
+        ]}"##,
+    );
+    state.set_single_selection(NodeId::new("g"));
+    let mut child = SceneNode::leaf("child", NodeKind::Rect);
+    child.bounds = Rect::xywh(10.0, 20.0, 70.0, 30.0);
+    let mut group = SceneNode::leaf("g", NodeKind::Group);
+    group.children = vec![child];
+    let scene = LayoutScene {
+        pages: vec![ScenePage {
+            id: "p1".into(),
+            name: "Page 1".into(),
+            children: vec![group],
+        }],
+        active_page_index: 0,
+    };
+
+    let panel =
+        PropertyPanel::for_selection_with_scene(&state, &scene).expect("scene-aware group panel");
+    assert_eq!((panel.snapshot.width, panel.snapshot.height), (70, 30));
 }
 
 #[test]
@@ -450,7 +507,7 @@ fn color_variable_picker_emits_bind_and_unbind_rows() {
 }
 
 #[test]
-fn fill_width_hides_the_w_input_but_keeps_h_and_row_height() {
+fn fill_width_keeps_both_numeric_inputs_visible_and_hittable() {
     use op_editor_core::PropertyFocus;
     let fill = {
         let mut s = state_from(
@@ -464,68 +521,27 @@ fn fill_width_hides_the_w_input_but_keeps_h_and_row_height() {
         PropertyPanel::for_selection(&s).expect("fill-width frame panel")
     };
     assert!(fill.snapshot.size_fill_width, "width sizing should be fill");
-    assert!(
-        !fill.snapshot.size_fill_height,
-        "height stays a concrete number"
-    );
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(280.0, 1200.0),
     };
     let fill_rects = sections::editable_input_rects(rect, visible_for(&fill), &fill.snapshot.fills);
-    // W is omitted (fill); H remains (numeric).
-    assert!(
-        !fill_rects.iter().any(|(f, _)| *f == PropertyFocus::SizeW),
-        "SizeW must be hidden when width is fill"
-    );
-    let fill_h = fill_rects
-        .iter()
-        .find(|(f, _)| *f == PropertyFocus::SizeH)
-        .map(|(_, r)| *r)
-        .expect("SizeH must remain");
-
-    // A fixed-width frame keeps both — and SizeH sits at the SAME y, so
-    // hiding W never collapses the row / shifts later sections.
-    let fixed = {
-        let mut s = state_from(
-            r##"{ "version": "0.8.0", "children": [
-                  {"type":"frame","id":"ff","name":"Frame",
-                   "x":40,"y":40,"width":360,"height":240,
-                   "layout":"vertical","children":[]}
-            ]}"##,
+    for focus in [PropertyFocus::SizeW, PropertyFocus::SizeH] {
+        let target = fill_rects
+            .iter()
+            .find(|(candidate, _)| *candidate == focus)
+            .map(|(_, rect)| *rect)
+            .expect("fill sizing must keep the numeric input");
+        let center = Point2D::new(
+            target.origin.x + target.size.x / 2.0,
+            target.origin.y + target.size.y / 2.0,
         );
-        s.set_single_selection(NodeId::new("ff"));
-        PropertyPanel::for_selection(&s).expect("fixed-width frame panel")
-    };
-    let fixed_rects =
-        sections::editable_input_rects(rect, visible_for(&fixed), &fixed.snapshot.fills);
-    assert!(
-        fixed_rects.iter().any(|(f, _)| *f == PropertyFocus::SizeW),
-        "fixed width keeps SizeW"
-    );
-    let fixed_w = fixed_rects
-        .iter()
-        .find(|(f, _)| *f == PropertyFocus::SizeW)
-        .map(|(_, r)| *r)
-        .expect("SizeW present for fixed width");
-    let fixed_h = fixed_rects
-        .iter()
-        .find(|(f, _)| *f == PropertyFocus::SizeH)
-        .map(|(_, r)| *r)
-        .expect("SizeH present for fixed width");
-    assert!(
-        (fill_h.origin.y - fixed_h.origin.y).abs() < 0.01,
-        "hiding W must not move H's row (row height preserved)"
-    );
-    // With W hidden, H reflows into the (now-empty) LEFT slot.
-    assert!(
-        (fill_h.origin.x - fixed_w.origin.x).abs() < 0.01,
-        "H must slide into the left slot when W is hidden"
-    );
+        assert_eq!(fill.hit_test(rect, center), Some(focus));
+    }
 }
 
 #[test]
-fn both_dimensions_fill_collapses_the_size_input_row() {
+fn both_dimensions_fill_keep_the_size_input_row() {
     use op_editor_core::PropertyFocus;
     let rect = Rect {
         origin: Point2D::new(0.0, 0.0),
@@ -543,9 +559,6 @@ fn both_dimensions_fill_collapses_the_size_input_row() {
         s.set_single_selection(NodeId::new("ff"));
         PropertyPanel::for_selection(&s).expect("frame panel")
     };
-    // The size checkboxes sit BELOW the W/H input row. When both
-    // dimensions are fill, the whole input row collapses, so the first
-    // checkbox (填充宽度) shifts up by exactly one input row.
     let chk_y = |p: &PropertyPanel| {
         sections::action_button_rects_with_fill_picker(
             rect,
@@ -565,25 +578,59 @@ fn both_dimensions_fill_collapses_the_size_input_row() {
         .map(|(_, r)| r.origin.y)
         .expect("fill-width checkbox rect")
     };
-    // One dimension numeric (row present) vs both fill (row collapsed).
     let one = panel_for("\"fill_container\"", "240");
     let both = panel_for("\"fill_container\"", "\"fill_container\"");
     assert!(one.snapshot.size_fill_width && both.snapshot.size_fill_height);
-    // INPUT_HEIGHT (30) + 10 gap = 40 px of collapse.
-    let delta = chk_y(&one) - chk_y(&both);
     assert!(
-        (delta - 40.0).abs() < 0.01,
-        "both-hidden must collapse the input row (~40px up), got {delta}"
+        (chk_y(&one) - chk_y(&both)).abs() < 0.01,
+        "checkbox rows must not jump when both axes use fill"
     );
-    // Neither W nor H emits a focus rect when both are hidden.
     let both_inputs =
         sections::editable_input_rects(rect, visible_for(&both), &both.snapshot.fills);
-    assert!(
-        !both_inputs
-            .iter()
-            .any(|(f, _)| matches!(f, PropertyFocus::SizeW | PropertyFocus::SizeH)),
-        "no W/H hit-rect when both dimensions are fill"
+    for focus in [PropertyFocus::SizeW, PropertyFocus::SizeH] {
+        assert!(
+            both_inputs.iter().any(|(candidate, _)| *candidate == focus),
+            "both fill axes must still emit the numeric hit rect"
+        );
+    }
+}
+
+#[test]
+fn fill_and_hug_inputs_paint_snapshot_size_and_numeric_commit_makes_fixed() {
+    use op_editor_core::PropertyFocus;
+    let mut state = state_from(
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"frame","id":"ff","name":"Frame",
+               "x":40,"y":40,"width":"fill_container","height":"fit_content",
+               "layout":"vertical","children":[
+                 {"type":"rectangle","id":"child","x":0,"y":0,
+                  "width":180,"height":90}
+               ]}
+        ]}"##,
     );
+    state.set_single_selection(NodeId::new("ff"));
+    let panel = PropertyPanel::for_selection(&state).expect("fill/hug frame panel");
+    assert_eq!((panel.snapshot.width, panel.snapshot.height), (180, 90));
+    assert!(panel.snapshot.size_fill_width && panel.snapshot.size_hug_height);
+
+    let mut backend = CountingBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    panel.paint(
+        &mut cx,
+        Rect {
+            origin: Point2D::ZERO,
+            size: Point2D::new(280.0, 1200.0),
+        },
+    );
+    assert!(backend.texts.iter().any(|text| text == "180"));
+    assert!(backend.texts.iter().any(|text| text == "90"));
+    assert!(state.commit_property_edit(PropertyFocus::SizeW, 220.0));
+    assert!(state.commit_property_edit(PropertyFocus::SizeH, 130.0));
+    let fixed = PropertyPanel::for_selection(&state).expect("fixed frame panel");
+    assert_eq!((fixed.snapshot.width, fixed.snapshot.height), (220, 130));
+    assert!(!fixed.snapshot.size_fill_width && !fixed.snapshot.size_hug_height);
 }
 
 #[test]

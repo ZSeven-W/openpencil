@@ -1,3 +1,4 @@
+use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_ui::util::resize_bounds;
 use op_editor_ui::widgets::{selection_handle_at_point, SelectionHandle};
 use op_editor_ui::{Point2D, Rect};
@@ -10,6 +11,8 @@ pub(in crate::widget_host) struct HandleDragState {
     pub(in crate::widget_host) start_screen_x: f32,
     pub(in crate::widget_host) start_screen_y: f32,
     pub(in crate::widget_host) start_bounds: Rect,
+    pub(in crate::widget_host) start_authored_x: Option<f64>,
+    pub(in crate::widget_host) start_authored_y: Option<f64>,
 }
 
 impl WidgetHost {
@@ -41,6 +44,11 @@ impl WidgetHost {
         else {
             return false;
         };
+        let (start_authored_x, start_authored_y) = self
+            .editor_state
+            .selected_node()
+            .map(|node| (node.base().x, node.base().y))
+            .unwrap_or((None, None));
         let raw = node.bounds;
         if raw.size.x <= 0.0 && raw.size.y <= 0.0 {
             return false;
@@ -51,6 +59,8 @@ impl WidgetHost {
             start_screen_x: x,
             start_screen_y: y,
             start_bounds: raw,
+            start_authored_x,
+            start_authored_y,
         });
         true
     }
@@ -67,8 +77,20 @@ impl WidgetHost {
         let dx = (x - drag.start_screen_x) / zoom;
         let dy = (y - drag.start_screen_y) / zoom;
         let new_bounds = resize_bounds(drag.start_bounds, drag.handle, dx, dy);
-        self.editor_state
-            .set_selected_bounds(rect_to_doc_rect(new_bounds));
+        let new_x = drag.handle.moves_left_edge().then(|| {
+            drag.start_authored_x.unwrap_or(0.0)
+                + f64::from(new_bounds.origin.x - drag.start_bounds.origin.x)
+        });
+        let new_y = drag.handle.moves_top_edge().then(|| {
+            drag.start_authored_y.unwrap_or(0.0)
+                + f64::from(new_bounds.origin.y - drag.start_bounds.origin.y)
+        });
+        self.editor_state.resize_selected_bounds(
+            rect_to_doc_rect(new_bounds),
+            drag.handle.resize_axes(),
+            new_x,
+            new_y,
+        );
         self.mark_dirty();
         true
     }

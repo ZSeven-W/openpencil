@@ -1,12 +1,12 @@
 //! Tests for the canvas-drag P1 gaps: selection resolution (parent
-//! promotion + enter-group), container-resize descendant scaling, and
+//! promotion + enter-group), Pencil-like container resize, and
 //! drag-end reorder / reparent mutators.
 
 #![cfg(test)]
 
 use crate::drag_mutators::{
     auto_layout_direction, parent_of, should_auto_reparent_outside_parent, DragDropTarget,
-    FlexDirection,
+    FlexDirection, ResizeAxes,
 };
 use crate::geometry::DocRect;
 use crate::node_id::NodeId;
@@ -29,7 +29,7 @@ fn nested_state() -> crate::EditorState {
 // --- Selection resolution (GAP A) -------------------------------------
 
 #[test]
-fn click_on_nested_child_promotes_to_top_level_container() {
+fn click_on_nested_child_selects_the_roots_direct_child() {
     let s = nested_state();
     let resolved = resolve_canvas_selection_target(
         s.active_children(),
@@ -37,11 +37,11 @@ fn click_on_nested_child_promotes_to_top_level_container() {
         None,
         &s.selection.set,
     );
-    assert_eq!(resolved, SelectionResolution::Select(NodeId::new("f1")));
+    assert_eq!(resolved, SelectionResolution::Select(NodeId::new("g1")));
 }
 
 #[test]
-fn click_on_child_of_selected_container_keeps_selection() {
+fn click_on_child_of_selected_root_advances_to_the_next_depth() {
     let mut s = nested_state();
     s.set_single_selection(NodeId::new("f1"));
     let resolved = resolve_canvas_selection_target(
@@ -50,11 +50,11 @@ fn click_on_child_of_selected_container_keeps_selection() {
         None,
         &s.selection.set,
     );
-    assert_eq!(resolved, SelectionResolution::Keep);
+    assert_eq!(resolved, SelectionResolution::Select(NodeId::new("g1")));
 }
 
 #[test]
-fn click_on_already_selected_node_reselects_it() {
+fn current_deep_selection_does_not_bypass_primary_depth() {
     let mut s = nested_state();
     s.set_single_selection(NodeId::new("r1"));
     let resolved = resolve_canvas_selection_target(
@@ -63,7 +63,7 @@ fn click_on_already_selected_node_reselects_it() {
         None,
         &s.selection.set,
     );
-    assert_eq!(resolved, SelectionResolution::Select(NodeId::new("r1")));
+    assert_eq!(resolved, SelectionResolution::Select(NodeId::new("g1")));
 }
 
 #[test]
@@ -107,12 +107,11 @@ fn top_level_hit_resolves_to_itself() {
 }
 
 #[test]
-fn image_visual_hit_skips_promotion() {
-    // TS `hasImageVisual` guard: an image-filled child selects
-    // directly instead of promoting to its frame.
+fn image_visual_hit_obeys_the_same_depth_rule() {
     let mut img = rect("img", "Photo", 10.0, 10.0, 50.0, 50.0);
     crate::fills::set_primary_fill_type(&mut img, crate::FillType::Image);
-    let f1 = frame("f1", "Card", 0.0, 0.0, 200.0, 200.0, vec![img]);
+    let g1 = group("g1", "Media", vec![img]);
+    let f1 = frame("f1", "Card", 0.0, 0.0, 200.0, 200.0, vec![g1]);
     let s = state_with(vec![f1]);
     let resolved = resolve_canvas_selection_target(
         s.active_children(),
@@ -120,7 +119,7 @@ fn image_visual_hit_skips_promotion() {
         None,
         &s.selection.set,
     );
-    assert_eq!(resolved, SelectionResolution::Select(NodeId::new("img")));
+    assert_eq!(resolved, SelectionResolution::Select(NodeId::new("g1")));
 }
 
 #[test]
@@ -486,36 +485,38 @@ fn parent_of_and_direction_helpers_walk_the_tree() {
     assert_eq!(auto_layout_direction(&free), None);
 }
 
-// --- Container resize scales descendants (GAP C) -----------------------
+// --- Container resize preserves descendants (Pencil parity) ------------
 
 #[test]
-fn container_resize_scales_free_descendants_recursively() {
+fn container_resize_keeps_free_descendant_authored_geometry() {
     let leaf = rect("leaf", "Leaf", 5.0, 5.0, 10.0, 10.0);
     let inner = frame("inner", "Inner", 20.0, 40.0, 100.0, 50.0, vec![leaf]);
     let root = frame("root", "Root", 100.0, 100.0, 200.0, 100.0, vec![inner]);
     let mut s = state_with(vec![root]);
     s.set_single_selection(NodeId::new("root"));
-    // 200×100 → 400×300: sx = 2, sy = 3.
     s.set_selected_bounds(DocRect {
         x: 100.0,
         y: 100.0,
         w: 400.0,
         h: 300.0,
     });
+    let root = find_node(s.active_children(), &NodeId::new("root")).unwrap();
+    assert_eq!(root.width_px(), Some(400.0));
+    assert_eq!(root.height_px(), Some(300.0));
     let inner = find_node(s.active_children(), &NodeId::new("inner")).unwrap();
-    assert_eq!(inner.base().x, Some(40.0));
-    assert_eq!(inner.base().y, Some(120.0));
-    assert_eq!(inner.width_px(), Some(200.0));
-    assert_eq!(inner.height_px(), Some(150.0));
+    assert_eq!(inner.base().x, Some(20.0));
+    assert_eq!(inner.base().y, Some(40.0));
+    assert_eq!(inner.width_px(), Some(100.0));
+    assert_eq!(inner.height_px(), Some(50.0));
     let leaf = find_node(s.active_children(), &NodeId::new("leaf")).unwrap();
-    assert_eq!(leaf.base().x, Some(10.0));
-    assert_eq!(leaf.base().y, Some(15.0));
-    assert_eq!(leaf.width_px(), Some(20.0));
-    assert_eq!(leaf.height_px(), Some(30.0));
+    assert_eq!(leaf.base().x, Some(5.0));
+    assert_eq!(leaf.base().y, Some(5.0));
+    assert_eq!(leaf.width_px(), Some(10.0));
+    assert_eq!(leaf.height_px(), Some(10.0));
 }
 
 #[test]
-fn container_resize_scales_flex_children_sizes_only() {
+fn container_resize_keeps_fixed_flex_child_size() {
     let f = flex_frame(
         "f1",
         "Stack",
@@ -534,21 +535,18 @@ fn container_resize_scales_flex_children_sizes_only() {
         h: 200.0,
     });
     let a = find_node(s.active_children(), &NodeId::new("a")).unwrap();
-    // Flow children keep layout-engine positions (no materialized x/y)…
     assert_eq!(a.base().x, None);
     assert_eq!(a.base().y, None);
-    // …but their explicit sizes scale with the container.
-    assert_eq!(a.width_px(), Some(200.0));
-    assert_eq!(a.height_px(), Some(80.0));
+    assert_eq!(a.width_px(), Some(100.0));
+    assert_eq!(a.height_px(), Some(40.0));
 }
 
 #[test]
-fn incremental_resize_steps_compose_to_the_total_scale() {
+fn incremental_container_resize_never_accumulates_descendant_changes() {
     let leaf = rect("leaf", "Leaf", 10.0, 10.0, 10.0, 10.0);
     let root = frame("root", "Root", 0.0, 0.0, 100.0, 100.0, vec![leaf]);
     let mut s = state_with(vec![root]);
     s.set_single_selection(NodeId::new("root"));
-    // Two drag steps: 100 → 150 → 200 must equal one 100 → 200 step.
     for w in [150.0, 200.0] {
         s.set_selected_bounds(DocRect {
             x: 0.0,
@@ -558,10 +556,101 @@ fn incremental_resize_steps_compose_to_the_total_scale() {
         });
     }
     let leaf = find_node(s.active_children(), &NodeId::new("leaf")).unwrap();
-    assert_eq!(leaf.base().x, Some(20.0));
-    assert_eq!(leaf.width_px(), Some(20.0));
+    assert_eq!(leaf.base().x, Some(10.0));
+    assert_eq!(leaf.width_px(), Some(10.0));
     assert_eq!(leaf.base().y, Some(10.0));
     assert_eq!(leaf.height_px(), Some(10.0));
+}
+
+#[test]
+fn single_axis_resize_freezes_only_that_axis_and_preserves_child_keywords() {
+    let doc = jian_ops_schema::load_str(
+        r#"{"version":"0.8.0","children":[{"type":"frame","id":"root","width":"fill_container","height":"fit_content","layout":"vertical","children":[{"type":"rectangle","id":"child","width":"fill_container","height":40}]}]}"#,
+    )
+    .expect("keyword fixture parses")
+    .value;
+    let mut s = crate::EditorState::from_document(doc);
+    s.set_single_selection(NodeId::new("root"));
+
+    s.resize_selected_bounds(
+        DocRect {
+            x: 0.0,
+            y: 0.0,
+            w: 360.0,
+            h: 240.0,
+        },
+        ResizeAxes::Width,
+        None,
+        None,
+    );
+
+    let root = find_node(s.active_children(), &NodeId::new("root")).unwrap();
+    let root_json = serde_json::to_value(root).unwrap();
+    assert_eq!(root_json["width"], serde_json::json!(360.0));
+    assert_eq!(root_json["height"], serde_json::json!("fit_content"));
+    let child = find_node(s.active_children(), &NodeId::new("child")).unwrap();
+    let child_json = serde_json::to_value(child).unwrap();
+    assert_eq!(child_json["width"], serde_json::json!("fill_container"));
+    assert_eq!(child_json["height"], serde_json::json!(40.0));
+}
+
+#[test]
+fn nested_free_resize_accepts_parent_relative_left_and_top() {
+    let child = rect("child", "Child", 20.0, 30.0, 80.0, 60.0);
+    let root = frame("root", "Root", 100.0, 200.0, 300.0, 300.0, vec![child]);
+    let mut s = state_with(vec![root]);
+    s.set_single_selection(NodeId::new("child"));
+
+    s.resize_selected_bounds(
+        DocRect {
+            x: 130.0,
+            y: 240.0,
+            w: 70.0,
+            h: 50.0,
+        },
+        ResizeAxes::Both,
+        Some(30.0),
+        Some(40.0),
+    );
+
+    let child = find_node(s.active_children(), &NodeId::new("child")).unwrap();
+    assert_eq!(child.base().x, Some(30.0));
+    assert_eq!(child.base().y, Some(40.0));
+    assert_eq!(child.width_px(), Some(70.0));
+    assert_eq!(child.height_px(), Some(50.0));
+}
+
+#[test]
+fn flow_child_resize_never_materializes_position() {
+    let f = flex_frame(
+        "root",
+        "Stack",
+        0.0,
+        0.0,
+        200.0,
+        200.0,
+        vec![flow_rect("child", "Child", 80.0, 40.0)],
+    );
+    let mut s = state_with(vec![f]);
+    s.set_single_selection(NodeId::new("child"));
+
+    s.resize_selected_bounds(
+        DocRect {
+            x: 100.0,
+            y: 100.0,
+            w: 120.0,
+            h: 999.0,
+        },
+        ResizeAxes::Width,
+        Some(100.0),
+        Some(100.0),
+    );
+
+    let child = find_node(s.active_children(), &NodeId::new("child")).unwrap();
+    assert_eq!(child.base().x, None);
+    assert_eq!(child.base().y, None);
+    assert_eq!(child.width_px(), Some(120.0));
+    assert_eq!(child.height_px(), Some(40.0));
 }
 
 #[test]
@@ -578,6 +667,31 @@ fn resizing_auto_grow_text_pins_fixed_width_growth() {
     let n = find_node(s.active_children(), &NodeId::new("t1")).unwrap();
     match n {
         PenNode::Text(t) => assert_eq!(t.text_growth, Some(TextGrowth::FixedWidth)),
+        other => panic!("expected text node, got {other:?}"),
+    }
+}
+
+#[test]
+fn height_only_text_resize_does_not_change_text_growth() {
+    let t = text("t1", "Title", 0.0, 0.0, 100.0, 20.0, "Hello");
+    let mut s = state_with(vec![t]);
+    s.set_single_selection(NodeId::new("t1"));
+    s.resize_selected_bounds(
+        DocRect {
+            x: 0.0,
+            y: 0.0,
+            w: 999.0,
+            h: 40.0,
+        },
+        ResizeAxes::Height,
+        None,
+        None,
+    );
+    let n = find_node(s.active_children(), &NodeId::new("t1")).unwrap();
+    assert_eq!(n.width_px(), Some(100.0));
+    assert_eq!(n.height_px(), Some(40.0));
+    match n {
+        PenNode::Text(t) => assert_eq!(t.text_growth, None),
         other => panic!("expected text node, got {other:?}"),
     }
 }

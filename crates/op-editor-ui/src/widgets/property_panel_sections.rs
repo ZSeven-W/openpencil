@@ -657,53 +657,36 @@ pub fn paint_size_section(
         origin: Point2D::new(x + PAD_X + half_w + 8.0, y),
         size: Point2D::new(half_w, INPUT_HEIGHT),
     };
-    // Hide the W/H box entirely when its dimension is fill/hug —
-    // matching TS size-section.tsx, which renders the NumberInput only
-    // when the dimension is a concrete number. Visible dimensions flow
-    // left-to-right, so when W is hidden, H slides into the left slot
-    // (no dangling empty half). The fixed `y += INPUT_HEIGHT + 10.0`
-    // below keeps the row height (and every later section's offset)
-    // unchanged regardless of how many boxes paint.
-    let w_visible = !flags.fill_width && !flags.hug_width;
-    let h_visible = !flags.fill_height && !flags.hug_height;
-    if w_visible {
-        let w_value = snapshot.width.to_string();
-        paint_input_with_prefix_focused_state(
-            cx,
-            theme,
-            w_rect,
-            "W",
-            edit.value_for(PropertyFocus::SizeW, &w_value),
-            edit.focus == Some(PropertyFocus::SizeW),
-            edit.caret_at(PropertyFocus::SizeW),
-            edit.select_all_at(PropertyFocus::SizeW),
-            edit.input_at(PropertyFocus::SizeW),
-            edit.now_ms,
-        );
-    }
-    if h_visible {
-        let h_value = snapshot.height.to_string();
-        let h_target = if w_visible { h_rect } else { w_rect };
-        paint_input_with_prefix_focused_state(
-            cx,
-            theme,
-            h_target,
-            "H",
-            edit.value_for(PropertyFocus::SizeH, &h_value),
-            edit.focus == Some(PropertyFocus::SizeH),
-            edit.caret_at(PropertyFocus::SizeH),
-            edit.select_all_at(PropertyFocus::SizeH),
-            edit.input_at(PropertyFocus::SizeH),
-            edit.now_ms,
-        );
-    }
-    // Collapse the whole input row when BOTH dimensions are fill/hug —
-    // the section shrinks up so the checkboxes sit under the label with
-    // no dangling empty row. `size_input_row_h` keeps the layout
-    // walkers in lockstep with this advance.
-    if w_visible || h_visible {
-        y += INPUT_HEIGHT + 10.0;
-    }
+    // Sizing mode and the numeric editor are complementary. Fill / Hug
+    // stays selected below while this row exposes the resolved snapshot
+    // size; committing a number replaces that axis with fixed sizing.
+    let w_value = snapshot.width.to_string();
+    paint_input_with_prefix_focused_state(
+        cx,
+        theme,
+        w_rect,
+        "W",
+        edit.value_for(PropertyFocus::SizeW, &w_value),
+        edit.focus == Some(PropertyFocus::SizeW),
+        edit.caret_at(PropertyFocus::SizeW),
+        edit.select_all_at(PropertyFocus::SizeW),
+        edit.input_at(PropertyFocus::SizeW),
+        edit.now_ms,
+    );
+    let h_value = snapshot.height.to_string();
+    paint_input_with_prefix_focused_state(
+        cx,
+        theme,
+        h_rect,
+        "H",
+        edit.value_for(PropertyFocus::SizeH, &h_value),
+        edit.focus == Some(PropertyFocus::SizeH),
+        edit.caret_at(PropertyFocus::SizeH),
+        edit.select_all_at(PropertyFocus::SizeH),
+        edit.input_at(PropertyFocus::SizeH),
+        edit.now_ms,
+    );
+    y += INPUT_HEIGHT + 10.0;
     let row_h = 22.0;
     paint_check_row(
         cx,

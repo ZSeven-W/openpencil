@@ -50,6 +50,39 @@ pub enum SelectionHandle {
     Left,
 }
 
+impl SelectionHandle {
+    /// Authored dimensions changed by this handle.
+    pub fn resize_axes(self) -> op_editor_core::drag_mutators::ResizeAxes {
+        use op_editor_core::drag_mutators::ResizeAxes;
+        match (self.resizes_width(), self.resizes_height()) {
+            (true, true) => ResizeAxes::Both,
+            (true, false) => ResizeAxes::Width,
+            (false, true) => ResizeAxes::Height,
+            (false, false) => unreachable!("every selection handle resizes at least one axis"),
+        }
+    }
+
+    /// Whether this handle authors the selected node's width.
+    pub fn resizes_width(self) -> bool {
+        !matches!(self, Self::Top | Self::Bottom)
+    }
+
+    /// Whether this handle authors the selected node's height.
+    pub fn resizes_height(self) -> bool {
+        !matches!(self, Self::Left | Self::Right)
+    }
+
+    /// Whether dragging this handle moves the selected node's left edge.
+    pub fn moves_left_edge(self) -> bool {
+        matches!(self, Self::Left | Self::TopLeft | Self::BottomLeft)
+    }
+
+    /// Whether dragging this handle moves the selected node's top edge.
+    pub fn moves_top_edge(self) -> bool {
+        matches!(self, Self::Top | Self::TopLeft | Self::TopRight)
+    }
+}
+
 /// Radius (screen px) of the rotation ring that sits OUTSIDE the
 /// 4 selection corners. Matches the TS `ROTATE_OUTER_RADIUS`.
 const ROTATE_OUTER_RADIUS: f32 = 16.0;
@@ -339,8 +372,8 @@ pub struct CanvasViewport<'a> {
     pub theme: Theme,
     /// Host ms clock — text-edit caret blink.
     pub now_ms: u64,
-    /// Node under the cursor (excluding selected nodes) — paints the
-    /// dashed hover outline (TS `drawHoverOutline`).
+    /// Hierarchy focus under the cursor. An unselected focus paints a
+    /// solid outline; its direct visible children paint dashed hints.
     pub(super) hovered: Option<String>,
     /// Top-level frame labels: (scene id, display name, label colour).
     /// Collected from the canonical tree at build time (the scene
@@ -412,7 +445,6 @@ impl<'a> CanvasViewport<'a> {
                 // The outline is a Select-tool affordance; a stale id
                 // from a previous tool must not paint.
                 .filter(|_| matches!(state.tool, op_editor_core::Tool::Select))
-                .filter(|id| !state.selection.set.iter().any(|s| s == *id))
                 .map(|id| id.as_str().to_string()),
             frame_labels: collect_frame_labels(state),
         }
@@ -625,6 +657,31 @@ impl<'a> Widget for CanvasViewport<'a> {
         } else {
             None
         };
+        let hovered_focus_selected = hovered_lookup
+            .is_some_and(|hovered| self.selected_set.iter().any(|selected| selected == hovered));
+        // Root labels carry their durable generating/selection colour
+        // from construction. Apply the transient hover tint here so
+        // `node_drag_active` suppresses it together with every other
+        // hierarchy-hover affordance.
+        let hovered_frame_labels = hovered_lookup.map(|hovered| {
+            self.frame_labels
+                .iter()
+                .map(|(id, label, color)| {
+                    (
+                        id.clone(),
+                        label.clone(),
+                        if id == hovered {
+                            self.theme.primary
+                        } else {
+                            *color
+                        },
+                    )
+                })
+                .collect::<Vec<_>>()
+        });
+        let frame_labels = hovered_frame_labels
+            .as_deref()
+            .unwrap_or(&self.frame_labels);
         let selected_root_frame_label = selection_chrome_visible
             && show_handles
             && self.scene.active_page().is_some_and(|page| {
@@ -750,21 +807,34 @@ impl<'a> Widget for CanvasViewport<'a> {
                     self.pencil_cursor_style,
                 );
             }
-            if let Some(screen) = paint_hits.hover_rect {
-                const HOVER: Color = Color {
-                    r: 0.231,
-                    g: 0.51,
-                    b: 0.965,
-                    a: 1.0,
-                };
-                // Replay the hovered node's root→node flip/rotation
-                // chain so the dashed outline lands on the rendered
-                // geometry, not the unrotated doc-space bounds.
-                let hover_transformed = super::canvas_overlay_transform::replay_on_backend(
-                    cx,
-                    &paint_hits.hover_transforms,
-                );
-                paint_dashed_rect(cx, screen, HOVER, 1.5);
+            const HOVER: Color = Color {
+                r: 0.231,
+                g: 0.51,
+                b: 0.965,
+                a: 1.0,
+            };
+            if !hovered_focus_selected {
+                if let Some(screen) = paint_hits.hover_rect {
+                    // Replay the focus node's root→node flip/rotation
+                    // chain so its solid outline lands on the rendered
+                    // geometry, not the unrotated doc-space bounds.
+                    let hover_transformed = super::canvas_overlay_transform::replay_on_backend(
+                        cx,
+                        &paint_hits.hover_transforms,
+                    );
+                    cx.backend.stroke_rect(screen, HOVER, 1.5);
+                    if hover_transformed {
+                        cx.backend.restore();
+                    }
+                }
+            }
+            for (screen, transforms) in &paint_hits.hover_child_rects {
+                // A direct child can add its own flip/rotation after
+                // the focus node's ancestor chain, so replay each hint
+                // independently instead of sharing the focus transform.
+                let hover_transformed =
+                    super::canvas_overlay_transform::replay_on_backend(cx, transforms);
+                paint_dashed_rect(cx, *screen, HOVER, 1.5);
                 if hover_transformed {
                     cx.backend.restore();
                 }
@@ -772,7 +842,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             super::canvas_frame_labels::paint_frame_labels(
                 cx,
                 &page.children,
-                &self.frame_labels,
+                frame_labels,
                 if selected_root_frame_label {
                     &[]
                 } else {

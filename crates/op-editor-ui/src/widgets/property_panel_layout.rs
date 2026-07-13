@@ -345,14 +345,9 @@ pub fn action_button_rects_with_fill_picker(
 
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;
-        // The W/H input row collapses when both dimensions are fill/hug
-        // (matches paint + editable_input_rects), so the size checkbox
-        // rects below shift up by the row height.
-        let w_visible = !visible.size_fill_width && !visible.size_hug_width;
-        let h_visible = !visible.size_fill_height && !visible.size_hug_height;
-        if w_visible || h_visible {
-            y += INPUT_HEIGHT + 10.0;
-        }
+        // W/H remain editable in every sizing mode. Committing a number
+        // switches only that axis back to fixed sizing.
+        y += INPUT_HEIGHT + 10.0;
         let row_h = 22.0;
         out.push((
             PropertyPanelAction::ToggleSizeFillWidth,

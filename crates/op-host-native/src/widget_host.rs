@@ -424,6 +424,11 @@ pub(in crate::widget_host) struct HandleDragState {
     pub(in crate::widget_host) start_screen_x: f32,
     pub(in crate::widget_host) start_screen_y: f32,
     pub(in crate::widget_host) start_bounds: Rect,
+    /// Authored parent-relative origin at press time. Kept separate from the
+    /// resolved absolute scene bounds so left/top drags of nested free nodes
+    /// do not jump into document coordinates.
+    pub(in crate::widget_host) start_authored_x: Option<f64>,
+    pub(in crate::widget_host) start_authored_y: Option<f64>,
 }
 
 /// Active rotation drag — `center_screen` is the screen-space

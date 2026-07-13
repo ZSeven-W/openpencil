@@ -226,7 +226,11 @@ impl WidgetHostNative {
         }
 
         // 5. PropertyPanel — only when selection.
-        let property_panel = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms);
+        let property_panel = PropertyPanel::for_selection_at_with_scene(
+            &self.editor_state,
+            &self.layout_scene,
+            self.now_ms,
+        );
         let property_panel_width = ui.property_panel_width;
         let right_rail_x = viewport_width - property_panel_width;
         if let Some(panel) = property_panel.as_ref() {

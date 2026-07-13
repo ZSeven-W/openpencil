@@ -5,7 +5,7 @@
 //! the spine under the repo's 800-line cap (mirrors the native
 //! host's `widget_host/input.rs` split).
 
-use op_editor_ui::widgets::TOP_BAR_HEIGHT;
+use op_editor_ui::widgets::{CanvasViewport, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
 use super::WidgetHost;
@@ -792,6 +792,47 @@ impl WidgetHost {
         let new_hover_ec = new_hover;
         if new_hover_ec != self.editor_state.editor_ui.align_toolbar_hover {
             self.editor_state.editor_ui.align_toolbar_hover = new_hover_ec;
+            self.mark_dirty();
+            return true;
+        }
+        // Canvas hierarchy hover. The scene hit path is resolved to
+        // the current level's primary target; shared canvas paint then
+        // draws that node solid plus all of its direct children dashed.
+        // Frame labels participate as explicit root targets.
+        let hover_eligible = !over_topmost
+            && matches!(self.editor_state.tool, op_editor_core::Tool::Select)
+            && self.over_canvas(x, y, self.last_viewport_w, self.last_viewport_h);
+        let new_canvas_hover = if hover_eligible {
+            let (cx0, cy0, cw, ch) = self.canvas_region(self.last_viewport_w, self.last_viewport_h);
+            let canvas_rect = Rect {
+                origin: Point2D::new(cx0, cy0),
+                size: Point2D::new(cw, ch),
+            };
+            let canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+            if let Some(root) = canvas.frame_label_at_point(canvas_rect, Point2D::new(x, y)) {
+                Some(op_editor_core::NodeId::new(root))
+            } else {
+                let local = Point2D::new(x - cx0, y - cy0);
+                let doc = self.editor_state.viewport.to_document(local);
+                self.layout_scene
+                    .node_path_at_doc_point(doc, self.editor_state.viewport.zoom)
+                    .and_then(|path| {
+                        let path = path
+                            .into_iter()
+                            .map(op_editor_core::NodeId::new)
+                            .collect::<Vec<_>>();
+                        op_editor_core::selection_resolve::resolve_canvas_depth_targets(
+                            &path,
+                            self.editor_state.editor_ui.entered_container.as_ref(),
+                        )
+                        .map(|targets| targets.primary)
+                    })
+            }
+        } else {
+            None
+        };
+        if new_canvas_hover != self.editor_state.editor_ui.canvas_hover_node {
+            self.editor_state.editor_ui.canvas_hover_node = new_canvas_hover;
             self.mark_dirty();
             return true;
         }

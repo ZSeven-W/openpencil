@@ -469,9 +469,11 @@ mod paint_tests {
     struct CursorCaptureBackend {
         polygons: Vec<(Vec<Point2D>, Color)>,
         polygon_strokes: Vec<(Vec<Point2D>, Color)>,
+        drop_shadows: Vec<(Rect, f32, f32, Color)>,
         round_fills: Vec<(Rect, Color)>,
         round_strokes: Vec<(Rect, Color, f32)>,
         labels: Vec<String>,
+        paint_ops: Vec<&'static str>,
     }
 
     impl RenderBackend for CursorCaptureBackend {
@@ -480,6 +482,7 @@ mod paint_tests {
         fn fill_rect(&mut self, _: Rect, _: Color) {}
         fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
         fn draw_text(&mut self, layout: &TextLayout, _: Point2D) {
+            self.paint_ops.push("text");
             if let Some(run) = layout.runs().first() {
                 self.labels.push(run.content.clone());
             }
@@ -490,7 +493,12 @@ mod paint_tests {
         fn translate(&mut self, _: Point2D) {}
         fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
         fn fill_round_rect(&mut self, rect: Rect, _: f32, color: Color) {
+            self.paint_ops.push("pill");
             self.round_fills.push((rect, color));
+        }
+        fn fill_drop_shadow(&mut self, rect: Rect, radius: f32, blur: f32, color: Color) {
+            self.paint_ops.push("shadow");
+            self.drop_shadows.push((rect, radius, blur, color));
         }
         fn stroke_round_rect(&mut self, rect: Rect, _: f32, color: Color, width: f32) {
             self.round_strokes.push((rect, color, width));
@@ -545,7 +553,7 @@ mod paint_tests {
         assert_eq!(
             backend.polygons.len(),
             7,
-            "4 halo feather layers + the white rim + body + tip wedge"
+            "4 shadow feather layers + the white rim + body + tip wedge"
         );
         let (pts, color) = &backend.polygons[5];
         assert_eq!(
@@ -558,11 +566,22 @@ mod paint_tests {
             (pts[0].x - 40.0).abs() < 0.01 && (pts[0].y - 60.0).abs() < 0.01,
             "pencil tip sits on the current element's centre"
         );
+        let centroid = |polygon: &[Point2D]| {
+            let count = polygon.len() as f32;
+            Point2D::new(
+                polygon.iter().map(|p| p.x).sum::<f32>() / count,
+                polygon.iter().map(|p| p.y).sum::<f32>() / count,
+            )
+        };
+        let shadow_center = centroid(&backend.polygons[0].0);
+        let body_center = centroid(pts);
+        assert!((shadow_center.x - body_center.x + 0.5).abs() < 0.01);
+        assert!((shadow_center.y - body_center.y - 0.5).abs() < 0.01);
         // The rim is FILLED geometry, not a stroke: the trait's fallback
         // polygon stroke drew each edge as its own capped segment, which
         // notched every vertex of the densely-sampled arc (user report
         // 2026-07-12: "不要有锯齿感"). It must still be white, and sit
-        // between the halo and the body.
+        // between the shadow and the body.
         let (rim_pts, rim_color) = &backend.polygons[4];
         assert!(
             (rim_color.r - 1.0).abs() < 0.01
@@ -581,7 +600,21 @@ mod paint_tests {
              skeleton owns the working-area affordance now"
         );
         assert_eq!(backend.labels, vec!["Mochi".to_string()]);
-        assert!(!backend.round_fills.is_empty(), "name pill paints");
+        let (pill, _) = backend.round_fills.last().expect("name pill paints");
+        let (shadow, radius, blur, color) = backend
+            .drop_shadows
+            .last()
+            .expect("name pill paints a contact shadow");
+        assert!((shadow.origin.x - pill.origin.x + 0.5).abs() < 0.01);
+        assert!((shadow.origin.y - pill.origin.y - 0.5).abs() < 0.01);
+        assert_eq!(shadow.size, pill.size);
+        assert!((*radius - 8.5).abs() < 0.01 && (*blur - 1.5).abs() < 0.01);
+        assert!(color.r < 0.01 && color.g < 0.01 && color.b < 0.01);
+        assert!((color.a - 0.28).abs() < 0.01);
+        assert_eq!(
+            &backend.paint_ops[backend.paint_ops.len() - 3..],
+            &["shadow", "pill", "text"]
+        );
     }
 
     #[test]
@@ -609,6 +642,10 @@ mod paint_tests {
             "fallback red fill"
         );
         assert!(backend.labels.is_empty(), "no name pill without a tag");
+        assert!(
+            backend.drop_shadows.is_empty(),
+            "no pill shadow without a tag"
+        );
         assert!(backend.round_fills.is_empty(), "no pill capsule either");
         assert!(
             backend.round_strokes.is_empty(),
@@ -635,6 +672,7 @@ mod paint_tests {
         );
         assert!(
             backend.polygons.is_empty()
+                && backend.drop_shadows.is_empty()
                 && backend.round_fills.is_empty()
                 && backend.round_strokes.is_empty()
         );

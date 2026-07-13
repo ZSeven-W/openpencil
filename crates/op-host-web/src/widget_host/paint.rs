@@ -180,7 +180,11 @@ impl WidgetHost {
             canvas.paint(&mut cx, canvas_rect);
         }
 
-        let property_panel = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms);
+        let property_panel = PropertyPanel::for_selection_at_with_scene(
+            &self.editor_state,
+            &self.layout_scene,
+            self.now_ms,
+        );
         if let Some(panel) = property_panel.as_ref() {
             let property_rect = Rect {
                 origin: Point2D::new(viewport_width - ui.property_panel_width, TOP_BAR_HEIGHT),

@@ -666,7 +666,9 @@ impl WidgetHost {
         // 0c. PropertyPanel button / checkbox — flex modes + size
         //     flags. Runs AFTER locale picker + TopBar so the
         //     dropdown overlays still win.
-        if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
+        if let Some(panel) =
+            PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene)
+        {
             let property_rect = Rect {
                 origin: Point2D::new(
                     viewport_width - self.editor_state.editor_ui.property_panel_width,
@@ -932,71 +934,47 @@ impl WidgetHost {
                     canvas.frame_label_at_point(canvas_rect, Point2D::new(x, y))
                 {
                     let node_id = op_editor_core::NodeId::new(&sc_node_id);
-                    if self.shift_held {
-                        let was_in_set = self.editor_state.is_selected(&node_id);
-                        self.editor_state.toggle_selection(node_id);
-                        if !was_in_set {
-                            self.start_node_drag(x, y);
-                        }
-                    } else {
-                        let already_in_set = self.editor_state.is_selected(&node_id);
-                        if !already_in_set || self.editor_state.selection_count() == 1 {
-                            self.editor_state.set_single_selection(node_id);
-                        }
-                        self.start_node_drag(x, y);
-                    }
-                    self.scroll_layer_panel_selection_into_view(viewport_height);
-                    self.mark_dirty();
-                    return true;
-                }
-                let hit = self
-                    .layout_scene
-                    .node_at_doc_point(doc_point, self.editor_state.viewport.zoom);
-                if let Some(sc_node_id) = hit {
-                    let node_id = op_editor_core::NodeId::new(&sc_node_id);
-                    // Canvas double-click: 400 ms same-node → enter
-                    // text-edit on Text nodes.
-                    let is_double = matches!(
-                        self.editor_state.editor_ui.last_canvas_click.clone(),
-                        Some((prev, t))
-                            if prev == node_id && self.now_ms.saturating_sub(t) < 400
+                    return self.apply_canvas_node_press(
+                        vec![node_id],
+                        x,
+                        y,
+                        text_edit_was_active,
+                        viewport_height,
                     );
-                    self.editor_state.editor_ui.last_canvas_click =
-                        Some((node_id.clone(), self.now_ms));
-                    if is_double
-                        && !text_edit_was_active
-                        && self.editor_state.start_text_edit(node_id.clone())
-                    {
-                        self.editor_state.ui.text_edit_input.touch(self.now_ms);
-                        self.mark_dirty();
-                        return true;
-                    }
-                    let mut should_start_drag = true;
-                    if self.shift_held {
-                        let was_in_set = self.editor_state.is_selected(&node_id);
-                        self.editor_state.toggle_selection(node_id);
-                        should_start_drag = !was_in_set;
-                    } else {
-                        let already_in_set = self.editor_state.is_selected(&node_id);
-                        if !already_in_set || self.editor_state.selection_count() == 1 {
-                            self.editor_state.set_single_selection(node_id);
-                        }
-                    }
-                    self.scroll_layer_panel_selection_into_view(viewport_height);
-                    if should_start_drag {
-                        self.start_node_drag(x, y);
-                    }
-                    self.mark_dirty();
-                    return true;
+                }
+                let hit_path = self
+                    .layout_scene
+                    .node_path_at_doc_point(doc_point, self.editor_state.viewport.zoom);
+                if let Some(hit_path) = hit_path {
+                    let hit_path = hit_path
+                        .into_iter()
+                        .map(op_editor_core::NodeId::new)
+                        .collect();
+                    return self.apply_canvas_node_press(
+                        hit_path,
+                        x,
+                        y,
+                        text_edit_was_active,
+                        viewport_height,
+                    );
                 }
                 // Empty canvas with Select → marquee.
+                self.editor_state.editor_ui.last_canvas_click = None;
                 let cleared_now = if !self.shift_held {
                     let was_set = !self.editor_state.selection.set.is_empty();
+                    let exited_scope = self
+                        .editor_state
+                        .editor_ui
+                        .entered_container
+                        .take()
+                        .is_some();
                     if was_set {
                         self.editor_state.clear_selection();
+                    }
+                    if was_set || exited_scope {
                         self.mark_dirty();
                     }
-                    was_set
+                    was_set || exited_scope
                 } else {
                     false
                 };
