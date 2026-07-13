@@ -142,7 +142,7 @@ Key aesthetics:
 - Screen width: 1440px
 - Sidebar: 280px wide, vertical, space_between
 - Sidebar structure: top (logo + navigation), bottom (upgrade CTA + user profile)
-- Content area: fill_container, vertical, gap 28-48, padding [32, 48]
+- Content area: width fill_container, height fit_content, vertical, gap 28-48, padding [32, 48]
 - Section gap within content: 28px
 
 ## Corner Radius

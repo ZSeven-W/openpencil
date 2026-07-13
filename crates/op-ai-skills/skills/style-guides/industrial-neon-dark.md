@@ -140,7 +140,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 240px wide, vertical, space_between, icon + text nav
-- Content area: fill_container, vertical, gap 28-48, padding [32, 40]
+- Content area: width fill_container, height fit_content, vertical, gap 28-48, padding [32, 40]
 - Sidebar indicator: 3px left border in neon green on active item
 
 ## Corner Radius

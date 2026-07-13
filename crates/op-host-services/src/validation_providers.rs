@@ -96,6 +96,9 @@ where qualityScore is 1-10. Use the real node IDs from the provided tree. \
 Treat layout=horizontal clip=true as an intentional horizontal scroller; preserve its \
 fixed item widths and partial right-edge item instead of changing layout geometry. \
 Do not add borders to chart bars, bar tracks, columns, or other data marks. \
+Review images for rendering integrity only: visible single-image slot, bounds, crop/fit, \
+clipping, radius, and overlay order. Never judge or replace image content, relevance, \
+aesthetics, perceived quality, resolution, tone, stock choice, search, or generation quality. \
 Return an empty fixes array and a high qualityScore when the design looks good.";
 
 /// Real `ScreenshotProvider` — renders the live document's active page
@@ -261,6 +264,14 @@ mod tests {
             prompt.contains("chart bars") && prompt.contains("Do not add borders"),
             "validation prompt must distinguish chart marks from card surfaces: {prompt}"
         );
+    }
+
+    #[test]
+    fn validation_prompt_limits_image_review_to_rendering_integrity() {
+        let prompt = validation_system_prompt();
+        assert!(prompt.contains("IMAGE REVIEW SCOPE — PRESENTATION ONLY"));
+        assert!(prompt.contains("Do NOT judge image subject relevance"));
+        assert!(prompt.contains("A correctly displayed image passes validation"));
     }
 
     // ── RealScreenshotProvider ───────────────────────────────────────────────

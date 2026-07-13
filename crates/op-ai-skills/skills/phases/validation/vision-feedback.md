@@ -26,6 +26,12 @@ Check for these issues:
 11. STRUCTURAL INCONSISTENCY: Sibling elements that should follow the same pattern but have different child structures. For example, if one input field has a leading icon but a sibling input field does not, or a list item is missing an expected child element. Fix by adding the missing child node.
 12. MISSING ELEMENTS: When a reference design is provided, check if important UI elements visible in the reference are missing or absent in the current design. Fix by adding the missing element as a child of the appropriate parent.
 
+IMAGE REVIEW SCOPE — PRESENTATION ONLY:
+
+- Check only rendering integrity: an intended image slot visibly renders exactly one image; the image has valid bounds, crop/fit, clipping, radius, and overlay order; no broken/empty placeholder is visible.
+- Do NOT judge image subject relevance, aesthetics, perceived quality, resolution, tone, stock-photo choice, search query quality, generation quality, or similarity to a reference image's photographic content.
+- Do NOT request, replace, remove, or downgrade `qualityScore` because a different image might look better. A correctly displayed image passes validation regardless of its content.
+
 Output ONLY a JSON object. No explanation, no markdown fences.
 {"qualityScore":8,"issues":["description1","description2"],"fixes":[{"nodeId":"actual-node-id","property":"width","value":"fill_container"}],"structuralFixes":[]}
 

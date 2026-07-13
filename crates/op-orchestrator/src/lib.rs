@@ -17,6 +17,7 @@ pub mod design_md_policy;
 pub mod design_system;
 pub mod design_type;
 pub mod intent;
+mod mobile_reflow;
 pub mod model_profile;
 pub(crate) mod orchestration_self_check;
 pub mod palette_harmonize;
@@ -47,11 +48,9 @@ pub mod append;
 pub(crate) mod avatar_repair;
 #[cfg(test)]
 mod avatar_repair_tests;
-pub(crate) mod broken_ref_repair;
 pub(crate) mod chip_repair;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;
-pub(crate) mod cleanup_scroller_guard;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
 pub mod geometry_validation;
@@ -67,7 +66,6 @@ pub mod scaffold;
 pub(crate) mod sidebar_archetype;
 pub mod spacing_repair;
 pub mod spawn_concurrent;
-pub(crate) mod stray_image_adopt;
 pub mod stub_repair;
 pub mod subagent;
 pub mod table_repair;
@@ -76,9 +74,13 @@ pub mod tree_heuristics;
 #[cfg(test)]
 mod cleanup_mobile_chrome_nav_wrapper_tests;
 #[cfg(test)]
+mod cleanup_mobile_reflow_tests;
+#[cfg(test)]
 mod cleanup_scroller_preservation_tests;
 #[cfg(test)]
 mod geometry_chip_tests;
+#[cfg(test)]
+mod geometry_root_containment_tests;
 #[cfg(test)]
 mod prompt_resolved_style_tests;
 #[cfg(test)]
@@ -99,6 +101,7 @@ pub use design_system::{
 pub use design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use intent::classify_intent;
 pub use loop_finalize::apply_loop_finalize;
+pub use mobile_reflow::repair_mobile_trailing_nav_reflow;
 pub use model_profile::{resolve_model_profile, ModelProfile, ModelTier};
 pub use prompt::build_orchestrator_prompt;
 pub use run::Orchestrator;

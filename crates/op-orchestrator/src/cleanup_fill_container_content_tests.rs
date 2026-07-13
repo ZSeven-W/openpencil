@@ -52,7 +52,7 @@ fn active_node_value(sink: &VecDocSink, id: &str) -> Value {
 }
 
 #[test]
-fn fill_container_content_section_on_fixed_vertical_root_collapses() {
+fn ordinary_fill_height_content_section_on_fixed_vertical_root_hugs() {
     let mut sink = insert_root(json!({
         "type": "frame",
         "id": "root",
@@ -136,6 +136,87 @@ fn empty_spacer_fill_container_not_collapsed() {
 
     assert_eq!(
         active_node_value(&sink, "spacer")["height"],
+        json!("fill_container")
+    );
+}
+
+#[test]
+fn clipped_scroll_body_fill_container_not_collapsed() {
+    let mut sink = insert_root(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Mobile App",
+        "width": 390,
+        "height": 844,
+        "layout": "vertical",
+        "children": [
+            {
+                "type": "frame",
+                "id": "scroll-body",
+                "name": "Scrollable Content",
+                "width": "fill_container",
+                "height": "fill_container",
+                "layout": "vertical",
+                "clipContent": true,
+                "children": [
+                    {"type": "text", "id": "body-copy", "content": "Long content"}
+                ]
+            }
+        ]
+    }));
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    assert_eq!(
+        active_node_value(&sink, "scroll-body")["height"],
+        json!("fill_container")
+    );
+}
+
+#[test]
+fn semantic_main_and_workspace_fill_consumers_are_preserved() {
+    let mut sink = insert_root(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Desktop App",
+        "width": 1200,
+        "height": 800,
+        "layout": "vertical",
+        "children": [
+            {
+                "type": "frame",
+                "id": "main",
+                "name": "Body",
+                "role": "main",
+                "width": "fill_container",
+                "height": "fill_container",
+                "layout": "vertical",
+                "children": [
+                    {"type": "text", "id": "main-copy", "content": "Main"}
+                ]
+            },
+            {
+                "type": "frame",
+                "id": "workspace",
+                "name": "Workspace",
+                "width": "fill_container",
+                "height": "fill_container",
+                "layout": "vertical",
+                "children": [
+                    {"type": "text", "id": "workspace-copy", "content": "Canvas"}
+                ]
+            }
+        ]
+    }));
+
+    run_cleanup_passes(&mut sink, &plan(), &["root"]);
+
+    assert_eq!(
+        active_node_value(&sink, "main")["height"],
+        json!("fill_container")
+    );
+    assert_eq!(
+        active_node_value(&sink, "workspace")["height"],
         json!("fill_container")
     );
 }

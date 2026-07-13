@@ -143,7 +143,7 @@ Key aesthetics:
 
 - Screen width: 1440px
 - Sidebar: 240px wide, vertical, white background with slate-blue active indicators
-- Content area: fill_container, vertical, gap 24-32, padding [32, 36]
+- Content area: width fill_container, height fit_content, vertical, gap 24-32, padding [32, 36]
 - Cards use 1px stroke (#E2E8F0) with very subtle shadow (0 1px 2px rgba(0,0,0,0.04))
 - Header bar: 60px height, white background, bottom border #E2E8F0
 - Generous whitespace between sections creates breathing room

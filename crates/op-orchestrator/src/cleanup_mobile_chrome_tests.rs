@@ -256,7 +256,7 @@ fn cleanup_strips_misrolled_mobile_search_bar_wrapper() {
 }
 
 #[test]
-fn cleanup_anchors_short_mobile_bottom_nav_to_viewport_bottom() {
+fn cleanup_keeps_ordinary_section_hugging_before_bottom_nav() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_str(
         r##"{
@@ -323,15 +323,17 @@ fn cleanup_anchors_short_mobile_bottom_nav_to_viewport_bottom() {
 
     run_cleanup_passes(&mut sink, &plan(), &["root"]);
 
+    let root = sink.state.active_children().first().expect("root survives");
+    let content = find_node(root, "content").expect("content survives");
+    let content = serde_json::to_value(content).expect("content serializes");
+    assert_eq!(content["height"], json!("fit_content"));
     assert!(
-        sink.applied.iter().any(|cmd| matches!(
+        !sink.applied.iter().any(|cmd| matches!(
             cmd,
-            EditorCommand::SetNodeLayoutProp { node_id, property, value }
-                if node_id.as_str() == "content"
-                    && property == "height"
-                    && matches!(value, LayoutPropValue::Keyword(keyword) if keyword == "fill_container")
+            EditorCommand::SetNodeLayoutProp { node_id, property, value: _ }
+                if node_id.as_str() == "content" && property == "height"
         )),
-        "cleanup should make the content before a short mobile bottom nav fill remaining viewport height: {:?}",
+        "bottom-nav repair must not make an ordinary section consume remaining height: {:?}",
         sink.applied
     );
 }

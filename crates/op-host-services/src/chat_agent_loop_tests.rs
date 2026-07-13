@@ -4,6 +4,7 @@
 
 #![cfg(test)]
 
+use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc as std_mpsc;
@@ -20,18 +21,27 @@ use op_ai::chat_provider::{ChatToolDef, ChatToolExecutor, ChatToolResult};
 struct ScriptedExecutor {
     calls: Mutex<Vec<(String, String)>>,
     finalize_calls: std::sync::atomic::AtomicUsize,
-    result: ChatToolResult,
+    results: Mutex<VecDeque<ChatToolResult>>,
 }
 
 impl ScriptedExecutor {
     fn ok(content: &str) -> Arc<Self> {
+        Self::sequence(&[content])
+    }
+
+    fn sequence(contents: &[&str]) -> Arc<Self> {
         Arc::new(Self {
             calls: Mutex::new(Vec::new()),
             finalize_calls: std::sync::atomic::AtomicUsize::new(0),
-            result: ChatToolResult {
-                content: content.to_string(),
-                is_error: false,
-            },
+            results: Mutex::new(
+                contents
+                    .iter()
+                    .map(|content| ChatToolResult {
+                        content: (*content).to_string(),
+                        is_error: false,
+                    })
+                    .collect(),
+            ),
         })
     }
 
@@ -52,7 +62,12 @@ impl ChatToolExecutor for ScriptedExecutor {
             .lock()
             .unwrap()
             .push((name.to_string(), args_json.to_string()));
-        self.result.clone()
+        let mut results = self.results.lock().unwrap();
+        if results.len() > 1 {
+            results.pop_front().expect("scripted result")
+        } else {
+            results.front().expect("scripted result").clone()
+        }
     }
 
     fn finalize(&self) {
@@ -150,6 +165,8 @@ fn get_screenshot_tool_def() -> ChatToolDef {
 /// so the tests can decode it back and prove it round-trips through the wire.
 const TINY_PNG_B64: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+const SECOND_TINY_PNG_B64: &str =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl9sAAAAASUVORK5CYII=";
 
 fn anthropic_tool_use_turn() -> String {
     [
@@ -507,8 +524,13 @@ fn anthropic_loop_replays_screenshot_result_as_image_content_block() {
     let (base, req_rx) =
         serve_sse_script(vec![anthropic_get_screenshot_turn(), anthropic_text_turn()]);
     // The executor returns exactly what the real get_screenshot MCP tool returns.
-    let screenshot_result =
-        serde_json::json!({ "image_base64": TINY_PNG_B64, "format": "png" }).to_string();
+    // Match the real MCP dispatch envelope, not the old bare-payload test
+    // double that hid the production extraction bug.
+    let screenshot_result = serde_json::json!({
+        "success": true,
+        "data": { "image_base64": TINY_PNG_B64, "format": "png" }
+    })
+    .to_string();
     let executor = ScriptedExecutor::ok(&screenshot_result);
     let cfg = AgentLoopConfig {
         url: format!("{base}/v1/messages"),
@@ -605,8 +627,11 @@ fn openai_loop_replays_screenshot_result_as_image_url_part() {
     ]
     .join("\n");
     let (base, req_rx) = serve_sse_script(vec![shot_turn, text_turn]);
-    let screenshot_result =
-        serde_json::json!({ "image_base64": TINY_PNG_B64, "format": "png" }).to_string();
+    let screenshot_result = serde_json::json!({
+        "success": true,
+        "data": { "image_base64": TINY_PNG_B64, "format": "png" }
+    })
+    .to_string();
     let executor = ScriptedExecutor::ok(&screenshot_result);
     let cfg = AgentLoopConfig {
         url: format!("{base}/chat/completions"),
@@ -660,6 +685,97 @@ fn openai_loop_replays_screenshot_result_as_image_url_part() {
 }
 
 #[test]
+fn openai_loop_keeps_only_latest_screenshot_without_dropping_user_intent() {
+    let shot_turn = |id: &str| {
+        [
+            format!(
+                r#"data: {{"choices":[{{"delta":{{"tool_calls":[{{"index":0,"id":"{id}","type":"function","function":{{"name":"get_screenshot","arguments":"{{\"nodeId\":\"root\"}}"}}}}]}}}}]}}"#
+            ),
+            String::new(),
+            r#"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#.into(),
+            String::new(),
+            "data: [DONE]".into(),
+            String::new(),
+            String::new(),
+        ]
+        .join("\n")
+    };
+    let text_turn = [
+        r#"data: {"choices":[{"delta":{"content":"Visual check complete."}}]}"#,
+        "",
+        r#"data: {"choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+        "",
+        "data: [DONE]",
+        "",
+        "",
+    ]
+    .join("\n");
+    let (base, req_rx) = serve_sse_script(vec![
+        shot_turn("call_shot_1"),
+        shot_turn("call_shot_2"),
+        text_turn,
+    ]);
+    let first_screenshot_result = serde_json::json!({
+        "success": true,
+        "data": { "image_base64": TINY_PNG_B64, "format": "png" }
+    })
+    .to_string();
+    let second_screenshot_result = serde_json::json!({
+        "success": true,
+        "data": { "image_base64": SECOND_TINY_PNG_B64, "format": "png" }
+    })
+    .to_string();
+    let executor = ScriptedExecutor::sequence(&[
+        first_screenshot_result.as_str(),
+        second_screenshot_result.as_str(),
+    ]);
+    let cfg = AgentLoopConfig {
+        url: format!("{base}/chat/completions"),
+        api_key: "sk-test".into(),
+        model: "MiniMax-M3".into(),
+        system_prompt: "You are a design editor.".into(),
+        history: Vec::new(),
+        user_prompt: "Build the exact coffee landing page I requested".into(),
+        max_output_tokens: 6_144,
+        tools: vec![get_screenshot_tool_def()],
+        executor,
+        max_turns: 5,
+        finalize_on_exit: true,
+        disable_thinking: false,
+    };
+    let (outcome, _deltas) = run_loop_collect(cfg, false);
+    assert_eq!(outcome, Ok(true));
+
+    let _first = req_rx.recv().expect("initial request");
+    let _second = req_rx.recv().expect("first screenshot request");
+    let third = req_rx.recv().expect("second screenshot request");
+    let body_start = third.find("\r\n\r\n").map(|i| i + 4).expect("body");
+    let body: Value = serde_json::from_str(&third[body_start..]).expect("body JSON");
+    let wire = body["messages"].to_string();
+
+    assert_eq!(
+        wire.matches("data:image/png;base64,").count(),
+        1,
+        "only the newest visual observation may ride the next request"
+    );
+    assert!(
+        !wire.contains(TINY_PNG_B64),
+        "the superseded first screenshot payload must be absent"
+    );
+    assert_eq!(wire.matches(SECOND_TINY_PNG_B64).count(), 1);
+    assert!(wire.contains(crate::chat_agent_context::ELIDED_SCREENSHOT_TEXT));
+    assert!(
+        wire.contains("Build the exact coffee landing page I requested"),
+        "context compaction must preserve the user's design intent"
+    );
+    assert!(wire.contains("call_shot_1"), "tool identity is preserved");
+    assert!(
+        wire.contains("call_shot_2"),
+        "latest tool call is preserved"
+    );
+}
+
+#[test]
 fn tool_card_envelope_wraps_args_with_level_and_running_status() {
     let envelope = tool_card_envelope("modify", r#"{"nodeId":"n1"}"#);
     let v: Value = serde_json::from_str(&envelope).unwrap();
@@ -671,3 +787,6 @@ fn tool_card_envelope_wraps_args_with_level_and_running_status() {
     let v: Value = serde_json::from_str(&envelope).unwrap();
     assert_eq!(v["args"], "not-json");
 }
+
+#[path = "chat_agent_loop_text_only_tests.rs"]
+mod text_only_tests;

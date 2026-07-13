@@ -37,6 +37,8 @@ Rules:
 
 ## Creative Variation (mandatory)
 
+Apply this section only while authoring the initial composition. Do not add or revise a variation during self-check. In particular, do not change a correctly rendered image's crop or placement merely for novelty; self-check may repair only objective presentation defects such as distortion, clipping, invalid bounds, or broken overlay order.
+
 After establishing your baseline direction, introduce 1-3 small creative variations (~10% each):
 
 - Asymmetric layout for one section

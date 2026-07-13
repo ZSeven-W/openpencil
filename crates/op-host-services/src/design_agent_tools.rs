@@ -13,6 +13,7 @@
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use jian_ops_schema::node::base::NumberOrExpression;
 use jian_ops_schema::node::container::LayoutMode;
 use jian_ops_schema::node::{ContainerProps, PenNode, TextContent};
 use jian_ops_schema::style::PenFill;
@@ -123,6 +124,17 @@ pub fn execute_design_tool_with_root_seed_guard(
             false,
         );
     };
+    // An explicit batch page is a context for the whole same-batch quality
+    // pass, not just for the write command. Keep every before/after read and
+    // deterministic repair on that page, then put the user's canvas context
+    // back exactly as it was.
+    let original_page_index = state.ui.active_page_index;
+    let original_selection = state.selection.clone();
+    if name == "batch_design" {
+        if let Some(target_page_index) = batch_design_target_page_index(state, args_json) {
+            state.ui.active_page_index = target_page_index;
+        }
+    }
     let reveal_started_ms = reveal_now_millis();
     let ids_before = should_register_batch_reveals(name, indicator_epoch)
         .then(|| collect_active_node_ids(state));
@@ -148,8 +160,23 @@ pub fn execute_design_tool_with_root_seed_guard(
         // finalize. Deterministic analogue of Pencil's per-batch
         // snapshot_layout feedback.
         let dup_bars_removed = remove_nested_duplicate_status_bars(state);
-        let layout_issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
-        let contrast_issues = scan_contrast_issues(state.active_children());
+        // A mobile skeleton is deliberately numeric while it is empty. Once a
+        // trailing bottom nav lands, recover any stale numeric content-shell
+        // remainder before diagnostics: otherwise the old shell consumes the
+        // whole root and places the nav exactly outside the clipped artboard.
+        // The orchestrator owns the narrow structural proof and only grows the
+        // numeric root when the shell's real content actually needs it.
+        let mobile_nav_reflowed = op_orchestrator::repair_mobile_trailing_nav_reflow(state);
+        let mut layout_issues = op_orchestrator::geometry_validation::geometry_diagnostics(state);
+        let effective_theme = op_editor_core::variables_resolve::effective_theme(
+            &state.doc,
+            &state.ui.variables.active_theme,
+        );
+        let contrast_issues = scan_contrast_issues(
+            state.active_children(),
+            state.doc.variables.as_ref(),
+            &effective_theme,
+        );
         let icon_issues = scan_icon_issues(state.active_children());
         let mut dup_root_issues = scan_duplicate_root_issues(state.active_children());
         dup_root_issues.extend(scan_ring_issues(state.active_children()));
@@ -159,14 +186,27 @@ pub fn execute_design_tool_with_root_seed_guard(
                 "removed {dup_bars_removed} extra status bar(s) you built - the standard                  status bar already exists; NEVER create another one"
             ));
         }
+        if mobile_nav_reflowed {
+            dup_root_issues.push(
+                "reflowed the mobile content shell and trailing bottom nav inside the root - keep ordinary content wrappers height=fit_content, preserve the status/content/nav region gap, and grow the numeric root only when real content requires it"
+                    .to_string(),
+            );
+        }
         let empty_shells = scan_empty_shells(state.active_children());
-        let unbound_slots = scan_unbound_image_slots(state.active_children());
+        let design_diagnostics =
+            crate::design_agent_diagnostics::collect_batch_design_diagnostics(state);
+        layout_issues.extend(design_diagnostics.layout_issues);
+        let intent_questions = design_diagnostics.intent_questions;
+        let variable_issues = design_diagnostics.variable_issues;
+        let image_slot_candidates = design_diagnostics.image_slot_candidates;
         if !layout_issues.is_empty()
             || !dup_root_issues.is_empty()
             || !contrast_issues.is_empty()
             || !icon_issues.is_empty()
             || !empty_shells.is_empty()
-            || !unbound_slots.is_empty()
+            || !intent_questions.is_empty()
+            || !variable_issues.is_empty()
+            || !image_slot_candidates.is_empty()
             || root_seed_hint.is_some()
         {
             if let Ok(mut envelope) = serde_json::from_str::<serde_json::Value>(&result.content) {
@@ -180,13 +220,19 @@ pub fn execute_design_tool_with_root_seed_guard(
                     if !dup_root_issues.is_empty() {
                         obj.insert("structureIssues".into(), serde_json::json!(dup_root_issues));
                     }
-                    if !unbound_slots.is_empty() {
+                    if !intent_questions.is_empty() {
+                        obj.insert(
+                            "intentQuestions".into(),
+                            serde_json::json!(intent_questions),
+                        );
+                    }
+                    if !variable_issues.is_empty() {
+                        obj.insert("variableIssues".into(), serde_json::json!(variable_issues));
+                    }
+                    if !image_slot_candidates.is_empty() {
                         obj.insert(
                             "imageSlots".into(),
-                            serde_json::json!(format!(
-                                "{} - these bare solid squares read as image slots with NO                                  image; give EACH an image fill NOW: G(id, \"search\",                                  \"<2-3 word subject from its card's title>\")",
-                                unbound_slots.join(", ")
-                            )),
+                            serde_json::json!(image_slot_candidates),
                         );
                     }
                     if !empty_shells.is_empty() {
@@ -201,7 +247,7 @@ pub fn execute_design_tool_with_root_seed_guard(
                     if !contrast_issues.is_empty() {
                         obj.insert(
                             "contrastHint".into(),
-                            serde_json::json!(contrast_hint(contrast_issues.len())),
+                            serde_json::json!(contrast_hint(&contrast_issues)),
                         );
                         obj.insert("contrastIssues".into(), serde_json::json!(contrast_issues));
                     }
@@ -218,6 +264,24 @@ pub fn execute_design_tool_with_root_seed_guard(
                                 .to_string(),
                         );
                     }
+                    if !intent_questions.is_empty() {
+                        hints.push(
+                            "intentQuestions are ambiguous: inspect the named nodes and choose explicitly. Do not assume the finalizer will move, resize, delete, or recolor them."
+                                .to_string(),
+                        );
+                    }
+                    if !variable_issues.is_empty() {
+                        hints.push(
+                            "variableIssues name broken references. Replace them deliberately with a token returned by get_variables or a concrete value; nearby colours are not sufficient evidence."
+                                .to_string(),
+                        );
+                    }
+                    if !image_slot_candidates.is_empty() {
+                        hints.push(
+                            "imageSlots lists unresolved media slots. Resolve them before continuing: default G requires the exact EMPTY slot id, never its row/card container; if an image is already a direct sibling, use M(imageId, slotId) only when explicit parent/slot hierarchy assigns it there. Do not decide from image subject, aesthetics, or perceived quality."
+                                .to_string(),
+                        );
+                    }
                     if let Some(hint) = root_seed_hint {
                         hints.push(hint);
                     }
@@ -229,7 +293,48 @@ pub fn execute_design_tool_with_root_seed_guard(
             }
         }
     }
+    if name == "batch_design" {
+        state.ui.active_page_index = original_page_index;
+        state.selection = original_selection;
+    }
     (result, mutated)
+}
+
+/// Resolve the optional outer batch page once, using the same id-first then
+/// legacy-index contract as the MCP command applier. An invalid explicit page
+/// returns `None`; the write will be rejected by the MCP path and no post-pass
+/// will run.
+fn batch_design_target_page_index(state: &EditorState, args_json: &str) -> Option<usize> {
+    let page_selector = serde_json::from_str::<serde_json::Value>(args_json)
+        .ok()
+        .and_then(|args| {
+            args.get("pageId")
+                .or_else(|| args.get("page_id"))
+                .or_else(|| args.get("page"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|page| !page.is_empty())
+                .map(str::to_string)
+        });
+    match page_selector.as_deref() {
+        Some(page) => match state.doc.pages.as_ref() {
+            Some(pages) if !pages.is_empty() => pages
+                .iter()
+                .position(|candidate| candidate.id == page)
+                .or_else(|| {
+                    page.parse::<usize>()
+                        .ok()
+                        .filter(|index| *index < pages.len())
+                }),
+            _ => page.parse::<usize>().ok().filter(|index| *index == 0),
+        },
+        None => Some(
+            state
+                .ui
+                .active_page_index
+                .min(state.page_count().saturating_sub(1)),
+        ),
+    }
 }
 
 /// Unified executor for the design agent pump: design-surface tools
@@ -788,6 +893,7 @@ struct ContrastIssue {
 }
 
 const CONTRAST_AA_TARGET: f64 = 4.5;
+const CONTRAST_ICON_TARGET: f64 = 3.0;
 
 /// Structure echo for abandoned rebuilds: TWO top-level frames with the
 /// same name means the model started a fresh copy instead of filling the
@@ -845,70 +951,6 @@ fn scan_duplicate_root_issues(nodes: &[PenNode]) -> Vec<String> {
 /// as a SIBLING — the bell floats alone in a full-width strip above the
 /// greeting (measured: "Header Row" = [bell], "Good evening" outside it,
 /// test0711-22). Which text belongs in the row is intent, so this echoes.
-/// Bare cover slots — EMPTY solid squares (>=48px, rounded/clipping) that
-/// read as image slots but carry NO image fill and NO G() binding. Some
-/// models (DeepSeek V4 measured) build entire album grids this way and
-/// never call G(), so every cover ships as a grey box. Echoed per batch so
-/// the model binds each slot itself; the enrichment fallback can then
-/// still fill whatever it ignores.
-fn scan_unbound_image_slots(nodes: &[PenNode]) -> Vec<String> {
-    let mut out = Vec::new();
-    fn is_bare_slot(node: &PenNode) -> bool {
-        let (container, rounded) = match node {
-            PenNode::Frame(f) => (
-                &f.container,
-                f.container.corner_radius.is_some() || f.container.clip_content == Some(true),
-            ),
-            PenNode::Rectangle(r) => (
-                &r.container,
-                r.container.corner_radius.is_some() || r.container.clip_content == Some(true),
-            ),
-            _ => return false,
-        };
-        if !rounded {
-            return false;
-        }
-        let (Some(w), Some(h)) = (
-            crate::design_agent_tools::sizing_px_of(&container.width),
-            crate::design_agent_tools::sizing_px_of(&container.height),
-        ) else {
-            return false;
-        };
-        if w < 48.0 || h < 48.0 || w / h > 1.6 || h / w > 1.6 {
-            return false;
-        }
-        if !matches!(
-            container.fill.as_deref(),
-            Some([jian_ops_schema::style::PenFill::Solid(_)])
-        ) {
-            return false;
-        }
-        node.children().is_none_or(|c| c.is_empty())
-    }
-    fn walk(nodes: &[PenNode], out: &mut Vec<String>) {
-        for node in nodes {
-            if out.len() >= 8 {
-                return;
-            }
-            if is_bare_slot(node) {
-                out.push(node.id_str().to_string());
-            }
-            if let Some(children) = node.children() {
-                walk(children, out);
-            }
-        }
-    }
-    walk(nodes, &mut out);
-    out
-}
-
-fn sizing_px_of(size: &Option<jian_ops_schema::sizing::SizingBehavior>) -> Option<f64> {
-    match size {
-        Some(jian_ops_schema::sizing::SizingBehavior::Number(px)) => Some(*px),
-        _ => None,
-    }
-}
-
 fn scan_header_icon_row_issues(nodes: &[PenNode]) -> Vec<String> {
     let mut out = Vec::new();
     fn walk(nodes: &[PenNode], out: &mut Vec<String>) {
@@ -1044,11 +1086,17 @@ fn scan_icon_issues(nodes: &[PenNode]) -> Vec<String> {
     out
 }
 
-fn scan_contrast_issues(nodes: &[PenNode]) -> Vec<ContrastIssue> {
+fn scan_contrast_issues(
+    nodes: &[PenNode],
+    variables: Option<
+        &std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>,
+    >,
+    theme: &std::collections::BTreeMap<String, String>,
+) -> Vec<ContrastIssue> {
     let mut candidates = Vec::new();
     let mut bg_stack = Vec::new();
     for node in nodes {
-        collect_contrast_candidates(node, &mut bg_stack, &mut candidates);
+        collect_contrast_candidates(node, variables, theme, &mut bg_stack, &mut candidates);
     }
 
     let pairs: Vec<(String, String, f64)> = candidates
@@ -1091,29 +1139,45 @@ struct ContrastCandidate {
 
 fn collect_contrast_candidates(
     node: &PenNode,
+    variables: Option<
+        &std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>,
+    >,
+    theme: &std::collections::BTreeMap<String, String>,
     bg_stack: &mut Vec<String>,
     out: &mut Vec<ContrastCandidate>,
 ) {
-    let pushed_bg = container_background_hex(node);
+    let opacity = resolved_node_opacity(node, variables, theme);
+    let pushed_bg = container_background_hex(
+        node,
+        variables,
+        theme,
+        bg_stack.last().map(String::as_str),
+        opacity,
+    );
     if let Some(bg) = pushed_bg.as_ref() {
         bg_stack.push(bg.clone());
     }
 
-    if let PenNode::Text(text) = node {
-        if let (Some(fg), Some(bg)) = (first_solid_hex(&text.fill), bg_stack.last()) {
+    let foreground = match node {
+        PenNode::Text(text) => Some((&text.fill, CONTRAST_AA_TARGET)),
+        PenNode::IconFont(icon) => Some((&icon.fill, CONTRAST_ICON_TARGET)),
+        _ => None,
+    };
+    if let (Some((fill, target)), Some(bg)) = (foreground, bg_stack.last()) {
+        if let Some(fg) = first_solid_hex(fill, variables, theme, Some(bg), opacity) {
             out.push(ContrastCandidate {
-                node_id: text.base.id.clone(),
-                node_name: text.base.name.clone(),
+                node_id: node.id_str().to_string(),
+                node_name: node.base().name.clone(),
                 fg,
                 bg: bg.clone(),
-                target: CONTRAST_AA_TARGET,
+                target,
             });
         }
     }
 
     if let Some(children) = node.children() {
         for child in children {
-            collect_contrast_candidates(child, bg_stack, out);
+            collect_contrast_candidates(child, variables, theme, bg_stack, out);
         }
     }
 
@@ -1122,32 +1186,102 @@ fn collect_contrast_candidates(
     }
 }
 
-fn container_background_hex(node: &PenNode) -> Option<String> {
-    match node {
-        PenNode::Frame(n) => first_solid_hex(&n.container.fill),
-        PenNode::Group(n) => first_solid_hex(&n.container.fill),
-        PenNode::Rectangle(n) => first_solid_hex(&n.container.fill),
-        PenNode::Tabs(n) => first_solid_hex(&n.fill),
-        _ => None,
-    }
+fn container_background_hex(
+    node: &PenNode,
+    variables: Option<
+        &std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>,
+    >,
+    theme: &std::collections::BTreeMap<String, String>,
+    parent_bg: Option<&str>,
+    node_opacity: f64,
+) -> Option<String> {
+    let fill = match node {
+        PenNode::Frame(n) => &n.container.fill,
+        PenNode::Group(n) => &n.container.fill,
+        PenNode::Rectangle(n) => &n.container.fill,
+        PenNode::Tabs(n) => &n.fill,
+        _ => return None,
+    };
+    first_solid_hex(fill, variables, theme, parent_bg, node_opacity)
 }
 
-fn first_solid_hex(fill: &Option<Vec<PenFill>>) -> Option<String> {
+fn first_solid_hex(
+    fill: &Option<Vec<PenFill>>,
+    variables: Option<
+        &std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>,
+    >,
+    theme: &std::collections::BTreeMap<String, String>,
+    background: Option<&str>,
+    node_opacity: f64,
+) -> Option<String> {
     fill.as_ref()?.iter().find_map(|fill| match fill {
-        PenFill::Solid(body) => concrete_hex(&body.color),
+        PenFill::Solid(body) => resolved_hex(
+            &body.color,
+            variables,
+            theme,
+            background,
+            node_opacity * f64::from(body.opacity.unwrap_or(1.0)),
+        ),
         _ => None,
     })
 }
 
-fn concrete_hex(color: &str) -> Option<String> {
-    let color = color.trim();
-    let hex = color.strip_prefix('#')?;
-    (hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then(|| color.to_string())
+fn resolved_node_opacity(
+    node: &PenNode,
+    variables: Option<
+        &std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>,
+    >,
+    theme: &std::collections::BTreeMap<String, String>,
+) -> f64 {
+    match node.base().opacity.as_ref() {
+        Some(NumberOrExpression::Number(opacity)) => opacity.clamp(0.0, 1.0),
+        Some(NumberOrExpression::Expression(reference)) => {
+            op_editor_core::variables_resolve::resolve_numeric_ref(reference, variables, theme)
+                .unwrap_or(1.0)
+                .clamp(0.0, 1.0)
+        }
+        None => 1.0,
+    }
 }
 
-fn contrast_hint(issue_count: usize) -> String {
+fn resolved_hex(
+    color: &str,
+    variables: Option<
+        &std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>,
+    >,
+    theme: &std::collections::BTreeMap<String, String>,
+    background: Option<&str>,
+    opacity: f64,
+) -> Option<String> {
+    let resolved = op_editor_core::variables_resolve::resolve_color_ref(color, variables, theme)?;
+    composite_color(resolved.trim(), background.unwrap_or("#FFFFFF"), opacity)
+}
+
+fn composite_color(foreground: &str, background: &str, opacity: f64) -> Option<String> {
+    let (fg_r, fg_g, fg_b) = op_editor_core::parse_hex_rgb(foreground)?;
+    let (bg_r, bg_g, bg_b) = op_editor_core::parse_hex_rgb(background)?;
+    let alpha = f64::from(op_editor_core::parse_hex_alpha(foreground)) * opacity.clamp(0.0, 1.0);
+    let blend = |foreground: f32, background: f32| {
+        ((f64::from(foreground) * alpha + f64::from(background) * (1.0 - alpha)) * 255.0).round()
+            as u8
+    };
+    Some(format!(
+        "#{:02X}{:02X}{:02X}",
+        blend(fg_r, bg_r),
+        blend(fg_g, bg_g),
+        blend(fg_b, bg_b)
+    ))
+}
+
+fn contrast_hint(issues: &[ContrastIssue]) -> String {
+    let text_count = issues
+        .iter()
+        .filter(|issue| (issue.target - CONTRAST_AA_TARGET).abs() < f64::EPSILON)
+        .count();
+    let icon_count = issues.len().saturating_sub(text_count);
     format!(
-        "{issue_count} text/background pairs below AA ({CONTRAST_AA_TARGET}:1); use a darker foreground or the on-<role> color."
+        "{} foreground/background pair(s) below their target (text: {text_count} below {CONTRAST_AA_TARGET}:1; icons: {icon_count} below {CONTRAST_ICON_TARGET}:1). Use a deliberate semantic foreground with sufficient contrast.",
+        issues.len()
     )
 }
 
@@ -1381,6 +1515,35 @@ mod tests {
     }
 
     #[test]
+    fn flat_script_reports_missing_layout_after_the_forest_is_assembled() {
+        let mut state = EditorState::new();
+        let (result, mutated) = execute_design_tool(
+            &mut state,
+            "batch_design",
+            r#"{"script":"const section=I(null,{type:'frame',name:'Popular',width:360,height:240}); I(section,{type:'text',name:'Title',content:'Popular'}); I(section,{type:'frame',name:'Rail',layout:'horizontal',width:'fill_container',height:180});"}"#,
+        );
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+
+        let value: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        let questions = value["intentQuestions"]
+            .as_array()
+            .expect("missing layout is reported after flat I(parent,obj) assembly");
+        assert!(questions.iter().any(|question| question
+            .as_str()
+            .is_some_and(|line| line.contains("Popular") && line.contains("no layout"))));
+
+        let root = state.active_children().first().expect("section inserted");
+        let PenNode::Frame(frame) = root else {
+            panic!("expected frame")
+        };
+        assert_eq!(
+            frame.container.layout, None,
+            "reporting ambiguity must not silently write vertical"
+        );
+    }
+
+    #[test]
     fn contrast_scanner_flags_bad_pair() {
         let bad_root: PenNode = serde_json::from_value(serde_json::json!({
             "type": "frame",
@@ -1396,7 +1559,7 @@ mod tests {
             }]
         }))
         .unwrap();
-        let issues = scan_contrast_issues(&[bad_root]);
+        let issues = scan_contrast_issues(&[bad_root], None, &std::collections::BTreeMap::new());
         assert_eq!(issues.len(), 1, "exactly one bad text/background pair");
         assert_eq!(issues[0].node_id, "title");
         assert_eq!(issues[0].node_name.as_deref(), Some("Title"));
@@ -1419,7 +1582,91 @@ mod tests {
             }]
         }))
         .unwrap();
-        assert!(scan_contrast_issues(&[passing_root]).is_empty());
+        assert!(
+            scan_contrast_issues(&[passing_root], None, &std::collections::BTreeMap::new())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn contrast_scanner_resolves_tokens_and_alpha_for_icons() {
+        let root: PenNode = serde_json::from_value(serde_json::json!({
+            "type": "frame", "id": "root", "name": "Search", "layout": "horizontal",
+            "fill": [{"type":"solid","color":"$--accent"}], "children": [{
+                "type": "frame", "id": "filter", "name": "Filter", "layout": "horizontal",
+                "fill": [{"type":"solid","color":"#EA580C15"}], "children": [{
+                    "type": "icon_font", "id": "icon", "name": "Filter Icon",
+                    "iconFontName": "sliders-horizontal", "width": 20, "height": 20,
+                    "fill": [{"type":"solid","color":"$--white"}]
+                }]
+            }]
+        }))
+        .unwrap();
+        let variables: std::collections::BTreeMap<
+            String,
+            jian_ops_schema::variable::VariableDefinition,
+        > = serde_json::from_value(serde_json::json!({
+            "--accent": {"type":"color","value":"#F5F5F5"},
+            "--white": {"type":"color","value":"#FFFFFF"}
+        }))
+        .unwrap();
+
+        let issues = scan_contrast_issues(
+            &[root],
+            Some(&variables),
+            &std::collections::BTreeMap::new(),
+        );
+
+        let issue = issues
+            .iter()
+            .find(|issue| issue.node_id == "icon")
+            .expect("white icon on a translucent orange tint is reported");
+        assert_eq!(issue.fg, "#FFFFFF");
+        assert_eq!(issue.target, CONTRAST_ICON_TARGET);
+        assert!(issue.ratio < issue.target);
+    }
+
+    #[test]
+    fn contrast_scanner_accounts_for_fill_and_node_opacity() {
+        let root: PenNode = serde_json::from_value(serde_json::json!({
+            "type":"frame", "id":"root", "fill":[{"type":"solid","color":"#000000"}],
+            "children":[
+                {"type":"text", "id":"fill-opacity", "content":"Dimmed",
+                 "fill":[{"type":"solid","color":"#FFFFFF","opacity":0.2}]},
+                {"type":"text", "id":"node-opacity", "content":"Also dimmed", "opacity":0.2,
+                 "fill":[{"type":"solid","color":"#FFFFFF"}]}
+            ]
+        }))
+        .unwrap();
+
+        let issues = scan_contrast_issues(&[root], None, &std::collections::BTreeMap::new());
+
+        assert!(issues.iter().any(|issue| issue.node_id == "fill-opacity"));
+        assert!(issues.iter().any(|issue| issue.node_id == "node-opacity"));
+    }
+
+    #[test]
+    fn batch_design_image_slot_feedback_requires_the_exact_slot_id() {
+        let mut state = EditorState::new();
+        let (result, mutated) = execute_design_tool(
+            &mut state,
+            "batch_design",
+            r##"{"operations":"root=I(null,{type:'frame',name:'Playlist',layout:'vertical',width:320,height:200,fill:[{type:'solid',color:'#111111'}],children:[{type:'frame',name:'Cover',layout:'none',width:56,height:56,fill:[{type:'solid',color:'#222222'}]}]})"}"##,
+        );
+        assert!(!result.is_error, "batch failed: {}", result.content);
+        assert!(mutated);
+
+        let value: serde_json::Value = serde_json::from_str(&result.content).unwrap();
+        assert!(
+            value["imageSlots"].as_array().is_some_and(|slots| slots
+                .iter()
+                .any(|slot| slot.as_str().is_some_and(|line| line.contains("Cover")))),
+            "explicit empty cover slot is surfaced: {}",
+            result.content
+        );
+        let hint = value["layoutHint"].as_str().unwrap_or("");
+        assert!(hint.contains("exact EMPTY slot id"), "{hint}");
+        assert!(hint.contains("never its row/card container"), "{hint}");
     }
 
     #[test]
@@ -1450,7 +1697,7 @@ mod tests {
             v["contrastHint"]
                 .as_str()
                 .unwrap_or("")
-                .contains("text/background pairs below AA"),
+                .contains("text: 1 below 4.5:1"),
             "actionable contrast hint attached: {}",
             result.content
         );

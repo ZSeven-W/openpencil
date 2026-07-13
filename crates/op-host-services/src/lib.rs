@@ -20,6 +20,7 @@
 // Migrated headless modules (Phases 2-5), kept alphabetical.
 pub mod acp_agent_probe_host;
 pub mod ai_proxy;
+mod chat_agent_context;
 pub mod chat_agent_loop;
 pub mod chat_attachment;
 #[cfg(test)]
@@ -37,6 +38,9 @@ pub mod chat_spawn;
 pub mod chat_subprocess;
 pub mod chat_subprocess_quirks;
 pub mod chat_system_prompt;
+mod design_agent_diagnostics;
+#[cfg(test)]
+mod design_agent_reflow_tests;
 pub mod design_agent_tools;
 pub mod design_context;
 pub mod design_md_llm;

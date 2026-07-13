@@ -39,6 +39,23 @@ pub use types::{
     SkillLoadEntry, SkillLoadReport, SkillMeta, SkillTrigger, DEFAULT_BUDGETS,
 };
 
+/// Authoritative tail for any design-agent prompt that appends task-specific
+/// skills after the base protocol. Initial asset choice may follow domain
+/// guidance; screenshot-driven self-check must not turn into image curation.
+pub const IMAGE_SELF_CHECK_SCOPE: &str = r#"## Image self-check scope (authoritative)
+
+During automatic screenshot-driven self-check, assess image presentation and rendering integrity only: intended photographic slots render exactly one visible image with valid bounds, crop/fit, clipping, radius, and overlay order; deliberately authored icon or illustration tiles render as intended. Do not judge or replace a rendered image based on subject relevance, aesthetics, perceived quality, resolution, tone, stock-photo choice, search-query quality, generation quality, or whether another asset might look better. This restriction does not apply to initial image-query/image-prompt authoring or to an explicit user request to replace, retarget, or restyle an image."#;
+
+/// Place the authoritative image-review scope after any task-specific prompt
+/// sections, moving an existing copy instead of duplicating it.
+pub fn append_image_self_check_scope(prompt: &mut String) {
+    let block = format!("\n\n---\n\n{IMAGE_SELF_CHECK_SCOPE}");
+    while let Some(index) = prompt.find(&block) {
+        prompt.replace_range(index..index + block.len(), "");
+    }
+    prompt.push_str(&block);
+}
+
 /// Return the product-design guideline text for `topic`, composed from the
 /// embedded skill corpus. Mirrors Pencil's `get_guidelines(guide, …)`: each
 /// topic resolves to its focused task guide plus the principle skills that
@@ -142,13 +159,13 @@ pub fn design_agent_system_prompt_with_skills(user_message: &str) -> String {
         .map(|s| s.content.trim())
         .filter(|c| !c.is_empty())
         .collect();
-    if depth.is_empty() {
-        return base.to_string();
+    let mut prompt = base.to_string();
+    if !depth.is_empty() {
+        prompt.push_str("\n\n---\n\n## Product-Design Depth (applies to this task)\n\n");
+        prompt.push_str(&depth.join("\n\n"));
     }
-    format!(
-        "{base}\n\n---\n\n## Product-Design Depth (applies to this task)\n\n{}",
-        depth.join("\n\n")
-    )
+    append_image_self_check_scope(&mut prompt);
+    prompt
 }
 
 /// The embedded `skills/` corpus — domain / knowledge / phase skill
@@ -235,6 +252,21 @@ mod tests {
         assert!(
             prompt.contains("THREE-SECTION ARCHITECTURE"),
             "mobile-app domain skill must resolve for a mobile ask"
+        );
+        assert!(
+            prompt.contains("ordinary content wrapper")
+                && prompt.contains("height=\"fit_content\""),
+            "mobile domain must teach Hug Height as the ordinary content default"
+        );
+    }
+
+    #[test]
+    fn design_agent_base_prompt_keeps_final_hug_height_invariant() {
+        let prompt = design_agent_system_prompt();
+        assert!(
+            prompt.contains("Final sizing invariant")
+                && prompt.contains("ordinary content wrappers default to `height:\"fit_content\"`"),
+            "the tool-loop base must carry the sizing invariant even when protocol skills are excluded"
         );
     }
 
@@ -383,8 +415,8 @@ mod tests {
             "must teach the I(parent, obj) script-gen call syntax"
         );
         assert!(
-            prompt.contains("no-op") || prompt.contains("NO-OP"),
-            "must teach that C/U/D/M/R/G and console are no-op stubs inside a script"
+            prompt.contains("unsupported in script mode") && prompt.contains("rejects the script"),
+            "must teach that unsupported script mutations fail loudly"
         );
         assert!(
             prompt.contains("get_screenshot"),
@@ -447,8 +479,8 @@ mod tests {
             "local-edit must teach the I(parent, obj) call syntax"
         );
         assert!(
-            skill.content.contains("NO-OP") || skill.content.contains("no-op"),
-            "local-edit must explain script no-op stubs"
+            skill.content.contains("are rejected") && skill.content.contains("operations"),
+            "local-edit must explain that unsupported script mutations fail loudly"
         );
         assert!(
             !skill.content.contains("json` code block"),
@@ -470,23 +502,114 @@ mod tests {
     }
 
     #[test]
-    fn design_agent_prompt_says_bake_not_variables() {
+    fn design_agent_prompt_requires_one_palette_source_of_truth() {
         let prompt = design_agent_system_prompt();
         assert!(
-            prompt.contains("Treat the returned TokenMap as reference values only"),
-            "design-agent prompt must frame TokenMap values as references"
+            prompt.contains("Choose exactly ONE source of truth"),
+            "design-agent prompt must make palette selection explicit"
         );
         assert!(
-            prompt.contains("BAKE concrete values"),
-            "design-agent prompt must require baking concrete values into nodes"
+            prompt.contains("Existing project variables/design system"),
+            "existing project tokens must win over presets"
         );
         assert!(
-            prompt.contains("Do NOT create document variables"),
-            "design-agent prompt must prohibit creating document variables"
+            prompt.contains("No matching built-in"),
+            "a style-guide concrete-value path must remain available"
         );
         assert!(
-            prompt.contains("Do NOT call `set_variables`"),
-            "design-agent prompt must prohibit set_variables"
+            prompt.contains("do not mix this palette with an unrelated preset"),
+            "the prompt must forbid competing palette sources"
         );
+    }
+
+    #[test]
+    fn design_agent_and_base_layout_teach_front_to_back_overlay_order() {
+        let prompt = design_agent_system_prompt();
+        for marker in [
+            "front-to-back by child index",
+            "`children[0]` is TOPMOST",
+            "M(overlayId, stackId, 0)",
+            "separate EMPTY frame/rectangle image slot",
+        ] {
+            assert!(
+                prompt.contains(marker),
+                "design-agent prompt must contain {marker:?}"
+            );
+        }
+
+        let layout = get_skill_by_name("layout").expect("base layout skill must be registered");
+        assert!(layout.content.contains("front-to-back by array index"));
+        assert!(layout.content.contains("`children[0]` is TOPMOST"));
+        assert!(layout
+            .content
+            .contains("separate EMPTY frame/rectangle slot"));
+    }
+
+    #[test]
+    fn design_agent_prompt_distinguishes_seed_from_explicit_viewport() {
+        let prompt = design_agent_system_prompt();
+        assert!(prompt.contains("CONSTRUCTION seed, not automatically the final height"));
+        assert!(prompt.contains("switch an ordinary content-driven page root"));
+        assert!(prompt.contains("A user-specified numeric viewport is authoritative"));
+        assert!(!prompt.contains("grow the height later if content exceeds it"));
+        assert!(!prompt.contains("numeric viewport such as 390x844 is an AUTHORED CONTRACT"));
+    }
+
+    #[test]
+    fn design_agent_prompt_forbids_cross_call_destructive_rebuilds() {
+        let prompt = design_agent_system_prompt();
+        assert!(prompt.contains("Preserve the last working visual state"));
+        assert!(prompt.contains("NEVER delete a visible working section in one tool call"));
+        assert!(prompt.contains("ONE transactional `batch_design` call"));
+        assert!(prompt.contains("keep the working section intact"));
+    }
+
+    #[test]
+    fn image_self_check_is_limited_to_rendering_integrity() {
+        let prompt = design_agent_system_prompt();
+        assert!(prompt.contains("Image self-check is presentation-only"));
+        assert!(prompt.contains("do NOT judge or replace it based on subject relevance"));
+        assert!(prompt.contains("does not restrict initial asset selection"));
+        assert!(prompt.contains("an explicit user request to replace, retarget, or restyle"));
+
+        let mobile = get_skill_by_name("mobile-ui").expect("mobile-ui skill must be registered");
+        assert!(mobile.content.contains("MOBILE IMAGE PRESENTATION"));
+        assert!(mobile
+            .content
+            .contains("During initial image-query or image-prompt authoring"));
+        assert!(mobile.content.contains("coherent in subject category"));
+        assert!(mobile.content.contains("verify only rendering integrity"));
+        assert!(mobile
+            .content
+            .contains("icon or illustration tile is valid"));
+        assert!(mobile
+            .content
+            .contains("explicit user-requested image edit remains allowed"));
+        assert!(!mobile.content.contains("MOBILE IMAGE QUALITY"));
+        assert!(!mobile.content.contains("random low-quality"));
+
+        let landing = design_agent_system_prompt_with_skills(
+            "Design a landing page for a climate travel service",
+        );
+        assert!(landing.contains("initial selection heuristic before inserting the image"));
+        assert!(landing.contains("self-check is presentation-only"));
+        assert!(landing.contains("automatic screenshot-driven self-check"));
+        assert!(landing.contains("unless the user explicitly requests an image edit"));
+        assert!(!landing.contains("If not, change it"));
+        assert!(landing
+            .trim_end()
+            .ends_with(IMAGE_SELF_CHECK_SCOPE.trim_end()));
+
+        let mut contextual = landing;
+        contextual.push_str("\n\nEXISTING CANVAS CONTEXT");
+        append_image_self_check_scope(&mut contextual);
+        assert_eq!(
+            contextual.matches(IMAGE_SELF_CHECK_SCOPE).count(),
+            1,
+            "the authoritative scope must be moved to the end, not duplicated"
+        );
+        assert!(contextual
+            .trim_end()
+            .ends_with(IMAGE_SELF_CHECK_SCOPE.trim_end()));
     }
 }

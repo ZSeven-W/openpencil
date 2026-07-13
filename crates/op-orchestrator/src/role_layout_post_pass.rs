@@ -113,16 +113,12 @@ pub(crate) fn fix_horizontal_overflow(node: &mut Value, canvas_width: f64) {
     }
 }
 
-/// Footer-sink floor (weak-model insurance): a `vertical` container that
-/// expresses intent to PUSH content apart on the main axis — either
-/// `justifyContent: space_between|space_around|space_evenly`, or a flexible
-/// spacer child (`height:"fill_container"` empty / "spacer"-named frame) — but is
-/// itself `height` hug (`fit_content` / unset) has NO free space to distribute,
-/// so the distribution / spacer collapses and a footer the model meant to pin to
-/// the bottom floats mid-column. Promote it to `height:"fill_container"` so the
-/// intent has room to act; the ancestor chain (sidebar → root) supplies the
-/// definite height, and where that chain itself hugs, `fill_container` is
-/// harmless (the container still hugs its content).
+/// Footer-sink floor (weak-model insurance): a `vertical` container with a
+/// flexible spacer, or an explicitly named viewport/sidebar/work-surface that
+/// distributes children on the main axis, needs definite free space. Promote
+/// that narrow, explicit shape from Hug to Full Height. `space_between` alone
+/// is not enough: ordinary cards and content columns use it internally while
+/// remaining content-sized.
 ///
 /// Weak models (glm-5.2) emit this even WITH the sidebar footer-sink contract
 /// loaded — they group a Top cluster + footer correctly but leave the wrapper
@@ -149,9 +145,51 @@ pub(crate) fn fix_main_axis_distribution_room(node: &mut Value) {
         .get("children")
         .and_then(Value::as_array)
         .is_some_and(|kids| kids.iter().any(is_flex_main_axis_spacer));
-    if distributes || has_flex_spacer {
+    if has_flex_spacer || (distributes && is_explicit_main_axis_remainder_consumer(node)) {
         node["height"] = json!("fill_container");
     }
+}
+
+fn is_explicit_main_axis_remainder_consumer(node: &Value) -> bool {
+    let role = node
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if matches!(
+        role.as_str(),
+        "sidebar"
+            | "navigation-rail"
+            | "main"
+            | "scroll"
+            | "scroll-area"
+            | "viewport"
+            | "workspace"
+            | "work-surface"
+    ) {
+        return true;
+    }
+
+    let name = node
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    [
+        "sidebar",
+        "navigation rail",
+        "scroll viewport",
+        "workspace",
+        "work surface",
+        "work-surface",
+        "侧边栏",
+        "导航栏",
+        "滚动视口",
+        "工作区",
+    ]
+    .iter()
+    .any(|needle| name.contains(needle))
 }
 
 /// A flexible vertical spacer: a child asking to fill the main axis
@@ -260,12 +298,25 @@ mod distribution_room_tests {
         // glm shape A: sidebar nav uses space_between but the column hugs, so
         // the distribution has no room and the footer floats mid-rail.
         let mut node = json!({
-            "type": "frame", "layout": "vertical", "height": "fit_content",
+            "type": "frame", "name": "Sidebar Navigation",
+            "layout": "vertical", "height": "fit_content",
             "justifyContent": "space_between",
             "children": [{"type": "frame"}, {"type": "frame"}],
         });
         fix_main_axis_distribution_room(&mut node);
         assert_eq!(height_of(&node), Some("fill_container"));
+    }
+
+    #[test]
+    fn ordinary_space_between_content_column_keeps_hug_height() {
+        let mut node = json!({
+            "type": "frame", "name": "Offer Card Content",
+            "layout": "vertical", "height": "fit_content",
+            "justifyContent": "space_between",
+            "children": [{"type": "text"}, {"type": "frame", "role": "button"}],
+        });
+        fix_main_axis_distribution_room(&mut node);
+        assert_eq!(height_of(&node), Some("fit_content"));
     }
 
     #[test]

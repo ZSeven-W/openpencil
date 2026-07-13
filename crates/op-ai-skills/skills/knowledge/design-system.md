@@ -22,8 +22,8 @@ TOKEN ROLES (use $color-* refs when the document carries the semantic palette; e
 
 SCREEN LAYOUT CONTRACTS (one frame tree, fill_container threads through):
 
-- Sidebar + content: root layout=horizontal; sidebar fixed 240-280 height=fill_container; main width=fill_container layout=vertical gap=24 padding=32.
-- Header + content: root layout=vertical; header height 56-64 padding=[0,24] layout=horizontal justifyContent=space_between alignItems=center, bottom border only; content width=fill_container layout=vertical gap=24 padding=32.
+- Sidebar + content: definite-height root layout=horizontal; sidebar fixed 240-280 height=fill_container; main width=fill_container height=fill_container layout=vertical gap=24 padding=32. Sections inside main remain fit_content.
+- Header + content: root layout=vertical; header height 56-64 padding=[0,24] layout=horizontal justifyContent=space_between alignItems=center, bottom border only; ordinary content width=fill_container height=fit_content layout=vertical gap=24 padding=32.
 - Two-column (2/3 + 1/3): inner layout=horizontal gap=24; main width=fill_container; side fixed 320-360. Main carries the dominant region, side carries supporting context.
 - Card grid: layout=horizontal gap=16-24, each card width=fill_container so columns share width evenly (wrap to vertical stacks on narrow widths).
 

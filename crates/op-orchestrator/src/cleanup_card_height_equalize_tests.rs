@@ -34,7 +34,7 @@ fn node_json(sink: &VecDocSink, id: &str) -> Value {
 }
 
 #[test]
-fn two_fill_width_fit_height_cards_in_row_become_fill_height() {
+fn explicitly_stretched_cards_in_row_become_fill_height() {
     let mut sink = VecDocSink::new();
     insert_tree(
         &mut sink,
@@ -53,6 +53,7 @@ fn two_fill_width_fit_height_cards_in_row_become_fill_height() {
                     "width": "fill_container",
                     "height": "fit_content",
                     "layout": "horizontal",
+                    "alignItems": "stretch",
                     "children": [
                         {
                             "type": "frame",
@@ -92,6 +93,34 @@ fn two_fill_width_fit_height_cards_in_row_become_fill_height() {
         node_json(&sink, "card-b")["height"],
         json!("fill_container")
     );
+}
+
+#[test]
+fn ordinary_card_row_keeps_hug_height() {
+    let mut sink = VecDocSink::new();
+    insert_tree(
+        &mut sink,
+        r##"{
+            "type":"frame", "id":"root", "name":"Page", "width":390,
+            "height":"fit_content", "layout":"vertical", "children":[{
+                "type":"frame", "id":"row", "name":"Deals", "layout":"horizontal",
+                "width":"fill_container", "height":"fit_content", "children":[
+                    {"type":"frame", "id":"a", "name":"Deal Card A", "role":"card",
+                     "width":"fill_container", "height":"fit_content", "layout":"vertical",
+                     "children":[{"type":"text", "id":"at", "content":"Short"}]},
+                    {"type":"frame", "id":"b", "name":"Deal Card B", "role":"card",
+                     "width":"fill_container", "height":"fit_content", "layout":"vertical",
+                     "children":[{"type":"text", "id":"bt", "content":"Longer title"}]}
+                ]
+            }]
+        }"##,
+    );
+
+    equalize_horizontal_card_heights(&mut sink, "root");
+
+    assert_eq!(node_json(&sink, "a")["height"], json!("fit_content"));
+    assert_eq!(node_json(&sink, "b")["height"], json!("fit_content"));
+    assert!(sink.applied.is_empty());
 }
 
 #[test]
@@ -285,4 +314,39 @@ fn empty_frame_siblings_untouched() {
     equalize_horizontal_card_heights(&mut sink, "root");
 
     assert_eq!(node_json(&sink, "root"), before);
+}
+
+#[test]
+fn card_internal_copy_and_rating_row_stays_content_height() {
+    let mut sink = VecDocSink::new();
+    insert_tree(
+        &mut sink,
+        r##"{
+            "type":"frame", "id":"root", "name":"Page", "width":390,
+            "height":"fit_content", "layout":"vertical", "children":[{
+                "type":"frame", "id":"card", "name":"Deal Card",
+                "width":"fill_container", "height":"fit_content", "layout":"vertical",
+                "children":[{
+                    "type":"frame", "id":"meta-row", "name":"",
+                    "width":"fill_container", "height":"fit_content", "layout":"horizontal",
+                    "children":[
+                        {"type":"frame","id":"copy","name":"","width":"fill_container","height":"fit_content","layout":"vertical","children":[
+                            {"type":"text","id":"title","content":"Maldives Overwater Villa"},
+                            {"type":"text","id":"location","content":"South Male Atoll"}
+                        ]},
+                        {"type":"frame","id":"rating","name":"","width":"fill_container","height":"fit_content","layout":"horizontal","children":[
+                            {"type":"icon_font","id":"star","iconFontName":"star","width":12,"height":12},
+                            {"type":"text","id":"score","content":"4.9"}
+                        ]}
+                    ]
+                }]
+            }]
+        }"##,
+    );
+    let before = node_json(&sink, "meta-row");
+
+    equalize_horizontal_card_heights(&mut sink, "root");
+
+    assert_eq!(node_json(&sink, "meta-row"), before);
+    assert!(sink.applied.is_empty());
 }

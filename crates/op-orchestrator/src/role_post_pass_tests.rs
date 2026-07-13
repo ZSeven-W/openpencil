@@ -974,6 +974,45 @@ fn mixed_category_header_and_chips_is_not_truncated_as_chip_row() {
 }
 
 #[test]
+fn image_cards_with_favorite_icons_are_not_category_chips() {
+    let card = |name: &str| {
+        json!({
+            "type":"frame", "name":name, "layout":"vertical",
+            "width":"fill_container", "height":"fill_container", "gap":12,
+            "cornerRadius":16, "children":[
+                {"type":"frame", "name":"Photo Wrap", "layout":"none",
+                 "width":"fill_container", "height":140, "clipContent":true,
+                 "children":[
+                    {"type":"image", "name":"Destination Photo", "src":"",
+                     "width":"fill_container", "height":140},
+                    {"type":"frame", "name":"Favorite", "children":[
+                        {"type":"icon_font", "iconFontName":"heart", "width":18, "height":18}
+                    ]}
+                 ]},
+                {"type":"text", "content":name, "width":"fit_content", "height":"fit_content"}
+            ]
+        })
+    };
+    let mut row = json!({
+        "type":"frame", "name":"Cards Row", "layout":"horizontal",
+        "width":"fit_content", "height":"fit_content", "gap":12,
+        "justifyContent":"space_between",
+        "children":[card("Santorini Card"), card("Kyoto Card"), card("Lisbon Card")]
+    });
+
+    post_pass_value(&mut row, Some(Value::Null), 375.0);
+
+    assert_eq!(row["width"], json!("fit_content"));
+    assert_eq!(row["children"][0]["cornerRadius"], json!(16));
+    assert_eq!(row["children"][0]["children"][0]["height"], json!(140));
+    assert_eq!(
+        row["children"][0]["children"][0]["layout"],
+        json!("none"),
+        "a photo with an overlaid favorite icon remains media, not a 56px category tile"
+    );
+}
+
+#[test]
 fn cart_count_badge_becomes_tiny_circle_on_neutral_button() {
     let mut button = json!({
         "type":"frame","role":"icon-button","name":"Cart Button",
@@ -1150,7 +1189,7 @@ fn mobile_featured_food_card_clamps_oversized_media_band() {
 #[test]
 fn card_row_equalized_to_fill_container() {
     // Two fixed-width cards of unequal width (240 vs 120 → ratio 0.5 < 0.6) and
-    // similar height → both promoted to fill_container.
+    // similar height → widths are promoted, while authored heights stay fixed.
     let mut row = json!({
         "type":"frame","layout":"horizontal","children":[
             {"type":"frame","width":240,"height":200,"children":[]},
@@ -1160,7 +1199,8 @@ fn card_row_equalized_to_fill_container() {
     equalize_card_row(&mut row);
     assert_eq!(row["children"][0]["width"], json!("fill_container"));
     assert_eq!(row["children"][1]["width"], json!("fill_container"));
-    assert_eq!(row["children"][0]["height"], json!("fill_container"));
+    assert_eq!(row["children"][0]["height"], json!(200));
+    assert_eq!(row["children"][1]["height"], json!(210));
 }
 
 #[test]

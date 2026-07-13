@@ -1,6 +1,6 @@
 use crate::types::DocSink;
 use jian_ops_schema::node::PenNode;
-use op_editor_core::{first_solid_fill_hex, EditorCommand, LayoutPropValue, NodeId, PenNodeExt};
+use op_editor_core::{first_solid_fill_hex, EditorCommand, NodeId, PenNodeExt};
 
 /// Bottom navigation is structural chrome with exactly one legal position:
 /// the mobile root's LAST child. Models "catch up" on forgotten sections by
@@ -26,7 +26,7 @@ pub(crate) fn anchor_bottom_nav_last_for_all_roots(sink: &mut dyn DocSink) {
     }
 }
 
-fn anchor_bottom_nav_last(sink: &mut dyn DocSink, root_id: &str) {
+pub(super) fn anchor_bottom_nav_last(sink: &mut dyn DocSink, root_id: &str) {
     let nav_id: Option<NodeId> = {
         let Some(root) = super::find_root(sink.state(), root_id) else {
             return;
@@ -69,78 +69,6 @@ pub(crate) fn repair_mobile_structural_chrome_for_all_roots(sink: &mut dyn DocSi
     }
 }
 
-/// A bottom-tab-bar SHELL the model never filled (skeleton-first plans it,
-/// the turn dies before the chrome batch — measured twice: an empty 68px
-/// TabBar, then an empty 72px "Tab Bar", test0711-22). An empty grey strip
-/// is worse than either outcome, and deleting the nav breaks the mobile
-/// contract — so the shell is filled with a standard generic 3-tab set
-/// (Home / Search / Profile). Labels are left fill-less on purpose: the
-/// text-fill backstop resolves them against the real background.
-pub(crate) fn fill_empty_bottom_nav_shells_for_all_roots(sink: &mut dyn DocSink) {
-    let targets: Vec<(NodeId, String)> = {
-        let mut out = Vec::new();
-        for root in sink.state().active_children() {
-            if !root.width_px().is_some_and(|w| w <= 480.0) {
-                continue;
-            }
-            let fg = if first_solid_fill_hex(root)
-                .and_then(super::relative_luminance)
-                .is_some_and(|lum| lum >= 0.5)
-            {
-                "#374151"
-            } else {
-                "#E5E7EB"
-            };
-            for child in root.children().into_iter().flatten() {
-                let empty = child.children().is_none_or(|children| children.is_empty());
-                if empty && is_bottom_nav_surface(child, false) {
-                    out.push((NodeId::new(child.id_str().to_string()), fg.to_string()));
-                }
-            }
-        }
-        out
-    };
-    for (nav_id, fg) in targets {
-        let tabs: Vec<PenNode> = [("home", "Home"), ("search", "Search"), ("user", "Profile")]
-            .iter()
-            .enumerate()
-            .filter_map(|(index, (icon, label))| {
-                serde_json::from_value(serde_json::json!({
-                    "type": "frame",
-                    "id": format!("{}-gen-tab-{index}", nav_id.as_str()),
-                    "name": format!("{label} Tab"),
-                    "width": "fill_container",
-                    "height": "fill_container",
-                    "layout": "vertical",
-                    "gap": 4,
-                    "padding": [4, 0],
-                    "justifyContent": "center",
-                    "alignItems": "center",
-                    "children": [
-                        { "type": "icon_font",
-                          "id": format!("{}-gen-tab-{index}-icon", nav_id.as_str()),
-                          "iconFontName": icon, "width": 22, "height": 22,
-                          "fill": [{"type": "solid", "color": fg}] },
-                        { "type": "text",
-                          "id": format!("{}-gen-tab-{index}-label", nav_id.as_str()),
-                          "content": label, "fontSize": 10, "fontWeight": "600",
-                          "width": "fit_content", "height": "fit_content",
-                          "fill": [{"type": "solid", "color": fg}] }
-                    ]
-                }))
-                .ok()
-            })
-            .collect();
-        if tabs.len() == 3 {
-            sink.apply(EditorCommand::InsertAuthoredSubtree {
-                nodes: tabs,
-                parent_id: nav_id,
-                page_id: None,
-            });
-        }
-    }
-}
-
 pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &str) {
     let repairs = {
         let Some(root) = super::find_root(sink.state(), root_id) else {
@@ -153,7 +81,6 @@ pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &
         let Some(children) = root.children() else {
             return;
         };
-        let should_anchor_bottom_nav = has_short_mobile_content(root);
         let last_index = children.len().saturating_sub(1);
         let mut repairs = MobileChromeRepairs::default();
         for (index, child) in children.iter().enumerate() {
@@ -167,15 +94,6 @@ pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &
                 repairs
                     .structural_shells
                     .push(NodeId::new(child.id_str().to_string()));
-            }
-            if should_anchor_bottom_nav
-                && bottom_nav_surface_target(child, allow_structural).is_some()
-            {
-                if let Some(target) = bottom_nav_anchor_target(children, index) {
-                    repairs
-                        .bottom_nav_anchor_sections
-                        .push(NodeId::new(target.id_str().to_string()));
-                }
             }
             collect_bottom_nav_chrome_repairs(child, root_width, allow_structural, &mut repairs);
         }
@@ -214,13 +132,6 @@ pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &
             page_id: None,
         });
     }
-    for node_id in repairs.bottom_nav_anchor_sections {
-        sink.apply(EditorCommand::SetNodeLayoutProp {
-            node_id,
-            property: "height".to_string(),
-            value: LayoutPropValue::Keyword("fill_container".to_string()),
-        });
-    }
 }
 
 #[derive(Default)]
@@ -228,25 +139,6 @@ struct MobileChromeRepairs {
     structural_shells: Vec<NodeId>,
     bottom_nav_surfaces: Vec<(NodeId, f64)>,
     bottom_nav_items: Vec<NodeId>,
-    bottom_nav_anchor_sections: Vec<NodeId>,
-}
-
-fn has_short_mobile_content(root: &PenNode) -> bool {
-    let Some(root_height) = root.height_px() else {
-        return false;
-    };
-    let Some(content_height) = crate::cleanup_layout::root_content_height(root) else {
-        return false;
-    };
-    f64::from(content_height) + 16.0 < root_height
-}
-
-fn bottom_nav_anchor_target(children: &[PenNode], nav_index: usize) -> Option<&PenNode> {
-    children[..nav_index].iter().rev().find(|node| {
-        node.is_container()
-            && !super::is_status_bar(node)
-            && bottom_nav_surface_target(node, false).is_none()
-    })
 }
 
 fn should_strip_structural_shell(node: &PenNode) -> bool {
@@ -492,6 +384,86 @@ fn is_structural_bottom_nav_row(node: &PenNode) -> bool {
         return false;
     }
     children.iter().all(is_labeled_nav_tab)
+}
+
+/// Exact Pencil demo fallback for the literal trailing `Tab Bar Section`.
+///
+/// Pencil represents the outer section and the inner pill as intrinsic-height
+/// containers, and leaves the pill's horizontal `layout` omitted while
+/// providing `space_around`. Keep this predicate separate from the generic
+/// structural matcher: cleanup must not rewrite every implicit flex row into a
+/// fixed 72 px nav surface.
+pub(super) fn is_pencil_trailing_tab_section(node: &PenNode) -> bool {
+    use jian_ops_schema::node::container::{
+        AlignItems, ContainerProps, JustifyContent, LayoutMode,
+    };
+    use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
+
+    fn props(node: &PenNode) -> Option<&ContainerProps> {
+        match node {
+            PenNode::Frame(node) => Some(&node.container),
+            PenNode::Group(node) => Some(&node.container),
+            _ => None,
+        }
+    }
+    fn is_fill_width(props: &ContainerProps) -> bool {
+        matches!(
+            props.width.as_ref(),
+            Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))
+        )
+    }
+    fn is_hug_height(props: &ContainerProps) -> bool {
+        matches!(
+            props.height.as_ref(),
+            None | Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
+        )
+    }
+    fn named(node: &PenNode, expected: &str) -> bool {
+        node.base()
+            .name
+            .as_deref()
+            .is_some_and(|name| name.trim().eq_ignore_ascii_case(expected))
+    }
+
+    let Some(outer) = props(node) else {
+        return false;
+    };
+    if !named(node, "Tab Bar Section")
+        || outer.layout.as_ref() != Some(&LayoutMode::Vertical)
+        || !is_fill_width(outer)
+        || !is_hug_height(outer)
+    {
+        return false;
+    }
+    let Some(children) = node.children() else {
+        return false;
+    };
+    let [pill] = children.as_slice() else {
+        return false;
+    };
+    let Some(pill_props) = props(pill) else {
+        return false;
+    };
+    if !named(pill, "Tab Pill")
+        || pill_props.layout.is_some()
+        || !is_fill_width(pill_props)
+        || !is_hug_height(pill_props)
+        || !matches!(
+            pill_props.justify_content,
+            Some(JustifyContent::SpaceAround | JustifyContent::SpaceBetween)
+        )
+        || pill_props.align_items.as_ref() != Some(&AlignItems::Center)
+    {
+        return false;
+    }
+    let Some(tabs) = pill.children() else {
+        return false;
+    };
+    (3..=5).contains(&tabs.len())
+        && tabs.iter().all(|tab| {
+            props(tab).is_some_and(|props| props.layout.as_ref() == Some(&LayoutMode::Vertical))
+                && is_labeled_nav_tab(tab)
+        })
 }
 
 /// A single bottom-nav tab: a nav-named/roled container that carries BOTH an
