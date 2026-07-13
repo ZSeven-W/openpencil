@@ -189,6 +189,7 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_oversized_image_fixes(&v, &mut cmds);
             collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
             collect_image_slot_fixes(&v, &rects, &mut cmds);
+            collect_overwide_control_row_fixes(&v, &rects, &mut cmds);
             collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
             collect_starved_rail_card_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
@@ -1368,18 +1369,10 @@ fn collect_image_slot_fixes(
     // is the model's intent for the slot; take it from whichever carrier is
     // surviving repair (1).
     if let Some(band) = fixed_height(v) {
-        let photo_h = if image_nodes.is_empty() {
-            filled_frames
-                .iter()
-                .filter_map(|f| fixed_height(f))
-                .fold(0.0, f64::max)
-        } else {
-            image_nodes
-                .iter()
-                .chain(filled_frames.iter())
-                .filter_map(|f| fixed_height(f))
-                .fold(0.0, f64::max)
-        };
+        // The photo may sit a level or two down (a `DestImg` box holding the
+        // image, measured test0711-1-glm) — take the tallest DEFINITE height
+        // among the image carriers anywhere in the band.
+        let photo_h = tallest_photo_height(v, 3);
         // The photo's declared height is only a credible BAND height if the
         // band would still read as a card photo. A plate taller than its own
         // band is wide is an oversized image (a 400x300 plate in a phone
@@ -1410,6 +1403,93 @@ fn collect_image_slot_fixes(
     for c in kids {
         collect_image_slot_fixes(c, rects, cmds);
     }
+}
+
+/// Tallest definite height among the image carriers (image nodes and
+/// image-filled plates) inside `v`, searched a few levels down.
+fn tallest_photo_height(v: &Value, depth: usize) -> f64 {
+    if depth == 0 {
+        return 0.0;
+    }
+    children(v)
+        .iter()
+        .map(|c| {
+            let own = if c.get("type").and_then(Value::as_str) == Some("image")
+                || is_image_filled_frame(c)
+                || carries_image(c)
+            {
+                fixed_height(c).unwrap_or(0.0)
+            } else {
+                0.0
+            };
+            own.max(tallest_photo_height(c, depth - 1))
+        })
+        .fold(0.0, f64::max)
+}
+
+/// A box whose own content is (only) an image — the `DestImg` wrapper shape.
+fn carries_image(v: &Value) -> bool {
+    let kids = children(v);
+    !kids.is_empty()
+        && kids
+            .iter()
+            .all(|c| c.get("type").and_then(Value::as_str) == Some("image"))
+}
+
+/// A horizontal cluster of FIXED-size controls (a header's bell + avatar)
+/// given `fill_container` width stretches across the header and — with a fill
+/// and a pill radius — paints as one giant capsule around the controls
+/// (measured test0711-1-glm: a frame named "Avatar" holding a 44px bell, a
+/// 44px stub and a 44px photo). The row's own content proves its width: it
+/// hugs. Only a PAINTED row of all-numeric children qualifies; a nav bar
+/// (fill_container tabs) and an unpainted spacer row are untouched.
+const CONTROL_ROW_SLACK: f64 = 1.4;
+const CONTROL_ROW_MIN_SLACK_PX: f64 = 24.0;
+
+fn collect_overwide_control_row_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    if layout_str(v) == Some("horizontal")
+        && v.get("width").and_then(Value::as_str) == Some("fill_container")
+        && has_visible_fill(v)
+    {
+        let kids: Vec<&Value> = children(v)
+            .iter()
+            .filter(|c| !has_authored_position(c))
+            .collect();
+        let all_fixed = kids.len() >= 2 && kids.iter().all(|c| fixed_width(c).is_some());
+        if all_fixed {
+            let content: f64 = kids.iter().filter_map(|c| fixed_width(c)).sum::<f64>()
+                + num(v, "gap") * (kids.len() - 1) as f64
+                + horizontal_padding(v);
+            if let Some(r) = v
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(|id| rects.get(id))
+            {
+                if r.w > content * CONTROL_ROW_SLACK && r.w > content + CONTROL_ROW_MIN_SLACK_PX {
+                    if let Some(id) = v.get("id").and_then(Value::as_str) {
+                        cmds.push(EditorCommand::SetNodeLayoutProp {
+                            node_id: NodeId::new(id.to_string()),
+                            property: "width".to_string(),
+                            value: LayoutPropValue::Keyword("fit_content".to_string()),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_overwide_control_row_fixes(c, rects, cmds);
+    }
+}
+
+fn has_visible_fill(v: &Value) -> bool {
+    v.get("fill")
+        .and_then(Value::as_array)
+        .is_some_and(|fills| !fills.is_empty())
 }
 
 /// A frame declaring a NUMERIC height but resolving MUCH taller — an
