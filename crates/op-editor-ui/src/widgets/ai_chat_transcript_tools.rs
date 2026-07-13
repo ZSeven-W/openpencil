@@ -22,7 +22,10 @@ const CARD_LABEL_X: f32 = 12.0;
 /// X-offset from the card right edge to the chevron top-left.
 const CARD_CHEVRON_RIGHT_OFFSET: f32 = 24.0;
 /// Radius of the ✓-ring that surrounds the check icon on completed cards.
-const CHECK_RING_R: f32 = 9.0;
+const CHECK_RING_R: f32 = 7.0;
+/// Status glyph box — deliberately smaller than the chevron: the check is a
+/// quiet confirmation beside the verb, not a second focal point.
+const STATUS_GLYPH: f32 = 11.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolLevel {
@@ -536,7 +539,7 @@ fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
         .sum();
     let icon_top_left = Point2D::new(
         card.header.origin.x + CARD_LABEL_X + label_units as f32 * 6.0 + 8.0,
-        card.header.origin.y + (CARD_HEADER_H - 14.0) / 2.0,
+        card.header.origin.y + (CARD_HEADER_H - STATUS_GLYPH) / 2.0,
     );
 
     let is_error = card.status == "error" || card.result_failed;
@@ -547,24 +550,24 @@ fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
             cx.backend,
             Icon::Loader,
             icon_top_left,
-            14.0,
+            STATUS_GLYPH,
             theme.muted_foreground,
-            1.5,
+            1.3,
         );
     } else if is_error {
         draw_icon(
             cx.backend,
             Icon::Close,
             icon_top_left,
-            14.0,
+            STATUS_GLYPH,
             theme.destructive,
-            1.5,
+            1.3,
         );
     } else {
         // Done: thin success-green ring + check glyph inside (#27 reference).
         let success_color = theme.status_success;
-        let ring_cx = icon_top_left.x + 7.0;
-        let ring_cy = icon_top_left.y + 7.0;
+        let ring_cx = icon_top_left.x + STATUS_GLYPH / 2.0;
+        let ring_cy = icon_top_left.y + STATUS_GLYPH / 2.0;
         cx.backend.stroke_oval(
             Rect::xywh(
                 ring_cx - CHECK_RING_R,
@@ -579,9 +582,9 @@ fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
             cx.backend,
             Icon::Check,
             icon_top_left,
-            14.0,
+            STATUS_GLYPH,
             success_color,
-            1.5,
+            1.3,
         );
     }
 }
