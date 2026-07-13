@@ -292,6 +292,15 @@ fn resolve_themed_value<'a>(
     values.first().map(|v| &v.value)
 }
 
+/// Whether the built-in semantic palette can answer `name` on its own — a
+/// reference the document's own table does not define is not necessarily
+/// broken. Callers that repair broken references ask this first.
+pub fn has_palette_fallback(name: &str) -> bool {
+    DEFAULT_PALETTE_FALLBACK
+        .iter()
+        .any(|(token, _)| *token == name)
+}
+
 /// Resolve a single `$name` reference to its concrete scalar
 /// (TS `resolveVariableRef`). Unknown tokens consult the built-in
 /// semantic palette; a resolved value that is itself a `$ref` is a

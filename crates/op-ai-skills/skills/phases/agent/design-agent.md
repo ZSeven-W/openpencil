@@ -43,7 +43,25 @@ Call `get_variables` to see the existing design variables and themes. Reuse them
 - `nitro` — high-energy, saturated accents
 - `shadcn` — neutral baseline, maximum flexibility
 
-Then reference tokens instead of raw hex everywhere they fit: `fill: "$--card"`, text `fill: "$--muted-foreground"`, buttons `"$--primary"` + `"$--primary-foreground"`, borders `"$--border"`, sidebars the `$--sidebar-*` family, radii `$--radius-m`. A design built on tokens re-themes to Dark for free.
+**Know what each token MEANS — the names are not what they sound like:**
+
+| Token | What it is | Use it for |
+|---|---|---|
+| `$--primary` | **the brand colour** (the orange/blue/violet the design is built around) | primary buttons, the active tab, a price, any accent element |
+| `$--primary-foreground` | text/icons ON the brand colour | the label inside a primary button |
+| `$--accent` | a **quiet neutral surface** (near-white in Light) — NOT the brand colour | hover states, a subtle raised row |
+| `$--muted` | a quiet neutral surface | search-input backgrounds, chip backgrounds |
+| `$--muted-foreground` | secondary text | placeholders, captions, metadata |
+| `$--background` / `$--card` | the page / a card surface | page root, cards |
+| `$--foreground` / `$--card-foreground` | primary text on those surfaces | headings, body |
+| `$--border` | hairline separators | card borders, dividers |
+| `$--ring` | the focus ring | focused inputs only |
+
+The single most common mistake: reaching for `$--accent` to make something the brand colour. It is a NEUTRAL — the design's accent colour is `$--primary`. A search bar's fill is `$--muted`, its icon `$--muted-foreground`, its filter button `$--primary` with a `$--primary-foreground` glyph (or a soft tint of `$--primary` with a `$--primary` glyph).
+
+Reference tokens instead of raw hex everywhere they fit: `fill: "$--card"`, borders `"$--border"`, sidebars the `$--sidebar-*` family, radii `$--radius-m`. A design built on tokens re-themes to Dark for free.
+
+**Only reference tokens that EXIST.** `get_variables` lists them. There is no `$--white`, `$--black`, `$--gray-100` — an unknown reference renders as an invisible glyph on its own background. Need white text on the brand colour? That is `$--primary-foreground`.
 
 When you create your OWN variables, use the same shadcn vocabulary (`--background`, `--card`, `--primary`, `--muted-foreground`, …) — never invent parallel names like `$color-accent` for a concept the vocabulary already covers.
 
