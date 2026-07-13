@@ -189,6 +189,7 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_oversized_image_fixes(&v, &mut cmds);
             collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
             collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
+            collect_starved_rail_card_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
             collect_card_row_height_fixes(&v, &rects, &mut cmds, false);
             collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
@@ -1109,6 +1110,88 @@ fn collect_grow_to_fit_fixes(
     }
     for c in children(v) {
         collect_grow_to_fit_fixes(c, rects, cmds);
+    }
+}
+
+/// A horizontal rail whose fill-width cards resolved SKINNIER than their own
+/// fixed-width content (a 5-card destination rail where every fill card got a
+/// ~58px share while carrying a 160px image + 188px label row — the images
+/// painted as clipped slivers and every city name truncated, measured
+/// test0711-1-glm). The authored fixed content is proof of the intended card
+/// width, so the repair follows it: cards hug their content, the rail becomes
+/// an overflowing scroller, and `space_between` (meaningless once overfull)
+/// falls back to start+gap. Marking the rail `clipContent` is load-bearing —
+/// it is what keeps the next round's overfull-row flexifier from flipping the
+/// cards straight back to fill_container.
+const RAIL_STARVE_EPS: f64 = 12.0;
+const RAIL_MIN_CARDS: usize = 3;
+
+/// The widest fixed-width DIRECT child plus the card's own side padding — the
+/// width this card provably needs to show its authored content.
+fn fixed_content_demand(card: &Value) -> f64 {
+    let widest = children(card)
+        .iter()
+        .filter_map(fixed_width)
+        .fold(0.0_f64, f64::max);
+    if widest == 0.0 {
+        0.0
+    } else {
+        widest + horizontal_padding(card)
+    }
+}
+
+fn collect_starved_rail_card_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if layout_str(v) == Some("horizontal") && !clips {
+        let cards: Vec<&Value> = children(v)
+            .iter()
+            .filter(|c| {
+                !has_authored_position(c)
+                    && c.get("width").and_then(Value::as_str) == Some("fill_container")
+            })
+            .collect();
+        if cards.len() >= RAIL_MIN_CARDS {
+            let all_starved = cards.iter().all(|c| {
+                let demand = fixed_content_demand(c);
+                demand > 0.0
+                    && c.get("id")
+                        .and_then(Value::as_str)
+                        .and_then(|id| rects.get(id))
+                        .is_some_and(|r| demand > r.w + RAIL_STARVE_EPS)
+            });
+            if all_starved {
+                for c in &cards {
+                    if let Some(id) = c.get("id").and_then(Value::as_str) {
+                        cmds.push(EditorCommand::SetNodeLayoutProp {
+                            node_id: NodeId::new(id.to_string()),
+                            property: "width".to_string(),
+                            value: LayoutPropValue::Keyword("fit_content".to_string()),
+                        });
+                    }
+                }
+                if let Some(id) = v.get("id").and_then(Value::as_str) {
+                    cmds.push(EditorCommand::SetNodeLayoutProp {
+                        node_id: NodeId::new(id.to_string()),
+                        property: "clipContent".to_string(),
+                        value: LayoutPropValue::Bool(true),
+                    });
+                    if v.get("justifyContent").and_then(Value::as_str) == Some("space_between") {
+                        cmds.push(EditorCommand::SetNodeLayoutProp {
+                            node_id: NodeId::new(id.to_string()),
+                            property: "justifyContent".to_string(),
+                            value: LayoutPropValue::Keyword("start".to_string()),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    for c in children(v) {
+        collect_starved_rail_card_fixes(c, rects, cmds);
     }
 }
 
