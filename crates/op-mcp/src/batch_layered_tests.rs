@@ -354,6 +354,43 @@ fn design_refine_rejects_script_combined_with_structured_payload() {
 }
 
 #[test]
+fn legacy_phase_tools_reject_direct_images_with_batch_design_guidance() {
+    fn assert_rejected(outcome: ToolOutcome, phase_tool: &str) {
+        match outcome {
+            ToolOutcome::Err(code, message) => {
+                assert_eq!(code, ToolErrorCode::InvalidArgument);
+                assert!(message.contains(phase_tool), "{message}");
+                assert!(message.contains("G()"), "{message}");
+                assert!(message.contains("placement"), "{message}");
+                assert!(message.contains("target geometry"), "{message}");
+                assert!(message.contains("batch_design"), "{message}");
+            }
+            other => panic!("expected legacy phase G() rejection, got {other:?}"),
+        }
+    }
+
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r#"G("slot-1", "search", "Prague coffee")"#.into(),
+    );
+    assert_rejected(design_skeleton_snapshot().call(&args), "design_skeleton");
+
+    args.insert(
+        "operations".into(),
+        r#"photo=G("row-1", "generate", "Coffee shop", "append")"#.into(),
+    );
+    assert_rejected(design_content_snapshot().call(&args), "design_content");
+
+    args.insert(
+        "operations".into(),
+        r#"G("slot-2", "search", "Coffee cup", "slot")"#.into(),
+    );
+    let state = EditorState::new();
+    assert_rejected(design_refine_snapshot(&state).call(&args), "design_refine");
+}
+
+#[test]
 fn design_refine_missing_root_errors_like_ts() {
     // TS design-refine throws "Root node not found: <id>" when the root is
     // absent; Rust must surface the same rather than apply a no-op.

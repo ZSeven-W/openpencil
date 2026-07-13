@@ -221,38 +221,26 @@ fn unrepairable_garbage_still_errors() {
 }
 
 #[test]
-fn pencil_ops_and_console_are_noop_stubs() {
-    // The PRELUDE advertises C/U/D/M/R/G plus console.* as no-op stubs so a
-    // script generated against the batch_design DSL vocabulary (and any
-    // stray console logging) never aborts the sandbox — only I(...) may
-    // cause an effect. Calling every stub plus a couple of real inserts must
-    // still return Ok with exactly the I() lines recorded.
+fn unsupported_mutations_are_rejected_instead_of_silently_dropped() {
+    let error = run_script_to_program(
+        r#"const root = I(null, {type: "frame", name: "Root"});
+U(root, {x: 10});"#,
+    )
+    .expect_err("U() must not look successful while doing nothing");
+    assert!(error.contains("OP_SCRIPT_MODE_UNSUPPORTED"), "{error}");
+    assert!(error.contains("operations mode"), "{error}");
+}
+
+#[test]
+fn console_remains_a_noop_while_insert_records() {
     let program = run_script_to_program(
         r#"console.log("building card");
 console.warn("heads up");
-console.error("nope");
-console.info("fyi");
-console.debug("trace");
-G("root", "search", "prompt");
-C(null, {type: "frame", name: "Copy"});
-U("n1", {x: 10});
-D("n2");
-M("n3", null);
-R("n4", "n5");
-I(null, {type: "frame", name: "Root"});
-I(null, {type: "text", content: "Hi"});"#,
+I(null, {type: "frame", name: "Root"});"#,
     )
-    .expect("pencil-op + console stubs must not abort the script");
-    let lines: Vec<&str> = program.lines().collect();
-    assert_eq!(
-        lines.len(),
-        2,
-        "only the two I() calls record a line; stub calls are no-ops"
-    );
-    assert!(lines[0].starts_with("b0=I(null, "));
-    assert!(lines[0].contains(r#""name":"Root""#));
-    assert!(lines[1].starts_with("b1=I(null, "));
-    assert!(lines[1].contains(r#""content":"Hi""#));
+    .expect("console does not affect the design program");
+    assert_eq!(program.lines().count(), 1);
+    assert!(program.contains(r#""name":"Root""#));
 }
 
 #[test]

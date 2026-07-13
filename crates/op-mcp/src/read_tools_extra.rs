@@ -8,7 +8,6 @@
 use std::collections::BTreeMap;
 
 use jian_ops_schema::node::PenNode;
-use op_editor_core::geometry::aggregate_bounds;
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
 
@@ -48,34 +47,16 @@ impl McpTool for GetCanvasBounds {
 }
 
 pub fn get_canvas_bounds_snapshot(state: &EditorState) -> GetCanvasBounds {
-    let children = active_children(state);
-    if children.is_empty() {
-        return GetCanvasBounds { bounds: None };
-    }
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-    for n in children {
-        let b = aggregate_bounds(n);
-        if b.is_empty() {
-            continue;
-        }
-        min_x = min_x.min(b.x);
-        min_y = min_y.min(b.y);
-        max_x = max_x.max(b.x + b.w);
-        max_y = max_y.max(b.y + b.h);
-    }
-    if !min_x.is_finite() {
-        return GetCanvasBounds { bounds: None };
-    }
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
     GetCanvasBounds {
-        bounds: Some((
-            min_x as i32,
-            min_y as i32,
-            (max_x - min_x) as i32,
-            (max_y - min_y) as i32,
-        )),
+        bounds: scene.content_bounds().map(|bounds| {
+            (
+                bounds.origin.x as i32,
+                bounds.origin.y as i32,
+                bounds.size.x as i32,
+                bounds.size.y as i32,
+            )
+        }),
     }
 }
 
@@ -344,5 +325,44 @@ pub fn get_selection_set_snapshot(state: &EditorState) -> GetSelectionSet {
             .iter()
             .map(|id| id.as_str().to_string())
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canvas_bounds_use_resolved_hug_root_and_active_page() {
+        let src = r#"{
+          "version":"1.0.0","pages":[
+            {"id":"hug-page","name":"Hug","children":[
+              {"type":"frame","id":"hug","x":10,"y":20,"width":390,
+               "height":"fit_content","layout":"vertical","gap":5,"padding":[10,20],
+               "children":[
+                 {"type":"rectangle","id":"a","width":"fill_container","height":40},
+                 {"type":"rectangle","id":"b","width":"fill_container","height":50}
+               ]},
+              {"type":"frame","id":"fixed","x":500,"y":30,"width":200,"height":20}
+            ]},
+            {"id":"other-page","name":"Other","children":[
+              {"type":"frame","id":"other","x":900,"y":100,"width":20,"height":30}
+            ]}
+          ],"children":[]
+        }"#;
+        let parsed = jian_ops_schema::load_str(src).expect("parse fixture");
+        let mut state = EditorState::from_document(parsed.value);
+
+        assert_eq!(
+            get_canvas_bounds_snapshot(&state).bounds,
+            Some((10, 20, 690, 115)),
+            "multi-root union must include the layout-resolved Hug height"
+        );
+        state.ui.active_page_index = 1;
+        assert_eq!(
+            get_canvas_bounds_snapshot(&state).bounds,
+            Some((900, 100, 20, 30)),
+            "fixed-size bounds and active-page selection stay unchanged"
+        );
     }
 }

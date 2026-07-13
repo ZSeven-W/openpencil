@@ -224,6 +224,115 @@ b=I("n10", {"type":"rectangle","name":"B","width":10,"height":10})"##;
 }
 
 #[test]
+fn failed_rail_reconstruction_keeps_all_four_populated_cards_byte_identical() {
+    let cards: Vec<jian_ops_schema::node::PenNode> = (1..=4)
+        .map(|index| {
+            serde_json::from_value(serde_json::json!({
+                "type": "frame",
+                "id": format!("card-{index}"),
+                "name": format!("Event Card {index}"),
+                "layout": "vertical",
+                "width": 168,
+                "height": 220,
+                "children": [
+                    {
+                        "type": "image",
+                        "id": format!("card-{index}-image"),
+                        "name": format!("Event {index} Photo"),
+                        "src": format!("https://example.invalid/event-{index}.jpg"),
+                        "objectFit": "crop",
+                        "width": "fill_container",
+                        "height": 112
+                    },
+                    {
+                        "type": "frame",
+                        "id": format!("card-{index}-details"),
+                        "name": format!("Event {index} Details"),
+                        "layout": "vertical",
+                        "width": "fill_container",
+                        "height": "fit_content",
+                        "children": [
+                            {
+                                "type": "text",
+                                "id": format!("card-{index}-title"),
+                                "name": "Title",
+                                "content": format!("Popular Event {index}"),
+                                "width": "fill_container",
+                                "height": 24
+                            },
+                            {
+                                "type": "text",
+                                "id": format!("card-{index}-venue"),
+                                "name": "Venue",
+                                "content": format!("Venue {index}"),
+                                "width": "fill_container",
+                                "height": 18
+                            }
+                        ]
+                    }
+                ]
+            }))
+            .expect("populated event card")
+        })
+        .collect();
+    let rail: jian_ops_schema::node::PenNode = serde_json::from_value(serde_json::json!({
+        "type": "frame",
+        "id": "event-rail",
+        "name": "Popular Near You",
+        "layout": "horizontal",
+        "width": 390,
+        "height": 220,
+        "children": cards
+    }))
+    .expect("populated rail");
+    let state = state_with(vec![rail]);
+    let before = serde_json::to_vec(state.active_children()).expect("pre-transaction bytes");
+
+    // This mirrors the destructive-redraft failure mode: four valid cards are
+    // deleted in the simulated batch, then reconstruction targets a bad id.
+    // Transactional execution must ship no partial delete commands.
+    let program = r##"D("card-1")
+D("card-2")
+D("card-3")
+D("card-4")
+replacement=I("missing-rail-parent", {"type":"frame","name":"Rebuilt Card","width":168,"height":220,"children":[{"type":"text","content":"replacement","width":120,"height":24}]})"##;
+    let (envelope, command) = call_operations(&state, program);
+
+    assert!(
+        command.is_none(),
+        "failed reconstruction must not emit deletes"
+    );
+    assert_eq!(envelope["applied"], Value::Bool(false), "{envelope}");
+    assert_eq!(envelope["results"], serde_json::json!([]), "{envelope}");
+    assert!(envelope["errors"][0]["error"]
+        .as_str()
+        .is_some_and(|message| message.contains("missing-rail-parent")));
+    assert_eq!(
+        serde_json::to_vec(state.active_children()).expect("post-transaction bytes"),
+        before,
+        "the original populated rail must remain byte-identical"
+    );
+
+    let rail =
+        op_editor_core::walkers::find_node(state.active_children(), &NodeId::new("event-rail"))
+            .expect("original rail");
+    let cards = rail.children().expect("original cards");
+    assert_eq!(cards.len(), 4, "all four cards must remain");
+    for (index, card) in cards.iter().enumerate() {
+        let children = card.children().expect("populated card subtree");
+        assert_eq!(children.len(), 2, "card {} lost content", index + 1);
+        assert!(matches!(
+            children.first(),
+            Some(jian_ops_schema::node::PenNode::Image(image)) if !image.src.as_str().is_empty()
+        ));
+        assert!(children
+            .get(1)
+            .and_then(jian_ops_schema::node::PenNode::children)
+            .is_some_and(|details| details.len() == 2));
+    }
+}
+
+#[test]
 fn best_effort_policy_keeps_ts_survivor_semantics_for_internal_callers() {
     // The orchestrator's script-gen path (`program_gen.rs`) opts back
     // into TS `runBatchDesignDsl` best-effort: the thrown line lands in
@@ -479,40 +588,8 @@ D("ghost")"##
     );
 }
 
-#[test]
-fn image_op_requires_ts_quoted_syntax_and_resolves_binding_parents() {
-    // Best-effort policy: the deliberately-bad third line must be
-    // dropped (not roll back the batch) so the G() parse + binding
-    // resolution of the good lines stays observable.
-    let mut state = sample();
-    let program = r##"wrap=I(null, {"type":"frame","name":"Wrap","x":500,"y":0,"width":400,"height":300,"children":[{"type":"text","name":"caption","content":"x","width":10,"height":10}]})
-img=G("wrap", "search", "sunset photo")
-G(wrap, "search", "bad syntax")"##;
-    let (envelope, cmd) = call_operations_best_effort(&state, program);
-    let errors = envelope["errors"].as_array().expect("errors");
-    assert_eq!(errors.len(), 1, "{envelope}");
-    assert!(
-        errors[0]["error"]
-            .as_str()
-            .unwrap()
-            .starts_with("Invalid G() syntax:"),
-        "{envelope}"
-    );
-    let wrap_id = binding_id(&envelope, "wrap");
-    let img_id = binding_id(&envelope, "img");
-
-    assert!(state.apply(cmd.expect("command")));
-    let wrap = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&wrap_id))
-        .expect("wrap");
-    let img = wrap
-        .children()
-        .expect("children")
-        .iter()
-        .find(|c| c.id_str() == img_id)
-        .expect("image under wrap");
-    assert!(matches!(img, jian_ops_schema::node::PenNode::Image(_)));
-    assert_eq!(img.base().name.as_deref(), Some("sunset photo"));
-}
+#[path = "batch_program_image_tests.rs"]
+mod image_tests;
 
 #[test]
 fn post_process_flag_marks_the_envelope() {

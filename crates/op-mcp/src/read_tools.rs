@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 
 use jian_ops_schema::node::PenNode;
 use jian_scene::layout_scene::{NodeKind, SceneNode};
-use op_editor_core::geometry::aggregate_bounds;
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, NodeId};
@@ -335,16 +334,32 @@ fn page_layout_snapshots(state: &EditorState) -> (Vec<PageLayout>, String) {
 }
 
 fn page_space_snapshots(state: &EditorState) -> (Vec<PageSpace>, String) {
+    let scene = op_pen_loader::editor_state_to_layout_scene(state);
     match state.doc.pages.as_ref() {
         Some(pages) if !pages.is_empty() => {
             let active = state.ui.active_page_index.min(pages.len() - 1);
             let out = pages
                 .iter()
-                .map(|page| page_space(&page.id, &page.children))
+                .enumerate()
+                .map(|(idx, page)| {
+                    let roots = scene
+                        .pages
+                        .get(idx)
+                        .map(|scene_page| scene_page.children.as_slice())
+                        .unwrap_or_default();
+                    page_space(&page.id, roots)
+                })
                 .collect();
             (out, pages[active].id.clone())
         }
-        _ => (vec![page_space("0", &state.doc.children)], "0".into()),
+        _ => {
+            let roots = scene
+                .pages
+                .first()
+                .map(|page| page.children.as_slice())
+                .unwrap_or_default();
+            (vec![page_space("0", roots)], "0".into())
+        }
     }
 }
 
@@ -506,13 +521,11 @@ fn layout_records_in(roots: &[PenNode], all_nodes: &[PenNode]) -> Vec<LayoutReco
     out
 }
 
-fn page_space(id: &str, roots: &[PenNode]) -> PageSpace {
-    fn walk(nodes: &[PenNode], out: &mut Vec<BoundsRecord>) {
+fn page_space(id: &str, roots: &[SceneNode]) -> PageSpace {
+    fn walk(nodes: &[SceneNode], out: &mut Vec<BoundsRecord>) {
         for n in nodes {
             out.push(bounds_record(n));
-            if let Some(children) = n.children() {
-                walk(children, out);
-            }
+            walk(&n.children, out);
         }
     }
     let root_bounds = roots.iter().map(bounds_record).collect();
@@ -525,14 +538,14 @@ fn page_space(id: &str, roots: &[PenNode]) -> PageSpace {
     }
 }
 
-fn bounds_record(node: &PenNode) -> BoundsRecord {
-    let b = aggregate_bounds(node);
+fn bounds_record(node: &SceneNode) -> BoundsRecord {
+    let b = node.aggregate_bounds();
     BoundsRecord {
-        id: node.id_str().to_string(),
-        x: b.x as i32,
-        y: b.y as i32,
-        w: b.w as i32,
-        h: b.h as i32,
+        id: node.id.clone(),
+        x: b.origin.x as i32,
+        y: b.origin.y as i32,
+        w: b.size.x as i32,
+        h: b.size.y as i32,
     }
 }
 
@@ -598,5 +611,62 @@ fn optional_i32_arg(
             )
         }),
         None => Ok(default),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bottom_args(page_id: Option<&str>) -> BTreeMap<String, String> {
+        let mut args = BTreeMap::from([
+            ("width".into(), "50".into()),
+            ("height".into(), "50".into()),
+            ("padding".into(), "10".into()),
+            ("direction".into(), "bottom".into()),
+        ]);
+        if let Some(id) = page_id {
+            args.insert("pageId".into(), id.into());
+        }
+        args
+    }
+
+    #[test]
+    fn empty_space_uses_resolved_omitted_height_and_requested_page() {
+        let src = r#"{
+          "version":"1.0.0","pages":[
+            {"id":"hug-page","name":"Hug","children":[
+              {"type":"frame","id":"hug","x":10,"y":20,"width":390,
+               "layout":"vertical","gap":5,"padding":[10,20],"children":[
+                 {"type":"rectangle","id":"a","width":"fill_container","height":40},
+                 {"type":"rectangle","id":"b","width":"fill_container","height":50}
+               ]},
+              {"type":"frame","id":"fixed","x":500,"y":30,"width":200,"height":20}
+            ]},
+            {"id":"other-page","name":"Other","children":[
+              {"type":"frame","id":"other","x":900,"y":100,"width":20,"height":30}
+            ]}
+          ],"children":[]
+        }"#;
+        let parsed = jian_ops_schema::load_str(src).expect("parse fixture");
+        let mut state = EditorState::from_document(parsed.value);
+        state.ui.active_page_index = 1;
+        let tool = find_empty_space_snapshot(&state);
+
+        let ToolOutcome::Ok(active) = tool.call(&bottom_args(None)) else {
+            panic!("active-page lookup should succeed");
+        };
+        assert_eq!(active.get("x").map(String::as_str), Some("900"));
+        assert_eq!(active.get("y").map(String::as_str), Some("140"));
+
+        let ToolOutcome::Ok(hug) = tool.call(&bottom_args(Some("hug-page"))) else {
+            panic!("requested-page lookup should succeed");
+        };
+        assert_eq!(hug.get("x").map(String::as_str), Some("10"));
+        assert_eq!(
+            hug.get("y").map(String::as_str),
+            Some("145"),
+            "bottom placement must include the resolved 115px Hug root"
+        );
     }
 }

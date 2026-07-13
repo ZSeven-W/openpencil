@@ -5,7 +5,7 @@
 //! `EditorState::apply` checks; the apply-path correctness is covered
 //! by `op-editor-core`'s `command_tests.rs`.
 
-use super::test_fixtures::sample;
+use super::test_fixtures::{frame, sample, state_with};
 use super::{BatchInsertItem, EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 use crate::batch_design_snapshot;
 use op_editor_core::PenNodeExt;
@@ -880,62 +880,98 @@ fn batch_design_accepts_bound_single_replace_operation() {
 
 #[test]
 fn batch_design_accepts_single_image_operation_without_fetcher() {
-    let tool = batch_design_snapshot(&sample());
+    let state = state_with(vec![frame("slot", "Slot", 0.0, 0.0, 160.0, 90.0, vec![])]);
+    let tool = batch_design_snapshot(&state);
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
-        r##"G("n10", "search", "hero product photo")"##.into(),
+        r##"G("slot", "search", "hero product photo")"##.into(),
     );
 
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(
+        ToolOutcome::OkJsonWithCommand(
             result,
-            EditorCommand::InsertSubtree {
+            EditorCommand::InsertAuthoredSubtree {
                 nodes,
                 parent_id,
                 page_id,
             },
         ) => {
-            assert_eq!(result.get("count"), Some(&"1".to_string()));
-            assert_eq!(parent_id.as_str(), "n10");
+            let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+            assert_eq!(result["results"].as_array().map(Vec::len), Some(1));
+            assert_eq!(parent_id.as_str(), "slot");
             assert!(page_id.is_none());
             assert_eq!(nodes.len(), 1);
-            assert!(matches!(nodes[0], jian_ops_schema::node::PenNode::Image(_)));
+            let jian_ops_schema::node::PenNode::Image(image) = &nodes[0] else {
+                panic!("expected image")
+            };
+            assert!(matches!(
+                image.width,
+                Some(jian_ops_schema::sizing::SizingBehavior::Keyword(
+                    jian_ops_schema::sizing::SizingKeyword::FillContainer
+                ))
+            ));
+            assert!(matches!(
+                image.height,
+                Some(jian_ops_schema::sizing::SizingBehavior::Keyword(
+                    jian_ops_schema::sizing::SizingKeyword::FillContainer
+                ))
+            ));
+            assert!(matches!(
+                image.object_fit,
+                Some(jian_ops_schema::node::ImageFitMode::Crop)
+            ));
             assert_eq!(nodes[0].base().name.as_deref(), Some("hero product photo"));
         }
-        other => panic!("expected image InsertSubtree command, got {other:?}"),
+        other => panic!("expected image InsertAuthoredSubtree command, got {other:?}"),
     }
 }
 
 #[test]
 fn batch_design_accepts_bound_single_image_operation_without_fetcher() {
-    let tool = batch_design_snapshot(&sample());
+    let state = state_with(vec![frame("slot", "Slot", 0.0, 0.0, 160.0, 90.0, vec![])]);
+    let tool = batch_design_snapshot(&state);
     let mut args = BTreeMap::new();
     args.insert(
         "operations".into(),
-        r##"hero=G(null, "generate", "dashboard background")"##.into(),
+        r##"hero=G("slot", "generate", "dashboard background")"##.into(),
     );
 
     match tool.call(&args) {
-        ToolOutcome::OkWithCommand(
+        ToolOutcome::OkJsonWithCommand(
             result,
-            EditorCommand::InsertSubtree {
+            EditorCommand::InsertAuthoredSubtree {
                 nodes,
                 parent_id,
                 page_id,
             },
         ) => {
-            assert_eq!(result.get("count"), Some(&"1".to_string()));
-            assert!(!parent_id.is_real());
+            let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+            assert_eq!(result["results"].as_array().map(Vec::len), Some(1));
+            assert_eq!(parent_id.as_str(), "slot");
             assert!(page_id.is_none());
             assert_eq!(nodes.len(), 1);
-            assert!(matches!(nodes[0], jian_ops_schema::node::PenNode::Image(_)));
+            let jian_ops_schema::node::PenNode::Image(image) = &nodes[0] else {
+                panic!("expected image")
+            };
+            assert!(matches!(
+                image.width,
+                Some(jian_ops_schema::sizing::SizingBehavior::Keyword(
+                    jian_ops_schema::sizing::SizingKeyword::FillContainer
+                ))
+            ));
+            assert!(matches!(
+                image.height,
+                Some(jian_ops_schema::sizing::SizingBehavior::Keyword(
+                    jian_ops_schema::sizing::SizingKeyword::FillContainer
+                ))
+            ));
             assert_eq!(
                 nodes[0].base().name.as_deref(),
                 Some("dashboard background")
             );
         }
-        other => panic!("expected bound image InsertSubtree command, got {other:?}"),
+        other => panic!("expected bound image InsertAuthoredSubtree command, got {other:?}"),
     }
 }
 
@@ -1466,11 +1502,47 @@ fn a_lone_empty_operations_list_still_reports_its_own_error() {
     }
 }
 
-/// Measured test0711-1-ds: every section frame omitted `layout`, so the engine
-/// laid [title, card rail] out as a ROW — each section title sat to the LEFT of
-/// its cards and the rail ran off the screen. An omitted layout stacks.
 #[test]
-fn a_container_without_a_layout_stacks_its_children() {
+fn two_real_batch_inputs_are_rejected_symmetrically() {
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r#"root=I(null,{"type":"frame","width":100,"height":100})"#.into(),
+    );
+    args.insert(
+        "nodes_json".into(),
+        r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10}]"#.into(),
+    );
+    match tool.call(&args) {
+        ToolOutcome::Err(ToolErrorCode::InvalidArgument, message) => {
+            assert!(message.contains("only one of"));
+        }
+        other => panic!("two real inputs must not silently prefer one: {other:?}"),
+    }
+}
+
+#[test]
+fn an_empty_script_does_not_block_real_operations() {
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert("script".into(), String::new());
+    args.insert(
+        "operations".into(),
+        r#"root=I(null,{"type":"frame","width":100,"height":100})"#.into(),
+    );
+    assert!(matches!(
+        tool.call(&args),
+        ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { .. })
+    ));
+}
+
+/// Layout omission is ambiguous: a title+rail section probably stacks, while
+/// a toolbar or comparison group probably forms a row. Shape normalization
+/// must preserve the omission; the agent loop reports it and asks the model to
+/// choose explicitly instead of silently inventing design intent.
+#[test]
+fn a_container_without_a_layout_remains_unspecified() {
     let mut section = serde_json::json!({
         "type": "frame", "id": "n6", "name": "Popular Destinations",
         "width": "fill_container", "height": 240,
@@ -1480,10 +1552,9 @@ fn a_container_without_a_layout_stacks_its_children() {
         ]
     });
     crate::batch_design::normalize_node_shape(&mut section);
-    assert_eq!(
-        section.get("layout").and_then(|v| v.as_str()),
-        Some("vertical"),
-        "the section stacks its title above its rail"
+    assert!(
+        section.get("layout").is_none(),
+        "normalization must not guess whether the children form a row or column"
     );
 }
 

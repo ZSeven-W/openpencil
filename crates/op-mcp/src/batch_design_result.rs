@@ -20,8 +20,10 @@ use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use serde_json::{json, Value};
 
 use super::batch_design::{
-    carries_input, dispatch_batch_design, expand_script_arg, parse_operations, ParsedOperations,
+    dispatch_batch_design, expand_script_arg, parse_operations, select_batch_input, BatchInputKind,
+    ParsedOperations,
 };
+use super::batch_direct_ops::is_direct_image_operation;
 use super::batch_page::optional_page_id;
 use super::read_nodes::{page_nodes_snapshots, PageNodes};
 use super::{EditorCommand, McpTool, ToolOutcome};
@@ -59,16 +61,14 @@ impl McpTool for BatchDesign {
                 Err(outcome) => outcome,
             };
         }
-        // An EMPTY `operations` placeholder beside a real `nodes_json` is not a
-        // program — fall through to the flat dispatch, which picks the slot the
-        // caller actually filled (a lone empty program still errors there).
-        let Some(operations) = args
-            .get("operations")
-            .filter(|_| carries_input(args, "operations") || !carries_input(args, "nodes_json"))
-        else {
-            // nodes_json (a Rust convenience) / missing → flat dispatch.
-            return dispatch_batch_design(args, None);
+        let input = match select_batch_input(args) {
+            Ok(input) => input,
+            Err((code, message)) => return ToolOutcome::Err(code, message),
         };
+        if input == BatchInputKind::NodesJson {
+            return dispatch_batch_design(args, None);
+        }
+        let operations = args.get("operations").expect("selected operations exists");
         match parse_operations(operations) {
             Ok(ParsedOperations::Insert {
                 parent_id,
@@ -77,8 +77,13 @@ impl McpTool for BatchDesign {
                 bindings,
                 promoted,
             }) => self.insert_with_result(args, parent_id, nodes, bindings, promoted),
-            // A single direct op keeps the flat dispatch (which re-parses
-            // and returns the existing command-per-op shape).
+            // G() needs the document snapshot to size the generated image to
+            // its target slot. The flat direct parser has no parent geometry,
+            // so route even a single G through the program simulator.
+            Ok(ParsedOperations::Direct(_)) if is_direct_image_operation(operations) => {
+                super::batch_program::run_batch_design_program(&self.state, operations, args)
+            }
+            // Other single direct ops keep the flat command-per-op shape.
             Ok(ParsedOperations::Direct(_)) => dispatch_batch_design(args, None),
             // Everything else — multi-line MIXED programs, per-line parse
             // failures — runs the DSL program executor. Transactional by
