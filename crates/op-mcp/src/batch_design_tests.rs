@@ -1419,3 +1419,49 @@ fn batch_design_script_unavailable_without_feature() {
         other => panic!("expected InvalidArgument, got {other:?}"),
     }
 }
+
+/// Models routinely send the unused input slots along as empty placeholders.
+/// Rejecting those killed a whole batch over a field the caller never meant
+/// to fill (measured 2026-07-12: a `script` batch died on "provide only one
+/// of script, operations, or nodes_json").
+#[test]
+fn empty_placeholder_slots_do_not_compete_with_the_real_input() {
+    let tool = batch_design_snapshot(&sample());
+    for placeholder in ["[]", "", "null", "{}"] {
+        let mut args = BTreeMap::new();
+        args.insert(
+            "nodes_json".into(),
+            r#"[{"kind":"rect","name":"A","x":0,"y":0,"width":10,"height":10}]"#.into(),
+        );
+        args.insert("operations".into(), placeholder.into());
+        match tool.call(&args) {
+            ToolOutcome::OkWithCommand(out, _) => {
+                assert_eq!(
+                    out.get("wrote").map(String::as_str),
+                    Some("true"),
+                    "{placeholder}"
+                );
+            }
+            other => {
+                panic!("empty `operations: {placeholder}` must not block nodes_json: {other:?}")
+            }
+        }
+    }
+}
+
+#[test]
+fn a_lone_empty_operations_list_still_reports_its_own_error() {
+    // The placeholder tolerance must not turn an empty program into a silent
+    // success: with nothing else to fall through to, the batch still reports.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert("operations".into(), "[]".into());
+    match tool.call(&args) {
+        ToolOutcome::Err(ToolErrorCode::InvalidArgument, _) => {}
+        ToolOutcome::OkJson(json) => assert!(
+            json.contains("\"applied\":false"),
+            "an empty program must not read as applied: {json}"
+        ),
+        other => panic!("empty program silently accepted: {other:?}"),
+    }
+}

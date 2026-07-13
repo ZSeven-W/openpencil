@@ -52,6 +52,15 @@ pub(crate) fn dispatch_phase(args: &BTreeMap<String, String>, phase: &'static st
     dispatch_batch_design(args, Some(phase))
 }
 
+/// Whether `args[key]` carries an actual input rather than an empty
+/// placeholder (`""`, `[]`, `{}`, `null`).
+pub(crate) fn carries_input(args: &BTreeMap<String, String>, key: &str) -> bool {
+    args.get(key).is_some_and(|value| {
+        let trimmed = value.trim();
+        !matches!(trimmed, "" | "[]" | "{}" | "null")
+    })
+}
+
 /// Expand a `script` arg into the `operations` DSL program the rest of
 /// `batch_design` already understands. Returns:
 /// - `None` — `args` carries no `script` key; caller proceeds unchanged.
@@ -69,7 +78,11 @@ pub(crate) fn expand_script_arg(
     args: &BTreeMap<String, String>,
 ) -> Option<Result<BTreeMap<String, String>, ToolOutcome>> {
     let script = args.get("script")?;
-    if args.contains_key("operations") || args.contains_key("nodes_json") {
+    // Only a COMPETING input is an error. Models routinely send the unused
+    // slots along as empty placeholders (`"operations": []`, `"nodes_json":
+    // ""`, a literal `null`) — rejecting those killed a whole batch over an
+    // empty field the caller never meant to fill (measured 2026-07-12).
+    if carries_input(args, "operations") || carries_input(args, "nodes_json") {
         return Some(Err(ToolOutcome::Err(
             ToolErrorCode::InvalidArgument,
             "provide only one of script, operations, or nodes_json".into(),
@@ -107,7 +120,15 @@ pub(crate) fn dispatch_batch_design(
         };
     }
     let page_id = optional_page_id(args);
-    if let Some(operations) = args.get("operations") {
+    // An empty placeholder (`[]`, `""`, `null`) is not a choice of input: when
+    // the OTHER slot carries the real program, fall through to it. A lone empty
+    // slot still reports its own error (an empty descriptor list is a mistake,
+    // not a missing argument).
+    let nodes_json_is_real = carries_input(args, "nodes_json");
+    if let Some(operations) = args
+        .get("operations")
+        .filter(|_| carries_input(args, "operations") || !nodes_json_is_real)
+    {
         return match parse_operations(operations) {
             Ok(ParsedOperations::Insert {
                 parent_id,

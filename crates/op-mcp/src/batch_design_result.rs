@@ -20,7 +20,7 @@ use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use serde_json::{json, Value};
 
 use super::batch_design::{
-    dispatch_batch_design, expand_script_arg, parse_operations, ParsedOperations,
+    carries_input, dispatch_batch_design, expand_script_arg, parse_operations, ParsedOperations,
 };
 use super::batch_page::optional_page_id;
 use super::read_nodes::{page_nodes_snapshots, PageNodes};
@@ -59,7 +59,13 @@ impl McpTool for BatchDesign {
                 Err(outcome) => outcome,
             };
         }
-        let Some(operations) = args.get("operations") else {
+        // An EMPTY `operations` placeholder beside a real `nodes_json` is not a
+        // program — fall through to the flat dispatch, which picks the slot the
+        // caller actually filled (a lone empty program still errors there).
+        let Some(operations) = args
+            .get("operations")
+            .filter(|_| carries_input(args, "operations") || !carries_input(args, "nodes_json"))
+        else {
             // nodes_json (a Rust convenience) / missing → flat dispatch.
             return dispatch_batch_design(args, None);
         };
