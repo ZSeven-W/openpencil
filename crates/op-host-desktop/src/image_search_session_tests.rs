@@ -1057,3 +1057,58 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
         "the rebuilt card gets ITS photo back, not the next-best junk result"
     );
 }
+
+/// MiniMax-M3 builds every card around a RECTANGLE named "img" (or a "ph"
+/// rectangle inside a frame named "img") — neither word was in the keyword
+/// table, so a whole page of destination cards shipped as grey boxes with no
+/// images at all (measured test0711-1-m3, 2026-07-12).
+#[test]
+fn m3_style_img_and_ph_rectangles_are_image_slots() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [{
+            "type": "frame", "id": "root", "width": 390, "height": 844, "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "card", "name": "Santorini",
+                  "width": "fill_container", "height": "fit_content", "layout": "vertical",
+                  "children": [
+                    { "type": "frame", "id": "wrap", "name": "img",
+                      "width": 180, "height": 140, "layout": "none", "children": [
+                        { "type": "rectangle", "id": "ph", "name": "ph",
+                          "width": 180, "height": 140,
+                          "fill": [{ "type": "solid", "color": "#E5E5E5" }] }
+                      ]},
+                    { "type": "text", "id": "t", "content": "Santorini" }
+                  ]},
+                { "type": "frame", "id": "deal", "name": "Bali, Indonesia",
+                  "width": "fill_container", "height": "fit_content", "layout": "vertical",
+                  "children": [
+                    { "type": "rectangle", "id": "img", "name": "img",
+                      "width": 165, "height": 130,
+                      "fill": [{ "type": "solid", "color": "#E5E5E5" }] }
+                  ]}
+            ]
+        }] }"##,
+    )
+    .expect("parse");
+    let state = op_editor_core::EditorState::from_document(doc);
+    let targets = super::collect_targets(&state, &std::collections::HashSet::new());
+
+    let by_id: std::collections::HashMap<&str, &str> = targets
+        .iter()
+        .map(|t| (t.node_id.as_str(), t.query.as_str()))
+        .collect();
+    assert!(
+        by_id.contains_key("ph"),
+        "a \"ph\" rectangle in an \"img\" wrapper is an image slot: {by_id:?}"
+    );
+    assert!(
+        by_id.contains_key("img"),
+        "a rectangle literally named \"img\" is an image slot: {by_id:?}"
+    );
+    assert_eq!(
+        by_id.get("ph"),
+        Some(&"Santorini"),
+        "the slot carries no subject — the CARD names the picture"
+    );
+    assert_eq!(by_id.get("img"), Some(&"Bali, Indonesia"));
+}
