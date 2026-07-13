@@ -2242,7 +2242,8 @@ fn double_image_slot() -> serde_json::Value {
 #[test]
 fn duplicate_image_plate_is_dropped_and_the_band_keeps_the_photo_height() {
     let mut cmds = Vec::new();
-    collect_image_slot_fixes(&double_image_slot(), &mut cmds);
+    let slot = double_image_slot();
+    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
 
     assert!(
         cmds.iter().any(|c| matches!(c,
@@ -2278,7 +2279,7 @@ fn a_lone_image_filled_plate_is_never_deleted() {
         ]
     });
     let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &mut cmds);
+    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
     assert!(
         cmds.is_empty(),
         "the only image in the slot stays: {cmds:?}"
@@ -2300,7 +2301,7 @@ fn an_image_filled_hero_with_content_on_it_is_not_a_duplicate_plate() {
         ]
     });
     let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &mut cmds);
+    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
     assert!(
         !cmds
             .iter()
@@ -2322,6 +2323,130 @@ fn a_mild_crop_stays_intentional() {
         ]
     });
     let mut cmds = Vec::new();
-    collect_image_slot_fixes(&slot, &mut cmds);
+    collect_image_slot_fixes(&slot, &slot_rects(&slot), &mut cmds);
     assert!(cmds.is_empty(), "a mild crop is left alone: {cmds:?}");
+}
+
+/// Resolved rects for a slot fixture: the band spans a 200px card, children
+/// take their authored size (enough for the aspect guard to reason about).
+fn slot_rects(slot: &serde_json::Value) -> std::collections::HashMap<String, Rect> {
+    fn walk(v: &serde_json::Value, out: &mut std::collections::HashMap<String, Rect>, w: f64) {
+        if let Some(id) = v.get("id").and_then(|x| x.as_str()) {
+            let cw = v.get("width").and_then(|x| x.as_f64()).unwrap_or(w);
+            let ch = v.get("height").and_then(|x| x.as_f64()).unwrap_or(120.0);
+            out.insert(
+                id.to_string(),
+                Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: cw,
+                    h: ch,
+                },
+            );
+        }
+        for c in v
+            .get("children")
+            .and_then(|c| c.as_array())
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+        {
+            walk(c, out, w);
+        }
+    }
+    let mut out = std::collections::HashMap::new();
+    walk(slot, &mut out, 200.0);
+    out
+}
+
+/// The regression that wrecked a GOOD design: a 400x300 plate cropped inside a
+/// phone card is an oversized image, NOT the card's width intent. Widening the
+/// cards to it blew one card across the whole screen and clipped the rest.
+#[test]
+fn an_oversized_plate_is_not_a_width_intent_for_the_rail() {
+    let cards: Vec<serde_json::Value> = (0..4)
+        .map(|i| {
+            json!({
+                "type": "frame", "id": format!("card{i}"), "width": "fill_container",
+                "height": "fill_container", "layout": "vertical", "clipContent": true,
+                "children": [
+                    { "type": "frame", "id": format!("img{i}"), "width": "fill_container",
+                      "height": 200, "clipContent": true, "children": [
+                        { "type": "image", "id": format!("plate{i}"), "width": 400, "height": 300,
+                          "src": "data:image/jpeg;base64,AAAA" }
+                      ]}
+                ]
+            })
+        })
+        .collect();
+    let rail = json!({
+        "type": "frame", "id": "rail", "width": "fill_container",
+        "layout": "horizontal", "gap": 12, "children": cards
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "rail".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 390.0,
+            h: 260.0,
+        },
+    );
+    for i in 0..4 {
+        // Healthy cards: two visible per screen, the rest scroll.
+        rects.insert(
+            format!("card{i}"),
+            Rect {
+                x: i as f64 * 182.0,
+                y: 0.0,
+                w: 170.0,
+                h: 260.0,
+            },
+        );
+    }
+    let mut cmds = Vec::new();
+    collect_starved_rail_card_fixes(&rail, &rects, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "a 170px card cropping a 400px plate is fine — leave it alone: {cmds:?}"
+    );
+}
+
+/// Same guard on the band: growing a 200px band to a 300px plate's height
+/// left a wall of empty space under the photo in every deal card.
+#[test]
+fn an_oversized_plate_does_not_stretch_the_photo_band() {
+    let slot = json!({
+        "type": "frame", "id": "band", "width": "fill_container", "height": 120,
+        "clipContent": true,
+        "children": [
+            { "type": "image", "id": "plate", "width": 400, "height": 300,
+              "src": "data:image/jpeg;base64,AAAA" }
+        ]
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "band".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 170.0,
+            h: 120.0,
+        },
+    );
+    rects.insert(
+        "plate".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 400.0,
+            h: 300.0,
+        },
+    );
+    let mut cmds = Vec::new();
+    collect_image_slot_fixes(&slot, &rects, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "a 300px plate in a 170px-wide band is oversized, not a band height: {cmds:?}"
+    );
 }
