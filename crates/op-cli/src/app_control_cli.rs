@@ -285,6 +285,7 @@ fn run_start_headless(port: u16, document_path: Option<&str>) -> Result<String, 
         None => default_document_path()?,
     };
     ensure_document_file(&document)?;
+    preflight_document(&document)?;
 
     let binary = find_desktop_binary()?;
     // Per-instance token passed to the server (echoed in its `ping`) so a
@@ -467,6 +468,40 @@ pub(crate) fn ensure_document_file(path: &Path) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(|e| format!("create {}: {e}", parent.display()))?;
     }
     fs::write(path, MINIMAL_DOCUMENT).map_err(|e| format!("write {}: {e}", path.display()))
+}
+
+/// Verify `path` holds a document the headless MCP server can actually load,
+/// using the same loader (`op_pen_loader::load_canonical`) the server runs at
+/// startup — so a pass here guarantees the server will load it, and a failure
+/// is surfaced as a clear, actionable CLI error.
+///
+/// Without this, a malformed / wrong-format file makes the `--mcp-http` server
+/// exit(1) *before* it binds the socket (it loads the document first), so the
+/// CLI only ever sees "exited before accepting connections" and the caller a
+/// bare "connection refused" — with no hint that the file is the cause. The
+/// check never mutates the file, so a corrupt-but-valuable document is
+/// preserved rather than silently replaced.
+fn preflight_document(path: &Path) -> Result<(), String> {
+    let bytes = fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    // A `.op` document is UTF-8 JSON; a real `.fig` / `.pen` is a binary ZIP
+    // archive (invalid UTF-8). Reject the binary case here as a wrong file type
+    // rather than letting the server's `read_to_string` fail with an IO-flavored
+    // error that reads like the file is unreadable.
+    let src = std::str::from_utf8(&bytes).map_err(|_| {
+        format!(
+            "{} is not a valid OpenPencil document: not UTF-8 text \
+             (looks like a binary archive). Only .op (JSON) documents open \
+             directly; legacy .pen / .fig files must be imported.",
+            path.display()
+        )
+    })?;
+    op_pen_loader::load_canonical(src).map(|_| ()).map_err(|e| {
+        format!(
+            "{} is not a valid OpenPencil document: {e}\n\
+             Only .op (JSON) documents open directly; legacy .pen / .fig files must be imported.",
+            path.display()
+        )
+    })
 }
 
 fn start_json(pid: u32, port: u16, document_path: Option<&Path>) -> String {
@@ -686,8 +721,50 @@ fn is_pid_alive(pid: u32) -> bool {
 
 #[cfg(test)]
 mod editor_will_open_tests {
-    use super::{default_document_path_in, editor_will_open, live_port_file_path_in};
+    use super::{
+        default_document_path_in, editor_will_open, live_port_file_path_in, preflight_document,
+        MINIMAL_DOCUMENT,
+    };
     use std::fs;
+
+    #[test]
+    fn preflight_rejects_malformed_documents_and_accepts_a_valid_one() {
+        let dir = std::env::temp_dir().join(format!("op-preflight-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+
+        // A real `.fig` / `.pen` is a binary ZIP archive — `PK\x03\x04` then
+        // bytes that are not valid UTF-8. This must be rejected as a wrong file
+        // type, not reported as an unreadable file, and never reach the server
+        // (which would exit(1) before binding → opaque "connection refused").
+        let archive = dir.join("archive.op");
+        fs::write(&archive, b"PK\x03\x04\xff\xfe\x00\x01binary\x80\x81").expect("write archive");
+        let err = preflight_document(&archive).expect_err("binary archive must be rejected");
+        assert!(
+            err.contains("is not a valid OpenPencil document"),
+            "unexpected error text: {err}"
+        );
+
+        // Valid UTF-8 that isn't a canonical document — exercises the loader's
+        // JSON parse-error path (distinct from the invalid-UTF-8 path above).
+        let garbage = dir.join("garbage.op");
+        fs::write(&garbage, b"this is not a .op document").expect("write garbage");
+        let err = preflight_document(&garbage).expect_err("non-document text must be rejected");
+        assert!(
+            err.contains("is not a valid OpenPencil document"),
+            "unexpected error text: {err}"
+        );
+
+        // The exact starter template `ensure_document_file` writes must load,
+        // so a fresh session is never falsely rejected (loader parity).
+        let good = dir.join("good.op");
+        fs::write(&good, MINIMAL_DOCUMENT).expect("write good doc");
+        assert!(
+            preflight_document(&good).is_ok(),
+            "the minimal starter document must pass preflight"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn reports_only_files_the_editor_actually_opens() {
