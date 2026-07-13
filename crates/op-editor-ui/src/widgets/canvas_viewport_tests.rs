@@ -54,8 +54,14 @@ struct RecordingBackend {
     shader_fills: usize,
     /// One `(radians, pivot)` per [`Op::Rotate`], in op order.
     rotations: Vec<(f32, Point2D)>,
+    /// One `(scale, pivot)` per [`Op::Scale`], in op order.
+    scales: Vec<(Point2D, Point2D)>,
     /// One color per [`Op::Stroke`], in op order.
     stroke_colors: Vec<Color>,
+    /// Whether each stroke was emitted through `stroke_line`.
+    stroke_is_line: Vec<bool>,
+    stroke_rects: Vec<(Rect, Color)>,
+    stroke_lines: Vec<(Point2D, Point2D, Color)>,
 }
 
 impl crate::RenderBackend for RecordingBackend {
@@ -66,9 +72,11 @@ impl crate::RenderBackend for RecordingBackend {
         self.rects += 1;
         self.ops.push(Op::Fill);
     }
-    fn stroke_rect(&mut self, _: Rect, color: Color, _: f32) {
+    fn stroke_rect(&mut self, rect: Rect, color: Color, _: f32) {
         self.strokes += 1;
         self.stroke_colors.push(color);
+        self.stroke_is_line.push(false);
+        self.stroke_rects.push((rect, color));
         self.ops.push(Op::Stroke);
     }
     fn draw_text(&mut self, layout: &TextLayout, point: Point2D) {
@@ -91,16 +99,19 @@ impl crate::RenderBackend for RecordingBackend {
         self.ops.push(Op::Restore);
     }
     fn translate(&mut self, _: Point2D) {}
-    fn scale(&mut self, _: Point2D, _: Point2D) {
+    fn scale(&mut self, scale: Point2D, pivot: Point2D) {
+        self.scales.push((scale, pivot));
         self.ops.push(Op::Scale);
     }
     fn rotate(&mut self, radians: f32, pivot: Point2D) {
         self.rotations.push((radians, pivot));
         self.ops.push(Op::Rotate);
     }
-    fn stroke_line(&mut self, _: Point2D, _: Point2D, color: Color, _: f32) {
+    fn stroke_line(&mut self, from: Point2D, to: Point2D, color: Color, _: f32) {
         self.strokes += 1;
         self.stroke_colors.push(color);
+        self.stroke_is_line.push(true);
+        self.stroke_lines.push((from, to, color));
         self.ops.push(Op::Stroke);
     }
     fn fill_round_rect(&mut self, rect: Rect, _: f32, _: Color) {
@@ -115,6 +126,7 @@ impl crate::RenderBackend for RecordingBackend {
     fn stroke_round_rect(&mut self, _: Rect, _: f32, color: Color, _: f32) {
         self.strokes += 1;
         self.stroke_colors.push(color);
+        self.stroke_is_line.push(false);
         self.ops.push(Op::Stroke);
     }
     fn fill_oval(&mut self, _: Rect, _: Color) {
@@ -123,11 +135,13 @@ impl crate::RenderBackend for RecordingBackend {
     fn stroke_oval(&mut self, _: Rect, color: Color, _: f32) {
         self.strokes += 1;
         self.stroke_colors.push(color);
+        self.stroke_is_line.push(false);
         self.ops.push(Op::StrokeOval);
     }
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, color: Color, _: f32) {
         self.strokes += 1;
         self.stroke_colors.push(color);
+        self.stroke_is_line.push(false);
         self.ops.push(Op::Stroke);
     }
     fn fill_round_rect_mesh_gradient(
@@ -260,6 +274,47 @@ fn sample_scene() -> LayoutScene {
     }
 }
 
+/// A focus frame with two visible direct children, one hidden direct
+/// child, and one grandchild. Hover hierarchy tests use the distinct
+/// edge coordinates to prove that only immediate visible children
+/// receive dashed hints.
+fn hover_hierarchy_scene() -> LayoutScene {
+    let direct_a = leaf(
+        "direct-a",
+        NodeKind::Rect,
+        Rect::xywh(30.0, 40.0, 48.0, 32.0),
+        None,
+    );
+    let grandchild = leaf(
+        "grandchild",
+        NodeKind::Rect,
+        Rect::xywh(122.0, 78.0, 24.0, 20.0),
+        None,
+    );
+    let mut direct_b = SceneNode::leaf("direct-b", NodeKind::Frame);
+    direct_b.bounds = Rect::xywh(100.0, 40.0, 80.0, 100.0);
+    direct_b.children = vec![grandchild];
+    let mut hidden = leaf(
+        "hidden-direct",
+        NodeKind::Rect,
+        Rect::xywh(188.0, 40.0, 24.0, 32.0),
+        None,
+    );
+    hidden.hidden = true;
+
+    let mut focus = SceneNode::leaf("focus", NodeKind::Frame);
+    focus.bounds = Rect::xywh(10.0, 10.0, 220.0, 180.0);
+    focus.children = vec![direct_a, direct_b, hidden];
+    LayoutScene {
+        pages: vec![ScenePage {
+            id: "p".into(),
+            name: "Page".into(),
+            children: vec![focus],
+        }],
+        active_page_index: 0,
+    }
+}
+
 fn sample_state() -> EditorState {
     EditorState::sample()
 }
@@ -350,15 +405,16 @@ fn active_node_drag_hides_selection_chrome_and_dimension_label() {
 }
 
 #[test]
-fn active_node_drag_suppresses_stale_child_hover_outline() {
+fn active_node_drag_suppresses_focus_and_child_hover_outlines() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
     let mut state = EditorState::new();
     state.doc.children = vec![named_frame_node("n1", "Frame")];
-    state.set_single_selection(op_editor_core::NodeId::new("n1"));
-    state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("n4"));
+    state.set_single_selection(op_editor_core::NodeId::new("n2"));
+    state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("n1"));
     let scene = sample_scene();
     let mut viewport = CanvasViewport::from_editor(&state, &scene);
     viewport.node_drag_active = true;
-    viewport.frame_labels.clear();
     let mut backend = RecordingBackend::default();
     {
         let mut cx = PaintCx {
@@ -367,9 +423,23 @@ fn active_node_drag_suppresses_stale_child_hover_outline() {
         viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
     }
 
-    assert_eq!(
-        backend.strokes, 1,
-        "dragging should suppress stale child hover outlines, leaving only the frame stroke"
+    assert!(
+        backend
+            .stroke_colors
+            .iter()
+            .all(|color| *color != HOVER_OUTLINE_COLOR),
+        "dragging should suppress both the focus outline and all direct-child hierarchy hints"
+    );
+    let frame_label_color = backend
+        .texts
+        .iter()
+        .zip(backend.text_colors.iter())
+        .find_map(|(text, color)| (text == "Frame").then_some(*color))
+        .expect("root frame label should paint");
+    assert_ne!(
+        frame_label_color,
+        viewport.theme.primary.to_jian(),
+        "dragging should suppress the transient root-title hover tint too"
     );
 }
 
@@ -959,6 +1029,33 @@ fn selected_root_frame_label_uses_primary_active_color() {
 }
 
 #[test]
+fn hovered_root_frame_label_uses_primary_active_color() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let scene = sample_scene();
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_frame_node("n1", "Frame")];
+    state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("n1"));
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 800.0, 600.0));
+    }
+
+    let color = backend
+        .texts
+        .iter()
+        .zip(backend.text_colors.iter())
+        .find_map(|(text, color)| (text == "Frame").then_some(*color))
+        .expect("root frame label should paint");
+
+    assert_eq!(color, viewport.theme.primary.to_jian());
+}
+
+#[test]
 fn frame_label_paint_matches_roots_linearly() {
     let _guard = crate::agent_indicator_test_support::lock();
     op_editor_core::agent_indicators::clear();
@@ -1108,6 +1205,130 @@ const SELECTION_BLUE: Color = Color {
     a: 1.0,
 };
 
+fn line_lies_on_rect_edge(from: Point2D, to: Point2D, rect: Rect) -> bool {
+    const EPSILON: f32 = 0.01;
+    let left = rect.origin.x;
+    let right = rect.origin.x + rect.size.x;
+    let top = rect.origin.y;
+    let bottom = rect.origin.y + rect.size.y;
+    let in_x = |x: f32| x >= left - EPSILON && x <= right + EPSILON;
+    let in_y = |y: f32| y >= top - EPSILON && y <= bottom + EPSILON;
+    let same = |a: f32, b: f32| (a - b).abs() <= EPSILON;
+    ((same(from.y, top) && same(to.y, top)) || (same(from.y, bottom) && same(to.y, bottom)))
+        && in_x(from.x)
+        && in_x(to.x)
+        || ((same(from.x, left) && same(to.x, left)) || (same(from.x, right) && same(to.x, right)))
+            && in_y(from.y)
+            && in_y(to.y)
+}
+
+#[test]
+fn hover_focus_is_solid_and_only_direct_visible_children_are_dashed() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let scene = hover_hierarchy_scene();
+    let mut state = EditorState::new();
+    state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("focus"));
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 300.0, 240.0));
+    }
+
+    let focus_solids: Vec<Rect> = backend
+        .stroke_rects
+        .iter()
+        .filter_map(|(rect, color)| (*color == HOVER_OUTLINE_COLOR).then_some(*rect))
+        .collect();
+    assert_eq!(
+        focus_solids,
+        vec![Rect::xywh(10.0, 10.0, 220.0, 180.0)],
+        "an unselected hierarchy focus should paint one solid outline"
+    );
+
+    let direct_a = Rect::xywh(30.0, 40.0, 48.0, 32.0);
+    let direct_b = Rect::xywh(100.0, 40.0, 80.0, 100.0);
+    let child_lines: Vec<(Point2D, Point2D)> = backend
+        .stroke_lines
+        .iter()
+        .filter_map(|(from, to, color)| (*color == HOVER_OUTLINE_COLOR).then_some((*from, *to)))
+        .collect();
+    assert!(
+        !child_lines.is_empty(),
+        "direct children should paint dashed hints"
+    );
+    assert!(child_lines
+        .iter()
+        .any(|(from, to)| line_lies_on_rect_edge(*from, *to, direct_a)));
+    assert!(child_lines
+        .iter()
+        .any(|(from, to)| line_lies_on_rect_edge(*from, *to, direct_b)));
+    assert!(
+        child_lines.iter().all(|(from, to)| {
+            line_lies_on_rect_edge(*from, *to, direct_a)
+                || line_lies_on_rect_edge(*from, *to, direct_b)
+        }),
+        "hidden direct children and visible grandchildren must not receive hierarchy hints"
+    );
+}
+
+#[test]
+fn selected_hover_focus_keeps_child_hints_selection_handles_and_dimensions() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let scene = hover_hierarchy_scene();
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_frame_node("focus", "Focus")];
+    state.set_single_selection(op_editor_core::NodeId::new("focus"));
+    state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("focus"));
+    let mut viewport = CanvasViewport::from_editor(&state, &scene);
+    viewport.selection_label = Some("220 × 180".into());
+    assert_eq!(
+        viewport.hovered.as_deref(),
+        Some("focus"),
+        "selected nodes must remain eligible as hierarchy hover focus"
+    );
+
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 300.0, 240.0));
+    }
+
+    assert!(
+        backend
+            .stroke_rects
+            .iter()
+            .all(|(_, color)| *color != HOVER_OUTLINE_COLOR),
+        "a selected focus should not duplicate its solid outline"
+    );
+    assert!(
+        backend
+            .stroke_lines
+            .iter()
+            .any(|(_, _, color)| *color == HOVER_OUTLINE_COLOR),
+        "a selected focus should still expose dashed direct-child hints"
+    );
+    assert!(
+        backend
+            .stroke_colors
+            .iter()
+            .filter(|color| **color == viewport.theme.primary)
+            .count()
+            >= 8,
+        "single selection handles should still paint above hierarchy hover"
+    );
+    assert!(
+        backend.texts.iter().any(|text| text == "220 × 180"),
+        "the selected dimensions capsule should remain visible"
+    );
+}
+
 /// Replay the recorded op stream up to the first stroke painted in
 /// `color`, tracking the save/restore transform stack, and return the
 /// `(radians, pivot)` rotations active at that stroke. `None` when no
@@ -1175,6 +1396,59 @@ fn active_rotations_at_first_oval_stroke(
                     matches!(op, Op::StrokeOval) && backend.stroke_colors[stroke_i] == color;
                 if is_match {
                     return Some(stack.last().cloned().unwrap_or_default());
+                }
+                stroke_i += 1;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+#[derive(Clone, Default)]
+struct ActiveTransforms {
+    rotations: Vec<(f32, Point2D)>,
+    scales: Vec<(Point2D, Point2D)>,
+}
+
+fn active_transforms_at_first_line_stroke(
+    backend: &RecordingBackend,
+    color: Color,
+) -> Option<ActiveTransforms> {
+    let mut stroke_i = 0usize;
+    let mut rot_i = 0usize;
+    let mut scale_i = 0usize;
+    let mut stack = vec![ActiveTransforms::default()];
+    for op in &backend.ops {
+        match op {
+            Op::Save => {
+                let top = stack.last().cloned().unwrap_or_default();
+                stack.push(top);
+            }
+            Op::Restore => {
+                stack.pop();
+            }
+            Op::Scale => {
+                stack
+                    .last_mut()
+                    .expect("unbalanced save/restore")
+                    .scales
+                    .push(backend.scales[scale_i]);
+                scale_i += 1;
+            }
+            Op::Rotate => {
+                stack
+                    .last_mut()
+                    .expect("unbalanced save/restore")
+                    .rotations
+                    .push(backend.rotations[rot_i]);
+                rot_i += 1;
+            }
+            Op::Stroke | Op::StrokeOval => {
+                let is_match =
+                    backend.stroke_is_line[stroke_i] && backend.stroke_colors[stroke_i] == color;
+                if is_match {
+                    return stack.last().cloned();
                 }
                 stroke_i += 1;
             }
@@ -1265,6 +1539,47 @@ fn hover_outline_on_child_applies_ancestor_rotation() {
         rotations[0].1,
         pivot
     );
+}
+
+#[test]
+fn direct_child_hover_hint_replays_parent_and_child_rotation_flip_chain() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
+    let mut scene = hover_hierarchy_scene();
+    let focus = &mut scene.pages[0].children[0];
+    let rotation = 0.4_f32;
+    focus.rotation = rotation;
+    focus.flip_y = true;
+    // Children paint in reverse order; the hidden child is skipped, so
+    // direct-b supplies the first dashed hierarchy stroke.
+    focus.children[1].flip_x = true;
+
+    let mut state = EditorState::new();
+    state.editor_ui.canvas_hover_node = Some(op_editor_core::NodeId::new("focus"));
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        viewport.paint(&mut cx, Rect::xywh(0.0, 0.0, 300.0, 240.0));
+    }
+
+    let transforms = active_transforms_at_first_line_stroke(&backend, HOVER_OUTLINE_COLOR)
+        .expect("a direct child should paint dashed hierarchy strokes");
+    assert_eq!(
+        transforms.rotations.len(),
+        1,
+        "the child hint should inherit the focus rotation once"
+    );
+    assert!((transforms.rotations[0].0 - rotation).abs() < 1e-4);
+    assert_eq!(
+        transforms.scales.len(),
+        2,
+        "the child hint should replay both the focus and child flips"
+    );
+    assert_eq!(transforms.scales[0].0, Point2D::new(1.0, -1.0));
+    assert_eq!(transforms.scales[1].0, Point2D::new(-1.0, 1.0));
 }
 
 #[test]

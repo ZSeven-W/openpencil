@@ -14,6 +14,7 @@ use super::{
     PanelResizeKind, RotateDragState, WidgetHostNative,
 };
 use op_editor_core::codegen::CodeSelection;
+use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_ui::widgets::{
     rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder,
     CanvasViewport, LayoutCx, LocalePicker, PropertyPanel, Toolbar, TopBar, TopBarHit, Widget,
@@ -701,7 +702,8 @@ impl WidgetHostNative {
         // 0c. PropertyPanel input row.
         self.refresh_layout_scene();
         if let Some(panel) =
-            PropertyPanel::for_selection(&self.editor_state).filter(|_| !in_git_panel)
+            PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene)
+                .filter(|_| !in_git_panel)
         {
             let property_rect = Rect {
                 origin: Point2D::new(
@@ -783,7 +785,16 @@ impl WidgetHostNative {
             }
             if let Some(focus) = panel.hit_test(property_rect, Point2D::new(x, y)) {
                 self.commit_property_focus_if_any();
-                let initial = super::press_helpers::property_focus_initial(focus, &panel);
+                // Committing the previous W/H field can change layout. Rebuild
+                // the scene before seeding the newly focused field so Fill/Hug
+                // reads the concrete post-commit canvas size, not a stale one.
+                self.refresh_layout_scene();
+                let resolved_panel =
+                    PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene);
+                let initial = resolved_panel
+                    .as_ref()
+                    .map(|panel| super::press_helpers::property_focus_initial(focus, panel))
+                    .unwrap_or_default();
                 // shell-core `PropertyFocus` → op-editor-core.
                 self.editor_state.ui.property_focus = Some(focus);
                 self.editor_state
@@ -1032,6 +1043,11 @@ impl WidgetHostNative {
                     &self.editor_state,
                     Point2D::new(x, y),
                 ) {
+                    let (start_authored_x, start_authored_y) = self
+                        .editor_state
+                        .selected_node()
+                        .map(|node| (node.base().x, node.base().y))
+                        .unwrap_or((None, None));
                     if let Some(node) = self
                         .layout_scene
                         .active_page()
@@ -1046,6 +1062,8 @@ impl WidgetHostNative {
                                 start_screen_x: x,
                                 start_screen_y: y,
                                 start_bounds: raw,
+                                start_authored_x,
+                                start_authored_y,
                             });
                             return true;
                         }
@@ -1090,22 +1108,25 @@ impl WidgetHostNative {
                 {
                     let ec_id = op_editor_core::NodeId::new(&node_id);
                     return self.apply_canvas_node_press(
-                        ec_id,
+                        vec![ec_id],
                         x,
                         y,
                         text_edit_was_active,
                         viewport_height,
                     );
                 }
-                if let Some(node_id) = self
+                if let Some(hit_path) = self
                     .layout_scene
-                    .node_at_doc_point(doc_point, self.editor_state.viewport.zoom)
+                    .node_path_at_doc_point(doc_point, self.editor_state.viewport.zoom)
                 {
-                    // Selection promotion / enter-group / drag start —
+                    // Relative-level selection / one-step drill / drag start —
                     // see `canvas_select_drag.rs`.
-                    let ec_id = op_editor_core::NodeId::new(&node_id);
+                    let hit_path = hit_path
+                        .into_iter()
+                        .map(op_editor_core::NodeId::new)
+                        .collect();
                     return self.apply_canvas_node_press(
-                        ec_id,
+                        hit_path,
                         x,
                         y,
                         text_edit_was_active,
@@ -1113,15 +1134,22 @@ impl WidgetHostNative {
                     );
                 }
                 // Empty canvas press — start a marquee.
+                self.editor_state.editor_ui.last_canvas_click = None;
                 let cleared_now = if !self.shift_held {
                     let was_set = !self.editor_state.selection.set.is_empty();
+                    let had_scope = self.editor_state.editor_ui.entered_container.is_some();
                     if was_set {
                         self.editor_state.clear_selection();
                     }
                     // Clicking blank canvas steps out of the entered
                     // container (clearing-exits rule).
                     self.editor_state.sync_entered_container_with_selection();
-                    was_set
+                    let exited_scope =
+                        had_scope && self.editor_state.editor_ui.entered_container.is_none();
+                    if was_set || exited_scope {
+                        self.mark_dirty();
+                    }
+                    was_set || exited_scope
                 } else {
                     false
                 };

@@ -1279,8 +1279,10 @@ pub struct EditorUiState {
     pub collapsed_layers: HashSet<NodeId>,
     /// Last LayerPanel click target + ms; 400 ms re-press → rename.
     pub last_layer_click: Option<(LayerContextTarget, u64)>,
-    /// Last canvas left-click target + ms; 400 ms same-node re-press
-    /// on a Text node promotes to inline text edit.
+    /// Deepest canvas hit + ms for the first half of a possible
+    /// double-click. A same-hit re-press within 400 ms drills exactly
+    /// one hierarchy level (or enters inline edit when no child level
+    /// remains on a Text node).
     pub last_canvas_click: Option<(NodeId, u64)>,
     /// Last VariablesPanel name-cell click + ms; 400 ms same-row
     /// re-press promotes to variable rename.
@@ -1340,14 +1342,15 @@ pub struct EditorUiState {
     // --- Component browser ------------------------------------------
     /// Whether the floating Component-Browser panel is shown.
     pub component_browser_open: bool,
-    /// Canvas node under the cursor (Select tool, no drag) — drives
-    /// the dashed hover outline (TS `hoveredNodeId`).
+    /// Current hierarchy focus under the cursor (Select tool, no
+    /// drag). Canvas paint outlines the focus solid and all of its
+    /// direct visible children dashed.
     pub canvas_hover_node: Option<NodeId>,
-    /// Frame/group the user "entered" by double-clicking it while
-    /// selected (TS `enteredFrameId`). While set, canvas-click parent
-    /// promotion stops at this container's children instead of
-    /// promoting to the page-root level. Escape and selecting outside
-    /// the container exit it. Transient: never serialized.
+    /// Sibling scope entered by a one-level canvas double-click. While
+    /// set, the scope's direct children are the current single-click
+    /// targets and their children are the next drill candidates.
+    /// Escape and selecting outside the scope exit it. Transient:
+    /// never serialized.
     pub entered_container: Option<NodeId>,
     /// Top-left corner of the Component-Browser panel in logical px;
     /// `None` until first opened — the host then centres it.

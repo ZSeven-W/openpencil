@@ -30,6 +30,23 @@ const NESTED: &str = r#"{"version":"0.8.0","children":[
   {"type":"rectangle","id":"other","name":"Other","x":650,"y":60,"width":40,"height":40}
 ]}"#;
 
+/// Four selection depths at the shared probe point: root > l1 > l2 > l3.
+/// Every nested node contains doc (470, 130), while `other` remains available
+/// for multi-selection and outside-scope tests.
+const FOUR_LEVEL: &str = r#"{"version":"0.8.0","children":[
+  {"type":"frame","id":"root","name":"Root","x":400,"y":60,"width":240,"height":240,
+   "children":[
+     {"type":"frame","id":"l1","name":"Level 1","x":20,"y":20,"width":200,"height":200,
+      "children":[
+        {"type":"frame","id":"l2","name":"Level 2","x":20,"y":20,"width":160,"height":160,
+         "children":[
+           {"type":"rectangle","id":"l3","name":"Level 3","x":20,"y":20,"width":60,"height":60}
+         ]}
+      ]}
+   ]},
+  {"type":"rectangle","id":"other","name":"Other","x":700,"y":60,"width":40,"height":40}
+]}"#;
+
 /// Screen point for a doc point (zoom 1, pan 0 in a fresh host).
 fn screen_at(host: &WidgetHostNative, doc_x: f32, doc_y: f32) -> (f32, f32) {
     let (cx0, cy0, _cw, _ch) = host.canvas_region(VIEWPORT_W, VIEWPORT_H);
@@ -45,44 +62,68 @@ fn release(host: &mut WidgetHostNative) {
     let _ = host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H);
 }
 
-// --- GAP A: promotion / enter-group / Escape ---------------------------
+// --- Relative-depth selection / enter-group / Escape -------------------
 
 #[test]
-fn click_on_nested_child_promotes_to_top_level_frame() {
+fn first_press_on_four_level_hit_selects_level_one() {
     let mut host = WidgetHostNative::new();
-    seed(&mut host, NESTED);
-    press_doc(&mut host, 450.0, 110.0); // over `leaf`
-    assert_eq!(host.editor_state().selection.anchor, NodeId::new("card"));
+    seed(&mut host, FOUR_LEVEL);
+
+    press_doc(&mut host, 470.0, 130.0);
+
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("l1"));
     assert_eq!(host.editor_state().editor_ui.entered_container, None);
 }
 
 #[test]
-fn click_on_child_of_selected_multi_set_keeps_the_set() {
+fn click_on_selected_primary_in_multi_set_keeps_the_set() {
     let mut host = WidgetHostNative::new();
-    seed(&mut host, NESTED);
-    host.editor_state_mut().selection.set = vec![NodeId::new("card"), NodeId::new("other")];
+    seed(&mut host, FOUR_LEVEL);
+    host.editor_state_mut().selection.set = vec![NodeId::new("l1"), NodeId::new("other")];
     host.editor_state_mut().selection.anchor = NodeId::new("other");
     host.mark_paint_dirty_for_test();
-    press_doc(&mut host, 450.0, 110.0); // child of selected `card`
+    press_doc(&mut host, 470.0, 130.0);
     assert_eq!(host.editor_state().selection_count(), 2, "set preserved");
     assert!(host.node_drag.is_some(), "press still drags the set");
 }
 
 #[test]
-fn double_click_selected_container_enters_and_selects_child() {
+fn double_click_drills_one_level_and_third_click_does_not_chain() {
     let mut host = WidgetHostNative::new();
-    seed(&mut host, NESTED);
-    press_doc(&mut host, 450.0, 110.0); // first click → selects `card`
+    seed(&mut host, FOUR_LEVEL);
+    host.set_now_ms(1_000);
+
+    press_doc(&mut host, 470.0, 130.0);
     release(&mut host);
-    assert_eq!(host.editor_state().selection.anchor, NodeId::new("card"));
-    press_doc(&mut host, 450.0, 110.0); // double-click (same node, <400 ms)
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("l1"));
+
+    host.set_now_ms(1_200);
+    press_doc(&mut host, 470.0, 130.0);
     release(&mut host);
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("l2"));
     assert_eq!(
         host.editor_state().editor_ui.entered_container,
-        Some(NodeId::new("card")),
-        "double-click on the selected container enters it"
+        Some(NodeId::new("l1")),
+        "double-click enters exactly the primary level"
     );
-    assert_eq!(host.editor_state().selection.anchor, NodeId::new("leaf"));
+    assert_eq!(
+        host.editor_state().editor_ui.canvas_hover_node,
+        Some(NodeId::new("l2")),
+        "stationary hover rebases to the newly selected second level"
+    );
+
+    host.set_now_ms(1_300);
+    press_doc(&mut host, 470.0, 130.0);
+    release(&mut host);
+    assert_eq!(
+        host.editor_state().selection.anchor,
+        NodeId::new("l2"),
+        "the click after a consumed double-click must not chain into l3"
+    );
+    assert_eq!(
+        host.editor_state().editor_ui.entered_container,
+        Some(NodeId::new("l1"))
+    );
 }
 
 #[test]
@@ -133,20 +174,46 @@ fn blank_canvas_press_exits_the_entered_container() {
 #[test]
 fn clicking_root_frame_label_selects_that_root() {
     let mut host = WidgetHostNative::new();
-    seed(
-        &mut host,
-        r#"{"version":"0.8.0","children":[
-          {"type":"frame","id":"music","name":"Music App Home","x":400,"y":60,"width":240,"height":200,
-           "children":[]}
-        ]}"#,
-    );
+    seed(&mut host, FOUR_LEVEL);
 
     press_doc(&mut host, 424.0, 42.0);
 
-    assert_eq!(host.editor_state().selection.anchor, NodeId::new("music"));
+    assert_eq!(host.editor_state().selection.anchor, NodeId::new("root"));
     assert!(
         host.node_drag.is_some(),
         "label press should behave like a root press"
+    );
+}
+
+#[test]
+fn cursor_hover_inside_four_level_tree_resolves_to_level_one() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, FOUR_LEVEL);
+    let _ = host.layout_scene();
+    host.last_viewport_w = VIEWPORT_W;
+    host.last_viewport_h = VIEWPORT_H;
+    let (x, y) = screen_at(&host, 470.0, 130.0);
+
+    assert!(host.apply_cursor_move(x, y));
+    assert_eq!(
+        host.editor_state().editor_ui.canvas_hover_node,
+        Some(NodeId::new("l1"))
+    );
+}
+
+#[test]
+fn cursor_hover_on_frame_label_resolves_to_root() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, FOUR_LEVEL);
+    let _ = host.layout_scene();
+    host.last_viewport_w = VIEWPORT_W;
+    host.last_viewport_h = VIEWPORT_H;
+    let (x, y) = screen_at(&host, 424.0, 42.0);
+
+    assert!(host.apply_cursor_move(x, y));
+    assert_eq!(
+        host.editor_state().editor_ui.canvas_hover_node,
+        Some(NodeId::new("root"))
     );
 }
 

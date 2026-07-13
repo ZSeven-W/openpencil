@@ -7,7 +7,7 @@ use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::PenFill;
 use op_editor_core::codegen::{CodegenHover, CodegenPhase};
 use op_editor_core::image_panel_state::{ImageAssetCheck, ImageAssetStatus};
-use op_editor_core::{ButtonPressTarget, NodeId};
+use op_editor_core::{ButtonPressTarget, NodeId, PropertyFocus};
 use op_editor_core::{FlexLayout, PaddingEditMode, PropertyTab};
 use op_editor_ui::widgets::property_panel_action::CodegenAction;
 use op_editor_ui::widgets::property_panel_action::{
@@ -55,6 +55,24 @@ fn point_for_action(host: &WidgetHost, want: impl Fn(&PropertyPanelAction) -> bo
         y += 2.0;
     }
     panic!("no property-panel action point maps to requested action");
+}
+
+fn point_for_focus(host: &WidgetHost, want: PropertyFocus) -> Point2D {
+    let panel = PropertyPanel::for_selection(&host.editor_state).expect("property panel");
+    let rect = property_rect(host);
+    let mut y = rect.origin.y + 2.0;
+    while y < rect.origin.y + rect.size.y {
+        let mut x = rect.origin.x + 2.0;
+        while x < rect.origin.x + rect.size.x {
+            let point = Point2D::new(x, y);
+            if panel.hit_test(rect, point) == Some(want) {
+                return point;
+            }
+            x += 2.0;
+        }
+        y += 2.0;
+    }
+    panic!("no property-panel input point maps to {want:?}");
 }
 
 fn point_inside_property_panel_without_target(host: &WidgetHost) -> Point2D {
@@ -120,6 +138,17 @@ fn ref_node<'a>(host: &'a WidgetHost, id: &str) -> &'a jian_ops_schema::node::Re
     }
 }
 
+fn selected_scene_size(host: &mut WidgetHost) -> (f32, f32) {
+    let id = host.editor_state.selection.anchor.as_str().to_string();
+    host.refresh_layout_scene();
+    let node = host
+        .layout_scene
+        .active_page()
+        .and_then(|page| page.find(&id))
+        .expect("selected scene node present");
+    (node.bounds.size.x, node.bounds.size.y)
+}
+
 #[test]
 fn property_panel_action_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHost::new();
@@ -150,6 +179,46 @@ fn property_panel_action_press_sets_and_release_clears_pressed_button() {
 
     assert!(host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H));
     assert_eq!(host.editor_state.editor_ui.pressed_button, None);
+}
+
+#[test]
+fn web_disabling_fill_height_freezes_resolved_height_then_numeric_input_resizes_scene() {
+    let mut host = WidgetHost::new();
+    seed(
+        &mut host,
+        r##"{ "version": "0.8.0", "children": [
+              {"type":"frame","id":"screen","width":390,"height":710,
+               "layout":"vertical","gap":0,"children":[
+                 {"type":"frame","id":"content","name":"Content Wrapper",
+                  "width":"fill_container","height":"fill_container",
+                  "layout":"vertical","children":[
+                    {"type":"rectangle","id":"body","width":"fill_container","height":100}
+                  ]},
+                 {"type":"frame","id":"nav","width":"fill_container","height":94}
+               ]}
+        ]}"##,
+    );
+    host.editor_state
+        .set_single_selection(NodeId::new("content"));
+
+    assert_eq!(selected_scene_size(&mut host), (390.0, 616.0));
+    host.apply_property_action(PropertyPanelAction::ToggleSizeFillHeight);
+
+    let content = selected_frame(&host);
+    assert_eq!(
+        content.container.height,
+        Some(SizingBehavior::Number(616.0)),
+        "turning Fill Height off must freeze the current resolved height"
+    );
+    assert_eq!(selected_scene_size(&mut host), (390.0, 616.0));
+
+    let point = point_for_focus(&host, PropertyFocus::SizeH);
+    assert!(host.apply_press(point.x, point.y, VIEWPORT_W, VIEWPORT_H));
+    assert_eq!(host.editor_state.ui.property_input.text(), "616");
+    host.editor_state.ui.property_input.set_text("200");
+    assert!(host.apply_send());
+
+    assert_eq!(selected_scene_size(&mut host), (390.0, 200.0));
 }
 
 #[test]

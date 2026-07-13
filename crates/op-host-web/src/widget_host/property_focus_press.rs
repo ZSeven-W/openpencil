@@ -11,7 +11,11 @@ impl WidgetHost {
         point: Point2D,
     ) -> bool {
         self.commit_property_focus_if_any();
-        let (focus, initial) = if let Some(panel) = PropertyPanel::for_selection(&self.editor_state)
+        // The previous property commit may have changed the selected node's
+        // resolved Fill/Hug size. Refresh before taking the next input seed.
+        self.refresh_layout_scene();
+        let (focus, initial) = if let Some(panel) =
+            PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene)
         {
             let focus = panel.hit_test(property_rect, point).unwrap_or(focus);
             (

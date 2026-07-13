@@ -321,9 +321,9 @@ impl EditorState {
         }
     }
 
-    // `set_selected_bounds` (handle-drag resize, incl. descendant
-    // scaling) lives in `drag_mutators.rs` — split out to keep this
-    // file under the 800-line ceiling.
+    // Selection-handle resize lives in `drag_mutators.rs` — split out to
+    // keep this file under the 800-line ceiling. It changes only the selected
+    // node; descendants adapt through normal layout resolution.
 
     /// Translate every node in the selection set by `(dx, dy)` doc
     /// px. Containers carry their subtree (child coords are parent-

@@ -209,15 +209,6 @@ pub(crate) fn silhouette_for(style: op_editor_core::PencilCursorStyle) -> Silhou
 
 /// Fallback for reveals not owned by any tagged agent (the same red the
 /// retired dashed-reveal border used as its untagged default).
-/// O4 outline halo — near-black slate, drawn wide and translucent
-/// OUTSIDE the white rim.
-const PENCIL_HALO: Color = Color {
-    r: 0.067,
-    g: 0.094,
-    b: 0.153,
-    a: 1.0,
-};
-
 /// Chubby variant's eraser butt.
 const PENCIL_ERASER_PINK: Color = Color {
     r: 1.0,
@@ -643,7 +634,7 @@ pub(crate) fn paint_cursor_swatch(
             .collect()
     };
     let body = at(silhouette.body);
-    paint_soft_halo(cx, &body, 1.0);
+    paint_soft_shadow(cx, &body, 1.0);
     paint_rim(cx, &body, 0.95);
     cx.backend.fill_polygon(&body, color);
     if let Some(eraser) = silhouette.eraser {
@@ -662,11 +653,11 @@ pub(crate) fn paint_cursor_swatch(
 }
 
 /// Uniformly outset a silhouette by `offset` px about its centroid. Used for
-/// both the halo layers and the white rim: a filled outset paints the rim as
+/// both the shadow layers and the white rim: a filled outset paints the rim as
 /// GEOMETRY, so its width is exact everywhere and no stroke joins can notch it
 /// (the trait's fallback polygon stroke drew each edge as its own capped
 /// segment — every vertex of the densely-sampled arc showed a jaggy).
-fn outset(body: &[Point2D], offset: f32, drop: f32) -> Vec<Point2D> {
+fn outset(body: &[Point2D], offset: f32, shift_x: f32, shift_y: f32) -> Vec<Point2D> {
     let n = body.len() as f32;
     let (mut sum_x, mut sum_y) = (0.0f32, 0.0f32);
     for p in body {
@@ -680,30 +671,27 @@ fn outset(body: &[Point2D], offset: f32, drop: f32) -> Vec<Point2D> {
         .fold(1.0f32, f32::max);
     let k = 1.0 + offset / radius;
     body.iter()
-        .map(|p| Point2D::new(cx + (p.x - cx) * k, cy + (p.y - cy) * k + drop))
+        .map(|p| Point2D::new(cx + (p.x - cx) * k + shift_x, cy + (p.y - cy) * k + shift_y))
         .collect()
 }
 
 /// Width of the white rim (px of outset beyond the body silhouette).
 const RIM: f32 = 1.6;
 
-/// Soft halo as concentric FILLED expansions of the silhouette, largest
-/// first with per-layer alpha stacking smoothly toward the body. Filled
-/// polygons have no stroke joins, so sharp silhouette corners cannot spike
-/// (three concentric STROKES read as a dirty banded ring - user feedback
-/// 2026-07-12, twice). The slight downward bias doubles as the contact
-/// shadow, replacing the old hard-edged offset copy.
-fn paint_soft_halo(cx: &mut PaintCx<'_>, body: &[Point2D], alpha_scale: f32) {
-    // The halo sits OUTSIDE the white rim, so every layer clears it.
+/// Pencil-style contact shadow: narrow neutral-black feather, shifted a
+/// half-pixel left/down. Filled expansions keep the fallback painter soft
+/// without introducing the jagged polygon joins produced by strokes.
+fn paint_soft_shadow(cx: &mut PaintCx<'_>, body: &[Point2D], alpha_scale: f32) {
+    // The shadow sits outside the white rim; largest/faintest paints first.
     for (offset, alpha) in [
-        (RIM + 3.2, 0.030),
-        (RIM + 2.4, 0.040),
-        (RIM + 1.6, 0.050),
-        (RIM + 0.8, 0.060),
+        (RIM + 1.6, 0.030),
+        (RIM + 1.2, 0.040),
+        (RIM + 0.8, 0.050),
+        (RIM + 0.4, 0.060),
     ] {
-        let ring = outset(body, offset, 0.7);
+        let ring = outset(body, offset, -0.5, 0.5);
         cx.backend
-            .fill_polygon(&ring, PENCIL_HALO.with_alpha(alpha * alpha_scale));
+            .fill_polygon(&ring, Color::BLACK.with_alpha(alpha * alpha_scale));
     }
 }
 
@@ -711,7 +699,7 @@ fn paint_soft_halo(cx: &mut PaintCx<'_>, body: &[Point2D], alpha_scale: f32) {
 /// ring of exactly `RIM` px with no stroke joins to notch it.
 fn paint_rim(cx: &mut PaintCx<'_>, body: &[Point2D], alpha: f32) {
     cx.backend
-        .fill_polygon(&outset(body, RIM, 0.0), Color::WHITE.with_alpha(alpha));
+        .fill_polygon(&outset(body, RIM, 0.0, 0.0), Color::WHITE.with_alpha(alpha));
 }
 
 fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhouette: &Silhouette) {
@@ -740,9 +728,8 @@ fn paint_sprite(cx: &mut PaintCx<'_>, sprite: &CursorSprite, now_ms: u64, silhou
             .collect()
     };
     let body = at(silhouette.body);
-    // Dark soft halo OUTSIDE the white rim (user-picked "O4", the macOS
-    // pointer treatment) - filled-expansion feather, see paint_soft_halo.
-    paint_soft_halo(cx, &body, sprite.alpha);
+    // Narrow neutral contact shadow outside the white rim.
+    paint_soft_shadow(cx, &body, sprite.alpha);
     paint_rim(cx, &body, 0.95 * sprite.alpha);
     cx.backend
         .fill_polygon(&body, sprite.color.with_alpha(sprite.alpha));
@@ -806,6 +793,19 @@ fn paint_name_pill(cx: &mut PaintCx<'_>, sprite: &CursorSprite, name: &str) {
         sprite.pos.y + OFFSET_Y,
         name_w + PAD_X * 2.0,
         PILL_H,
+    );
+    // Pencil's label uses the same compact contact shadow as its pointer:
+    // nearly centred, neutral black, and just soft enough to lift the tag.
+    cx.backend.fill_drop_shadow(
+        Rect::xywh(
+            pill.origin.x - 0.5,
+            pill.origin.y + 0.5,
+            pill.size.x,
+            pill.size.y,
+        ),
+        PILL_H / 2.0,
+        1.5,
+        Color::BLACK.with_alpha(0.28 * sprite.alpha),
     );
     cx.backend.fill_round_rect(
         pill,

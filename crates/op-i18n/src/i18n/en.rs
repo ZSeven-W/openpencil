@@ -288,9 +288,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.bottomNavPrompt" => "Design a mobile app bottom navigation bar with 5 tabs: Home, Search, Add, Messages, Profile",
         "ai.quickAction.colorPalette" => "Suggest a color palette for my app",
         "ai.quickAction.colorPalettePrompt" => "Suggest a modern color palette for a pet care app",
-        "ai.quickAction.dashboard" => {
-            "Design a dark-themed music streaming mobile app home screen. Include a greeting \"Good evening\", horizontal scrollable \"Recently Played\" album art cards, \"Made For You\" section with 3 playlist cards showing cover art and playlist names, \"New Releases\" section with 4 album cards in a 2x2 grid, and a floating mini player bar at the bottom showing current track with play/pause controls. Bottom tab bar (Home, Search, Library, Premium). Dark background with lime green accent."
-        }
+        "ai.quickAction.dashboard" => "Dark music streaming mobile app",
         "ai.quickAction.dashboardPrompt" => {
             "Design a dark-themed music streaming mobile app home screen. Include a greeting \"Good evening\", horizontal scrollable \"Recently Played\" album art cards, \"Made For You\" section with 3 playlist cards showing cover art and playlist names, \"New Releases\" section with 4 album cards in a 2x2 grid, and a floating mini player bar at the bottom showing current track with play/pause controls. Bottom tab bar (Home, Search, Library, Premium). Dark background with lime green accent."
         }

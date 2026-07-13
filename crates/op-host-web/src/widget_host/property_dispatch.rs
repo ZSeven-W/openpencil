@@ -97,6 +97,13 @@ impl WidgetHost {
             }
             _ => {}
         }
+        // Resolve Fill/Hug pixels against the real scene before an instance
+        // write scope temporarily swaps a Ref anchor for its display node.
+        let resolved_sizing_fallback = match action {
+            A::ToggleSizeFillWidth | A::ToggleSizeHugWidth => self.selected_resolved_size(true),
+            A::ToggleSizeFillHeight | A::ToggleSizeHugHeight => self.selected_resolved_size(false),
+            _ => None,
+        };
         let instance_scope = self.editor_state.begin_instance_write_for_anchor();
         match action {
             A::SetPropertyTab(tab) => {
@@ -106,16 +113,32 @@ impl WidgetHost {
                 self.set_selected_layout_mode(mode);
             }
             A::ToggleSizeFillWidth => {
-                self.toggle_selected_sizing(true, SizingKeyword::FillContainer);
+                self.toggle_selected_sizing(
+                    true,
+                    SizingKeyword::FillContainer,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeFillHeight => {
-                self.toggle_selected_sizing(false, SizingKeyword::FillContainer);
+                self.toggle_selected_sizing(
+                    false,
+                    SizingKeyword::FillContainer,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeHugWidth => {
-                self.toggle_selected_sizing(true, SizingKeyword::FitContent);
+                self.toggle_selected_sizing(
+                    true,
+                    SizingKeyword::FitContent,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeHugHeight => {
-                self.toggle_selected_sizing(false, SizingKeyword::FitContent);
+                self.toggle_selected_sizing(
+                    false,
+                    SizingKeyword::FitContent,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeClipContent => {
                 self.toggle_selected_clip_content();

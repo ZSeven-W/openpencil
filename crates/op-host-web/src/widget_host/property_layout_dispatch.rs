@@ -6,6 +6,23 @@ use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use op_editor_core::PropertyFocus;
 
 impl WidgetHost {
+    pub(in crate::widget_host) fn selected_resolved_size(&mut self, width: bool) -> Option<f64> {
+        self.refresh_layout_scene();
+        let id = self.editor_state.selection.anchor.as_str();
+        self.layout_scene
+            .active_page()
+            .and_then(|page| page.find(id))
+            .map(|node| node.aggregate_bounds())
+            .map(|bounds| {
+                if width {
+                    f64::from(bounds.size.x)
+                } else {
+                    f64::from(bounds.size.y)
+                }
+            })
+            .filter(|value| value.is_finite() && *value >= 0.0)
+    }
+
     pub(in crate::widget_host) fn set_selected_layout_mode(
         &mut self,
         mode: op_editor_core::FlexLayout,
@@ -33,12 +50,16 @@ impl WidgetHost {
         &mut self,
         width: bool,
         keyword: SizingKeyword,
+        resolved_fallback: Option<f64>,
     ) {
         let id = self.editor_state.selection.anchor.clone();
         if !id.is_real() {
             return;
         }
-        let (is_current, fallback) = {
+        // Leaving Fill / Hug must freeze the layout-resolved canvas size.
+        // The canonical keyword has no literal pixels, so aggregate_bounds
+        // can collapse to the much smaller descendant-content union.
+        let (is_current, aggregate_fallback) = {
             let Some(node) = self.editor_state.selected_node() else {
                 return;
             };
@@ -47,6 +68,7 @@ impl WidgetHost {
             let bounds = op_editor_core::aggregate_bounds(node);
             (is_current, if width { bounds.w } else { bounds.h })
         };
+        let fallback = resolved_fallback.unwrap_or(aggregate_fallback);
         self.editor_state.commit_history();
         if is_current {
             let focus = if width {

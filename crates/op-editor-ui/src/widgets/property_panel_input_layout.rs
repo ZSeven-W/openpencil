@@ -117,38 +117,21 @@ pub fn editable_input_rects(
     }
     if visible.size_options {
         y += SECTION_HEADER_HEIGHT;
-        // Mirror paint_size_section: omit the W/H hit-rect when its
-        // dimension is fill/hug, and reflow H into the left slot when W
-        // is hidden — but keep the row's vertical advance fixed so later
-        // sections don't shift. (TS size-section.tsx: input rendered
-        // only when the dimension is a concrete number.)
-        let w_left = Point2D::new(x0 + PAD_X, y);
-        let h_right = Point2D::new(x0 + PAD_X + half_w + 8.0, y);
-        let w_visible = !visible.size_fill_width && !visible.size_hug_width;
-        let h_visible = !visible.size_fill_height && !visible.size_hug_height;
-        if w_visible {
-            rects.push((
-                PropertyFocus::SizeW,
-                Rect {
-                    origin: w_left,
-                    size: Point2D::new(half_w, INPUT_HEIGHT),
-                },
-            ));
-        }
-        if h_visible {
-            rects.push((
-                PropertyFocus::SizeH,
-                Rect {
-                    origin: if w_visible { h_right } else { w_left },
-                    size: Point2D::new(half_w, INPUT_HEIGHT),
-                },
-            ));
-        }
-        // Collapse the input row when both dimensions are fill/hug (same
-        // rule as paint_size_section) so the checkboxes shift up.
-        if w_visible || h_visible {
-            y += INPUT_HEIGHT + 10.0;
-        }
+        rects.push((
+            PropertyFocus::SizeW,
+            Rect {
+                origin: Point2D::new(x0 + PAD_X, y),
+                size: Point2D::new(half_w, INPUT_HEIGHT),
+            },
+        ));
+        rects.push((
+            PropertyFocus::SizeH,
+            Rect {
+                origin: Point2D::new(x0 + PAD_X + half_w + 8.0, y),
+                size: Point2D::new(half_w, INPUT_HEIGHT),
+            },
+        ));
+        y += INPUT_HEIGHT + 10.0;
         let check_h = 22.0;
         y += check_h * if visible.clip_content { 3.0 } else { 2.0 };
         y += 12.0;

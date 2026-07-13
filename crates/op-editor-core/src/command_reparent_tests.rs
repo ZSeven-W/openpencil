@@ -6,7 +6,10 @@ use crate::command::EditorCommand;
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::test_support::{frame, rect, state_with};
+use crate::walkers::find_node;
+use jian_ops_schema::node::PenNode;
 use jian_ops_schema::page::PenPage;
+use serde_json::json;
 
 fn id(s: &str) -> NodeId {
     NodeId::new(s)
@@ -128,4 +131,60 @@ fn copy_node_applies_root_overrides_without_overriding_fresh_id() {
     assert_eq!(clone.base().name.as_deref(), Some("Copy"));
     assert_eq!(clone.base().x, Some(42.0));
     assert_eq!(clone.width_px(), Some(88.0));
+}
+
+#[test]
+fn move_node_accepts_a_childless_container_but_rejects_a_leaf() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
+        "version": "1.0",
+        "children": [
+            {"type":"text","id":"source","content":"Move me"},
+            {"type":"frame","id":"empty-frame","name":"Empty Frame"},
+            {"type":"text","id":"leaf","content":"Not a parent"}
+        ]
+    }))
+    .unwrap();
+    let mut state = crate::EditorState::from_document(doc);
+    assert!(state.apply(EditorCommand::MoveNode {
+        node_id: id("source"),
+        target_parent: id("empty-frame"),
+        page_id: None,
+        index: None,
+    }));
+    let frame = find_node(state.active_children(), &id("empty-frame")).unwrap();
+    assert!(frame
+        .children()
+        .is_some_and(|children| children.iter().any(|node| node.id_str() == "source")));
+
+    let before = serde_json::to_value(&state.doc).unwrap();
+    assert!(!state.apply(EditorCommand::MoveNode {
+        node_id: id("source"),
+        target_parent: id("leaf"),
+        page_id: None,
+        index: None,
+    }));
+    assert_eq!(serde_json::to_value(&state.doc).unwrap(), before);
+}
+
+#[test]
+fn copy_node_accepts_a_childless_rectangle_container() {
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
+        "version": "1.0",
+        "children": [
+            {"type":"text","id":"source","content":"Copy me"},
+            {"type":"rectangle","id":"empty-rectangle","name":"Empty Rectangle"}
+        ]
+    }))
+    .unwrap();
+    let mut state = crate::EditorState::from_document(doc);
+    assert!(state.apply(EditorCommand::CopyNode {
+        node_id: id("source"),
+        target_parent: id("empty-rectangle"),
+        overrides_json: None,
+        page_id: None,
+    }));
+    let rectangle = find_node(state.active_children(), &id("empty-rectangle")).unwrap();
+    assert!(rectangle.children().is_some_and(|children| {
+        children.len() == 1 && matches!(children[0], PenNode::Text(_))
+    }));
 }

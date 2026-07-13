@@ -275,6 +275,88 @@ fn fit_content_text_resolves_scene_bounds_to_measured_text() {
 }
 
 #[test]
+fn omitted_height_text_uses_content_height_for_fixed_and_fill_width() {
+    // Live M3 regression: the model emitted pixel-like lineHeight values while
+    // omitting text height. They are outside the canonical multiplier range;
+    // auto-height text must fall back to content measurement instead of
+    // becoming fontSize * lineHeight hundreds of pixels tall.
+    let src = r##"{
+      "version":"1.0.0","children":[{
+        "type":"frame","id":"root","width":320,"height":300,
+        "layout":"vertical","gap":4,"children":[
+          {"type":"text","id":"fixed","width":144,
+           "content":"Neon Lights Live","fontSize":13,"lineHeight":17},
+          {"type":"text","id":"fill","width":"fill_container",
+           "content":"Sunset Jazz on Pier 17","fontSize":14,"lineHeight":18},
+          {"type":"rectangle","id":"after","width":"fill_container","height":20}
+        ]
+      }]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let page = scene.active_page().expect("active page");
+    let fixed = page.find("fixed").expect("fixed-width text");
+    let fill = page.find("fill").expect("fill-width text");
+    let after = page.find("after").expect("following sibling");
+
+    assert_eq!(
+        fixed.line_height, 0.0,
+        "paint should use default line height"
+    );
+    assert_eq!(
+        fill.line_height, 0.0,
+        "paint should use default line height"
+    );
+    assert!(
+        (10.0..40.0).contains(&fixed.bounds.size.y),
+        "fixed-width omitted-height text should use content height, got {:?}",
+        fixed.bounds
+    );
+    assert!(
+        (10.0..40.0).contains(&fill.bounds.size.y),
+        "fill-width omitted-height text should use content height, got {:?}",
+        fill.bounds
+    );
+    assert!(
+        after.bounds.origin.y >= fill.bounds.origin.y + fill.bounds.size.y,
+        "following sibling must come after auto-height text: fixed={:?} fill={:?} after={:?}",
+        fixed.bounds,
+        fill.bounds,
+        after.bounds
+    );
+    assert!(
+        after.bounds.origin.y < 100.0,
+        "auto-height text must not consume the clipped parent: {:?}",
+        after.bounds
+    );
+}
+
+#[test]
+fn explicit_height_multiline_text_rejects_pixel_like_line_height_for_paint() {
+    // An explicit box height is a geometry contract, not permission to change
+    // lineHeight from a multiplier into pixels. Layout and paint must therefore
+    // use the same fallback semantics for multi-line fixed-height text.
+    let src = r##"{
+      "version":"1.0.0","children":[{
+        "type":"text","id":"explicit","width":180,"height":52,
+        "textGrowth":"fixed-width-height",
+        "content":"First line\nSecond line","fontSize":14,"lineHeight":17
+      }]
+    }"##;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let node = scene
+        .active_page()
+        .expect("active page")
+        .find("explicit")
+        .expect("explicit-height text");
+
+    assert_eq!(node.bounds.size.y, 52.0, "authored box height is preserved");
+    assert_eq!(
+        node.line_height, 0.0,
+        "paint must use the default multiplier instead of treating 17 as 17x"
+    );
+}
+
+#[test]
 fn fit_content_stack_reserves_missing_height_text_before_next_section() {
     let src = r##"{
       "version":"1.0.0",

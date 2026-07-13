@@ -201,9 +201,8 @@ pub struct VisibleSections {
     pub layout_justify: LayoutJustifyValue,
     pub layout_align: LayoutAlignValue,
     pub size_options: bool,
-    /// Per-dimension sizing masks — when set, the matching W/H input is
-    /// hidden (fill/hug replaces the numeric field, TS size-section
-    /// parity). Read by `editable_input_rects` to gate the hit-rect.
+    /// Per-dimension sizing modes. Numeric W/H editors remain visible
+    /// and show the resolved snapshot size in every mode.
     pub size_fill_width: bool,
     pub size_fill_height: bool,
     pub size_hug_width: bool,

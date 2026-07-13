@@ -4,8 +4,8 @@ use super::helpers::{resize_bounds, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH};
 use super::{DragState, PanelResizeKind, WidgetHostNative};
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::{
-    AIChatHit, AIChatPlaceholder, ChatResizeEdge, AI_CHAT_MAX_RATIO, AI_CHAT_MIN_HEIGHT,
-    AI_CHAT_MIN_WIDTH,
+    AIChatHit, AIChatPlaceholder, CanvasViewport, ChatResizeEdge, AI_CHAT_MAX_RATIO,
+    AI_CHAT_MIN_HEIGHT, AI_CHAT_MIN_WIDTH,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -195,6 +195,9 @@ impl WidgetHostNative {
         let total_dx = ((x - drag.press_screen_x) / zoom) as f64;
         let total_dy = ((y - drag.press_screen_y) / zoom) as f64;
         if !drag.moved {
+            // Once the gesture becomes a drag it cannot be the first
+            // half of a later double-click drill.
+            self.editor_state.editor_ui.last_canvas_click = None;
             let option_source_ids: Vec<op_editor_core::NodeId> =
                 self.editor_state.selection.set.to_vec();
             if self.alt_held
@@ -1037,8 +1040,20 @@ impl WidgetHostNative {
             let dx = (x - drag.start_screen_x) / zoom;
             let dy = (y - drag.start_screen_y) / zoom;
             let new_bounds = resize_bounds(drag.start_bounds, drag.handle, dx, dy);
-            self.editor_state
-                .set_selected_bounds(rect_to_doc_rect(new_bounds));
+            let new_x = drag.handle.moves_left_edge().then(|| {
+                drag.start_authored_x.unwrap_or(0.0)
+                    + f64::from(new_bounds.origin.x - drag.start_bounds.origin.x)
+            });
+            let new_y = drag.handle.moves_top_edge().then(|| {
+                drag.start_authored_y.unwrap_or(0.0)
+                    + f64::from(new_bounds.origin.y - drag.start_bounds.origin.y)
+            });
+            self.editor_state.resize_selected_bounds(
+                rect_to_doc_rect(new_bounds),
+                drag.handle.resize_axes(),
+                new_x,
+                new_y,
+            );
             self.mark_dirty();
             return true;
         }
@@ -1351,11 +1366,11 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        // Canvas hover outline (TS `hoveredNodeId`): track the node
-        // under the cursor while the Select tool idles over the
-        // canvas. Reads the CURRENT layout scene without refreshing
-        // (same discipline as layer-row hover — hover must not
-        // rebuild a stale scene).
+        // Canvas hierarchy hover: resolve the current level's focus
+        // from the root-to-deepest scene path. Shared paint outlines
+        // the focus solid and all direct children dashed. Reads the
+        // CURRENT layout scene without refreshing (same discipline as
+        // layer-row hover — hover must not rebuild a stale scene).
         let hover_eligible = !over_topmost
             && matches!(self.editor_state.tool, op_editor_core::Tool::Select)
             && self.over_canvas(x, y, self.last_viewport_w, self.last_viewport_h);
@@ -1371,12 +1386,31 @@ impl WidgetHostNative {
                 }
             }
             self.last_hover_probe = Some((x, y));
-            let (cx0, cy0) = self.canvas_origin();
-            let canvas_local = Point2D::new(x - cx0, y - cy0);
-            let doc = self.editor_state.viewport.to_document(canvas_local);
-            self.layout_scene
-                .node_at_doc_point(doc, self.editor_state.viewport.zoom)
-                .map(|id| op_editor_core::NodeId::new(&id))
+            let (cx0, cy0, cw, ch) = self.canvas_region(self.last_viewport_w, self.last_viewport_h);
+            let canvas_rect = Rect {
+                origin: Point2D::new(cx0, cy0),
+                size: Point2D::new(cw, ch),
+            };
+            let canvas = CanvasViewport::from_editor(&self.editor_state, &self.layout_scene);
+            if let Some(root) = canvas.frame_label_at_point(canvas_rect, Point2D::new(x, y)) {
+                Some(op_editor_core::NodeId::new(root))
+            } else {
+                let canvas_local = Point2D::new(x - cx0, y - cy0);
+                let doc = self.editor_state.viewport.to_document(canvas_local);
+                self.layout_scene
+                    .node_path_at_doc_point(doc, self.editor_state.viewport.zoom)
+                    .and_then(|path| {
+                        let path = path
+                            .into_iter()
+                            .map(op_editor_core::NodeId::new)
+                            .collect::<Vec<_>>();
+                        op_editor_core::selection_resolve::resolve_canvas_depth_targets(
+                            &path,
+                            self.editor_state.editor_ui.entered_container.as_ref(),
+                        )
+                        .map(|targets| targets.primary)
+                    })
+            }
         } else {
             self.last_hover_probe = None;
             None

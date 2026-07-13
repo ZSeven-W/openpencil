@@ -18,6 +18,20 @@ impl WidgetHostNative {
         action: op_editor_ui::widgets::PropertyPanelAction,
     ) {
         use op_editor_ui::widgets::PropertyPanelAction as A;
+        // A sizing keyword toggle may temporarily swap an instance's merged
+        // display node into the document below. Capture the real canvas size
+        // before that scope starts so turning Fill/Hug off freezes exactly
+        // what the user sees, without rebuilding a scene from the temporary
+        // instance-write representation.
+        let resolved_sizing_fallback = match action {
+            A::ToggleSizeFillWidth | A::ToggleSizeHugWidth => {
+                self.resolved_selected_sizing_axis(true)
+            }
+            A::ToggleSizeFillHeight | A::ToggleSizeHugHeight => {
+                self.resolved_selected_sizing_axis(false)
+            }
+            _ => None,
+        };
         // Instance / component lifecycle actions act on the REAL Ref
         // node, so they dispatch BEFORE the instance-write redirect
         // scope below swaps in the merged display node.
@@ -70,16 +84,32 @@ impl WidgetHostNative {
                 self.set_selected_layout_mode(mode);
             }
             A::ToggleSizeFillWidth => {
-                self.toggle_selected_sizing(true, SizingKeyword::FillContainer);
+                self.toggle_selected_sizing(
+                    true,
+                    SizingKeyword::FillContainer,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeFillHeight => {
-                self.toggle_selected_sizing(false, SizingKeyword::FillContainer);
+                self.toggle_selected_sizing(
+                    false,
+                    SizingKeyword::FillContainer,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeHugWidth => {
-                self.toggle_selected_sizing(true, SizingKeyword::FitContent);
+                self.toggle_selected_sizing(
+                    true,
+                    SizingKeyword::FitContent,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeHugHeight => {
-                self.toggle_selected_sizing(false, SizingKeyword::FitContent);
+                self.toggle_selected_sizing(
+                    false,
+                    SizingKeyword::FitContent,
+                    resolved_sizing_fallback,
+                );
             }
             A::ToggleSizeClipContent => {
                 self.toggle_selected_clip_content();

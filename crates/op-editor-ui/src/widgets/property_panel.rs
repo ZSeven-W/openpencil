@@ -271,6 +271,41 @@ impl PropertyPanel {
         Self::for_selection_at(state, 0)
     }
 
+    /// Build the panel and replace a single selection's displayed W/H with
+    /// its layout-resolved canvas size. This matters for Fill/Hug nodes: the
+    /// canonical node stores a sizing keyword, while the inspector must show
+    /// the concrete size the user is about to freeze by typing a number.
+    pub fn for_selection_with_scene(
+        state: &EditorState,
+        scene: &crate::layout_scene::LayoutScene,
+    ) -> Option<Self> {
+        Self::for_selection_at_with_scene(state, scene, 0)
+    }
+
+    /// Clocked variant of [`Self::for_selection_with_scene`].
+    pub fn for_selection_at_with_scene(
+        state: &EditorState,
+        scene: &crate::layout_scene::LayoutScene,
+        now_ms: u64,
+    ) -> Option<Self> {
+        let mut panel = Self::for_selection_at(state, now_ms)?;
+        if state.selection_count() == 1 {
+            if let Some(node) = scene
+                .active_page()
+                .and_then(|page| page.find(state.selection.anchor.as_str()))
+            {
+                let bounds = node.aggregate_bounds();
+                if bounds.size.x.is_finite() && bounds.size.x >= 0.0 {
+                    panel.snapshot.width = bounds.size.x.round() as i32;
+                }
+                if bounds.size.y.is_finite() && bounds.size.y >= 0.0 {
+                    panel.snapshot.height = bounds.size.y.round() as i32;
+                }
+            }
+        }
+        Some(panel)
+    }
+
     /// Same as [`for_selection`] but threads the host's monotonic
     /// millisecond clock through so the focused-input caret can
     /// blink off the same animation timer as the chat input.
