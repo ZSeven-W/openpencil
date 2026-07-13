@@ -188,6 +188,7 @@ pub fn geometry_validate_and_fix(sink: &mut dyn DocSink, root_id: &str) -> usize
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
             collect_oversized_image_fixes(&v, &mut cmds);
             collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
+            collect_image_slot_fixes(&v, &mut cmds);
             collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
             collect_starved_rail_card_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
@@ -1126,13 +1127,27 @@ fn collect_grow_to_fit_fixes(
 const RAIL_STARVE_EPS: f64 = 12.0;
 const RAIL_MIN_CARDS: usize = 3;
 
-/// The widest fixed-width DIRECT child plus the card's own side padding — the
-/// width this card provably needs to show its authored content.
+/// The widest fixed-width DESCENDANT plus the card's own side padding — the
+/// width this card provably needs to show its authored content. Descendants,
+/// not just direct children: a destination card's photo is often an
+/// absolutely-positioned 200px plate two levels down, and that number is
+/// still the card's authored width intent (measured test0711-1-glm, where a
+/// direct-children-only scan saw nothing and left the cards at 79px).
 fn fixed_content_demand(card: &Value) -> f64 {
-    let widest = children(card)
-        .iter()
-        .filter_map(fixed_width)
-        .fold(0.0_f64, f64::max);
+    fn widest_fixed(v: &Value, depth: usize) -> f64 {
+        if depth == 0 {
+            return 0.0;
+        }
+        children(v)
+            .iter()
+            .map(|c| {
+                fixed_width(c)
+                    .unwrap_or(0.0)
+                    .max(widest_fixed(c, depth - 1))
+            })
+            .fold(0.0_f64, f64::max)
+    }
+    let widest = widest_fixed(card, 3);
     if widest == 0.0 {
         0.0
     } else {
@@ -1166,10 +1181,20 @@ fn collect_starved_rail_card_fixes(
             if all_starved {
                 for c in &cards {
                     if let Some(id) = c.get("id").and_then(Value::as_str) {
-                        cmds.push(EditorCommand::SetNodeLayoutProp {
+                        // The card takes its DEMAND as a definite width, not
+                        // fit_content: an absolutely-positioned photo plate is
+                        // out of flow, so hugging would size the card to its
+                        // text alone and starve the photo all over again
+                        // (measured: hug gave 126px against a 200px plate).
+                        cmds.push(EditorCommand::UpdateNode {
                             node_id: NodeId::new(id.to_string()),
-                            property: "width".to_string(),
-                            value: LayoutPropValue::Keyword("fit_content".to_string()),
+                            x: None,
+                            y: None,
+                            width: Some(fixed_content_demand(c).round() as i32),
+                            height: None,
+                            name: None,
+                            fill_hex: None,
+                            page_id: None,
                         });
                     }
                 }
@@ -1242,6 +1267,109 @@ fn collect_absolute_fill_image_fixes(
     }
     for c in children(v) {
         collect_absolute_fill_image_fixes(c, rects, cmds);
+    }
+}
+
+/// TWO images in one slot, and a photo band cropped to a sliver.
+///
+/// Measured (test0711-1-glm): a destination card's image wrapper was authored
+/// `height: 56` and held BOTH an absolutely-positioned 200x130 frame whose
+/// FILL is the photo AND a sibling image NODE carrying the same slot's photo -
+/// two images stacked in one box, of which only the top 56px survived the
+/// wrapper's clip. Every card's surviving 56px was that photo's sky, so five
+/// different photos rendered as five identical blue bands (user report: "最近
+/// 怎么经常有这种情况").
+///
+/// Two repairs, both provable from the authored tree:
+/// 1. **One image per slot** - when a wrapper holds an image-filled frame AND
+///    an image node, the image NODE wins (it is what the image pipeline fills
+///    and re-searches); the duplicate fill-frame is deleted.
+/// 2. **The band keeps the photo's height** - the photo the model authored for
+///    the slot declares a definite height; a wrapper shorter than half of it is
+///    an authoring slip, not art direction, so the wrapper grows to the photo's
+///    height. (A wrapper that already fits, or crops only mildly, is left
+///    alone - intentional letterboxing stays intentional.)
+const IMAGE_BAND_MIN_VISIBLE_FRACTION: f64 = 0.5;
+
+fn is_image_filled_frame(v: &Value) -> bool {
+    matches!(
+        v.get("type").and_then(Value::as_str),
+        Some("frame" | "group" | "rectangle")
+    ) && v
+        .get("fill")
+        .and_then(Value::as_array)
+        .is_some_and(|fills| {
+            fills.iter().any(|f| {
+                f.get("type").and_then(Value::as_str) == Some("image")
+                    || f.get("url").is_some()
+                    || f.get("src").is_some()
+            })
+        })
+}
+
+fn fixed_height(v: &Value) -> Option<f64> {
+    match v.get("height") {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(s)) => s.parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn collect_image_slot_fixes(v: &Value, cmds: &mut Vec<EditorCommand>) {
+    let kids = children(v);
+    let image_nodes: Vec<&Value> = kids
+        .iter()
+        .filter(|c| c.get("type").and_then(Value::as_str) == Some("image"))
+        .collect();
+    let filled_frames: Vec<&Value> = kids.iter().filter(|c| is_image_filled_frame(c)).collect();
+
+    // (1) One image per slot: the node wins, the duplicate fill-frame goes.
+    // Only a CHILDLESS plate qualifies — a filled frame that carries content
+    // (a hero with a headline on it) is a real container, not a stray twin.
+    if !image_nodes.is_empty() {
+        for frame in filled_frames.iter().filter(|f| children(f).is_empty()) {
+            if let Some(id) = frame.get("id").and_then(Value::as_str) {
+                cmds.push(EditorCommand::DeleteNode {
+                    node_id: NodeId::new(id.to_string()),
+                    page_id: None,
+                });
+            }
+        }
+    }
+
+    // (2) The band keeps the photo's height. The photo's own declared height
+    // is the model's intent for the slot; take it from whichever carrier is
+    // surviving repair (1).
+    if let Some(band) = fixed_height(v) {
+        let photo_h = if image_nodes.is_empty() {
+            filled_frames
+                .iter()
+                .filter_map(|f| fixed_height(f))
+                .fold(0.0, f64::max)
+        } else {
+            image_nodes
+                .iter()
+                .chain(filled_frames.iter())
+                .filter_map(|f| fixed_height(f))
+                .fold(0.0, f64::max)
+        };
+        if photo_h > 0.0 && band < photo_h * IMAGE_BAND_MIN_VISIBLE_FRACTION {
+            if let Some(id) = v.get("id").and_then(Value::as_str) {
+                cmds.push(EditorCommand::UpdateNode {
+                    node_id: NodeId::new(id.to_string()),
+                    x: None,
+                    y: None,
+                    width: None,
+                    height: Some(photo_h.round() as i32),
+                    name: None,
+                    fill_hex: None,
+                    page_id: None,
+                });
+            }
+        }
+    }
+    for c in kids {
+        collect_image_slot_fixes(c, cmds);
     }
 }
 

@@ -2118,21 +2118,29 @@ fn starved_rail_rects() -> std::collections::HashMap<String, Rect> {
 }
 
 #[test]
-fn starved_rail_cards_hug_and_rail_becomes_scroller() {
+fn starved_rail_cards_take_their_demand_and_the_rail_becomes_a_scroller() {
     let mut cmds = Vec::new();
     collect_starved_rail_card_fixes(&starved_rail(), &starved_rail_rects(), &mut cmds);
-    let hugged: Vec<&str> = cmds
+    let sized: Vec<(&str, i32)> = cmds
         .iter()
         .filter_map(|c| match c {
-            EditorCommand::SetNodeLayoutProp {
+            EditorCommand::UpdateNode {
                 node_id,
-                property,
-                value: LayoutPropValue::Keyword(k),
-            } if property == "width" && k == "fit_content" => Some(node_id.as_str()),
+                width: Some(w),
+                ..
+            } => Some((node_id.as_str(), *w)),
             _ => None,
         })
         .collect();
-    assert_eq!(hugged.len(), 5, "all five cards hug: {cmds:?}");
+    assert_eq!(
+        sized.len(),
+        5,
+        "all five cards take a definite width: {cmds:?}"
+    );
+    assert!(
+        sized.iter().all(|(_, w)| *w == 188),
+        "each card takes its widest fixed content as its width: {sized:?}"
+    );
     let rail_clipped = cmds.iter().any(|c| {
         matches!(c,
         EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Bool(true) }
@@ -2208,4 +2216,112 @@ fn rail_with_one_flexible_card_is_not_forced_to_hug() {
     let mut cmds = Vec::new();
     collect_starved_rail_card_fixes(&rail, &starved_rail_rects(), &mut cmds);
     assert!(cmds.is_empty(), "mixed rail left to the echo: {cmds:?}");
+}
+
+// ── one image per slot + un-cropped photo band ──
+
+/// The measured test0711-1-glm card: a 56px image band holding BOTH a
+/// 200x130 image-filled plate and the real image node.
+fn double_image_slot() -> serde_json::Value {
+    json!({
+        "type": "frame", "id": "band", "name": "Dest Image Bali",
+        "width": "fill_container", "height": 56, "layout": "horizontal",
+        "clipContent": true,
+        "children": [
+            { "type": "frame", "id": "plate", "name": "Dest Image Fill Bali",
+              "width": 200, "height": 130, "x": 0, "y": 0,
+              "fill": [{ "type": "image", "url": "data:image/jpeg;base64,AAAA" }] },
+            { "type": "icon_font", "id": "heart", "width": 22, "height": 22, "x": 165, "y": 10 },
+            { "type": "image", "id": "photo", "name": "Bali temple rice terraces",
+              "width": "fill_container", "height": "fill_container",
+              "src": "data:image/jpeg;base64,BBBB" }
+        ]
+    })
+}
+
+#[test]
+fn duplicate_image_plate_is_dropped_and_the_band_keeps_the_photo_height() {
+    let mut cmds = Vec::new();
+    collect_image_slot_fixes(&double_image_slot(), &mut cmds);
+
+    assert!(
+        cmds.iter().any(|c| matches!(c,
+            EditorCommand::DeleteNode { node_id, .. } if node_id.as_str() == "plate")),
+        "the childless image plate is the duplicate — the image node wins: {cmds:?}"
+    );
+    assert!(
+        !cmds.iter().any(|c| matches!(c,
+            EditorCommand::DeleteNode { node_id, .. } if node_id.as_str() == "photo")),
+        "the real image node survives"
+    );
+    let grown = cmds.iter().find_map(|c| match c {
+        EditorCommand::UpdateNode {
+            node_id, height, ..
+        } if node_id.as_str() == "band" => *height,
+        _ => None,
+    });
+    assert_eq!(
+        grown,
+        Some(130),
+        "a 56px band cropped a 130px photo to its sky — the band takes the photo's height"
+    );
+}
+
+#[test]
+fn a_lone_image_filled_plate_is_never_deleted() {
+    // No image node in the slot — the plate IS the image. Untouched.
+    let slot = json!({
+        "type": "frame", "id": "band", "width": "fill_container", "height": 130,
+        "children": [
+            { "type": "frame", "id": "plate", "width": 200, "height": 130,
+              "fill": [{ "type": "image", "url": "data:image/jpeg;base64,AAAA" }] }
+        ]
+    });
+    let mut cmds = Vec::new();
+    collect_image_slot_fixes(&slot, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "the only image in the slot stays: {cmds:?}"
+    );
+}
+
+#[test]
+fn an_image_filled_hero_with_content_on_it_is_not_a_duplicate_plate() {
+    // A filled frame that CARRIES content is a real container (hero with a
+    // headline), not a stray twin — even beside an image node.
+    let slot = json!({
+        "type": "frame", "id": "band", "width": "fill_container", "height": 200,
+        "children": [
+            { "type": "frame", "id": "hero", "width": 200, "height": 200,
+              "fill": [{ "type": "image", "url": "data:image/jpeg;base64,AAAA" }],
+              "children": [{ "type": "text", "id": "headline", "content": "Explore" }] },
+            { "type": "image", "id": "photo", "width": 80, "height": 80,
+              "src": "data:image/jpeg;base64,BBBB" }
+        ]
+    });
+    let mut cmds = Vec::new();
+    collect_image_slot_fixes(&slot, &mut cmds);
+    assert!(
+        !cmds
+            .iter()
+            .any(|c| matches!(c, EditorCommand::DeleteNode { .. })),
+        "a hero container is not deleted: {cmds:?}"
+    );
+}
+
+#[test]
+fn a_mild_crop_stays_intentional() {
+    // 130px photo in a 100px band — letterboxing the model may well have
+    // meant. Only a band that hides MORE than half the photo is repaired.
+    let slot = json!({
+        "type": "frame", "id": "band", "width": "fill_container", "height": 100,
+        "clipContent": true,
+        "children": [
+            { "type": "image", "id": "photo", "width": 200, "height": 130,
+              "src": "data:image/jpeg;base64,BBBB" }
+        ]
+    });
+    let mut cmds = Vec::new();
+    collect_image_slot_fixes(&slot, &mut cmds);
+    assert!(cmds.is_empty(), "a mild crop is left alone: {cmds:?}");
 }
