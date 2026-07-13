@@ -482,16 +482,26 @@ pub(crate) fn ensure_document_file(path: &Path) -> Result<(), String> {
 /// check never mutates the file, so a corrupt-but-valuable document is
 /// preserved rather than silently replaced.
 fn preflight_document(path: &Path) -> Result<(), String> {
-    let src = fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
-    op_pen_loader::load_canonical(&src)
-        .map(|_| ())
-        .map_err(|e| {
-            format!(
-                "{} is not a valid OpenPencil document: {e}\n\
+    let bytes = fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    // A `.op` document is UTF-8 JSON; a real `.fig` / `.pen` is a binary ZIP
+    // archive (invalid UTF-8). Reject the binary case here as a wrong file type
+    // rather than letting the server's `read_to_string` fail with an IO-flavored
+    // error that reads like the file is unreadable.
+    let src = std::str::from_utf8(&bytes).map_err(|_| {
+        format!(
+            "{} is not a valid OpenPencil document: not UTF-8 text \
+             (looks like a binary archive). Only .op (JSON) documents open \
+             directly; legacy .pen / .fig files must be imported.",
+            path.display()
+        )
+    })?;
+    op_pen_loader::load_canonical(src).map(|_| ()).map_err(|e| {
+        format!(
+            "{} is not a valid OpenPencil document: {e}\n\
              Only .op (JSON) documents open directly; legacy .pen / .fig files must be imported.",
-                path.display()
-            )
-        })
+            path.display()
+        )
+    })
 }
 
 fn start_json(pid: u32, port: u16, document_path: Option<&Path>) -> String {
@@ -718,18 +728,27 @@ mod editor_will_open_tests {
     use std::fs;
 
     #[test]
-    fn preflight_rejects_malformed_document_and_accepts_a_valid_one() {
-        // A malformed / wrong-format file (here: a ZIP container's `PK` magic,
-        // i.e. a `.fig`/`.pen`-style archive saved under a `.op` name) must be
-        // rejected up front with a clear reason — NOT allowed to reach the
-        // server, which would exit(1) before binding and leave the caller with
-        // an opaque "connection refused".
+    fn preflight_rejects_malformed_documents_and_accepts_a_valid_one() {
         let dir = std::env::temp_dir().join(format!("op-preflight-{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
 
-        let bad = dir.join("bad.op");
-        fs::write(&bad, b"PK\x03\x04 not a canonical .op document").expect("write bad doc");
-        let err = preflight_document(&bad).expect_err("malformed document must be rejected");
+        // A real `.fig` / `.pen` is a binary ZIP archive — `PK\x03\x04` then
+        // bytes that are not valid UTF-8. This must be rejected as a wrong file
+        // type, not reported as an unreadable file, and never reach the server
+        // (which would exit(1) before binding → opaque "connection refused").
+        let archive = dir.join("archive.op");
+        fs::write(&archive, b"PK\x03\x04\xff\xfe\x00\x01binary\x80\x81").expect("write archive");
+        let err = preflight_document(&archive).expect_err("binary archive must be rejected");
+        assert!(
+            err.contains("is not a valid OpenPencil document"),
+            "unexpected error text: {err}"
+        );
+
+        // Valid UTF-8 that isn't a canonical document — exercises the loader's
+        // JSON parse-error path (distinct from the invalid-UTF-8 path above).
+        let garbage = dir.join("garbage.op");
+        fs::write(&garbage, b"this is not a .op document").expect("write garbage");
+        let err = preflight_document(&garbage).expect_err("non-document text must be rejected");
         assert!(
             err.contains("is not a valid OpenPencil document"),
             "unexpected error text: {err}"

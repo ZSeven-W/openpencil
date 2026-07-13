@@ -3104,6 +3104,7 @@ dependencies = [
  "op-ai-skills",
  "op-config-store",
  "op-figma",
+ "op-pen-loader",
  "op-process-io",
  "op-rpc-transport",
  "serde_json",
