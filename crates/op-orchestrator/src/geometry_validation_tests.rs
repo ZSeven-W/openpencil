@@ -1963,7 +1963,27 @@ fn forensic_resolved_rects() {
     };
     let json = std::fs::read_to_string(&path).expect("read file");
     let doc: jian_ops_schema::PenDocument = serde_json::from_str(&json).expect("parse");
-    let state = op_editor_core::EditorState::from_document(doc);
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    // `OP_FORENSIC_FIX=1` additionally runs the repair loop on every page
+    // root, so the rect dump below shows the POST-fix geometry.
+    if std::env::var("OP_FORENSIC_FIX").as_deref() == Ok("1") {
+        use op_editor_core::PenNodeExt as _;
+        let roots: Vec<String> = state
+            .active_children()
+            .iter()
+            .map(|n| n.id_str().to_string())
+            .collect();
+        let mut sink = crate::test_support::VecDocSink::new();
+        std::mem::swap(&mut sink.state, &mut state);
+        for root in roots {
+            let rounds = super::geometry_validate_and_fix(&mut sink, &root);
+            eprintln!(
+                "FIX ROUNDS for {root}: {rounds} ({} commands)",
+                sink.applied.len()
+            );
+        }
+        std::mem::swap(&mut sink.state, &mut state);
+    }
     let issues = super::geometry_diagnostics(&state);
     eprintln!("DIAGNOSTICS ({}):", issues.len());
     for issue in &issues {
@@ -2044,4 +2064,148 @@ fn slightly_short_fixed_frame_grows_to_fit_its_children() {
             card.height_px()
         );
     }
+}
+
+// ── starved rail-card fixes ──
+
+fn rail_card(id: &str, card_w: serde_json::Value, inner_w: f64) -> serde_json::Value {
+    json!({
+        "type": "frame", "id": id, "name": id, "width": card_w,
+        "height": "fill_container", "layout": "vertical", "clipContent": true,
+        "children": [
+            { "type": "frame", "id": format!("{id}-img"), "width": inner_w, "height": 190 },
+            { "type": "frame", "id": format!("{id}-label"), "width": inner_w + 28.0, "height": 56 }
+        ]
+    })
+}
+
+/// The measured test0711-1-glm shape: a 5-card horizontal rail, every card
+/// width fill_container (~58px share) while carrying 160px fixed content.
+fn starved_rail() -> serde_json::Value {
+    let cards: Vec<serde_json::Value> = (0..5)
+        .map(|i| rail_card(&format!("card{i}"), json!("fill_container"), 160.0))
+        .collect();
+    json!({
+        "type": "frame", "id": "rail", "name": "PD Rail", "width": "fill_container",
+        "layout": "horizontal", "gap": 12, "justifyContent": "space_between",
+        "children": cards
+    })
+}
+
+fn starved_rail_rects() -> std::collections::HashMap<String, Rect> {
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "rail".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 342.0,
+            h: 254.0,
+        },
+    );
+    for i in 0..5 {
+        rects.insert(
+            format!("card{i}"),
+            Rect {
+                x: i as f64 * 70.0,
+                y: 0.0,
+                w: 58.0,
+                h: 254.0,
+            },
+        );
+    }
+    rects
+}
+
+#[test]
+fn starved_rail_cards_hug_and_rail_becomes_scroller() {
+    let mut cmds = Vec::new();
+    collect_starved_rail_card_fixes(&starved_rail(), &starved_rail_rects(), &mut cmds);
+    let hugged: Vec<&str> = cmds
+        .iter()
+        .filter_map(|c| match c {
+            EditorCommand::SetNodeLayoutProp {
+                node_id,
+                property,
+                value: LayoutPropValue::Keyword(k),
+            } if property == "width" && k == "fit_content" => Some(node_id.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(hugged.len(), 5, "all five cards hug: {cmds:?}");
+    let rail_clipped = cmds.iter().any(|c| {
+        matches!(c,
+        EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Bool(true) }
+            if node_id.as_str() == "rail" && property == "clipContent")
+    });
+    assert!(
+        rail_clipped,
+        "rail marked scroller so the overfull flexifier skips it"
+    );
+    let spread_dropped = cmds.iter().any(|c| {
+        matches!(c,
+        EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
+            if node_id.as_str() == "rail" && property == "justifyContent" && k == "start")
+    });
+    assert!(spread_dropped, "space_between falls back to start+gap");
+}
+
+#[test]
+fn two_fill_columns_with_fitting_content_are_untouched() {
+    // An app-shell's two fill columns whose fixed content FITS the share —
+    // and below RAIL_MIN_CARDS anyway. Must not become a scroller.
+    let cols: Vec<serde_json::Value> = (0..2)
+        .map(|i| rail_card(&format!("col{i}"), json!("fill_container"), 300.0))
+        .collect();
+    let shell = json!({
+        "type": "frame", "id": "shell", "width": "fill_container",
+        "layout": "horizontal", "gap": 24, "children": cols
+    });
+    let mut rects = std::collections::HashMap::new();
+    rects.insert(
+        "shell".to_string(),
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 800.0,
+            h: 600.0,
+        },
+    );
+    for i in 0..2 {
+        rects.insert(
+            format!("col{i}"),
+            Rect {
+                x: i as f64 * 400.0,
+                y: 0.0,
+                w: 388.0,
+                h: 600.0,
+            },
+        );
+    }
+    let mut cmds = Vec::new();
+    collect_starved_rail_card_fixes(&shell, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "fitting columns untouched: {cmds:?}");
+}
+
+#[test]
+fn already_clipped_rail_is_left_alone() {
+    let mut rail = starved_rail();
+    rail["clipContent"] = json!(true);
+    let mut cmds = Vec::new();
+    collect_starved_rail_card_fixes(&rail, &starved_rail_rects(), &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "an authored scroller is intentional: {cmds:?}"
+    );
+}
+
+#[test]
+fn rail_with_one_flexible_card_is_not_forced_to_hug() {
+    // One card has NO fixed content (a genuine flex spacer/card) — the
+    // all-starved gate must hold the repair back.
+    let mut rail = starved_rail();
+    rail["children"][2]["children"] = json!([]);
+    let mut cmds = Vec::new();
+    collect_starved_rail_card_fixes(&rail, &starved_rail_rects(), &mut cmds);
+    assert!(cmds.is_empty(), "mixed rail left to the echo: {cmds:?}");
 }
