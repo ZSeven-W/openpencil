@@ -117,6 +117,25 @@ fn build_prompt_tolerates_unknown_styleguide_and_guideline() {
     assert!(prompt.contains("batch_design"));
 }
 
+#[test]
+fn build_prompt_keeps_landing_image_self_check_presentation_only() {
+    let s = spec(
+        "Design the landing-page hero",
+        &["n1"],
+        REAL_STYLEGUIDE,
+        &["landing-page"],
+    );
+    let prompt = build_sub_agent_prompt(&s, None);
+    assert!(prompt.contains("initial selection heuristic before inserting the image"));
+    assert!(prompt.contains("self-check is presentation-only"));
+    assert!(prompt.contains("automatic screenshot-driven self-check"));
+    assert!(prompt.contains("unless the user explicitly requests an image edit"));
+    assert!(!prompt.contains("If not, change it"));
+    assert!(prompt
+        .trim_end()
+        .ends_with(op_ai_skills::IMAGE_SELF_CHECK_SCOPE.trim_end()));
+}
+
 // ---------------------------------------------------------------------------
 // parse_spawn_args
 // ---------------------------------------------------------------------------

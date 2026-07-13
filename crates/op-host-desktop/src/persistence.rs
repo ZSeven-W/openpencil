@@ -689,4 +689,53 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(sidecar_path(&path));
     }
+
+    #[test]
+    fn opening_document_fits_and_centers_fit_content_root() {
+        let mut host = WidgetHostNative::new();
+        let doc = jian_ops_schema::load_str(
+            r#"{
+              "version":"0.8.0",
+              "children":[{
+                "type":"frame","id":"root","name":"Explore",
+                "x":12,"y":24,"width":390,"height":"fit_content",
+                "layout":"vertical",
+                "children":[
+                  {"type":"frame","id":"header","width":"fill_container","height":62},
+                  {"type":"frame","id":"content","width":"fill_container","height":616},
+                  {"type":"frame","id":"tabs","width":"fill_container","height":72}
+                ]
+              }]
+            }"#,
+        )
+        .expect("fixture JSON parses")
+        .value;
+        let state_to_open = EditorState::from_document(doc);
+        let path = temp_op_path("open-centers-fit-content-root");
+        save_to_path(&state_to_open, &path).expect("save succeeds");
+        let mut current_path = None;
+
+        assert!(open_path(&mut host, path.clone(), &mut current_path, None));
+
+        let (min_x, min_y, max_x, max_y) =
+            active_page_bbox(host.editor_state()).expect("resolved content has bounds");
+        assert!((max_y - min_y - 750.0).abs() < 0.01);
+        let content_center_x = ((min_x + max_x) / 2.0) as f32;
+        let content_center_y = ((min_y + max_y) / 2.0) as f32;
+        let (canvas_w, canvas_h) = op_host_services::design_session::design_canvas_size(
+            host.editor_state(),
+            super::super::INITIAL_VIEWPORT_W,
+            super::super::INITIAL_VIEWPORT_H,
+        );
+        let screen_center_x = host.editor_state().viewport.pan_x
+            + content_center_x * host.editor_state().viewport.zoom;
+        let screen_center_y = host.editor_state().viewport.pan_y
+            + content_center_y * host.editor_state().viewport.zoom;
+
+        assert!((screen_center_x - canvas_w / 2.0).abs() < 0.5);
+        assert!((screen_center_y - canvas_h / 2.0).abs() < 0.5);
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(sidecar_path(&path));
+    }
 }
