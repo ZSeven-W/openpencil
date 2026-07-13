@@ -98,11 +98,7 @@ fn collect_empty_media_slots<'a>(node: &'a PenNode, out: &mut Vec<&'a str>, dept
     }
     if let PenNode::Frame(_) = node {
         let empty = node.children().is_none_or(|c| c.is_empty());
-        if empty
-            && node
-                .height_px()
-                .is_some_and(|h| h >= MEDIA_SLOT_MIN_H)
-        {
+        if empty && node.height_px().is_some_and(|h| h >= MEDIA_SLOT_MIN_H) {
             out.push(node.id_str());
             return;
         }
