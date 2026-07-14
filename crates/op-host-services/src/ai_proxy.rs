@@ -1,9 +1,9 @@
 //! Backend AI proxy for the WASM web bundle.
 //!
-//! The browser shell (`op-host-web`) can't bundle the skill corpus or
-//! hold provider API keys, so it POSTs a model request here and the
-//! desktop daemon expands skill NAMES into a system prompt (via
-//! `op_ai_skills::compose_system_prompt`, server-side) and streams the
+//! The browser shell (`op-host-web`) can't bundle the skill corpus or run
+//! native providers, so it POSTs a model request here (with an optional
+//! request-scoped browser credential) and the daemon expands skill NAMES via
+//! `op_ai_skills::compose_system_prompt`, then streams the
 //! provider's `ChatDelta`s back as Server-Sent Events. The framing and
 //! skill-expansion live here (pure + tested); `web_canvas_server.rs`
 //! only routes `/api/ai/stream` (POST → SSE) and `/api/ai/models`
@@ -11,17 +11,11 @@
 
 use std::io::Write;
 
-use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, CliName, EffortLevel, ThinkingMode,
-};
-use op_editor_core::{AgentProvider, EditorState, ModelEntry};
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, ThinkingMode};
+use op_editor_core::{BuiltinAgentConfig, EditorState};
 use serde_json::{json, Value};
 
 use crate::chat_builtin_http::ConfiguredBuiltinProvider;
-use crate::chat_claude::ClaudeCodeProvider;
-use crate::chat_copilot::CopilotProvider;
-use crate::chat_http_server::OpenCodeProvider;
-use crate::chat_subprocess::SubprocessProvider;
 
 /// Parsed `POST /api/ai/stream` body. The web bundle sends skill NAMES
 /// (not the corpus) plus the per-turn knobs; the proxy expands the
@@ -33,6 +27,7 @@ pub struct AiStreamRequest {
     pub max_output_tokens: u32,
     pub thinking: ThinkingMode,
     pub effort: EffortLevel,
+    pub transient_builtin: Option<BuiltinAgentConfig>,
 }
 
 /// Parse a `/api/ai/stream` JSON body into an [`AiStreamRequest`].
@@ -79,6 +74,10 @@ pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
         .and_then(Value::as_str)
         .map(parse_effort)
         .unwrap_or_default();
+    let transient_builtin = match obj.get("credential") {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(crate::web_credentials::parse_transient_builtin(value)?),
+    };
     Some(AiStreamRequest {
         model,
         skills,
@@ -86,6 +85,7 @@ pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
         max_output_tokens,
         thinking,
         effort,
+        transient_builtin,
     })
 }
 
@@ -199,48 +199,75 @@ pub fn write_sse_error<W: Write>(out: &mut W, message: &str) -> std::io::Result<
 }
 
 /// Build a `ChatProvider` for the proxy from the editor's agent
-/// settings. Returns the first ready built-in (API-key) agent whose
-/// model matches `model`, else the first ready built-in agent
-/// regardless of model, else `None` (the route then emits an SSE
-/// error). The proxy is headless — it has no UI host — so it builds the
+/// settings. Returns the permitted ready built-in (API-key) agent whose model
+/// matches `model`; only an empty or `default` model selects the first ready
+/// built-in. Unknown, CLI, and ACP model ids return `None`. An exact
+/// browser-owned model whose endpoint is no longer permitted fails closed.
+/// The proxy is headless — it has no UI host — so it builds the
 /// provider directly from `agent_settings.builtin_agents` rather than
 /// going through `chat_session::provider_for_selected_model` (which
 /// takes the live `WidgetHostNative`).
-///
-// TODO: full provider parity with chat_session — ACP agents still need the
-// live MCP lifecycle. Built-in API-key agents and verified CLI providers are
-// supported here because they can be driven from the headless web daemon.
 pub fn proxy_provider(editor: &EditorState, model: &str) -> Option<Box<dyn ChatProvider>> {
     proxy_provider_with_chat_session(editor, model, true)
 }
 
-/// Build a proxy provider while choosing whether CLI-backed providers should
-/// join their resumable chat sessions. Plain `/api/ai/stream` uses chat
-/// sessions; standard-mode classification/design calls pass `false` so those
-/// internal LLM calls do not pollute the user's chat conversation.
+pub fn proxy_provider_for_request(
+    editor: &EditorState,
+    request: &AiStreamRequest,
+    _policy: crate::web_credential_policy::WebCredentialPersistence,
+) -> Result<Option<Box<dyn ChatProvider>>, String> {
+    let Some(agent) = request.transient_builtin.as_ref() else {
+        return Ok(proxy_provider(editor, &request.model));
+    };
+    if agent.model.trim() != request.model.trim() {
+        return Err("transient credential model does not match the request".into());
+    }
+    crate::web_credentials::validate_web_provider_base_url(&agent.base_url)?;
+    if !crate::web_credentials::public_demo_transient_endpoint_allowed(agent) {
+        return Err("custom provider endpoint is not explicitly allowed".into());
+    }
+    Ok(ConfiguredBuiltinProvider::from_builtin_agent(agent)
+        .map(|provider| Box::new(provider) as Box<dyn ChatProvider>))
+}
+
+/// Build the built-in provider selected by a web request. The web daemon does
+/// not expose host CLI or ACP providers.
 pub fn proxy_provider_with_chat_session(
     editor: &EditorState,
     model: &str,
-    chat_session: bool,
+    _chat_session: bool,
 ) -> Option<Box<dyn ChatProvider>> {
     let agents = &editor.editor_ui.agent_settings.builtin_agents;
     // Prefer an exact model match so a request for a specific model
     // reaches the agent configured for it.
-    if let Some(chosen) = agents
-        .iter()
-        .find(|a| a.ready() && a.model.trim() == model.trim())
+    let exact_builtin_agents = || {
+        agents
+            .iter()
+            .filter(|agent| agent.ready() && agent.model.trim() == model.trim())
+    };
+    if let Some(chosen) =
+        exact_builtin_agents().find(|agent| browser_owned_endpoint_is_allowed(agent))
     {
         let provider = ConfiguredBuiltinProvider::from_builtin_agent(chosen)?;
         return Some(Box::new(provider));
     }
-
-    if let Some(provider) = cli_provider_for_model(editor, model, chat_session) {
-        return Some(provider);
+    if exact_builtin_agents().next().is_some() {
+        return None;
     }
 
-    let chosen = agents.iter().find(|a| a.ready())?;
+    if !matches!(model.trim(), "" | "default") {
+        return None;
+    }
+    let chosen = agents
+        .iter()
+        .find(|agent| agent.ready() && browser_owned_endpoint_is_allowed(agent))?;
     let provider = ConfiguredBuiltinProvider::from_builtin_agent(chosen)?;
     Some(Box::new(provider))
+}
+
+fn browser_owned_endpoint_is_allowed(agent: &BuiltinAgentConfig) -> bool {
+    !crate::web_credentials::browser_owns_builtin_agent(agent)
+        || crate::web_credentials::public_demo_transient_endpoint_allowed(agent)
 }
 
 /// JSON body for `GET /api/ai/models` — a JSON array of model ids the
@@ -253,86 +280,14 @@ pub fn models_json(editor: &EditorState) -> String {
         .agent_settings
         .builtin_agents
         .iter()
-        .filter(|a| a.ready())
+        .filter(|a| a.ready() && browser_owned_endpoint_is_allowed(a))
         .map(|a| a.model.trim())
         .filter(|m| !m.is_empty())
         .map(str::to_string)
         .collect();
-    models.extend(
-        editor
-            .chat
-            .discovered_models
-            .iter()
-            .filter(|m| cli_model_is_available(editor, m))
-            .map(|m| m.value.trim())
-            .filter(|m| !m.is_empty())
-            .map(str::to_string),
-    );
+    let mut seen = std::collections::HashSet::new();
+    models.retain(|model| seen.insert(model.clone()));
     serde_json::to_string(&models).unwrap_or_else(|_| "[]".to_string())
-}
-
-fn cli_model_is_available(editor: &EditorState, model: &ModelEntry) -> bool {
-    model.builtin_provider_id.is_none()
-        && editor
-            .editor_ui
-            .agent_settings
-            .provider_verified_connected(model.provider)
-}
-
-fn cli_provider_for_model(
-    editor: &EditorState,
-    model: &str,
-    chat_session: bool,
-) -> Option<Box<dyn ChatProvider>> {
-    let requested = model.trim();
-    let entry = if requested.is_empty() || requested == "default" {
-        editor
-            .chat
-            .available_models
-            .iter()
-            .find(|m| cli_model_is_available(editor, m))
-            .or_else(|| {
-                editor
-                    .chat
-                    .discovered_models
-                    .iter()
-                    .find(|m| cli_model_is_available(editor, m))
-            })
-    } else {
-        editor
-            .chat
-            .available_models
-            .iter()
-            .find(|m| m.value.trim() == requested && cli_model_is_available(editor, m))
-            .or_else(|| {
-                editor
-                    .chat
-                    .discovered_models
-                    .iter()
-                    .find(|m| m.value.trim() == requested && cli_model_is_available(editor, m))
-            })
-    }?;
-    provider_for_cli(entry.provider, chat_session)
-}
-
-fn provider_for_cli(provider: AgentProvider, chat_session: bool) -> Option<Box<dyn ChatProvider>> {
-    match provider {
-        AgentProvider::ClaudeCode => Some(Box::new(if chat_session {
-            ClaudeCodeProvider::for_chat()
-        } else {
-            ClaudeCodeProvider::new()
-        })),
-        AgentProvider::CodexCli => SubprocessProvider::for_cli(CliName::Codex)
-            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
-        AgentProvider::OpenCode => Some(Box::new(OpenCodeProvider::new())),
-        AgentProvider::GithubCopilot => Some(Box::new(if chat_session {
-            CopilotProvider::for_chat()
-        } else {
-            CopilotProvider::new()
-        })),
-        AgentProvider::GeminiCli => SubprocessProvider::for_cli(CliName::Gemini)
-            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
-    }
 }
 
 #[cfg(test)]
@@ -408,6 +363,91 @@ mod tests {
     }
 
     #[test]
+    fn request_scoped_builtin_credential_builds_a_provider_without_mutating_settings() {
+        let body = serde_json::json!({
+            "model": "private-model",
+            "user": "generate",
+            "credential": {
+                "id": "builtin-web-1",
+                "preset": "openai",
+                "display_name": "Private",
+                "kind": "openai-compat",
+                "api_key": "sk-transient",
+                "model": "private-model",
+                "base_url": "https://api.openai.com/v1",
+                "enabled": true
+            }
+        })
+        .to_string();
+        let request = parse_ai_stream_body(&body).expect("request parses");
+        let state = EditorState::new();
+
+        let provider = proxy_provider_for_request(
+            &state,
+            &request,
+            crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+        )
+        .expect("public built-in endpoint is allowed");
+
+        assert!(provider.is_some());
+        assert!(state.editor_ui.agent_settings.builtin_agents.is_empty());
+    }
+
+    #[test]
+    fn request_scoped_custom_endpoint_is_rejected_by_browser_only_policy() {
+        let body = serde_json::json!({
+            "model": "private-model",
+            "user": "generate",
+            "credential": {
+                "id": "builtin-web-1",
+                "preset": "custom",
+                "display_name": "Private",
+                "kind": "openai-compat",
+                "api_key": "sk-transient",
+                "model": "private-model",
+                "base_url": "http://127.0.0.1:8080/v1",
+                "enabled": true
+            }
+        })
+        .to_string();
+        let request = parse_ai_stream_body(&body).expect("request parses");
+
+        assert!(proxy_provider_for_request(
+            &EditorState::new(),
+            &request,
+            crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn server_persistence_does_not_allow_a_loopback_request_endpoint() {
+        let body = serde_json::json!({
+            "model": "private-model",
+            "user": "generate",
+            "credential": {
+                "id": "builtin-web-1",
+                "preset": "custom",
+                "display_name": "Private",
+                "kind": "openai-compat",
+                "api_key": "sk-transient",
+                "model": "private-model",
+                "base_url": "http://127.0.0.1:8080/v1",
+                "enabled": true
+            }
+        })
+        .to_string();
+        let request = parse_ai_stream_body(&body).expect("request parses");
+
+        assert!(proxy_provider_for_request(
+            &EditorState::new(),
+            &request,
+            crate::web_credential_policy::WebCredentialPersistence::Server,
+        )
+        .is_err());
+    }
+
+    #[test]
     fn delta_to_sse_frames_text_delta() {
         assert_eq!(
             delta_to_sse(&ChatDelta::TextDelta("hi".into())),
@@ -457,6 +497,7 @@ mod tests {
             max_output_tokens: 2000,
             thinking: ThinkingMode::Adaptive,
             effort: EffortLevel::Low,
+            transient_builtin: None,
         };
         let provider = EchoProvider {
             script: vec![
@@ -483,6 +524,7 @@ mod tests {
             max_output_tokens: 128,
             thinking: ThinkingMode::Adaptive,
             effort: EffortLevel::Low,
+            transient_builtin: None,
         };
         let seen_model = Arc::new(Mutex::new(None));
         let provider = CaptureModelProvider {
@@ -509,6 +551,7 @@ mod tests {
             max_output_tokens: 64,
             thinking: ThinkingMode::Adaptive,
             effort: EffortLevel::Low,
+            transient_builtin: None,
         };
         let provider = EchoProvider {
             script: vec![
@@ -553,16 +596,13 @@ mod tests {
     }
 
     #[test]
-    fn proxy_provider_falls_back_when_model_unmatched() {
-        // A request for an unknown model still resolves to the only
-        // ready agent rather than failing — the proxy serves whatever
-        // the daemon has configured.
+    fn proxy_provider_rejects_an_unmatched_model() {
         let mut editor = EditorState::new();
         editor
             .editor_ui
             .agent_settings
             .add_builtin_agent_with_defaults("Built-in Claude", "sk-test", "claude-sonnet-4-5");
-        assert!(proxy_provider(&editor, "no-such-model").is_some());
+        assert!(proxy_provider(&editor, "no-such-model").is_none());
     }
 
     #[test]
@@ -580,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    fn models_json_lists_verified_cli_models() {
+    fn models_json_excludes_verified_cli_models() {
         let mut editor = EditorState::new();
         editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
             op_editor_core::AgentProvider::ClaudeCode,
@@ -603,7 +643,7 @@ mod tests {
         let json = models_json(&editor);
         let parsed: Value = serde_json::from_str(&json).expect("valid json array");
         let arr = parsed.as_array().expect("array");
-        assert!(arr.iter().any(|m| m == "claude-sonnet-4-6"), "{json}");
+        assert!(arr.is_empty(), "{json}");
     }
 
     #[test]
@@ -622,7 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn proxy_provider_builds_from_verified_cli_model() {
+    fn proxy_provider_rejects_verified_cli_model() {
         let mut editor = EditorState::new();
         editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
             op_editor_core::AgentProvider::ClaudeCode,
@@ -642,12 +682,11 @@ mod tests {
             );
         editor.rebuild_chat_models();
 
-        let provider = proxy_provider(&editor, "claude-sonnet-4-6").expect("CLI provider builds");
-        assert_eq!(provider.provider_label(), "Claude Code");
+        assert!(proxy_provider(&editor, "claude-sonnet-4-6").is_none());
     }
 
     #[test]
-    fn proxy_provider_default_uses_first_verified_cli_model() {
+    fn proxy_provider_default_does_not_use_verified_cli_model() {
         let mut editor = EditorState::new();
         editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
             op_editor_core::AgentProvider::ClaudeCode,
@@ -667,7 +706,10 @@ mod tests {
             );
         editor.rebuild_chat_models();
 
-        let provider = proxy_provider(&editor, "default").expect("CLI provider builds");
-        assert_eq!(provider.provider_label(), "Claude Code");
+        assert!(proxy_provider(&editor, "default").is_none());
     }
 }
+
+#[cfg(test)]
+#[path = "ai_proxy_tests.rs"]
+mod ai_proxy_tests;

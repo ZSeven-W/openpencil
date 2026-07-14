@@ -278,24 +278,17 @@ pub struct HttpRequest {
     pub method: String,
     pub path: String,
     pub body: String,
+    pub host: Option<String>,
+    pub origin: Option<String>,
 }
 
-/// Read an HTTP request off `stream`. Reads to the `\r\n\r\n` header
-/// terminator, parses the request line + `Content-Length`, then reads
-/// exactly that many body bytes. The header block is capped so a
-/// malformed peer can't exhaust memory.
+/// Parse a capped HTTP header and then read exactly its declared body length.
+/// Query strings are stripped from the path before routing.
 pub fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest, String> {
     const MAX_HEADER: usize = 64 * 1024;
-    // Body ceiling. A whole-document live sync (`/api/mcp/document`), or an
-    // `insert_node` carrying an embedded base64 image, is legitimately large —
-    // realistic image-heavy designs run to tens of MiB, so the old 8 MiB cap
-    // rejected them. 64 MiB comfortably accepts realistic documents while
-    // bounding peak memory: the doc-sync path parses the body into a
-    // `serde_json::Value` and reserializes the inner document before the
-    // canonical load, so actual peak is a few× the body — a 64 MiB ceiling
-    // keeps that within a sane envelope for this localhost, single-user server.
-    // The body is read incrementally (below), so a lying `Content-Length` can't
-    // force an up-front allocation.
+    // Whole-document sync can carry embedded images, so retain the 64 MiB
+    // ceiling while reading incrementally to avoid allocating from a claimed
+    // Content-Length alone.
     const MAX_BODY: usize = 64 * 1024 * 1024;
     let mut head: Vec<u8> = Vec::new();
     let mut byte = [0u8; 1];
@@ -347,17 +340,28 @@ pub fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest
                 .flatten()
         })
         .unwrap_or(0);
+    if path == "/api/settings/credentials"
+        && content_length > crate::web_credentials::MAX_CREDENTIAL_BODY_BYTES
+    {
+        return Err("credential settings body exceeds 256 KiB".into());
+    }
+    let header_value = |wanted: &str| {
+        headers.lines().skip(1).find_map(|line| {
+            let (name, value) = line.trim().split_once(':')?;
+            name.eq_ignore_ascii_case(wanted)
+                .then(|| value.trim().to_string())
+        })
+    };
+    let host = header_value("host");
+    let origin = header_value("origin");
     if content_length > MAX_BODY {
         return Err(format!(
             "request body exceeds {} MiB",
             MAX_BODY / (1024 * 1024)
         ));
     }
-    // Read the body incrementally so memory tracks bytes ACTUALLY received,
-    // not the peer-declared Content-Length: a lying or oversized length can't
-    // force a big up-front allocation — the buffer grows only as bytes arrive,
-    // and a stalled peer trips the socket read timeout instead of pinning a
-    // thread indefinitely.
+    // Grow the body from bytes actually received, not the declared length;
+    // socket timeouts bound a stalled peer.
     let mut body = Vec::with_capacity(content_length.min(64 * 1024));
     let mut remaining = content_length;
     let mut chunk = [0u8; 64 * 1024];
@@ -376,6 +380,8 @@ pub fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest
         method,
         path,
         body: String::from_utf8_lossy(&body).into_owned(),
+        host,
+        origin,
     })
 }
 
@@ -398,6 +404,7 @@ pub fn write_mcp_http_response<S: std::io::Write>(
          Access-Control-Allow-Headers: Content-Type, mcp-session-id\r\n\
          Access-Control-Expose-Headers: mcp-session-id\r\n\
          mcp-session-id: openpencil\r\n\
+         Cache-Control: no-store\r\n\
          Content-Type: application/json\r\n\
          Content-Length: {}\r\nConnection: close\r\n\r\n{}",
         body.len(),

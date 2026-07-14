@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/openpencil-packages",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Web SDK workspace for OpenPencil (the Rust product lives in ../crates). Hosts the wasm-backed op-web-sdk viewer family plus the JS build glue that feeds the Rust web target.",
   "author": {

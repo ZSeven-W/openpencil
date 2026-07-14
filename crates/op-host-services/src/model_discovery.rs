@@ -303,7 +303,10 @@ pub fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
     // `initialize` (id 1) → `initialized` notification →
     // `model/list` (id 2). stdin is held open until the response
     // lands so the server doesn't shut down mid-refresh.
-    let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"openpencil","version":"0.8.0"},"capabilities":{"experimentalApi":true}}}"#;
+    let init = format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{"clientInfo":{{"name":"openpencil","version":"{}"}},"capabilities":{{"experimentalApi":true}}}}}}"#,
+        env!("CARGO_PKG_VERSION")
+    );
     let initialized = r#"{"jsonrpc":"2.0","method":"initialized"}"#;
     let list = r#"{"jsonrpc":"2.0","id":2,"method":"model/list","params":{}}"#;
     writeln!(stdin, "{init}").ok()?;

@@ -59,9 +59,7 @@ mod repaint_coalescer;
 #[cfg(feature = "canvaskit")]
 mod theme_preset_io;
 #[cfg(feature = "canvaskit")]
-mod web_acp_connect;
-#[cfg(feature = "canvaskit")]
-mod web_agent_connect;
+mod web_ai_credentials;
 #[cfg(feature = "canvaskit")]
 mod web_ai_transport;
 // Web Iconify bridge — drains the icon picker's remote-search request directly
@@ -73,9 +71,13 @@ mod iconify_web;
 #[cfg(feature = "canvaskit")]
 mod web_chat;
 #[cfg(feature = "canvaskit")]
+mod web_credential_sync;
+#[cfg(feature = "canvaskit")]
 mod web_design_md;
 #[cfg(feature = "canvaskit")]
 mod web_settings;
+#[cfg(feature = "canvaskit")]
+mod web_storage;
 // Pure web_sys clipboard/download — Ctrl+C/X in inputs + Figma/file paste.
 #[cfg(feature = "canvaskit")]
 mod web_clipboard;

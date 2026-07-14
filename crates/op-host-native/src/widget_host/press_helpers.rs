@@ -369,6 +369,10 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::ToggleBuiltinAgentKind(index) => {
                 self.commit_settings_focus_if_any();
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .take_over_browser_builtin_agent(index);
                 if let Some(agent) = self
                     .editor_state
                     .editor_ui
@@ -404,6 +408,10 @@ impl WidgetHostNative {
                         self.editor_state
                             .editor_ui
                             .agent_settings
+                            .take_over_browser_builtin_agent(index);
+                        self.editor_state
+                            .editor_ui
+                            .agent_settings
                             .set_builtin_agent_preset(index, preset);
                         self.editor_state.rebuild_chat_models();
                     }
@@ -429,6 +437,10 @@ impl WidgetHostNative {
             }
             AgentSettingsHit::ToggleBuiltinAgentEnabled(index) => {
                 self.commit_settings_focus_if_any();
+                self.editor_state
+                    .editor_ui
+                    .agent_settings
+                    .take_over_browser_builtin_agent(index);
                 if let Some(agent) = self
                     .editor_state
                     .editor_ui

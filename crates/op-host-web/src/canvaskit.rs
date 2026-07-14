@@ -2,6 +2,7 @@
 //!
 //! Replaces the from-scratch `wasm32-unknown-unknown` skia build (skia-safe-op
 //! + hand-rolled libc++/GL shim) with the official CanvasKit skia WASM artifact.
+//!
 //! The Rust side owns all widget/draw logic and drives CanvasKit through the
 //! thin `op_ck_bridge.js` FFI. `CanvasKitBackend` implements the same
 //! `RenderBackend` (`jian_widgets::painter::Painter`) the native desktop
@@ -707,6 +708,8 @@ pub async fn init_backend(
 struct CkInner {
     backend: CanvasKitBackend,
     host: crate::widget_host::WidgetHost,
+    settings_fingerprint: Option<crate::web_settings::Fingerprint>,
+    credential_fingerprint: crate::web_settings::CredentialFingerprint,
     canvas: web_sys::HtmlCanvasElement,
     /// Hidden ARIA DOM mirror (#57) — kept in sync after every paint so a
     /// screen reader can read the opaque CanvasKit surface. `None` only if
@@ -720,6 +723,7 @@ struct CkInner {
 
 impl CkInner {
     fn repaint(&mut self) {
+        crate::web_chat::reconcile_models(self.host.editor_state_mut());
         let (w, h) = self.backend.logical_size();
         self.backend.begin_frame();
         self.host.paint_dyn(&mut self.backend, w, h);
@@ -730,6 +734,26 @@ impl CkInner {
         // appears otherwise. Cheap — toggles only on a focus transition.
         if let Some(ime) = self.ime.as_mut() {
             ime.sync_focus(self.host.input_active());
+        }
+        if crate::web_settings::save_credentials_if_changed(
+            self.host.editor_state(),
+            &mut self.credential_fingerprint,
+        )
+        .is_some()
+        {
+            if let Some(json) =
+                crate::web_settings::server_credentials_json(self.host.editor_state())
+            {
+                crate::web_credential_sync::credential_changed(json);
+            }
+        }
+        if !crate::web_settings::credential_migration_pending(&self.credential_fingerprint) {
+            if let Some(settings_fingerprint) = self.settings_fingerprint.as_mut() {
+                let _ = crate::web_settings::save_if_changed(
+                    self.host.editor_state(),
+                    settings_fingerprint,
+                );
+            }
         }
         if self.host.layout_transition_active() {
             crate::repaint_coalescer::request();
@@ -895,7 +919,15 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let logical_h = (dev_h / dpr).round().max(1.0) as u32;
 
     let backend = init_backend(&canvas_id, dpr, logical_w, logical_h).await?;
-    let host = crate::widget_host::WidgetHost::new();
+    let mut host = crate::widget_host::WidgetHost::new();
+    let credential_load = crate::web_settings::load_into(host.editor_state_mut());
+    host.mark_editor_state_dirty();
+    let settings_fingerprint = credential_load.initial_settings_fingerprint(host.editor_state());
+    let credential_fingerprint = credential_load.initial_fingerprint(host.editor_state());
+    let initial_credential_json = credential_load
+        .loaded
+        .then(|| crate::web_settings::server_credentials_json(host.editor_state()))
+        .flatten();
     // Hidden ARIA DOM mirror (#57) — created next to the canvas, refreshed
     // after every paint so screen readers can read the opaque GPU surface.
     let a11y = crate::a11y_dom::A11yDomMirror::create(&canvas);
@@ -905,10 +937,16 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let inner = Rc::new(RefCell::new(CkInner {
         backend,
         host,
+        settings_fingerprint,
+        credential_fingerprint,
         canvas: canvas.clone(),
         a11y,
         ime,
     }));
+    crate::web_credential_sync::start();
+    if let Some(json) = initial_credential_json {
+        crate::web_credential_sync::credential_changed(json);
+    }
     {
         let mut b = inner.borrow_mut();
         let _ = b.resize_to_window(&window)?;
@@ -1046,8 +1084,6 @@ pub async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 crate::dom_io::drain_pending_attachment_pick(&inner);
                 crate::dom_io::drain_pending_kit_io(&inner);
                 crate::theme_preset_io::drain_pending_theme_preset_io(&inner);
-                crate::web_agent_connect::drain_pending_provider_connect(&inner);
-                crate::web_acp_connect::drain_pending_acp_agent_connect(&inner);
                 crate::web_fonts::drain_font_requests(&inner);
             },
         )?;

@@ -826,6 +826,24 @@ fn http_request_still_rejects_an_over_cap_content_length() {
 }
 
 #[test]
+fn credential_settings_request_rejects_over_256_kib_before_reading_body() {
+    let request = concat!(
+        "POST /api/settings/credentials HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Content-Length: 262145\r\n",
+        "\r\n"
+    );
+    let mut cur = std::io::Cursor::new(request.as_bytes().to_vec());
+
+    let err = read_http_request(&mut cur).expect_err("oversized credential body must be rejected");
+
+    assert!(
+        err.contains("credential settings body exceeds 256 KiB"),
+        "{err}"
+    );
+}
+
+#[test]
 fn http_transport_serves_initialize() {
     let rpc = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
     let request = format!(
@@ -848,6 +866,7 @@ fn http_transport_serves_initialize() {
     assert!(resp.contains("Content-Type: application/json"));
     assert!(resp.contains("mcp-session-id: openpencil"));
     assert!(resp.contains("Access-Control-Allow-Origin: *"));
+    assert!(resp.contains("Cache-Control: no-store"));
     // The JSON-RPC initialize reply carries the protocol handshake +
     // the request id, proving the body round-tripped over HTTP.
     assert!(resp.contains(r#""protocolVersion""#), "body: {resp}");

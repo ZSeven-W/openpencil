@@ -75,7 +75,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>icon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleShortVersionString</key><string>0.8.0</string>
+  <key>CFBundleShortVersionString</key><string>0.8.1</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>

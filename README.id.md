@@ -123,14 +123,14 @@ Rilis Rust bertag menerbitkan satu image web host. Image TypeScript lama yang me
 
 | Image | Termasuk |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle, dan aset CanvasKit |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host, wasm bundle, dan aset CanvasKit |
 
 Web UI hanya menampilkan built-in agent profiles; alat Claude/Codex/OpenCode/Copilot/Gemini CLI tidak dibundel ke dalam image Docker.
 
 **Jalankan:**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
 ```
 
 Lalu buka `http://localhost:3100/`.
@@ -308,7 +308,7 @@ OpenPencil telah ditulis ulang dari awal dalam **Rust** ([#129](https://github.c
 - **Aksesibilitas native** — AccessKit di macOS, Windows, dan Linux, ditambah mirror DOM di web, alih-alih mengandalkan pohon a11y browser.
 - **Satu workspace bertipe** — host MCP, CLI, penyedia AI, pembuatan kode, impor Figma, dan integrasi Git semuanya berada dalam satu workspace Rust, dengan penjagaan rantai pasokan `cargo-deny` di CI.
 
-> **Status:** editor TypeScript dipensiunkan pada `v0.7.5` dan kini hanya ada dalam riwayat git; repositori ini adalah workspace Rust. Rilis Rust `v0.8.0` sedang dalam pengembangan aktif (lihat Peta Jalan di bawah).
+> **Status:** editor TypeScript dipensiunkan pada `v0.7.5` dan kini hanya ada dalam riwayat git; repositori ini adalah workspace Rust. Rilis Rust `v0.8.1` sedang dalam pengembangan aktif (lihat Peta Jalan di bawah).
 
 ## Struktur Proyek
 

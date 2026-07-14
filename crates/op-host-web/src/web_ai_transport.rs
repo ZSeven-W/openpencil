@@ -14,7 +14,7 @@
 //! round-trip itself still needs a running daemon + browser to verify.
 #![allow(dead_code)]
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use wasm_bindgen::closure::Closure;
@@ -65,9 +65,8 @@ impl AiStreamHandle {
 /// The `onprogress` closure tracks a consumed-length cursor: each tick parses
 /// only fully-terminated `data:` blocks (those before the last blank-line
 /// separator) and advances the cursor past that separator, so a partial tail is
-/// re-parsed on the next tick and no block is delivered twice. The closure is
-/// `forget()`-leaked (page-scoped like `live_sync::start_interval`); the XHR owns it for
-/// the duration of the request. A one-shot `onloadend` runs a final drain and —
+/// re-parsed on the next tick and no block is delivered twice. A one-shot
+/// `onloadend` detaches and drops the progress closure, then runs a final drain and —
 /// when the stream ended without a terminal `done` / `error` event (daemon
 /// down, non-200, connection dropped mid-stream) — synthesizes an
 /// [`AiEvent::Error`] so the caller's turn never hangs in the streaming state.
@@ -97,6 +96,7 @@ pub fn post_ai_stream_to(
     // event was delivered, so onloadend can detect an abnormal end.
     let cursor = Rc::new(Cell::new(0usize));
     let saw_terminal = Rc::new(Cell::new(false));
+    let terminal_for_send_error = saw_terminal.clone();
 
     let xhr_for_cb = xhr.clone();
     let on_event_cb = on_event.clone();
@@ -115,15 +115,23 @@ pub fn post_ai_stream_to(
             on_event_cb(evt);
         }
     });
-    xhr.set_onprogress(Some(onprogress.as_ref().unchecked_ref()));
-    onprogress.forget(); // lives until the XHR completes (page-scoped like live_sync)
+    let progress_holder = Rc::new(RefCell::new(Some(onprogress)));
+    xhr.set_onprogress(
+        progress_holder
+            .borrow()
+            .as_ref()
+            .map(|callback| callback.as_ref().unchecked_ref()),
+    );
 
     // One-shot end-of-request hook (fires for load, error, AND abort): drain
     // any tail the last onprogress missed, then synthesize an Error if the
     // stream ended without a terminal event. After an abort the caller has
     // already dropped its turn, so the synthesized event is simply ignored.
     let xhr_for_end = xhr.clone();
+    let progress_holder_for_end = progress_holder.clone();
     let onloadend = Closure::<dyn FnMut()>::once_into_js(move || {
+        xhr_for_end.set_onprogress(None);
+        progress_holder_for_end.borrow_mut().take();
         if let Ok(Some(text)) = xhr_for_end.response_text() {
             let (events, next) = drain_sse_buffer(&text, cursor.get());
             cursor.set(next);
@@ -143,7 +151,19 @@ pub fn post_ai_stream_to(
     });
     xhr.set_onloadend(Some(onloadend.unchecked_ref()));
 
-    xhr.send_with_opt_str(Some(&body_json))?;
+    if let Err(error) = xhr.send_with_opt_str(Some(&body_json)) {
+        xhr.set_onprogress(None);
+        progress_holder.borrow_mut().take();
+        xhr.set_onloadend(None);
+        // `once_into_js` releases its Rust capture when invoked. Mark this as
+        // terminal and invoke the now-detached callback so a synchronous send
+        // error cannot leave its XHR/on_event capture waiting for JS GC.
+        terminal_for_send_error.set(true);
+        let _ = onloadend
+            .unchecked_ref::<js_sys::Function>()
+            .call0(&wasm_bindgen::JsValue::NULL);
+        return Err(error);
+    }
     Ok(AiStreamHandle { xhr })
 }
 
@@ -239,6 +259,19 @@ fn nonempty_str(obj: &serde_json::Map<String, serde_json::Value>, key: &str) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn xhr_progress_callback_has_terminal_cleanup_instead_of_a_page_lifetime_leak() {
+        let source = include_str!("web_ai_transport.rs");
+        let implementation = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("transport implementation");
+        assert!(!implementation.contains(&["onprogress", ".forget()"].concat()));
+        assert!(implementation.contains("xhr_for_end.set_onprogress(None)"));
+        assert!(implementation.contains("progress_holder_for_end.borrow_mut().take()"));
+        assert!(implementation.contains("xhr.set_onloadend(None)"));
+    }
 
     #[test]
     fn parse_event_maps_each_wire_shape() {

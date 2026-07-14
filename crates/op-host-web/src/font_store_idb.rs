@@ -20,6 +20,7 @@ use web_sys::{IdbDatabase, IdbObjectStore, IdbOpenDbRequest, IdbTransactionMode}
 const DB_NAME: &str = "openpencil";
 const STORE: &str = "imported_fonts";
 const DB_VERSION: u32 = 1;
+type FontLoadCallback = Box<dyn FnOnce(Vec<(String, Vec<u8>)>)>;
 
 /// CSS font stack → IndexedDB record key. Mirrors the JS `primaryFamilyKey`:
 /// first family before a comma, quotes stripped, trimmed, lowercased; generic
@@ -192,7 +193,7 @@ pub(crate) fn delete_font(family_key: &str) {
 /// `on_done` is only called on a successful read; any error path logs and drops
 /// it (mount-time load simply skips — the editor still runs, imports just don't
 /// survive the reload).
-pub(crate) fn load_all(on_done: Box<dyn FnOnce(Vec<(String, Vec<u8>)>)>) {
+pub(crate) fn load_all(on_done: FontLoadCallback) {
     open_db(Box::new(move |db| {
         let store = match db.transaction_with_str(STORE) {
             Ok(tx) => match tx.object_store(STORE) {

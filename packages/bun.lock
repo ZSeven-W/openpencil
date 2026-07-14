@@ -14,7 +14,7 @@
     },
     "op-web-sdk": {
       "name": "@zseven-w/op-web-sdk",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "devDependencies": {
         "jsdom": "^25.0.0",
         "tsup": "^8.0.0",
@@ -24,7 +24,7 @@
     },
     "op-web-sdk-react": {
       "name": "@zseven-w/op-web-sdk-react",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "dependencies": {
         "@zseven-w/op-web-sdk": "workspace:*",
       },
@@ -46,7 +46,7 @@
     },
     "op-web-sdk-vue": {
       "name": "@zseven-w/op-web-sdk-vue",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "dependencies": {
         "@zseven-w/op-web-sdk": "workspace:*",
       },

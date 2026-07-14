@@ -123,14 +123,14 @@ cargo run -p op-host-desktop
 
 | 镜像 | 包含 |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host、wasm bundle 和 CanvasKit 资源 |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host、wasm bundle 和 CanvasKit 资源 |
 
 Web UI 只暴露内置 agent profiles；Docker 镜像不再内置 Claude/Codex/OpenCode/Copilot/Gemini CLI 工具。
 
 **运行：**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
 ```
 
 然后打开 `http://localhost:3100/`。
@@ -308,7 +308,7 @@ OpenPencil 已从头用 **Rust** 完成重写（[#129](https://github.com/ZSeven
 - **原生无障碍** — macOS、Windows 和 Linux 上通过 AccessKit 实现，Web 端通过 DOM 镜像实现，而非依赖浏览器自身的无障碍树。
 - **单一类型检查工作区** — MCP 宿主、CLI、AI 提供商、代码生成、Figma 导入和 Git 集成全部位于同一个 Rust workspace，并在 CI 中通过 `cargo-deny` 进行供应链管控。
 
-> **状态：** TypeScript 版编辑器已在 `v0.7.5` 退役，仅存在于 Git 历史中；本仓库即为 Rust workspace。`v0.8.0` 版本的 Rust 发布正在积极开发中（参见下方路线图）。
+> **状态：** TypeScript 版编辑器已在 `v0.7.5` 退役，仅存在于 Git 历史中；本仓库即为 Rust workspace。`v0.8.1` 版本的 Rust 发布正在积极开发中（参见下方路线图）。
 
 ## 项目结构
 

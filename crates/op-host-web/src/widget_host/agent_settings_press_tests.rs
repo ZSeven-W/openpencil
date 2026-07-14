@@ -1,7 +1,7 @@
 use super::WidgetHost;
 use op_editor_core::agent_settings::{
     AgentSettingsTab, BuiltinAgentField, ImageGenField, ImageGenProvider, ImageTestStatus,
-    ProviderConnectPhase, SettingsFocus,
+    SettingsFocus,
 };
 use op_editor_core::{AgentProvider, AgentSettingsButton, ButtonPressTarget, PencilCursorStyle};
 use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
@@ -105,95 +105,6 @@ fn web_agent_settings_hides_mcp_tab_from_sidebar() {
     assert_eq!(
         host.editor_state.editor_ui.agent_settings.tab,
         AgentSettingsTab::Agents
-    );
-}
-
-#[test]
-fn web_provider_connect_response_applies_real_models() {
-    let mut host = WidgetHost::new();
-    host.editor_state
-        .editor_ui
-        .agent_settings
-        .begin_provider_connect(AgentProvider::CodexCli);
-    let response = serde_json::json!({
-        "ok": true,
-        "provider": "codex",
-        "connected": true,
-        "models": [
-            { "value": "gpt-5.5", "displayName": "GPT-5.5" }
-        ],
-        "connectionInfo": "Connected via Codex CLI",
-        "version": "codex 1.2.3"
-    })
-    .to_string();
-
-    assert!(crate::web_agent_connect::apply_provider_connect_response(
-        &mut host.editor_state,
-        AgentProvider::CodexCli,
-        &response
-    ));
-
-    let settings = &host.editor_state.editor_ui.agent_settings;
-    assert!(settings.provider_verified_connected(AgentProvider::CodexCli));
-    assert!(host
-        .editor_state
-        .chat
-        .available_models
-        .iter()
-        .any(|m| m.provider == AgentProvider::CodexCli && m.value == "gpt-5.5"));
-}
-
-#[test]
-fn web_provider_connect_response_without_models_is_failure() {
-    let mut host = WidgetHost::new();
-    host.editor_state
-        .chat
-        .discovered_models
-        .push(op_editor_core::ModelEntry::new(
-            AgentProvider::CodexCli,
-            "stale-gpt",
-            "Stale GPT",
-        ));
-    host.editor_state
-        .editor_ui
-        .agent_settings
-        .begin_provider_connect(AgentProvider::CodexCli);
-    let response = serde_json::json!({
-        "ok": true,
-        "provider": "codex",
-        "connected": true,
-        "models": [],
-        "connectionInfo": "Connected via Codex CLI",
-        "version": "codex 1.2.3"
-    })
-    .to_string();
-
-    assert!(crate::web_agent_connect::apply_provider_connect_response(
-        &mut host.editor_state,
-        AgentProvider::CodexCli,
-        &response
-    ));
-
-    let settings = &host.editor_state.editor_ui.agent_settings;
-    assert!(!settings.provider_verified_connected(AgentProvider::CodexCli));
-    let idx =
-        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
-    assert_eq!(
-        settings.provider_connection[idx].phase,
-        ProviderConnectPhase::Error
-    );
-    assert!(settings.provider_connection[idx]
-        .error
-        .as_deref()
-        .is_some_and(|error| error.contains("No models found")));
-    assert!(
-        !host
-            .editor_state
-            .chat
-            .available_models
-            .iter()
-            .any(|m| m.provider == AgentProvider::CodexCli),
-        "stale Codex models must not become selectable after a failed connect"
     );
 }
 

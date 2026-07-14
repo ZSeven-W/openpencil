@@ -123,14 +123,14 @@ Getaggte Rust-Releases veröffentlichen ein einzelnes Web-Host-Image. Die frühe
 
 | Image | Enthält |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust-Web-Host, wasm bundle und CanvasKit-Assets |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust-Web-Host, wasm bundle und CanvasKit-Assets |
 
 Die Web-UI zeigt nur integrierte Agent-Profile; Claude/Codex/OpenCode/Copilot/Gemini-CLI-Tools sind nicht in Docker-Images enthalten.
 
 **Ausführen:**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
 ```
 
 Öffnen Sie dann `http://localhost:3100/`.
@@ -308,7 +308,7 @@ OpenPencil wurde von Grund auf in **Rust** neu geschrieben ([#129](https://githu
 - **Native Barrierefreiheit** — AccessKit auf macOS, Windows und Linux sowie ein DOM-Spiegel im Web, anstatt sich auf den a11y-Baum eines Browsers zu stützen.
 - **Ein typgeprüfter Workspace** — der MCP-Host, CLI, AI-Anbieter, Codegenerierung, Figma-Import und Git-Integration leben alle in einem einzigen Rust-Workspace, mit `cargo-deny`-Supply-Chain-Kontrolle in der CI.
 
-> **Status:** der TypeScript-Editor wurde mit `v0.7.5` eingestellt und existiert nur noch in der Git-Historie; dieses Repository ist der Rust-Workspace. Das `v0.8.0`-Rust-Release befindet sich in aktiver Entwicklung (siehe Roadmap unten).
+> **Status:** der TypeScript-Editor wurde mit `v0.7.5` eingestellt und existiert nur noch in der Git-Historie; dieses Repository ist der Rust-Workspace. Das `v0.8.1`-Rust-Release befindet sich in aktiver Entwicklung (siehe Roadmap unten).
 
 ## Projektstruktur
 

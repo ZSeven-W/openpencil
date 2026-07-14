@@ -263,6 +263,82 @@ fn request_timeout_does_not_consume_available_retry_budget() {
 }
 
 #[test]
+fn provider_does_not_follow_redirects_or_echo_upstream_error_bodies() {
+    let redirected = TcpListener::bind("127.0.0.1:0").expect("bind redirect target");
+    redirected
+        .set_nonblocking(true)
+        .expect("nonblocking redirect target");
+    let redirected_addr = redirected.local_addr().expect("redirect target address");
+    let (followed_tx, followed_rx) = std_mpsc::channel();
+    let redirected_server = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while std::time::Instant::now() < deadline {
+            match redirected.accept() {
+                Ok((mut stream, _)) => {
+                    let _ = read_http_request(&mut stream);
+                    let body = "data: {\"choices\":[{\"finish_reason\":\"stop\"}]}\n\n";
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    stream.write_all(response.as_bytes()).unwrap();
+                    followed_tx.send(true).unwrap();
+                    return;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("redirect target accept failed: {error}"),
+            }
+        }
+        followed_tx.send(false).unwrap();
+    });
+
+    let origin = TcpListener::bind("127.0.0.1:0").expect("bind redirect origin");
+    let origin_addr = origin.local_addr().expect("redirect origin address");
+    let origin_server = std::thread::spawn(move || {
+        let (mut stream, _) = origin.accept().expect("accept origin request");
+        let _ = read_http_request(&mut stream);
+        let body = r#"{"error":"echoed credential sk-test"}"#;
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://{redirected_addr}/v1/chat/completions\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut provider = ConfiguredBuiltinProvider::from_builtin_agent(&builtin_config(
+        BuiltinAgentKind::OpenAiCompat,
+        format!("http://{origin_addr}/v1"),
+    ))
+    .expect("ready redirecting provider");
+    provider.max_retries = 0;
+    provider.min_gap = Duration::ZERO;
+
+    let deltas: Vec<_> = provider
+        .send(ChatRequest {
+            user_message: "hello".into(),
+            ..Default::default()
+        })
+        .collect();
+    origin_server.join().expect("origin server exits");
+    let followed = followed_rx.recv().expect("redirect result");
+    redirected_server.join().expect("redirect target exits");
+
+    assert!(!followed, "provider client must not follow redirects");
+    let error = deltas
+        .iter()
+        .find_map(|delta| match delta {
+            ChatDelta::Error(message) => Some(message.as_str()),
+            _ => None,
+        })
+        .expect("redirect must surface a status-only error");
+    assert!(error.contains("302"), "unexpected error: {error}");
+    assert!(!error.contains("sk-test"), "credential leaked: {error}");
+    assert!(!error.contains("echoed credential"), "body leaked: {error}");
+}
+
+#[test]
 fn parse_openai_sse_data_extracts_text_delta() {
     let data = r#"{"choices":[{"delta":{"content":"hello"}}]}"#;
     assert_eq!(
@@ -278,6 +354,36 @@ fn parse_anthropic_sse_data_extracts_text_delta() {
         parse_anthropic_sse_data(data),
         Some(ChatDelta::TextDelta("hello".into()))
     );
+}
+
+#[test]
+fn openai_sse_error_does_not_reflect_upstream_message() {
+    let sentinel = "SENTINEL_sk-browser-secret";
+    let data = format!(r#"{{"error":{{"message":"provider echoed {sentinel}"}}}}"#);
+
+    let delta = parse_openai_sse_data(&data).expect("error event parses");
+
+    assert_eq!(
+        delta,
+        ChatDelta::Error("OpenAI-compatible provider reported a stream error".into())
+    );
+    assert!(!format!("{delta:?}").contains(sentinel));
+}
+
+#[test]
+fn anthropic_sse_error_does_not_reflect_upstream_message() {
+    let sentinel = "SENTINEL_anthropic-browser-secret";
+    let data = format!(
+        r#"{{"type":"error","error":{{"type":"invalid_request_error","message":"provider echoed {sentinel}"}}}}"#
+    );
+
+    let delta = parse_anthropic_sse_data(&data).expect("error event parses");
+
+    assert_eq!(
+        delta,
+        ChatDelta::Error("Anthropic provider reported a stream error".into())
+    );
+    assert!(!format!("{delta:?}").contains(sentinel));
 }
 
 #[test]
@@ -415,7 +521,7 @@ fn openai_sse_error_finishes_aborted() {
     assert!(
         deltas
             .iter()
-            .any(|d| matches!(d, ChatDelta::Error(message) if message == "bad key")),
+        .any(|d| matches!(d, ChatDelta::Error(message) if message == "OpenAI-compatible provider reported a stream error")),
         "expected upstream error delta, got {deltas:?}"
     );
     assert!(

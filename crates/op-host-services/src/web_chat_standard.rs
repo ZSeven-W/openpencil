@@ -1,9 +1,10 @@
 //! Standard chat/design turn for the Rust web shell.
 //!
-//! The browser owns the immediate UI, but it cannot spawn CLI providers or
-//! hold API keys. This endpoint mirrors the desktop "standard mode" route on
-//! the daemon side: classify the user's turn, then dispatch to plain chat,
-//! design modification, or the orchestrator-backed new-design pipeline.
+//! The browser owns the immediate UI. This endpoint accepts an optional
+//! request-scoped built-in credential and mirrors the desktop "standard mode"
+//! route on the daemon side: classify the user's turn, then dispatch to plain
+//! chat, design modification, or the orchestrator-backed new-design pipeline.
+//! Host CLI and ACP providers are intentionally unavailable on the web route.
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};
@@ -13,7 +14,7 @@ use op_ai::chat_provider::{
     ChatAttachment, ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, StopReason,
 };
 use op_editor_core::chat::MAX_ATTACHMENT_BYTES;
-use op_editor_core::{EditorCommand, EditorState, NodeId};
+use op_editor_core::{BuiltinAgentConfig, EditorCommand, EditorState, NodeId};
 use op_orchestrator::{
     AbortFlag, DesignRequest, DocSink, Orchestrator, Progress, SkippedScreenshotProvider,
     SkippedVisionLlmClient, ValidationProviders,
@@ -36,6 +37,7 @@ pub struct WebStandardTurnRequest {
     agent_team_size: Option<u32>,
     history: Vec<(ChatHistoryRole, String)>,
     attachments: Vec<ChatAttachment>,
+    transient_builtin: Option<BuiltinAgentConfig>,
 }
 
 pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
@@ -65,6 +67,10 @@ pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
         .map(|n| (n as u32).clamp(1, 6));
     let history = parse_chat_history(obj.get("history"));
     let attachments = parse_chat_attachments(obj.get("attachments"));
+    let transient_builtin = match obj.get("credential") {
+        None | Some(Value::Null) => None,
+        Some(value) => Some(crate::web_credentials::parse_transient_builtin(value)?),
+    };
     Some(WebStandardTurnRequest {
         ai,
         document_json,
@@ -73,6 +79,7 @@ pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
         agent_team_size,
         history,
         attachments,
+        transient_builtin,
     })
 }
 
@@ -171,6 +178,7 @@ pub fn stream_standard_turn<W: Write>(
             hub.broadcast(version);
         }
     }
+    inject_transient_builtin(&mut snapshot, req.transient_builtin.as_ref());
 
     let Some(classify_provider) =
         crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
@@ -218,8 +226,17 @@ fn apply_request_snapshot(
     hub: &SseHub,
 ) -> Result<EditorState, String> {
     let mut broadcast_version = None;
-    let snapshot = {
+    let mut snapshot = {
         let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(agent) = req.transient_builtin.as_ref() {
+            if agent.model.trim() != req.ai.model.trim() {
+                return Err("transient credential model does not match the request".into());
+            }
+            crate::web_credentials::validate_web_provider_base_url(&agent.base_url)?;
+            if !crate::web_credentials::public_demo_transient_endpoint_allowed(agent) {
+                return Err("custom provider endpoint is not explicitly allowed".into());
+            }
+        }
         if let Some(doc_json) = req.document_json.as_deref() {
             let loaded = op_pen_loader::load_canonical(doc_json).map_err(|e| e.to_string())?;
             if guard.editor.doc != loaded.value {
@@ -254,7 +271,18 @@ fn apply_request_snapshot(
     if let Some(version) = broadcast_version {
         hub.broadcast(version);
     }
+    inject_transient_builtin(&mut snapshot, req.transient_builtin.as_ref());
     Ok(snapshot)
+}
+
+fn inject_transient_builtin(state: &mut EditorState, transient: Option<&BuiltinAgentConfig>) {
+    let Some(transient) = transient else {
+        return;
+    };
+    let agents = &mut state.editor_ui.agent_settings.builtin_agents;
+    agents.retain(|agent| agent.id != transient.id);
+    agents.insert(0, transient.clone());
+    state.rebuild_chat_models();
 }
 
 fn selected_model_id(req: &AiStreamRequest) -> Option<String> {
@@ -669,207 +697,5 @@ fn format_subtask_skills(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use op_ai::chat_provider::{EffortLevel, ThinkingMode};
-
-    struct CaptureProvider {
-        seen: Arc<Mutex<Option<ChatRequest>>>,
-    }
-
-    impl ChatProvider for CaptureProvider {
-        fn provider_label(&self) -> &str {
-            "capture"
-        }
-
-        fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-            *self.seen.lock().expect("seen lock") = Some(request);
-            Box::new(std::iter::once(ChatDelta::Done {
-                stop_reason: StopReason::EndTurn,
-            }))
-        }
-    }
-
-    #[test]
-    fn parse_standard_turn_body_reads_canvas_snapshot_fields() {
-        let body = serde_json::json!({
-            "model": "claude-sonnet",
-            "user": "design a page",
-            "document": { "version": "1.0.0", "children": [] },
-            "selectedIds": ["n1", "", "n2"],
-            "activePageId": "page-1",
-            "agent_team_size": 9,
-            "history": [
-                { "role": "user", "content": "previous request" },
-                { "role": "assistant", "content": "previous answer" },
-                { "role": "system", "content": "ignored" },
-                { "role": "user", "content": "" }
-            ],
-            "attachments": [
-                {
-                    "name": "a.png",
-                    "media_type": "image/png",
-                    "data_base64": "AQID"
-                },
-                {
-                    "name": "bad.txt",
-                    "media_type": "text/plain",
-                    "data_base64": "not base64"
-                }
-            ]
-        })
-        .to_string();
-
-        let req = parse_standard_turn_body(&body).expect("request parses");
-
-        assert_eq!(req.ai.model, "claude-sonnet");
-        assert_eq!(req.ai.user, "design a page");
-        assert!(req.document_json.is_some());
-        assert_eq!(req.selected_ids, vec!["n1".to_string(), "n2".to_string()]);
-        assert_eq!(req.active_page_id.as_deref(), Some("page-1"));
-        assert_eq!(req.agent_team_size, Some(6));
-        assert_eq!(
-            req.history,
-            vec![
-                (
-                    op_ai::chat_provider::ChatHistoryRole::User,
-                    "previous request".into()
-                ),
-                (
-                    op_ai::chat_provider::ChatHistoryRole::Assistant,
-                    "previous answer".into()
-                ),
-            ]
-        );
-        assert_eq!(req.attachments.len(), 1);
-        assert_eq!(req.attachments[0].name, "a.png");
-        assert_eq!(req.attachments[0].media_type, "image/png");
-        assert_eq!(req.attachments[0].data, vec![1, 2, 3]);
-    }
-
-    #[test]
-    fn stream_chat_route_passes_history_and_attachments_to_provider() {
-        let history = vec![
-            (ChatHistoryRole::User, "previous request".to_string()),
-            (ChatHistoryRole::Assistant, "previous answer".to_string()),
-        ];
-        let attachments = vec![op_ai::chat_provider::ChatAttachment {
-            name: "a.png".to_string(),
-            media_type: "image/png".to_string(),
-            data: vec![1, 2, 3],
-        }];
-        let req = WebStandardTurnRequest {
-            ai: AiStreamRequest {
-                model: "claude-sonnet".into(),
-                skills: Vec::new(),
-                user: "current request".into(),
-                max_output_tokens: 2048,
-                thinking: ThinkingMode::Adaptive,
-                effort: EffortLevel::Low,
-            },
-            document_json: None,
-            selected_ids: Vec::new(),
-            active_page_id: None,
-            agent_team_size: None,
-            history: history.clone(),
-            attachments: attachments.clone(),
-        };
-        let seen = Arc::new(Mutex::new(None));
-        let provider = CaptureProvider { seen: seen.clone() };
-        let mut out = Vec::new();
-
-        stream_chat_route(&mut out, &req, &EditorState::new(), &provider, None)
-            .expect("stream chat");
-
-        let captured = seen
-            .lock()
-            .expect("seen lock")
-            .clone()
-            .expect("provider saw request");
-        assert_eq!(captured.user_message, "current request");
-        assert_eq!(captured.history, history);
-        assert_eq!(captured.attachments, attachments);
-    }
-
-    #[test]
-    fn design_doc_sink_applies_and_bumps_version() {
-        let state = Mutex::new(WebCanvasState::new(EditorState::new(), 3100));
-        let hub = SseHub::default();
-        let sub = hub.subscribe();
-        let mirror = state.lock().unwrap().editor.clone();
-        let mut sink = WebDesignDocSink::new(&state, &hub, mirror);
-
-        assert!(sink.apply(EditorCommand::InsertNode {
-            kind: "rect".into(),
-            name: "Generated".into(),
-            x: 10,
-            y: 20,
-            width: 100,
-            height: 50,
-            fill_hex: Some("#ff0000".into()),
-            target_parent: NodeId::NONE,
-            page_id: None,
-        }));
-
-        assert_eq!(state.lock().unwrap().version, 1);
-        assert_eq!(sub.recv().unwrap(), 1);
-        assert_eq!(sink.state().active_children().len(), 1);
-    }
-
-    #[test]
-    fn progress_labels_match_desktop_design_session_bullets() {
-        assert_eq!(progress_label(&Progress::Planning), "• Planning…");
-        assert_eq!(
-            progress_label(&Progress::SubtaskStarted {
-                id: "brand".into(),
-                label: "Brand Header".into(),
-            }),
-            "• Subtask `brand` — Brand Header"
-        );
-    }
-
-    // Lock the web progress_label output for SubtaskSkills and SubtaskRetry
-    // against the cluster-C contract — byte-identical to the desktop formatter
-    // in op-host-desktop/src/design_session.rs.
-    #[test]
-    fn web_progress_label_matches_desktop_skill_block_format() {
-        use op_orchestrator::SkillBrief;
-
-        let p = Progress::SubtaskSkills {
-            id: "header".into(),
-            included: vec![SkillBrief {
-                name: "cjk-typography".into(),
-                token_count: 800,
-                truncated: true,
-            }],
-            dropped: vec![("examples".into(), "budget".into())],
-            budget_used: 5200,
-            budget_max: 8000,
-        };
-        let s = progress_label(&p);
-        assert!(
-            s.contains("• Subtask `header`  ·  1 skills · 5200/8000 tok · 1 dropped"),
-            "summary line mismatch: {s}"
-        );
-        assert!(
-            s.contains("\n  ▸ skills: cjk-typography (truncated)"),
-            "skills sub-line mismatch: {s}"
-        );
-        assert!(
-            s.contains("\n  ▸ dropped: examples (budget)"),
-            "dropped sub-line mismatch: {s}"
-        );
-    }
-
-    #[test]
-    fn web_progress_label_subtask_retry_format() {
-        assert_eq!(
-            progress_label(&Progress::SubtaskRetry {
-                id: "header".into(),
-                attempt: 2,
-                reason: "zero nodes generated".into(),
-            }),
-            "  ▸ retry #2: zero nodes generated"
-        );
-    }
-}
+#[path = "web_chat_standard_tests.rs"]
+mod tests;
