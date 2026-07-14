@@ -1016,7 +1016,16 @@ fn scan_empty_shells(nodes: &[PenNode]) -> Vec<String> {
 fn scan_ring_issues(nodes: &[PenNode]) -> Vec<String> {
     const MIN_RING_SIZE: f64 = 48.0;
     const HAIRLINE: f32 = 2.5;
-    let mut out = Vec::new();
+    let mut out = op_design_lint::detect_missing_progress_rings(nodes)
+        .into_iter()
+        .take(4)
+        .map(|missing| {
+            format!(
+                "missing-progress-ring at {} ({}): numeric metric has no visible circle or arc - author ellipse/arc geometry or a painted circular frame",
+                missing.node_id, missing.node_name
+            )
+        })
+        .collect::<Vec<_>>();
     fn hairline_ring(node: &PenNode) -> bool {
         let PenNode::Ellipse(ellipse) = node else {
             return false;
@@ -2154,6 +2163,27 @@ mod ring_issue_tests {
             issues[0].contains("ring") && issues[0].contains("thickness 8-12"),
             "echo names the cluster and the fix: {issues:?}"
         );
+    }
+
+    #[test]
+    fn missing_ring_wrapper_is_echoed_by_builtin_scan() {
+        let doc: jian_ops_schema::PenDocument = serde_json::from_str(
+            r##"{ "version": "1.0", "children": [{
+                "type": "frame", "id": "steps-ring", "name": "Steps Ring",
+                "width": 124, "height": 124, "layout": "vertical",
+                "alignItems": "center", "justifyContent": "center",
+                "children": [
+                    {"type": "text", "id": "value", "content": "8,432"},
+                    {"type": "text", "id": "label", "content": "steps"}
+                ]
+            }] }"##,
+        )
+        .expect("doc");
+
+        let issues = scan_ring_issues(&doc.children);
+
+        assert_eq!(issues.len(), 1, "one missing ring echoed: {issues:?}");
+        assert!(issues[0].contains("missing-progress-ring"), "{issues:?}");
     }
 }
 

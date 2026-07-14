@@ -10,6 +10,10 @@ pub(crate) fn size_number(node: &Value, key: &str) -> f64 {
     }
 }
 
+#[cfg(test)]
+#[path = "role_layout_radial_tests.rs"]
+mod radial_tests;
+
 fn gap_number(node: &Value) -> f64 {
     match node.get("gap") {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(0.0),
@@ -53,6 +57,16 @@ pub(crate) fn fix_horizontal_overflow(node: &mut Value, canvas_width: f64) {
         node.get("layout").and_then(Value::as_str),
         Some("vertical") | Some("none")
     ) {
+        return;
+    }
+    // Arc siblings inside a radial wrapper are authored as a visual stack,
+    // even when a weak model leaves the wrapper on the default/horizontal
+    // layout. Treating them as ordinary row items sums the track, progress arc,
+    // and centre-label widths (120 + 120 + 80 in a common mobile ring) and
+    // widens the intended 120px wrapper to ~320px before the radial cleanup can
+    // overlay them. Leave this high-confidence shape to `radial_repair`, which
+    // converts the wrapper to absolute layout and centres the direct children.
+    if crate::radial_repair::is_radial_stack_in_flow(node) {
         return;
     }
     let parent_w = size_number(node, "width");

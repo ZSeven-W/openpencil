@@ -55,7 +55,7 @@ Document
                                property_focus, property_input: TextInputState,
                                settings_input: TextInputState,
                                agent_settings_open, agent_settings (focus, tab, connected[5],
-                               mcp_server, mcp_cli_enabled[6], images_*, hover_provider),
+                               mcp_server, mcp_cli_enabled[8], images_*, hover_provider),
                                color_picker, pen_in_progress, pen_cursor_doc,
                                pending_pen_history,
                                layer_context_menu, page_context_menu,
@@ -287,7 +287,7 @@ Every input path that reasons about the canvas region MUST derive its rects from
 `agent_settings_panel.rs` + 4 tab modules render an 880×640 modal opened from the TopBar agent chip or `Cmd+,`. Sidebar nav: Agents / MCP / Images / System. Right pane scrolls; modal paints last (over dim scrim) so it covers every other widget.
 
 - **Agents** — `+ 添加服务商` and `+ 添加 Agent` actions in two empty-state sections, then 5 provider cards (Claude / Codex / OpenCode / GitHub Copilot / Gemini) with real brand logos from `widgets/brand_icons.rs`. Hovering a connected card swaps the green `✓ Connected` row for a red `断开连接` button; both lifecycle actions toggle `agent_settings.connected[i]`.
-- **MCP** — server status card with port input + Start/Stop button, then a 2×3 grid of CLI integration toggles (Claude Code / Codex / Gemini / OpenCode / Kiro / GitHub Copilot). Port input is editable (see "Settings input editing" below).
+- **MCP** — server status card with port input + Start/Stop button, then a 2×4 grid of CLI integration toggles (Claude Code / Codex / Gemini / OpenCode / Kiro / GitHub Copilot / Antigravity / Grok Build). Port input is editable (see "Settings input editing" below).
 - **Images** — Image Search Ready/Not-configured indicator + collapsible Advanced section (Openverse OAuth Client ID / Secret + Register link + Test button), then Image Generation section with `+ Add` empty state.
 - **System** — read-only Auto-update status card (no updater backend wired yet — a togglable switch would lie to the user; the row paints as informational text).
 

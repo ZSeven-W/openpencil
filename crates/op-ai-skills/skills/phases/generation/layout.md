@@ -101,18 +101,26 @@ RING / PIE / ARC / DONUT / GAUGE / DISC (Apple Activity Ring, progress ring, pie
   - PIE SLICE: ellipse(..., startAngle=0, sweepAngle=120, fill:[...]) (no innerRadius)
   - GAUGE (half ring): ellipse(..., innerRadius=0.7, startAngle=180, sweepAngle=180, fill:[...])
   - Do NOT punch a hole with a smaller bg-colored ellipse on top — use innerRadius.
-- CAVEAT — ellipse cannot have children. For a ring/circle WITH centered text or icon (badge, avatar
-  with initials, progress ring with a "%" label), wrap the ring ellipse + the text as SIBLINGS in a
-  layout="horizontal" frame { alignItems:"center", justifyContent:"center" } — or keep the
-  frame(cornerRadius=width/2) pattern for that centered-content case only:
-  frame(width=80, height=80, layout="horizontal", alignItems="center", justifyContent="center")
-  ├── ellipse(width=80, height=80, innerRadius=0.85, fill:[ringColor])   ← the ring
-  └── text(content="8,432", fontSize=16, fontWeight=700, fill:[textColor])  ← the centered label
-  (When the ring fully encloses the text, the frame+cornerRadius single-node form also works.)
-- DO NOT use layout: "none" + nested frame with absolute x/y to overlay text on a circle.
-  layout=none + nested children renders unreliably. Use the sibling-in-centered-frame pattern instead.
-- textAlignVertical is NOT supported. Use a layout=horizontal/vertical parent + alignItems=center
-  - justifyContent=center to center text inside any container.
+- CAVEAT — ellipse cannot have children. For a SIMPLE FILLED CIRCLE with centered text or icon
+  (badge or avatar with initials), use a fixed square frame with `cornerRadius=width/2`,
+  `layout="horizontal"`, `alignItems="center"`, and `justifyContent="center"`; it does not need
+  track/progress arc siblings.
+- For a PROGRESS RING / DONUT / GAUGE with centered content, use a FIXED-SIZE `layout="none"`
+  wrapper and explicitly overlay same-size, same-position track/progress ellipses plus a centered
+  child frame.
+  NEVER put the ellipses and center content as siblings in a horizontal/vertical flow; flex layout
+  places them beside one another instead of making them concentric.
+  frame(width=80, height=80, layout="none")
+  ├── frame(x=10, y=24, width=60, height=32, layout="horizontal", alignItems="center", justifyContent="center")
+  │   └── text(content="8,432", fontSize=16, fontWeight=700, fill:[textColor])  ← centered content, topmost
+  ├── ellipse(x=0, y=0, width=80, height=80, innerRadius=0.85, startAngle=-90, sweepAngle=270, fill:[progressColor])
+  └── ellipse(x=0, y=0, width=80, height=80, innerRadius=0.85, fill:[trackColor])
+  Because `layout="none"` paints lower array indexes on top, keep the center child before progress,
+  and progress before track. Choose explicit center bounds, then calculate
+  `x=(wrapperWidth-centerWidth)/2` and `y=(wrapperHeight-centerHeight)/2` whenever sizes change.
+- textAlignVertical is NOT supported. Center text/icon content inside the explicitly positioned
+  center child with layout="horizontal" + alignItems="center" + justifyContent="center"; keep the
+  ring ellipses outside that flow child.
 
 AESTHETIC HYGIENE — keep these silent (never emit, the post-pass also strips them):
 

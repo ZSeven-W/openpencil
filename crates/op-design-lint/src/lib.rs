@@ -8,6 +8,7 @@ pub mod color;
 pub mod detectors;
 pub mod fixes;
 pub mod issue;
+pub mod missing_progress_ring;
 pub mod node_mut;
 pub mod node_util;
 pub mod plan;
@@ -22,4 +23,5 @@ pub use detectors::{
 };
 pub use fixes::{apply_fixes, detect_and_fix};
 pub use issue::{FixProperty, FixReport, Issue, IssueCategory, IssueSeverity};
+pub use missing_progress_ring::{detect_missing_progress_rings, MissingProgressRing};
 pub use plan::{detect_and_plan, PlannedAction, PlannedFix};
