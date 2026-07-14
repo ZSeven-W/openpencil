@@ -34,15 +34,19 @@ pub enum AgentProvider {
     OpenCode,
     GithubCopilot,
     GeminiCli,
+    Antigravity,
+    GrokBuild,
 }
 
 impl AgentProvider {
-    pub const ALL: [AgentProvider; 5] = [
+    pub const ALL: [AgentProvider; 7] = [
         AgentProvider::ClaudeCode,
         AgentProvider::CodexCli,
         AgentProvider::OpenCode,
         AgentProvider::GithubCopilot,
         AgentProvider::GeminiCli,
+        AgentProvider::Antigravity,
+        AgentProvider::GrokBuild,
     ];
     pub fn name(self) -> &'static str {
         match self {
@@ -51,6 +55,8 @@ impl AgentProvider {
             AgentProvider::OpenCode => "OpenCode",
             AgentProvider::GithubCopilot => "GitHub Copilot",
             AgentProvider::GeminiCli => "Gemini CLI",
+            AgentProvider::Antigravity => "Antigravity",
+            AgentProvider::GrokBuild => "Grok Build",
         }
     }
     /// i18n key for the provider's subtitle. Paint code resolves
@@ -65,13 +71,15 @@ impl AgentProvider {
             AgentProvider::OpenCode => "settings.provider.openCode",
             AgentProvider::GithubCopilot => "settings.provider.githubCopilot",
             AgentProvider::GeminiCli => "settings.provider.geminiCli",
+            AgentProvider::Antigravity => "settings.provider.antigravity",
+            AgentProvider::GrokBuild => "settings.provider.grokBuild",
         }
     }
 }
 
 /// Terminal-side MCP integrations the user can flip on/off. Order
-/// matches the TS app's MCP settings grid (Claude / Codex / Gemini
-/// / OpenCode / Kiro / Copilot, 2 rows × 3 columns) so the index is
+/// matches the product's MCP settings grid (Claude / Codex / Gemini /
+/// OpenCode / Kiro / Copilot / Antigravity / Grok Build) so the index is
 /// reusable for both layout and `mcp_cli_enabled[i]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum McpCli {
@@ -81,16 +89,20 @@ pub enum McpCli {
     OpenCode,
     Kiro,
     GithubCopilot,
+    Antigravity,
+    GrokBuild,
 }
 
 impl McpCli {
-    pub const ALL: [McpCli; 6] = [
+    pub const ALL: [McpCli; 8] = [
         McpCli::ClaudeCode,
         McpCli::Codex,
         McpCli::Gemini,
         McpCli::OpenCode,
         McpCli::Kiro,
         McpCli::GithubCopilot,
+        McpCli::Antigravity,
+        McpCli::GrokBuild,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -100,6 +112,8 @@ impl McpCli {
             McpCli::OpenCode => "OpenCode CLI",
             McpCli::Kiro => "Kiro CLI",
             McpCli::GithubCopilot => "GitHub Copilot CLI",
+            McpCli::Antigravity => "Antigravity CLI",
+            McpCli::GrokBuild => "Grok Build CLI",
         }
     }
 }
@@ -133,13 +147,13 @@ pub enum SettingsFocus {
 #[derive(Debug, Clone, Copy)]
 pub struct AgentSettings {
     pub tab: AgentSettingsTab,
-    pub connected: [bool; 5],
+    pub connected: [bool; 7],
     /// Vertical scroll offset of the right content pane in px.
     /// Clamped to `[0, content_height - viewport_height]` by the
     /// host on wheel input.
     pub scroll_y: f32,
     pub mcp_server: McpServer,
-    pub mcp_cli_enabled: [bool; 6],
+    pub mcp_cli_enabled: [bool; 8],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
     /// Currently-focused editable input on the modal. `None` while
@@ -163,10 +177,10 @@ impl Default for AgentSettings {
             tab: AgentSettingsTab::Agents,
             // Connection state is wired manually for now — no auth
             // backend exists, so every provider starts disconnected.
-            connected: [false; 5],
+            connected: [false; 7],
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
-            mcp_cli_enabled: [false; 6],
+            mcp_cli_enabled: [false; 8],
             images_advanced_open: true,
             images_search_ready: true,
             focus: None,

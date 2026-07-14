@@ -13,6 +13,7 @@
 /// pending image / file the user staged for the next turn.
 pub use op_ai::chat_provider::{ChatAttachment, EffortLevel, ThinkingMode};
 
+use crate::chat_activity::{ChatActivity, ChatCompletion};
 use crate::chat_title::{suggest_chat_title, DEFAULT_CHAT_TITLE};
 use jian_core::text_input::{prev_char_boundary, Selection, TextInputState};
 
@@ -33,15 +34,19 @@ pub enum AgentProvider {
     OpenCode,
     GithubCopilot,
     GeminiCli,
+    Antigravity,
+    GrokBuild,
 }
 
 impl AgentProvider {
-    pub const ALL: [AgentProvider; 5] = [
+    pub const ALL: [AgentProvider; 7] = [
         AgentProvider::ClaudeCode,
         AgentProvider::CodexCli,
         AgentProvider::OpenCode,
         AgentProvider::GithubCopilot,
         AgentProvider::GeminiCli,
+        AgentProvider::Antigravity,
+        AgentProvider::GrokBuild,
     ];
 
     pub fn name(self) -> &'static str {
@@ -51,6 +56,8 @@ impl AgentProvider {
             AgentProvider::OpenCode => "OpenCode",
             AgentProvider::GithubCopilot => "GitHub Copilot",
             AgentProvider::GeminiCli => "Gemini CLI",
+            AgentProvider::Antigravity => "Antigravity",
+            AgentProvider::GrokBuild => "Grok Build",
         }
     }
 
@@ -62,6 +69,8 @@ impl AgentProvider {
             AgentProvider::OpenCode => "settings.provider.openCode",
             AgentProvider::GithubCopilot => "settings.provider.githubCopilot",
             AgentProvider::GeminiCli => "settings.provider.geminiCli",
+            AgentProvider::Antigravity => "settings.provider.antigravity",
+            AgentProvider::GrokBuild => "settings.provider.grokBuild",
         }
     }
 }
@@ -186,10 +195,10 @@ pub struct ChatImage {
 }
 
 /// One message in the chat transcript. `content` is the visible
-/// answer text; `thinking` and `tool_calls` are the assistant's
-/// reasoning + tool activity, each shown in a collapsible block;
-/// `images` are pictures the user attached. `streaming` is true on
-/// the trailing assistant bubble while its turn is still in flight.
+/// answer text; `thinking`, `tool_calls`, and `activities` carry the
+/// assistant's private reasoning and user-visible work state; `images` are
+/// pictures the user attached. `streaming` is true on the trailing assistant
+/// bubble while its turn is still in flight.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatMessage {
     pub role: ChatRole,
@@ -203,6 +212,12 @@ pub struct ChatMessage {
     pub thinking: String,
     /// Tool invocations the assistant made this turn.
     pub tool_calls: Vec<ChatToolCall>,
+    /// Provider-neutral design activity. CLI orchestrator progress and
+    /// built-in tool events can both target this presentation model.
+    pub activities: Vec<ChatActivity>,
+    /// Structured terminal metadata for provider history and diagnostics. The
+    /// transcript must not recover these values by parsing visible prose.
+    pub completion: Option<ChatCompletion>,
     /// Images the user attached to this message.
     pub images: Vec<ChatImage>,
     /// Collapsed state of the thinking block (default collapsed).
@@ -235,6 +250,8 @@ impl ChatMessage {
             agent_color: None,
             thinking: String::new(),
             tool_calls: Vec::new(),
+            activities: Vec::new(),
+            completion: None,
             images: Vec::new(),
             thinking_collapsed: true,
             tools_collapsed: true,
@@ -255,6 +272,8 @@ impl ChatMessage {
             agent_color: None,
             thinking: String::new(),
             tool_calls: Vec::new(),
+            activities: Vec::new(),
+            completion: None,
             images: Vec::new(),
             thinking_collapsed: true,
             tools_collapsed: true,
@@ -491,7 +510,7 @@ impl ChatState {
     ///
     /// [`available_models`]: ChatState::available_models
     /// [`discovered_models`]: ChatState::discovered_models
-    pub fn rebuild_available_models(&mut self, connected: &[bool; 5]) {
+    pub fn rebuild_available_models(&mut self, connected: &[bool; 7]) {
         let prev = self.available_models.get(self.selected_model).cloned();
         self.available_models = self
             .discovered_models
@@ -1312,7 +1331,7 @@ mod tests {
             ..Default::default()
         };
         // Only Claude Code (index 0 of AgentProvider::ALL) connected.
-        let mut connected = [false; 5];
+        let mut connected = [false; 7];
         connected[0] = true;
         chat.rebuild_available_models(&connected);
         assert_eq!(chat.available_models.len(), 2);
@@ -1331,7 +1350,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let mut connected = [false; 5];
+        let mut connected = [false; 7];
         connected[0] = true; // Claude
         connected[1] = true; // Codex
         chat.rebuild_available_models(&connected);

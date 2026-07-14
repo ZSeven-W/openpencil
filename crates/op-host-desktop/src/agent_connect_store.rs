@@ -1,8 +1,8 @@
 //! Cross-launch persistence for CLI provider connections.
 //!
 //! Before this file existed NOTHING about agent settings survived a
-//! restart — `connected[5]` and the probed model catalog are runtime
-//! state, so every launch greeted the user with five "Connect" buttons
+//! restart — the connected-provider flags and probed model catalog are runtime
+//! state, so every launch greeted the user with disconnected provider cards
 //! (measured / user-reported on both dev and packaged builds). The store
 //! keeps only the CONNECTED flags (no keys, no models — CLI providers
 //! have no secrets and the catalog must be re-probed anyway); on startup
@@ -22,7 +22,7 @@ struct PersistedAgentConnections {
 
 /// Persist the currently-connected provider ids. Best-effort: a failed
 /// write must never break the probe flow.
-pub(crate) fn save(connected: &[bool; 5]) {
+pub(crate) fn save(connected: &[bool; 7]) {
     let value = PersistedAgentConnections {
         connected: AgentProvider::ALL
             .iter()

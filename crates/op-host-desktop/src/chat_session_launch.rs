@@ -174,7 +174,7 @@ pub fn launch_if_pending(
         return true;
     }
     let Some(provider) = chat_provider_for_selected_model(host) else {
-        // Selected agent has no `ChatProvider` bridge (all five CLI
+        // Selected agent has no `ChatProvider` bridge (all fixed CLI
         // agents are wired today, so this is a stale-index / not-ready
         // builtin/ACP guard). Surface that honestly in the assistant
         // bubble instead of silently running a different agent (codex
@@ -579,7 +579,7 @@ fn near(a: f64, b: f64) -> bool {
 
 /// Build the `ChatProvider` for an agent index (into
 /// `AgentProvider::ALL`: 0 ClaudeCode, 1 CodexCli, 2 OpenCode,
-/// 3 GithubCopilot, 4 GeminiCli). Claude Code uses its dedicated
+/// 3 GithubCopilot, 4 GeminiCli, 5 Antigravity, 6 GrokBuild). Claude Code uses its dedicated
 /// SDK adapter; Codex / Gemini use the subprocess transport; Copilot
 /// rides the official SDK; OpenCode chats over its local HTTP server
 /// (`chat_http_server.rs`).
@@ -607,6 +607,10 @@ fn provider_for_agent(agent_idx: usize, chat_session: bool) -> Option<Box<dyn Ch
             CopilotProvider::new()
         })),
         4 => SubprocessProvider::for_cli(CliName::Gemini)
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
+        5 => SubprocessProvider::for_cli(CliName::Antigravity)
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
+        6 => SubprocessProvider::for_cli(CliName::GrokBuild)
             .map(|p| Box::new(p) as Box<dyn ChatProvider>),
         _ => None,
     }

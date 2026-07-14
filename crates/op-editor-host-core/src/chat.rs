@@ -95,10 +95,9 @@ pub struct ChatSession {
     tool_rx: Option<Receiver<ChatToolRequest>>,
     deferred_tool_requests: VecDeque<ChatToolRequest>,
     finished: bool,
-    /// A design-agent-loop turn folds the model's free-text narration into the
-    /// collapsed thinking area instead of the visible bubble — the tool-call
-    /// checklist already carries the progress, so the raw "Let me build the
-    /// header…" chatter is noise. Plain chat / CLI turns keep it `false`.
+    /// A design-agent-loop turn preserves the exact narration/tool ordering so
+    /// the transcript can interleave visible prose with activity cards. Plain
+    /// chat keeps its classic aggregated tool panel.
     is_design_loop: bool,
     loop_finalized: bool,
     viewport_fitted: bool,
@@ -108,6 +107,10 @@ pub struct ChatSession {
 pub struct ChatPoll {
     pub text: String,
     pub thinking: String,
+    /// Tool calls in provider order. A call produced by [`ChatSession::poll`]
+    /// carries a `content_offset` relative to this poll's aggregated `text`,
+    /// preserving its position between text deltas without changing the
+    /// aggregate fields consumed by existing callers.
     pub tool_calls: Vec<ChatToolCall>,
     pub error: Option<String>,
     pub finished: bool,
@@ -130,12 +133,12 @@ pub fn apply_poll_to_message(message: &mut ChatMessage, poll: &ChatPoll) {
     apply_poll_to_message_with(message, poll, false);
 }
 
-/// Fold one [`ChatPoll`] into the trailing assistant `message`. When
-/// `fold_narration_into_thinking` is set (design-agent loop), the model's
-/// free-text `text` goes to the collapsed thinking area instead of the visible
-/// content — the tool-call checklist carries the progress, so the raw chatter
-/// is noise. Errors ALWAYS surface in `content` regardless.
+/// Fold one [`ChatPoll`] into the trailing assistant `message`. Design-loop
+/// turns keep narration visible and stamp tool offsets for chronological
+/// interleaving; plain chat keeps the classic grouped tool panel. Errors always
+/// surface in `content`.
 pub fn apply_poll_to_message_with(message: &mut ChatMessage, poll: &ChatPoll, design_loop: bool) {
+    let content_base = message.content.len() as u32;
     if let Some(err) = &poll.error {
         message.content = format!("error: {err}");
     } else {
@@ -153,12 +156,28 @@ pub fn apply_poll_to_message_with(message: &mut ChatMessage, poll: &ChatPoll, de
     // Stamp where each call landed in the narration so the transcript can
     // interleave prose and per-call verb chips chronologically. Only
     // design-loop turns interleave; plain chat keeps the aggregated panel.
-    let offset = message.content.len() as u32;
+    let error_offset = message.content.len() as u32;
     message
         .tool_calls
         .extend(poll.tool_calls.iter().cloned().map(|mut call| {
             if design_loop {
-                call.content_offset = Some(offset);
+                // `ChatSession::poll` records the position within this batch.
+                // Hand-built polls from existing callers carry `None`; retain
+                // their historical behavior by placing those calls after the
+                // batch's complete text.
+                call.content_offset = Some(if poll.error.is_some() {
+                    // Errors replace, rather than append to, visible content.
+                    error_offset
+                } else {
+                    let within_poll = call
+                        .content_offset
+                        .unwrap_or_else(|| poll.text.len() as u32);
+                    content_base.saturating_add(within_poll)
+                });
+            } else {
+                // Offsets drive design-loop narration interleaving only. Plain
+                // chat keeps the classic aggregate tool panel.
+                call.content_offset = None;
             }
             call
         }));
@@ -179,15 +198,48 @@ pub fn chat_history_from_transcript(messages: &[ChatMessage]) -> Vec<(ChatHistor
     }
     messages[..end]
         .iter()
-        .filter(|m| !m.content.trim().is_empty())
-        .map(|m| {
+        .filter_map(|m| {
             let role = match m.role {
                 ChatRole::User => ChatHistoryRole::User,
                 ChatRole::Assistant => ChatHistoryRole::Assistant,
             };
-            (role, m.content.clone())
+            history_content(m).map(|content| (role, content))
         })
         .collect()
+}
+
+/// Keep structured design completions in provider history even when the UI
+/// intentionally carries their status outside the visible message content.
+fn history_content(message: &ChatMessage) -> Option<String> {
+    let completion = (message.role == ChatRole::Assistant)
+        .then_some(message.completion)
+        .flatten();
+    if message.content.trim().is_empty() && completion.is_none() {
+        return None;
+    }
+    let mut text = message.content.clone();
+    if let Some(completion) = completion {
+        if !text.trim().is_empty() {
+            text.push_str("\n\n");
+        }
+        text.push_str(&format!(
+            "Design work completed: {} succeeded, {} failed.",
+            completion.succeeded, completion.failed
+        ));
+    }
+    let sections: Vec<&str> = message
+        .activities
+        .iter()
+        .filter(|activity| !activity.id.starts_with("__"))
+        .map(|activity| activity.title.trim())
+        .filter(|title| !title.is_empty())
+        .collect();
+    if !sections.is_empty() {
+        text.push_str(" Sections: ");
+        text.push_str(&sections.join("; "));
+        text.push('.');
+    }
+    Some(text)
 }
 
 fn tool_call_defaults_open(call: &ChatToolCall) -> bool {
@@ -255,9 +307,9 @@ impl ChatSession {
         }
     }
 
-    /// Mark this turn as a design-agent loop so the pump folds the model's
-    /// free-text narration into the collapsed thinking area (see
-    /// [`apply_poll_to_message_with`]). Chainable.
+    /// Mark this turn as a design-agent loop so the pump stamps tool positions
+    /// into the visible narration timeline (see [`apply_poll_to_message_with`]).
+    /// Chainable.
     pub fn into_design_loop(mut self) -> Self {
         self.is_design_loop = true;
         self
@@ -324,7 +376,11 @@ impl ChatSession {
                     tool_calls.push(ChatToolCall {
                         name,
                         args,
-                        content_offset: None,
+                        // Preserve this call's exact position among text
+                        // deltas drained by the same poll. Thinking remains in
+                        // its compatible aggregate field and does not affect
+                        // visible narration offsets.
+                        content_offset: Some(text.len() as u32),
                     });
                 }
                 Ok(ChatDelta::Error(msg)) => {

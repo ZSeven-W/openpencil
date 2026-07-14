@@ -3259,6 +3259,7 @@ dependencies = [
  "serde_json",
  "skia-safe",
  "tokio",
+ "toml_edit",
  "tracing",
  "tracing-subscriber",
  "zip",
@@ -3394,6 +3395,7 @@ dependencies = [
  "jian-ops-schema",
  "jian-scene",
  "op-ai-skills",
+ "op-design-lint",
  "op-editor-core",
  "op-mcp",
  "op-pen-loader",
@@ -5140,6 +5142,7 @@ dependencies = [
  "indexmap 2.14.0",
  "toml_datetime",
  "toml_parser",
+ "toml_writer",
  "winnow",
 ]
 

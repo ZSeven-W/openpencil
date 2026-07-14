@@ -322,6 +322,8 @@ fn builtin_group_header_falls_back_to_generic_label_without_retained_name() {
 #[test]
 fn gemini_provider_group_label_matches_ts_provider_name() {
     assert_eq!(provider_label(AgentProvider::GeminiCli), "GOOGLE GEMINI");
+    assert_eq!(provider_label(AgentProvider::Antigravity), "ANTIGRAVITY");
+    assert_eq!(provider_label(AgentProvider::GrokBuild), "GROK BUILD");
 }
 
 #[test]

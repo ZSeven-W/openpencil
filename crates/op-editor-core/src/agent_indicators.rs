@@ -75,6 +75,16 @@ pub struct AgentIndicators {
     /// the current-element breathing border. Retained for the whole
     /// run (see [`REVEAL_DURATION_MS`]).
     pub reveals: HashMap<String, u64>,
+    /// The user-facing identity confirmed for this run. Unlike node/frame
+    /// ownership, this exists before the first design command lands, so the
+    /// canvas can park the Agent cursor in the current viewport while the
+    /// model is still planning.
+    pub cursor_agent: Option<AgentTag>,
+    /// Daemon run epoch currently mirrored into this process. Kept separate
+    /// from the local `epoch`: the browser owns its own lifecycle token, but
+    /// must still detect two active daemon runs with no observed idle poll
+    /// between them.
+    remote_epoch: Option<u64>,
     /// `true` from [`begin`] until the run's clear/end — keeps the
     /// cursor + current-element border alive between streamed chunks
     /// even when no reveal is inside its animation window.
@@ -107,6 +117,8 @@ impl AgentIndicators {
         self.frames.clear();
         self.previews.clear();
         self.reveals.clear();
+        self.cursor_agent = None;
+        self.remote_epoch = None;
         self.run_active = false;
         self.finishing = false;
         self.needs_final_frame = false;
@@ -114,6 +126,23 @@ impl AgentIndicators {
         self.root_seed_mobile = None;
         self.root_seed_consumed = false;
     }
+}
+
+/// Confirm the user-facing Agent identity for the live run.
+///
+/// This is intentionally separate from [`add_frame`] / [`add_node`]: the
+/// transcript learns the Agent name before any canvas node exists. Keeping
+/// that milestone in the registry lets the cursor appear immediately at the
+/// viewport's idle anchor, then move to reveal targets as writing begins.
+pub fn confirm_cursor_agent(epoch: u64, color: &str, name: &str) {
+    let mut r = REGISTRY.lock().unwrap();
+    if r.epoch != epoch || !r.run_active {
+        return;
+    }
+    r.cursor_agent = Some(AgentTag {
+        color: color.to_string(),
+        name: name.to_string(),
+    });
 }
 
 static REGISTRY: LazyLock<Mutex<AgentIndicators>> =
@@ -286,15 +315,16 @@ pub fn finish_if_epoch(epoch: u64) {
     }
     r.run_active = false;
     r.finishing = true;
-    // An empty queue means this run never put a cursor on screen, so clear
-    // immediately WITHOUT arming the erase frame — there is nothing stale to
-    // repaint. (Arming it here would leave a sticky global flag that an
-    // unrelated animation-deadline query could observe.) A run with queued
-    // reveals keeps playing; the paint-path drain arms the erase frame once
-    // the last reveal leaves its window, because a cursor WAS on screen.
+    // An empty queue clears immediately. If identity confirmation already
+    // painted the pre-node cursor, arm one erase frame; otherwise avoid a
+    // sticky redraw flag for a run that never showed any canvas overlay. A
+    // run with queued reveals keeps playing and the paint-path drain arms its
+    // erase frame once the final reveal leaves the window.
     if r.reveals.is_empty() {
+        let cursor_was_visible = r.cursor_agent.is_some();
         r.clear_maps();
         r.epoch += 1;
+        r.needs_final_frame = cursor_was_visible;
     }
 }
 
@@ -393,11 +423,12 @@ pub fn next_reveal_deadline_ms(now_ms: u64) -> Option<u64> {
         .filter(|started| **started > now_ms)
         .min()
         .copied();
-    let active = r
+    let active_reveal = r
         .reveals
         .values()
         .any(|started| *started <= now_ms && now_ms.saturating_sub(*started) <= REVEAL_DURATION_MS);
-    match (next_start, active) {
+    let active_cursor = r.run_active && r.cursor_agent.is_some();
+    match (next_start, active_reveal || active_cursor) {
         (Some(start), true) => Some(start.min(now_ms.saturating_add(REVEAL_FRAME_MS))),
         (Some(start), false) => Some(start),
         (None, true) => Some(now_ms.saturating_add(REVEAL_FRAME_MS)),
@@ -412,8 +443,11 @@ pub fn next_reveal_deadline_ms(now_ms: u64) -> Option<u64> {
 
 /// Next host-clock millisecond needed for the generating-frame scan animation.
 pub fn next_generation_scan_deadline_ms(now_ms: u64) -> Option<u64> {
-    let r = REGISTRY.lock().unwrap();
-    (r.run_active && !r.frames.is_empty()).then(|| now_ms.saturating_add(REVEAL_FRAME_MS))
+    let mut r = REGISTRY.lock().unwrap();
+    rebase_external_clock_reveals(&mut r, now_ms);
+    let reveal_runway_pending = r.reveals.values().any(|started_at| *started_at > now_ms);
+    (!r.frames.is_empty() && (r.run_active || reveal_runway_pending))
+        .then(|| now_ms.saturating_add(REVEAL_FRAME_MS))
 }
 
 fn rebase_external_clock_reveals(r: &mut AgentIndicators, now_ms: u64) {
@@ -538,7 +572,11 @@ fn has_active_indicators(r: &AgentIndicators) -> bool {
 /// order deterministic for tests; `apply_remote` doesn't care.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RemoteIndicators {
+    /// Daemon-owned run epoch. A changed value starts a fresh local mirror
+    /// even when polling missed the prior run's inactive transition.
+    pub epoch: u64,
     pub run_active: bool,
+    pub cursor_agent: Option<AgentTag>,
     pub nodes: Vec<(String, AgentTag)>,
     pub frames: Vec<(String, AgentTag)>,
     pub previews: Vec<String>,
@@ -561,7 +599,11 @@ pub fn relay_json() -> String {
     let mut reveals: Vec<(&String, &u64)> = snap.reveals.iter().collect();
     reveals.sort_by(|a, b| a.0.cmp(b.0));
     serde_json::json!({
+        "epoch": snap.epoch,
         "active": snap.run_active,
+        "cursorAgent": snap.cursor_agent.as_ref().map(|tag| {
+            serde_json::json!({"color": tag.color, "name": tag.name})
+        }),
         "nodes": tag_entries(&snap.nodes),
         "frames": tag_entries(&snap.frames),
         "previews": previews,
@@ -576,7 +618,20 @@ pub fn relay_json() -> String {
 /// Parse a `relay_json` body. `None` on any shape mismatch.
 pub fn parse_relay_json(body: &str) -> Option<RemoteIndicators> {
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    // Epoch-less payloads came from the original relay protocol. Preserve
+    // compatibility by treating them as one synthetic daemon epoch.
+    let epoch = match v.get("epoch") {
+        Some(value) => value.as_u64()?,
+        None => 0,
+    };
     let run_active = v.get("active")?.as_bool()?;
+    let cursor_agent = match v.get("cursorAgent") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(agent) => Some(AgentTag {
+            color: agent.get("color")?.as_str()?.to_string(),
+            name: agent.get("name")?.as_str()?.to_string(),
+        }),
+    };
     let tag_list = |key: &str| -> Vec<(String, AgentTag)> {
         v.get(key)
             .and_then(|a| a.as_array())
@@ -614,7 +669,9 @@ pub fn parse_relay_json(body: &str) -> Option<RemoteIndicators> {
         })
         .unwrap_or_default();
     Some(RemoteIndicators {
+        epoch,
         run_active,
+        cursor_agent,
         nodes: tag_list("nodes"),
         frames: tag_list("frames"),
         previews,
@@ -626,8 +683,9 @@ pub fn parse_relay_json(body: &str) -> Option<RemoteIndicators> {
 /// Returns `true` while anything is active or draining, so the caller
 /// keeps its animation pump alive.
 ///
-/// - A newly active remote run mirrors [`begin`] (fresh epoch, clean
-///   maps) so a stale prior relay can't bleed through.
+/// - A newly active remote epoch mirrors [`begin`] (fresh local epoch,
+///   clean maps) so a stale prior relay can't bleed through even when the
+///   browser misses the inactive snapshot between back-to-back runs.
 /// - `nodes` / `frames` / `previews` are replaced wholesale — the
 ///   daemon is the authority for ownership tags.
 /// - `reveals` are insert-only: an id already present locally keeps its
@@ -638,25 +696,31 @@ pub fn parse_relay_json(body: &str) -> Option<RemoteIndicators> {
 pub fn apply_remote(remote: &RemoteIndicators) -> bool {
     let mut r = REGISTRY.lock().unwrap();
     if remote.run_active {
-        if !r.run_active {
+        if !r.run_active || r.remote_epoch != Some(remote.epoch) {
             r.epoch += 1;
             r.clear_maps();
             r.run_active = true;
+            r.remote_epoch = Some(remote.epoch);
         }
         r.nodes = remote.nodes.iter().cloned().collect();
         r.frames = remote.frames.iter().cloned().collect();
+        r.cursor_agent = remote.cursor_agent.clone();
         r.previews = remote.previews.iter().cloned().collect();
         for (id, ms) in &remote.reveals {
             r.reveals.entry(id.clone()).or_insert(*ms);
         }
         return true;
     }
-    if r.run_active {
+    // An out-of-order inactive poll from the previous daemon run must not
+    // tear down the newer active mirror.
+    if r.run_active && r.remote_epoch == Some(remote.epoch) {
         r.run_active = false;
         r.finishing = true;
         if r.reveals.is_empty() {
+            let cursor_was_visible = r.cursor_agent.is_some();
             r.clear_maps();
             r.epoch += 1;
+            r.needs_final_frame = cursor_was_visible;
         }
     }
     has_active_indicators(&r) || r.needs_final_frame

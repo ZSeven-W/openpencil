@@ -182,6 +182,40 @@ fn transcript_layout_rebuilds_when_message_content_changes() {
 }
 
 #[test]
+fn transcript_layout_rebuilds_for_activity_but_not_hidden_completion_metadata() {
+    use crate::widgets::ai_chat_transcript_cache::{transcript_build_count, unowned_for_tests};
+    let b = body();
+    let loc = op_editor_core::Locale::EnUs;
+    let mut message = ChatMessage::assistant_streaming();
+    message.content = "cache probe structured activity".into();
+    message.activities.push(op_editor_core::ChatActivity {
+        id: "section".into(),
+        title: "Build section".into(),
+        detail: None,
+        status: op_editor_core::ChatActivityStatus::Running,
+        content_offset: None,
+    });
+
+    let _ = unowned_for_tests(std::slice::from_ref(&message), b, loc);
+    let base = transcript_build_count();
+    message.activities[0].status = op_editor_core::ChatActivityStatus::Done;
+    let _ = unowned_for_tests(std::slice::from_ref(&message), b, loc);
+    assert_eq!(transcript_build_count(), base + 1);
+
+    message.completion = Some(op_editor_core::ChatCompletion {
+        succeeded: 1,
+        failed: 0,
+        nodes: 8,
+    });
+    let _ = unowned_for_tests(std::slice::from_ref(&message), b, loc);
+    assert_eq!(
+        transcript_build_count(),
+        base + 1,
+        "completion metadata is provider history, not transcript layout"
+    );
+}
+
+#[test]
 fn transcript_hit_test_reuses_the_cached_layout() {
     use crate::widgets::ai_chat_transcript_cache::{transcript_build_count, unowned_for_tests};
     let mut m = ChatMessage::assistant("cache probe gamma — clickable header");

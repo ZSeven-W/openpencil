@@ -542,6 +542,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.openCode" => "Über 75 LLM-Anbieter",
         "settings.provider.githubCopilot" => "GitHub-Copilot-Modelle",
         "settings.provider.geminiCli" => "Google-Gemini-Modelle",
+        "settings.provider.antigravity" => "Antigravity-Modelle",
+        "settings.provider.grokBuild" => "Grok-Build-Modelle",
         "settings.system.title" => "System",
         "settings.system.autoUpdate" => "Automatische Updates",
         "settings.system.upToDate" => "Aktuell",

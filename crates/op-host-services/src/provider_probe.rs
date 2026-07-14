@@ -81,6 +81,12 @@ fn no_models_error(provider: AgentProvider) -> String {
         AgentProvider::GeminiCli => {
             "No models found. Run \"gemini\" once to authenticate, or set GEMINI_API_KEY.".to_string()
         }
+        AgentProvider::Antigravity => {
+            "No model available. Run \"agy\" once to authenticate.".to_string()
+        }
+        AgentProvider::GrokBuild => {
+            "No models found. Run \"grok\" once to authenticate.".to_string()
+        }
     }
 }
 
@@ -114,6 +120,8 @@ pub fn connect_provider(provider: AgentProvider) -> ProbeOutcome {
         AgentProvider::OpenCode => connect_opencode(),
         AgentProvider::GithubCopilot => connect_copilot(),
         AgentProvider::GeminiCli => connect_gemini_cli(),
+        AgentProvider::Antigravity => crate::cli_provider_probe::connect_antigravity(),
+        AgentProvider::GrokBuild => crate::cli_provider_probe::connect_grok_build(),
     }
 }
 
@@ -121,27 +129,41 @@ pub fn connect_provider(provider: AgentProvider) -> ProbeOutcome {
 /// `install-agent.ts::getInstallInfo` (lines 37-76). The TS
 /// auto-install execution (`npm install -g` from the app) is NOT
 /// ported; the command is surfaced as guidance instead.
-fn install_command(provider: AgentProvider) -> &'static str {
+pub(crate) fn install_command(provider: AgentProvider) -> &'static str {
+    install_command_for_platform(provider, cfg!(windows), cfg!(target_os = "macos"))
+}
+
+fn install_command_for_platform(
+    provider: AgentProvider,
+    windows: bool,
+    macos: bool,
+) -> &'static str {
     match provider {
         AgentProvider::ClaudeCode => "npm install -g @anthropic-ai/claude-code",
         AgentProvider::CodexCli => "npm install -g @openai/codex",
         AgentProvider::OpenCode => {
-            if cfg!(windows) {
+            if windows {
                 "npm install -g opencode-ai"
             } else {
                 "curl -fsSL https://opencode.ai/install | bash"
             }
         }
         AgentProvider::GithubCopilot => {
-            if cfg!(target_os = "macos") {
+            if macos {
                 "brew install github/copilot/copilot"
-            } else if cfg!(windows) {
+            } else if windows {
                 "winget install GitHub.CopilotCLI"
             } else {
                 "See documentation"
             }
         }
         AgentProvider::GeminiCli => "npm install -g @anthropic-ai/gemini-cli",
+        AgentProvider::Antigravity if windows => {
+            "irm https://antigravity.google/cli/install.ps1 | iex"
+        }
+        AgentProvider::Antigravity => "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+        AgentProvider::GrokBuild if windows => "irm https://x.ai/cli/install.ps1 | iex",
+        AgentProvider::GrokBuild => "curl -fsSL https://x.ai/cli/install.sh | bash",
     }
 }
 

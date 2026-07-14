@@ -653,7 +653,15 @@ fn paint_node_inner<'a>(
             // fill, then the children render normally below.
             paint_widget_visual(cx, node, world_rect, zoom);
             if let Some(accent) = options.generation_accent {
-                if super::canvas_generation_scan::is_placeholder_section(node) {
+                let visually_empty = super::canvas_generation_scan::is_placeholder_section(node)
+                    || options.reveals.is_some_and(|schedule| {
+                        super::canvas_generation_scan::is_pending_filled_section(
+                            node,
+                            schedule.starts,
+                            schedule.now_ms,
+                        )
+                    });
+                if visually_empty {
                     let on_deck = options
                         .generating_descendant_ids
                         .is_some_and(|ids| ids.contains(&node.id));

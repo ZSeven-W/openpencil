@@ -112,6 +112,11 @@ pub mod toolbar;
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
 mod canvas_agent_cursor;
+mod canvas_agent_cursor_motion;
+#[cfg(test)]
+mod canvas_agent_cursor_motion_tests;
+#[cfg(test)]
+mod canvas_agent_cursor_presence_tests;
 #[cfg(test)]
 mod canvas_agent_cursor_tests;
 mod canvas_frame_labels;
@@ -201,10 +206,10 @@ mod ai_chat_panel_hit;
 pub mod ai_chat_panel_paint;
 pub(crate) mod ai_chat_tool_verbs;
 pub mod ai_chat_transcript;
+pub(crate) mod ai_chat_transcript_activity;
 #[cfg(test)]
 mod ai_chat_transcript_apply_tests;
 pub(crate) mod ai_chat_transcript_cache;
-pub(crate) mod ai_chat_transcript_completion;
 pub(crate) mod ai_chat_transcript_design;
 pub(crate) mod ai_chat_transcript_flow;
 pub(crate) mod ai_chat_transcript_hit;

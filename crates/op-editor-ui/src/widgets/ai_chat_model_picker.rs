@@ -615,6 +615,12 @@ pub fn paint_provider_logo(
             paint_brand_logo(cx.backend, BrandLogo::Copilot, top_left, size, color)
         }
         AgentProvider::OpenCode => paint_opencode_logo(cx.backend, top_left, size, color),
+        AgentProvider::Antigravity => {
+            paint_brand_logo(cx.backend, BrandLogo::Antigravity, top_left, size, color)
+        }
+        AgentProvider::GrokBuild => {
+            paint_brand_logo(cx.backend, BrandLogo::Grok, top_left, size, color)
+        }
     }
 }
 
@@ -627,6 +633,8 @@ pub(super) fn provider_label(provider: AgentProvider) -> &'static str {
         AgentProvider::GeminiCli => "GOOGLE GEMINI",
         AgentProvider::GithubCopilot => "GITHUB COPILOT",
         AgentProvider::OpenCode => "OPENCODE",
+        AgentProvider::Antigravity => "ANTIGRAVITY",
+        AgentProvider::GrokBuild => "GROK BUILD",
     }
 }
 
@@ -638,6 +646,8 @@ fn group_label(provider: AgentProvider, builtin: bool) -> &'static str {
             AgentProvider::GeminiCli => "GEMINI API KEY",
             AgentProvider::GithubCopilot => "COPILOT API KEY",
             AgentProvider::OpenCode => "OPENCODE API KEY",
+            AgentProvider::Antigravity => "ANTIGRAVITY API KEY",
+            AgentProvider::GrokBuild => "GROK BUILD API KEY",
         }
     } else {
         provider_label(provider)

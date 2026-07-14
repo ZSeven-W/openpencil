@@ -10,11 +10,12 @@ impl DesktopApp {
         };
         let settings = &mut self.host.editor_state_mut().editor_ui.agent_settings;
         let mut changed = false;
-        for (idx, detected) in detected_flags.iter().copied().enumerate() {
-            if detected && !settings.mcp_cli_enabled[idx] {
-                settings.mcp_cli_enabled[idx] = true;
-                changed = true;
-            }
+        // Native CLI config is the source of truth at launch. In particular,
+        // do not let a persisted OpenPencil toggle silently overwrite an
+        // explicit `enabled = false` (or equivalent) written by the CLI.
+        if settings.mcp_cli_enabled != detected_flags {
+            settings.mcp_cli_enabled = detected_flags;
+            changed = true;
         }
         let any_cli_enabled = settings.mcp_cli_enabled.iter().any(|enabled| *enabled);
         let port = settings.mcp_server.port;
@@ -27,7 +28,7 @@ impl DesktopApp {
         }
         changed |= self.reconcile_mcp_server_from_settings();
         if any_cli_enabled {
-            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 6], port)));
+            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 8], port)));
         }
         if self.mcp_server_active() {
             changed |= self.request_redraw(false);
@@ -216,7 +217,7 @@ impl DesktopApp {
 
     pub(crate) fn reconcile_mcp_cli_integrations(
         &mut self,
-        before: Option<([bool; 6], u16)>,
+        before: Option<([bool; 8], u16)>,
     ) -> bool {
         let Some((before_flags, before_port)) = before else {
             return false;
@@ -265,5 +266,49 @@ impl DesktopApp {
             }
         }
         reverted
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use op_editor_core::agent_settings::McpCli;
+
+    #[test]
+    fn bootstrap_respects_native_disabled_state_over_persisted_toggle() {
+        let home = std::env::temp_dir().join(format!(
+            "openpencil-mcp-native-disabled-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(home.join(".grok")).unwrap();
+        std::fs::write(
+            home.join(".grok/config.toml"),
+            "[mcp_servers.openpencil]\nurl = \"http://127.0.0.1:3100/mcp\"\nenabled = false\n",
+        )
+        .unwrap();
+
+        let mut app = DesktopApp::new(None);
+        app.mcp_integrations_home = Some(home.clone());
+        let index = McpCli::ALL
+            .iter()
+            .position(|cli| *cli == McpCli::GrokBuild)
+            .unwrap();
+        app.host
+            .editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .mcp_cli_enabled[index] = true;
+
+        assert!(app.bootstrap_mcp_runtime_from_settings());
+        assert!(
+            !app.host
+                .editor_state()
+                .editor_ui
+                .agent_settings
+                .mcp_cli_enabled[index]
+        );
+        assert!(!app.mcp_server_active());
+        let _ = std::fs::remove_dir_all(home);
     }
 }

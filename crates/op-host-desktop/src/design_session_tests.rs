@@ -1,5 +1,5 @@
 use super::*;
-use op_editor_core::{EditorCommand, EditorState};
+use op_editor_core::{EditorCommand, EditorState, Locale};
 use op_editor_host_core::design::{DesignCmdReq, DesignDelta, RemoteDocSink};
 use op_host_services::design_session::{
     active_content_bounds, design_canvas_size, fit_design_viewport_to_content,
@@ -85,8 +85,8 @@ fn undo_batch_signals_are_distinguishable_on_the_wire() {
 /// End-to-end smoke through `pump_commands` + `pump_progress`:
 /// a fake worker thread drives a `RemoteDocSink` against
 /// real-looking channels, the UI loop drains both pumps, and we
-/// assert that the chat bubble carries the rendered progress +
-/// terminal summary line, and that the session clears itself
+/// assert that the chat bubble carries ordered narration, typed activity and
+/// structured terminal metadata, and that the session clears itself
 /// after `Done`.
 ///
 /// This is the host-side complement to the orchestrator's own
@@ -99,6 +99,7 @@ fn end_to_end_pump_round_trips_apply_and_progress_via_actor_channels() {
     let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
     let mut current = Some(DesignSession::from_channels(delta_rx, cmd_rx));
     let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.locale = Locale::EnUs;
     // Seed a streaming assistant bubble — `chat.begin_send`
     // creates one in production; the pumps fold the worker's
     // progress + summary into it.
@@ -158,19 +159,29 @@ fn end_to_end_pump_round_trips_apply_and_progress_via_actor_channels() {
         .last()
         .expect("seeded bubble survives");
     assert!(
-        bubble.thinking.contains("Planning"),
-        "progress line should render in the process block, got thinking={:?}",
-        bubble.thinking
+        bubble.thinking.is_empty(),
+        "typed progress stays out of thinking"
+    );
+    assert!(bubble.content.contains("mapping the request"));
+    assert!(bubble.content.contains("Done —"));
+    assert_eq!(bubble.activities.len(), 1);
+    assert_eq!(bubble.activities[0].title, "Planning the design");
+    assert!(bubble.activities[0].content_offset.is_some());
+    assert_eq!(
+        bubble.activities[0].status,
+        op_editor_core::ChatActivityStatus::Done
+    );
+    assert_eq!(
+        bubble.completion,
+        Some(op_editor_core::ChatCompletion {
+            succeeded: 1,
+            failed: 0,
+            nodes: 3,
+        })
     );
     assert!(
-        !bubble.content.contains("Planning"),
-        "final answer should not be polluted by progress lines, got: {:?}",
-        bubble.content
-    );
-    assert!(
-        bubble.content.contains("1 subtask"),
-        "summary should report 1 subtask succeeded, got: {:?}",
-        bubble.content
+        !bubble.content.contains("subtask(s) succeeded"),
+        "completion metadata must not depend on parsing the visible summary"
     );
     assert!(
         !bubble.streaming,
@@ -288,48 +299,165 @@ fn mobile_root() -> jian_ops_schema::node::PenNode {
 }
 
 #[test]
-fn progress_label_formats_subtask_skills_block() {
+fn typed_progress_merges_one_subtask_and_hides_scheduler_details() {
     use op_orchestrator::{Progress, SkillBrief};
-    let p = Progress::SubtaskSkills {
-        id: "header".into(),
-        included: vec![
-            SkillBrief {
-                name: "cjk-typography".into(),
-                token_count: 800,
-                truncated: false,
-            },
-            SkillBrief {
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    let events = vec![
+        Progress::Planned {
+            subtasks: vec![("header".into(), "Greeting header".into())],
+        },
+        Progress::SubtaskStarted {
+            id: "header".into(),
+            label: "Greeting header".into(),
+        },
+        Progress::SubtaskSkills {
+            id: "header".into(),
+            included: vec![SkillBrief {
                 name: "mobile-app".into(),
                 token_count: 600,
                 truncated: false,
-            },
-        ],
-        dropped: vec![("examples".into(), "budget".into())],
-        budget_used: 5200,
-        budget_max: 8000,
-    };
-    let s = super::progress_label(&p);
-    assert!(s.contains("• Subtask `header`"), "{s}");
-    assert!(s.contains("2 skills · 5200/8000 tok · 1 dropped"), "{s}");
-    assert!(
-        s.contains("\n  ▸ skills: cjk-typography, mobile-app"),
-        "{s}"
+            }],
+            dropped: vec![("examples".into(), "budget".into())],
+            budget_used: 5200,
+            budget_max: 8000,
+        },
+        Progress::SubtaskNodes {
+            id: "header".into(),
+            nodes_so_far: 3,
+        },
+        Progress::SubtaskDone {
+            id: "header".into(),
+            node_count: 3,
+        },
+    ];
+
+    assert!(super::apply_progress(&mut message, &events, Locale::EnUs));
+    assert_eq!(message.activities.len(), 1);
+    assert_eq!(message.activities[0].title, "Greeting header");
+    assert_eq!(message.activities[0].detail.as_deref(), Some("3 elements"));
+    assert!(message.activities[0].content_offset.is_some());
+    assert_eq!(
+        message.activities[0].status,
+        op_editor_core::ChatActivityStatus::Done
     );
-    assert!(s.contains("\n  ▸ dropped: examples (budget)"), "{s}");
+    assert!(message.thinking.is_empty());
+    let visible = format!(
+        "{} {:?}",
+        message.activities[0].title, message.activities[0].detail
+    );
+    for internal in ["skills", "5200/8000", "dropped", "examples"] {
+        assert!(
+            !visible.contains(internal),
+            "leaked internal field: {internal}"
+        );
+    }
+    assert!(message.content.contains("mapped the page into 1 section"));
 }
 
 #[test]
-fn progress_label_formats_subtask_retry() {
-    use op_orchestrator::Progress;
-    let p = Progress::SubtaskRetry {
-        id: "header".into(),
-        attempt: 2,
-        reason: "zero nodes generated".into(),
-    };
+fn cli_progress_builds_an_ordered_narration_timeline_and_plain_summary() {
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    assert!(super::apply_progress(
+        &mut message,
+        &[
+            Progress::Planning,
+            Progress::Planned {
+                subtasks: vec![("header".into(), "Greeting header".into())],
+            },
+            Progress::CleanupDone,
+            Progress::ValidationStarted,
+            Progress::ValidationDone { total_applied: 0 },
+        ],
+        Locale::EnUs,
+    ));
+
+    let offsets: Vec<usize> = message
+        .activities
+        .iter()
+        .map(|activity| activity.content_offset.expect("timeline offset") as usize)
+        .collect();
+    assert!(offsets.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert!(message.content.contains("mapping the request"));
+    assert!(message.content.contains("polishing spacing"));
+    assert!(message.content.contains("checking overflow"));
+    assert!(!message.content.contains("skills"));
+
+    assert!(super::append_completion_narration(
+        &mut message,
+        1,
+        0,
+        Locale::EnUs
+    ));
+    assert!(message.content.ends_with(
+        "Done — the planned section is in place and the final layout has been checked."
+    ));
+}
+
+#[test]
+fn typed_progress_updates_retry_without_duplicating_the_activity() {
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    let events = vec![
+        Progress::SubtaskStarted {
+            id: "header".into(),
+            label: "Greeting header".into(),
+        },
+        Progress::SubtaskRetry {
+            id: "header".into(),
+            attempt: 2,
+            reason: "zero nodes generated".into(),
+        },
+    ];
+
+    assert!(super::apply_progress(&mut message, &events, Locale::EnUs));
+    assert_eq!(message.activities.len(), 1);
     assert_eq!(
-        super::progress_label(&p),
-        "  ▸ retry #2: zero nodes generated"
+        message.activities[0].detail.as_deref(),
+        Some("Retrying · attempt 2")
     );
+    assert_eq!(
+        message.activities[0].status,
+        op_editor_core::ChatActivityStatus::Running
+    );
+    assert!(!format!("{:?}", message.activities).contains("zero nodes"));
+}
+
+#[test]
+fn cli_progress_uses_the_editor_locale_for_visible_process_and_summary() {
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    assert!(super::apply_progress(
+        &mut message,
+        &[
+            Progress::Planning,
+            Progress::Planned {
+                subtasks: vec![("header".into(), "问候页头".into())],
+            },
+            Progress::CleanupDone,
+            Progress::ValidationStarted,
+            Progress::ValidationPreCheckDone {
+                applied: 0,
+                by_category: Default::default(),
+            },
+            Progress::ValidationDone { total_applied: 0 },
+        ],
+        Locale::ZhCn,
+    ));
+    assert!(super::append_completion_narration(
+        &mut message,
+        1,
+        0,
+        Locale::ZhCn,
+    ));
+
+    assert!(message.content.contains("需求整理成清晰的页面结构"));
+    assert!(message.content.contains("润色间距"));
+    assert!(message.content.contains("检查溢出"));
+    assert!(message.content.contains("已完成——"));
+    assert!(message
+        .activities
+        .iter()
+        .any(|activity| activity.title == "检查设计"));
+    assert!(!message.content.contains("Planning"));
+    assert!(!message.content.contains("Done"));
 }
 
 fn mobile_fit_content_root() -> jian_ops_schema::node::PenNode {

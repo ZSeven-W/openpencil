@@ -289,10 +289,10 @@ fn agent_chip_counts_ready_builtin_agents() {
 fn chip_with_only_builtin_agents_reserves_no_icon_cluster() {
     let mut bar = TopBar::new("test.op");
     bar.agent_count = 4;
-    bar.connected = [false; 5];
+    bar.connected = [false; 7];
     assert_eq!(bar.agent_icons_span(), 0.0, "no painted icons, no span");
 
-    bar.connected = [true, false, false, false, false];
+    bar.connected = [true, false, false, false, false, false, false];
     assert!(
         bar.agent_icons_span() > 0.0,
         "a connected CLI provider brings the cluster back"

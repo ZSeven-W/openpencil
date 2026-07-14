@@ -2,7 +2,7 @@ use op_ai::chat_provider::{
     ChatDelta, ChatHistoryRole, ChatRequest, ChatToolExecutor, ChatToolResult, EchoProvider,
     StopReason,
 };
-use op_editor_core::{ChatMessage, ChatToolCall};
+use op_editor_core::{ChatActivity, ChatActivityStatus, ChatCompletion, ChatMessage, ChatToolCall};
 use op_editor_host_core::chat::{
     apply_poll_to_message, apply_poll_to_message_with, chat_history_from_transcript,
     chat_tool_channel, ChatPoll, ChatSession,
@@ -195,6 +195,39 @@ fn design_loop_streams_narration_as_visible_prose_with_offsets() {
 }
 
 #[test]
+fn design_loop_preserves_text_tool_text_order_within_one_poll() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(ChatDelta::TextDelta("before".into())).unwrap();
+    tx.send(ChatDelta::ToolUse {
+        name: "batch_design".into(),
+        args: "{}".into(),
+    })
+    .unwrap();
+    tx.send(ChatDelta::TextDelta("after".into())).unwrap();
+    drop(tx);
+
+    let mut session = ChatSession::from_channels(rx, None).into_design_loop();
+    let poll = session.poll();
+    assert_eq!(poll.text, "beforeafter");
+    assert_eq!(poll.tool_calls.len(), 1);
+    assert_eq!(
+        poll.tool_calls[0].content_offset,
+        Some("before".len() as u32),
+        "the poll records the call where it appeared, not after all batched text"
+    );
+
+    let mut message = ChatMessage::assistant_streaming();
+    apply_poll_to_message_with(&mut message, &poll, true);
+
+    assert_eq!(message.content, "beforeafter");
+    assert_eq!(
+        message.tool_calls[0].content_offset,
+        Some("before".len() as u32),
+        "the design transcript interleaves the tool between before and after"
+    );
+}
+
+#[test]
 fn apply_poll_opens_modify_tools_but_keeps_read_tools_collapsed() {
     let mut modify = ChatMessage::assistant_streaming();
     apply_poll_to_message(
@@ -286,6 +319,79 @@ fn chat_history_from_transcript_skips_blank_messages() {
             (ChatHistoryRole::Assistant, "answer".into()),
         ]
     );
+}
+
+#[test]
+fn chat_history_preserves_structured_design_completion_for_follow_up() {
+    let mut completed = ChatMessage::assistant("");
+    completed.activities.push(ChatActivity {
+        id: "recent".into(),
+        title: "Recently Played".into(),
+        detail: None,
+        status: ChatActivityStatus::Done,
+        content_offset: None,
+    });
+    completed.completion = Some(ChatCompletion {
+        succeeded: 1,
+        failed: 0,
+        nodes: 18,
+    });
+    let messages = vec![
+        ChatMessage::user("design a music home"),
+        completed,
+        ChatMessage::user("make the cards smaller"),
+        ChatMessage::assistant_streaming(),
+    ];
+
+    let history = chat_history_from_transcript(&messages);
+
+    assert_eq!(history.len(), 2);
+    assert_eq!(
+        history[0],
+        (ChatHistoryRole::User, "design a music home".into())
+    );
+    assert_eq!(history[1].0, ChatHistoryRole::Assistant);
+    assert!(history[1].1.contains("1 succeeded, 0 failed"));
+    assert!(history[1].1.contains("Recently Played"));
+}
+
+#[test]
+fn chat_history_keeps_visible_narration_and_structured_sections() {
+    let mut completed = ChatMessage::assistant("Done — the layout has been checked.");
+    completed.activities.push(ChatActivity {
+        id: "header".into(),
+        title: "Greeting Header".into(),
+        detail: None,
+        status: ChatActivityStatus::Done,
+        content_offset: Some(0),
+    });
+    completed.activities.push(ChatActivity {
+        id: "__validation".into(),
+        title: "Checking the design".into(),
+        detail: None,
+        status: ChatActivityStatus::Done,
+        content_offset: Some(0),
+    });
+    completed.completion = Some(ChatCompletion {
+        succeeded: 1,
+        failed: 0,
+        nodes: 1,
+    });
+
+    let history = chat_history_from_transcript(&[
+        ChatMessage::user("design it"),
+        completed,
+        ChatMessage::user("make the header smaller"),
+        ChatMessage::assistant_streaming(),
+    ]);
+
+    assert!(history[1].1.contains("Done — the layout has been checked."));
+    assert!(history[1]
+        .1
+        .contains("Design work completed: 1 succeeded, 0 failed."));
+    assert!(history[1].1.contains("Sections: Greeting Header."));
+    assert!(!history[1].1.contains("Checking the design"));
+    assert!(!history[1].1.contains("nodes"));
 }
 
 #[test]

@@ -135,6 +135,7 @@ pub(super) fn pump_indicator(
             msg.agent_name = Some(id.name.clone());
             msg.agent_color = Some(id.color.clone());
         }
+        agent_indicators::confirm_cursor_agent(epoch, &id.color, &id.name);
         *indicator = Some(DesignLoopIndicator {
             epoch,
             color: id.color,
@@ -166,13 +167,15 @@ pub(super) fn pump_indicator(
 ///
 /// Lifecycle (deliberately asymmetric with [`pump_indicator`] — see the
 /// module doc):
-/// - Lazy creation the first time `current_design.is_some()` with no local
-///   indicator yet: reads the epoch the launch site already began via
+/// - Lazy creation after the routed design session publishes its first
+///   user-visible activity: reads the epoch the launch site already began via
 ///   [`op_editor_core::agent_indicators::active_epoch`] (never calls
 ///   `begin()` — that would either steal a fresh epoch out from under the
 ///   in-flight `DesignSession`'s `indicator_epoch`, or silently no-op if
 ///   one is already active, neither of which this driver should decide).
-///   `None` means no epoch is active for this turn (e.g. a test harness
+///   Waiting for an activity keeps an async classifier's ordinary chat route
+///   from being relabelled as a design agent. `None` also means no epoch is
+///   active for this turn (e.g. a test harness
 ///   using `DesignSession::from_channels` without an epoch) — the driver
 ///   stays dormant rather than fabricating one.
 /// - While the indicator exists and `current_design` stays `Some` →
@@ -195,44 +198,15 @@ pub(super) fn pump_indicator(
 pub(super) fn pump_design_session_indicator(
     indicator: &mut Option<DesignLoopIndicator>,
     current_design: &Option<crate::design_session::DesignSession>,
-    state: &EditorState,
+    state: &mut EditorState,
+    running_tab: Option<usize>,
 ) {
-    if current_design.is_some() && indicator.is_none() {
+    let identity = current_design
+        .is_some()
+        .then(|| ensure_design_session_transcript_identity(state, running_tab))
+        .flatten();
+    if let (Some((name, color)), None) = (identity, indicator.as_ref()) {
         if let Some(epoch) = agent_indicators::active_epoch() {
-            let identities = assign_agent_identities_seeded(1, identity_seed());
-            let id = identities
-                .into_iter()
-                .next()
-                .expect("assign_agent_identities(1) always yields one");
-            // The transcript is the source of truth for a single-agent
-            // design turn. CLI turns are stamped by `ChatState::begin_send`
-            // (for example "Claude Code"), while builtin turns use their
-            // provider display name. Reusing that label keeps the canvas
-            // cursor and chat bubble from presenting two different agents.
-            // A persona remains the fallback for harnesses that do not seed
-            // a streaming assistant message; its colour also supplies the
-            // canvas accent when the transcript has no orchestrated colour.
-            let (name, color) = state
-                .chat
-                .messages
-                .iter()
-                .rev()
-                .find(|message| {
-                    message.role == op_editor_core::ChatRole::Assistant && message.streaming
-                })
-                .map(|message| {
-                    (
-                        message
-                            .agent_name
-                            .clone()
-                            .unwrap_or_else(|| id.name.clone()),
-                        message
-                            .agent_color
-                            .clone()
-                            .unwrap_or_else(|| id.color.clone()),
-                    )
-                })
-                .unwrap_or((id.name, id.color));
             let initial = collect_top_level_frame_ids(state);
             *indicator = Some(DesignLoopIndicator {
                 epoch,
@@ -253,6 +227,44 @@ pub(super) fn pump_design_session_indicator(
             *indicator = None;
         }
     }
+}
+
+/// Stamp a product persona only after typed design activity arrives. External
+/// CLI turns park a `DesignSession` while intent classification is still in
+/// flight, so assigning at `current_design.is_some()` would mislabel ordinary
+/// chat turns. The provider remains visible in the model selector; the message
+/// and canvas use the same user-facing design-agent identity. Cursor
+/// confirmation happens here (rather than only in the later indicator pump)
+/// so a turn that publishes activity and finishes in one UI frame still keeps
+/// its identity for the queued reveal drain.
+pub(super) fn ensure_design_session_transcript_identity(
+    state: &mut EditorState,
+    running_tab: Option<usize>,
+) -> Option<(String, String)> {
+    let chat = state.chat.run_tab_mut(running_tab);
+    let message =
+        chat.messages.iter_mut().rev().find(|message| {
+            message.role == op_editor_core::ChatRole::Assistant && message.streaming
+        })?;
+    if message.activities.is_empty() {
+        return None;
+    }
+    let (name, color) =
+        if let (Some(name), Some(color)) = (&message.agent_name, &message.agent_color) {
+            (name.clone(), color.clone())
+        } else {
+            let identity = assign_agent_identities_seeded(1, identity_seed())
+                .into_iter()
+                .next()
+                .expect("assign_agent_identities_seeded(1) always yields one");
+            message.agent_name = Some(identity.name.clone());
+            message.agent_color = Some(identity.color.clone());
+            (identity.name, identity.color)
+        };
+    if let Some(epoch) = agent_indicators::active_epoch() {
+        agent_indicators::confirm_cursor_agent(epoch, &color, &name);
+    }
+    Some((name, color))
 }
 
 /// True when the active design-loop epoch still has scheduled reveals that
@@ -324,6 +336,18 @@ mod tests {
         )
     }
 
+    fn mark_design_started(state: &mut EditorState) {
+        let mut message = op_editor_core::ChatMessage::assistant_streaming();
+        message.activities.push(op_editor_core::ChatActivity {
+            id: "__planning".into(),
+            title: "Planning the design".into(),
+            detail: None,
+            status: op_editor_core::ChatActivityStatus::Running,
+            content_offset: None,
+        });
+        state.chat.messages.push(message);
+    }
+
     #[test]
     fn collect_top_level_frame_ids_does_not_panic_on_fresh_doc() {
         let state = make_state();
@@ -340,6 +364,37 @@ mod tests {
         pump_indicator(&mut indicator, &None, &mut state);
         assert!(indicator.is_none());
         assert_eq!(state.chat.agents_running, (0, 0));
+    }
+
+    #[test]
+    fn pump_indicator_confirms_cursor_when_the_agent_name_is_published() {
+        let _guard = lock_agent_indicators();
+        agent_indicators::clear();
+        let mut state = make_state();
+        state
+            .chat
+            .messages
+            .push(op_editor_core::ChatMessage::assistant_streaming());
+        state.chat.agents_running = (1, 1);
+        let epoch = agent_indicators::begin();
+        let (_tx, rx) = mpsc::channel::<op_ai::chat_provider::ChatDelta>();
+        let current = Some(op_editor_host_core::chat::ChatSession::from_channels(
+            rx, None,
+        ));
+        let mut indicator = None;
+
+        pump_indicator(&mut indicator, &current, &mut state);
+
+        let indicator = indicator.expect("the design-loop identity is published");
+        assert_eq!(indicator.epoch, epoch);
+        assert_eq!(
+            agent_indicators::snapshot().cursor_agent,
+            Some(agent_indicators::AgentTag {
+                color: indicator.color,
+                name: indicator.name,
+            })
+        );
+        agent_indicators::end_if_epoch(epoch);
     }
 
     #[test]
@@ -384,9 +439,9 @@ mod tests {
     fn design_session_indicator_noop_when_current_design_none() {
         let _guard = lock_agent_indicators();
         agent_indicators::clear();
-        let state = make_state();
+        let mut state = make_state();
         let mut indicator: Option<DesignLoopIndicator> = None;
-        pump_design_session_indicator(&mut indicator, &None, &state);
+        pump_design_session_indicator(&mut indicator, &None, &mut state, None);
         assert!(indicator.is_none());
     }
 
@@ -397,14 +452,15 @@ mod tests {
         // `current_design` must not spin one up out of thin air.
         let _guard = lock_agent_indicators();
         agent_indicators::clear();
-        let state = make_state();
+        let mut state = make_state();
+        mark_design_started(&mut state);
         let (session, _epoch) = design_session_with_epoch();
         // Retire the epoch immediately so none is active by the time the
         // pump runs, mirroring "epoch already ended elsewhere".
         agent_indicators::clear();
         let current = Some(session);
         let mut indicator: Option<DesignLoopIndicator> = None;
-        pump_design_session_indicator(&mut indicator, &current, &state);
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
         assert!(
             indicator.is_none(),
             "no active epoch → driver must stay dormant, not fabricate one"
@@ -412,33 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn design_session_indicator_registers_frames_that_appear_after_the_turn_starts() {
-        let _guard = lock_agent_indicators();
-        agent_indicators::clear();
-        let mut state = make_state();
-        let (session, epoch) = design_session_with_epoch();
-        let current = Some(session);
-        let mut indicator: Option<DesignLoopIndicator> = None;
-
-        // First pump: no frames on the canvas yet — snapshots the (empty)
-        // initial set and assigns the agent identity.
-        pump_design_session_indicator(&mut indicator, &current, &state);
-        assert!(indicator.is_some(), "live current_design must create one");
-        assert_eq!(indicator.as_ref().unwrap().epoch, epoch);
-        assert!(!agent_indicators::is_frame_generating("frame-1"));
-
-        // The orchestrator inserts a top-level frame mid-turn.
-        state.active_children_mut().push(frame_node("frame-1"));
-        pump_design_session_indicator(&mut indicator, &current, &state);
-
-        assert!(
-            agent_indicators::is_frame_generating("frame-1"),
-            "a frame added during the turn must be tagged as generating"
-        );
-    }
-
-    #[test]
-    fn design_session_indicator_reuses_streaming_transcript_identity() {
+    fn design_session_indicator_waits_for_design_progress_after_classification() {
         let _guard = lock_agent_indicators();
         agent_indicators::clear();
         let mut state = make_state();
@@ -449,11 +479,84 @@ mod tests {
         let current = Some(session);
         let mut indicator: Option<DesignLoopIndicator> = None;
 
-        pump_design_session_indicator(&mut indicator, &current, &state);
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
 
+        assert!(indicator.is_none());
         assert_eq!(
-            indicator.as_ref().map(|value| value.name.as_str()),
-            Some("Claude Code")
+            state.chat.messages.last().unwrap().agent_name.as_deref(),
+            Some("Claude Code"),
+            "a parked design session must not relabel a turn before intent is known"
+        );
+    }
+
+    #[test]
+    fn design_session_indicator_registers_frames_that_appear_after_the_turn_starts() {
+        let _guard = lock_agent_indicators();
+        agent_indicators::clear();
+        let mut state = make_state();
+        mark_design_started(&mut state);
+        let (session, epoch) = design_session_with_epoch();
+        let current = Some(session);
+        let mut indicator: Option<DesignLoopIndicator> = None;
+
+        // First pump: no frames on the canvas yet — snapshots the (empty)
+        // initial set and assigns the agent identity.
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
+        assert!(indicator.is_some(), "live current_design must create one");
+        assert_eq!(indicator.as_ref().unwrap().epoch, epoch);
+        assert!(!agent_indicators::is_frame_generating("frame-1"));
+
+        // The orchestrator inserts a top-level frame mid-turn.
+        state.active_children_mut().push(frame_node("frame-1"));
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
+
+        assert!(
+            agent_indicators::is_frame_generating("frame-1"),
+            "a frame added during the turn must be tagged as generating"
+        );
+    }
+
+    #[test]
+    fn design_session_indicator_stamps_one_persona_on_transcript_and_canvas() {
+        let _guard = lock_agent_indicators();
+        agent_indicators::clear();
+        let mut state = make_state();
+        let mut message = op_editor_core::ChatMessage::assistant_streaming();
+        message.agent_name = Some("Claude Code".into());
+        message.activities.push(op_editor_core::ChatActivity {
+            id: "content".into(),
+            title: "Build content".into(),
+            detail: None,
+            status: op_editor_core::ChatActivityStatus::Running,
+            content_offset: None,
+        });
+        state.chat.messages.push(message);
+        let (session, _epoch) = design_session_with_epoch();
+        let current = Some(session);
+        let mut indicator: Option<DesignLoopIndicator> = None;
+
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
+
+        let indicator = indicator
+            .as_ref()
+            .expect("design activity starts indicator");
+        let transcript = state.chat.messages.last().expect("streaming message");
+        assert_ne!(indicator.name, "Claude Code");
+        assert_eq!(
+            transcript.agent_name.as_deref(),
+            Some(indicator.name.as_str())
+        );
+        assert_eq!(
+            transcript.agent_color.as_deref(),
+            Some(indicator.color.as_str())
+        );
+        assert_eq!(
+            agent_indicators::snapshot().cursor_agent,
+            Some(agent_indicators::AgentTag {
+                color: indicator.color.clone(),
+                name: indicator.name.clone(),
+            }),
+            "the canvas cursor identity is confirmed in the same pump as the transcript name"
         );
     }
 
@@ -462,20 +565,21 @@ mod tests {
         let _guard = lock_agent_indicators();
         agent_indicators::clear();
         let mut state = make_state();
+        mark_design_started(&mut state);
         let (session, _epoch) = design_session_with_epoch();
         let mut current = Some(session);
         let mut indicator: Option<DesignLoopIndicator> = None;
 
-        pump_design_session_indicator(&mut indicator, &current, &state);
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
         state.active_children_mut().push(frame_node("frame-1"));
-        pump_design_session_indicator(&mut indicator, &current, &state);
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
         assert!(agent_indicators::is_frame_generating("frame-1"));
 
         // Turn finished: `design_session::pump_progress` already dropped the
         // session (which itself retired the epoch via `Drop`) before this
         // driver observes `current_design == None`.
         current = None;
-        pump_design_session_indicator(&mut indicator, &current, &state);
+        pump_design_session_indicator(&mut indicator, &current, &mut state, None);
 
         assert!(indicator.is_none(), "teardown must clear the local handle");
         assert!(
@@ -496,6 +600,7 @@ mod tests {
         let _guard = lock_agent_indicators();
         agent_indicators::clear();
         let mut state = make_state();
+        mark_design_started(&mut state);
         let (session, epoch) = design_session_with_epoch();
         let current_design = Some(session);
         let mut chat_indicator: Option<DesignLoopIndicator> = None;
@@ -506,7 +611,7 @@ mod tests {
         assert!(chat_indicator.is_none());
 
         // Design-session driver: drives off the same epoch independently.
-        pump_design_session_indicator(&mut design_indicator, &current_design, &state);
+        pump_design_session_indicator(&mut design_indicator, &current_design, &mut state, None);
         assert!(design_indicator.is_some());
         assert_eq!(design_indicator.as_ref().unwrap().epoch, epoch);
     }

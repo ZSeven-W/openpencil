@@ -560,6 +560,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.openCode" => "75+ LLM providers",
         "settings.provider.githubCopilot" => "GitHub Copilot models",
         "settings.provider.geminiCli" => "Google Gemini models",
+        "settings.provider.antigravity" => "Antigravity models",
+        "settings.provider.grokBuild" => "Grok Build models",
         "settings.system.title" => "System",
         "settings.system.autoUpdate" => "Auto-update",
         "settings.system.upToDate" => "Up to date",
@@ -584,6 +586,46 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "dialog.exportErrorLead" => "An error occurred while rendering the image.",
         "ai.thinkingProcess" => "Thinking",
         "ai.toolCalls" => "{{count}} tool calls",
+        "ai.designProgress.narration.planning" => {
+            "I’m mapping the request into a clear screen structure."
+        }
+        "ai.designProgress.narration.plannedOne" => {
+            "I’ve mapped the page into 1 section. I’ll build it, then refine the full screen."
+        }
+        "ai.designProgress.narration.plannedMany" => {
+            "I’ve mapped the page into {{count}} sections. I’ll build each one, then refine the full screen."
+        }
+        "ai.designProgress.narration.polishing" => {
+            "The main sections are in place. I’m polishing spacing, hierarchy, and consistency."
+        }
+        "ai.designProgress.narration.checking" => {
+            "The layout is built. I’m checking overflow, alignment, and visual balance."
+        }
+        "ai.designProgress.narration.visualReference" => {
+            "I’m preparing a visual reference before building the screen."
+        }
+        "ai.designProgress.activity.planning" => "Planning the design",
+        "ai.designProgress.activity.polishing" => "Polishing the layout",
+        "ai.designProgress.activity.checking" => "Checking the design",
+        "ai.designProgress.activity.visualReference" => "Preparing the visual reference",
+        "ai.designProgress.detail.needsAttention" => "Needs attention",
+        "ai.designProgress.detail.retrying" => "Retrying · attempt {{attempt}}",
+        "ai.designProgress.detail.refining" => "Refining details",
+        "ai.designProgress.detail.standardPath" => "Using the standard design path",
+        "ai.designProgress.detail.elementOne" => "1 element",
+        "ai.designProgress.detail.elementMany" => "{{count}} elements",
+        "ai.designProgress.completion.empty" => {
+            "Done — the design is complete and ready to review."
+        }
+        "ai.designProgress.completion.one" => {
+            "Done — the planned section is in place and the final layout has been checked."
+        }
+        "ai.designProgress.completion.many" => {
+            "Done — all {{count}} planned sections are in place and the final layout has been checked."
+        }
+        "ai.designProgress.completion.issues" => {
+            "Finished with issues — {{completed}} completed and {{failed}} need attention."
+        }
         "figma.importNotWired" => ".fig file import not yet wired",
         "dialog.loadErrorInvalidUtf8" => "The file is not valid UTF-8 text: {{detail}}",
         "dialog.loadErrorOldVersion" => "This file was saved by an older version of OpenPencil and must be re-saved before it can be opened.",

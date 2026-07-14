@@ -76,7 +76,7 @@ impl ProviderConnectJob {
 }
 
 /// op-editor-core's `AgentProvider` → the shell-core twin the probe
-/// layer speaks (same five variants, same order).
+/// layer speaks (same variants, same order).
 fn provider_to_sc(p: op_editor_core::AgentProvider) -> op_ai::agent_settings_state::AgentProvider {
     use op_ai::agent_settings_state::AgentProvider as Sc;
     match p {
@@ -85,6 +85,8 @@ fn provider_to_sc(p: op_editor_core::AgentProvider) -> op_ai::agent_settings_sta
         op_editor_core::AgentProvider::OpenCode => Sc::OpenCode,
         op_editor_core::AgentProvider::GithubCopilot => Sc::GithubCopilot,
         op_editor_core::AgentProvider::GeminiCli => Sc::GeminiCli,
+        op_editor_core::AgentProvider::Antigravity => Sc::Antigravity,
+        op_editor_core::AgentProvider::GrokBuild => Sc::GrokBuild,
     }
 }
 
@@ -116,6 +118,12 @@ pub fn missing_models_connect_error(provider: op_editor_core::AgentProvider) -> 
         }
         op_editor_core::AgentProvider::GeminiCli => {
             "No models found. Gemini CLI did not return a model list.".to_string()
+        }
+        op_editor_core::AgentProvider::Antigravity => {
+            "No model available. Antigravity did not expose its default model.".to_string()
+        }
+        op_editor_core::AgentProvider::GrokBuild => {
+            "No models found. Grok Build did not return a model list.".to_string()
         }
     }
 }

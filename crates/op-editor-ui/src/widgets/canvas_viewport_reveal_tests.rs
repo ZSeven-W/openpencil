@@ -1,13 +1,14 @@
-use super::{paint_node_with_options, RevealSchedule};
+use super::{paint_node_with_options, paint_node_with_options_hiding, RevealSchedule};
 use crate::layout_scene::{NodeKind, SceneNode};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
 struct RevealCaptureBackend {
     ops: Vec<String>,
     scales: usize,
+    strokes: usize,
     translations: Vec<Point2D>,
 }
 
@@ -18,7 +19,9 @@ impl RenderBackend for RevealCaptureBackend {
         self.ops
             .push(format!("fill({},{})", rect.origin.x, rect.origin.y));
     }
-    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {
+        self.strokes += 1;
+    }
     fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
     fn clip_rect(&mut self, _: Rect) {}
     fn save(&mut self) {
@@ -37,7 +40,9 @@ impl RenderBackend for RevealCaptureBackend {
     }
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
     fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
-    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {
+        self.strokes += 1;
+    }
     fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
     fn resize(&mut self, _: u32, _: u32) {}
     fn dpi_scale(&self) -> f32 {
@@ -83,6 +88,39 @@ fn paint_with_reveals(
     backend
 }
 
+fn paint_with_generation_scan(
+    node: &SceneNode,
+    reveals: &HashMap<String, u64>,
+    now_ms: u64,
+    scan: &HashSet<String>,
+) -> RevealCaptureBackend {
+    let mut backend = RevealCaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    let _ = paint_node_with_options_hiding(
+        &mut cx,
+        node,
+        Point2D::ZERO,
+        1.0,
+        None,
+        Rect::xywh(0.0, 0.0, 4000.0, 4000.0),
+        Some(RevealSchedule {
+            starts: reveals,
+            now_ms,
+        }),
+        None,
+        None,
+        None,
+        None,
+        now_ms,
+        Some(scan),
+        Some(super::super::canvas_generation_scan::SKELETON_BLUE),
+        None,
+    );
+    backend
+}
+
 #[test]
 fn future_reveal_child_waits_before_painting() {
     let frame = frame_with_child();
@@ -92,12 +130,39 @@ fn future_reveal_child_waits_before_painting() {
         paint_with_reveals(&frame, &reveals, 1_000).ops,
         vec!["fill(0,0)".to_string()]
     );
-    // 1_400: past c's 180ms scale-pop window (started 1_200; Task 4), so
-    // this checks the settled paint ops, not the in-flight pop transform.
+    // 1_700: past c's 260ms wireframe + 180ms scale-pop windows, so this
+    // checks the settled paint ops, not either in-flight treatment.
     assert_eq!(
-        paint_with_reveals(&frame, &reveals, 1_400).ops,
+        paint_with_reveals(&frame, &reveals, 1_700).ops,
         vec!["fill(0,0)".to_string(), "fill(10,10)".to_string()]
     );
+}
+
+#[test]
+fn pending_child_keeps_parent_radar_until_reveal_handoff() {
+    let frame = frame_with_child();
+    let reveals = HashMap::from([("c".to_string(), 1_350)]);
+    let scan = HashSet::from(["f".to_string()]);
+
+    let pending = paint_with_generation_scan(&frame, &reveals, 1_000, &scan);
+    assert!(
+        pending
+            .ops
+            .iter()
+            .filter(|op| op.starts_with("fill"))
+            .count()
+            > 20,
+        "the existing shell keeps a visible radar band during the reveal runway"
+    );
+    assert!(pending.ops.contains(&"save".to_string()));
+
+    let handed_off = paint_with_generation_scan(&frame, &reveals, 1_350, &scan);
+    assert_eq!(
+        handed_off.ops,
+        vec!["fill(0,0)".to_string(), "fill(10,10)".to_string()],
+        "at the child's start the parent radar stops and the child wireframe begins"
+    );
+    assert_eq!(handed_off.strokes, 1, "the child is still a wireframe");
 }
 
 #[test]

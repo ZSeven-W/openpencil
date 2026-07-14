@@ -26,6 +26,7 @@ use crate::layout_scene::LayoutScene;
 use crate::layout_scene::NodeKind;
 use crate::layout_scene::{SceneAnchor, SceneNode};
 use crate::theme::Theme;
+use crate::widgets::canvas_frame_labels::FrameLabel;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect};
@@ -375,11 +376,11 @@ pub struct CanvasViewport<'a> {
     /// Hierarchy focus under the cursor. An unselected focus paints a
     /// solid outline; its direct visible children paint dashed hints.
     pub(super) hovered: Option<String>,
-    /// Top-level frame labels: (scene id, display name, label colour).
+    /// Top-level frame labels, including transient generation state.
     /// Collected from the canonical tree at build time (the scene
     /// carries no node names); painted screen-space above each root
     /// frame (TS `drawFrameLabelColored`).
-    pub(super) frame_labels: Vec<(String, String, Color)>,
+    pub(super) frame_labels: Vec<FrameLabel>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -517,7 +518,7 @@ impl<'a> CanvasViewport<'a> {
 /// Frame gets a grey label; reusable components purple; instances
 /// (Ref nodes — expanded to frames in the scene) the indigo
 /// instance tint.
-fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
+fn collect_frame_labels(state: &EditorState) -> Vec<FrameLabel> {
     use op_editor_core::PenNodeExt;
     let theme = theme_for(&state.editor_ui);
     const FRAME_LABEL: Color = Color {
@@ -560,10 +561,11 @@ fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
                     _ => return None,
                 }
             };
-            Some((
+            Some(FrameLabel::new(
                 node.base().id.clone(),
                 generating_label_text(&name, generating),
                 color,
+                generating,
             ))
         })
         .collect()
@@ -571,7 +573,7 @@ fn collect_frame_labels(state: &EditorState) -> Vec<(String, String, Color)> {
 
 fn generating_label_text(base_name: &str, generating: bool) -> String {
     if generating {
-        format!("✨ Generating: {base_name}")
+        format!("Generating: {base_name}")
     } else {
         base_name.to_string()
     }
@@ -666,16 +668,12 @@ impl<'a> Widget for CanvasViewport<'a> {
         let hovered_frame_labels = hovered_lookup.map(|hovered| {
             self.frame_labels
                 .iter()
-                .map(|(id, label, color)| {
-                    (
-                        id.clone(),
-                        label.clone(),
-                        if id == hovered {
-                            self.theme.primary
-                        } else {
-                            *color
-                        },
-                    )
+                .map(|label| {
+                    let mut label = label.clone();
+                    if label.id == hovered {
+                        label.color = self.theme.primary;
+                    }
+                    label
                 })
                 .collect::<Vec<_>>()
         });
@@ -719,6 +717,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             let generation_sets = super::canvas_generation_scan::generating_paint_sets(
                 &page.children,
                 indicators.as_ref(),
+                self.now_ms,
             );
             // Starter ghost: after a design prompt clears the blank starter
             // frame, keep painting its silhouette (white artboard + name
@@ -805,6 +804,10 @@ impl<'a> Widget for CanvasViewport<'a> {
                     self.now_ms,
                     indicators,
                     self.pencil_cursor_style,
+                    Point2D::new(
+                        rect.origin.x + rect.size.x / 2.0,
+                        rect.origin.y + rect.size.y / 2.0,
+                    ),
                 );
             }
             const HOVER: Color = Color {

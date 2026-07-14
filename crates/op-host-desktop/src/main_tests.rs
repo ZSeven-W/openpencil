@@ -596,6 +596,13 @@ fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&home);
+    mcp_integrations::set_cli_enabled_at_home(
+        op_editor_core::agent_settings::McpCli::Codex,
+        true,
+        0,
+        &home,
+    )
+    .expect("seed enabled Codex integration");
     let mut app = DesktopApp::new(None);
     app.mcp_integrations_home = Some(home.clone());
     let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
@@ -650,6 +657,13 @@ fn startup_mcp_bootstrap_updates_cli_config_after_port_fallback() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&home);
+    mcp_integrations::set_cli_enabled_at_home(
+        op_editor_core::agent_settings::McpCli::Codex,
+        true,
+        busy_port,
+        &home,
+    )
+    .expect("seed enabled Codex integration");
 
     let mut app = DesktopApp::new(None);
     app.mcp_integrations_home = Some(home.clone());

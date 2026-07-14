@@ -75,6 +75,8 @@ mod web_credential_sync;
 #[cfg(feature = "canvaskit")]
 mod web_design_md;
 #[cfg(feature = "canvaskit")]
+mod web_model_catalog;
+#[cfg(feature = "canvaskit")]
 mod web_settings;
 #[cfg(feature = "canvaskit")]
 mod web_storage;

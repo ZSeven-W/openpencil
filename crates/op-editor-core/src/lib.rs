@@ -9,6 +9,7 @@
 
 pub mod agent_indicators;
 mod agent_indicators_tests;
+mod agent_provider_wire;
 pub mod agent_settings;
 pub mod agent_settings_acp_connection;
 pub mod agent_settings_builtin_presets;
@@ -18,6 +19,7 @@ pub mod align;
 pub mod align_guides;
 pub mod button_press_state;
 pub mod chat;
+pub mod chat_activity;
 pub mod chat_button_state;
 mod chat_design_apply;
 pub mod chat_sessions;
@@ -196,6 +198,7 @@ pub use chat::{
     AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,
     ModelEntry,
 };
+pub use chat_activity::{ChatActivity, ChatActivityStatus, ChatCompletion};
 pub use chat_button_state::{ChatFooterButton, ChatHeaderButton};
 pub use chat_sessions::{adjust_running_tab_after_close, ChatSessions};
 pub use color_picker::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};

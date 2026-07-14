@@ -12,7 +12,7 @@
 use std::io::Write;
 
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, ThinkingMode};
-use op_editor_core::{BuiltinAgentConfig, EditorState};
+use op_editor_core::{AgentProvider, BuiltinAgentConfig, EditorState};
 use serde_json::{json, Value};
 
 use crate::chat_builtin_http::ConfiguredBuiltinProvider;
@@ -21,6 +21,9 @@ use crate::chat_builtin_http::ConfiguredBuiltinProvider;
 /// (not the corpus) plus the per-turn knobs; the proxy expands the
 /// names server-side.
 pub struct AiStreamRequest {
+    /// Explicit provider identity from the structured model catalog. Older
+    /// clients omit it and use the ambiguity-safe legacy resolver.
+    pub provider: Option<AgentProvider>,
     pub model: String,
     pub skills: Vec<String>,
     pub user: String,
@@ -44,6 +47,11 @@ pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
+    let provider = match obj.get("provider") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => Some(AgentProvider::from_wire_id(value)?),
+        Some(_) => return None,
+    };
     let user = obj
         .get("user")
         .and_then(Value::as_str)
@@ -79,6 +87,7 @@ pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
         Some(value) => Some(crate::web_credentials::parse_transient_builtin(value)?),
     };
     Some(AiStreamRequest {
+        provider,
         model,
         skills,
         user,
@@ -169,7 +178,7 @@ pub fn stream_ai_response<W: Write>(
 
 fn request_model_id(model: &str) -> Option<String> {
     let model = model.trim();
-    if model.is_empty() || model == "default" {
+    if model.is_empty() || model == "default" || parse_builtin_model_key(model).is_some() {
         None
     } else {
         Some(model.to_string())
@@ -198,71 +207,72 @@ pub fn write_sse_error<W: Write>(out: &mut W, message: &str) -> std::io::Result<
     out.flush()
 }
 
-/// Build a `ChatProvider` for the proxy from the editor's agent
-/// settings. Returns the permitted ready built-in (API-key) agent whose model
-/// matches `model`; only an empty or `default` model selects the first ready
-/// built-in. Unknown, CLI, and ACP model ids return `None`. An exact
-/// browser-owned model whose endpoint is no longer permitted fails closed.
-/// The proxy is headless — it has no UI host — so it builds the
-/// provider directly from `agent_settings.builtin_agents` rather than
-/// going through `chat_session::provider_for_selected_model` (which
-/// takes the live `WidgetHostNative`).
+/// Build a `ChatProvider` for a legacy model-only request. Ambiguous targets
+/// return `None`; structured browser requests use the exact-provider request
+/// resolver instead. Browser-owned built-ins remain subject to the deployment
+/// endpoint policy even when they were persisted by a private deployment.
+///
+// Host CLI and ACP agents stay unavailable here: a browser request must never
+// turn the web daemon into an arbitrary local subprocess launcher.
 pub fn proxy_provider(editor: &EditorState, model: &str) -> Option<Box<dyn ChatProvider>> {
     proxy_provider_with_chat_session(editor, model, true)
 }
 
+/// Resolve one browser request in chat-session mode while preserving the
+/// deployment's credential-persistence context. Persistence controls whether
+/// browser credentials may be copied into daemon settings; it never relaxes
+/// per-request endpoint validation.
 pub fn proxy_provider_for_request(
     editor: &EditorState,
     request: &AiStreamRequest,
-    _policy: crate::web_credential_policy::WebCredentialPersistence,
+    policy: crate::web_credential_policy::WebCredentialPersistence,
 ) -> Result<Option<Box<dyn ChatProvider>>, String> {
-    let Some(agent) = request.transient_builtin.as_ref() else {
-        return Ok(proxy_provider(editor, &request.model));
-    };
-    if agent.model.trim() != request.model.trim() {
-        return Err("transient credential model does not match the request".into());
-    }
-    crate::web_credentials::validate_web_provider_base_url(&agent.base_url)?;
-    if !crate::web_credentials::public_demo_transient_endpoint_allowed(agent) {
-        return Err("custom provider endpoint is not explicitly allowed".into());
-    }
-    Ok(ConfiguredBuiltinProvider::from_builtin_agent(agent)
-        .map(|provider| Box::new(provider) as Box<dyn ChatProvider>))
+    proxy_provider_for_request_with_chat_session(editor, request, true, policy)
 }
 
-/// Build the built-in provider selected by a web request. The web daemon does
-/// not expose host CLI or ACP providers.
+/// Resolve one parsed browser request. Structured clients may constrain the
+/// built-in provider identity; host CLI and ACP agents remain unavailable. A
+/// request-scoped built-in credential always wins over daemon settings but is
+/// validated independently of persistence policy.
+pub fn proxy_provider_for_request_with_chat_session(
+    editor: &EditorState,
+    request: &AiStreamRequest,
+    _chat_session: bool,
+    _policy: crate::web_credential_policy::WebCredentialPersistence,
+) -> Result<Option<Box<dyn ChatProvider>>, String> {
+    if let Some(agent) = request.transient_builtin.as_ref() {
+        if agent.model.trim() != request.model.trim() {
+            return Err("transient credential model does not match the request".into());
+        }
+        if request
+            .provider
+            .is_some_and(|expected| agent.kind.model_provider() != expected)
+        {
+            return Err("transient credential provider does not match the request".into());
+        }
+        crate::web_credentials::validate_web_provider_base_url(&agent.base_url)?;
+        if !crate::web_credentials::public_demo_transient_endpoint_allowed(agent) {
+            return Err("custom provider endpoint is not explicitly allowed".into());
+        }
+        return Ok(ConfiguredBuiltinProvider::from_builtin_agent(agent)
+            .map(|provider| Box::new(provider) as Box<dyn ChatProvider>));
+    }
+
+    Ok(proxy_builtin_for_identity(
+        editor,
+        request.provider,
+        &request.model,
+    ))
+}
+
+/// Build a legacy built-in proxy provider. The session flag is retained for
+/// call-site parity, but web requests never launch a host CLI session.
 pub fn proxy_provider_with_chat_session(
     editor: &EditorState,
     model: &str,
     _chat_session: bool,
 ) -> Option<Box<dyn ChatProvider>> {
-    let agents = &editor.editor_ui.agent_settings.builtin_agents;
-    // Prefer an exact model match so a request for a specific model
-    // reaches the agent configured for it.
-    let exact_builtin_agents = || {
-        agents
-            .iter()
-            .filter(|agent| agent.ready() && agent.model.trim() == model.trim())
-    };
-    if let Some(chosen) =
-        exact_builtin_agents().find(|agent| browser_owned_endpoint_is_allowed(agent))
-    {
-        let provider = ConfiguredBuiltinProvider::from_builtin_agent(chosen)?;
-        return Some(Box::new(provider));
-    }
-    if exact_builtin_agents().next().is_some() {
-        return None;
-    }
-
-    if !matches!(model.trim(), "" | "default") {
-        return None;
-    }
-    let chosen = agents
-        .iter()
-        .find(|agent| agent.ready() && browser_owned_endpoint_is_allowed(agent))?;
-    let provider = ConfiguredBuiltinProvider::from_builtin_agent(chosen)?;
-    Some(Box::new(provider))
+    proxy_builtin_for_identity(editor, None, model)
 }
 
 fn browser_owned_endpoint_is_allowed(agent: &BuiltinAgentConfig) -> bool {
@@ -270,24 +280,81 @@ fn browser_owned_endpoint_is_allowed(agent: &BuiltinAgentConfig) -> bool {
         || crate::web_credentials::public_demo_transient_endpoint_allowed(agent)
 }
 
-/// JSON body for `GET /api/ai/models` — a JSON array of model ids the
-/// proxy can serve. Sourced from the editor's configured ready
-/// built-in agents (the only kind the headless proxy drives); empty
-/// array when nothing is configured.
+/// JSON body for `GET /api/ai/models`. Only permitted ready built-in model ids
+/// are exposed; host CLI discovery remains private to the native desktop.
 pub fn models_json(editor: &EditorState) -> String {
     let mut models: Vec<String> = editor
         .editor_ui
         .agent_settings
         .builtin_agents
         .iter()
-        .filter(|a| a.ready() && browser_owned_endpoint_is_allowed(a))
-        .map(|a| a.model.trim())
-        .filter(|m| !m.is_empty())
+        .filter(|agent| agent.ready() && browser_owned_endpoint_is_allowed(agent))
+        .map(|agent| agent.model.trim())
+        .filter(|model| !model.is_empty())
         .map(str::to_string)
         .collect();
     let mut seen = std::collections::HashSet::new();
     models.retain(|model| seen.insert(model.clone()));
     serde_json::to_string(&models).unwrap_or_else(|_| "[]".to_string())
+}
+
+fn proxy_builtin_for_identity(
+    editor: &EditorState,
+    provider: Option<AgentProvider>,
+    model: &str,
+) -> Option<Box<dyn ChatProvider>> {
+    if let Some((builtin_id, builtin_model)) = parse_builtin_model_key(model) {
+        let chosen = editor
+            .editor_ui
+            .agent_settings
+            .builtin_agents
+            .iter()
+            .find(|agent| {
+                agent.ready()
+                    && browser_owned_endpoint_is_allowed(agent)
+                    && agent.id == builtin_id
+                    && agent.model.trim() == builtin_model
+                    && provider.is_none_or(|expected| agent.kind.model_provider() == expected)
+            })?;
+        return ConfiguredBuiltinProvider::from_builtin_agent(chosen)
+            .map(|p| Box::new(p) as Box<dyn ChatProvider>);
+    }
+
+    let requested = model.trim();
+    let is_default = requested.is_empty() || requested == "default";
+    let agents = &editor.editor_ui.agent_settings.builtin_agents;
+    let exact = || {
+        agents.iter().filter(|agent| {
+            agent.ready()
+                && agent.model.trim() == requested
+                && provider.is_none_or(|expected| agent.kind.model_provider() == expected)
+        })
+    };
+    if let Some(chosen) = exact().find(|agent| browser_owned_endpoint_is_allowed(agent)) {
+        return ConfiguredBuiltinProvider::from_builtin_agent(chosen)
+            .map(|configured| Box::new(configured) as Box<dyn ChatProvider>);
+    }
+    if exact().next().is_some() || !is_default {
+        return None;
+    }
+
+    let chosen = agents.iter().find(|agent| {
+        agent.ready()
+            && browser_owned_endpoint_is_allowed(agent)
+            && provider.is_none_or(|expected| agent.kind.model_provider() == expected)
+    })?;
+    ConfiguredBuiltinProvider::from_builtin_agent(chosen)
+        .map(|configured| Box::new(configured) as Box<dyn ChatProvider>)
+}
+
+fn parse_builtin_model_key(value: &str) -> Option<(&str, &str)> {
+    let mut parts = value.trim().splitn(3, ':');
+    if parts.next()? != "builtin" {
+        return None;
+    }
+    let id = parts.next()?.trim();
+    let model = parts.next()?.trim();
+    (!id.is_empty() && !model.is_empty()).then_some((id, model))
 }
 
 #[cfg(test)]
@@ -318,8 +385,9 @@ mod tests {
 
     #[test]
     fn parse_ai_stream_body_maps_full_body() {
-        let body = r#"{"model":"m","skills":["codegen-planning"],"user":"hi","max_output_tokens":2000,"thinking":"adaptive","effort":"low"}"#;
+        let body = r#"{"provider":"grok-build","model":"m","skills":["codegen-planning"],"user":"hi","max_output_tokens":2000,"thinking":"adaptive","effort":"low"}"#;
         let req = parse_ai_stream_body(body).expect("body parses");
+        assert_eq!(req.provider, Some(AgentProvider::GrokBuild));
         assert_eq!(req.model, "m");
         assert_eq!(req.skills, vec!["codegen-planning".to_string()]);
         assert_eq!(req.user, "hi");
@@ -360,6 +428,7 @@ mod tests {
     fn parse_ai_stream_body_rejects_non_object() {
         assert!(parse_ai_stream_body("[]").is_none());
         assert!(parse_ai_stream_body("not json").is_none());
+        assert!(parse_ai_stream_body(r#"{"provider":"unknown"}"#).is_none());
     }
 
     #[test]
@@ -489,6 +558,7 @@ mod tests {
     #[test]
     fn stream_ai_response_writes_headers_and_deltas() {
         let req = AiStreamRequest {
+            provider: None,
             model: "m".into(),
             // Real corpus loads server-side; the EchoProvider ignores
             // the system prompt but the expansion must not error.
@@ -518,6 +588,7 @@ mod tests {
     #[test]
     fn stream_ai_response_forwards_requested_model_to_provider() {
         let req = AiStreamRequest {
+            provider: None,
             model: "claude-sonnet-4-6".into(),
             skills: vec![],
             user: "hi".into(),
@@ -545,6 +616,7 @@ mod tests {
         // An Error delta is terminal — nothing written after it even if
         // the script has trailing deltas.
         let req = AiStreamRequest {
+            provider: None,
             model: "m".into(),
             skills: vec![],
             user: "x".into(),
@@ -596,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn proxy_provider_rejects_an_unmatched_model() {
+    fn proxy_provider_rejects_an_unmatched_legacy_model() {
         let mut editor = EditorState::new();
         editor
             .editor_ui
@@ -614,9 +686,8 @@ mod tests {
             .agent_settings
             .add_builtin_agent_with_defaults("Built-in Claude", "sk-test", "claude-sonnet-4-5");
         let json = models_json(&editor);
-        let parsed: Value = serde_json::from_str(&json).expect("valid json array");
-        let arr = parsed.as_array().expect("array");
-        assert!(arr.iter().any(|m| m == "claude-sonnet-4-5"), "{json}");
+        let parsed: Vec<String> = serde_json::from_str(&json).expect("valid model array");
+        assert_eq!(parsed, vec!["claude-sonnet-4-5"]);
     }
 
     #[test]
@@ -686,26 +757,38 @@ mod tests {
     }
 
     #[test]
-    fn proxy_provider_default_does_not_use_verified_cli_model() {
+    fn explicit_cli_provider_remains_unavailable_to_web_proxy() {
         let mut editor = EditorState::new();
-        editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
-            op_editor_core::AgentProvider::ClaudeCode,
-            "claude-sonnet-4-6",
-            "Claude Sonnet 4.6",
-        )];
-        editor
-            .editor_ui
-            .agent_settings
-            .apply_provider_connect_outcome(
-                op_editor_core::AgentProvider::ClaudeCode,
-                op_editor_core::ProviderConnectOutcome {
-                    connected: true,
-                    info: Some("Connected via Claude Code".into()),
-                    ..Default::default()
-                },
-            );
+        editor.chat.discovered_models = vec![
+            op_editor_core::ModelEntry::new(AgentProvider::Antigravity, "default", "Default"),
+            op_editor_core::ModelEntry::new(AgentProvider::GrokBuild, "default", "Default"),
+        ];
+        for provider in [AgentProvider::Antigravity, AgentProvider::GrokBuild] {
+            editor
+                .editor_ui
+                .agent_settings
+                .apply_provider_connect_outcome(
+                    provider,
+                    op_editor_core::ProviderConnectOutcome {
+                        connected: true,
+                        info: Some("Connected".into()),
+                        ..Default::default()
+                    },
+                );
+        }
         editor.rebuild_chat_models();
 
+        let request =
+            parse_ai_stream_body(r#"{"provider":"grok-build","model":"default","user":"hi"}"#)
+                .expect("request parses");
+        let provider = proxy_provider_for_request_with_chat_session(
+            &editor,
+            &request,
+            true,
+            crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+        )
+        .expect("request is valid");
+        assert!(provider.is_none());
         assert!(proxy_provider(&editor, "default").is_none());
     }
 }

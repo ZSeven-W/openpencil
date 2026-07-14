@@ -42,6 +42,7 @@ use std::rc::Rc;
 use op_codegen::ai::types::{AssetFile, PendingRequest, PipelineStep, RequestId};
 use op_codegen::ai::CodegenPipeline;
 use op_editor_core::codegen::{CodeGenProgress, CodegenPhase};
+use op_editor_core::AgentProvider;
 use op_editor_host_core::codegen::{
     build_codegen_input_value as build_codegen_input, framework_ext,
 };
@@ -86,6 +87,8 @@ struct CodegenRun {
     /// The model id (wire `value`) to send with each request; "default" lets
     /// the proxy pick the configured provider.
     model: String,
+    /// Exact provider selected alongside `model`, when one is available.
+    provider: Option<AgentProvider>,
     /// Target framework captured at launch — the Download file extension must
     /// match what was GENERATED even if the user switches tabs afterwards
     /// (desktop `CodegenSession.framework` parity).
@@ -190,7 +193,7 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
     // 1. Build input from the live editor state. Nothing to generate from
     //    (empty page + no selection) surfaces an inline error (desktop
     //    `launch_codegen_if_pending` parity).
-    let (input, model, credential, framework) = {
+    let (input, provider, model, credential, framework) = {
         let b = inner.borrow();
         let state = b.host().editor_state();
         let Some(input) = build_codegen_input(state) else {
@@ -207,8 +210,27 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
         };
         // Model id: the selected chat model's wire value, else "default" (the
         // proxy then picks the configured provider).
+        let selected = state.chat.selected_model_entry();
+        if selected.is_some_and(|entry| entry.builtin_provider_id.is_none()) {
+            drop(b);
+            let mut bm = inner.borrow_mut();
+            let cg = &mut bm.host_mut().editor_state_mut().codegen;
+            cg.error = Some("Select a browser AI provider to generate code".into());
+            cg.phase = CodegenPhase::Error;
+            cg.pending_generate = false;
+            cg.pending_regenerate = false;
+            bm.host_mut().mark_editor_state_dirty();
+            let _ = bm.repaint();
+            return;
+        }
         let (model, credential) = crate::web_ai_credentials::selected_target(state);
-        (input, model, credential, state.codegen.framework)
+        // The browser surface is built-in-only. Structured built-in catalog
+        // entries still carry provider identity, but a transient CLI entry
+        // must never opt this request into daemon-side CLI routing.
+        let provider = selected
+            .filter(|entry| entry.builtin_provider_id.is_some())
+            .map(|entry| entry.provider);
+        (input, provider, model, credential, state.codegen.framework)
     };
 
     // Reset the panel into the Generating state before the first turn, and
@@ -244,6 +266,7 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
             terminal: false,
             cancelled: false,
             model,
+            provider,
             framework,
             credential,
         },
@@ -352,7 +375,12 @@ fn fire_request<C: RepaintContext + 'static>(
 
     let body_json = {
         let run = shared.borrow();
-        build_body_json(&req, &run.0.model, run.0.credential.as_ref())
+        build_body_json(
+            &req,
+            run.0.provider,
+            &run.0.model,
+            run.0.credential.as_ref(),
+        )
     };
 
     // Cloned handles moved into the streaming callback.
@@ -367,6 +395,7 @@ fn fire_request<C: RepaintContext + 'static>(
             return;
         }
         match evt {
+            AiEvent::AgentIdentity { .. } => {}
             AiEvent::Delta(t) => {
                 // Tight borrow: append + drop before returning to the browser.
                 shared_cb.borrow_mut().0.buf.push_str(&t);
@@ -427,6 +456,7 @@ fn fire_request<C: RepaintContext + 'static>(
 /// in-process). Hand-rolled to avoid a serde derive for this tiny payload.
 fn build_body_json(
     req: &PendingRequest,
+    provider: Option<AgentProvider>,
     model: &str,
     credential: Option<&serde_json::Value>,
 ) -> String {
@@ -436,6 +466,7 @@ fn build_body_json(
         .map(|s| serde_json::Value::String((*s).to_string()))
         .collect::<Vec<_>>();
     let body = serde_json::json!({
+        "provider": provider.map(AgentProvider::wire_id),
         "model": model,
         "skills": skills_json,
         "user": req.user_message,
@@ -669,10 +700,15 @@ mod tests {
         };
         let credential = serde_json::json!({"api_key":"sk-codegen"});
 
-        let body: serde_json::Value =
-            serde_json::from_str(&build_body_json(&req, "private-model", Some(&credential)))
-                .unwrap();
+        let body: serde_json::Value = serde_json::from_str(&build_body_json(
+            &req,
+            Some(AgentProvider::CodexCli),
+            "private-model",
+            Some(&credential),
+        ))
+        .unwrap();
 
+        assert_eq!(body["provider"], "codex-cli");
         assert_eq!(body["model"], "private-model");
         assert_eq!(body["credential"]["api_key"], "sk-codegen");
     }

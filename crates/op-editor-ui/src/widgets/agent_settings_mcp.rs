@@ -63,6 +63,7 @@ fn grid_top(content: Rect, settings: &AgentSettings) -> f32 {
 }
 
 pub(super) fn content_height(settings: &AgentSettings) -> f32 {
+    let grid_rows = McpCli::ALL.len().div_ceil(2) as f32;
     TITLE_H
         + SERVER_CARD_H
         + client_config_block_h(settings)
@@ -70,8 +71,8 @@ pub(super) fn content_height(settings: &AgentSettings) -> f32 {
         + SECTION_TITLE_H
         + SUBTITLE_H * 2.0
         + ROW_GAP_BEFORE_GRID
-        + 3.0 * CELL_H
-        + 2.0 * CELL_VGAP
+        + grid_rows * CELL_H
+        + (grid_rows - 1.0).max(0.0) * CELL_VGAP
         + 24.0
 }
 

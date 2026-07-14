@@ -1,5 +1,5 @@
 //! Subprocess CLI bridge — spawns an external CLI binary
-//! (Claude Code / Codex / Gemini) and bridges its stdio into the
+//! (Claude Code / Codex / Gemini / Antigravity / Grok Build) and bridges its stdio into the
 //! shell-core `ChatProvider` shape.
 //!
 //! Per-CLI wire protocol (single-shot mode; multi-turn context rides
@@ -36,6 +36,20 @@
 //!   instead of shipping a dead argv.
 //! - **OpenCode** — served by the HTTP-server transport
 //!   (`chat_http_server.rs`), not a stdio subprocess.
+//! - **Antigravity (`agy`)** — isolated-cwd `--sandbox` print mode plus a
+//!   private per-turn HOME containing a strict, no-write/no-command/no-web
+//!   policy and only this editor process's loopback OpenPencil MCP entry.
+//!   The OS keyring remains available for authentication. Its verified
+//!   one-shot API only accepts `-p <prompt>`, so the prompt remains visible in
+//!   argv while that child is alive.
+//! - **Grok Build (`grok`)** — private `--prompt-file`, fail-closed
+//!   `dontAsk` permissions in both argv and a private per-turn
+//!   `CLAUDE_CONFIG_DIR` compatibility policy, strict sandbox, read-only
+//!   built-ins, and an explicit `MCPTool(openpencil__*)` pre-approval. Other
+//!   MCP servers merged into the user's global config are not pre-approved and
+//!   are silently denied; the prompt guard independently forbids them.
+//!   Its NDJSON `text`, `thought`, `end`, and `error` events parse through
+//!   [`crate::chat_grok_stream::parse_grok_stream_line`].
 //!
 //! Codex / Gemini parse-misses are skipped silently (TS parity — TS
 //! drops unparsed lines); generic custom binaries degrade unparsed
@@ -65,6 +79,9 @@ use tokio::sync::mpsc;
 use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
 use crate::chat_spawn::{build_command, exit_status_label, find_binary};
 use crate::chat_subprocess_quirks as quirks;
+use crate::chat_subprocess_safety as safety;
+
+pub use crate::chat_subprocess_parse::parse_line;
 
 /// How the user's prompt reaches the CLI. Claude Code's `--print`
 /// mode requires the prompt as a positional argv after `--` and
@@ -78,6 +95,10 @@ pub enum PromptMode {
     /// Argv is passed verbatim; user_message is written to stdin
     /// followed by EOF.
     Stdin,
+    /// Append `<flag> <prompt>` to argv; stdin gets closed.
+    FlagArg(&'static str),
+    /// Append `<flag> <private-file>`; stdin gets closed.
+    PromptFile(&'static str),
 }
 
 /// TS `DEFAULT_CODEX_TIMEOUT_MS` / `DEFAULT_GEMINI_TIMEOUT_MS` —
@@ -174,6 +195,18 @@ impl SubprocessProvider {
                 Some("--model"),
                 vec!["-".into()],
             ),
+            CliName::Antigravity => (
+                safety::antigravity_args(),
+                PromptMode::FlagArg("-p"),
+                Some("--model"),
+                Vec::new(),
+            ),
+            CliName::GrokBuild => (
+                safety::grok_args(),
+                PromptMode::PromptFile("--prompt-file"),
+                Some("-m"),
+                Vec::new(),
+            ),
             // Copilot's routed transport is the official SDK
             // (`chat_copilot.rs`); the old `gh-copilot suggest`
             // template was a stale dead end. OpenCode chats over its
@@ -238,8 +271,12 @@ impl SubprocessProvider {
     fn turn_args(&self, request: &ChatRequest) -> Vec<String> {
         let mut args = self.args.clone();
         if let (Some(flag), Some(model)) = (self.model_flag, request.model_id()) {
-            args.push(flag.into());
-            args.push(model.into());
+            let provider_default = model == "default"
+                && matches!(self.cli, Some(CliName::Antigravity | CliName::GrokBuild));
+            if !provider_default {
+                args.push(flag.into());
+                args.push(model.into());
+            }
         }
         if self.native_effort_config {
             if let Some(level) = codex_reasoning_effort(request.thinking, request.effort) {
@@ -360,34 +397,81 @@ impl ChatProvider for SubprocessProvider {
             }
             _ => prompt_with_system_prompt(&request.system_prompt, prompt),
         };
+        let attachment_paths = guard.as_ref().map(|g| g.paths()).unwrap_or(&[]);
+        let isolation = match safety::IsolatedTurn::prepare(cli, &prompt, attachment_paths) {
+            Ok(turn) => turn,
+            Err(e) => {
+                return Box::new(
+                    vec![
+                        ChatDelta::Error(format!("failed to isolate CLI turn: {e}")),
+                        ChatDelta::Done {
+                            stop_reason: StopReason::Aborted,
+                        },
+                    ]
+                    .into_iter(),
+                );
+            }
+        };
+        if let Some(turn) = &isolation {
+            prompt = turn.prompt().to_string();
+        }
         let mut args_with_prompt = self.turn_args(&request);
         // PromptMode::PositionalArg: append `-- <prompt>` so the CLI
         // picks up the message as a CLI argument (Claude Code mode).
         // PromptMode::Stdin (default): leave argv untouched; the
         // prompt is written to stdin after spawn.
-        if self.prompt_mode == PromptMode::PositionalArg {
-            args_with_prompt.push("--".into());
-            args_with_prompt.push(prompt.clone());
+        match self.prompt_mode {
+            PromptMode::PositionalArg => {
+                args_with_prompt.push("--".into());
+                args_with_prompt.push(prompt.clone());
+            }
+            PromptMode::FlagArg(flag) => {
+                args_with_prompt.push(flag.into());
+                args_with_prompt.push(prompt.clone());
+            }
+            PromptMode::PromptFile(flag) => {
+                args_with_prompt.push(flag.into());
+                args_with_prompt.push(
+                    isolation
+                        .as_ref()
+                        .and_then(safety::IsolatedTurn::prompt_file)
+                        .expect("prompt-file mode requires isolated prompt")
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+            PromptMode::Stdin => {}
         }
         let args = Arc::new(args_with_prompt);
         let prompt_mode = self.prompt_mode;
         // Per-CLI child env: Codex / Gemini use the TS allowlists so
         // unrelated secrets never reach the CLI; Claude Code + custom
         // binaries keep the scrub-the-dangerous-vars policy.
-        let env_pairs = match cli {
+        let mut env_pairs = match cli {
             Some(CliName::Codex) => quirks::codex_child_env(),
             Some(CliName::Gemini) => quirks::gemini_child_env(),
+            Some(CliName::Antigravity | CliName::GrokBuild) => {
+                safety::child_env(cli).unwrap_or_default()
+            }
             _ => scrubbed_child_env(),
         };
-        // TS runs Codex / Gemini under a 15-minute wall clock.
-        let turn_timeout =
-            matches!(cli, Some(CliName::Codex) | Some(CliName::Gemini)).then_some(CLI_TURN_TIMEOUT);
+        safety::append_isolated_env(&mut env_pairs, isolation.as_ref());
+        let turn_timeout = match cli {
+            Some(CliName::Codex | CliName::Gemini) => Some(CLI_TURN_TIMEOUT),
+            Some(CliName::Antigravity) => Some(safety::ANTIGRAVITY_TIMEOUT),
+            Some(CliName::GrokBuild) => Some(safety::GROK_TIMEOUT),
+            _ => None,
+        };
         let label = self.label.clone();
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             // Keep staged attachment temp files alive for the turn.
             let _guard = guard;
+            let _isolation = isolation;
             let mut cmd = build_command(&binary, &args);
+            if let Some(turn) = &_isolation {
+                cmd.current_dir(turn.cwd());
+            }
             // Set the child's env from the per-CLI policy. We
             // env_clear first because tokio::process Command
             // otherwise inherits the parent env verbatim.
@@ -415,7 +499,8 @@ impl ChatProvider for SubprocessProvider {
             // parity: gemini stream path discards stderr).
             let stderr_tail: Arc<std::sync::Mutex<String>> = Arc::default();
             if let Some(stderr) = child.take_stderr() {
-                let capture = (cli == Some(CliName::Codex)).then(|| Arc::clone(&stderr_tail));
+                let capture = (cli == Some(CliName::Codex) || safety::is_guarded_cli(cli))
+                    .then(|| Arc::clone(&stderr_tail));
                 tokio::spawn(async move {
                     let mut lines = BufReader::new(stderr).lines();
                     while let Ok(Some(line)) = lines.next_line().await {
@@ -455,6 +540,13 @@ impl ChatProvider for SubprocessProvider {
                     // immediately so the CLI doesn't sit waiting on it
                     // (Claude Code's `--print` mode exits if stdin
                     // stays open with no input).
+                }
+                PromptMode::FlagArg(_) => {
+                    // Prompt is carried in argv; closing stdin prevents a
+                    // one-shot CLI from falling back into interactive mode.
+                }
+                PromptMode::PromptFile(_) => {
+                    // Prompt lives in the private isolated workspace.
                 }
             }
             let _ = child.close_stdin().await; // EOF; ignore close error
@@ -517,6 +609,9 @@ impl ChatProvider for SubprocessProvider {
                             let delta = match cli {
                                 Some(CliName::Codex) => quirks::parse_codex_line(&line),
                                 Some(CliName::Gemini) => quirks::parse_gemini_stream_line(&line),
+                                Some(CliName::GrokBuild) => {
+                                    crate::chat_grok_stream::parse_grok_stream_line(&line)
+                                }
                                 _ => Some(parse_line(&line)),
                             };
                             let Some(delta) = delta else { continue };
@@ -534,6 +629,13 @@ impl ChatProvider for SubprocessProvider {
                             // post-EOF branch below covers streams that
                             // end without a turn event.
                             let delta = match delta {
+                                ChatDelta::Done { .. }
+                                    if emitted_error && safety::is_guarded_cli(cli) =>
+                                {
+                                    ChatDelta::Done {
+                                        stop_reason: StopReason::Aborted,
+                                    }
+                                }
                                 ChatDelta::Done { .. }
                                     if cli == Some(CliName::Codex)
                                         && !emitted_text
@@ -586,7 +688,15 @@ impl ChatProvider for SubprocessProvider {
             // Aborted instead of an unrelated `EndTurn`. Codex routes
             // stderr through the TS extractor and surfaces the TS
             // "returned no output" error on an empty success.
-            let status = child.wait().await.ok();
+            // A guarded CLI may emit its terminal event before its
+            // process actually exits. Bound that final reap as well,
+            // otherwise a well-formed `Done` could bypass the turn
+            // wall clock and leave the chat blocked indefinitely.
+            let status = if safety::is_guarded_cli(cli) {
+                child.kill_graceful(safety::EXIT_GRACE).await.ok()
+            } else {
+                child.wait().await.ok()
+            };
             if !emitted_done && !terminal_error {
                 let nonzero = status.as_ref().map(|s| !s.success()).unwrap_or(false);
                 if nonzero {
@@ -594,11 +704,11 @@ impl ChatProvider for SubprocessProvider {
                     // failure — don't stack a second message on it
                     // (TS surfaces exactly one error per turn).
                     if !emitted_error {
+                        let tail = stderr_tail
+                            .lock()
+                            .map(|buf| buf.clone())
+                            .unwrap_or_default();
                         let msg = if cli == Some(CliName::Codex) {
-                            let tail = stderr_tail
-                                .lock()
-                                .map(|buf| buf.clone())
-                                .unwrap_or_default();
                             quirks::extract_codex_cli_error(&tail).unwrap_or_else(|| {
                                 let code = status
                                     .as_ref()
@@ -606,6 +716,8 @@ impl ChatProvider for SubprocessProvider {
                                     .unwrap_or_else(|| "unknown".into());
                                 format!("Codex exited with code {code}.")
                             })
+                        } else if let Some(message) = safety::friendly_stderr_error(cli, &tail) {
+                            message
                         } else {
                             let code = status
                                 .as_ref()
@@ -620,11 +732,20 @@ impl ChatProvider for SubprocessProvider {
                             stop_reason: StopReason::Aborted,
                         })
                         .await;
-                } else if cli == Some(CliName::Codex) && !emitted_text && !emitted_error {
+                } else if safety::is_guarded_cli(cli) && emitted_error {
+                    let _ = tx
+                        .send(ChatDelta::Done {
+                            stop_reason: StopReason::Aborted,
+                        })
+                        .await;
+                } else if (cli == Some(CliName::Codex) || safety::is_guarded_cli(cli))
+                    && !emitted_text
+                    && !emitted_error
+                {
                     // TS `runCodexExec`: empty final text + no errors
                     // = explicit failure, not a silent empty bubble.
                     let _ = tx
-                        .send(ChatDelta::Error("Codex returned no output.".into()))
+                        .send(ChatDelta::Error(format!("{label} returned no output.")))
                         .await;
                     let _ = tx
                         .send(ChatDelta::Done {
@@ -641,96 +762,6 @@ impl ChatProvider for SubprocessProvider {
             }
         });
         Box::new(BlockingRecvIter::new(rx))
-    }
-}
-
-/// Parse a single CLI stdout line into a `ChatDelta` — the generic
-/// envelope for Claude Code subprocess mode + custom binaries.
-/// Recognized shapes documented in module header; everything else
-/// degrades to a raw text delta carrying the line + a trailing
-/// newline. Codex / Gemini use their own TS-parity parsers in
-/// `chat_subprocess_quirks` (which skip instead of degrade).
-pub fn parse_line(line: &str) -> ChatDelta {
-    let trimmed = line.trim_start();
-    if !trimmed.starts_with('{') {
-        // Not JSON — surface as raw text so CLIs that just stream
-        // plain stdout still produce a visible response in the chat
-        // panel.
-        let mut s = line.to_string();
-        s.push('\n');
-        return ChatDelta::TextDelta(s);
-    }
-    let val: serde_json::Value = match serde_json::from_str(trimmed) {
-        Ok(v) => v,
-        Err(_) => {
-            let mut s = line.to_string();
-            s.push('\n');
-            return ChatDelta::TextDelta(s);
-        }
-    };
-    let ty = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
-    // Strict shape per type — missing or wrong-type required fields
-    // become `Error` deltas instead of silent empty deltas (codex
-    // BLOCK 6). Better to surface a parse problem than to feed empty
-    // strings into the chat panel.
-    match ty {
-        "text" => match val.get("delta").and_then(|v| v.as_str()) {
-            Some(s) => ChatDelta::TextDelta(s.to_string()),
-            None => ChatDelta::Error(format!("malformed text event: {trimmed}")),
-        },
-        "thinking" => match val.get("delta").and_then(|v| v.as_str()) {
-            Some(s) => ChatDelta::Thinking(s.to_string()),
-            None => ChatDelta::Error(format!("malformed thinking event: {trimmed}")),
-        },
-        "tool_use" => match (val.get("name").and_then(|v| v.as_str()), val.get("args")) {
-            (Some(name), Some(args)) => ChatDelta::ToolUse {
-                name: name.to_string(),
-                args: args.to_string(),
-            },
-            _ => ChatDelta::Error(format!("malformed tool_use event: {trimmed}")),
-        },
-        "done" => {
-            let reason = val.get("stop_reason").and_then(|v| v.as_str());
-            ChatDelta::Done {
-                stop_reason: map_stop_reason(reason),
-            }
-        }
-        "item.completed" => {
-            let item = val.get("item");
-            match (
-                item.and_then(|i| i.get("type")).and_then(|v| v.as_str()),
-                item.and_then(|i| i.get("text")).and_then(|v| v.as_str()),
-            ) {
-                (Some("agent_message"), Some(text)) => ChatDelta::TextDelta(text.to_string()),
-                _ => ChatDelta::Thinking(String::new()),
-            }
-        }
-        "turn.completed" => ChatDelta::Done {
-            stop_reason: StopReason::EndTurn,
-        },
-        "thread.started" | "turn.started" | "item.started" | "item.updated" => {
-            ChatDelta::Thinking(String::new())
-        }
-        "error" => match val.get("message").and_then(|v| v.as_str()) {
-            Some(msg) => ChatDelta::Error(msg.to_string()),
-            None => ChatDelta::Error(format!("malformed error event: {trimmed}")),
-        },
-        _ => {
-            // Unknown structured event — surface the raw line so the
-            // user can debug what their CLI is emitting.
-            let mut s = line.to_string();
-            s.push('\n');
-            ChatDelta::TextDelta(s)
-        }
-    }
-}
-
-fn map_stop_reason(s: Option<&str>) -> StopReason {
-    match s.unwrap_or("") {
-        "max_tokens" => StopReason::MaxTokens,
-        "tool_use" => StopReason::ToolUse,
-        "aborted" | "user_abort" => StopReason::Aborted,
-        _ => StopReason::EndTurn,
     }
 }
 

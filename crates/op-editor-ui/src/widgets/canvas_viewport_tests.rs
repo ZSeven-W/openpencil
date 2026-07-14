@@ -17,11 +17,11 @@ fn generating_label_text_preserves_plain_names_when_idle() {
 fn generating_label_text_prefixes_active_frame_names() {
     assert_eq!(
         generating_label_text("Checkout", true),
-        "✨ Generating: Checkout"
+        "Generating: Checkout"
     );
     assert_eq!(
         generating_label_text("移动端首页", true),
-        "✨ Generating: 移动端首页"
+        "Generating: 移动端首页"
     );
 }
 
@@ -969,7 +969,7 @@ fn frame_label_paint_uses_top_level_scene_nodes() {
         let mut frame = SceneNode::leaf(format!("frame-{i}"), NodeKind::Frame);
         frame.bounds = Rect::xywh(i as f32 * 140.0, 0.0, 120.0, 80.0);
         frame.children = vec![child];
-        labels.push((
+        labels.push(FrameLabel::new(
             format!("frame-{i}"),
             format!("Frame {i}"),
             Color {
@@ -978,6 +978,7 @@ fn frame_label_paint_uses_top_level_scene_nodes() {
                 b: 0.6,
                 a: 1.0,
             },
+            false,
         ));
         roots.push(frame);
     }
@@ -1011,6 +1012,70 @@ fn frame_label_paint_uses_top_level_scene_nodes() {
 }
 
 #[test]
+fn generating_frame_label_paints_vector_icon_and_keeps_full_hit_area() {
+    let mut frame = SceneNode::leaf("n1", NodeKind::Frame);
+    frame.bounds = Rect::xywh(40.0, 40.0, 120.0, 80.0);
+    let color = Color {
+        r: 0.0,
+        g: 0.48,
+        b: 1.0,
+        a: 1.0,
+    };
+    let labels = vec![FrameLabel::new("n1", "Generating: Frame", color, true)];
+    let mut state = EditorState::new();
+    state.viewport.zoom = 1.0;
+    let clip = Rect::xywh(0.0, 0.0, 400.0, 300.0);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        super::super::canvas_frame_labels::paint_frame_labels(
+            &mut cx,
+            std::slice::from_ref(&frame),
+            &labels,
+            &[],
+            Point2D::ZERO,
+            &state.viewport,
+            clip,
+        );
+    }
+
+    assert_eq!(backend.texts, vec!["Generating: Frame"]);
+    assert_eq!(
+        backend.strokes,
+        super::super::icons::Icon::Sparkles.paths().len()
+    );
+    assert_eq!(
+        super::super::canvas_frame_labels::frame_label_at_point(
+            std::slice::from_ref(&frame),
+            &labels,
+            Point2D::ZERO,
+            &state.viewport,
+            clip,
+            Point2D::new(170.0, 20.0),
+        ),
+        Some("n1".into())
+    );
+
+    let idle_labels = vec![FrameLabel::new("n1", "Frame", color, false)];
+    let mut idle_backend = RecordingBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut idle_backend,
+    };
+    super::super::canvas_frame_labels::paint_frame_labels(
+        &mut cx,
+        &[frame],
+        &idle_labels,
+        &[],
+        Point2D::ZERO,
+        &state.viewport,
+        clip,
+    );
+    assert_eq!(idle_backend.strokes, 0);
+}
+
+#[test]
 fn selected_root_frame_label_uses_primary_active_color() {
     let scene = sample_scene();
     let mut state = EditorState::new();
@@ -1021,8 +1086,8 @@ fn selected_root_frame_label_uses_primary_active_color() {
     let color = viewport
         .frame_labels
         .iter()
-        .find(|(id, _, _)| id == "n1")
-        .map(|(_, _, color)| *color)
+        .find(|label| label.id == "n1")
+        .map(|label| label.color)
         .expect("root frame label should be collected");
 
     assert_eq!(color, viewport.theme.primary);
@@ -1066,7 +1131,7 @@ fn frame_label_paint_matches_roots_linearly() {
         let mut frame = SceneNode::leaf(format!("frame-{i}"), NodeKind::Frame);
         frame.bounds = Rect::xywh(i as f32 * 90.0, 0.0, 80.0, 48.0);
         roots.push(frame);
-        labels.push((
+        labels.push(FrameLabel::new(
             format!("frame-{i}"),
             format!("Frame {i}"),
             Color {
@@ -1075,6 +1140,7 @@ fn frame_label_paint_matches_roots_linearly() {
                 b: 0.6,
                 a: 1.0,
             },
+            false,
         ));
     }
     let scene = LayoutScene {

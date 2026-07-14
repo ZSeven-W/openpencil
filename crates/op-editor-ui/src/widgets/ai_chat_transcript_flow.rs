@@ -10,12 +10,16 @@
 //! "N tool calls" panel.
 
 use op_editor_core::chat::ChatMessage;
+use op_editor_core::ChatActivity;
 
 use crate::Rect;
 
-use super::ai_chat_transcript::{streaming_caret_visible, TextBubble, TranscriptItem, LINE_H};
+use super::ai_chat_transcript::{
+    action_step_height, streaming_caret_visible, ActionStep, TextBubble, TranscriptItem,
+    ACTION_STEP_GAP, LINE_H,
+};
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
-use super::ai_chat_transcript_steps::strip_tool_call_xml;
+use super::ai_chat_transcript_steps::{activity_step, step_state, strip_tool_call_xml};
 use super::ai_chat_transcript_text::wrap_units;
 use super::ai_chat_transcript_tools::{
     build_tool_panel, paint_tool_panel, ToolPanel, ToolPanelLayout, CARD_GAP,
@@ -39,6 +43,98 @@ pub(crate) fn should_interleave(msg: &ChatMessage) -> bool {
             .tool_calls
             .iter()
             .any(|call| call.content_offset.is_some())
+}
+
+/// CLI-backed design turns carry the same chronological anchor as built-in
+/// tool calls, but on provider-neutral activities. Legacy rows without an
+/// offset keep their grouped checklist layout.
+pub(crate) fn should_interleave_activities(msg: &ChatMessage) -> bool {
+    !msg.activities.is_empty()
+        && msg
+            .activities
+            .iter()
+            .any(|activity| activity.content_offset.is_some())
+}
+
+/// Lay out narration and CLI design activities in one ordered flow. The
+/// activity cards and built-in tool cards remain different adapters, while
+/// their placement obeys the same byte-offset timeline contract.
+pub(crate) fn build_activity_flow(
+    msg: &ChatMessage,
+    x: f32,
+    mut y: f32,
+    width: f32,
+    budget: u32,
+    source_index_base: usize,
+) -> (Vec<TextBubble>, Vec<ActionStep>, f32) {
+    let content = msg.content.as_str();
+    let groups = activity_groups(&msg.activities, content);
+    let mut bubbles = Vec::new();
+    let mut steps = Vec::new();
+    let mut cursor = 0usize;
+
+    for (offset, first_index, len) in groups {
+        y = push_prose(
+            &content[cursor..offset],
+            x,
+            &mut y,
+            width,
+            budget,
+            &mut bubbles,
+        );
+        cursor = offset;
+        for index in first_index..first_index + len {
+            let source_index = source_index_base + index;
+            let parsed = activity_step(&msg.activities[index]);
+            let details: Vec<String> = parsed
+                .details
+                .iter()
+                .flat_map(|line| wrap_units(line, budget.saturating_sub(4)))
+                .collect();
+            let (done, active, failed) =
+                step_state(&parsed, msg.streaming, index, msg.activities.len());
+            let expanded = msg
+                .action_step_expanded_overrides
+                .get(source_index)
+                .copied()
+                .flatten()
+                .unwrap_or(active);
+            let height = action_step_height(expanded, details.len());
+            steps.push(ActionStep {
+                rect: Rect::xywh(x, y, width, height),
+                source_index,
+                label: parsed.title,
+                details,
+                expanded,
+                done,
+                active,
+                failed,
+            });
+            y += height + ACTION_STEP_GAP;
+        }
+        y += (FLOW_GAP - ACTION_STEP_GAP).max(0.0);
+    }
+
+    y = push_prose(&content[cursor..], x, &mut y, width, budget, &mut bubbles);
+    (bubbles, steps, y)
+}
+
+fn activity_groups(activities: &[ChatActivity], content: &str) -> Vec<(usize, usize, usize)> {
+    let mut groups = Vec::new();
+    let mut last_offset = 0usize;
+    for (index, activity) in activities.iter().enumerate() {
+        let offset = activity
+            .content_offset
+            .map(|offset| clamp_to_char_boundary(content, offset as usize))
+            .unwrap_or(last_offset)
+            .max(last_offset);
+        last_offset = offset;
+        match groups.last_mut() {
+            Some((group_offset, _, len)) if *group_offset == offset => *len += 1,
+            _ => groups.push((offset, index, 1)),
+        }
+    }
+    groups
 }
 
 /// Lay out the interleaved flow starting at `y`. Returns the prose bubbles,
@@ -141,7 +237,6 @@ fn push_prose(
         lines: wrap_units(visible, budget),
         rich,
         typing: false,
-        completion: None,
     });
     *y += h + FLOW_GAP;
     *y
@@ -189,7 +284,7 @@ pub(crate) fn paint_flow(cx: &mut PaintCx<'_>, theme: &Theme, item: &TranscriptI
         cx.backend.restore();
     }
     for panel in &item.flow_panels {
-        paint_tool_panel(cx, theme, panel);
+        paint_tool_panel(cx, theme, panel, now_ms);
     }
 }
 
