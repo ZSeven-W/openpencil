@@ -212,6 +212,7 @@ fn fingerprint_messages(messages: &[ChatMessage]) -> u64 {
             // late-stamped offset must invalidate the cached build.
             tc.content_offset.hash(&mut h);
         }
+        m.activities.hash(&mut h);
         // Only the thumbnail count feeds layout; the bytes are painted from the
         // live slice, so hashing the length is both sufficient and cheap.
         m.images.len().hash(&mut h);

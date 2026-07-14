@@ -694,7 +694,8 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 crate::design_loop_indicator::pump_design_session_indicator(
                     &mut self.design_session_indicator,
                     &self.current_design,
-                    self.host.editor_state(),
+                    self.host.editor_state_mut(),
+                    self.chat_running_tab,
                 );
                 // Each pump retires its session when the turn finishes — once
                 // no chat / design / sub-agent run remains in flight, the tab

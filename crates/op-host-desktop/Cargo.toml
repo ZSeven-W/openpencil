@@ -178,6 +178,7 @@ winit = { package = "casement", path = "../../vendor/casement", default-features
 # Save/Open file dialogs so the user picks the path.
 serde = { workspace = true }
 serde_json = { workspace = true }
+toml_edit = "0.25"
 rfd = "0.14"
 # OS clipboard for the AI chat input's Cmd+C / Cmd+V / Cmd+X.
 # arboard wraps NSPasteboard (macOS), the Win32 clipboard, and

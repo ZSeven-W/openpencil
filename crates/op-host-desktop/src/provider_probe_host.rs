@@ -138,7 +138,7 @@ impl DesktopApp {
 
     /// Write the connection flags through to the store whenever they
     /// change — the Disconnect button mutates state in the widget layer,
-    /// which cannot reach the store itself. Cheap ([bool;5] compare),
+    /// which cannot reach the store itself. Cheap (fixed-size flag compare),
     /// called once per frame.
     pub(crate) fn persist_connection_changes(&mut self) {
         let connected = self.host.editor_state().editor_ui.agent_settings.connected;
@@ -214,7 +214,7 @@ mod tests {
 
     fn reset_settings(app: &mut DesktopApp) {
         let es = app.host.editor_state_mut();
-        es.editor_ui.agent_settings.connected = [false; 5];
+        es.editor_ui.agent_settings.connected = [false; 7];
         es.editor_ui.agent_settings.provider_connection = Default::default();
         es.editor_ui.agent_settings.pending_provider_connect = None;
         es.editor_ui.agent_settings.builtin_agents.clear();

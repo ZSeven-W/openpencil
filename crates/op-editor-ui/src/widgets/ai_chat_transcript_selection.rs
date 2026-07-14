@@ -34,7 +34,7 @@ pub(crate) fn transcript_text_offset_at(
         let Some(bubble) = &item.bubble else {
             continue;
         };
-        if bubble.typing || bubble.completion.is_some() || !(bubble.rect).contains(p) {
+        if bubble.typing || !(bubble.rect).contains(p) {
             continue;
         }
         // Bounds-defense: the cached build may carry more items than the live

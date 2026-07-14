@@ -173,6 +173,38 @@ fn install_commands_mirror_install_agent_ts() {
         install_command(AgentProvider::GeminiCli),
         "npm install -g @anthropic-ai/gemini-cli"
     );
+    let antigravity = if cfg!(windows) {
+        "irm https://antigravity.google/cli/install.ps1 | iex"
+    } else {
+        "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+    };
+    let grok = if cfg!(windows) {
+        "irm https://x.ai/cli/install.ps1 | iex"
+    } else {
+        "curl -fsSL https://x.ai/cli/install.sh | bash"
+    };
+    assert_eq!(install_command(AgentProvider::Antigravity), antigravity);
+    assert_eq!(install_command(AgentProvider::GrokBuild), grok);
+}
+
+#[test]
+fn antigravity_and_grok_install_commands_are_platform_native() {
+    assert_eq!(
+        install_command_for_platform(AgentProvider::Antigravity, true, false),
+        "irm https://antigravity.google/cli/install.ps1 | iex"
+    );
+    assert_eq!(
+        install_command_for_platform(AgentProvider::GrokBuild, true, false),
+        "irm https://x.ai/cli/install.ps1 | iex"
+    );
+    assert_eq!(
+        install_command_for_platform(AgentProvider::Antigravity, false, false),
+        "curl -fsSL https://antigravity.google/cli/install.sh | bash"
+    );
+    assert_eq!(
+        install_command_for_platform(AgentProvider::GrokBuild, false, true),
+        "curl -fsSL https://x.ai/cli/install.sh | bash"
+    );
 }
 
 #[test]

@@ -595,6 +595,29 @@ pub fn draw_icon(
     }
 }
 
+/// Paint the shared running-state loader used by transcript activity cards.
+/// Keeping the clock and rotation here prevents CLI progress rows and built-in
+/// tool rows from drifting into separate spinner implementations.
+pub fn draw_spinning_loader(
+    backend: &mut dyn RenderBackend,
+    top_left: Point2D,
+    size: f32,
+    color: Color,
+    stroke_width: f32,
+    now_ms: u64,
+) {
+    let center = Point2D::new(top_left.x + size / 2.0, top_left.y + size / 2.0);
+    backend.save();
+    backend.rotate(loader_rotation_radians(now_ms), center);
+    draw_icon(backend, Icon::Loader, top_left, size, color, stroke_width);
+    backend.restore();
+}
+
+pub(crate) fn loader_rotation_radians(now_ms: u64) -> f32 {
+    const PERIOD_MS: u64 = 1_000;
+    (now_ms % PERIOD_MS) as f32 / PERIOD_MS as f32 * std::f32::consts::TAU
+}
+
 pub struct IconPathData<'a> {
     pub d: &'a str,
     pub style: super::icon_catalog::IconRenderStyle,
@@ -700,3 +723,15 @@ const PALETTE: &[&str] = &[
 ];
 
 use super::icons_data::*;
+
+#[cfg(test)]
+mod spinner_tests {
+    use super::loader_rotation_radians;
+
+    #[test]
+    fn loader_rotation_wraps_once_per_second() {
+        assert_eq!(loader_rotation_radians(0), 0.0);
+        assert!((loader_rotation_radians(250) - std::f32::consts::FRAC_PI_2).abs() < 0.0001);
+        assert_eq!(loader_rotation_radians(1_000), 0.0);
+    }
+}

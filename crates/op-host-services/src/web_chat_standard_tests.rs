@@ -202,6 +202,7 @@ fn stream_chat_route_passes_history_and_attachments_to_provider() {
     }];
     let req = WebStandardTurnRequest {
         ai: AiStreamRequest {
+            provider: None,
             model: "claude-sonnet".into(),
             skills: Vec::new(),
             user: "current request".into(),

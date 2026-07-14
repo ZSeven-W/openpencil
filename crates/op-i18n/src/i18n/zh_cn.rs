@@ -568,6 +568,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.openCode" => "75+ LLM 提供商",
         "settings.provider.githubCopilot" => "GitHub Copilot 模型",
         "settings.provider.geminiCli" => "Google Gemini 模型",
+        "settings.provider.antigravity" => "Antigravity 模型",
+        "settings.provider.grokBuild" => "Grok Build 模型",
         "settings.system.title" => "系统",
         "settings.system.autoUpdate" => "自动更新",
         "settings.system.upToDate" => "已是最新",
@@ -594,6 +596,42 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "dialog.exportErrorLead" => "渲染图像时出错。",
         "ai.thinkingProcess" => "思考过程",
         "ai.toolCalls" => "{{count}} 个工具调用",
+        "ai.designProgress.narration.planning" => "我正在把需求整理成清晰的页面结构。",
+        "ai.designProgress.narration.plannedOne" => {
+            "页面已拆分为 1 个区块。我会先完成它，再统一润色整个页面。"
+        }
+        "ai.designProgress.narration.plannedMany" => {
+            "页面已拆分为 {{count}} 个区块。我会逐一完成，再统一润色整个页面。"
+        }
+        "ai.designProgress.narration.polishing" => {
+            "主要区块已就位。我正在润色间距、层级和整体一致性。"
+        }
+        "ai.designProgress.narration.checking" => {
+            "布局已完成。我正在检查溢出、对齐和视觉平衡。"
+        }
+        "ai.designProgress.narration.visualReference" => {
+            "我正在准备视觉参考，然后再开始构建页面。"
+        }
+        "ai.designProgress.activity.planning" => "规划设计",
+        "ai.designProgress.activity.polishing" => "润色布局",
+        "ai.designProgress.activity.checking" => "检查设计",
+        "ai.designProgress.activity.visualReference" => "准备视觉参考",
+        "ai.designProgress.detail.needsAttention" => "需要处理",
+        "ai.designProgress.detail.retrying" => "正在重试 · 第 {{attempt}} 次",
+        "ai.designProgress.detail.refining" => "正在润色细节",
+        "ai.designProgress.detail.standardPath" => "改用标准设计流程",
+        "ai.designProgress.detail.elementOne" => "1 个元素",
+        "ai.designProgress.detail.elementMany" => "{{count}} 个元素",
+        "ai.designProgress.completion.empty" => "已完成——设计可以开始检查。",
+        "ai.designProgress.completion.one" => {
+            "已完成——计划中的区块已就位，最终布局也已检查。"
+        }
+        "ai.designProgress.completion.many" => {
+            "已完成——计划中的 {{count}} 个区块已全部就位，最终布局也已检查。"
+        }
+        "ai.designProgress.completion.issues" => {
+            "本次已结束，但仍有问题——已完成 {{completed}} 项，{{failed}} 项需要处理。"
+        }
         "figma.importNotWired" => ".fig 文件导入尚未接入",
         "dialog.loadErrorInvalidUtf8" => "文件不是有效的 UTF-8 文本:{{detail}}",
         "dialog.loadErrorOldVersion" => "该文件由旧版本 OpenPencil 保存,需要重新保存后才能打开。",

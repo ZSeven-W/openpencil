@@ -542,6 +542,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.openCode" => "Hơn 75 nhà cung cấp LLM",
         "settings.provider.githubCopilot" => "Mô hình GitHub Copilot",
         "settings.provider.geminiCli" => "Mô hình Google Gemini",
+        "settings.provider.antigravity" => "Mô hình Antigravity",
+        "settings.provider.grokBuild" => "Mô hình Grok Build",
         "settings.system.title" => "Hệ thống",
         "settings.system.autoUpdate" => "Tự động cập nhật",
         "settings.system.upToDate" => "Đã cập nhật",

@@ -10,8 +10,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use op_editor_core::editor_ui_state::{RecentFile, RECENT_FILE_CAP};
 use op_editor_core::{
-    AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey,
-    EditorState, ImageGenProfile, ImageGenProvider, Locale, ThemeMode,
+    AcpAgentConfig, AcpConnectionType, AgentProvider, BuiltinAgentConfig, BuiltinAgentKind,
+    BuiltinAgentPresetKey, EditorState, ImageGenProfile, ImageGenProvider, Locale, McpCli,
+    ThemeMode,
 };
 use serde::{Deserialize, Serialize};
 
@@ -78,14 +79,14 @@ pub struct Fingerprint {
     theme: ThemeMode,
     locale: Locale,
     port: u16,
-    cli: [bool; 6],
+    cli: [bool; 8],
     images_adv: bool,
     openverse_client_id: String,
     openverse_client_secret: String,
     openverse_credential_owner: Option<String>,
     auto_update_enabled: bool,
     experimental_features_enabled: bool,
-    connected: [bool; 5],
+    connected: [bool; 7],
     builtin_agents: Vec<BuiltinAgentConfig>,
     acp_agents: Vec<AcpAgentConfig>,
     image_gen_profiles: Vec<ImageGenProfile>,
@@ -134,7 +135,7 @@ struct SettingsPayload {
     #[serde(default)]
     mcp_port: Option<u16>,
     #[serde(default)]
-    mcp_cli_enabled: Option<[bool; 6]>,
+    mcp_cli_enabled: Option<Vec<bool>>,
     #[serde(default)]
     images_advanced_open: Option<bool>,
     #[serde(default)]
@@ -146,10 +147,11 @@ struct SettingsPayload {
     #[serde(default)]
     experimental_features_enabled: Option<bool>,
     /// Per-provider connect state, indexed by `AgentProvider::ALL`
-    /// (Claude / Codex / OpenCode / Copilot / Gemini). Restored on
+    /// (Claude / Codex / OpenCode / Copilot / Gemini / Antigravity /
+    /// Grok Build). Restored on
     /// launch so the chat model picker survives a restart.
     #[serde(default)]
-    connected: Option<[bool; 5]>,
+    connected: Option<Vec<bool>>,
     #[serde(default)]
     builtin_agents: Option<Vec<BuiltinAgentPayload>>,
     #[serde(default)]
@@ -178,13 +180,13 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         theme: Some(theme_to_str(eui.theme_mode).into()),
         locale: Some(locale_to_str(eui.locale).into()),
         mcp_port: Some(eui.agent_settings.mcp_server.port),
-        mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
+        mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled.to_vec()),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
         openverse_oauth: openverse_oauth_to_payload(&eui.agent_settings),
         openverse_credential_owner: eui.agent_settings.openverse_credential_owner.clone(),
         auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
         experimental_features_enabled: Some(eui.agent_settings.experimental_features_enabled),
-        connected: Some(eui.agent_settings.connected),
+        connected: Some(eui.agent_settings.connected.to_vec()),
         // Skip auto-imported (e.g. Zode) agents: their source file is the
         // single source of truth and they're re-imported every launch, so
         // persisting them would silently duplicate the source's API keys
@@ -247,7 +249,10 @@ fn apply_payload_with_options(
         eui.agent_settings.mcp_server.port = port.max(1024);
     }
     if let Some(flags) = payload.mcp_cli_enabled {
-        eui.agent_settings.mcp_cli_enabled = flags;
+        eui.agent_settings.mcp_cli_enabled = [false; 8];
+        for (index, enabled) in flags.into_iter().take(McpCli::ALL.len()).enumerate() {
+            eui.agent_settings.mcp_cli_enabled[index] = enabled;
+        }
     }
     if let Some(b) = payload.images_advanced_open {
         eui.agent_settings.images_advanced_open = b;
@@ -264,7 +269,10 @@ fn apply_payload_with_options(
         eui.agent_settings.experimental_features_enabled = b;
     }
     if let Some(c) = payload.connected {
-        eui.agent_settings.connected = c;
+        eui.agent_settings.connected = [false; 7];
+        for (index, connected) in c.into_iter().take(AgentProvider::ALL.len()).enumerate() {
+            eui.agent_settings.connected[index] = connected;
+        }
     }
     if let Some(agents) = payload.builtin_agents {
         let agents = agents

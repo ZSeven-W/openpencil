@@ -8,7 +8,7 @@ use crate::agent_settings_builtin_presets::BuiltinAgentPresetKey;
 fn default_settings_are_quiescent() {
     let s = AgentSettings::default();
     assert_eq!(s.tab, AgentSettingsTab::Agents);
-    assert_eq!(s.connected, [false; 5]);
+    assert_eq!(s.connected, [false; 7]);
     assert!(s.builtin_agents.is_empty());
     assert!(s.builtin_agent_draft.is_none());
     assert!(s.acp_agent_draft.is_none());
@@ -31,7 +31,7 @@ fn default_settings_are_quiescent() {
 #[test]
 fn tab_and_cli_arrays_cover_all_variants() {
     assert_eq!(AgentSettingsTab::ALL.len(), 4);
-    assert_eq!(McpCli::ALL.len(), 6);
+    assert_eq!(McpCli::ALL.len(), 8);
 }
 
 #[test]

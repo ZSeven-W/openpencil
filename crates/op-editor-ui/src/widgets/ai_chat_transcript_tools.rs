@@ -4,33 +4,20 @@ use serde_json::Value;
 use super::ai_chat_tool_verbs::verb_for_tool;
 use super::ai_chat_transcript::wrap_units;
 use crate::theme::Theme;
+use crate::widgets::ai_chat_transcript_activity::{
+    paint_activity_chrome, TranscriptActivityChrome, TranscriptActivityStatus,
+};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 
 const GROUP_HEADER_H: f32 = 22.0;
-/// #27 restyle: comfortable 48px card header (was 24px).
+/// Compact activity-card header shared with CLI progress rows.
 const CARD_HEADER_H: f32 = 28.0;
 pub(crate) const CARD_GAP: f32 = 4.0;
 const CARD_PAD_X: f32 = 8.0;
 const CARD_PAD_Y: f32 = 6.0;
 const CARD_LINE_H: f32 = 14.0;
-/// Radius for the #27 rounded-rect card style (~10px per spec).
-const CARD_RADIUS: f32 = 6.0;
-/// X-offset of the left-aligned card label.
-const CARD_LABEL_X: f32 = 12.0;
-/// X-offset from the card right edge to the chevron top-left.
-const CARD_CHEVRON_RIGHT_OFFSET: f32 = 24.0;
-/// Radius of the ✓-ring that surrounds the check icon on completed cards.
-const CHECK_RING_R: f32 = 7.0;
-/// Status glyph box — deliberately smaller than the chevron: the check is a
-/// quiet confirmation beside the verb, not a second focal point.
-const STATUS_GLYPH: f32 = 11.0;
-/// Expander caret box. The collapsed state stacks two of them with an
-/// overlap (`EXPANDER_NUDGE`) so the pair reads as one select control.
-const EXPANDER_GLYPH: f32 = 11.0;
-const EXPANDER_NUDGE: f32 = 2.0;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolLevel {
     Read,
@@ -379,14 +366,19 @@ fn push_wrapped_tool_line(
     }
 }
 
-pub(crate) fn paint_tool_panel(cx: &mut PaintCx<'_>, theme: &Theme, panel: &ToolPanel) {
+pub(crate) fn paint_tool_panel(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    panel: &ToolPanel,
+    now_ms: u64,
+) {
     // Interleaved-flow panels are headerless (zero-height header rect): the
     // cards sit directly between narration paragraphs, Pencil-style.
     if panel.header.size.y > 0.0 {
         paint_tool_panel_header(cx, theme, panel);
     }
     for card in &panel.cards {
-        paint_tool_card(cx, theme, card);
+        paint_tool_card(cx, theme, card, now_ms);
     }
 }
 
@@ -418,8 +410,7 @@ fn paint_tool_panel_header(cx: &mut PaintCx<'_>, theme: &Theme, panel: &ToolPane
     );
 }
 
-fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
-    // #27 restyle: elevated-dark fill with subtle 1px border, ~10px radius.
+fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, now_ms: u64) {
     let mut bg = theme.card;
     let mut border = theme.border;
     if card.level == ToolLevel::Delete {
@@ -428,66 +419,46 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
         bg = theme.destructive;
         bg.a *= 0.08;
     }
-    cx.backend.fill_round_rect(card.rect, CARD_RADIUS, bg);
-    cx.backend
-        .stroke_round_rect(card.rect, CARD_RADIUS, border, 1.0);
-
-    // Label: left-aligned, muted-bright color, vertically centered.
     let text_color = if card.level == ToolLevel::Delete {
         theme.destructive
     } else {
         theme.muted_foreground
     };
-    let label_x = card.header.origin.x + CARD_LABEL_X;
-    let label_baseline = card.header.origin.y + CARD_HEADER_H / 2.0 + 4.0;
-    draw_line(
+    let is_error = card.status == "error" || card.result_failed;
+    let status = if is_error {
+        TranscriptActivityStatus::Error
+    } else if card.status == "running" {
+        TranscriptActivityStatus::Running
+    } else if card.status == "pending" {
+        TranscriptActivityStatus::Pending
+    } else {
+        TranscriptActivityStatus::Done
+    };
+    let source_reserve = card
+        .source
+        .as_deref()
+        .map(|source| source_badge_width(source) + 48.0)
+        .unwrap_or(40.0);
+    paint_activity_chrome(
         cx,
-        verb_for_tool(&card.name),
-        label_x,
-        label_baseline,
-        11.0,
-        text_color,
+        theme,
+        TranscriptActivityChrome {
+            rect: card.rect,
+            header: card.header,
+            label: verb_for_tool(&card.name),
+            label_color: text_color,
+            background: bg,
+            border,
+            status,
+            expanded: Some(card.expanded),
+            right_reserve: source_reserve,
+        },
+        now_ms,
     );
 
-    // Source badge — sits just left of the status icon when present.
+    // Source badge occupies the reserved band between status and expander.
     if let Some(source) = card.source.as_deref() {
         paint_source_badge(cx, theme, card, source);
-    }
-
-    // Status ring + icon: positioned before the chevron.
-    paint_status_icon(cx, theme, card);
-
-    // Expander at the far right. Collapsed reads as a SELECT affordance (a
-    // stacked up/down caret pair, the reference treatment) rather than a
-    // navigational ">"; expanded collapses to a single down caret.
-    let expander_x = card.header.origin.x + card.header.size.x - CARD_CHEVRON_RIGHT_OFFSET;
-    let center_y = card.header.origin.y + CARD_HEADER_H / 2.0;
-    if card.expanded {
-        draw_icon(
-            cx.backend,
-            Icon::ChevronDown,
-            Point2D::new(expander_x, center_y - EXPANDER_GLYPH / 2.0),
-            EXPANDER_GLYPH,
-            theme.muted_foreground,
-            1.4,
-        );
-    } else {
-        draw_icon(
-            cx.backend,
-            Icon::ChevronUp,
-            Point2D::new(expander_x, center_y - EXPANDER_GLYPH + EXPANDER_NUDGE),
-            EXPANDER_GLYPH,
-            theme.muted_foreground,
-            1.4,
-        );
-        draw_icon(
-            cx.backend,
-            Icon::ChevronDown,
-            Point2D::new(expander_x, center_y - EXPANDER_NUDGE),
-            EXPANDER_GLYPH,
-            theme.muted_foreground,
-            1.4,
-        );
     }
 
     if card.body.size.y > 0.0 {
@@ -521,7 +492,7 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
 }
 
 fn paint_source_badge(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, source: &str) {
-    let badge_w = (source.chars().count() as f32 * 5.5 + 10.0).min(96.0);
+    let badge_w = source_badge_width(source);
     let badge = Rect::xywh(
         card.header.origin.x + card.header.size.x - badge_w - 40.0,
         card.header.origin.y + (CARD_HEADER_H - 12.0) / 2.0,
@@ -544,68 +515,8 @@ fn paint_source_badge(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, 
     cx.backend.restore();
 }
 
-/// Paint the per-card status indicator.
-///
-/// For completed (done) cards: a thin-ring circle in success-green with
-/// the `check` glyph inside — matching the #27 reference look. For
-/// running/pending: a muted loader spinner. For error: a red ✕ icon.
-fn paint_status_icon(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard) {
-    // Reference anatomy: the status glyph sits INLINE right after the verb
-    // label ("Checked guidelines ✓"), not flushed to the right edge.
-    let label_units: u32 = verb_for_tool(&card.name)
-        .chars()
-        .map(super::ai_chat_transcript_text::char_display_units)
-        .sum();
-    let icon_top_left = Point2D::new(
-        card.header.origin.x + CARD_LABEL_X + label_units as f32 * 6.0 + 8.0,
-        card.header.origin.y + (CARD_HEADER_H - STATUS_GLYPH) / 2.0,
-    );
-
-    let is_error = card.status == "error" || card.result_failed;
-    let is_pending = matches!(card.status.as_str(), "running" | "pending");
-
-    if is_pending {
-        draw_icon(
-            cx.backend,
-            Icon::Loader,
-            icon_top_left,
-            STATUS_GLYPH,
-            theme.muted_foreground,
-            1.3,
-        );
-    } else if is_error {
-        draw_icon(
-            cx.backend,
-            Icon::Close,
-            icon_top_left,
-            STATUS_GLYPH,
-            theme.destructive,
-            1.3,
-        );
-    } else {
-        // Done: thin success-green ring + check glyph inside (#27 reference).
-        let success_color = theme.status_success;
-        let ring_cx = icon_top_left.x + STATUS_GLYPH / 2.0;
-        let ring_cy = icon_top_left.y + STATUS_GLYPH / 2.0;
-        cx.backend.stroke_oval(
-            Rect::xywh(
-                ring_cx - CHECK_RING_R,
-                ring_cy - CHECK_RING_R,
-                CHECK_RING_R * 2.0,
-                CHECK_RING_R * 2.0,
-            ),
-            success_color,
-            1.0,
-        );
-        draw_icon(
-            cx.backend,
-            Icon::Check,
-            icon_top_left,
-            STATUS_GLYPH,
-            success_color,
-            1.3,
-        );
-    }
+fn source_badge_width(source: &str) -> f32 {
+    (source.chars().count() as f32 * 5.5 + 10.0).min(96.0)
 }
 
 fn draw_line(
@@ -643,10 +554,11 @@ mod tests {
         };
         let card = test_card("done", false);
 
-        paint_tool_card(&mut cx, &theme, &card);
+        paint_tool_card(&mut cx, &theme, &card, 0);
 
         assert_eq!(backend.status_paths, Icon::Check.paths());
         assert_eq!(backend.status_colors, vec![theme.status_success]);
+        assert!(backend.rotations.is_empty());
     }
 
     #[test]
@@ -657,10 +569,11 @@ mod tests {
         };
         let card = test_card("error", true);
 
-        paint_tool_card(&mut cx, &Theme::dark(), &card);
+        paint_tool_card(&mut cx, &Theme::dark(), &card, 0);
 
         assert_eq!(backend.status_paths, Icon::Close.paths());
         assert_eq!(backend.status_colors, vec![Theme::dark().destructive]);
+        assert!(backend.rotations.is_empty());
     }
 
     #[test]
@@ -672,7 +585,7 @@ mod tests {
         let card = expanded_test_card();
         let theme = Theme::dark();
 
-        paint_tool_card(&mut cx, &theme, &card);
+        paint_tool_card(&mut cx, &theme, &card, 0);
 
         assert_eq!(
             backend.separator_lines,
@@ -683,6 +596,47 @@ mod tests {
                 1.0,
             )]
         );
+    }
+
+    #[test]
+    fn running_tool_uses_the_shared_rotating_loader() {
+        let mut backend = StatusIconBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let card = test_card("running", false);
+
+        paint_tool_card(&mut cx, &Theme::dark(), &card, 250);
+
+        assert_eq!(backend.rotations.len(), 1);
+        assert!((backend.rotations[0] - std::f32::consts::FRAC_PI_2).abs() < 0.0001);
+    }
+
+    #[test]
+    fn pending_tool_uses_a_quiet_non_rotating_wait_ring() {
+        let mut backend = StatusIconBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let card = test_card("pending", false);
+
+        paint_tool_card(&mut cx, &Theme::dark(), &card, 250);
+
+        assert!(backend.rotations.is_empty());
+    }
+
+    #[test]
+    fn failed_result_overrides_a_stale_running_status() {
+        let mut backend = StatusIconBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let card = test_card("running", true);
+
+        paint_tool_card(&mut cx, &Theme::dark(), &card, 250);
+
+        assert_eq!(backend.status_paths, Icon::Close.paths());
+        assert!(backend.rotations.is_empty());
     }
 
     fn test_card(status: &str, result_failed: bool) -> ToolCallCard {
@@ -724,6 +678,7 @@ mod tests {
         status_paths: Vec<&'static str>,
         status_colors: Vec<Color>,
         separator_lines: Vec<(Point2D, Point2D, Color, f32)>,
+        rotations: Vec<f32>,
     }
 
     impl RenderBackend for StatusIconBackend {
@@ -763,6 +718,9 @@ mod tests {
         fn save(&mut self) {}
         fn restore(&mut self) {}
         fn translate(&mut self, _: Point2D) {}
+        fn rotate(&mut self, radians: f32, _: Point2D) {
+            self.rotations.push(radians);
+        }
         fn resize(&mut self, _: u32, _: u32) {}
         fn dpi_scale(&self) -> f32 {
             1.0

@@ -1,112 +1,4 @@
-//! Sibling test file for `canvas_agent_cursor.rs` (800-line cap
-//! convention) — kinematics, sprite building, paint.
-
-mod kinematics_tests {
-    use crate::widgets::canvas_agent_cursor::{cursor_kinematics, ease_out_cubic, Waypoint};
-    use crate::{Point2D, Rect};
-
-    fn wp(start_ms: u64, x: f32, y: f32) -> Waypoint {
-        Waypoint {
-            start_ms,
-            pos: Point2D::new(x, y),
-            rect: Rect::xywh(x - 5.0, y - 5.0, 10.0, 10.0),
-        }
-    }
-
-    #[test]
-    fn empty_queue_yields_no_cursor() {
-        assert!(cursor_kinematics(&[], 1_000).is_none());
-    }
-
-    #[test]
-    fn cursor_arrives_exactly_at_reveal_start() {
-        let wps = [wp(1_000, 100.0, 50.0), wp(1_400, 300.0, 90.0)];
-        let kin = cursor_kinematics(&wps, 1_400).unwrap();
-        assert!((kin.pos.x - 300.0).abs() < 0.01 && (kin.pos.y - 90.0).abs() < 0.01);
-        assert_eq!(kin.current, Some(1));
-    }
-
-    #[test]
-    fn cursor_flies_between_waypoints_while_current_stays_on_departed() {
-        let wps = [wp(1_000, 100.0, 50.0), wp(1_300, 300.0, 50.0)];
-        let kin = cursor_kinematics(&wps, 1_150).unwrap();
-        assert!(kin.pos.x > 100.0 && kin.pos.x < 300.0);
-        assert_eq!(
-            kin.current,
-            Some(0),
-            "mid-flight the previous placement is still the current element"
-        );
-    }
-
-    #[test]
-    fn long_gaps_depart_late_and_arrive_on_time() {
-        let wps = [wp(1_000, 100.0, 50.0), wp(5_000, 300.0, 50.0)];
-        let hold = cursor_kinematics(&wps, 1_500).unwrap();
-        assert!(
-            (hold.pos.x - 100.0).abs() < 0.01,
-            "cursor waits at the previous node until depart"
-        );
-        assert!((hold.alpha - 1.0).abs() < 0.01, "parked cursor never fades");
-        let arrive = cursor_kinematics(&wps, 5_000).unwrap();
-        assert!((arrive.pos.x - 300.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn entry_fades_in_toward_first_waypoint() {
-        let wps = [wp(2_000, 100.0, 50.0)];
-        assert!(
-            cursor_kinematics(&wps, 1_700).is_none(),
-            "hidden before the entry window"
-        );
-        let kin = cursor_kinematics(&wps, 1_875).unwrap();
-        assert!(kin.alpha > 0.0 && kin.alpha < 1.0);
-        assert!(
-            kin.pos.x < 100.0 && kin.pos.y < 50.0,
-            "slides in from the entry offset"
-        );
-        assert!(kin.current.is_none(), "no current element during entry");
-    }
-
-    #[test]
-    fn parked_cursor_persists_after_queue_exhausts() {
-        let wps = [wp(1_000, 100.0, 50.0)];
-        for probe in [1_500u64, 2_500, 30_000] {
-            let kin = cursor_kinematics(&wps, probe).unwrap();
-            assert!(
-                (kin.alpha - 1.0).abs() < 0.01,
-                "cursor must not fade while the run is alive (probe {probe})"
-            );
-            assert!((kin.pos.x - 100.0).abs() < 0.01);
-            assert_eq!(kin.current, Some(0));
-        }
-    }
-
-    #[test]
-    fn equal_start_waypoints_coalesce_on_the_last_placement() {
-        let wps = [
-            wp(1_000, 100.0, 50.0),
-            wp(1_000, 200.0, 80.0),
-            wp(1_400, 400.0, 90.0),
-        ];
-        let at_shared_start = cursor_kinematics(&wps, 1_000).unwrap();
-        assert!(
-            (at_shared_start.pos.x - 200.0).abs() < 0.01,
-            "cursor parks on the last equal-start placement in sort order"
-        );
-        let mid_flight = cursor_kinematics(&wps, 1_200).unwrap();
-        assert!(
-            mid_flight.pos.x > 200.0,
-            "flight to the next waypoint departs from the coalesced placement"
-        );
-    }
-
-    #[test]
-    fn ease_out_cubic_hits_endpoints() {
-        assert!(ease_out_cubic(0.0).abs() < 1e-6);
-        assert!((ease_out_cubic(1.0) - 1.0).abs() < 1e-6);
-        assert!(ease_out_cubic(0.5) > 0.5, "ease-out front-loads the motion");
-    }
-}
+//! Sibling tests for `canvas_agent_cursor.rs` — sprite building and paint.
 
 mod hex_tests {
     use crate::widgets::canvas_agent_cursor::parse_hex;
@@ -227,6 +119,26 @@ mod sprite_tests {
                 && (rect.size.x - 120.0).abs() < 0.01,
             "border rect folds in pan + zoom"
         );
+    }
+
+    #[test]
+    fn only_a_live_generation_adds_zoom_independent_idle_sway() {
+        let roots = vec![frame_with_child("f1", "c1", 0.0)];
+        let mut ind = AgentIndicators::default();
+        ind.reveals.insert("c1".into(), 1_000);
+
+        let still_1x = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 1_500)[0].pos;
+        let still_2x = cursor_sprites(&roots, &ind, Point2D::ZERO, 2.0, 1_500)[0].pos;
+        ind.run_active = true;
+        let live_1x = cursor_sprites(&roots, &ind, Point2D::ZERO, 1.0, 1_500)[0].pos;
+        let live_2x = cursor_sprites(&roots, &ind, Point2D::ZERO, 2.0, 1_500)[0].pos;
+
+        let delta_1x = Point2D::new(live_1x.x - still_1x.x, live_1x.y - still_1x.y);
+        let delta_2x = Point2D::new(live_2x.x - still_2x.x, live_2x.y - still_2x.y);
+        assert!(delta_1x.x.abs() > 0.1 || delta_1x.y.abs() > 0.1);
+        assert!(delta_1x.x.abs() <= 3.0 && delta_1x.y.abs() <= 1.5);
+        assert!((delta_1x.x - delta_2x.x).abs() < 0.01);
+        assert!((delta_1x.y - delta_2x.y).abs() < 0.01);
     }
 
     #[test]
@@ -549,6 +461,7 @@ mod paint_tests {
             1_050,
             &ind,
             Default::default(),
+            Point2D::new(400.0, 300.0),
         );
         assert_eq!(
             backend.polygons.len(),
@@ -634,6 +547,7 @@ mod paint_tests {
             1_050,
             &ind,
             Default::default(),
+            Point2D::new(400.0, 300.0),
         );
         assert_eq!(backend.polygons.len(), 7, "fallback pencil still paints");
         let (_, color) = &backend.polygons[5];
@@ -669,6 +583,7 @@ mod paint_tests {
             1_000,
             &ind,
             Default::default(),
+            Point2D::new(400.0, 300.0),
         );
         assert!(
             backend.polygons.is_empty()
@@ -713,7 +628,7 @@ mod scan_gate_tests {
                 name: "Kiki".into(),
             },
         );
-        let sets = generating_paint_sets(&roots, Some(&ind)).expect("active run");
+        let sets = generating_paint_sets(&roots, Some(&ind), 1_000).expect("active run");
         let ids = &sets.scan;
         assert!(
             !ids.contains("main"),
@@ -747,7 +662,7 @@ mod scan_gate_tests {
         let mut root2 = SceneNode::leaf("root", NodeKind::Frame);
         root2.bounds = Rect::xywh(0.0, 0.0, 1440.0, 900.0);
         root2.children = vec![filled_header, sidebar2, main2];
-        let sets = generating_paint_sets(&[root2], Some(&ind)).expect("active run");
+        let sets = generating_paint_sets(&[root2], Some(&ind), 1_000).expect("active run");
         let ids = &sets.scan;
         assert!(
             ids.contains("main"),
@@ -789,7 +704,7 @@ mod scan_gate_tests {
                 name: "Fern".into(),
             },
         );
-        let sets = generating_paint_sets(&[root], Some(&ind)).expect("active run");
+        let sets = generating_paint_sets(&[root], Some(&ind), 1_000).expect("active run");
         assert!(
             sets.scan.contains("header"),
             "the header is first in fill order — it is on deck"
@@ -828,7 +743,7 @@ mod scan_gate_tests {
                 name: "Kiki".into(),
             },
         );
-        let sets = generating_paint_sets(&roots, Some(&ind)).expect("active run");
+        let sets = generating_paint_sets(&roots, Some(&ind), 1_000).expect("active run");
         let ids = &sets.scan;
         assert!(ids.contains("shell-a"), "the on-deck shell scans");
         assert!(

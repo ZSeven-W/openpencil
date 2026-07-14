@@ -556,6 +556,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.openCode" => "75+ LLM 供應商",
         "settings.provider.githubCopilot" => "GitHub Copilot 模型",
         "settings.provider.geminiCli" => "Google Gemini 模型",
+        "settings.provider.antigravity" => "Antigravity 模型",
+        "settings.provider.grokBuild" => "Grok Build 模型",
         "settings.system.title" => "系統",
         "settings.system.autoUpdate" => "自動更新",
         "settings.system.upToDate" => "已是最新",

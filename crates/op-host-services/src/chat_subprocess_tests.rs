@@ -154,6 +154,66 @@ fn for_cli_rejects_opencode_and_copilot() {
     assert!(SubprocessProvider::for_cli(CliName::Copilot).is_none());
 }
 
+#[test]
+fn antigravity_and_grok_use_documented_one_shot_flags() {
+    let antigravity = SubprocessProvider::for_cli(CliName::Antigravity).unwrap();
+    assert!(antigravity.binary.ends_with("agy"));
+    assert_eq!(antigravity.args, ["--sandbox", "--print-timeout", "90s"]);
+    assert_eq!(antigravity.prompt_mode, PromptMode::FlagArg("-p"));
+    assert_eq!(antigravity.model_flag, Some("--model"));
+
+    let grok = SubprocessProvider::for_cli(CliName::GrokBuild).unwrap();
+    assert!(grok.binary.ends_with("grok"));
+    assert!(grok
+        .args
+        .windows(2)
+        .any(|pair| pair == ["--permission-mode", "dontAsk"]));
+    assert!(grok
+        .args
+        .windows(2)
+        .any(|pair| pair == ["--allow", safety::GROK_MCP_ALLOW]));
+    assert!(grok
+        .args
+        .windows(2)
+        .any(|pair| pair == ["--sandbox", "strict"]));
+    assert!(grok
+        .args
+        .windows(2)
+        .any(|pair| pair == ["--tools", safety::GROK_READ_TOOLS]));
+    for forbidden in ["run_terminal_cmd", "search_replace", "web_search"] {
+        assert!(!grok.args.iter().any(|arg| arg == forbidden));
+    }
+    assert!(grok.args.iter().any(|arg| arg == "--no-subagents"));
+    assert!(grok.args.iter().any(|arg| arg == "--disable-web-search"));
+    assert_eq!(grok.prompt_mode, PromptMode::PromptFile("--prompt-file"));
+    assert_eq!(grok.model_flag, Some("-m"));
+}
+
+#[test]
+fn grok_default_model_keeps_cli_default_but_named_model_uses_m_flag() {
+    let grok = SubprocessProvider::for_cli(CliName::GrokBuild).unwrap();
+    let default_args = grok.turn_args(&request_with_model(Some("default")));
+    assert!(!default_args.iter().any(|arg| arg == "-m"));
+
+    let selected_args = grok.turn_args(&request_with_model(Some("grok-code-fast-1")));
+    let flag = selected_args.iter().position(|arg| arg == "-m").unwrap();
+    assert_eq!(selected_args[flag + 1], "grok-code-fast-1");
+}
+
+#[test]
+fn antigravity_default_model_keeps_cli_default_but_named_model_uses_model_flag() {
+    let antigravity = SubprocessProvider::for_cli(CliName::Antigravity).unwrap();
+    let default_args = antigravity.turn_args(&request_with_model(Some("default")));
+    assert!(!default_args.iter().any(|arg| arg == "--model"));
+
+    let selected_args = antigravity.turn_args(&request_with_model(Some("Gemini 3.5 Flash (High)")));
+    let flag = selected_args
+        .iter()
+        .position(|arg| arg == "--model")
+        .unwrap();
+    assert_eq!(selected_args[flag + 1], "Gemini 3.5 Flash (High)");
+}
+
 /// `ChatRequest` carrying only a model selection (knobs defaulted).
 fn request_with_model(model: Option<&str>) -> ChatRequest {
     ChatRequest {

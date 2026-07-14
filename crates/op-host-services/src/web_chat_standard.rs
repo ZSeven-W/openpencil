@@ -180,20 +180,25 @@ pub fn stream_standard_turn<W: Write>(
     }
     inject_transient_builtin(&mut snapshot, req.transient_builtin.as_ref());
 
-    let Some(classify_provider) =
-        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
-    else {
-        return write_error_event(out, "no model configured");
-    };
-    let Some(chat_provider) =
-        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, true)
-    else {
-        return write_error_event(out, "no model configured");
-    };
-    let Some(design_provider) =
-        crate::ai_proxy::proxy_provider_with_chat_session(&snapshot, &req.ai.model, false)
-    else {
-        return write_error_event(out, "no model configured");
+    let credential_persistence = state
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .credential_persistence;
+    let providers = (|| -> Result<_, String> {
+        let resolve = |chat_session| {
+            crate::ai_proxy::proxy_provider_for_request_with_chat_session(
+                &snapshot,
+                &req.ai,
+                chat_session,
+                credential_persistence,
+            )?
+            .ok_or_else(|| "no model configured".to_string())
+        };
+        Ok((resolve(false)?, resolve(true)?, resolve(false)?))
+    })();
+    let (classify_provider, chat_provider, design_provider) = match providers {
+        Ok(providers) => providers,
+        Err(message) => return write_error_event(out, &message),
     };
 
     let classified = crate::chat_intent::classify_intent_for_standard_route(
@@ -287,7 +292,7 @@ fn inject_transient_builtin(state: &mut EditorState, transient: Option<&BuiltinA
 
 fn selected_model_id(req: &AiStreamRequest) -> Option<String> {
     let model = req.model.trim();
-    if model.is_empty() || model == "default" {
+    if model.is_empty() || model == "default" || model.starts_with("builtin:") {
         None
     } else {
         Some(model.to_string())
@@ -479,7 +484,17 @@ fn stream_new_design_route<W: Write>(
         vision,
         system_prompt,
     };
+    let identity =
+        op_orchestrator::agent_identity::assign_agent_identities_seeded(1, web_identity_seed())
+            .into_iter()
+            .next()
+            .expect("one requested agent identity");
+    // The browser transcript learns the persona first. The daemon relay then
+    // confirms that exact same identity, so the canvas cursor cannot appear
+    // under a different name or colour than the visible assistant bubble.
+    write_agent_identity_event(out, &identity)?;
     let epoch = op_editor_core::agent_indicators::begin();
+    op_editor_core::agent_indicators::confirm_cursor_agent(epoch, &identity.color, &identity.name);
     let summary = {
         let out_ref = &mut *out;
         let mut on_progress = move |p: Progress| {
@@ -582,6 +597,27 @@ fn write_thinking_event<W: Write>(out: &mut W, text: &str) -> std::io::Result<()
         crate::ai_proxy::delta_to_sse(&ChatDelta::Thinking(text.to_string())).as_bytes(),
     )?;
     out.flush()
+}
+
+fn write_agent_identity_event<W: Write>(
+    out: &mut W,
+    identity: &op_orchestrator::agent_identity::AgentIdentity,
+) -> std::io::Result<()> {
+    let payload = serde_json::json!({
+        "agent": {
+            "name": identity.name,
+            "color": identity.color,
+        }
+    });
+    out.write_all(format!("data: {payload}\n\n").as_bytes())?;
+    out.flush()
+}
+
+fn web_identity_seed() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.subsec_nanos() as u64)
+        .unwrap_or(0)
 }
 
 fn write_done_event<W: Write>(out: &mut W) -> std::io::Result<()> {

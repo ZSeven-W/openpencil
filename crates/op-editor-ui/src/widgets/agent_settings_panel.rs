@@ -479,7 +479,7 @@ fn agents_content_height(settings: &AgentSettings, mode: AgentSettingsPanelMode)
         + SECTION_GAP
         + (agent_settings_acp::content_height(settings) + SECTION_GAP)
         + 32.0
-        + 5.0 * (CARD_HEIGHT + CARD_GAP)
+        + AgentProvider::ALL.len() as f32 * (CARD_HEIGHT + CARD_GAP)
         + 28.0
         + 24.0
 }

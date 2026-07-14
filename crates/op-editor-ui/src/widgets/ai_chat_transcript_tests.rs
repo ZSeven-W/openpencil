@@ -142,7 +142,7 @@ fn assistant_answer_uses_plain_text_height_without_bubble_padding() {
 }
 
 #[test]
-fn done_summary_renders_as_compact_completion_card() {
+fn done_summary_renders_as_plain_assistant_narration() {
     let msg = ChatMessage::assistant("Done — 4 subtask(s) succeeded, 0 failed, 4 node(s) total.");
     let body = body();
     let items = build_transcript(
@@ -152,18 +152,8 @@ fn done_summary_renders_as_compact_completion_card() {
     );
     let bubble = items[0].bubble.as_ref().expect("completion bubble");
 
-    assert!(
-        bubble.completion.is_some(),
-        "Done summary should use completion card styling"
-    );
-    assert!(
-        bubble.rect.size.x < body.size.x,
-        "completion card should not take the full transcript width"
-    );
-    assert!(
-        bubble.rect.size.y > LINE_H,
-        "completion card should have a compact card height instead of raw text height"
-    );
+    assert_eq!(bubble.rect.size.x, body.size.x);
+    assert!(bubble.lines.join(" ").starts_with("Done —"));
 
     let mut backend = TranscriptPaintBackend::default();
     let mut cx = PaintCx {
@@ -179,15 +169,47 @@ fn done_summary_renders_as_compact_completion_card() {
     );
 
     assert!(
-        backend.round_rects.iter().any(|(rect, radius)| {
-            rect_close(*rect, bubble.rect) && (*radius - 10.0).abs() < 1e-4
-        }),
-        "completion card should paint a rounded status surface"
+        backend.round_rects.is_empty(),
+        "the retired blue Done status surface must not be painted"
+    );
+}
+
+#[test]
+fn structured_completion_is_metadata_only_without_narration() {
+    let mut msg = ChatMessage::assistant("");
+    msg.completion = Some(op_editor_core::ChatCompletion {
+        succeeded: 3,
+        failed: 0,
+        nodes: 42,
+    });
+    let items = build_transcript(
+        std::slice::from_ref(&msg),
+        body(),
+        op_editor_core::Locale::EnUs,
     );
     assert!(
-        backend.texts.iter().any(|text| text == "Done"),
-        "completion card should show a concise title"
+        items[0].bubble.is_none(),
+        "structured metadata alone must not resurrect the old blue Done card"
     );
+    assert!(msg.content.is_empty());
+}
+
+#[test]
+fn structured_completion_keeps_final_narration_visible() {
+    let mut msg = ChatMessage::assistant("All requested sections are ready.");
+    msg.completion = Some(op_editor_core::ChatCompletion {
+        succeeded: 3,
+        failed: 0,
+        nodes: 42,
+    });
+    let items = build_transcript(
+        std::slice::from_ref(&msg),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    let bubble = items[0].bubble.as_ref().expect("final narration");
+    assert_eq!(bubble.lines.join(" "), "All requested sections are ready.");
 }
 
 #[test]
@@ -215,10 +237,10 @@ fn user_bubbles_remain_compact_and_right_aligned() {
 
 #[test]
 fn tight_final_turn_pins_completion_and_scrolls_to_reveal_prompt() {
-    // A short final turn (prompt + Done card) squeezed into a 64px body by
+    // A short final turn (prompt + Done summary) squeezed into a 64px body by
     // the fixed checklist overflows, so it can no longer show both at once.
     // The pinned (default) view keeps the latest content — the completion
-    // card — anchored to the bottom; the prompt is one scroll-up away. This
+    // summary — anchored to the bottom; the prompt is one scroll-up away. This
     // replaces the old no-scroll "keep the prompt attached" tail-fit hack,
     // whose only way to keep both visible was to never scroll at all.
     let messages = [
@@ -234,16 +256,15 @@ fn tight_final_turn_pins_completion_and_scrolls_to_reveal_prompt() {
         "tight body should overflow → a scroll range exists"
     );
 
-    // Pinned: the completion card rests against the body bottom.
+    // Pinned: the completion summary rests against the body bottom.
     let pinned = transcript_effective_offset(&messages, tight_body, loc, 0.0, true);
     assert!((pinned - max).abs() < 0.5);
     let items = build_transcript_with_design_hover(&messages, tight_body, loc, None, pinned);
-    let completion = items[1].bubble.as_ref().expect("completion card");
-    assert!(completion.completion.is_some());
+    let completion = items[1].bubble.as_ref().expect("completion summary");
     assert!(
         completion.rect.origin.y + completion.rect.size.y
             <= tight_body.origin.y + tight_body.size.y + 0.5,
-        "completion card pins to the bottom of the body"
+        "completion summary pins to the bottom of the body"
     );
 
     // Scrolling to the top (un-pinned, offset 0) brings the prompt fully
@@ -333,6 +354,7 @@ struct TranscriptPaintBackend {
     text_colors: Vec<(String, jian_core::scene::Color)>,
     svg_strokes: Vec<(Point2D, f32)>,
     svg_stroke_colors: Vec<(Point2D, f32, crate::Color)>,
+    rotations: Vec<f32>,
 }
 
 impl crate::RenderBackend for TranscriptPaintBackend {
@@ -350,6 +372,9 @@ impl crate::RenderBackend for TranscriptPaintBackend {
     fn save(&mut self) {}
     fn restore(&mut self) {}
     fn translate(&mut self, _: Point2D) {}
+    fn rotate(&mut self, radians: f32, _: Point2D) {
+        self.rotations.push(radians);
+    }
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: crate::Color, _: f32) {}
     fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: crate::Color) {
         self.round_rects.push((rect, radius));
@@ -367,6 +392,61 @@ impl crate::RenderBackend for TranscriptPaintBackend {
     fn dpi_scale(&self) -> f32 {
         1.0
     }
+}
+
+#[test]
+fn cli_running_activity_uses_the_shared_rotating_loader() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.activities.push(op_editor_core::ChatActivity {
+        id: "build".into(),
+        title: "Building the screen".into(),
+        detail: None,
+        status: op_editor_core::ChatActivityStatus::Running,
+        content_offset: None,
+    });
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &[message],
+        250,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(backend.rotations.len(), 1);
+    assert!((backend.rotations[0] - std::f32::consts::FRAC_PI_2).abs() < 0.0001);
+}
+
+#[test]
+fn cli_pending_activity_uses_a_quiet_non_rotating_wait_ring() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.activities.push(op_editor_core::ChatActivity {
+        id: "queued".into(),
+        title: "Queued section".into(),
+        detail: None,
+        status: op_editor_core::ChatActivityStatus::Pending,
+        content_offset: None,
+    });
+    let mut backend = TranscriptPaintBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_transcript(
+        &mut cx,
+        &crate::Theme::dark(),
+        body(),
+        &[message],
+        250,
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert!(backend.rotations.is_empty());
 }
 
 #[test]
@@ -517,6 +597,138 @@ fn empty_design_progress_lines_do_not_render_inline_or_as_typing_placeholder() {
     assert!(
         items[0].bubble.is_none(),
         "fixed checklist progress should suppress the empty streaming typing placeholder"
+    );
+}
+
+#[test]
+fn structured_activities_render_as_compact_rows_without_thinking_text() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.activities = vec![
+        op_editor_core::ChatActivity {
+            id: "header".into(),
+            title: "Greeting header".into(),
+            detail: None,
+            status: op_editor_core::ChatActivityStatus::Running,
+            content_offset: None,
+        },
+        op_editor_core::ChatActivity {
+            id: "rail".into(),
+            title: "Recently played".into(),
+            detail: Some("12 elements".into()),
+            status: op_editor_core::ChatActivityStatus::Done,
+            content_offset: None,
+        },
+    ];
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(items[0].steps.len(), 2);
+    assert_eq!(items[0].steps[0].label, "Greeting header");
+    assert!(items[0].steps[0].active);
+    assert_eq!(items[0].steps[0].rect.size.y, ACTION_STEP_H);
+    assert_eq!(items[0].steps[1].label, "Recently played");
+    assert!(items[0].steps[1].done);
+    assert!(items[0].thinking.is_none());
+    assert!(items[0].bubble.is_none());
+}
+
+#[test]
+fn structured_activities_interleave_with_cli_narration_by_offset() {
+    let first = "I mapped the screen.";
+    let second = "The sections are in place.";
+    let final_text = "Done — the layout has been checked.";
+    let content = format!("{first}\n\n{second}\n\n{final_text}");
+    let second_offset = first.len() + 2 + second.len();
+    let mut message = ChatMessage::assistant(&content);
+    message.activities = vec![
+        op_editor_core::ChatActivity {
+            id: "build".into(),
+            title: "Building sections".into(),
+            detail: None,
+            status: op_editor_core::ChatActivityStatus::Done,
+            content_offset: Some(first.len() as u32),
+        },
+        op_editor_core::ChatActivity {
+            id: "check".into(),
+            title: "Checking the design".into(),
+            detail: None,
+            status: op_editor_core::ChatActivityStatus::Done,
+            content_offset: Some(second_offset as u32),
+        },
+    ];
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    let item = &items[0];
+
+    assert_eq!(item.steps.len(), 2);
+    assert_eq!(item.flow_bubbles.len(), 3);
+    assert!(item.bubble.is_none());
+    assert!(item.flow_bubbles[0].rect.origin.y < item.steps[0].rect.origin.y);
+    assert!(item.steps[0].rect.origin.y < item.flow_bubbles[1].rect.origin.y);
+    assert!(item.flow_bubbles[1].rect.origin.y < item.steps[1].rect.origin.y);
+    assert!(item.steps[1].rect.origin.y < item.flow_bubbles[2].rect.origin.y);
+}
+
+#[test]
+fn legacy_and_interleaved_activity_steps_use_distinct_override_slots() {
+    let mut message = ChatMessage::assistant("Narration");
+    message.thinking = "• Legacy detail\n  ▸ diagnostic".into();
+    message.activities.push(op_editor_core::ChatActivity {
+        id: "build".into(),
+        title: "Building section".into(),
+        detail: Some("2 elements".into()),
+        status: op_editor_core::ChatActivityStatus::Done,
+        content_offset: Some(0),
+    });
+    message.action_step_expanded_overrides = vec![Some(false), Some(true)];
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+
+    assert_eq!(items[0].steps.len(), 2);
+    assert_eq!(items[0].steps[0].source_index, 0);
+    assert_eq!(items[0].steps[1].source_index, 1);
+    assert!(!items[0].steps[0].expanded);
+    assert!(items[0].steps[1].expanded);
+}
+
+#[test]
+fn detail_less_structured_activity_has_no_invisible_toggle_hit() {
+    let mut message = ChatMessage::assistant_streaming();
+    message.activities.push(op_editor_core::ChatActivity {
+        id: "header".into(),
+        title: "Greeting header".into(),
+        detail: None,
+        status: op_editor_core::ChatActivityStatus::Running,
+        content_offset: None,
+    });
+    let body = body();
+    let canonical = super::ai_chat_transcript_cache::unowned_for_tests(
+        std::slice::from_ref(&message),
+        body,
+        op_editor_core::Locale::EnUs,
+    );
+    let step = &canonical.items[0].steps[0];
+
+    assert_eq!(
+        transcript_hit(
+            &canonical,
+            body,
+            step.rect.origin.x + 8.0,
+            step.rect.origin.y + 8.0,
+            0.0,
+        ),
+        None
     );
 }
 

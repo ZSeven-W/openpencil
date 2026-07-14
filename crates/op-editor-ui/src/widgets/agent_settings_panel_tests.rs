@@ -3,8 +3,8 @@ use crate::widgets::icons::Icon;
 use crate::widgets::{PaintCx, Widget};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::agent_settings::{
-    AcpAgentField, AgentSettingsTab, BuiltinAgentField, ImageSearchField, ImageTestStatus,
-    SettingsFocus,
+    AcpAgentField, AgentProvider, AgentSettingsTab, BuiltinAgentField, ImageSearchField,
+    ImageTestStatus, SettingsFocus,
 };
 use op_editor_core::{AgentSettingsButton, ButtonPressTarget, EditorState};
 
@@ -497,6 +497,24 @@ fn agents_tab_acp_cards_replace_empty_hint_height() {
     assert!(
         with_acp > empty,
         "configured ACP agents should contribute list-card height instead of a fixed empty hint"
+    );
+}
+
+#[test]
+fn agents_content_height_contains_every_provider_card() {
+    let state = EditorState::default();
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content = crate::widgets::agent_settings_panel_geometry::content_rect(rect);
+    let last = crate::widgets::agent_settings_panel_geometry::agent_card_rect_in(
+        rect,
+        AgentProvider::ALL.len() - 1,
+        &state.editor_ui.agent_settings,
+    );
+
+    assert!(
+        last.origin.y + last.size.y <= content.origin.y + panel.content_total_height(),
+        "scrollable content must include the final CLI provider card"
     );
 }
 

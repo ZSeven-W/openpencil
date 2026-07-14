@@ -1,3 +1,5 @@
+use op_editor_core::{ChatActivity, ChatActivityStatus};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ParsedStepStatus {
     Pending,
@@ -17,6 +19,20 @@ pub(crate) struct ParsedStep {
 pub(crate) struct StepExtraction {
     pub steps: Vec<ParsedStep>,
     pub visible_text: String,
+}
+
+pub(crate) fn activity_step(activity: &ChatActivity) -> ParsedStep {
+    let status = match activity.status {
+        ChatActivityStatus::Pending => ParsedStepStatus::Pending,
+        ChatActivityStatus::Running => ParsedStepStatus::Streaming,
+        ChatActivityStatus::Done => ParsedStepStatus::Done,
+        ChatActivityStatus::Error => ParsedStepStatus::Error,
+    };
+    ParsedStep {
+        title: activity.title.clone(),
+        status: Some(status),
+        details: activity.detail.iter().cloned().collect(),
+    }
 }
 
 pub(crate) fn strip_tool_call_xml(text: &str) -> String {

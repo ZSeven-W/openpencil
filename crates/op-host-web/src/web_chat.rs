@@ -30,17 +30,18 @@ use std::rc::Rc;
 
 use base64::Engine as _;
 use op_ai::chat_history::{trim_chat_history, DEFAULT_MAX_CHARS, DEFAULT_MAX_MESSAGES};
-use op_editor_core::chat::{AgentProvider, ChatState, ModelEntry};
+use op_editor_core::chat::ChatState;
 use op_editor_core::EditorState;
 use op_editor_host_core::chat::chat_history_from_transcript;
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
 
 use crate::repaint_ctx::RepaintContext;
 use crate::web_ai_transport::{post_ai_stream_to, AiEvent, AiStreamHandle};
 
+#[cfg(test)]
+use crate::web_model_catalog::{apply_models, parse_models_json, provider_for_model_id};
+pub(crate) use crate::web_model_catalog::{fetch_models, reconcile_models};
+
 type EventQueue = Rc<RefCell<VecDeque<AiEvent>>>;
-const DAEMON_BUILTIN_PREFIX: &str = "daemon-builtin:";
 
 /// The in-flight chat turn: the XHR abort handle plus its generation. wasm is
 /// single-threaded, so a thread_local slot is the natural owner — every drain
@@ -281,8 +282,24 @@ pub(crate) struct PreparedTurn {
 /// the request; `begin_send` already copied image previews into the user
 /// transcript bubble.
 pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
+    let selected = state.chat.selected_model_entry().cloned();
+    // Host CLI/ACP providers are intentionally unavailable on the browser
+    // surface. Reconciliation normally makes this impossible, but reject a
+    // transient stale CLI selection before consuming the pending send too.
+    if selected
+        .as_ref()
+        .is_some_and(|entry| entry.builtin_provider_id.is_none())
+    {
+        return None;
+    }
     let user_text = state.chat.pending_send.take()?;
     let (model, credential) = crate::web_ai_credentials::selected_target(state);
+    let provider = selected.as_ref().and_then(|entry| {
+        // Legacy string catalogs use an unqualified model id and must stay on
+        // the daemon's ambiguity-safe built-in resolver. Structured built-ins
+        // and request-scoped browser credentials can carry exact identity.
+        (model.starts_with("builtin:") || credential.is_some()).then(|| entry.provider.wire_id())
+    });
     let thinking = state.chat.thinking_mode.as_str();
     let effort = state.chat.effort_level.as_str();
     let agent_team_size = state.chat.agent_team_size;
@@ -321,6 +338,7 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         .and_then(|pages| pages.get(state.ui.active_page_index))
         .map(|page| page.id.as_str());
     let body = serde_json::json!({
+        "provider": provider,
         "model": model,
         "credential": credential,
         // Standard turns route through the daemon classifier + design
@@ -355,6 +373,10 @@ pub(crate) fn apply_event_to_chat(chat: &mut ChatState, evt: &AiEvent) -> bool {
         return terminal;
     };
     match evt {
+        AiEvent::AgentIdentity { name, color } => {
+            msg.agent_name = Some(name.clone());
+            msg.agent_color = Some(color.clone());
+        }
         AiEvent::Delta(text) => msg.content.push_str(text),
         AiEvent::Thinking(text) => msg.thinking.push_str(text),
         AiEvent::Error(e) => {
@@ -366,164 +388,10 @@ pub(crate) fn apply_event_to_chat(chat: &mut ChatState, evt: &AiEvent) -> bool {
     terminal
 }
 
-// ---------------------------------------------------------------------
-// Model discovery (`GET /api/ai/models`)
-// ---------------------------------------------------------------------
-
-/// Fetch the daemon's model catalog once (called from `mount()`) and populate
-/// the chat model picker. Best-effort: a missing daemon / bad payload leaves
-/// the catalog empty and sends fall back to the `"default"` model.
-pub(crate) fn fetch_models<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
-    let base = crate::daemon_base::daemon_base();
-    let url = format!("{base}/api/ai/models");
-    let Ok(xhr) = web_sys::XmlHttpRequest::new() else {
-        return;
-    };
-    if xhr.open_with_async("GET", &url, true).is_err() {
-        return;
-    }
-    let xhr_cb = xhr.clone();
-    let inner_cb = inner.clone();
-    // `once_into_js` self-cleans after the single firing (live_sync idiom).
-    let onloadend = Closure::<dyn FnMut()>::once_into_js(move || {
-        let Ok(Some(text)) = xhr_cb.response_text() else {
-            return;
-        };
-        let ids = parse_models_json(&text);
-        if ids.is_empty() {
-            return;
-        }
-        let Ok(mut b) = inner_cb.try_borrow_mut() else {
-            return;
-        };
-        apply_models(b.host_mut().editor_state_mut(), &ids);
-        b.host_mut().mark_editor_state_dirty();
-        let _ = b.repaint();
-    });
-    xhr.set_onloadend(Some(onloadend.unchecked_ref()));
-    let _ = xhr.send();
-}
-
-/// Parse the `GET /api/ai/models` body — a JSON array of model-id strings
-/// (`ai_proxy::models_json`). Lenient: non-string entries and blanks are
-/// skipped; a non-array payload yields the empty catalog.
-pub(crate) fn parse_models_json(body: &str) -> Vec<String> {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
-        return Vec::new();
-    };
-    let Some(arr) = value.as_array() else {
-        return Vec::new();
-    };
-    arr.iter()
-        .filter_map(|v| v.as_str())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
-/// Heuristic provider tag for a daemon built-in model id. This drives only the
-/// API-key branding in the picker; the daemon resolves the real built-in by
-/// model id.
-pub(crate) fn provider_for_model_id(id: &str) -> AgentProvider {
-    let lower = id.to_ascii_lowercase();
-    if lower.contains("gemini") {
-        AgentProvider::GeminiCli
-    } else if lower.contains("gpt") || lower.contains("codex") {
-        AgentProvider::CodexCli
-    } else if lower.contains("copilot") {
-        AgentProvider::GithubCopilot
-    } else {
-        // claude-* and anything unrecognized group under Claude.
-        AgentProvider::ClaudeCode
-    }
-}
-
-/// Merge the daemon's built-in-only catalog into the chat model picker. A
-/// synthetic built-in id keeps these entries out of every CLI path; because it
-/// does not match a browser-local profile, requests carry no transient key and
-/// the daemon resolves its operator-owned built-in by model id.
-pub(crate) fn apply_models(state: &mut EditorState, ids: &[String]) {
-    state.chat.discovered_models = ids
-        .iter()
-        .map(|id| {
-            ModelEntry::builtin_with_display_name(
-                provider_for_model_id(id),
-                format!("{DAEMON_BUILTIN_PREFIX}{id}"),
-                "Server API Key",
-                id.clone(),
-                id.clone(),
-            )
-        })
-        .collect();
-
-    reconcile_models(state);
-}
-
-/// Restore the web model picker from its two authoritative built-in-only
-/// sources: the daemon catalog and ready browser-local providers.
-///
-/// Core settings mutations call `EditorState::rebuild_chat_models`, whose
-/// native connected-provider filter can temporarily remove daemon models.
-/// Re-running this web reconciliation makes those models visible again while
-/// keeping the selected entry by identity whenever it still exists.
-pub(crate) fn reconcile_models(state: &mut EditorState) {
-    let previous = state
-        .chat
-        .available_models
-        .get(state.chat.selected_model)
-        .cloned();
-    let local_agents = state
-        .editor_ui
-        .agent_settings
-        .builtin_agents
-        .iter()
-        .filter(|agent| agent.ready())
-        .collect::<Vec<_>>();
-    let local_model_ids = local_agents
-        .iter()
-        .map(|agent| agent.model.trim())
-        .collect::<std::collections::HashSet<_>>();
-    let mut available_models = state
-        .chat
-        .discovered_models
-        .iter()
-        .filter(|entry| {
-            entry
-                .builtin_provider_id
-                .as_deref()
-                .is_some_and(|id| id.starts_with(DAEMON_BUILTIN_PREFIX))
-                && !local_model_ids.contains(entry.value.trim())
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    available_models.extend(local_agents.into_iter().map(|agent| {
-        ModelEntry::builtin_with_display_name(
-            agent.kind.model_provider(),
-            agent.id.clone(),
-            agent.display_name.clone(),
-            format!("builtin:{}:{}", agent.id, agent.model),
-            agent.model.clone(),
-        )
-    }));
-    if state.chat.available_models == available_models {
-        return;
-    }
-    state.chat.available_models = available_models;
-    state.chat.selected_model = previous
-        .and_then(|p| {
-            state.chat.available_models.iter().position(|m| {
-                m.provider == p.provider
-                    && m.value == p.value
-                    && m.builtin_provider_id == p.builtin_provider_id
-            })
-        })
-        .unwrap_or(0);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use op_editor_core::chat::{AgentProvider, ModelEntry};
 
     fn state_with_queued_send(text: &str) -> EditorState {
         let mut state = EditorState::new();
@@ -554,6 +422,7 @@ mod tests {
         assert_eq!(prepared.endpoint, "/api/ai/standard");
         let body: serde_json::Value =
             serde_json::from_str(&prepared.body_json).expect("body is JSON");
+        assert_eq!(body["provider"], "claude-code");
         assert_eq!(body["model"], "claude-sonnet-4-5");
         assert_eq!(body["user"], "design a login page");
         assert_eq!(body["max_output_tokens"], 4096);
@@ -604,6 +473,7 @@ mod tests {
         let prepared = prepare_turn(&mut state).expect("send was pending");
         let body: serde_json::Value =
             serde_json::from_str(&prepared.body_json).expect("body is JSON");
+        assert!(body["provider"].is_null());
         assert_eq!(body["model"], "default");
         assert_eq!(body["thinking"], thinking.as_str());
         assert_eq!(body["effort"], effort.as_str());
@@ -657,6 +527,13 @@ mod tests {
         let mut chat = chat_with_queued_send("hello");
         assert!(!apply_event_to_chat(
             &mut chat,
+            &AiEvent::AgentIdentity {
+                name: "Mochi".into(),
+                color: "#4ECDC4".into(),
+            }
+        ));
+        assert!(!apply_event_to_chat(
+            &mut chat,
             &AiEvent::Delta("Hi ".into())
         ));
         assert!(!apply_event_to_chat(
@@ -671,6 +548,8 @@ mod tests {
         let msg = chat.messages.last().expect("assistant bubble");
         assert_eq!(msg.content, "Hi there");
         assert_eq!(msg.thinking, "consider…");
+        assert_eq!(msg.agent_name.as_deref(), Some("Mochi"));
+        assert_eq!(msg.agent_color.as_deref(), Some("#4ECDC4"));
         assert!(!msg.streaming, "Done clears the streaming flag");
     }
 
@@ -699,19 +578,34 @@ mod tests {
         assert!(apply_event_to_chat(&mut chat, &AiEvent::Done));
         assert_eq!(chat.messages, before, "stopped transcript is untouched");
     }
-
     #[test]
     fn parse_models_json_reads_string_arrays_leniently() {
-        assert_eq!(
-            parse_models_json(r#"["claude-sonnet-4-5","gpt-5.5"]"#),
-            vec!["claude-sonnet-4-5".to_string(), "gpt-5.5".to_string()]
-        );
-        assert_eq!(
-            parse_models_json(r#"["", "  ", 3, "gemini-2.5-pro"]"#),
-            vec!["gemini-2.5-pro".to_string()]
-        );
+        let models = parse_models_json(r#"["claude-sonnet-4-5","gpt-5.5"]"#);
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].value, "claude-sonnet-4-5");
+        assert_eq!(models[1].value, "gpt-5.5");
+        let models = parse_models_json(r#"["", "  ", 3, "gemini-2.5-pro"]"#);
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].value, "gemini-2.5-pro");
         assert!(parse_models_json("{}").is_empty());
         assert!(parse_models_json("not json").is_empty());
+    }
+
+    #[test]
+    fn structured_catalog_keeps_builtin_identity_and_drops_cli_rows() {
+        let models = parse_models_json(
+            r#"[
+                {"provider":"codex-cli","value":"builtin:server-1:gpt-5.4","displayName":"GPT-5.4","providerDisplayName":"Server OpenAI"},
+                {"provider":"grok-build","value":"default","displayName":"Default"}
+            ]"#,
+        );
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].provider, AgentProvider::CodexCli);
+        assert_eq!(models[0].value, "builtin:server-1:gpt-5.4");
+        assert_eq!(
+            models[0].builtin_provider_id.as_deref(),
+            Some("daemon-builtin:server-1")
+        );
     }
 
     #[test]

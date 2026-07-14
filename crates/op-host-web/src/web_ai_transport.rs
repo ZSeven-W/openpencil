@@ -23,6 +23,10 @@ use wasm_bindgen::JsCast;
 /// One streamed event from the AI proxy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AiEvent {
+    /// User-facing identity chosen for an orchestrated design run. The chat
+    /// transcript applies this before the daemon exposes the same persona
+    /// through the canvas-indicator relay.
+    AgentIdentity { name: String, color: String },
     /// A token / text fragment to append to the in-flight assistant turn.
     Delta(String),
     /// A reasoning fragment (`{"thinking":"…"}`) — the chat transcript
@@ -210,8 +214,9 @@ pub(crate) fn drain_sse_buffer(text: &str, start: usize) -> (Vec<AiEvent>, usize
 
 /// Parse one SSE `data:` payload (already trimmed of the `data:` prefix) into
 /// an [`AiEvent`]. Wire shape is `ai_proxy::delta_to_sse` on the desktop side:
-/// `{"delta":…}` / `{"thinking":…}` / `{"done":true}` / `{"error":…}` (plus
-/// the OpenAI-style `[DONE]` sentinel for compatibility).
+/// `{"agent":{"name":…,"color":…}}` / `{"delta":…}` / `{"thinking":…}` /
+/// `{"done":true}` / `{"error":…}` (plus the OpenAI-style `[DONE]` sentinel
+/// for compatibility).
 ///
 /// An `error` field takes precedence over `delta` so a turn that fails
 /// mid-stream surfaces the error rather than a partial delta; `{"done":false}`
@@ -235,6 +240,13 @@ pub(crate) fn parse_event(payload: &str) -> Option<AiEvent> {
         .is_some_and(|v| !v.is_null() && v.as_bool() != Some(false))
     {
         return Some(AiEvent::Done);
+    }
+    if let Some(agent) = obj.get("agent").and_then(serde_json::Value::as_object) {
+        if let (Some(name), Some(color)) =
+            (nonempty_str(agent, "name"), nonempty_str(agent, "color"))
+        {
+            return Some(AiEvent::AgentIdentity { name, color });
+        }
     }
     if let Some(delta) = nonempty_str(obj, "delta") {
         return Some(AiEvent::Delta(delta));
@@ -275,6 +287,13 @@ mod tests {
 
     #[test]
     fn parse_event_maps_each_wire_shape() {
+        assert_eq!(
+            parse_event(r##"{"agent":{"name":"Mochi","color":"#4ECDC4"}}"##),
+            Some(AiEvent::AgentIdentity {
+                name: "Mochi".into(),
+                color: "#4ECDC4".into(),
+            })
+        );
         assert_eq!(
             parse_event(r#"{"delta":"Hi"}"#),
             Some(AiEvent::Delta("Hi".into()))

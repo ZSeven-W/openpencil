@@ -281,8 +281,8 @@ pub enum Progress {
     },
     /// Per-subtask skill-load report — emitted right after the sub-agent
     /// prompt is built (from the merged `SkillLoadReport`). `dropped` carries
-    /// `(name, reason_display)` pairs; the UI renders the concise summary line
-    /// plus `▸ skills:` / `▸ dropped:` detail sub-lines.
+    /// `(name, reason_display)` pairs for diagnostics; user-facing activity
+    /// deliberately omits skill, token-budget, and context-drop internals.
     SubtaskSkills {
         id: String,
         included: Vec<SkillBrief>,

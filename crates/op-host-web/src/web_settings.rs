@@ -8,7 +8,7 @@
 use op_editor_core::editor_ui_state::{RecentFile, RECENT_FILE_CAP};
 use op_editor_core::{
     BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey, EditorState, ImageGenProfile,
-    ImageGenProvider, Locale, ThemeMode,
+    ImageGenProvider, Locale, McpCli, ThemeMode,
 };
 use serde::{Deserialize, Serialize};
 
@@ -75,7 +75,7 @@ pub(crate) struct Fingerprint {
     theme: ThemeMode,
     locale: Locale,
     port: u16,
-    cli: [bool; 6],
+    cli: [bool; 8],
     images_adv: bool,
     auto_update_enabled: bool,
     experimental_features_enabled: bool,
@@ -105,7 +105,7 @@ struct SettingsPayload {
     #[serde(default)]
     mcp_port: Option<u16>,
     #[serde(default)]
-    mcp_cli_enabled: Option<[bool; 6]>,
+    mcp_cli_enabled: Option<Vec<bool>>,
     #[serde(default)]
     images_advanced_open: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -215,7 +215,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         theme: Some(theme_to_str(eui.theme_mode).into()),
         locale: Some(locale_to_str(eui.locale).into()),
         mcp_port: Some(eui.agent_settings.mcp_server.port),
-        mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
+        mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled.to_vec()),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
         openverse_oauth: None,
         auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
@@ -250,7 +250,10 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
         eui.agent_settings.mcp_server.port = port.max(1024);
     }
     if let Some(flags) = payload.mcp_cli_enabled {
-        eui.agent_settings.mcp_cli_enabled = flags;
+        eui.agent_settings.mcp_cli_enabled = [false; 8];
+        for (index, enabled) in flags.into_iter().take(McpCli::ALL.len()).enumerate() {
+            eui.agent_settings.mcp_cli_enabled[index] = enabled;
+        }
     }
     if let Some(open) = payload.images_advanced_open {
         eui.agent_settings.images_advanced_open = open;

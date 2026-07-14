@@ -26,7 +26,33 @@ fn frame_generating_requires_active_run_and_registered_frame() {
 }
 
 #[test]
-fn generation_scan_deadline_ticks_only_for_active_registered_frames() {
+fn confirmed_cursor_identity_is_epoch_scoped_and_ticks_before_first_reveal() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear();
+    let stale = begin();
+    let live = begin();
+
+    confirm_cursor_agent(stale, "#FF6B6B", "Stale");
+    assert!(snapshot().cursor_agent.is_none());
+
+    confirm_cursor_agent(live, "#4ECDC4", "Mochi");
+    assert_eq!(
+        snapshot()
+            .cursor_agent
+            .as_ref()
+            .map(|tag| tag.name.as_str()),
+        Some("Mochi")
+    );
+    assert_eq!(
+        next_reveal_deadline_ms(1_000),
+        Some(1_000 + REVEAL_FRAME_MS),
+        "the parked pre-node cursor must keep breathing"
+    );
+    clear();
+}
+
+#[test]
+fn generation_scan_deadline_ticks_for_live_or_finishing_registered_frames() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     clear();
     assert_eq!(next_generation_scan_deadline_ms(1_000), None);
@@ -39,7 +65,23 @@ fn generation_scan_deadline_ticks_only_for_active_registered_frames() {
         Some(1_000 + REVEAL_FRAME_MS)
     );
 
-    end_if_epoch(epoch);
+    add_reveal(epoch, "future", 1_350);
+    finish_if_epoch(epoch);
+    assert_eq!(
+        next_generation_scan_deadline_ms(1_000),
+        Some(1_000 + REVEAL_FRAME_MS),
+        "a fast natural finish must keep animating through the reveal runway"
+    );
+    assert_eq!(
+        next_generation_scan_deadline_ms(1_350),
+        None,
+        "the reveal wireframe owns the final handoff"
+    );
+    clear();
+
+    let cancelled = begin();
+    add_frame(cancelled, "frame", "#4ECDC4", "Mochi");
+    end_if_epoch(cancelled);
     assert_eq!(next_generation_scan_deadline_ms(1_000), None);
 }
 
@@ -185,6 +227,22 @@ fn empty_finish_does_not_arm_a_spurious_erase_frame() {
         None,
         "an empty finish leaves no pending erase frame for other queries to trip on"
     );
+    clear();
+}
+
+#[test]
+fn confirmed_cursor_empty_finish_requests_one_erase_frame() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let epoch = begin();
+    confirm_cursor_agent(epoch, "#4ECDC4", "Mochi");
+    finish_if_epoch(epoch);
+
+    assert_eq!(
+        next_reveal_deadline_ms(5_000),
+        Some(5_000 + REVEAL_FRAME_MS)
+    );
+    assert!(snapshot_at_if_active(5_016).is_none());
+    assert_eq!(next_reveal_deadline_ms(5_032), None);
     clear();
 }
 
@@ -508,13 +566,22 @@ fn reveal_offsets_give_each_element_a_readable_beat() {
 fn relay_json_round_trips_through_parse() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let e = begin();
+    confirm_cursor_agent(e, "#4ECDC4", "Mochi");
     add_node(e, "n5", "#FF6B6B", "Nova");
     add_frame(e, "n1", "#4ECDC4", "Mochi");
     mark_preview(e, "n9");
     add_reveal(e, "n5", 1_234);
 
     let remote = parse_relay_json(&relay_json()).expect("relay body parses");
+    assert_eq!(remote.epoch, e);
     assert!(remote.run_active);
+    assert_eq!(
+        remote.cursor_agent,
+        Some(AgentTag {
+            color: "#4ECDC4".to_string(),
+            name: "Mochi".to_string(),
+        })
+    );
     assert_eq!(
         remote.nodes,
         vec![(
@@ -536,7 +603,12 @@ fn apply_remote_mirrors_a_daemon_run_locally() {
     let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     clear();
     let remote = RemoteIndicators {
+        epoch: 41,
         run_active: true,
+        cursor_agent: Some(AgentTag {
+            color: "#4ECDC4".to_string(),
+            name: "Mochi".to_string(),
+        }),
         nodes: vec![(
             "n5".to_string(),
             AgentTag {
@@ -554,6 +626,10 @@ fn apply_remote_mirrors_a_daemon_run_locally() {
     );
     let snap = snapshot();
     assert!(snap.run_active);
+    assert_eq!(
+        snap.cursor_agent.as_ref().map(|tag| tag.name.as_str()),
+        Some("Mochi")
+    );
     assert_eq!(snap.nodes.get("n5").unwrap().name, "Nova");
     assert!(snap.previews.contains("n9"));
     assert_eq!(snap.reveals.get("n5"), Some(&777));
@@ -578,4 +654,102 @@ fn apply_remote_mirrors_a_daemon_run_locally() {
     clear();
     let idle = RemoteIndicators::default();
     assert!(!apply_remote(&idle));
+}
+
+#[test]
+fn remote_cursor_only_run_requests_an_erase_frame_when_it_ends() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear();
+    let active = RemoteIndicators {
+        epoch: 73,
+        run_active: true,
+        cursor_agent: Some(AgentTag {
+            color: "#4ECDC4".into(),
+            name: "Mochi".into(),
+        }),
+        ..Default::default()
+    };
+    assert!(apply_remote(&active));
+
+    assert!(apply_remote(&RemoteIndicators {
+        epoch: 73,
+        ..Default::default()
+    }));
+    assert!(snapshot_at_if_active(1_000).is_none());
+    assert_eq!(next_reveal_deadline_ms(1_016), None);
+    clear();
+}
+
+#[test]
+fn changed_remote_epoch_replaces_back_to_back_active_run() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    clear();
+    let first = RemoteIndicators {
+        epoch: 101,
+        run_active: true,
+        cursor_agent: Some(AgentTag {
+            color: "#FF6B6B".into(),
+            name: "Nova".into(),
+        }),
+        nodes: vec![(
+            "old-node".into(),
+            AgentTag {
+                color: "#FF6B6B".into(),
+                name: "Nova".into(),
+            },
+        )],
+        reveals: vec![("old-node".into(), 100)],
+        ..Default::default()
+    };
+    assert!(apply_remote(&first));
+
+    let second = RemoteIndicators {
+        epoch: 102,
+        run_active: true,
+        cursor_agent: Some(AgentTag {
+            color: "#4ECDC4".into(),
+            name: "Mochi".into(),
+        }),
+        nodes: vec![(
+            "new-node".into(),
+            AgentTag {
+                color: "#4ECDC4".into(),
+                name: "Mochi".into(),
+            },
+        )],
+        reveals: vec![("new-node".into(), 200)],
+        ..Default::default()
+    };
+    assert!(apply_remote(&second));
+
+    let snap = snapshot();
+    assert!(snap.run_active);
+    assert!(!snap.nodes.contains_key("old-node"));
+    assert!(!snap.reveals.contains_key("old-node"));
+    assert!(snap.nodes.contains_key("new-node"));
+    assert_eq!(snap.reveals.get("new-node"), Some(&200));
+    assert_eq!(
+        snap.cursor_agent.as_ref().map(|tag| tag.name.as_str()),
+        Some("Mochi")
+    );
+
+    // A delayed inactive response from epoch 101 cannot end epoch 102.
+    assert!(apply_remote(&RemoteIndicators {
+        epoch: 101,
+        ..Default::default()
+    }));
+    assert!(snapshot().run_active);
+
+    assert!(apply_remote(&RemoteIndicators {
+        epoch: 102,
+        ..Default::default()
+    }));
+    assert!(!snapshot().run_active);
+    clear();
+}
+
+#[test]
+fn relay_parser_accepts_legacy_epochless_payload() {
+    let remote = parse_relay_json(r#"{"active":false}"#).expect("legacy relay parses");
+    assert_eq!(remote.epoch, 0);
 }

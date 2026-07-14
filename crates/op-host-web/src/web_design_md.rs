@@ -207,6 +207,7 @@ fn start_generation_pump<C: RepaintContext + 'static>(
             let evt = queue.borrow_mut().pop_front();
             let Some(evt) = evt else { break };
             match evt {
+                AiEvent::AgentIdentity { .. } => {}
                 AiEvent::Delta(text) => markdown.borrow_mut().push_str(&text),
                 AiEvent::Thinking(_) => {}
                 AiEvent::Done => {
@@ -293,10 +294,17 @@ fn build_auto_generate_body(state: &EditorState) -> Option<String> {
     if state.active_children().is_empty() {
         return None;
     }
-    state.chat.selected_model_entry()?;
+    let selected = state.chat.selected_model_entry()?;
+    // The web AI surface exposes built-in providers only. Keep the request
+    // scoped credential path from the deployment-aware web host, while using
+    // provider identity only for an actual built-in catalog entry.
+    if selected.builtin_provider_id.is_none() {
+        return None;
+    }
     let (model, credential) = crate::web_ai_credentials::selected_target(state);
     let user = build_design_md_user_message(state);
     let body = serde_json::json!({
+        "provider": selected.provider.wire_id(),
         "model": model,
         "skills": [],
         "user": user,

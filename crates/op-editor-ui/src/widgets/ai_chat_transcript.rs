@@ -18,15 +18,14 @@ use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::chat::{ChatMessage, ChatRole, ChatTranscriptSelection};
 
 use super::ai_chat_transcript_cache::CanonicalTranscript;
-use super::ai_chat_transcript_completion::{
-    completion_card_rect, paint_completion_card, parse_completion_summary, CompletionSummary,
-};
 use super::ai_chat_transcript_design::{
     applied_design_block_label, extract_design_json_blocks, paint_design_block,
     place_design_blocks, DesignBlock,
 };
 pub(crate) use super::ai_chat_transcript_flow::normalize_narration_markdown;
-use super::ai_chat_transcript_flow::{build_flow, paint_flow, should_interleave};
+use super::ai_chat_transcript_flow::{
+    build_activity_flow, build_flow, paint_flow, should_interleave, should_interleave_activities,
+};
 pub(crate) use super::ai_chat_transcript_hit::{transcript_hit, TranscriptHit};
 use super::ai_chat_transcript_identity::{
     layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
@@ -36,7 +35,8 @@ use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, r
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
 pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
 use super::ai_chat_transcript_steps::{
-    extract_step_blocks, split_design_progress, step_state, strip_tool_call_xml, ParsedStep,
+    activity_step, extract_step_blocks, split_design_progress, step_state, strip_tool_call_xml,
+    ParsedStep,
 };
 use super::ai_chat_transcript_text::char_display_units;
 pub(crate) use super::ai_chat_transcript_text::wrap_units;
@@ -67,15 +67,15 @@ pub(crate) const HEADER_H: f32 = 22.0;
 pub(crate) const MSG_GAP: f32 = 12.0;
 /// Vertical gap between sub-blocks within one message.
 const SUB_GAP: f32 = 4.0;
-/// Height of one design-progress step row (#27 restyle: 48px for comfortable
-/// vertical padding, matching the tool/step card height spec).
-pub(crate) const ACTION_STEP_H: f32 = 48.0;
+/// Height of one design activity header. Matches the compact built-in tool
+/// cards so CLI and in-process design turns share one reading rhythm.
+pub(crate) const ACTION_STEP_H: f32 = 28.0;
 /// Height of one detail line under a progress step.
 pub(crate) const ACTION_DETAIL_LINE_H: f32 = 14.0;
 /// Gap between the progress title row and detail lines.
 pub(crate) const ACTION_DETAIL_GAP: f32 = 4.0;
 /// Vertical gap between compact design-progress rows.
-const ACTION_STEP_GAP: f32 = 4.0;
+pub(crate) const ACTION_STEP_GAP: f32 = 4.0;
 /// Side length of an image thumbnail box.
 const IMG_THUMB: f32 = 60.0;
 /// Gap between image thumbnails.
@@ -107,6 +107,8 @@ pub(crate) struct Collapsible {
 /// step treatment rather than dumping progress into reasoning text.
 pub(crate) struct ActionStep {
     pub rect: Rect,
+    /// Stable slot in the message's combined legacy/activity override list.
+    pub source_index: usize,
     pub label: String,
     pub details: Vec<String>,
     pub expanded: bool,
@@ -125,7 +127,6 @@ pub(crate) struct TextBubble {
     /// user bubble, the typing pill and the selection/copy paths.
     pub rich: Vec<super::ai_chat_transcript_richtext::RichLine>,
     pub typing: bool,
-    pub completion: Option<CompletionSummary>,
 }
 
 /// One fully-placed message in the transcript — absolute rects ready
@@ -137,10 +138,7 @@ pub(crate) struct TranscriptItem {
     pub steps: Vec<ActionStep>,
     pub thinking: Option<Collapsible>,
     pub tools: Option<ToolPanel>,
-    /// Interleaved design-loop flow: narration paragraphs and headerless
-    /// tool panels alternating in document order (both carry absolute
-    /// rects, so paint/hit order is irrelevant). When non-empty, `tools`
-    /// and `bubble` are None — the flow replaces them.
+    /// Interleaved narration and activity/tool panels in document order.
     pub flow_bubbles: Vec<TextBubble>,
     pub flow_panels: Vec<ToolPanel>,
     pub design_blocks: Vec<DesignBlock>,
@@ -191,7 +189,20 @@ pub(crate) fn build_item(
     let mut y = top;
     let (agent_identity, next_y) = layout_agent_identity(msg, x, y, bubble_w);
     y = next_y;
-    let (mut progress_steps, thinking_text) = split_design_progress(&msg.thinking);
+    let (legacy_progress_steps, thinking_text) = split_design_progress(&msg.thinking);
+    let activity_interleave = !is_user && should_interleave_activities(msg);
+    let structured_step_count = if activity_interleave {
+        0
+    } else {
+        msg.activities.len()
+    };
+    let mut progress_steps: Vec<ParsedStep> = if msg.activities.is_empty() {
+        legacy_progress_steps
+    } else if activity_interleave {
+        legacy_progress_steps
+    } else {
+        msg.activities.iter().map(activity_step).collect()
+    };
     let raw_visible_content = if is_user {
         msg.content.clone()
     } else {
@@ -255,11 +266,6 @@ pub(crate) fn build_item(
         unit_budget(bubble_w - 2.0 * BUBBLE_PAD)
     };
     let has_progress_steps = !progress_steps.is_empty();
-    let completion_summary = (!is_user
-        && !msg.tool_calls.iter().any(|c| c.content_offset.is_some()))
-    .then(|| parse_completion_summary(&visible_content))
-    .flatten();
-
     let build_collapsible = |present: bool,
                              collapsed: bool,
                              label: String,
@@ -293,7 +299,10 @@ pub(crate) fn build_item(
     let mut steps = Vec::new();
     let inline_steps: Vec<&ParsedStep> = progress_steps
         .iter()
-        .filter(|step| !step.details.is_empty())
+        .enumerate()
+        .filter_map(|(index, step)| {
+            (index < structured_step_count || !step.details.is_empty()).then_some(step)
+        })
         .collect();
     let total_steps = inline_steps.len();
     for (i, step) in inline_steps.iter().copied().enumerate() {
@@ -314,6 +323,7 @@ pub(crate) fn build_item(
         let step_h = action_step_height(expanded, details.len());
         steps.push(ActionStep {
             rect: Rect::xywh(x, y, bubble_w, step_h),
+            source_index: i,
             label: step.title.clone(),
             details,
             expanded,
@@ -331,9 +341,16 @@ pub(crate) fn build_item(
         &|| wrap_units(&thinking_text, budget),
         &mut y,
     );
-    let interleave = !is_user && should_interleave(msg);
+    let tool_interleave = !is_user && !activity_interleave && should_interleave(msg);
     let (mut flow_bubbles, mut flow_panels) = (Vec::new(), Vec::new());
-    let tools = if interleave {
+    if activity_interleave {
+        let (bubbles, activity_steps, next_y) =
+            build_activity_flow(msg, x, y, bubble_w, budget, steps.len());
+        flow_bubbles = bubbles;
+        steps.extend(activity_steps);
+        y = next_y;
+    }
+    let tools = if tool_interleave {
         // Pencil-style flow: narration paragraphs and per-call verb chips
         // alternate at the stamped content offsets; no grouped
         // "N tool calls" header, nothing collapsed away.
@@ -386,7 +403,8 @@ pub(crate) fn build_item(
         && !has_progress_steps
         && thinking.is_none()
         && tools.is_none()
-        && !interleave;
+        && !activity_interleave
+        && !tool_interleave;
     let bubble = if typing {
         let r = Rect::xywh(
             x,
@@ -400,7 +418,6 @@ pub(crate) fn build_item(
             lines: Vec::new(),
             rich: Vec::new(),
             typing: true,
-            completion: None,
         })
     } else if automated_placeholder {
         let lines = vec![AUTOMATED_ACTION_LABEL.to_string()];
@@ -411,19 +428,8 @@ pub(crate) fn build_item(
             lines,
             rich: Vec::new(),
             typing: false,
-            completion: None,
         })
-    } else if let Some(summary) = completion_summary {
-        let r = completion_card_rect(x, y, bubble_w);
-        y += r.size.y;
-        Some(TextBubble {
-            rect: r,
-            lines: Vec::new(),
-            rich: Vec::new(),
-            typing: false,
-            completion: Some(summary),
-        })
-    } else if !visible_content.is_empty() && !interleave {
+    } else if !visible_content.is_empty() && !activity_interleave && !tool_interleave {
         // The user's own words are plain; the assistant's narration keeps its
         // markdown typography (bold labels, code chips, bulleted lists).
         let (lines, rich, h) = if is_user {
@@ -445,7 +451,6 @@ pub(crate) fn build_item(
             lines,
             rich,
             typing: false,
-            completion: None,
         })
     } else {
         None
@@ -490,7 +495,7 @@ pub(crate) fn build_item(
     )
 }
 
-fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
+pub(crate) fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
     if !expanded || detail_count == 0 {
         ACTION_STEP_H
     } else {
@@ -608,13 +613,13 @@ pub(crate) fn paint_transcript_with_selection(
             paint_agent_identity(cx, theme, identity);
         }
         for step in &item.steps {
-            paint_action_step(cx, theme, step);
+            paint_action_step(cx, theme, step, now_ms);
         }
         if let Some(block) = &item.thinking {
             paint_collapsible(cx, theme, block);
         }
         if let Some(block) = &item.tools {
-            paint_tool_panel(cx, theme, block);
+            paint_tool_panel(cx, theme, block, now_ms);
         }
         paint_flow(cx, theme, item, now_ms);
         for (block_index, block) in item.design_blocks.iter().enumerate() {
@@ -651,8 +656,6 @@ pub(crate) fn paint_transcript_with_selection(
                     bubble.rect.origin.y + bubble.rect.size.y / 2.0,
                     now_ms,
                 );
-            } else if let Some(summary) = bubble.completion {
-                paint_completion_card(cx, theme, bubble.rect, summary);
             } else {
                 // Clip to the bubble — over-long tokens stay inside.
                 cx.backend.save();

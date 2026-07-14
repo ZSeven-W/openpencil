@@ -317,6 +317,7 @@ pub(crate) fn pump_sub_agents(
             let epoch = agent_indicators::begin_with_root_seed_hint(subs[*active].root_seed_mobile);
             let initial_frame_ids = collect_top_level_frame_ids(host.editor_state());
             let identity = subs[*active].identity.clone();
+            agent_indicators::confirm_cursor_agent(epoch, &identity.color, &identity.name);
             subs[*active].indicator = Some(DesignLoopIndicator {
                 epoch,
                 color: identity.color.clone(),

@@ -542,6 +542,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.openCode" => "75+ の LLM プロバイダー",
         "settings.provider.githubCopilot" => "GitHub Copilot モデル",
         "settings.provider.geminiCli" => "Google Gemini モデル",
+        "settings.provider.antigravity" => "Antigravity モデル",
+        "settings.provider.grokBuild" => "Grok Build モデル",
         "settings.system.title" => "システム",
         "settings.system.autoUpdate" => "自動更新",
         "settings.system.upToDate" => "最新です",

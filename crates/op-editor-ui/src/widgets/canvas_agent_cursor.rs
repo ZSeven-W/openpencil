@@ -15,21 +15,15 @@
 
 use std::collections::HashMap;
 
+use super::canvas_agent_cursor_motion::{cursor_kinematics, parked_cursor_position, Waypoint};
 use crate::layout_scene::SceneNode;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::agent_indicators::{AgentIndicators, AgentTag};
 
-/// Longest single flight; longer waypoint gaps depart late, arrive on time.
-const MAX_FLIGHT_MS: u64 = 350;
 /// Minimum time between cursor stops; denser waypoints collapse to the
 /// last placement in the dwell window.
 const DWELL_MS: u64 = 280;
-/// Fade-in slide duration before a queue's first waypoint.
-const ENTRY_MS: u64 = 250;
-/// Where the entry slide starts, relative to the first waypoint (screen px).
-const ENTRY_OFFSET_X: f32 = -28.0;
-const ENTRY_OFFSET_Y: f32 = -20.0;
 /// Tiny standalone leaves still reveal, but the cursor does not chase
 /// them. The threshold is in document-space square pixels.
 const MIN_STANDALONE_WAYPOINT_AREA: f32 = 2_000.0;
@@ -280,29 +274,6 @@ const ROUNDED_COLLAR: [(f32, f32); 5] = [
     (8.38, 1.22),
 ];
 
-/// A scheduled placement the cursor must reach: one generated node's
-/// reveal start, at that node's centre, plus the node's screen rect for
-/// the current-element breathing border.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Waypoint {
-    pub start_ms: u64,
-    pub pos: Point2D,
-    pub rect: Rect,
-}
-
-/// Frame-local cursor pose derived from a waypoint queue.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Kinematics {
-    pub pos: Point2D,
-    /// 0..=1 opacity (entry fade-in only — a live run never fades out;
-    /// the whole overlay disappears together when the run's indicators
-    /// clear).
-    pub alpha: f32,
-    /// Index of the last waypoint whose start has passed — the element
-    /// the cursor is currently working on. `None` during entry.
-    pub current: Option<usize>,
-}
-
 /// Parse a `#RRGGBB` hex string into an opaque [`Color`]. Returns `None`
 /// for malformed / non-ASCII input.
 pub(crate) fn parse_hex(hex: &str) -> Option<Color> {
@@ -314,91 +285,6 @@ pub(crate) fn parse_hex(hex: &str) -> Option<Color> {
     let g = u8::from_str_radix(&h[2..4], 16).ok()? as f32 / 255.0;
     let b = u8::from_str_radix(&h[4..6], 16).ok()? as f32 / 255.0;
     Some(Color { r, g, b, a: 1.0 })
-}
-
-pub(crate) fn ease_out_cubic(t: f32) -> f32 {
-    let u = 1.0 - t.clamp(0.0, 1.0);
-    1.0 - u * u * u
-}
-
-/// Smoothstep-style ease for flights: slow out of the park, fast
-/// mid-flight, soft landing. Chained short hops read as deliberate
-/// dart-dart-dart instead of a constant-speed crawl.
-pub(crate) fn ease_in_out_cubic(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    if t < 0.5 {
-        4.0 * t * t * t
-    } else {
-        let u = -2.0 * t + 2.0;
-        1.0 - u * u * u / 2.0
-    }
-}
-
-fn lerp(a: Point2D, b: Point2D, t: f32) -> Point2D {
-    Point2D::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
-}
-
-/// Derive the cursor pose for one agent's placement queue at `now_ms`.
-/// `waypoints` must be sorted by `start_ms`. Equal-start placements
-/// coalesce: at their shared start instant the cursor parks on the last
-/// one in the caller's sort order (start_ms, then node id). `None` =
-/// cursor not shown (before the entry window opens).
-pub(crate) fn cursor_kinematics(waypoints: &[Waypoint], now_ms: u64) -> Option<Kinematics> {
-    if waypoints.is_empty() {
-        return None;
-    }
-    let next_idx = waypoints
-        .iter()
-        .position(|w| w.start_ms > now_ms)
-        .unwrap_or(waypoints.len());
-    if next_idx == 0 {
-        // Entry: slide + fade toward the queue's first waypoint.
-        let first = &waypoints[0];
-        let entry_start = first.start_ms.saturating_sub(ENTRY_MS);
-        if now_ms < entry_start {
-            return None;
-        }
-        let t = ((now_ms - entry_start) as f32 / ENTRY_MS as f32).clamp(0.0, 1.0);
-        let from = Point2D::new(first.pos.x + ENTRY_OFFSET_X, first.pos.y + ENTRY_OFFSET_Y);
-        return Some(Kinematics {
-            pos: lerp(from, first.pos, ease_out_cubic(t)),
-            alpha: t,
-            current: None,
-        });
-    }
-    let current = Some(next_idx - 1);
-    let prev = &waypoints[next_idx - 1];
-    if next_idx == waypoints.len() {
-        // Queue exhausted: park on the last placement until the next
-        // streamed chunk schedules more work (or the run ends).
-        return Some(Kinematics {
-            pos: prev.pos,
-            alpha: 1.0,
-            current,
-        });
-    }
-    let next = &waypoints[next_idx];
-    // Flight occupies at most 70% of the gap so even densely-staggered
-    // hops keep a micro-dwell before departure — pause, then an eased
-    // dart, instead of continuous constant-speed crawling.
-    let gap = next.start_ms.saturating_sub(prev.start_ms).max(1);
-    let flight = MAX_FLIGHT_MS.min((gap as f64 * 0.7) as u64).max(1);
-    let depart = prev.start_ms.max(next.start_ms.saturating_sub(flight));
-    if now_ms < depart {
-        // Parked, waiting for a distant slot.
-        return Some(Kinematics {
-            pos: prev.pos,
-            alpha: 1.0,
-            current,
-        });
-    }
-    let window = next.start_ms.saturating_sub(depart).max(1);
-    let t = ((now_ms - depart) as f32 / window as f32).clamp(0.0, 1.0);
-    Some(Kinematics {
-        pos: lerp(prev.pos, next.pos, ease_in_out_cubic(t)),
-        alpha: 1.0,
-        current,
-    })
 }
 
 /// Placements grouped by owning agent (`None` key = untagged fallback);
@@ -541,7 +427,25 @@ pub(crate) fn cursor_sprites(
     zoom: f32,
     now_ms: u64,
 ) -> Vec<CursorSprite> {
-    if indicators.reveals.is_empty() {
+    cursor_sprites_with_idle_anchor(roots, indicators, viewport_origin, zoom, now_ms, None)
+}
+
+/// Resolve cursors with an optional viewport-centre idle anchor.
+///
+/// Production paint always supplies the centre. The `None` wrapper above
+/// keeps geometry-only callers deterministic while preserving the historic
+/// "no reveal, no cursor" contract outside an actual canvas viewport.
+pub(crate) fn cursor_sprites_with_idle_anchor(
+    roots: &[SceneNode],
+    indicators: &AgentIndicators,
+    viewport_origin: Point2D,
+    zoom: f32,
+    now_ms: u64,
+    idle_anchor: Option<Point2D>,
+) -> Vec<CursorSprite> {
+    let confirmed = indicators.cursor_agent.as_ref();
+    let live_idle_cursor = indicators.run_active && confirmed.is_some() && idle_anchor.is_some();
+    if indicators.reveals.is_empty() && !live_idle_cursor {
         return Vec::new();
     }
     let mut remaining = indicators.reveals.len();
@@ -560,6 +464,11 @@ pub(crate) fn cursor_sprites(
     // Group placements per owning agent; key `None` = untagged fallback.
     let mut groups: AgentGroups = AgentGroups::new();
     for (tag, id, wp) in tagged {
+        // The transcript-confirmed run identity is authoritative for this
+        // single-agent epoch. Node ownership can arrive from the orchestrator
+        // under an earlier provisional persona; preferring it would split one
+        // turn into two differently named cursors.
+        let tag = confirmed.cloned().or(tag);
         let key = tag.as_ref().map(|t| (t.color.clone(), t.name.clone()));
         groups
             .entry(key)
@@ -567,18 +476,41 @@ pub(crate) fn cursor_sprites(
             .1
             .push((id, wp));
     }
+    if let (Some(tag), Some(_)) = (confirmed, idle_anchor) {
+        let key = Some((tag.color.clone(), tag.name.clone()));
+        groups
+            .entry(key)
+            .or_insert_with(|| (Some(tag.clone()), Vec::new()));
+    }
     // Deterministic order for the sprite output: `None` (untagged) first,
     // then tagged groups sorted by their `(color, name)` key — sprite
     // order must not depend on HashMap iteration order.
     let mut ordered: Vec<_> = groups.into_iter().collect();
     ordered.sort_by(|(a, _), (b, _)| a.cmp(b));
     let mut sprites = Vec::new();
-    for (_, (tag, mut placements)) in ordered {
+    for (key, (tag, mut placements)) in ordered {
         placements.sort_by(|a, b| a.1.start_ms.cmp(&b.1.start_ms).then_with(|| a.0.cmp(&b.0)));
-        let waypoints: Vec<Waypoint> = coalesce_dwell_waypoints(placements)
+        let mut waypoints: Vec<Waypoint> = coalesce_dwell_waypoints(placements)
             .into_iter()
             .map(|(_, wp)| wp)
             .collect();
+        let confirmed_key = confirmed.map(|agent| (agent.color.clone(), agent.name.clone()));
+        let has_idle_anchor = key == confirmed_key && idle_anchor.is_some();
+        if has_idle_anchor {
+            // Start at t=0 (the host's monotonic clock origin), so once the
+            // identity is confirmed the cursor is immediately parked at the
+            // visible viewport centre. A future first reveal becomes the next
+            // waypoint, producing a real centre→node flight rather than the
+            // old first-node entry pop.
+            waypoints.insert(
+                0,
+                Waypoint {
+                    start_ms: 0,
+                    pos: idle_anchor.expect("checked above"),
+                    rect: Rect::xywh(0.0, 0.0, 0.0, 0.0),
+                },
+            );
+        }
         let Some(kin) = cursor_kinematics(&waypoints, now_ms) else {
             continue;
         };
@@ -586,12 +518,22 @@ pub(crate) fn cursor_sprites(
             .as_ref()
             .and_then(|t| parse_hex(&t.color))
             .unwrap_or(FALLBACK_COLOR);
+        let pos = if indicators.run_active {
+            kin.parked
+                .map(|parked| parked_cursor_position(kin.pos, parked, now_ms))
+                .unwrap_or(kin.pos)
+        } else {
+            kin.pos
+        };
         sprites.push(CursorSprite {
-            pos: kin.pos,
+            pos,
             alpha: kin.alpha,
             color,
             name: tag.map(|t| t.name),
-            current_rect: kin.current.map(|i| waypoints[i].rect),
+            current_rect: kin.current.and_then(|i| {
+                let rect = waypoints[i].rect;
+                (rect.size.x > 0.0 && rect.size.y > 0.0).then_some(rect)
+            }),
         });
     }
     sprites
@@ -608,9 +550,17 @@ pub(crate) fn paint_agent_cursors(
     now_ms: u64,
     indicators: &AgentIndicators,
     style: op_editor_core::PencilCursorStyle,
+    viewport_center: Point2D,
 ) {
     let silhouette = silhouette_for(style);
-    for sprite in cursor_sprites(roots, indicators, viewport_origin, zoom, now_ms) {
+    for sprite in cursor_sprites_with_idle_anchor(
+        roots,
+        indicators,
+        viewport_origin,
+        zoom,
+        now_ms,
+        Some(viewport_center),
+    ) {
         paint_sprite(cx, &sprite, now_ms, &silhouette);
     }
 }

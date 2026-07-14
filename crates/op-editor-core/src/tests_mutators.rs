@@ -643,7 +643,7 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
         "gpt-5.5",
         "GPT-5.5",
     )];
-    s.editor_ui.agent_settings.connected = [false, true, false, false, false];
+    s.editor_ui.agent_settings.connected = [false, true, false, false, false, false, false];
     s.editor_ui.agent_settings.provider_connection[1].phase =
         crate::agent_settings::ProviderConnectPhase::Connected;
     s.editor_ui.chat_selected_agent = 0;
@@ -658,7 +658,7 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
 fn rebuild_chat_models_does_not_invent_cli_models_without_discovery() {
     let mut s = sample();
     s.chat.discovered_models.clear();
-    s.editor_ui.agent_settings.connected = [false, true, false, false, false];
+    s.editor_ui.agent_settings.connected = [false, true, false, false, false, false, false];
 
     s.rebuild_chat_models();
 

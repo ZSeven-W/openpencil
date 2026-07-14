@@ -36,6 +36,10 @@ pub enum CliName {
     Codex,
     /// OpenCode AI's CLI (HTTP server mode).
     OpenCode,
+    /// Google's Antigravity coding agent CLI (subprocess IPC).
+    Antigravity,
+    /// xAI's Grok Build coding agent CLI (subprocess IPC).
+    GrokBuild,
 }
 
 impl CliName {
@@ -46,6 +50,8 @@ impl CliName {
             CliName::Copilot => "GitHub Copilot",
             CliName::Codex => "Codex",
             CliName::OpenCode => "OpenCode",
+            CliName::Antigravity => "Antigravity",
+            CliName::GrokBuild => "Grok Build",
         }
     }
     /// Default binary name on PATH. Users override via
@@ -61,6 +67,8 @@ impl CliName {
             CliName::Copilot => "copilot",
             CliName::Codex => "codex",
             CliName::OpenCode => "opencode",
+            CliName::Antigravity => "agy",
+            CliName::GrokBuild => "grok",
         }
     }
     /// Which backend transport this CLI uses. Mirrors the table in
@@ -68,9 +76,11 @@ impl CliName {
     /// Claude/Gemini/Copilot = subprocess IPC; Codex/OpenCode = HTTP server.
     pub fn backend(self) -> ChatProviderKind {
         match self {
-            CliName::ClaudeCode | CliName::Gemini | CliName::Copilot => {
-                ChatProviderKind::Subprocess(self)
-            }
+            CliName::ClaudeCode
+            | CliName::Gemini
+            | CliName::Copilot
+            | CliName::Antigravity
+            | CliName::GrokBuild => ChatProviderKind::Subprocess(self),
             CliName::Codex | CliName::OpenCode => ChatProviderKind::HttpServer(self),
         }
     }
@@ -398,6 +408,14 @@ mod tests {
             ChatProviderKind::Subprocess(_)
         ));
         assert!(matches!(
+            CliName::Antigravity.backend(),
+            ChatProviderKind::Subprocess(_)
+        ));
+        assert!(matches!(
+            CliName::GrokBuild.backend(),
+            ChatProviderKind::Subprocess(_)
+        ));
+        assert!(matches!(
             CliName::Codex.backend(),
             ChatProviderKind::HttpServer(_)
         ));
@@ -412,6 +430,8 @@ mod tests {
         assert_eq!(CliName::ClaudeCode.default_binary(), "claude");
         assert_eq!(CliName::Codex.default_binary(), "codex");
         assert_eq!(CliName::OpenCode.default_binary(), "opencode");
+        assert_eq!(CliName::Antigravity.default_binary(), "agy");
+        assert_eq!(CliName::GrokBuild.default_binary(), "grok");
     }
 
     #[test]
@@ -459,6 +479,8 @@ mod tests {
     fn cli_label_is_human_readable() {
         assert_eq!(CliName::ClaudeCode.label(), "Claude Code");
         assert_eq!(CliName::OpenCode.label(), "OpenCode");
+        assert_eq!(CliName::Antigravity.label(), "Antigravity");
+        assert_eq!(CliName::GrokBuild.label(), "Grok Build");
     }
 
     #[test]

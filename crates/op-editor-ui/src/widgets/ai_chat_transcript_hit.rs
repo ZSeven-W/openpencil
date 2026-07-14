@@ -60,10 +60,13 @@ pub(crate) fn transcript_hit(
                 }
             }
         }
-        for (step_index, step) in item.steps.iter().enumerate() {
+        for step in &item.steps {
             // Only the header band toggles — clicking a detail line must not
-            // collapse. Every rendered step has details (empty ones are
-            // filtered out at build time), so each is meaningfully collapsible.
+            // collapse. Detail-less structured activities are status rows, not
+            // disclosure controls, so they deliberately have no hit target.
+            if step.details.is_empty() {
+                continue;
+            }
             let header = Rect::xywh(
                 step.rect.origin.x,
                 step.rect.origin.y,
@@ -73,7 +76,7 @@ pub(crate) fn transcript_hit(
             if (header).contains(p) {
                 return Some(TranscriptHit::SetActionStepExpanded(
                     item.msg_index,
-                    step_index,
+                    step.source_index,
                     !step.expanded,
                 ));
             }

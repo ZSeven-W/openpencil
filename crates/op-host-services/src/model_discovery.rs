@@ -20,79 +20,13 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use op_ai::agent_settings_state::AgentProvider;
 use op_ai::chat_models::ModelEntry;
 
-/// Background model-discovery probe. [`discover_models`] reads a
-/// cache file and spawns a subprocess (`opencode models`, ~1 s),
-/// so it must not block the event loop — the probe runs it on a
-/// worker thread and the host drains the result on a later frame.
-pub struct ModelProbe {
-    rx: Option<Receiver<Vec<ModelEntry>>>,
-}
-
-impl ModelProbe {
-    /// Idle probe with no worker attached. Used by tests and by any
-    /// future caller that wants to opt out of startup discovery.
-    pub fn idle() -> Self {
-        Self { rx: None }
-    }
-
-    /// Spawn the discovery worker. Returns immediately.
-    pub fn spawn() -> Self {
-        let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = tx.send(discover_models());
-        });
-        Self { rx: Some(rx) }
-    }
-
-    /// Whether discovery is still in flight. The desktop runner uses
-    /// this to keep waking the idle event loop until the worker result
-    /// is drained into the chat model catalog.
-    pub fn is_pending(&self) -> bool {
-        self.rx.is_some()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn pending_for_test() -> (Self, mpsc::Sender<Vec<ModelEntry>>) {
-        let (tx, rx) = mpsc::channel();
-        (Self { rx: Some(rx) }, tx)
-    }
-
-    /// If discovery has finished, move its models into the caller's
-    /// `EditorState.chat` and return `true` (the GUI caller then marks
-    /// the state dirty). Idempotent — the receiver is dropped after the
-    /// first drain so later calls are cheap no-ops.
-    pub fn poll_into(&mut self, state: &mut op_editor_core::EditorState) -> bool {
-        let Some(rx) = self.rx.as_ref() else {
-            return false;
-        };
-        match rx.try_recv() {
-            Ok(models) => {
-                // The discovery worker emits shell-core `ModelEntry`s;
-                // translate each into the op-editor-core type the
-                // host's `EditorState.chat` carries. The translated
-                // list is the *full* catalog (every installed CLI);
-                // `rebuild_chat_models` then narrows it to the
-                // providers the user has connected in Settings.
-                let es = state;
-                es.chat.discovered_models = models.into_iter().map(model_entry_to_ec).collect();
-                es.rebuild_chat_models();
-                self.rx = None;
-                true
-            }
-            Err(TryRecvError::Empty) => false,
-            Err(TryRecvError::Disconnected) => {
-                self.rx = None;
-                false
-            }
-        }
-    }
-}
+pub use crate::model_probe::ModelProbe;
 
 /// Translate a shell-core `ModelEntry` into op-editor-core's.
 pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
@@ -103,6 +37,8 @@ pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
         ScP::OpenCode => op_editor_core::AgentProvider::OpenCode,
         ScP::GithubCopilot => op_editor_core::AgentProvider::GithubCopilot,
         ScP::GeminiCli => op_editor_core::AgentProvider::GeminiCli,
+        ScP::Antigravity => op_editor_core::AgentProvider::Antigravity,
+        ScP::GrokBuild => op_editor_core::AgentProvider::GrokBuild,
     };
     op_editor_core::ModelEntry::new(provider, m.value, m.display_name)
 }
@@ -111,22 +47,39 @@ pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
 /// provider-grouped model list. Safe to call off the UI thread —
 /// it only reads files and spawns short-lived subprocesses.
 pub fn discover_models() -> Vec<ModelEntry> {
-    let mut out = Vec::new();
-    for provider in discovery_provider_order() {
-        match provider {
-            AgentProvider::ClaudeCode => out.extend(discover_claude()),
-            AgentProvider::CodexCli => out.extend(discover_codex()),
-            AgentProvider::OpenCode => out.extend(discover_opencode()),
-            AgentProvider::GithubCopilot => out.extend(discover_copilot()),
-            AgentProvider::GeminiCli => out.extend(discover_gemini()),
-        }
+    discover_models_for_connected([true; 7])
+}
+
+/// Discover a startup-selected provider set concurrently while preserving
+/// the stable Settings/model-picker provider order in the returned catalog.
+pub fn discover_models_for_connected(connected: [bool; 7]) -> Vec<ModelEntry> {
+    let workers: Vec<_> = discovery_provider_order()
+        .into_iter()
+        .enumerate()
+        .filter(|(index, _)| connected[*index])
+        .map(|(_, provider)| std::thread::spawn(move || discover_provider(provider)))
+        .collect();
+    workers
+        .into_iter()
+        .flat_map(|worker| worker.join().unwrap_or_default())
+        .collect()
+}
+
+fn discover_provider(provider: AgentProvider) -> Vec<ModelEntry> {
+    match provider {
+        AgentProvider::ClaudeCode => discover_claude(),
+        AgentProvider::CodexCli => discover_codex(),
+        AgentProvider::OpenCode => discover_opencode(),
+        AgentProvider::GithubCopilot => discover_copilot(),
+        AgentProvider::GeminiCli => discover_gemini(),
+        AgentProvider::Antigravity => crate::cli_model_discovery::discover_antigravity(),
+        AgentProvider::GrokBuild => crate::cli_model_discovery::discover_grok(),
     }
-    out
 }
 
 /// Provider probe order mirrors TS `DEFAULT_PROVIDERS`, which is
 /// also the core `AgentProvider::ALL` order used by Settings.
-fn discovery_provider_order() -> [AgentProvider; 5] {
+fn discovery_provider_order() -> [AgentProvider; 7] {
     AgentProvider::ALL
 }
 
@@ -171,14 +124,12 @@ pub fn resolve_cli(name: &str) -> Option<PathBuf> {
 /// Standard user-local / package-manager bin directories — the TS
 /// `posixUserBinDirs()` list plus the opencode/npm-global extras the
 /// per-CLI TS resolvers add, applied uniformly (a superset never
-/// hides an install). Windows mirrors the npm-global dir candidates.
+/// hides an install). Windows also covers npm-global plus the official
+/// Antigravity and Grok Build installer directories.
 fn user_bin_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     if cfg!(windows) {
-        if let Some(appdata) = std::env::var_os("APPDATA") {
-            dirs.push(PathBuf::from(appdata).join("npm"));
-        }
-        return dirs;
+        return crate::cli_resolver_windows::user_bin_dirs();
     }
     let Some(home) = dirs::home_dir() else {
         return dirs;

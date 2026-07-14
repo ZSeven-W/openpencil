@@ -542,6 +542,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.openCode" => "ผู้ให้บริการ LLM มากกว่า 75 ราย",
         "settings.provider.githubCopilot" => "โมเดล GitHub Copilot",
         "settings.provider.geminiCli" => "โมเดล Google Gemini",
+        "settings.provider.antigravity" => "โมเดล Antigravity",
+        "settings.provider.grokBuild" => "โมเดล Grok Build",
         "settings.system.title" => "ระบบ",
         "settings.system.autoUpdate" => "อัปเดตอัตโนมัติ",
         "settings.system.upToDate" => "เป็นเวอร์ชันล่าสุด",

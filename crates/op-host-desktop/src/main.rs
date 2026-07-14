@@ -46,6 +46,7 @@ mod keyboard_input;
 mod kit_io;
 mod kit_persistence;
 mod macos_app;
+mod mcp_config_io;
 mod mcp_integrations;
 mod mcp_port_file;
 mod mcp_runtime;
@@ -234,7 +235,7 @@ struct DesktopApp {
     last_saved_pencil_cursor: Option<op_editor_core::PencilCursorStyle>,
     /// Last persisted `connected` flags — any change (Connect landing,
     /// Disconnect press in the widget layer) writes through to the store.
-    last_saved_connections: Option<[bool; 5]>,
+    last_saved_connections: Option<[bool; 7]>,
     /// In-flight ACP-agent connect probe (Settings → Agents → ACP
     /// Connect), drained by `drain_acp_agent_connect`.
     acp_agent_connect_job: Option<acp_agent_probe_host::AcpAgentConnectJob>,
@@ -366,7 +367,8 @@ impl DesktopApp {
         let model_probe = if cfg!(test) {
             op_host_services::model_discovery::ModelProbe::idle()
         } else {
-            op_host_services::model_discovery::ModelProbe::spawn()
+            let connected = host.editor_state().editor_ui.agent_settings.connected;
+            op_host_services::model_discovery::ModelProbe::spawn_for_connected(connected)
         };
         Self {
             window: None,

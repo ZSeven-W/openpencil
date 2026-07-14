@@ -1,10 +1,11 @@
 //! Radar-scan overlay for empty sections inside actively generating frames.
 
-use crate::layout_scene::{NodeKind, SceneNode};
+use super::canvas_viewport_paint::REVEAL_WIREFRAME_MS;
+use crate::layout_scene::{Effect, NodeKind, SceneNode};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use op_editor_core::agent_indicators::AgentIndicators;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 // Calm sweep — Pencil's placeholder band reads unhurried; a fast strobe
 // draws the eye away from the content that IS landing.
@@ -35,7 +36,179 @@ pub(super) fn is_placeholder_section(node: &SceneNode) -> bool {
     node.kind == NodeKind::Frame && node.children.is_empty()
 }
 
-/// The two generation states an empty shell can be in.
+/// A batch can populate a formerly-empty shell before any of its children
+/// are allowed to paint. Keep that shell visually "empty" for the existing
+/// reveal runway so a fast batch still shows part of the radar sweep.
+pub(super) fn is_pending_filled_section(
+    node: &SceneNode,
+    reveals: &HashMap<String, u64>,
+    now_ms: u64,
+) -> bool {
+    if node.kind != NodeKind::Frame || node.children.is_empty() {
+        return false;
+    }
+    // A newly-created shell that has not started its own reveal is itself
+    // hidden by the reveal painter; its nearest already-visible ancestor owns
+    // the placeholder treatment until this shell materialises.
+    if reveals
+        .get(&node.id)
+        .is_some_and(|started_at| *started_at > now_ms)
+    {
+        return false;
+    }
+
+    children_have_no_visible_material(&node.children, reveals, now_ms)
+}
+
+/// Transparent wrappers are not always assigned their own reveal slot. A
+/// subtree remains visually empty while every branch is either still pending
+/// or paints no pixels of its own; the first genuinely visible branch prevents
+/// the shell from washing over finished work.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SubtreeMaterialization {
+    Pending,
+    Visible,
+    Empty,
+}
+
+fn children_have_no_visible_material(
+    children: &[SceneNode],
+    reveals: &HashMap<String, u64>,
+    now_ms: u64,
+) -> bool {
+    for child in children.iter().filter(|child| !child.hidden) {
+        match subtree_materialization(child, reveals, now_ms) {
+            SubtreeMaterialization::Visible => return false,
+            SubtreeMaterialization::Pending | SubtreeMaterialization::Empty => {}
+        }
+    }
+    true
+}
+
+fn subtree_materialization(
+    node: &SceneNode,
+    reveals: &HashMap<String, u64>,
+    now_ms: u64,
+) -> SubtreeMaterialization {
+    if node.hidden {
+        return SubtreeMaterialization::Empty;
+    }
+
+    // A pending reveal gates the whole subtree in `paint_node_inner`, even
+    // when this node is a zero-sized wrapper around otherwise-visible
+    // descendants. Once the reveal starts, a bounded node's wireframe is the
+    // visible handoff from the parent radar. Geometry alone is not enough
+    // after that beat: transparent layout containers must keep recursing.
+    if let Some(started_at) = reveals.get(&node.id) {
+        if *started_at > now_ms {
+            return SubtreeMaterialization::Pending;
+        }
+        let elapsed_ms = now_ms.saturating_sub(*started_at);
+        if elapsed_ms < REVEAL_WIREFRAME_MS && node_has_extent(node) {
+            return SubtreeMaterialization::Visible;
+        }
+    }
+
+    if node_paints_own_visual(node) {
+        return SubtreeMaterialization::Visible;
+    }
+
+    let mut saw_pending = false;
+    for child in node.children.iter().filter(|child| !child.hidden) {
+        match subtree_materialization(child, reveals, now_ms) {
+            SubtreeMaterialization::Pending => saw_pending = true,
+            SubtreeMaterialization::Visible => return SubtreeMaterialization::Visible,
+            SubtreeMaterialization::Empty => {}
+        }
+    }
+    if saw_pending {
+        SubtreeMaterialization::Pending
+    } else {
+        SubtreeMaterialization::Empty
+    }
+}
+
+fn node_has_extent(node: &SceneNode) -> bool {
+    node.bounds.size.x > 0.0 && node.bounds.size.y > 0.0
+}
+
+/// Pure counterpart to the per-kind canvas painter's own-pixel branches.
+/// Layout bounds do not imply pixels: Frames, Groups, and Rectangles are
+/// frequently transparent wrappers whose only visible material is a child.
+fn node_paints_own_visual(node: &SceneNode) -> bool {
+    if !node_has_extent(node) {
+        return false;
+    }
+
+    let styled_box = node.image_src.is_some()
+        || node.fill.is_some()
+        || node.gradient.is_some()
+        || node.shader.is_some()
+        || node.stroke.is_some();
+    let casts_outer_shadow = node
+        .effects
+        .iter()
+        .any(|effect| matches!(effect, Effect::DropShadow(shadow) if !shadow.inner));
+    let paints_widget = node.widget.as_ref().is_some_and(|widget| {
+        matches!(
+            widget.kind.as_str(),
+            "switch"
+                | "checkbox"
+                | "slider"
+                | "progress"
+                | "select"
+                | "radio_group"
+                | "text_input"
+                | "text_area"
+                | "number_input"
+                | "tabs"
+        )
+    });
+
+    match &node.kind {
+        NodeKind::Frame | NodeKind::Rect => styled_box || casts_outer_shadow || paints_widget,
+        NodeKind::Group => false,
+        NodeKind::Ellipse => {
+            node.image_src.is_some()
+                || node.fill.is_some()
+                || node.stroke.is_some()
+                || casts_outer_shadow
+        }
+        NodeKind::Polygon => {
+            node.image_src.is_some() || node.fill.is_some() || node.stroke.is_some()
+        }
+        // The painter supplies a default black stroke when no explicit line
+        // paint is authored.
+        NodeKind::Line => true,
+        NodeKind::Path => {
+            if node
+                .svg_path
+                .as_deref()
+                .is_some_and(|path| !path.is_empty())
+            {
+                node.fill.is_some()
+                    || node.gradient.is_some()
+                    || node.stroke.is_some()
+                    || node
+                        .effects
+                        .iter()
+                        .any(|effect| matches!(effect, Effect::DropShadow(shadow) if shadow.inner))
+            } else {
+                node.points.len() >= 2
+            }
+        }
+        NodeKind::Text => {
+            paints_widget || node.text.as_deref().is_some_and(|text| !text.is_empty())
+        }
+        NodeKind::Other(tag) if tag == "icon_font" => node
+            .text
+            .as_deref()
+            .is_some_and(|glyph_name| !glyph_name.is_empty()),
+        NodeKind::Other(_) => false,
+    }
+}
+
+/// The two generation states a visually empty shell can be in.
 pub(super) struct GenerationPaintSets {
     /// The shell being worked RIGHT NOW (first empty in fill order) plus all
     /// worked content: the full radar treatment — wash + sweeping band.
@@ -50,8 +223,16 @@ pub(super) struct GenerationPaintSets {
 pub(super) fn generating_paint_sets(
     roots: &[SceneNode],
     indicators: Option<&AgentIndicators>,
+    now_ms: u64,
 ) -> Option<GenerationPaintSets> {
-    let indicators = indicators.filter(|value| value.run_active && !value.frames.is_empty())?;
+    let indicators = indicators.filter(|value| {
+        !value.frames.is_empty()
+            && (value.run_active
+                || value
+                    .reveals
+                    .values()
+                    .any(|started_at| *started_at > now_ms))
+    })?;
     let mut sets = GenerationPaintSets {
         scan: HashSet::new(),
         queued: HashSet::new(),
@@ -60,16 +241,28 @@ pub(super) fn generating_paint_sets(
         if indicators.frames.contains_key(&root.id) {
             // Per generating root (Team mode runs several concurrently).
             let mut deck_taken = false;
-            collect_descendants(&root.children, &mut sets, &mut deck_taken);
+            collect_descendants(
+                &root.children,
+                &mut sets,
+                &mut deck_taken,
+                &indicators.reveals,
+                now_ms,
+            );
         }
     }
     Some(sets)
 }
 
-fn collect_descendants(nodes: &[SceneNode], sets: &mut GenerationPaintSets, deck_taken: &mut bool) {
-    // Work-order gate: across the WHOLE generating root, the FIRST empty
-    // shell in document (pre-order) position is "on deck" and gets the active
-    // radar; every later empty shell still SHOWS its skeleton, but as a quiet
+fn collect_descendants(
+    nodes: &[SceneNode],
+    sets: &mut GenerationPaintSets,
+    deck_taken: &mut bool,
+    reveals: &HashMap<String, u64>,
+    now_ms: u64,
+) {
+    // Work-order gate: across the WHOLE generating root, the FIRST visually
+    // empty shell in document (pre-order) position is "on deck" and gets the
+    // active radar; every later shell still SHOWS its skeleton, but as a quiet
     // wireframe. Two earlier shapes were both wrong: a per-container gate lit
     // the root's trailing bottom-nav while the model was filling the header
     // nested in the content wrapper, and suppressing the queue entirely left
@@ -77,7 +270,8 @@ fn collect_descendants(nodes: &[SceneNode], sets: &mut GenerationPaintSets, deck
     // the deck is global — and exactly one shell may look active.
     for node in nodes {
         let empty_frame = node.kind == NodeKind::Frame && node.children.is_empty();
-        if empty_frame {
+        let pending_filled = is_pending_filled_section(node, reveals, now_ms);
+        if empty_frame || pending_filled {
             if !*deck_taken {
                 sets.scan.insert(node.id.clone());
             } else {
@@ -87,7 +281,7 @@ fn collect_descendants(nodes: &[SceneNode], sets: &mut GenerationPaintSets, deck
         } else {
             sets.scan.insert(node.id.clone());
         }
-        collect_descendants(&node.children, sets, deck_taken);
+        collect_descendants(&node.children, sets, deck_taken, reveals, now_ms);
     }
 }
 
