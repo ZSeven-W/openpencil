@@ -188,7 +188,7 @@ Any avatar, profile photo, client/user thumbnail, product image, hero, or logo s
 
 An AVATAR slot is a fixed SQUARE: `width` = `height` = 40–48 (both NUMERIC, never `fill_container`), `cornerRadius` = half the size, `clipContent: true`; the image child inside is `fill_container` on BOTH axes. Never give an image a numeric height taller than its slot — a 300px image in a 42px avatar strip paints across half the screen. The same square rule applies to every ROW media thumbnail (mini-player artwork, track/list covers): fixed square `width` = `height` (e.g. 44×44), never `fill_container` width — that steals the whole row.
 
-Progress/activity RINGS are thick, not hairlines: each ring is an ellipse stroked 8–12px (muted track ellipse + accent progress ellipse on top, inside a `layout: "none"` frame with centered x/y). A 1px stroke reads as a faint wireframe circle. For a ring with content in the middle, prefer a `frame` with `cornerRadius` = half its size over ellipse siblings.
+Progress/activity RINGS are thick, not hairlines: use a fixed square `layout: "none"` wrapper containing same-size, same-position muted track and accent progress arc ellipses. Because lower child indexes paint on top, author children in front-to-back order: center content, progress arc, then track. A 1px stroke reads as a faint wireframe circle, so use an 8–12px visual thickness (`innerRadius` or stroke). For a value inside the ring, make the center child explicitly sized and positioned; never place track, progress, and center content as siblings in horizontal/vertical flow.
 
 ### Reuse design-system components
 

@@ -170,6 +170,80 @@ fn cleanup_does_not_repair_single_arc_or_wrapped_card_arcs() {
 }
 
 #[test]
+fn cleanup_does_not_stack_independent_partial_gauges_in_one_row() {
+    let mut sink = insert_root(json!({
+        "type":"frame","id":"root","name":"Root","width":375,"height":220,"layout":"vertical","children":[
+            {"type":"frame","id":"gauges","name":"Independent Gauges","width":136,"height":48,
+             "layout":"horizontal","gap":8,"children":[
+                {"type":"ellipse","id":"gauge-a","name":"Gauge A","width":40,"height":40,
+                 "innerRadius":0.75,"startAngle":-90,"sweepAngle":180},
+                {"type":"ellipse","id":"gauge-b","name":"Gauge B","width":40,"height":40,
+                 "innerRadius":0.75,"startAngle":-90,"sweepAngle":180},
+                {"type":"text","id":"label","name":"Gauge Label","width":40,"height":20,"content":"Goals"}
+             ]}
+        ]
+    }));
+
+    run_cleanup(&mut sink);
+
+    let root = active_root_json(&sink);
+    let row = find_by_name(&root, "Independent Gauges").expect("gauge row");
+    assert_eq!(row["layout"], json!("horizontal"));
+}
+
+#[test]
+fn cleanup_recenters_radial_stack_after_geometry_changes_wrapper_width() {
+    let mut sink = insert_root(json!({
+        "type":"frame","id":"root","name":"Root","width":375,"height":812,
+        "layout":"vertical","padding":[0,24],"children":[
+            {"type":"frame","id":"card","name":"Activity Card","width":"fill_container",
+             "height":"fit_content","layout":"vertical","padding":20,"gap":20,"children":[
+                {"type":"frame","id":"ring","name":"Ring","width":320,"height":120,
+                 "layout":"horizontal","gap":0,"alignItems":"center","justifyContent":"center","children":[
+                    {"type":"ellipse","id":"track","name":"Ring Track","width":120,"height":120,
+                     "innerRadius":0.86},
+                    {"type":"ellipse","id":"progress","name":"Ring Progress","width":120,"height":120,
+                     "innerRadius":0.86,"startAngle":-90,"sweepAngle":264},
+                    {"type":"frame","id":"center","name":"Ring Center","width":98,"height":43,
+                     "layout":"vertical","children":[
+                        {"type":"text","id":"value","content":"8,420","fontSize":24},
+                        {"type":"text","id":"label","content":"steps","fontSize":12}
+                    ]}
+                ]}
+            ]}
+        ]
+    }));
+
+    run_cleanup(&mut sink);
+
+    let root = active_root_json(&sink);
+    let ring = find_by_name(&root, "Ring").expect("ring exists");
+    assert_eq!(ring["layout"], json!("none"));
+    assert_eq!(
+        ring["width"],
+        json!("fill_container"),
+        "geometry must exercise the late numeric-to-fill width change"
+    );
+
+    let rects = resolved_rects(&sink);
+    let ring_id = ring.get("id").and_then(Value::as_str).expect("ring id");
+    let parent = rects.get(ring_id).expect("ring rect");
+    let expected = (parent.x + parent.w / 2.0, parent.y + parent.h / 2.0);
+    for name in ["Ring Track", "Ring Progress", "Ring Center"] {
+        let child = find_by_name(&root, name).unwrap_or_else(|| panic!("{name} exists"));
+        let child_id = child.get("id").and_then(Value::as_str).expect("child id");
+        let rect = rects
+            .get(child_id)
+            .unwrap_or_else(|| panic!("{child_id} rect"));
+        let center = (rect.x + rect.w / 2.0, rect.y + rect.h / 2.0);
+        assert!(
+            (center.0 - expected.0).abs() <= 1.0 && (center.1 - expected.1).abs() <= 1.0,
+            "{name} center {center:?} must match final wrapper center {expected:?}"
+        );
+    }
+}
+
+#[test]
 fn cleanup_deletes_only_empty_decorated_small_frame_stubs() {
     let mut sink = insert_root(json!({
         "type":"frame","id":"root","name":"Root","width":390,"height":360,"layout":"vertical","children":[

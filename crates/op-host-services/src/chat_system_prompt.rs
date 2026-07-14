@@ -52,12 +52,14 @@ WORKFLOW:
 DIAGNOSING OVERLAP / STACKING BUGS — read this before "fixing" any visual overlap:
 - When snapshot_layout.overlaps is non-empty, two or more siblings share screen area. Do NOT blindly enlarge heights, shrink fonts, or tweak padding — those are surface patches.
 - Inspect the overlapping nodes' shared PARENT via batch_get. Look at its `layout` field:
-  • `layout: "none"` (or missing) → children positioned via absolute x/y. OpenPencil's renderer has a known bug where absolute-positioned children stack vertically instead of honoring x/y. This is almost always the true root cause.
+  • `layout: "none"` → a deliberate absolute stack. Overlap can be intentional; verify every child has explicit numeric x/y/width/height and the intended z-order before changing the layout.
+  • missing `layout` → ambiguous. Set `vertical`/`horizontal` for flow content, or explicit `none` only for a deliberate absolute stack.
   • `layout: "vertical"` with gap=0 and children using textGrowth:"fit_content" → text can visually touch; bump `gap` or add padding on the children.
-- Preferred fix for `layout: "none"` parents that contain stacked content (badges, titles, rows):
+- Preferred fix for an ACCIDENTAL `layout: "none"` parent whose children should flow (ordinary titles, rows, form fields):
   update_node(parent, { layout: "vertical", gap: 8, alignItems: "flex-start" })
   and strip the children's absolute x/y (the flex engine positions them).
-- For a circle/ring with centered content: NEVER use `layout: "none"`. Use a frame with cornerRadius = width/2, layout:"horizontal", alignItems:"center", justifyContent:"center", children:[ the text/icon ].
+- For a simple filled circular badge/avatar with centered initials or an icon: use a fixed square frame with cornerRadius = width/2, layout:"horizontal", alignItems:"center", justifyContent:"center", children:[ the text/icon ].
+- For a progress ring/donut with centered content: use a fixed square `layout:"none"` wrapper. Give every child explicit numeric x/y/width/height and order children front-to-back as center content, progress arc, then track; lower child indexes paint on top. Never put track, progress, and center content as siblings in horizontal/vertical flow.
 
 INSERT_NODE GUIDE — always include complete node data with children:
 - Button example: {"type":"frame","name":"My Button","width":"fill_container","height":50,"cornerRadius":8,"fill":[{"type":"solid","color":"#1877F2"}],"layout":"horizontal","gap":8,"alignItems":"center","justifyContent":"center","children":[{"type":"text","name":"Label","text":"Continue","fontSize":15,"fontWeight":600,"fill":[{"type":"solid","color":"#FFFFFF"}]}]}

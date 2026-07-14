@@ -268,7 +268,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         if fixed {
             tracing::info!(
                 subtask = %subtask.id,
-                "subagent self-check auto-fixed product-row overflow (fixed-width cards -> fill_container)"
+                "subagent self-check auto-fixed fixable layout issues before insertion"
             );
         }
     }

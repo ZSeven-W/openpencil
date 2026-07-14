@@ -1430,6 +1430,11 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
             crate::geometry_validation::geometry_validate_and_fix(sink, rid);
         }
         debug_probe_child_height(sink, rid, "geometry");
+        // Geometry validation can change a repaired radial wrapper from its
+        // authored numeric width to `fill_container`. Re-run the centering pass
+        // against the final resolved bounds so absolute arc/label coordinates
+        // do not retain the pre-validation width and leave the ring off-centre.
+        crate::radial_repair::repair_radial_stacks(sink, rid);
         adjust_root_height_to_content(sink, rid, preserve_root_height);
         debug_probe_child_height(sink, rid, "adjust_root_height");
     }

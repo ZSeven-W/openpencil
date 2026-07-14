@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 op-editor-core = { path = "../op-editor-core" }
+op-design-lint = { path = "../op-design-lint" }
 op-mcp = { path = "../op-mcp", features = ["script"] }
 op-ai-skills = { path = "../op-ai-skills" }
 # Real jian flex layout (resolved absolute rects) for geometry-driven structural

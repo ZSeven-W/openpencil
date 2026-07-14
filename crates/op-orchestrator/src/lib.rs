@@ -84,6 +84,8 @@ mod geometry_root_containment_tests;
 #[cfg(test)]
 mod prompt_resolved_style_tests;
 #[cfg(test)]
+mod radial_preinsert_tests;
+#[cfg(test)]
 mod radial_stub_tests;
 #[cfg(test)]
 mod sidebar_archetype_tests;
