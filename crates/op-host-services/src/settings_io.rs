@@ -4,7 +4,9 @@
 //! All preferences live on `EditorState.editor_ui` — the host's
 //! single source of truth.
 
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use op_editor_core::editor_ui_state::{RecentFile, RECENT_FILE_CAP};
 use op_editor_core::{
@@ -12,6 +14,9 @@ use op_editor_core::{
     EditorState, ImageGenProfile, ImageGenProvider, Locale, ThemeMode,
 };
 use serde::{Deserialize, Serialize};
+
+#[path = "settings_io_checked.rs"]
+mod settings_io_checked;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct RecentFilePayload {
@@ -77,6 +82,7 @@ pub struct Fingerprint {
     images_adv: bool,
     openverse_client_id: String,
     openverse_client_secret: String,
+    openverse_credential_owner: Option<String>,
     auto_update_enabled: bool,
     experimental_features_enabled: bool,
     connected: [bool; 5],
@@ -96,6 +102,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         images_adv: eui.agent_settings.images_advanced_open,
         openverse_client_id: eui.agent_settings.openverse_client_id.clone(),
         openverse_client_secret: eui.agent_settings.openverse_client_secret.clone(),
+        openverse_credential_owner: eui.agent_settings.openverse_credential_owner.clone(),
         auto_update_enabled: eui.agent_settings.auto_update_enabled,
         experimental_features_enabled: eui.agent_settings.experimental_features_enabled,
         connected: eui.agent_settings.connected,
@@ -115,6 +122,7 @@ pub fn save_if_changed(state: &EditorState, before: Fingerprint) {
 const SETTINGS_VERSION: u32 = 1;
 const APP_DIR: &str = "openpencil";
 const FILE_NAME: &str = "settings.json";
+static SETTINGS_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SettingsPayload {
@@ -131,6 +139,8 @@ struct SettingsPayload {
     images_advanced_open: Option<bool>,
     #[serde(default)]
     openverse_oauth: Option<OpenverseOAuthPayload>,
+    #[serde(default)]
+    openverse_credential_owner: Option<String>,
     #[serde(default)]
     auto_update_enabled: Option<bool>,
     #[serde(default)]
@@ -171,6 +181,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
         openverse_oauth: openverse_oauth_to_payload(&eui.agent_settings),
+        openverse_credential_owner: eui.agent_settings.openverse_credential_owner.clone(),
         auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
         experimental_features_enabled: Some(eui.agent_settings.experimental_features_enabled),
         connected: Some(eui.agent_settings.connected),
@@ -214,6 +225,14 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
 }
 
 fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
+    apply_payload_with_options(state, payload, true);
+}
+
+fn apply_payload_with_options(
+    state: &mut EditorState,
+    payload: SettingsPayload,
+    dedupe_builtins: bool,
+) {
     if payload.version != SETTINGS_VERSION {
         return;
     }
@@ -237,6 +256,7 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
         eui.agent_settings.openverse_client_id = oauth.client_id;
         eui.agent_settings.openverse_client_secret = oauth.client_secret;
     }
+    eui.agent_settings.openverse_credential_owner = payload.openverse_credential_owner;
     if let Some(b) = payload.auto_update_enabled {
         eui.agent_settings.auto_update_enabled = b;
     }
@@ -251,7 +271,11 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
             .into_iter()
             .filter_map(builtin_agent_from_payload)
             .collect();
-        eui.agent_settings.builtin_agents = dedupe_builtin_agents(agents);
+        eui.agent_settings.builtin_agents = if dedupe_builtins {
+            dedupe_builtin_agents(agents)
+        } else {
+            agents
+        };
         eui.agent_settings.next_builtin_agent_id =
             next_builtin_agent_id(&eui.agent_settings.builtin_agents);
     }
@@ -492,6 +516,41 @@ fn next_image_gen_profile_id(profiles: &[ImageGenProfile]) -> u64 {
         .saturating_add(1)
 }
 
+fn load_checked_from_path(state: &mut EditorState, path: &Path) -> Result<(), String> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("failed to read settings file: {error}")),
+    };
+    let raw: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("failed to parse settings file: {error}"))?;
+    settings_io_checked::validate_payload_fields(&raw)?;
+    let payload: SettingsPayload = serde_json::from_value(raw)
+        .map_err(|error| format!("failed to parse settings file: {error}"))?;
+    if payload.version != SETTINGS_VERSION {
+        return Err(format!(
+            "unsupported settings file version {}; expected {SETTINGS_VERSION}",
+            payload.version
+        ));
+    }
+    settings_io_checked::validate_lossless_payload(&payload)?;
+    apply_payload_with_options(state, payload, false);
+    Ok(())
+}
+
+/// Strict load used by web startup. A missing file is a normal first-run state,
+/// but an existing file must be readable and losslessly loadable so the daemon
+/// cannot later overwrite unknown settings or miss browser-owned credentials.
+pub fn load_checked(state: &mut EditorState) -> Result<(), String> {
+    if let Some(detected) = detect_system_locale() {
+        state.editor_ui.locale = detected;
+    }
+    let path = settings_path().ok_or_else(|| "failed to resolve settings file path".to_string())?;
+    load_checked_from_path(state, &path)?;
+    crate::zode_import::import_zode_builtin_agents(state);
+    Ok(())
+}
+
 /// Best-effort load. Returns silently on missing file / parse error.
 pub fn load(state: &mut EditorState) {
     // Seed the locale from the OS BEFORE the settings file is read.
@@ -556,21 +615,111 @@ fn locale_from_tag(raw: &str) -> Option<Locale> {
     str_to_locale(lang)
 }
 
-/// Best-effort save. Returns silently on IO failure.
-pub fn save(state: &EditorState) {
-    let Some(path) = settings_path() else { return };
+/// Persist settings and report any failure to the caller.
+pub fn save_checked(state: &EditorState) -> Result<(), String> {
+    let path = settings_path().ok_or_else(|| "settings path is unavailable".to_string())?;
+    save_checked_to_path(state, &path)
+}
+
+struct PendingSettingsFile {
+    path: PathBuf,
+    file: Option<std::fs::File>,
+}
+
+impl PendingSettingsFile {
+    fn file_mut(&mut self) -> &mut std::fs::File {
+        self.file
+            .as_mut()
+            .expect("pending settings file must stay open until replacement")
+    }
+
+    fn close(&mut self) {
+        drop(self.file.take());
+    }
+}
+
+impl Drop for PendingSettingsFile {
+    fn drop(&mut self) {
+        self.close();
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn create_unique_settings_temp(path: &Path) -> Result<PendingSettingsFile, String> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_else(|| "settings.json".into());
+
+    for _ in 0..128 {
+        let sequence = SETTINGS_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let tmp_path = parent.join(format!(
+            ".{file_name}.{}.{}.tmp",
+            std::process::id(),
+            sequence
+        ));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+
+        match options.open(&tmp_path) {
+            Ok(file) => {
+                let pending = PendingSettingsFile {
+                    path: tmp_path,
+                    file: Some(file),
+                };
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    pending
+                        .file
+                        .as_ref()
+                        .expect("new settings file must be open")
+                        .set_permissions(std::fs::Permissions::from_mode(0o600))
+                        .map_err(|error| {
+                            format!("failed to secure temporary settings file: {error}")
+                        })?;
+                }
+                return Ok(pending);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(format!("failed to create temporary settings file: {error}"));
+            }
+        }
+    }
+
+    Err("failed to allocate a unique temporary settings file".to_string())
+}
+
+fn save_checked_to_path(state: &EditorState, path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create settings directory: {error}"))?;
     }
     let payload = to_payload(state);
-    let Ok(json) = serde_json::to_string_pretty(&payload) else {
-        return;
-    };
-    let mut tmp = path.clone();
-    tmp.set_extension("json.tmp");
-    if std::fs::write(&tmp, json).is_ok() {
-        let _ = std::fs::rename(&tmp, &path);
+    let json = serde_json::to_string_pretty(&payload)
+        .map_err(|error| format!("failed to encode settings: {error}"))?;
+    let mut tmp = create_unique_settings_temp(path)?;
+    if let Err(error) = tmp.file_mut().write_all(json.as_bytes()) {
+        return Err(format!("failed to write temporary settings: {error}"));
     }
+    tmp.close();
+    if let Err(error) = std::fs::rename(&tmp.path, path) {
+        return Err(format!("failed to replace settings file: {error}"));
+    }
+    Ok(())
+}
+
+/// Best-effort save for existing callers that do not surface persistence
+/// failures to a request boundary.
+pub fn save(state: &EditorState) {
+    let _ = save_checked(state);
 }
 
 fn theme_to_str(t: ThemeMode) -> &'static str {

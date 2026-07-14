@@ -123,14 +123,14 @@ cargo run -p op-host-desktop
 
 | イメージ | 含まれるもの |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host、wasm bundle、CanvasKit assets |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host、wasm bundle、CanvasKit assets |
 
 Web UI は built-in agent profiles のみを公開します。Claude/Codex/OpenCode/Copilot/Gemini CLI ツールは Docker イメージに同梱されません。
 
 **実行：**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
 ```
 
 その後 `http://localhost:3100/` を開いてください。
@@ -308,7 +308,7 @@ OpenPencil は **Rust** で一から書き直されました ([#129](https://git
 - **ネイティブアクセシビリティ** — macOS・Windows・Linux では AccessKit を使用し、Web ではブラウザの a11y ツリーに依存する代わりに DOM ミラーを提供。
 - **型チェック済みの単一ワークスペース** — MCP ホスト、CLI、AI プロバイダー、コード生成、Figma インポート、Git 統合がすべて単一の Rust ワークスペースに収まり、CI では `cargo-deny` によるサプライチェーンのゲーティングを実施。
 
-> **ステータス：** TypeScript エディターは `v0.7.5` で廃止され、現在は Git 履歴にのみ残っています。このリポジトリは Rust ワークスペースです。`v0.8.0` の Rust リリースは現在活発に開発中です（下記のロードマップを参照）。
+> **ステータス：** TypeScript エディターは `v0.7.5` で廃止され、現在は Git 履歴にのみ残っています。このリポジトリは Rust ワークスペースです。`v0.8.1` の Rust リリースは現在活発に開発中です（下記のロードマップを参照）。
 
 ## プロジェクト構成
 

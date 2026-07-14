@@ -184,9 +184,7 @@ fn trace_grid_contours(
         let mut points = vec![start];
         while current != start {
             points.push(current);
-            let Some(next_index) = edges.iter().position(|(from, _)| *from == current) else {
-                return None;
-            };
+            let next_index = edges.iter().position(|(from, _)| *from == current)?;
             let (_, next) = edges.swap_remove(next_index);
             current = next;
         }

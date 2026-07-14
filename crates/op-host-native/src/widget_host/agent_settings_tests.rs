@@ -91,6 +91,36 @@ fn builtin_agent_api_key_focus_accepts_text_and_rebuilds_models() {
 }
 
 #[test]
+fn editing_browser_owned_builtin_agent_transfers_it_to_operator_ownership() {
+    let mut host = WidgetHostNative::new();
+    let settings = &mut host.editor_state_mut().editor_ui.agent_settings;
+    settings.add_builtin_agent_with_defaults("Browser", "sk-browser", "browser-model");
+    settings.builtin_agents[0].id = "web-credential:builtin:builtin-web-1".into();
+    settings.next_builtin_agent_id = 7;
+    settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::ApiKey,
+    });
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input
+        .set_text("sk-operator");
+
+    assert!(host.apply_send());
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.builtin_agents[0].id, "builtin-7");
+    assert_eq!(settings.builtin_agents[0].api_key, "sk-operator");
+    assert_eq!(settings.next_builtin_agent_id, 8);
+    assert!(host
+        .editor_state()
+        .chat
+        .available_models
+        .iter()
+        .any(|model| model.builtin_provider_id.as_deref() == Some("builtin-7")));
+}
+
+#[test]
 fn builtin_agent_compact_switch_toggles_enabled_and_models() {
     let mut host = WidgetHostNative::new();
     let id = host
@@ -788,6 +818,35 @@ fn image_generation_profile_focus_accepts_text_and_commits() {
         .settings_input
         .text()
         .is_empty());
+}
+
+#[test]
+fn editing_browser_owned_image_profile_transfers_it_to_operator_ownership() {
+    let mut host = WidgetHostNative::new();
+    let settings = &mut host.editor_state_mut().editor_ui.agent_settings;
+    settings.add_image_gen_profile();
+    settings.image_gen_profiles[0].id = "web-credential:image:igp-web-1".into();
+    settings.active_image_gen_profile_id = Some("web-credential:image:igp-web-1".into());
+    settings.next_image_gen_profile_id = 4;
+    settings.focus = Some(SettingsFocus::ImageGenProfile {
+        index: 0,
+        field: ImageGenField::Name,
+    });
+    host.editor_state_mut()
+        .editor_ui
+        .settings_input
+        .set_text("Operator Images");
+
+    assert!(host.apply_send());
+
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.image_gen_profiles[0].id, "igp-4");
+    assert_eq!(settings.image_gen_profiles[0].name, "Operator Images");
+    assert_eq!(
+        settings.active_image_gen_profile_id.as_deref(),
+        Some("igp-4")
+    );
+    assert_eq!(settings.next_image_gen_profile_id, 5);
 }
 
 #[test]

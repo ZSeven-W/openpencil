@@ -428,16 +428,15 @@ pub(crate) async fn send_with_backoff(
                     tokio::time::sleep(delay).await;
                     continue;
                 }
-                let body = resp.text().await.unwrap_or_default();
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    // Raw provider JSON reads as gibberish in the chat
-                    // transcript — say what happened and what to do.
                     return Err(format!(
-                        "The model provider is rate-limiting this account (429) and the run could not ride it out after {max_retries} retries. Wait a moment, then send the prompt again to continue. ({label}: {})",
-                        body.trim()
+                        "The model provider is rate-limiting this account (429) and the run could not ride it out after {max_retries} retries. Wait a moment, then send the prompt again to continue. ({label})"
                     ));
                 }
-                return Err(format!("{label} http {status}: {}", body.trim()));
+                // Provider error bodies are untrusted and can echo request
+                // headers. Never relay them into chat/SSE where credentials
+                // could be reflected back into logs or browser responses.
+                return Err(format!("{label} http {status}"));
             }
             Err(e) => {
                 if e.is_timeout() {
@@ -522,6 +521,7 @@ async fn run_openai_chat(
 /// kill a slow-but-live generation.
 pub(crate) fn builtin_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(BUILTIN_HTTP_CONNECT_TIMEOUT)
         .timeout(BUILTIN_HTTP_REQUEST_TIMEOUT)
         .build()
@@ -704,8 +704,12 @@ fn parse_openai_sse_data(data: &str) -> Option<ChatDelta> {
         });
     }
     let value: Value = serde_json::from_str(data).ok()?;
-    if let Some(message) = value.pointer("/error/message").and_then(Value::as_str) {
-        return Some(ChatDelta::Error(message.to_string()));
+    if value.get("error").is_some() {
+        // A provider-controlled HTTP-200 SSE event can reflect request headers
+        // or credentials in its message. Preserve only the error boundary.
+        return Some(ChatDelta::Error(
+            "OpenAI-compatible provider reported a stream error".into(),
+        ));
     }
     let choice = value.get("choices")?.as_array()?.first()?;
     if let Some(delta) = choice.get("delta") {
@@ -761,10 +765,9 @@ fn parse_anthropic_sse_data(data: &str) -> Option<ChatDelta> {
         "message_stop" => Some(ChatDelta::Done {
             stop_reason: StopReason::EndTurn,
         }),
-        "error" => value
-            .pointer("/error/message")
-            .and_then(Value::as_str)
-            .map(|message| ChatDelta::Error(message.to_string())),
+        "error" => Some(ChatDelta::Error(
+            "Anthropic provider reported a stream error".into(),
+        )),
         _ => None,
     }
 }

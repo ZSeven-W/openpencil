@@ -53,6 +53,7 @@ impl WidgetHostNative {
             })) => {
                 {
                     let settings = &mut self.editor_state.editor_ui.agent_settings;
+                    settings.take_over_browser_image_profile(index);
                     if let Some(profile) = settings.image_gen_profiles.get_mut(index) {
                         if profile.provider != provider {
                             profile.provider = provider;

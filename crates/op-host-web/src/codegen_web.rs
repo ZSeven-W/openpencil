@@ -90,6 +90,9 @@ struct CodegenRun {
     /// match what was GENERATED even if the user switches tabs afterwards
     /// (desktop `CodegenSession.framework` parity).
     framework: op_editor_core::codegen::Framework,
+    /// Browser-local credential for the selected built-in provider. Captured
+    /// once at launch and sent only with this run's model requests.
+    credential: Option<serde_json::Value>,
 }
 
 /// Shared state threaded through the async driver: the run + the delta queue.
@@ -135,6 +138,7 @@ pub(crate) fn cancel_active_run() {
         let mut s = shared.borrow_mut();
         s.0.cancelled = true;
         s.0.pipe.cancel();
+        s.0.credential = None;
         if let Some(handle) = s.0.handle.take() {
             // Aborting fires the XHR's onloadend, which synthesizes an Error
             // event — the event callback drops it via the `cancelled` flag.
@@ -186,7 +190,7 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
     // 1. Build input from the live editor state. Nothing to generate from
     //    (empty page + no selection) surfaces an inline error (desktop
     //    `launch_codegen_if_pending` parity).
-    let (input, model, framework) = {
+    let (input, model, credential, framework) = {
         let b = inner.borrow();
         let state = b.host().editor_state();
         let Some(input) = build_codegen_input(state) else {
@@ -203,12 +207,8 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
         };
         // Model id: the selected chat model's wire value, else "default" (the
         // proxy then picks the configured provider).
-        let model = state
-            .chat
-            .selected_model_entry()
-            .map(|e| e.value.clone())
-            .unwrap_or_else(|| "default".to_string());
-        (input, model, state.codegen.framework)
+        let (model, credential) = crate::web_ai_credentials::selected_target(state);
+        (input, model, credential, state.codegen.framework)
     };
 
     // Reset the panel into the Generating state before the first turn, and
@@ -245,6 +245,7 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
             cancelled: false,
             model,
             framework,
+            credential,
         },
         VecDeque::new(),
     )));
@@ -302,6 +303,7 @@ fn drive<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: String, share
                         });
                     });
                     s.0.terminal = true;
+                    s.0.credential = None;
                     s.1.push_back(WebCodegenDelta::Done {
                         code,
                         degraded,
@@ -311,6 +313,7 @@ fn drive<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: String, share
                 }
                 PipelineStep::Failed { message } => {
                     s.0.terminal = true;
+                    s.0.credential = None;
                     s.1.push_back(WebCodegenDelta::Failed(message));
                     return;
                 }
@@ -347,7 +350,10 @@ fn fire_request<C: RepaintContext + 'static>(
         s.0.buf.clear();
     }
 
-    let body_json = build_body_json(&req, &shared.borrow().0.model);
+    let body_json = {
+        let run = shared.borrow();
+        build_body_json(&req, &run.0.model, run.0.credential.as_ref())
+    };
 
     // Cloned handles moved into the streaming callback.
     let inner_cb = inner.clone();
@@ -419,7 +425,11 @@ fn fire_request<C: RepaintContext + 'static>(
 /// prompts) are forwarded; the daemon proxy composes the final system prompt
 /// (the same `op_ai_skills::compose_system_prompt` the desktop host runs
 /// in-process). Hand-rolled to avoid a serde derive for this tiny payload.
-fn build_body_json(req: &PendingRequest, model: &str) -> String {
+fn build_body_json(
+    req: &PendingRequest,
+    model: &str,
+    credential: Option<&serde_json::Value>,
+) -> String {
     let skills_json = req
         .skills
         .iter()
@@ -432,6 +442,7 @@ fn build_body_json(req: &PendingRequest, model: &str) -> String {
         "max_output_tokens": req.max_output_tokens,
         "thinking": req.thinking.as_str(),
         "effort": req.effort.as_str(),
+        "credential": credential,
     });
     serde_json::to_string(&body).unwrap_or_else(|_| "{}".to_string())
 }
@@ -577,6 +588,19 @@ mod tests {
     use super::*;
     use op_editor_core::{EditorState, NodeId};
 
+    #[test]
+    fn codegen_lifecycle_explicitly_clears_request_credentials() {
+        let source = include_str!("codegen_web.rs");
+        let implementation = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("codegen implementation");
+        assert!(
+            implementation.matches("s.0.credential = None;").count() >= 2,
+            "cancel and terminal completion must both clear the captured credential"
+        );
+    }
+
     fn two_rect_state() -> EditorState {
         let doc = jian_ops_schema::load_str(
             r#"{"version":"0.8.0","children":[
@@ -630,6 +654,27 @@ mod tests {
         assert_eq!(framework_ext(Framework::Flutter), "dart");
         assert_eq!(framework_ext(Framework::SwiftUi), "swift");
         assert_eq!(framework_ext(Framework::Compose), "kt");
+    }
+
+    #[test]
+    fn codegen_proxy_body_carries_the_selected_request_scoped_credential() {
+        let req = PendingRequest {
+            id: RequestId(1),
+            kind: op_codegen::ai::types::RequestKind::Planning,
+            skills: vec!["codegen-plan"],
+            user_message: "plan".into(),
+            max_output_tokens: 1024,
+            thinking: op_ai::chat_provider::ThinkingMode::Disabled,
+            effort: op_ai::chat_provider::EffortLevel::Low,
+        };
+        let credential = serde_json::json!({"api_key":"sk-codegen"});
+
+        let body: serde_json::Value =
+            serde_json::from_str(&build_body_json(&req, "private-model", Some(&credential)))
+                .unwrap();
+
+        assert_eq!(body["model"], "private-model");
+        assert_eq!(body["credential"]["api_key"], "sk-codegen");
     }
 
     #[test]

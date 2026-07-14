@@ -7,8 +7,31 @@ fn fresh_state() -> WebCanvasState {
     WebCanvasState::new(EditorState::new(), 3100)
 }
 
+fn fresh_server_persistence_state() -> WebCanvasState {
+    WebCanvasState::new_with_policy(
+        EditorState::new(),
+        3100,
+        crate::web_credential_policy::WebCredentialPersistence::Server,
+    )
+}
+
 // A minimal canonical document body in the TS `setSyncDocument` shape.
 const SYNC_BODY: &str = r##"{"document":{"version":"1.0.0","children":[{"id":"n9","type":"rectangle","name":"Synced Rect","x":1,"y":2,"width":80,"height":40,"fill":[{"type":"solid","color":"#123456"}]}]},"sourceClientId":"web"}"##;
+
+const CREDENTIAL_BODY: &str = r#"{
+  "version":2,
+  "builtin_agents":[{
+    "id":"builtin-web-1","preset":"custom","display_name":"Private Model",
+    "kind":"openai-compat","api_key":"sk-browser-only","model":"private-model",
+    "base_url":"https://api.openai.com/v1","enabled":true
+  }],
+  "image_gen_profiles":[{
+    "id":"igp-web-1","name":"Image","provider":"openai",
+    "api_key":"image-browser-only","model":"gpt-image-1","base_url":null
+  }],
+  "active_image_gen_profile_id":"igp-web-1",
+  "openverse_oauth":{"client_id":"client","client_secret":"openverse-browser-only"}
+}"#;
 
 fn write_temp_op(name: &str, body: &str) -> PathBuf {
     let path = std::env::temp_dir().join(temp_op_file_name(
@@ -69,6 +92,316 @@ fn server_health_matches_ts_running_port_shape() {
 }
 
 #[test]
+fn credential_policy_endpoint_reports_only_the_boolean() {
+    let mut state = WebCanvasState::new_with_policy(
+        EditorState::new(),
+        3100,
+        crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+    );
+    let reply = handle_web_canvas_request("GET", "/api/settings/credential-policy", "", &mut state);
+
+    assert_eq!(reply.status, "200 OK");
+    assert_eq!(reply.body, r#"{"serverPersistence":false}"#);
+    assert!(!reply.body.contains("api_key"));
+    assert!(!reply.body.contains("secret"));
+}
+
+#[test]
+fn browser_only_route_rejects_credentials_without_mutating_state() {
+    let mut state = fresh_state();
+    let before = crate::settings_io::fingerprint(&state.editor);
+
+    let reply = handle_web_canvas_request(
+        "POST",
+        "/api/settings/credentials",
+        CREDENTIAL_BODY,
+        &mut state,
+    );
+
+    assert_eq!(reply.status, "403 Forbidden");
+    assert_eq!(before, crate::settings_io::fingerprint(&state.editor));
+    assert!(!reply.body.contains("sk-browser-only"));
+}
+
+#[test]
+fn server_policy_merges_credentials_without_echoing_them() {
+    let mut state = fresh_server_persistence_state();
+
+    let reply = handle_web_canvas_request(
+        "POST",
+        "/api/settings/credentials",
+        CREDENTIAL_BODY,
+        &mut state,
+    );
+
+    assert_eq!(reply.status, "200 OK");
+    assert_eq!(reply.body, r#"{"ok":true}"#);
+    let agent = state
+        .editor
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter()
+        .find(|agent| agent.id.ends_with(":builtin:builtin-web-1"))
+        .expect("merged browser agent");
+    assert_eq!(agent.api_key, "sk-browser-only");
+    assert!(!reply.body.contains("browser-only"));
+}
+
+#[test]
+fn browser_only_restart_does_not_load_previously_persisted_browser_credentials() {
+    let mut persisted = EditorState::new();
+    crate::web_credentials::apply_json(&mut persisted, CREDENTIAL_BODY)
+        .expect("private deployment snapshot");
+    persisted.editor_ui.agent_settings.add_builtin_agent_config(
+        "Operator",
+        "operator-key",
+        "operator-model",
+        op_editor_core::BuiltinAgentKind::OpenAiCompat,
+        "https://operator.example/v1",
+    );
+
+    let state = WebCanvasState::new_with_policy(
+        persisted,
+        3100,
+        crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+    );
+    let settings = &state.editor.editor_ui.agent_settings;
+
+    assert!(settings
+        .builtin_agents
+        .iter()
+        .all(|agent| !agent.id.starts_with("web-credential:")));
+    assert!(settings
+        .builtin_agents
+        .iter()
+        .any(|agent| agent.model == "operator-model"));
+    assert!(settings.image_gen_profiles.is_empty());
+    assert!(settings.openverse_client_secret.is_empty());
+    assert_eq!(settings.openverse_credential_owner, None);
+}
+
+#[test]
+fn browser_only_startup_removes_browser_credentials_and_saves_once() {
+    let mut editor = EditorState::new();
+    crate::web_credentials::apply_json(&mut editor, CREDENTIAL_BODY)
+        .expect("private deployment snapshot");
+    editor.editor_ui.agent_settings.add_builtin_agent_config(
+        "Operator",
+        "operator-key",
+        "operator-model",
+        op_editor_core::BuiltinAgentKind::OpenAiCompat,
+        "https://operator.example/v1",
+    );
+    let mut saves = 0;
+
+    enforce_credential_persistence_policy(
+        &mut editor,
+        crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+        |saved| {
+            saves += 1;
+            let settings = &saved.editor_ui.agent_settings;
+            assert!(settings
+                .builtin_agents
+                .iter()
+                .all(|agent| !agent.id.starts_with("web-credential:")));
+            assert!(settings
+                .builtin_agents
+                .iter()
+                .any(|agent| agent.model == "operator-model"));
+            assert!(settings.image_gen_profiles.is_empty());
+            assert!(settings.openverse_client_secret.is_empty());
+            Ok(())
+        },
+    )
+    .expect("browser credentials are scrubbed and saved");
+
+    assert_eq!(saves, 1);
+}
+
+#[test]
+fn browser_only_startup_propagates_credential_scrub_save_failure() {
+    let mut editor = EditorState::new();
+    crate::web_credentials::apply_json(&mut editor, CREDENTIAL_BODY)
+        .expect("private deployment snapshot");
+
+    let error = enforce_credential_persistence_policy(
+        &mut editor,
+        crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+        |_| Err("simulated disk failure".into()),
+    )
+    .expect_err("startup must fail when scrubbed settings cannot be saved");
+
+    assert_eq!(
+        error,
+        "failed to remove browser-owned credentials while server persistence is disabled"
+    );
+    assert!(editor
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter()
+        .all(|agent| !agent.id.starts_with("web-credential:")));
+}
+
+#[test]
+fn server_persistence_startup_keeps_browser_credentials_without_saving() {
+    let mut editor = EditorState::new();
+    crate::web_credentials::apply_json(&mut editor, CREDENTIAL_BODY)
+        .expect("private deployment snapshot");
+
+    enforce_credential_persistence_policy(
+        &mut editor,
+        crate::web_credential_policy::WebCredentialPersistence::Server,
+        |_| panic!("server persistence must not rewrite settings at startup"),
+    )
+    .expect("server persistence keeps stored browser credentials");
+
+    assert!(editor
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter()
+        .any(|agent| agent.id.starts_with("web-credential:")));
+}
+
+#[test]
+fn credential_persistence_failure_rolls_back_and_returns_500_without_echoing_secrets() {
+    let mut state = fresh_server_persistence_state();
+    let settings_before = crate::settings_io::fingerprint(&state.editor);
+    let agent_settings_before = state.editor.editor_ui.agent_settings.clone();
+    let document_children = state.editor.doc.children.as_ptr();
+    let reply = handle_web_canvas_request(
+        "POST",
+        "/api/settings/credentials",
+        CREDENTIAL_BODY,
+        &mut state,
+    );
+    assert_eq!(reply.status, "200 OK");
+
+    let reply = persist_api_settings(
+        "POST",
+        "/api/settings/credentials",
+        &mut state,
+        settings_before.clone(),
+        Some(agent_settings_before),
+        reply,
+        |_| Err("simulated disk failure".into()),
+    );
+
+    assert_eq!(reply.status, "500 Internal Server Error");
+    assert_eq!(
+        settings_before,
+        crate::settings_io::fingerprint(&state.editor)
+    );
+    assert_eq!(state.editor.doc.children.as_ptr(), document_children);
+    assert!(!reply.body.contains("sk-browser-only"));
+    assert!(!reply.body.contains("simulated disk failure"));
+}
+
+#[test]
+fn cross_origin_browser_cannot_write_server_credentials() {
+    let state = Mutex::new(fresh_server_persistence_state());
+    let before = {
+        let guard = state.lock().unwrap();
+        crate::settings_io::fingerprint(&guard.editor)
+    };
+    let request = format!(
+        "POST /api/settings/credentials HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nOrigin: https://evil.example\r\nContent-Length: {}\r\n\r\n{}",
+        CREDENTIAL_BODY.len(),
+        CREDENTIAL_BODY
+    );
+    let request_len = request.len();
+    let mut stream = std::io::Cursor::new(request.into_bytes());
+
+    serve_one(&mut stream, &state, &SseHub::default()).expect("request handled");
+
+    let response = String::from_utf8_lossy(&stream.get_ref()[request_len..]);
+    assert!(response.contains("403 Forbidden"));
+    assert!(response.contains("cross-origin"));
+    assert!(!response.contains("sk-browser-only"));
+    let guard = state.lock().unwrap();
+    assert_eq!(before, crate::settings_io::fingerprint(&guard.editor));
+}
+
+#[test]
+fn credential_origin_check_allows_default_loopback_and_non_browser_clients() {
+    for headers in [
+        "Host: 127.0.0.1:3100\r\nOrigin: http://127.0.0.1:3100\r\n",
+        "Host: localhost:3100\r\nOrigin: http://localhost:3100\r\n",
+        "Host: [::1]:3100\r\nOrigin: http://[::1]:3100\r\n",
+        "Host: private.example:8443\r\n",
+    ] {
+        let request = format!(
+            "POST /api/settings/credentials HTTP/1.1\r\n{headers}Content-Length: 0\r\n\r\n"
+        );
+        let mut stream = std::io::Cursor::new(request.into_bytes());
+        let request = crate::mcp_serve::read_http_request(&mut stream).unwrap();
+        assert!(
+            credential_request_origin_allowed_with_config(&request, None),
+            "headers={headers:?}"
+        );
+    }
+}
+
+#[test]
+fn credential_origin_check_allows_an_explicitly_configured_public_origin() {
+    let request = "POST /api/settings/credentials HTTP/1.1\r\nHost: demo.example:8443\r\nOrigin: https://demo.example:8443\r\nContent-Length: 0\r\n\r\n";
+    let mut stream = std::io::Cursor::new(request.as_bytes());
+    let request = crate::mcp_serve::read_http_request(&mut stream).unwrap();
+
+    assert!(credential_request_origin_allowed_with_config(
+        &request,
+        Some("https://other.example, https://demo.example:8443"),
+    ));
+}
+
+#[test]
+fn credential_origin_check_rejects_an_unconfigured_public_same_host_origin() {
+    let request = "POST /api/settings/credentials HTTP/1.1\r\nHost: evil.example\r\nOrigin: https://evil.example\r\nContent-Length: 0\r\n\r\n";
+    let mut stream = std::io::Cursor::new(request.as_bytes());
+    let request = crate::mcp_serve::read_http_request(&mut stream).unwrap();
+
+    assert!(!credential_request_origin_allowed_with_config(
+        &request, None,
+    ));
+}
+
+#[test]
+fn credential_origin_check_rejects_null_malformed_and_cross_authority_origins() {
+    for origin in [
+        "null",
+        "://bad",
+        "https://evil.example",
+        "file://private.example",
+    ] {
+        let request = format!(
+            "POST /api/settings/credentials HTTP/1.1\r\nHost: private.example\r\nOrigin: {origin}\r\nContent-Length: 0\r\n\r\n"
+        );
+        let mut stream = std::io::Cursor::new(request.into_bytes());
+        let request = crate::mcp_serve::read_http_request(&mut stream).unwrap();
+        assert!(
+            !credential_request_origin_allowed_with_config(&request, None),
+            "origin={origin}"
+        );
+    }
+}
+
+#[test]
+fn sensitive_browser_posts_include_credentials_and_ai_routes() {
+    for path in ["/api/settings/credentials", "/api/ai/stream"] {
+        let request = crate::mcp_serve::HttpRequest {
+            method: "POST".into(),
+            path: path.into(),
+            body: String::new(),
+            host: None,
+            origin: None,
+        };
+        assert!(is_sensitive_browser_post(&request), "path={path}");
+    }
+}
+
+#[test]
 fn post_mcp_server_start_stop_updates_daemon_agent_settings() {
     let mut s = fresh_state();
     assert!(!s.editor.editor_ui.agent_settings.mcp_server.running);
@@ -125,6 +458,24 @@ fn get_document_returns_doc_and_version() {
 fn no_path_startup_uses_the_same_starter_document_as_the_web_shell() {
     let editor = startup_editor_for_web_canvas(None).expect("startup editor");
     assert_eq!(editor.doc, EditorState::starter().doc);
+}
+
+#[test]
+fn every_web_persistence_policy_propagates_strict_settings_load_failures() {
+    for policy in [
+        crate::web_credential_policy::WebCredentialPersistence::BrowserOnly,
+        crate::web_credential_policy::WebCredentialPersistence::Server,
+    ] {
+        let checked_calls = std::cell::Cell::new(0);
+        let result = startup_editor_for_web_canvas_with_loader(None, policy, |_| {
+            checked_calls.set(checked_calls.get() + 1);
+            Err("invalid existing settings".into())
+        });
+
+        let error = result.expect_err("all web policies must fail closed on invalid settings");
+        assert_eq!(error, "invalid existing settings");
+        assert_eq!(checked_calls.get(), 1, "policy={policy:?}");
+    }
 }
 
 #[test]
@@ -234,17 +585,36 @@ fn unknown_route_404s() {
 
 #[test]
 fn get_ai_models_returns_json_array() {
-    // The AI proxy model list is served as a JSON array — empty
-    // when nothing is configured, but always well-formed JSON the
-    // web bundle can `JSON.parse`.
-    let r = handle_web_canvas_request("GET", "/api/ai/models", "", &mut fresh_state());
+    let mut state = fresh_state();
+    state
+        .editor
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_with_defaults("Built-in", "sk-test", "built-in-model");
+    state.editor.chat.discovered_models = vec![op_editor_core::ModelEntry::new(
+        op_editor_core::AgentProvider::ClaudeCode,
+        "cli-model",
+        "CLI model",
+    )];
+    state
+        .editor
+        .editor_ui
+        .agent_settings
+        .apply_provider_connect_outcome(
+            op_editor_core::AgentProvider::ClaudeCode,
+            op_editor_core::ProviderConnectOutcome {
+                connected: true,
+                info: Some("Connected via CLI".into()),
+                ..Default::default()
+            },
+        );
+    state.editor.rebuild_chat_models();
+
+    let r = handle_web_canvas_request("GET", "/api/ai/models", "", &mut state);
     assert!(r.status.starts_with("200"));
-    let parsed: serde_json::Value =
-        serde_json::from_str(&r.body).expect("models body is valid JSON");
-    assert!(
-        parsed.is_array(),
-        "models body must be a JSON array: {}",
-        r.body
+    assert_eq!(
+        serde_json::from_str::<Vec<String>>(&r.body).expect("models body is valid JSON"),
+        vec!["built-in-model"]
     );
 }
 
@@ -406,175 +776,17 @@ fn png_dimensions(bytes: &[u8]) -> (u32, u32) {
 }
 
 #[test]
-fn provider_connect_probe_response_updates_agent_settings_and_models() {
-    use op_ai::agent_settings_state::AgentProvider as ProbeProvider;
-    use op_ai::chat_models::ModelEntry as ProbeModelEntry;
-    use op_editor_core::agent_settings::ProviderConnectPhase;
-    use op_editor_core::AgentProvider;
+fn web_cli_and_acp_connect_routes_are_unavailable_in_both_dispatchers() {
+    for path in ["/api/agents/connect", "/api/acp/connect"] {
+        let direct = handle_web_canvas_request("POST", path, "{}", &mut fresh_state());
+        assert_eq!(direct.status, "404 Not Found", "path={path}");
 
-    let mut s = fresh_state();
-    let body = serde_json::json!({ "provider": "codex" }).to_string();
-    let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
-        crate::provider_probe::ProbeOutcome {
-            connected: true,
-            models: vec![ProbeModelEntry::new(
-                ProbeProvider::CodexCli,
-                "gpt-5.5",
-                "GPT-5.5",
-            )],
-            connection_info: Some("Connected via Codex CLI".to_string()),
-            version: Some("codex 1.2.3".to_string()),
-            ..Default::default()
-        }
-    });
-
-    assert!(r.status.starts_with("200"), "{}", r.body);
-    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
-    assert_eq!(parsed["ok"], true);
-    assert_eq!(parsed["connected"], true);
-    assert_eq!(parsed["models"][0]["value"], "gpt-5.5");
-
-    let idx =
-        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
-    let settings = &s.editor.editor_ui.agent_settings;
-    assert!(settings.provider_verified_connected(AgentProvider::CodexCli));
-    assert_eq!(
-        settings.provider_connection[idx].phase,
-        ProviderConnectPhase::Connected
-    );
-    assert!(s
-        .editor
-        .chat
-        .discovered_models
-        .iter()
-        .any(|m| m.provider == AgentProvider::CodexCli && m.value == "gpt-5.5"));
-    assert!(s
-        .editor
-        .chat
-        .available_models
-        .iter()
-        .any(|m| m.provider == AgentProvider::CodexCli && m.value == "gpt-5.5"));
-}
-
-#[test]
-fn provider_connect_probe_response_without_models_is_failure() {
-    use op_editor_core::agent_settings::ProviderConnectPhase;
-    use op_editor_core::AgentProvider;
-
-    let mut s = fresh_state();
-    s.editor
-        .chat
-        .discovered_models
-        .push(op_editor_core::ModelEntry::new(
-            AgentProvider::CodexCli,
-            "stale-gpt",
-            "Stale GPT",
-        ));
-    let body = serde_json::json!({ "provider": "codex" }).to_string();
-    let r = handle_provider_connect_request_with_probe(&body, &mut s, |_| {
-        crate::provider_probe::ProbeOutcome {
-            connected: true,
-            connection_info: Some("Connected via Codex CLI".to_string()),
-            version: Some("codex 1.2.3".to_string()),
-            ..Default::default()
-        }
-    });
-
-    assert!(r.status.starts_with("200"), "{}", r.body);
-    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
-    assert_eq!(parsed["connected"], false);
-    assert!(
-        parsed["error"]
-            .as_str()
-            .is_some_and(|error| error.contains("No models found")),
-        "{}",
-        r.body
-    );
-
-    let settings = &s.editor.editor_ui.agent_settings;
-    assert!(!settings.provider_verified_connected(AgentProvider::CodexCli));
-    let idx =
-        op_editor_core::agent_settings::AgentSettings::provider_index(AgentProvider::CodexCli);
-    assert_eq!(
-        settings.provider_connection[idx].phase,
-        ProviderConnectPhase::Error
-    );
-    assert!(
-        !s.editor
-            .chat
-            .available_models
-            .iter()
-            .any(|m| m.provider == AgentProvider::CodexCli),
-        "stale Codex models must not become selectable after a failed connect"
-    );
-}
-
-#[test]
-fn acp_connect_probe_response_updates_agent_settings() {
-    use op_editor_core::agent_settings::{AcpAgentConnectPhase, AcpConnectionType};
-    use std::collections::BTreeMap;
-
-    let mut s = fresh_state();
-    s.editor.editor_ui.agent_settings.add_acp_agent_config(
-        "Claude Code",
-        AcpConnectionType::Local,
-        "claude",
-        Vec::new(),
-        BTreeMap::new(),
-        None,
-        true,
-    );
-    let body = serde_json::json!({ "id": "acp-1" }).to_string();
-    let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
-        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
-            connected: true,
-            info: Some("Claude Code 1.0".into()),
-            error: None,
-        }
-    });
-
-    assert!(r.status.starts_with("200"), "{}", r.body);
-    let parsed: serde_json::Value = serde_json::from_str(&r.body).expect("json body");
-    assert_eq!(parsed["connected"], true);
-    assert_eq!(parsed["connectionInfo"], "Claude Code 1.0");
-
-    let settings = &s.editor.editor_ui.agent_settings;
-    assert!(settings.acp_agents[0].connected);
-    let conn = settings.acp_agent_connection_for("acp-1");
-    assert_eq!(conn.phase, AcpAgentConnectPhase::Connected);
-    assert_eq!(conn.info.as_deref(), Some("Claude Code 1.0"));
-}
-
-#[test]
-fn acp_connect_failure_keeps_agent_disconnected() {
-    use op_editor_core::agent_settings::{AcpAgentConnectPhase, AcpConnectionType};
-    use std::collections::BTreeMap;
-
-    let mut s = fresh_state();
-    s.editor.editor_ui.agent_settings.add_acp_agent_config(
-        "Claude Code",
-        AcpConnectionType::Local,
-        "claude",
-        Vec::new(),
-        BTreeMap::new(),
-        None,
-        true,
-    );
-    let body = serde_json::json!({ "id": "acp-1" }).to_string();
-    let r = handle_acp_agent_connect_request_with_probe(&body, &mut s, |_| {
-        crate::acp_agent_probe_host::AcpAgentProbeOutcome {
-            connected: false,
-            info: None,
-            error: Some("failed to spawn ACP agent".into()),
-        }
-    });
-
-    assert!(r.status.starts_with("200"), "{}", r.body);
-    let settings = &s.editor.editor_ui.agent_settings;
-    assert!(!settings.acp_agents[0].connected);
-    let conn = settings.acp_agent_connection_for("acp-1");
-    assert_eq!(conn.phase, AcpAgentConnectPhase::Error);
-    assert_eq!(conn.error.as_deref(), Some("failed to spawn ACP agent"));
+        let response = serve("POST", path, "{}");
+        assert!(
+            response.contains("404 Not Found"),
+            "path={path}, {response}"
+        );
+    }
 }
 
 #[test]

@@ -6,6 +6,7 @@
 //! required. The bundle layout comes from the shared
 //! [`op_codegen::ai::bundle`] builder (manifest + raw/sanitized views
 //! + assets), zipped by the dependency-free STORED encoder
+//!
 //! ([`op_codegen::ai::stored_zip`]) so the wasm build stays under the
 //! bundle-size ceiling.
 //!

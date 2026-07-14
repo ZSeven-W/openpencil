@@ -7,13 +7,31 @@
 
 use op_editor_core::editor_ui_state::{RecentFile, RECENT_FILE_CAP};
 use op_editor_core::{
-    AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey,
-    EditorState, ImageGenProfile, ImageGenProvider, Locale, ThemeMode,
+    BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey, EditorState, ImageGenProfile,
+    ImageGenProvider, Locale, ThemeMode,
 };
 use serde::{Deserialize, Serialize};
 
 const SETTINGS_VERSION: u32 = 1;
+const CREDENTIAL_PAYLOAD_VERSION: u32 = 2;
 const STORAGE_KEY: &str = "openpencil-rust-web-settings";
+const CREDENTIAL_STORAGE_KEY: &str = "openpencil-rust-web-credentials";
+
+#[path = "web_settings_legacy.rs"]
+mod legacy;
+#[path = "web_settings_storage.rs"]
+mod storage;
+#[path = "web_settings_validation.rs"]
+mod validation;
+
+#[cfg(test)]
+use storage::{
+    apply_stored_snapshots, load_into_with, save_credentials_if_changed_with, save_if_changed_with,
+    StoredCredentialSource,
+};
+pub(crate) use storage::{
+    credential_migration_pending, load_into, save_credentials_if_changed, save_if_changed,
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct RecentFilePayload {
@@ -32,22 +50,6 @@ struct BuiltinAgentPayload {
     api_key: String,
     model: String,
     base_url: String,
-    enabled: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct AcpAgentPayload {
-    id: String,
-    display_name: String,
-    connection_type: String,
-    #[serde(default)]
-    command: String,
-    #[serde(default)]
-    args: Vec<String>,
-    #[serde(default)]
-    env: std::collections::BTreeMap<String, String>,
-    #[serde(default)]
-    url: Option<String>,
     enabled: bool,
 }
 
@@ -75,16 +77,22 @@ pub(crate) struct Fingerprint {
     port: u16,
     cli: [bool; 6],
     images_adv: bool,
-    openverse_client_id: String,
-    openverse_client_secret: String,
     auto_update_enabled: bool,
     experimental_features_enabled: bool,
-    connected: [bool; 5],
+    recent_files: Vec<RecentFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CredentialFingerprint {
     builtin_agents: Vec<BuiltinAgentConfig>,
-    acp_agents: Vec<AcpAgentConfig>,
     image_gen_profiles: Vec<ImageGenProfile>,
     active_image_gen_profile_id: Option<String>,
-    recent_files: Vec<RecentFile>,
+    openverse_client_id: String,
+    openverse_client_secret: String,
+    write_pending: bool,
+    write_disabled: bool,
+    pending_credential_json: Option<String>,
+    pending_settings_json: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -100,24 +108,29 @@ struct SettingsPayload {
     mcp_cli_enabled: Option<[bool; 6]>,
     #[serde(default)]
     images_advanced_open: Option<bool>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     openverse_oauth: Option<OpenverseOAuthPayload>,
     #[serde(default)]
     auto_update_enabled: Option<bool>,
     #[serde(default)]
     experimental_features_enabled: Option<bool>,
-    #[serde(default)]
-    connected: Option<[bool; 5]>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     builtin_agents: Option<Vec<BuiltinAgentPayload>>,
-    #[serde(default)]
-    acp_agents: Option<Vec<AcpAgentPayload>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     image_gen_profiles: Option<Vec<ImageGenProfilePayload>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     active_image_gen_profile_id: Option<String>,
     #[serde(default)]
     recent_files: Option<Vec<RecentFilePayload>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CredentialPayload {
+    version: u32,
+    builtin_agents: Vec<BuiltinAgentPayload>,
+    image_gen_profiles: Vec<ImageGenProfilePayload>,
+    active_image_gen_profile_id: Option<String>,
+    openverse_oauth: Option<OpenverseOAuthPayload>,
 }
 
 pub(crate) fn fingerprint(state: &EditorState) -> Fingerprint {
@@ -128,45 +141,71 @@ pub(crate) fn fingerprint(state: &EditorState) -> Fingerprint {
         port: eui.agent_settings.mcp_server.port,
         cli: eui.agent_settings.mcp_cli_enabled,
         images_adv: eui.agent_settings.images_advanced_open,
-        openverse_client_id: eui.agent_settings.openverse_client_id.clone(),
-        openverse_client_secret: eui.agent_settings.openverse_client_secret.clone(),
         auto_update_enabled: eui.agent_settings.auto_update_enabled,
         experimental_features_enabled: eui.agent_settings.experimental_features_enabled,
-        connected: eui.agent_settings.connected,
-        builtin_agents: eui.agent_settings.builtin_agents.clone(),
-        acp_agents: eui.agent_settings.acp_agents.clone(),
-        image_gen_profiles: eui.agent_settings.image_gen_profiles.clone(),
-        active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
         recent_files: eui.recent_files.clone(),
     }
 }
 
-pub(crate) fn load_into(state: &mut EditorState) {
-    let Some(raw) = storage_get(STORAGE_KEY) else {
-        return;
-    };
-    let _ = apply_json(state, &raw);
-}
-
-pub(crate) fn save_if_changed(state: &EditorState, before: &mut Fingerprint) {
-    let next = fingerprint(state);
-    if next != *before {
-        save(state);
-        *before = next;
+pub(crate) fn credential_fingerprint(state: &EditorState) -> CredentialFingerprint {
+    let settings = &state.editor_ui.agent_settings;
+    CredentialFingerprint {
+        builtin_agents: settings.builtin_agents.clone(),
+        image_gen_profiles: settings.image_gen_profiles.clone(),
+        active_image_gen_profile_id: settings.active_image_gen_profile_id.clone(),
+        openverse_client_id: settings.openverse_client_id.clone(),
+        openverse_client_secret: settings.openverse_client_secret.clone(),
+        write_pending: false,
+        write_disabled: false,
+        pending_credential_json: None,
+        pending_settings_json: None,
     }
 }
 
+pub(crate) fn credentials_json(state: &EditorState) -> Option<String> {
+    serde_json::to_string(&credential_payload(state)).ok()
+}
+
+/// Snapshot sent to the daemon when server persistence is explicitly enabled.
+/// The web credential schema contains built-in providers and image services,
+/// never CLI or ACP agent configuration.
+pub(crate) fn server_credentials_json(state: &EditorState) -> Option<String> {
+    credentials_json(state)
+}
+
+fn credential_payload(state: &EditorState) -> CredentialPayload {
+    let settings = &state.editor_ui.agent_settings;
+    CredentialPayload {
+        version: CREDENTIAL_PAYLOAD_VERSION,
+        builtin_agents: settings
+            .builtin_agents
+            .iter()
+            .map(builtin_agent_to_payload)
+            .collect(),
+        image_gen_profiles: settings
+            .image_gen_profiles
+            .iter()
+            .map(image_gen_profile_to_payload)
+            .collect(),
+        active_image_gen_profile_id: settings.active_image_gen_profile_id.clone(),
+        openverse_oauth: openverse_oauth_to_payload(settings),
+    }
+}
+
+#[cfg(test)]
 fn apply_json(state: &mut EditorState, raw: &str) -> Result<(), String> {
-    let payload: SettingsPayload = serde_json::from_str(raw).map_err(|e| e.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(raw).map_err(|e| e.to_string())?;
+    let payload = validation::settings_payload(&value)?;
     apply_payload(state, payload);
     Ok(())
 }
 
-fn save(state: &EditorState) {
-    let Ok(json) = serde_json::to_string(&to_payload(state)) else {
-        return;
-    };
-    storage_set(STORAGE_KEY, &json);
+#[cfg(test)]
+fn apply_credential_json(state: &mut EditorState, raw: &str) -> Result<(), String> {
+    let value: serde_json::Value = serde_json::from_str(raw).map_err(|error| error.to_string())?;
+    let payload = validation::credential_payload(&value)?;
+    apply_credential_payload(state, payload);
+    Ok(())
 }
 
 fn to_payload(state: &EditorState) -> SettingsPayload {
@@ -178,32 +217,12 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         mcp_port: Some(eui.agent_settings.mcp_server.port),
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
-        openverse_oauth: openverse_oauth_to_payload(&eui.agent_settings),
+        openverse_oauth: None,
         auto_update_enabled: Some(eui.agent_settings.auto_update_enabled),
         experimental_features_enabled: Some(eui.agent_settings.experimental_features_enabled),
-        connected: Some(eui.agent_settings.connected),
-        builtin_agents: Some(
-            eui.agent_settings
-                .builtin_agents
-                .iter()
-                .map(builtin_agent_to_payload)
-                .collect(),
-        ),
-        acp_agents: Some(
-            eui.agent_settings
-                .acp_agents
-                .iter()
-                .map(acp_agent_to_payload)
-                .collect(),
-        ),
-        image_gen_profiles: Some(
-            eui.agent_settings
-                .image_gen_profiles
-                .iter()
-                .map(image_gen_profile_to_payload)
-                .collect(),
-        ),
-        active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
+        builtin_agents: None,
+        image_gen_profiles: None,
+        active_image_gen_profile_id: None,
         recent_files: Some(
             eui.recent_files
                 .iter()
@@ -246,9 +265,6 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     if let Some(enabled) = payload.experimental_features_enabled {
         eui.agent_settings.experimental_features_enabled = enabled;
     }
-    if let Some(connected) = payload.connected {
-        eui.agent_settings.connected = connected;
-    }
     if let Some(agents) = payload.builtin_agents {
         let agents = agents
             .into_iter()
@@ -257,13 +273,6 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
         eui.agent_settings.builtin_agents = dedupe_builtin_agents(agents);
         eui.agent_settings.next_builtin_agent_id =
             next_builtin_agent_id(&eui.agent_settings.builtin_agents);
-    }
-    if let Some(agents) = payload.acp_agents {
-        eui.agent_settings.acp_agents = agents
-            .into_iter()
-            .filter_map(acp_agent_from_payload)
-            .collect();
-        eui.agent_settings.next_acp_agent_id = next_acp_agent_id(&eui.agent_settings.acp_agents);
     }
     if let Some(profiles) = payload.image_gen_profiles {
         eui.agent_settings.image_gen_profiles = profiles
@@ -305,6 +314,46 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
                 modified_at: r.modified_at,
             })
             .collect();
+    }
+    state.rebuild_chat_models();
+}
+
+fn apply_credential_payload(state: &mut EditorState, payload: CredentialPayload) {
+    let settings = &mut state.editor_ui.agent_settings;
+    settings.builtin_agents = dedupe_builtin_agents(
+        payload
+            .builtin_agents
+            .into_iter()
+            .filter_map(builtin_agent_from_payload)
+            .collect(),
+    );
+    settings.next_builtin_agent_id = next_builtin_agent_id(&settings.builtin_agents);
+    settings.image_gen_profiles = payload
+        .image_gen_profiles
+        .into_iter()
+        .filter_map(image_gen_profile_from_payload)
+        .collect();
+    settings.next_image_gen_profile_id = next_image_gen_profile_id(&settings.image_gen_profiles);
+    settings.active_image_gen_profile_id = payload
+        .active_image_gen_profile_id
+        .filter(|active| {
+            settings
+                .image_gen_profiles
+                .iter()
+                .any(|profile| profile.id == *active)
+        })
+        .or_else(|| {
+            settings
+                .image_gen_profiles
+                .first()
+                .map(|profile| profile.id.clone())
+        });
+    if let Some(oauth) = payload.openverse_oauth {
+        settings.openverse_client_id = oauth.client_id;
+        settings.openverse_client_secret = oauth.client_secret;
+    } else {
+        settings.openverse_client_id.clear();
+        settings.openverse_client_secret.clear();
     }
     state.rebuild_chat_models();
 }
@@ -355,42 +404,6 @@ fn builtin_agent_from_payload(payload: BuiltinAgentPayload) -> Option<BuiltinAge
         model: payload.model,
         base_url: payload.base_url,
         enabled: payload.enabled,
-    })
-}
-
-fn acp_agent_to_payload(agent: &AcpAgentConfig) -> AcpAgentPayload {
-    AcpAgentPayload {
-        id: agent.id.clone(),
-        display_name: agent.display_name.clone(),
-        connection_type: match agent.connection_type {
-            AcpConnectionType::Local => "local",
-            AcpConnectionType::Remote => "remote",
-        }
-        .into(),
-        command: agent.command.clone(),
-        args: agent.args.clone(),
-        env: agent.env.clone(),
-        url: agent.url.clone(),
-        enabled: agent.enabled,
-    }
-}
-
-fn acp_agent_from_payload(payload: AcpAgentPayload) -> Option<AcpAgentConfig> {
-    let connection_type = match payload.connection_type.as_str() {
-        "local" => AcpConnectionType::Local,
-        "remote" => AcpConnectionType::Remote,
-        _ => return None,
-    };
-    Some(AcpAgentConfig {
-        id: payload.id,
-        display_name: payload.display_name,
-        connection_type,
-        command: payload.command,
-        args: payload.args,
-        env: payload.env,
-        url: payload.url,
-        enabled: payload.enabled,
-        connected: false,
     })
 }
 
@@ -473,15 +486,6 @@ fn next_builtin_agent_id(agents: &[BuiltinAgentConfig]) -> u64 {
         .saturating_add(1)
 }
 
-fn next_acp_agent_id(agents: &[AcpAgentConfig]) -> u64 {
-    agents
-        .iter()
-        .filter_map(|agent| agent.id.strip_prefix("acp-")?.parse::<u64>().ok())
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1)
-}
-
 fn next_image_gen_profile_id(profiles: &[ImageGenProfile]) -> u64 {
     profiles
         .iter()
@@ -546,163 +550,14 @@ fn str_to_locale(s: &str) -> Option<Locale> {
     })
 }
 
-#[cfg(target_arch = "wasm32")]
-fn storage_get(key: &str) -> Option<String> {
-    web_sys::window()
-        .and_then(|window| window.local_storage().ok().flatten())
-        .and_then(|storage| storage.get_item(key).ok().flatten())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn storage_get(_key: &str) -> Option<String> {
-    None
-}
-
-#[cfg(target_arch = "wasm32")]
-fn storage_set(key: &str, value: &str) {
-    if let Some(storage) =
-        web_sys::window().and_then(|window| window.local_storage().ok().flatten())
-    {
-        let _ = storage.set_item(key, value);
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn storage_set(_key: &str, _value: &str) {}
+#[cfg(test)]
+#[path = "web_settings_tests.rs"]
+mod tests;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use op_editor_core::{EditorState, Locale, ThemeMode};
+#[path = "web_settings_acp_scrub_tests.rs"]
+mod acp_scrub_tests;
 
-    #[test]
-    fn settings_payload_restores_theme_and_locale() {
-        let payload = r#"{"version":1,"theme":"light","locale":"en-US"}"#;
-        let mut state = EditorState::new();
-
-        apply_json(&mut state, payload).expect("settings payload should parse");
-
-        assert_eq!(state.editor_ui.theme_mode, ThemeMode::Light);
-        assert_eq!(state.editor_ui.locale, Locale::EnUs);
-    }
-
-    #[test]
-    fn fingerprint_changes_when_theme_changes() {
-        let mut state = EditorState::new();
-        let before = fingerprint(&state);
-
-        state.editor_ui.theme_mode = ThemeMode::Light;
-
-        assert_ne!(before, fingerprint(&state));
-    }
-
-    #[test]
-    fn settings_payload_round_trips_recent_files_and_mcp_preferences() {
-        let mut src = EditorState::new();
-        src.editor_ui.theme_mode = ThemeMode::Light;
-        src.editor_ui.locale = Locale::Ja;
-        src.editor_ui.agent_settings.mcp_server.port = 4321;
-        src.editor_ui.agent_settings.mcp_cli_enabled[1] = true;
-        src.editor_ui.agent_settings.images_advanced_open = true;
-        src.editor_ui.agent_settings.openverse_client_id = "client".into();
-        src.editor_ui.agent_settings.openverse_client_secret = "secret".into();
-        src.editor_ui.agent_settings.auto_update_enabled = false;
-        src.editor_ui.agent_settings.experimental_features_enabled = true;
-        src.editor_ui.agent_settings.connected = [true, false, false, true, false];
-        src.editor_ui.recent_files = vec![
-            RecentFile {
-                path: "/tmp/a.op".into(),
-                modified_at: 1,
-            },
-            RecentFile {
-                path: "/tmp/b.op".into(),
-                modified_at: 2,
-            },
-        ];
-        let json = serde_json::to_string(&to_payload(&src)).expect("settings serialize");
-        let mut dst = EditorState::new();
-
-        apply_json(&mut dst, &json).expect("settings payload parses");
-
-        assert_eq!(dst.editor_ui.theme_mode, ThemeMode::Light);
-        assert_eq!(dst.editor_ui.locale, Locale::Ja);
-        assert_eq!(dst.editor_ui.agent_settings.mcp_server.port, 4321);
-        assert!(dst.editor_ui.agent_settings.mcp_cli_enabled[1]);
-        assert!(dst.editor_ui.agent_settings.images_advanced_open);
-        assert_eq!(dst.editor_ui.agent_settings.openverse_client_id, "client");
-        assert_eq!(
-            dst.editor_ui.agent_settings.openverse_client_secret,
-            "secret"
-        );
-        assert!(!dst.editor_ui.agent_settings.auto_update_enabled);
-        assert!(dst.editor_ui.agent_settings.experimental_features_enabled);
-        assert_eq!(
-            dst.editor_ui.agent_settings.connected,
-            [true, false, false, true, false]
-        );
-        assert_eq!(dst.editor_ui.recent_files.len(), 2);
-        assert_eq!(dst.editor_ui.recent_files[0].path, "/tmp/a.op");
-    }
-
-    #[test]
-    fn settings_payload_round_trips_agent_and_image_profiles() {
-        let mut src = EditorState::new();
-        src.editor_ui.agent_settings.add_builtin_agent_config(
-            "MiniMax",
-            "sk-test",
-            "MiniMax-M2.7",
-            BuiltinAgentKind::Anthropic,
-            "https://api.minimaxi.com/anthropic",
-        );
-        src.editor_ui.agent_settings.add_acp_agent_config(
-            "Design Agent",
-            AcpConnectionType::Local,
-            "/usr/local/bin/design-agent",
-            vec!["--stdio".into()],
-            std::collections::BTreeMap::new(),
-            None,
-            true,
-        );
-        let image_profile_id = src.editor_ui.agent_settings.add_image_gen_profile();
-        let profile = &mut src.editor_ui.agent_settings.image_gen_profiles[0];
-        profile.name = "Gemini Image".into();
-        profile.provider = ImageGenProvider::Gemini;
-        profile.api_key = "image-key".into();
-        profile.model = "gemini-image".into();
-        assert!(src
-            .editor_ui
-            .agent_settings
-            .set_active_image_gen_profile(&image_profile_id));
-        let json = serde_json::to_string(&to_payload(&src)).expect("settings serialize");
-        let mut dst = EditorState::new();
-
-        apply_json(&mut dst, &json).expect("settings payload parses");
-
-        assert_eq!(dst.editor_ui.agent_settings.builtin_agents.len(), 1);
-        assert_eq!(
-            dst.editor_ui.agent_settings.builtin_agents[0].display_name,
-            "MiniMax"
-        );
-        assert_eq!(
-            dst.editor_ui.agent_settings.builtin_agents[0].preset,
-            BuiltinAgentPresetKey::MiniMax
-        );
-        assert_eq!(dst.editor_ui.agent_settings.acp_agents.len(), 1);
-        assert_eq!(
-            dst.editor_ui.agent_settings.acp_agents[0].command,
-            "/usr/local/bin/design-agent"
-        );
-        assert_eq!(dst.editor_ui.agent_settings.image_gen_profiles.len(), 1);
-        assert_eq!(
-            dst.editor_ui.agent_settings.image_gen_profiles[0].provider,
-            ImageGenProvider::Gemini
-        );
-        assert_eq!(
-            dst.editor_ui
-                .agent_settings
-                .active_image_gen_profile_id
-                .as_deref(),
-            Some(image_profile_id.as_str())
-        );
-    }
-}
+#[cfg(test)]
+#[path = "web_settings_lossless_tests.rs"]
+mod lossless_tests;

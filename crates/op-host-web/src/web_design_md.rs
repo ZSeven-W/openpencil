@@ -293,10 +293,8 @@ fn build_auto_generate_body(state: &EditorState) -> Option<String> {
     if state.active_children().is_empty() {
         return None;
     }
-    let model = state
-        .chat
-        .selected_model_entry()
-        .map(|entry| entry.value.clone())?;
+    state.chat.selected_model_entry()?;
+    let (model, credential) = crate::web_ai_credentials::selected_target(state);
     let user = build_design_md_user_message(state);
     let body = serde_json::json!({
         "model": model,
@@ -305,6 +303,7 @@ fn build_auto_generate_body(state: &EditorState) -> Option<String> {
         "max_output_tokens": 8192u32,
         "thinking": "disabled",
         "effort": "high",
+        "credential": credential,
     });
     serde_json::to_string(&body).ok()
 }
@@ -396,4 +395,35 @@ fn strip_tool_call_blocks(text: &str) -> String {
 
 fn console_error(msg: &str) {
     web_sys::console::error_1(&JsValue::from_str(msg));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_auto_generate_body;
+    use op_editor_core::{BuiltinAgentKind, EditorState};
+
+    #[test]
+    fn design_md_proxy_body_carries_the_selected_request_scoped_credential() {
+        let mut state = EditorState::starter();
+        let selected_id = state.editor_ui.agent_settings.add_builtin_agent_config(
+            "Private",
+            "sk-design-md",
+            "private-model",
+            BuiltinAgentKind::OpenAiCompat,
+            "https://api.openai.com/v1",
+        );
+        state.rebuild_chat_models();
+        state.chat.selected_model = state
+            .chat
+            .available_models
+            .iter()
+            .position(|entry| entry.builtin_provider_id.as_deref() == Some(selected_id.as_str()))
+            .unwrap();
+
+        let body: serde_json::Value =
+            serde_json::from_str(&build_auto_generate_body(&state).expect("request body")).unwrap();
+
+        assert_eq!(body["model"], "private-model");
+        assert_eq!(body["credential"]["api_key"], "sk-design-md");
+    }
 }

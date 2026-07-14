@@ -29,7 +29,7 @@
 # first).
 #
 # CI / cross-build controls (all optional, default = local behavior):
-#   OPENPENCIL_VERSION     CFBundleShortVersionString (default 0.8.0)
+#   OPENPENCIL_VERSION     CFBundleShortVersionString (default 0.8.1)
 #   OPENPENCIL_TARGET      cargo target triple (e.g. x86_64-apple-darwin);
 #                          builds + bundles for that triple and reads the
 #                          bundle from target/<triple>/release/bundle/osx
@@ -49,7 +49,7 @@
 set -euo pipefail
 
 WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_VERSION="${OPENPENCIL_VERSION:-0.8.0}"
+APP_VERSION="${OPENPENCIL_VERSION:-0.8.1}"
 TARGET_TRIPLE="${OPENPENCIL_TARGET:-}"
 
 # Locate cargo-bundle. Tries PATH first, then a workspace-local

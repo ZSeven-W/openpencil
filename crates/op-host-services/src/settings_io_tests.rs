@@ -1,5 +1,7 @@
 use super::*;
 
+#[path = "settings_io_checked_tests.rs"]
+mod checked_tests;
 #[test]
 fn persisted_locale_overrides_system_locale_seed() {
     assert_eq!(
@@ -351,6 +353,7 @@ fn openverse_oauth_round_trips_through_payload() {
     let mut src = EditorState::new();
     src.editor_ui.agent_settings.openverse_client_id = "client-id".into();
     src.editor_ui.agent_settings.openverse_client_secret = "client-secret".into();
+    src.editor_ui.agent_settings.openverse_credential_owner = Some("browser".into());
 
     let json = serde_json::to_string(&to_payload(&src)).unwrap();
     let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
@@ -365,6 +368,100 @@ fn openverse_oauth_round_trips_through_payload() {
         dst.editor_ui.agent_settings.openverse_client_secret,
         "client-secret"
     );
+    assert_eq!(
+        dst.editor_ui
+            .agent_settings
+            .openverse_credential_owner
+            .as_deref(),
+        Some("browser")
+    );
+}
+
+#[test]
+fn checked_save_reports_an_unwritable_parent() {
+    let root = std::env::temp_dir().join(format!(
+        "openpencil-settings-save-{}-{}",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("unnamed")
+    ));
+    let blocking_parent = root.join("not-a-directory");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(&blocking_parent, b"block").unwrap();
+    let path = blocking_parent.join("settings.json");
+
+    let result = save_checked_to_path(&EditorState::new(), &path);
+
+    assert!(result.is_err());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[cfg(unix)]
+#[test]
+fn checked_save_does_not_reuse_an_existing_temporary_path() {
+    let root = std::env::temp_dir().join(format!(
+        "openpencil-settings-unique-temp-{}-{}",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("unnamed")
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("settings.json");
+    let tmp = root.join("settings.json.tmp");
+    std::fs::write(&tmp, b"do not replace").unwrap();
+
+    let result = save_checked_to_path(&EditorState::new(), &path);
+
+    assert!(result.is_ok());
+    assert_eq!(std::fs::read(&tmp).unwrap(), b"do not replace");
+    assert!(path.is_file());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn checked_save_removes_the_temporary_file_after_a_replace_failure() {
+    let root = std::env::temp_dir().join(format!(
+        "openpencil-settings-replace-failure-{}-{}",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("unnamed")
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("settings.json");
+    std::fs::create_dir(&path).unwrap();
+
+    let result = save_checked_to_path(&EditorState::new(), &path);
+
+    assert!(result.is_err());
+    let remaining = std::fs::read_dir(&root)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(remaining, vec![path]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[cfg(unix)]
+#[test]
+fn checked_save_enforces_private_permissions_on_the_final_file() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = std::env::temp_dir().join(format!(
+        "openpencil-settings-private-mode-{}-{}",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("unnamed")
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("settings.json");
+    let old_tmp = root.join("settings.json.tmp");
+    std::fs::write(&old_tmp, b"old temporary contents").unwrap();
+    std::fs::set_permissions(&old_tmp, std::fs::Permissions::from_mode(0o666)).unwrap();
+
+    save_checked_to_path(&EditorState::new(), &path).unwrap();
+
+    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]

@@ -123,14 +123,14 @@ Các bản phát hành Rust có tag chỉ phát hành một image web host. Các
 
 | Image | Bao gồm |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle và tài nguyên CanvasKit |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host, wasm bundle và tài nguyên CanvasKit |
 
 Web UI chỉ hiển thị các built-in agent profiles; công cụ Claude/Codex/OpenCode/Copilot/Gemini CLI không được đóng gói trong Docker images.
 
 **Chạy:**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
 ```
 
 Sau đó mở `http://localhost:3100/`.
@@ -308,7 +308,7 @@ OpenPencil đã được viết lại từ đầu bằng **Rust** ([#129](https:
 - **Trợ năng gốc** — AccessKit trên macOS, Windows và Linux, cộng với DOM mirror trên web, thay vì dựa vào cây a11y của browser.
 - **Một workspace có kiểm tra kiểu** — MCP host, CLI, nhà cung cấp AI, tạo mã, nhập Figma và tích hợp Git đều nằm trong một Rust workspace duy nhất, với `cargo-deny` kiểm soát chuỗi cung ứng trong CI.
 
-> **Trạng thái:** editor TypeScript đã bị khai tử tại `v0.7.5` và chỉ còn tồn tại trong lịch sử git; repo này chính là Rust workspace. Bản phát hành Rust `v0.8.0` đang được phát triển tích cực (xem Lộ trình bên dưới).
+> **Trạng thái:** editor TypeScript đã bị khai tử tại `v0.7.5` và chỉ còn tồn tại trong lịch sử git; repo này chính là Rust workspace. Bản phát hành Rust `v0.8.1` đang được phát triển tích cực (xem Lộ trình bên dưới).
 
 ## Cấu trúc dự án
 

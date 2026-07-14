@@ -25,22 +25,26 @@ impl WidgetHostNative {
                         .editor_ui
                         .agent_settings
                         .openverse_client_id = draft.trim().to_string();
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_credential_owner = None;
                 }
                 op_editor_core::agent_settings::ImageSearchField::ClientSecret => {
                     self.editor_state
                         .editor_ui
                         .agent_settings
                         .openverse_client_secret = draft.trim().to_string();
+                    self.editor_state
+                        .editor_ui
+                        .agent_settings
+                        .openverse_credential_owner = None;
                 }
             },
             SettingsFocus::BuiltinAgent { index, field } => {
-                if let Some(agent) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_agents
-                    .get_mut(index)
-                {
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                settings.take_over_browser_builtin_agent(index);
+                if let Some(agent) = settings.builtin_agents.get_mut(index) {
                     match field {
                         BuiltinAgentField::DisplayName => {
                             if !draft.trim().is_empty() {
@@ -99,13 +103,9 @@ impl WidgetHostNative {
                 }
             }
             SettingsFocus::ImageGenProfile { index, field } => {
-                if let Some(profile) = self
-                    .editor_state
-                    .editor_ui
-                    .agent_settings
-                    .image_gen_profiles
-                    .get_mut(index)
-                {
+                let settings = &mut self.editor_state.editor_ui.agent_settings;
+                settings.take_over_browser_image_profile(index);
+                if let Some(profile) = settings.image_gen_profiles.get_mut(index) {
                     match field {
                         ImageGenField::Name => {
                             profile.name = draft.trim().to_string();

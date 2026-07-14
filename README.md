@@ -194,6 +194,39 @@ Three submodules live under `vendor/`, all public and fetched over HTTPS (no SSH
 bash scripts/start-web-rust.sh
 ```
 
+Browser-entered built-in provider, image-generation, and Openverse credentials
+are kept in same-origin `localStorage`
+(`openpencil-rust-web-credentials`) by default,
+separate from ordinary web preferences. A credential needed by an AI request is
+sent with that request, but the daemon does not write the browser snapshot to
+`settings.json`.
+
+Private deployments can opt into server persistence with
+`OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true`. This setting is
+deployment-wide; each accepted browser snapshot replaces the shared
+browser-owned copy. Enable it only for a trusted, access-controlled deployment
+with one active administrator profile, behind HTTPS. Turning the setting off
+removes previously persisted browser-owned credentials at the next startup
+while preserving operator-owned configuration. As with all `localStorage`,
+same-origin scripts can read these values, so the web origin must be protected
+from untrusted scripts and XSS. Before downgrading to a release that predates
+this switch, turn it off and start the current release once to scrub the
+browser-owned copy.
+
+The web host supports built-in API-key agents only. CLI and ACP agents remain
+native-only: they are not shown in the web model picker, stored in browser
+credential snapshots, synchronized to the server, or exposed through web
+connect routes. Browser requests to credential and AI endpoints allow
+loopback/localhost origins by default. A public reverse proxy must separately set
+`OPENPENCIL_WEB_ALLOWED_ORIGINS` to a comma-separated list of exact origins,
+for example `https://demo.openpencil.dev`.
+
+Server persistence does not permit browser-controlled requests to loopback,
+private, link-local, metadata, or reserved provider endpoints. A trusted private
+deployment that intentionally uses an internal provider must separately set
+`OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` to a comma-separated list of exact URL
+origins, for example `http://127.0.0.1:11434,https://llm.internal.example`.
+
 Or run as a desktop app:
 
 ```bash
@@ -208,14 +241,14 @@ Tagged Rust releases publish a single web-host image. The retired TypeScript ima
 
 | Image | Includes |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.0` | Rust web host, wasm bundle, and CanvasKit assets |
+| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host, wasm bundle, and CanvasKit assets |
 
 The web UI exposes built-in agent profiles only; Claude/Codex/OpenCode/Copilot/Gemini CLI tooling is not bundled into Docker images.
 
 **Run:**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.0
+docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
 ```
 
 Then open `http://localhost:3100/`.
@@ -413,7 +446,7 @@ OpenPencil was rewritten from the ground up in **Rust** ([#129](https://github.c
 - **Native accessibility** — AccessKit on macOS, Windows, and Linux, plus a DOM mirror on web, instead of leaning on a browser's a11y tree.
 - **One type-checked workspace** — the MCP host, CLI, AI providers, code generation, Figma import, and Git integration all live in a single Rust workspace, with `cargo-deny` supply-chain gating in CI.
 
-> **Status:** the TypeScript editor was retired at `v0.7.5` and lives only in git history; this repository is the Rust workspace. The `v0.8.0` Rust release is under active development (see the Roadmap below).
+> **Status:** the TypeScript editor was retired at `v0.7.5` and lives only in git history; this repository is the Rust workspace. The Rust `v0.8` release line is under active development (see the Roadmap below).
 
 ## Project Structure
 

@@ -24,7 +24,7 @@ exclude = [
 default-members = ["crates/op-host-desktop", "crates/op-cli", "crates/op-host-web-server"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 # 1.87 floor: op-mcp's `script` feature (enabled unconditionally by
 # op-host-services + op-orchestrator) depends on rquickjs 0.12, whose

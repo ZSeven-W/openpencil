@@ -443,6 +443,9 @@ pub struct AgentSettings {
     pub hover_image_gen_add_button: bool,
     pub openverse_client_id: String,
     pub openverse_client_secret: String,
+    /// Provenance marker for Openverse credentials copied from a web
+    /// deployment. `None` means the singleton is operator-managed.
+    pub openverse_credential_owner: Option<String>,
     pub image_gen_profiles: Vec<ImageGenProfile>,
     pub active_image_gen_profile_id: Option<String>,
     pub image_gen_provider_menu_open: Option<usize>,
@@ -506,6 +509,7 @@ impl Default for AgentSettings {
             hover_image_gen_add_button: false,
             openverse_client_id: String::new(),
             openverse_client_secret: String::new(),
+            openverse_credential_owner: None,
             image_gen_profiles: Vec::new(),
             active_image_gen_profile_id: None,
             image_gen_provider_menu_open: None,
@@ -529,6 +533,56 @@ impl Default for AgentSettings {
 }
 
 impl AgentSettings {
+    /// Turn a browser-snapshot built-in into a daemon/operator-owned entry
+    /// before native settings mutate it. Browser snapshots identify ownership
+    /// through the scoped id, so changing the id is the ownership transfer.
+    pub fn take_over_browser_builtin_agent(&mut self, index: usize) -> bool {
+        let Some(old_id) = self
+            .builtin_agents
+            .get(index)
+            .map(|agent| agent.id.clone())
+            .filter(|id| id.starts_with("web-credential:builtin:"))
+        else {
+            return false;
+        };
+        let next = next_free_numeric_id(
+            self.next_builtin_agent_id,
+            "builtin-",
+            self.builtin_agents.iter().map(|agent| agent.id.as_str()),
+        );
+        self.builtin_agents[index].id = format!("builtin-{next}");
+        self.next_builtin_agent_id = next.saturating_add(1);
+        debug_assert_ne!(self.builtin_agents[index].id, old_id);
+        true
+    }
+
+    /// Operator ownership transfer for a browser-snapshot image profile. Keep
+    /// the active-profile pointer aligned with the newly allocated local id.
+    pub fn take_over_browser_image_profile(&mut self, index: usize) -> bool {
+        let Some(old_id) = self
+            .image_gen_profiles
+            .get(index)
+            .map(|profile| profile.id.clone())
+            .filter(|id| id.starts_with("web-credential:image:"))
+        else {
+            return false;
+        };
+        let next = next_free_numeric_id(
+            self.next_image_gen_profile_id,
+            "igp-",
+            self.image_gen_profiles
+                .iter()
+                .map(|profile| profile.id.as_str()),
+        );
+        let new_id = format!("igp-{next}");
+        self.image_gen_profiles[index].id = new_id.clone();
+        self.next_image_gen_profile_id = next.saturating_add(1);
+        if self.active_image_gen_profile_id.as_deref() == Some(old_id.as_str()) {
+            self.active_image_gen_profile_id = Some(new_id);
+        }
+        true
+    }
+
     pub fn add_builtin_agent(&mut self) -> String {
         if let Some(preset) = BUILTIN_AGENT_PRESETS.iter().find(|preset| {
             !self
@@ -790,6 +844,25 @@ impl AgentSettings {
         }
         true
     }
+}
+
+fn next_free_numeric_id<'a>(
+    requested: u64,
+    prefix: &str,
+    ids: impl Iterator<Item = &'a str>,
+) -> u64 {
+    let used: std::collections::HashSet<u64> = ids
+        .filter_map(|id| id.strip_prefix(prefix)?.parse().ok())
+        .collect();
+    let mut next = requested.max(1);
+    while used.contains(&next) {
+        let advanced = next.saturating_add(1);
+        if advanced == next {
+            break;
+        }
+        next = advanced;
+    }
+    next
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

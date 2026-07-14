@@ -40,6 +40,7 @@ use crate::repaint_ctx::RepaintContext;
 use crate::web_ai_transport::{post_ai_stream_to, AiEvent, AiStreamHandle};
 
 type EventQueue = Rc<RefCell<VecDeque<AiEvent>>>;
+const DAEMON_BUILTIN_PREFIX: &str = "daemon-builtin:";
 
 /// The in-flight chat turn: the XHR abort handle plus its generation. wasm is
 /// single-threaded, so a thread_local slot is the natural owner — every drain
@@ -281,11 +282,7 @@ pub(crate) struct PreparedTurn {
 /// transcript bubble.
 pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
     let user_text = state.chat.pending_send.take()?;
-    let model = state
-        .chat
-        .selected_model_entry()
-        .map(|e| e.value.clone())
-        .unwrap_or_else(|| "default".to_string());
+    let (model, credential) = crate::web_ai_credentials::selected_target(state);
     let thinking = state.chat.thinking_mode.as_str();
     let effort = state.chat.effort_level.as_str();
     let agent_team_size = state.chat.agent_team_size;
@@ -325,6 +322,7 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         .map(|page| page.id.as_str());
     let body = serde_json::json!({
         "model": model,
+        "credential": credential,
         // Standard turns route through the daemon classifier + design
         // orchestrator; skills are resolved daemon-side per route.
         "skills": [],
@@ -424,9 +422,9 @@ pub(crate) fn parse_models_json(body: &str) -> Vec<String> {
         .collect()
 }
 
-/// Heuristic provider tag for a daemon model id — drives only the picker's
-/// branding/grouping on web (the daemon resolves the real provider by id, so
-/// a mismatch here cannot misroute a request).
+/// Heuristic provider tag for a daemon built-in model id. This drives only the
+/// API-key branding in the picker; the daemon resolves the real built-in by
+/// model id.
 pub(crate) fn provider_for_model_id(id: &str) -> AgentProvider {
     let lower = id.to_ascii_lowercase();
     if lower.contains("gemini") {
@@ -441,31 +439,84 @@ pub(crate) fn provider_for_model_id(id: &str) -> AgentProvider {
     }
 }
 
-/// Install the daemon catalog into the chat model picker. Writes both
-/// `discovered_models` and `available_models` directly — the web shell has no
-/// connected-CLI mask (the daemon owns provider configuration), so the
-/// desktop's connected-providers filter does not apply. The previously
-/// selected model is preserved by identity when it survives, else selection
-/// falls back to the first entry.
+/// Merge the daemon's built-in-only catalog into the chat model picker. A
+/// synthetic built-in id keeps these entries out of every CLI path; because it
+/// does not match a browser-local profile, requests carry no transient key and
+/// the daemon resolves its operator-owned built-in by model id.
 pub(crate) fn apply_models(state: &mut EditorState, ids: &[String]) {
-    let entries: Vec<ModelEntry> = ids
+    state.chat.discovered_models = ids
         .iter()
-        .map(|id| ModelEntry::new(provider_for_model_id(id), id.clone(), id.clone()))
+        .map(|id| {
+            ModelEntry::builtin_with_display_name(
+                provider_for_model_id(id),
+                format!("{DAEMON_BUILTIN_PREFIX}{id}"),
+                "Server API Key",
+                id.clone(),
+                id.clone(),
+            )
+        })
         .collect();
-    let prev = state
+
+    reconcile_models(state);
+}
+
+/// Restore the web model picker from its two authoritative built-in-only
+/// sources: the daemon catalog and ready browser-local providers.
+///
+/// Core settings mutations call `EditorState::rebuild_chat_models`, whose
+/// native connected-provider filter can temporarily remove daemon models.
+/// Re-running this web reconciliation makes those models visible again while
+/// keeping the selected entry by identity whenever it still exists.
+pub(crate) fn reconcile_models(state: &mut EditorState) {
+    let previous = state
         .chat
         .available_models
         .get(state.chat.selected_model)
         .cloned();
-    state.chat.discovered_models = entries.clone();
-    state.chat.available_models = entries;
-    state.chat.selected_model = prev
+    let local_agents = state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter()
+        .filter(|agent| agent.ready())
+        .collect::<Vec<_>>();
+    let local_model_ids = local_agents
+        .iter()
+        .map(|agent| agent.model.trim())
+        .collect::<std::collections::HashSet<_>>();
+    let mut available_models = state
+        .chat
+        .discovered_models
+        .iter()
+        .filter(|entry| {
+            entry
+                .builtin_provider_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with(DAEMON_BUILTIN_PREFIX))
+                && !local_model_ids.contains(entry.value.trim())
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    available_models.extend(local_agents.into_iter().map(|agent| {
+        ModelEntry::builtin_with_display_name(
+            agent.kind.model_provider(),
+            agent.id.clone(),
+            agent.display_name.clone(),
+            format!("builtin:{}:{}", agent.id, agent.model),
+            agent.model.clone(),
+        )
+    }));
+    if state.chat.available_models == available_models {
+        return;
+    }
+    state.chat.available_models = available_models;
+    state.chat.selected_model = previous
         .and_then(|p| {
-            state
-                .chat
-                .available_models
-                .iter()
-                .position(|m| m.provider == p.provider && m.value == p.value)
+            state.chat.available_models.iter().position(|m| {
+                m.provider == p.provider
+                    && m.value == p.value
+                    && m.builtin_provider_id == p.builtin_provider_id
+            })
         })
         .unwrap_or(0);
 }
@@ -674,6 +725,11 @@ mod tests {
         assert_eq!(state.chat.available_models.len(), 2);
         assert_eq!(state.chat.discovered_models.len(), 2);
         assert_eq!(state.chat.selected_model, 0);
+        assert!(state
+            .chat
+            .available_models
+            .iter()
+            .all(|entry| entry.builtin_provider_id.is_some()));
         assert_eq!(
             state.chat.available_models[1].provider,
             AgentProvider::GeminiCli
@@ -714,3 +770,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "web_chat_credential_tests.rs"]
+mod credential_tests;

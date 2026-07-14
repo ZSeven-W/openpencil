@@ -25,8 +25,9 @@ use std::thread;
 use std::time::Duration;
 
 use base64::Engine as _;
-use op_editor_core::agent_settings::{AcpAgentConnectOutcome, ProviderConnectOutcome};
-use op_editor_core::EditorState;
+use op_editor_core::{AgentSettings, EditorState};
+
+use crate::web_credential_policy::WebCredentialPersistence;
 
 /// Slow/stalled-peer bound — bodies can be large (whole documents with embedded
 /// images), so a connection that opens and dribbles must not pin a thread.
@@ -94,6 +95,9 @@ impl Drop for ConnGuard {
 /// read/replace it over `/api/mcp/document`.
 pub struct WebCanvasState {
     pub(crate) editor: EditorState,
+    /// Immutable deployment policy for browser-supplied credentials. Public
+    /// demo deployments fail closed to browser-only persistence.
+    pub(crate) credential_persistence: WebCredentialPersistence,
     /// Local file backing this daemon document, when `--serve-web` was launched
     /// with a path or the user opened a recent local file through the daemon.
     pub(crate) current_path: Option<PathBuf>,
@@ -111,13 +115,41 @@ impl WebCanvasState {
         Self::new_with_path(editor, port, None)
     }
 
+    #[cfg(test)]
+    pub(crate) fn new_with_policy(
+        editor: EditorState,
+        port: u16,
+        credential_persistence: WebCredentialPersistence,
+    ) -> Self {
+        Self::new_with_path_and_policy(editor, port, None, credential_persistence)
+    }
+
+    #[cfg(test)]
     pub(crate) fn new_with_path(
         editor: EditorState,
         port: u16,
         current_path: Option<PathBuf>,
     ) -> Self {
+        Self::new_with_path_and_policy(
+            editor,
+            port,
+            current_path,
+            WebCredentialPersistence::BrowserOnly,
+        )
+    }
+
+    fn new_with_path_and_policy(
+        mut editor: EditorState,
+        port: u16,
+        current_path: Option<PathBuf>,
+        credential_persistence: WebCredentialPersistence,
+    ) -> Self {
+        if !credential_persistence.server_persistence() {
+            let _ = crate::web_credentials::remove_browser_owned_credentials(&mut editor);
+        }
         Self {
             editor,
+            credential_persistence,
             current_path,
             version: 0,
             port,
@@ -153,6 +185,35 @@ impl WebCanvasState {
 pub struct WebReply {
     pub(crate) status: &'static str,
     pub(crate) body: String,
+}
+
+fn persist_api_settings<F>(
+    method: &str,
+    path: &str,
+    state: &mut WebCanvasState,
+    settings_before: crate::settings_io::Fingerprint,
+    credential_settings_before: Option<AgentSettings>,
+    reply: WebReply,
+    save_credentials: F,
+) -> WebReply
+where
+    F: FnOnce(&EditorState) -> Result<(), String>,
+{
+    if method == "POST" && path == "/api/settings/credentials" && reply.status == "200 OK" {
+        if save_credentials(&state.editor).is_err() {
+            if let Some(settings) = credential_settings_before {
+                state.editor.editor_ui.agent_settings = settings;
+                state.editor.rebuild_chat_models();
+            }
+            return WebReply {
+                status: "500 Internal Server Error",
+                body: crate::mcp_serve::rest_error_body("failed to persist server credentials"),
+            };
+        }
+    } else {
+        crate::settings_io::save_if_changed(&state.editor, settings_before);
+    }
+    reply
 }
 
 /// Handle one parsed web-canvas REST request against the in-memory state. Pure
@@ -286,16 +347,6 @@ pub fn handle_web_canvas_request(
         ("POST", "/api/file/open-recent") => open_recent_file(body, state),
         ("POST", "/api/export/pdf") => export_pdf_download(body, state),
         ("POST", "/api/export/raster") => export_raster_download(body, state),
-        ("POST", "/api/agents/connect") => {
-            handle_provider_connect_request_with_probe(body, state, crate::provider_probe::connect_provider)
-        }
-        ("POST", "/api/acp/connect") => {
-            handle_acp_agent_connect_request_with_probe(
-                body,
-                state,
-                crate::acp_agent_probe_host::probe_acp_agent_config,
-            )
-        }
         ("GET", "/api/ai/models") => WebReply {
             // JSON array of model ids the AI proxy can serve (the
             // configured built-in agents). The web bundle queries this
@@ -305,6 +356,40 @@ pub fn handle_web_canvas_request(
             status: "200 OK",
             body: crate::ai_proxy::models_json(&state.editor),
         },
+        ("GET", "/api/settings/credential-policy") => WebReply {
+            status: "200 OK",
+            body: serde_json::json!({
+                "serverPersistence": state.credential_persistence.server_persistence(),
+            })
+            .to_string(),
+        },
+        ("POST", "/api/settings/credentials") => {
+            if !state.credential_persistence.server_persistence() {
+                WebReply {
+                    status: "403 Forbidden",
+                    body: crate::mcp_serve::rest_error_body(
+                        "server credential persistence is disabled",
+                    ),
+                }
+            } else {
+                match crate::web_credentials::apply_json(&mut state.editor, body) {
+                    Ok(()) => WebReply {
+                        status: "200 OK",
+                        body: r#"{"ok":true}"#.into(),
+                    },
+                    Err(message) => WebReply {
+                        status: if body.len()
+                            > crate::web_credentials::MAX_CREDENTIAL_BODY_BYTES
+                        {
+                            "413 Payload Too Large"
+                        } else {
+                            "400 Bad Request"
+                        },
+                        body: crate::mcp_serve::rest_error_body(&message),
+                    },
+                }
+            }
+        }
         _ => WebReply {
             status: "404 Not Found",
             body: r#"{"ok":false,"error":"Not found. Use /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/file/save, /api/export/raster, /api/export/pdf, or /mcp."}"#
@@ -637,248 +722,6 @@ fn update_mcp_server_settings(body: &str, state: &mut WebCanvasState) -> WebRepl
     }
 }
 
-pub fn handle_acp_agent_connect_request_with_probe<F>(
-    body: &str,
-    state: &mut WebCanvasState,
-    probe: F,
-) -> WebReply
-where
-    F: FnOnce(op_acp::AcpAgentConfig) -> crate::acp_agent_probe_host::AcpAgentProbeOutcome,
-{
-    let Some(id) = parse_acp_agent_connect_request(body) else {
-        return WebReply {
-            status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("Missing ACP agent id"),
-        };
-    };
-    let Some(index) = state
-        .editor
-        .editor_ui
-        .agent_settings
-        .acp_agents
-        .iter()
-        .position(|agent| agent.id == id && agent.ready())
-    else {
-        return WebReply {
-            status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("ACP agent is not configured"),
-        };
-    };
-    let agent = state.editor.editor_ui.agent_settings.acp_agents[index].clone();
-    state
-        .editor
-        .editor_ui
-        .agent_settings
-        .begin_acp_agent_connect(index);
-    let outcome = probe(crate::acp_agent_probe_host::acp_config_for_probe(&agent));
-    apply_acp_agent_probe_outcome(&id, outcome, state)
-}
-
-fn parse_acp_agent_connect_request(body: &str) -> Option<String> {
-    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
-    parsed
-        .get("id")
-        .or_else(|| parsed.get("agentId"))
-        .and_then(|v| v.as_str())
-        .filter(|id| !id.trim().is_empty())
-        .map(str::to_string)
-}
-
-fn apply_acp_agent_probe_outcome(
-    id: &str,
-    outcome: crate::acp_agent_probe_host::AcpAgentProbeOutcome,
-    state: &mut WebCanvasState,
-) -> WebReply {
-    state
-        .editor
-        .editor_ui
-        .agent_settings
-        .apply_acp_agent_connect_outcome(
-            id,
-            AcpAgentConnectOutcome {
-                connected: outcome.connected,
-                info: outcome.info.clone(),
-                error: outcome.error.clone(),
-            },
-        );
-    state.editor.rebuild_chat_models();
-    WebReply {
-        status: "200 OK",
-        body: serde_json::json!({
-            "ok": true,
-            "id": id,
-            "connected": outcome.connected,
-            "connectionInfo": outcome.info,
-            "error": outcome.error,
-        })
-        .to_string(),
-    }
-}
-
-pub fn handle_provider_connect_request_with_probe<F>(
-    body: &str,
-    state: &mut WebCanvasState,
-    probe: F,
-) -> WebReply
-where
-    F: FnOnce(op_ai::agent_settings_state::AgentProvider) -> crate::provider_probe::ProbeOutcome,
-{
-    let Some(provider) = parse_provider_connect_request(body) else {
-        return WebReply {
-            status: "400 Bad Request",
-            body: crate::mcp_serve::rest_error_body("Missing provider"),
-        };
-    };
-    state
-        .editor
-        .editor_ui
-        .agent_settings
-        .begin_provider_connect(provider);
-    let outcome = probe(provider_to_probe(provider));
-    apply_provider_probe_outcome(provider, outcome, state)
-}
-
-fn parse_provider_connect_request(body: &str) -> Option<op_editor_core::AgentProvider> {
-    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
-    parsed
-        .get("provider")
-        .and_then(|v| v.as_str())
-        .and_then(parse_agent_provider)
-}
-
-fn parse_agent_provider(raw: &str) -> Option<op_editor_core::AgentProvider> {
-    use op_editor_core::AgentProvider;
-    let normalized = raw
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .flat_map(|c| c.to_lowercase())
-        .collect::<String>();
-    match normalized.as_str() {
-        "claude" | "claudecode" => Some(AgentProvider::ClaudeCode),
-        "codex" | "codexcli" => Some(AgentProvider::CodexCli),
-        "opencode" => Some(AgentProvider::OpenCode),
-        "githubcopilot" | "copilot" => Some(AgentProvider::GithubCopilot),
-        "gemini" | "geminicli" => Some(AgentProvider::GeminiCli),
-        _ => None,
-    }
-}
-
-fn provider_to_probe(
-    provider: op_editor_core::AgentProvider,
-) -> op_ai::agent_settings_state::AgentProvider {
-    use op_ai::agent_settings_state::AgentProvider as ProbeProvider;
-    use op_editor_core::AgentProvider;
-    match provider {
-        AgentProvider::ClaudeCode => ProbeProvider::ClaudeCode,
-        AgentProvider::CodexCli => ProbeProvider::CodexCli,
-        AgentProvider::OpenCode => ProbeProvider::OpenCode,
-        AgentProvider::GithubCopilot => ProbeProvider::GithubCopilot,
-        AgentProvider::GeminiCli => ProbeProvider::GeminiCli,
-    }
-}
-
-fn apply_provider_probe_outcome(
-    provider: op_editor_core::AgentProvider,
-    outcome: crate::provider_probe::ProbeOutcome,
-    state: &mut WebCanvasState,
-) -> WebReply {
-    let outcome = crate::provider_probe_host::normalize_provider_probe_outcome(provider, outcome);
-    let crate::provider_probe::ProbeOutcome {
-        connected,
-        models,
-        error,
-        warning,
-        not_installed,
-        install_command,
-        connection_info,
-        hint_path,
-        version,
-    } = outcome;
-    let response_models: Vec<serde_json::Value> = models
-        .iter()
-        .map(|m| {
-            serde_json::json!({
-                "provider": provider_key(provider),
-                "value": m.value,
-                "displayName": m.display_name,
-            })
-        })
-        .collect();
-    state
-        .editor
-        .editor_ui
-        .agent_settings
-        .apply_provider_connect_outcome(
-            provider,
-            ProviderConnectOutcome {
-                connected,
-                info: connection_info.clone(),
-                warning: warning.clone(),
-                error: error.clone(),
-                not_installed,
-                install_command: install_command.clone(),
-                hint_path: hint_path.clone(),
-                version: version.clone(),
-            },
-        );
-    state
-        .editor
-        .editor_ui
-        .agent_settings
-        .pending_provider_connect = None;
-    if connected && !models.is_empty() {
-        state
-            .editor
-            .chat
-            .discovered_models
-            .retain(|m| m.provider != provider);
-        state.editor.chat.discovered_models.extend(
-            models
-                .into_iter()
-                .map(crate::model_discovery::model_entry_to_ec),
-        );
-        sort_discovered_models(&mut state.editor);
-    }
-    state.editor.rebuild_chat_models();
-    WebReply {
-        status: "200 OK",
-        body: serde_json::json!({
-            "ok": true,
-            "provider": provider_key(provider),
-            "connected": connected,
-            "models": response_models,
-            "error": error,
-            "warning": warning,
-            "notInstalled": not_installed,
-            "installCommand": install_command,
-            "connectionInfo": connection_info,
-            "hintPath": hint_path,
-            "version": version,
-        })
-        .to_string(),
-    }
-}
-
-fn sort_discovered_models(editor: &mut EditorState) {
-    editor.chat.discovered_models.sort_by_key(|m| {
-        op_editor_core::AgentProvider::ALL
-            .iter()
-            .position(|p| *p == m.provider)
-            .unwrap_or(usize::MAX)
-    });
-}
-
-fn provider_key(provider: op_editor_core::AgentProvider) -> &'static str {
-    use op_editor_core::AgentProvider;
-    match provider {
-        AgentProvider::ClaudeCode => "claude",
-        AgentProvider::CodexCli => "codex",
-        AgentProvider::OpenCode => "opencode",
-        AgentProvider::GithubCopilot => "github-copilot",
-        AgentProvider::GeminiCli => "gemini",
-    }
-}
-
 fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebReply {
     let parsed: Option<serde_json::Value> = serde_json::from_str(body).ok();
     let Some(path_s) = parsed
@@ -1075,10 +918,28 @@ fn startup_editor_from_base_for_web_canvas(
     }
 }
 
-pub fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
+fn startup_editor_for_web_canvas_with_loader<Checked>(
+    path: Option<PathBuf>,
+    _policy: WebCredentialPersistence,
+    checked_load: Checked,
+) -> Result<EditorState, String>
+where
+    Checked: FnOnce(&mut EditorState) -> Result<(), String>,
+{
     let mut base = EditorState::starter();
-    crate::settings_io::load(&mut base);
+    checked_load(&mut base)?;
     startup_editor_from_base_for_web_canvas(base, path)
+}
+
+fn startup_editor_for_web_canvas_with_policy(
+    path: Option<PathBuf>,
+    policy: WebCredentialPersistence,
+) -> Result<EditorState, String> {
+    startup_editor_for_web_canvas_with_loader(path, policy, crate::settings_io::load_checked)
+}
+
+pub fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorState, String> {
+    startup_editor_for_web_canvas_with_policy(path, crate::web_credential_policy::from_env())
 }
 
 /// Run the web-canvas daemon on `host:port` (default `127.0.0.1`), backed by
@@ -1088,7 +949,13 @@ pub fn startup_editor_for_web_canvas(path: Option<PathBuf>) -> Result<EditorStat
 /// the in-memory document). Blocks until a token-authed shutdown request.
 pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<(), String> {
     let current_path = path.clone();
-    let editor = startup_editor_for_web_canvas(path)?;
+    let credential_persistence = crate::web_credential_policy::from_env();
+    let mut editor = startup_editor_for_web_canvas_with_policy(path, credential_persistence)?;
+    enforce_credential_persistence_policy(
+        &mut editor,
+        credential_persistence,
+        crate::settings_io::save_checked,
+    )?;
     let listener =
         TcpListener::bind((host, port)).map_err(|e| format!("bind {host}:{port}: {e}"))?;
     let bound = listener.local_addr().map(|a| a.port()).unwrap_or(port);
@@ -1106,10 +973,11 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<()
     // Shared across connection threads: the document authority (one writer at a
     // time via the Mutex) + the SSE broadcast hub. Thread-per-connection so a
     // long-lived SSE stream (or a slow client) never blocks other clients.
-    let state = Arc::new(Mutex::new(WebCanvasState::new_with_path(
+    let state = Arc::new(Mutex::new(WebCanvasState::new_with_path_and_policy(
         editor,
         bound,
         current_path,
+        credential_persistence,
     )));
     let hub = Arc::new(SseHub::default());
     let conn_count = Arc::new(AtomicUsize::new(0));
@@ -1169,6 +1037,25 @@ pub fn run_web_canvas(path: Option<PathBuf>, port: u16, host: &str) -> Result<()
     Ok(())
 }
 
+fn enforce_credential_persistence_policy<F>(
+    editor: &mut EditorState,
+    policy: WebCredentialPersistence,
+    save: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&EditorState) -> Result<(), String>,
+{
+    if !policy.server_persistence()
+        && crate::web_credentials::remove_browser_owned_credentials(editor)
+    {
+        save(editor).map_err(|_| {
+            "failed to remove browser-owned credentials while server persistence is disabled"
+                .to_string()
+        })?;
+    }
+    Ok(())
+}
+
 /// Handle one connection. Routes: static host page + wasm bundle (`GET /`,
 /// `GET /pkg/*` via `crate::web_static`); SSE live-update stream (`GET
 /// /api/mcp/events`); REST whole-doc sync / health (`/api/*` via
@@ -1189,6 +1076,14 @@ fn serve_one<S: Read + Write>(
     if req.method == "OPTIONS" {
         return crate::mcp_serve::write_mcp_http_response(stream, "204 No Content", "")
             .map(|()| false);
+    }
+    if is_sensitive_browser_post(&req) && !credential_request_origin_allowed(&req) {
+        return crate::mcp_serve::write_mcp_http_response(
+            stream,
+            "403 Forbidden",
+            &crate::mcp_serve::rest_error_body("cross-origin sensitive request is forbidden"),
+        )
+        .map(|()| false);
     }
     // Static serving: the host page (`/`) and the wasm-bindgen bundle
     // (`/pkg/*`). Owns only those paths — everything else falls through.
@@ -1224,12 +1119,24 @@ fn serve_one<S: Read + Write>(
         };
         let provider = {
             let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            crate::ai_proxy::proxy_provider(&guard.editor, &ai_req.model)
+            crate::ai_proxy::proxy_provider_for_request(
+                &guard.editor,
+                &ai_req,
+                guard.credential_persistence,
+            )
         };
-        let Some(provider) = provider else {
-            return crate::ai_proxy::write_sse_error(stream, "no model configured")
-                .map_err(|e| format!("ai stream error: {e}"))
-                .map(|()| false);
+        let provider = match provider {
+            Ok(Some(provider)) => provider,
+            Ok(None) => {
+                return crate::ai_proxy::write_sse_error(stream, "no model configured")
+                    .map_err(|e| format!("ai stream error: {e}"))
+                    .map(|()| false);
+            }
+            Err(message) => {
+                return crate::ai_proxy::write_sse_error(stream, &message)
+                    .map_err(|e| format!("ai stream error: {e}"))
+                    .map(|()| false);
+            }
         };
         return crate::ai_proxy::stream_ai_response(stream, ai_req, provider.as_ref())
             .map_err(|e| format!("ai stream: {e}"))
@@ -1249,76 +1156,6 @@ fn serve_one<S: Read + Write>(
             .map_err(|e| format!("ai standard: {e}"))
             .map(|()| false);
     }
-    if req.method == "POST" && req.path == "/api/agents/connect" {
-        let Some(provider) = parse_provider_connect_request(&req.body) else {
-            return crate::mcp_serve::write_mcp_http_response(
-                stream,
-                "400 Bad Request",
-                &crate::mcp_serve::rest_error_body("Missing provider"),
-            )
-            .map(|()| false);
-        };
-        let outcome = crate::provider_probe::connect_provider(provider_to_probe(provider));
-        let reply = {
-            let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            guard
-                .editor
-                .editor_ui
-                .agent_settings
-                .begin_provider_connect(provider);
-            let reply = apply_provider_probe_outcome(provider, outcome, &mut guard);
-            crate::settings_io::save(&guard.editor);
-            reply
-        };
-        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
-            .map(|()| false);
-    }
-    if req.method == "POST" && req.path == "/api/acp/connect" {
-        let Some(id) = parse_acp_agent_connect_request(&req.body) else {
-            return crate::mcp_serve::write_mcp_http_response(
-                stream,
-                "400 Bad Request",
-                &crate::mcp_serve::rest_error_body("Missing ACP agent id"),
-            )
-            .map(|()| false);
-        };
-        let agent = {
-            let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            let Some(index) = guard
-                .editor
-                .editor_ui
-                .agent_settings
-                .acp_agents
-                .iter()
-                .position(|agent| agent.id == id && agent.ready())
-            else {
-                return crate::mcp_serve::write_mcp_http_response(
-                    stream,
-                    "400 Bad Request",
-                    &crate::mcp_serve::rest_error_body("ACP agent is not configured"),
-                )
-                .map(|()| false);
-            };
-            let agent = guard.editor.editor_ui.agent_settings.acp_agents[index].clone();
-            guard
-                .editor
-                .editor_ui
-                .agent_settings
-                .begin_acp_agent_connect(index);
-            agent
-        };
-        let outcome = crate::acp_agent_probe_host::probe_acp_agent_config(
-            crate::acp_agent_probe_host::acp_config_for_probe(&agent),
-        );
-        let reply = {
-            let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
-            let reply = apply_acp_agent_probe_outcome(&id, outcome, &mut guard);
-            crate::settings_io::save(&guard.editor);
-            reply
-        };
-        return crate::mcp_serve::write_mcp_http_response(stream, reply.status, &reply.body)
-            .map(|()| false);
-    }
     // All `/api/mcp/*` REST paths go to the REST handler — including ones this
     // daemon doesn't implement yet, which it answers with 404 rather than
     // mis-routing them into the JSON-RPC dispatch below.
@@ -1326,7 +1163,20 @@ fn serve_one<S: Read + Write>(
         let reply = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
             let before = guard.version;
+            let settings_before = crate::settings_io::fingerprint(&guard.editor);
+            let credential_settings_before = (req.method == "POST"
+                && req.path == "/api/settings/credentials")
+                .then(|| guard.editor.editor_ui.agent_settings.clone());
             let reply = handle_web_canvas_request(&req.method, &req.path, &req.body, &mut guard);
+            let reply = persist_api_settings(
+                &req.method,
+                &req.path,
+                &mut guard,
+                settings_before,
+                credential_settings_before,
+                reply,
+                crate::settings_io::save_checked,
+            );
             // Broadcast INSIDE the state lock so the version bump and its
             // broadcast are atomic — otherwise two concurrent mutations could
             // broadcast their versions out of order (SSE clients seeing N then
@@ -1428,6 +1278,100 @@ fn serve_one<S: Read + Write>(
         "200 OK"
     };
     crate::mcp_serve::write_mcp_http_response(stream, status, &response).map(|()| false)
+}
+
+const WEB_ALLOWED_ORIGINS_ENV: &str = "OPENPENCIL_WEB_ALLOWED_ORIGINS";
+
+fn is_sensitive_browser_post(request: &crate::mcp_serve::HttpRequest) -> bool {
+    request.method == "POST"
+        && (request.path == "/api/settings/credentials" || request.path.starts_with("/api/ai/"))
+}
+
+fn credential_request_origin_allowed(request: &crate::mcp_serve::HttpRequest) -> bool {
+    let allowed_origins = std::env::var(WEB_ALLOWED_ORIGINS_ENV).ok();
+    credential_request_origin_allowed_with_config(request, allowed_origins.as_deref())
+}
+
+fn credential_request_origin_allowed_with_config(
+    request: &crate::mcp_serve::HttpRequest,
+    allowed_origins: Option<&str>,
+) -> bool {
+    let Some(origin) = request.origin.as_deref() else {
+        // Non-browser clients do not normally send Origin. Server persistence
+        // is an opt-in private-deployment feature, so those clients remain
+        // usable while browser requests are constrained by the unforgeable
+        // Origin header.
+        return true;
+    };
+    let Some(host) = request.host.as_deref() else {
+        return false;
+    };
+    let Some(origin) = parse_http_origin(origin) else {
+        return false;
+    };
+    let Ok(host) = reqwest::Url::parse(&format!("http://{host}/")) else {
+        return false;
+    };
+    let same_request_authority =
+        origin
+            .host_str()
+            .zip(host.host_str())
+            .is_some_and(|(origin_host, request_host)| {
+                let request_port = host.port().or_else(|| match origin.scheme() {
+                    "http" => Some(80),
+                    "https" => Some(443),
+                    _ => None,
+                });
+                origin_host.eq_ignore_ascii_case(request_host)
+                    && origin.port_or_known_default() == request_port
+            });
+    if !same_request_authority {
+        return false;
+    }
+    if origin.host_str().is_some_and(is_loopback_web_host) {
+        return true;
+    }
+    allowed_origins
+        .into_iter()
+        .flat_map(|origins| origins.split(','))
+        .filter_map(|configured| parse_http_origin(configured.trim()))
+        .any(|configured| same_url_origin(&origin, &configured))
+}
+
+fn parse_http_origin(value: &str) -> Option<reqwest::Url> {
+    let origin = reqwest::Url::parse(value).ok()?;
+    (matches!(origin.scheme(), "http" | "https")
+        && origin.username().is_empty()
+        && origin.password().is_none()
+        && origin.host_str().is_some()
+        && origin.path() == "/"
+        && origin.query().is_none()
+        && origin.fragment().is_none())
+    .then_some(origin)
+}
+
+fn same_url_origin(left: &reqwest::Url, right: &reqwest::Url) -> bool {
+    left.scheme() == right.scheme()
+        && left
+            .host_str()
+            .zip(right.host_str())
+            .is_some_and(|(left, right)| left.eq_ignore_ascii_case(right))
+        && left.port_or_known_default() == right.port_or_known_default()
+}
+
+fn is_loopback_web_host(host: &str) -> bool {
+    let ip_literal = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .to_ascii_lowercase()
+            .strip_suffix(".localhost")
+            .is_some_and(|prefix| !prefix.is_empty())
+        || ip_literal
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 /// Stream Server-Sent Events to a subscribed client: write the SSE headers,
