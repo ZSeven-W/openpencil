@@ -7,7 +7,7 @@
 #
 # Usage:
 #   ./install-op.sh                         # install the latest stable release
-#   OP_VERSION=0.8.1 ./install-op.sh        # pin a specific version
+#   OP_VERSION=X.Y.Z ./install-op.sh        # pin a specific version
 #   OP_PRERELEASE=1 ./install-op.sh         # allow the newest pre-release
 #   INSTALL_DIR=$HOME/.local/bin ./install-op.sh
 #
@@ -68,7 +68,7 @@ resolve_version() {
   tag="$(curl -fsSL "$api" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\(v\{0,1\}[^"]*\)"$/\1/')"
   if [ -z "$tag" ]; then
     echo "error: could not resolve the latest release tag from GitHub" >&2
-    echo "       set OP_VERSION explicitly, e.g. OP_VERSION=0.8.1 $0" >&2
+    echo "       set OP_VERSION explicitly, e.g. OP_VERSION=X.Y.Z $0" >&2
     echo "       or set OP_PRERELEASE=1 to allow pre-release tags" >&2
     exit 1
   fi

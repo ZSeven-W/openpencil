@@ -155,14 +155,15 @@ jobs:
       - name: Compute release version
         shell: bash
         run: |
-          # Tag pushes (vX.Y.Z) drive the artifact version; workflow_dispatch
-          # falls back to [workspace.package].version in the root Cargo.toml.
+          cargo_version="$(scripts/workspace-version.sh)"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "OP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-          else
-            ver="$(awk -F'"' '/^\[workspace\.package\]/{f=1} f && /^version/{print $2; exit}' Cargo.toml)"
-            echo "OP_VERSION=${ver:-0.0.0}" >> "$GITHUB_ENV"
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ "$tag_version" != "$cargo_version" ]]; then
+              echo "::error::release tag version $tag_version does not match Cargo workspace version $cargo_version"
+              exit 1
+            fi
           fi
+          echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
       - name: Build (host)
         run: cargo build -p op-host-desktop -p op-cli --target ${{ matrix.target }} --release
       - name: Package archives (unix)
