@@ -103,7 +103,10 @@ fn start_document_file_is_minimal_op_when_missing() {
 
     assert_eq!(
         std::fs::read_to_string(&path).expect("read document"),
-        "{\n  \"version\": \"0.8.0\",\n  \"name\": \"OpenPencil CLI Session\",\n  \"children\": []\n}\n"
+        format!(
+            "{{\n  \"version\": \"{}\",\n  \"name\": \"OpenPencil CLI Session\",\n  \"children\": []\n}}\n",
+            env!("CARGO_PKG_VERSION")
+        )
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -165,7 +165,7 @@ impl EditorState {
     }
 
     /// Build an editor state around an empty single-page document.
-    /// `version` is set to the current `.op` format version literal;
+    /// `version` is set to the current Cargo package version;
     /// `children` is empty (no nodes) and `pages` is left `None` so
     /// the document uses the default single-page fallback.
     pub fn new() -> Self {
@@ -327,7 +327,7 @@ impl Default for EditorState {
 /// An empty canonical document — `version` set, no nodes, no pages.
 fn empty_document() -> jian_ops_schema::PenDocument {
     jian_ops_schema::PenDocument {
-        version: "0.8.0".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
         name: None,
         themes: None,
         variables: None,
@@ -352,6 +352,7 @@ mod tests {
     #[test]
     fn new_state_is_empty_and_quiescent() {
         let s = EditorState::new();
+        assert_eq!(s.doc.version, env!("CARGO_PKG_VERSION"));
         assert!(s.doc.children.is_empty());
         assert!(s.doc.pages.is_none());
         // Persisted variables/themes live on `doc`, not duplicated.
