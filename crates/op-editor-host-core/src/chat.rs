@@ -169,9 +169,7 @@ pub fn apply_poll_to_message_with(message: &mut ChatMessage, poll: &ChatPoll, de
                     // Errors replace, rather than append to, visible content.
                     error_offset
                 } else {
-                    let within_poll = call
-                        .content_offset
-                        .unwrap_or_else(|| poll.text.len() as u32);
+                    let within_poll = call.content_offset.unwrap_or(poll.text.len() as u32);
                     content_base.saturating_add(within_poll)
                 });
             } else {

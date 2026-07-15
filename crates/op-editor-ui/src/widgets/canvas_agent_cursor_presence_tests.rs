@@ -23,11 +23,9 @@ fn scene() -> Vec<SceneNode> {
 
 #[test]
 fn confirmed_agent_parks_at_viewport_center_before_first_reveal() {
-    let mut indicators = AgentIndicators {
-        run_active: true,
-        cursor_agent: Some(tag("#4ECDC4", "Mochi")),
-        ..Default::default()
-    };
+    let mut indicators = AgentIndicators::default();
+    indicators.run_active = true;
+    indicators.cursor_agent = Some(tag("#4ECDC4", "Mochi"));
     let center = Point2D::new(420.0, 310.0);
 
     assert!(
@@ -57,11 +55,9 @@ fn confirmed_agent_parks_at_viewport_center_before_first_reveal() {
 
 #[test]
 fn first_reveal_flies_from_the_viewport_center_to_its_node() {
-    let mut indicators = AgentIndicators {
-        run_active: true,
-        cursor_agent: Some(tag("#4ECDC4", "Mochi")),
-        ..Default::default()
-    };
+    let mut indicators = AgentIndicators::default();
+    indicators.run_active = true;
+    indicators.cursor_agent = Some(tag("#4ECDC4", "Mochi"));
     indicators.reveals.insert("c1".into(), 1_000);
     let center = Point2D::new(420.0, 310.0);
     let roots = scene();

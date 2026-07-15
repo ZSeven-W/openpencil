@@ -420,6 +420,7 @@ fn coalesce_dwell_waypoints(placements: Vec<(String, Waypoint)>) -> Vec<(String,
 
 /// Resolve every agent's cursor for this frame. Pure: same scene +
 /// indicators + clock in, same sprites out.
+#[cfg(test)]
 pub(crate) fn cursor_sprites(
     roots: &[SceneNode],
     indicators: &AgentIndicators,
@@ -542,6 +543,7 @@ pub(crate) fn cursor_sprites_with_idle_anchor(
 /// Paint every agent cursor for this frame. Called by `CanvasViewport`
 /// right after the frame indicators so cursors sit on top of the
 /// breathing glows and badges.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn paint_agent_cursors(
     cx: &mut PaintCx<'_>,
     roots: &[SceneNode],

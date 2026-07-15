@@ -308,93 +308,6 @@ fn load_bundle() -> Result<SkillBundle, String> {
     Ok(SkillBundle { version, files })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        load_bundle, render_bundle_template, BUNDLE_JSON, EXPECTED_VERSION_SENTINEL_COUNT,
-        VERSION_SENTINEL,
-    };
-    use serde_json::Value;
-
-    #[test]
-    fn embedded_bundle_renders_cargo_version_everywhere() {
-        let bundle = load_bundle().expect("embedded skill bundle should load");
-        let cargo_version = env!("CARGO_PKG_VERSION");
-
-        assert_eq!(bundle.version, cargo_version);
-        for (path, content) in &bundle.files {
-            assert!(
-                !content.contains(VERSION_SENTINEL),
-                "rendered bundle file {path:?} still contains the version sentinel"
-            );
-        }
-
-        for path in [
-            ".claude-plugin/plugin.json",
-            ".cursor-plugin/plugin.json",
-            "package.json",
-            "gemini-extension.json",
-        ] {
-            let content = bundle
-                .files
-                .iter()
-                .find_map(|(candidate, content)| (candidate == path).then_some(content))
-                .unwrap_or_else(|| panic!("embedded bundle missing {path}"));
-            let manifest: Value = serde_json::from_str(content)
-                .unwrap_or_else(|error| panic!("parse embedded {path}: {error}"));
-            assert_eq!(
-                manifest.get("version").and_then(Value::as_str),
-                Some(cargo_version),
-                "embedded {path} version differs from Cargo"
-            );
-        }
-
-        let marketplace_content = bundle
-            .files
-            .iter()
-            .find_map(|(path, content)| {
-                (path == ".claude-plugin/marketplace.json").then_some(content)
-            })
-            .expect("embedded bundle missing .claude-plugin/marketplace.json");
-        let marketplace: Value = serde_json::from_str(marketplace_content)
-            .expect("parse embedded .claude-plugin/marketplace.json");
-        let plugins = marketplace
-            .get("plugins")
-            .and_then(Value::as_array)
-            .expect("embedded marketplace plugins must be an array");
-        assert!(!plugins.is_empty(), "embedded marketplace has no plugins");
-        for plugin in plugins {
-            assert_eq!(
-                plugin.get("version").and_then(Value::as_str),
-                Some(cargo_version),
-                "embedded marketplace plugin version differs from Cargo"
-            );
-        }
-    }
-
-    #[test]
-    fn bundle_renderer_rejects_missing_version_sentinels() {
-        let error = render_bundle_template("{}", env!("CARGO_PKG_VERSION"))
-            .expect_err("template without version sentinels should fail");
-        let expected = format!("expected {EXPECTED_VERSION_SENTINEL_COUNT}");
-
-        assert!(error.contains(&expected), "unexpected error: {error}");
-        assert!(error.contains("found 0"), "unexpected error: {error}");
-    }
-
-    #[test]
-    fn bundle_renderer_rejects_partially_templated_versions() {
-        let partial_template = BUNDLE_JSON.replacen(VERSION_SENTINEL, env!("CARGO_PKG_VERSION"), 1);
-        let error = render_bundle_template(&partial_template, env!("CARGO_PKG_VERSION"))
-            .expect_err("template with only five version sentinels should fail");
-        let expected = format!("expected {EXPECTED_VERSION_SENTINEL_COUNT}");
-        let found = format!("found {}", EXPECTED_VERSION_SENTINEL_COUNT - 1);
-
-        assert!(error.contains(&expected), "unexpected error: {error}");
-        assert!(error.contains(&found), "unexpected error: {error}");
-    }
-}
-
 fn write_bundle_to(dest: &Path, bundle: &SkillBundle) -> Result<(), String> {
     fs::create_dir_all(dest).map_err(|e| format!("create {}: {e}", dest.display()))?;
     for (relative, content) in &bundle.files {
@@ -527,4 +440,91 @@ fn timestamp_string() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs().to_string())
         .unwrap_or_else(|_| "0".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        load_bundle, render_bundle_template, BUNDLE_JSON, EXPECTED_VERSION_SENTINEL_COUNT,
+        VERSION_SENTINEL,
+    };
+    use serde_json::Value;
+
+    #[test]
+    fn embedded_bundle_renders_cargo_version_everywhere() {
+        let bundle = load_bundle().expect("embedded skill bundle should load");
+        let cargo_version = env!("CARGO_PKG_VERSION");
+
+        assert_eq!(bundle.version, cargo_version);
+        for (path, content) in &bundle.files {
+            assert!(
+                !content.contains(VERSION_SENTINEL),
+                "rendered bundle file {path:?} still contains the version sentinel"
+            );
+        }
+
+        for path in [
+            ".claude-plugin/plugin.json",
+            ".cursor-plugin/plugin.json",
+            "package.json",
+            "gemini-extension.json",
+        ] {
+            let content = bundle
+                .files
+                .iter()
+                .find_map(|(candidate, content)| (candidate == path).then_some(content))
+                .unwrap_or_else(|| panic!("embedded bundle missing {path}"));
+            let manifest: Value = serde_json::from_str(content)
+                .unwrap_or_else(|error| panic!("parse embedded {path}: {error}"));
+            assert_eq!(
+                manifest.get("version").and_then(Value::as_str),
+                Some(cargo_version),
+                "embedded {path} version differs from Cargo"
+            );
+        }
+
+        let marketplace_content = bundle
+            .files
+            .iter()
+            .find_map(|(path, content)| {
+                (path == ".claude-plugin/marketplace.json").then_some(content)
+            })
+            .expect("embedded bundle missing .claude-plugin/marketplace.json");
+        let marketplace: Value = serde_json::from_str(marketplace_content)
+            .expect("parse embedded .claude-plugin/marketplace.json");
+        let plugins = marketplace
+            .get("plugins")
+            .and_then(Value::as_array)
+            .expect("embedded marketplace plugins must be an array");
+        assert!(!plugins.is_empty(), "embedded marketplace has no plugins");
+        for plugin in plugins {
+            assert_eq!(
+                plugin.get("version").and_then(Value::as_str),
+                Some(cargo_version),
+                "embedded marketplace plugin version differs from Cargo"
+            );
+        }
+    }
+
+    #[test]
+    fn bundle_renderer_rejects_missing_version_sentinels() {
+        let error = render_bundle_template("{}", env!("CARGO_PKG_VERSION"))
+            .expect_err("template without version sentinels should fail");
+        let expected = format!("expected {EXPECTED_VERSION_SENTINEL_COUNT}");
+
+        assert!(error.contains(&expected), "unexpected error: {error}");
+        assert!(error.contains("found 0"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn bundle_renderer_rejects_partially_templated_versions() {
+        let partial_template = BUNDLE_JSON.replacen(VERSION_SENTINEL, env!("CARGO_PKG_VERSION"), 1);
+        let error = render_bundle_template(&partial_template, env!("CARGO_PKG_VERSION"))
+            .expect_err("template with only five version sentinels should fail");
+        let expected = format!("expected {EXPECTED_VERSION_SENTINEL_COUNT}");
+        let found = format!("found {}", EXPECTED_VERSION_SENTINEL_COUNT - 1);
+
+        assert!(error.contains(&expected), "unexpected error: {error}");
+        assert!(error.contains(&found), "unexpected error: {error}");
+    }
 }

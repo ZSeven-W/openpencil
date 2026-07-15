@@ -126,7 +126,7 @@ pub fn pump_progress(
                         failed: count_u32(failed),
                         nodes: count_u32(s.total_nodes),
                     });
-                    changed |= append_completion_narration(msg, ok, failed, locale);
+                    append_completion_narration(msg, ok, failed, locale);
                 }
                 Err(e) => {
                     for activity in &mut msg.activities {

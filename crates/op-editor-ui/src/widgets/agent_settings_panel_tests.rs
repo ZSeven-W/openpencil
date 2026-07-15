@@ -480,9 +480,10 @@ fn builtin_agent_cards_use_ts_compact_height_when_not_editing() {
         2,
         "fixture should exercise multiple compact provider cards"
     );
-    assert!(
-        panel.content_total_height() < 850.0,
-        "compact provider cards should not force the Agents tab to scroll immediately"
+    assert_eq!(
+        crate::widgets::agent_settings_builtin::content_height(&panel.settings),
+        192.0,
+        "the built-in section should stay compact independently of the CLI provider count"
     );
 }
 

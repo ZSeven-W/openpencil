@@ -53,13 +53,6 @@ fn body() -> Rect {
     Rect::xywh(0.0, 0.0, 340.0, 300.0)
 }
 
-fn rect_close(actual: Rect, expected: Rect) -> bool {
-    (actual.origin.x - expected.origin.x).abs() < 0.01
-        && (actual.origin.y - expected.origin.y).abs() < 0.01
-        && (actual.size.x - expected.size.x).abs() < 0.01
-        && (actual.size.y - expected.size.y).abs() < 0.01
-}
-
 #[allow(dead_code)] // test helper kept for future color-assertion tests
 fn color_close(a: crate::Color, b: crate::Color) -> bool {
     (a.r - b.r).abs() < 1e-6
@@ -713,7 +706,7 @@ fn detail_less_structured_activity_has_no_invisible_toggle_hit() {
         content_offset: None,
     });
     let body = body();
-    let canonical = super::ai_chat_transcript_cache::unowned_for_tests(
+    let canonical = crate::widgets::ai_chat_transcript_cache::unowned_for_tests(
         std::slice::from_ref(&message),
         body,
         op_editor_core::Locale::EnUs,
