@@ -1,8 +1,4 @@
-//! Fail-closed automation policy for third-party coding-agent CLIs.
-//! Antigravity and Grok Build are coding agents, not plain LLM
-//! clients. OpenPencil needs their `openpencil` MCP tools, but must not
-//! implicitly grant terminal, filesystem-write, web, subagent, or
-//! unrelated MCP access just because a user selected a CLI model.
+//! Fail-closed policy for third-party coding-agent CLIs.
 
 use std::fs;
 use std::io;
@@ -19,12 +15,22 @@ pub const ANTIGRAVITY_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 pub const GROK_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 pub const EXIT_GRACE: Duration = Duration::from_secs(2);
 
-/// Grok's native headless tool filter keeps its built-in local access
-/// read-only, `dontAsk` silently denies calls without an explicit allow rule,
-/// and strict sandboxing contains approved local access. MCP servers from the
-/// user's global Grok config can still be visible; this rule only pre-approves
-/// the OpenPencil namespace. The in-band automation guard also tells the agent
-/// not to call any other configured MCP server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TurnPurpose {
+    CanvasAgent,
+    Generation,
+}
+
+#[cfg(test)]
+#[path = "chat_subprocess_safety_antigravity_tests.rs"]
+mod antigravity_tests;
+
+impl TurnPurpose {
+    fn uses_canvas_mcp(self) -> bool {
+        self == Self::CanvasAgent
+    }
+}
+
 pub const GROK_READ_TOOLS: &str = "read_file,grep,list_dir";
 pub const GROK_MCP_ALLOW: &str = "MCPTool(openpencil__*)";
 
@@ -37,29 +43,29 @@ const ANTIGRAVITY_DENY_RULES: &[&str] = &[
     "execute_url(*)",
 ];
 
-pub fn antigravity_args() -> Vec<String> {
+pub fn antigravity_args(purpose: TurnPurpose) -> Vec<String> {
     // Antigravity's verified one-shot interface accepts the prompt through
     // `-p`; unlike Grok Build, it exposes no prompt-file option. The caller
     // therefore has to put the guarded prompt in argv for the lifetime of the
     // child. Keep the remaining containment layers (private cwd, filtered
     // environment, sandbox, and wall-clock timeout) even though argv privacy
     // cannot be provided for this CLI.
-    vec!["--sandbox".into(), "--print-timeout".into(), "90s".into()]
+    let mut args = vec!["--sandbox".into(), "--print-timeout".into(), "90s".into()];
+    if purpose == TurnPurpose::Generation {
+        args.extend(["--mode".into(), "plan".into()]);
+    }
+    args
 }
 
-pub fn grok_args() -> Vec<String> {
-    vec![
+pub fn grok_args(purpose: TurnPurpose) -> Vec<String> {
+    let mut args = vec![
         "--no-auto-update".into(),
         "--output-format".into(),
         "streaming-json".into(),
         "--permission-mode".into(),
         "dontAsk".into(),
-        "--allow".into(),
-        GROK_MCP_ALLOW.into(),
         "--sandbox".into(),
         "strict".into(),
-        "--tools".into(),
-        GROK_READ_TOOLS.into(),
         "--max-turns".into(),
         "24".into(),
         "--no-plan".into(),
@@ -68,7 +74,14 @@ pub fn grok_args() -> Vec<String> {
         "--no-memory".into(),
         "--disable-web-search".into(),
         "--no-wait-for-background".into(),
-    ]
+    ];
+    if purpose.uses_canvas_mcp() {
+        args.extend(["--allow".into(), GROK_MCP_ALLOW.into()]);
+        args.extend(["--tools".into(), GROK_READ_TOOLS.into()]);
+    } else {
+        args.extend(["--tools".into(), String::new()]);
+    }
+    args
 }
 
 const AUTOMATION_GUARD: &str = "OPENPENCIL AUTOMATION SAFETY:\n\
@@ -77,9 +90,6 @@ Do not run terminal commands, write local files, browse the web, spawn subagents
 Never request interactive approval. If the OpenPencil MCP tools are unavailable or denied, report that failure and stop.";
 const GROK_COMPAT_SETTINGS: &[u8] = br#"{"permissions":{"defaultMode":"dontAsk"}}"#;
 
-/// Private, empty per-turn working directory. Antigravity gets a private HOME
-/// containing only a strict policy and the loopback OpenPencil MCP entry.
-/// Grok reads the prompt and compatibility policy from mode-0600 files here.
 pub struct IsolatedTurn {
     dir: PathBuf,
     prompt_file: Option<PathBuf>,
@@ -95,13 +105,51 @@ impl IsolatedTurn {
         attachments: &[PathBuf],
     ) -> io::Result<Option<Self>> {
         let host_home = dirs::home_dir();
-        Self::prepare_with_host_home(cli, prompt, attachments, host_home.as_deref())
+        Self::prepare_for(
+            cli,
+            prompt,
+            attachments,
+            TurnPurpose::CanvasAgent,
+            host_home.as_deref(),
+        )
     }
 
+    pub(crate) fn prepare_generation(
+        cli: Option<CliName>,
+        prompt: &str,
+        attachments: &[PathBuf],
+    ) -> io::Result<Option<Self>> {
+        let host_home = dirs::home_dir();
+        Self::prepare_for(
+            cli,
+            prompt,
+            attachments,
+            TurnPurpose::Generation,
+            host_home.as_deref(),
+        )
+    }
+
+    #[cfg(test)]
     fn prepare_with_host_home(
         cli: Option<CliName>,
         prompt: &str,
         attachments: &[PathBuf],
+        host_home: Option<&Path>,
+    ) -> io::Result<Option<Self>> {
+        Self::prepare_for(
+            cli,
+            prompt,
+            attachments,
+            TurnPurpose::CanvasAgent,
+            host_home,
+        )
+    }
+
+    fn prepare_for(
+        cli: Option<CliName>,
+        prompt: &str,
+        attachments: &[PathBuf],
+        purpose: TurnPurpose,
         host_home: Option<&Path>,
     ) -> io::Result<Option<Self>> {
         let Some(cli @ (CliName::Antigravity | CliName::GrokBuild)) = cli else {
@@ -110,7 +158,11 @@ impl IsolatedTurn {
         let dir = create_turn_dir(cli)?;
 
         let result = (|| {
-            let mut guarded_prompt = format!("{AUTOMATION_GUARD}\n\n{prompt}");
+            let mut prepared_prompt = if purpose.uses_canvas_mcp() {
+                format!("{AUTOMATION_GUARD}\n\n{prompt}")
+            } else {
+                prompt.to_owned()
+            };
             for (index, source) in attachments.iter().enumerate() {
                 let file_name = source
                     .file_name()
@@ -119,14 +171,14 @@ impl IsolatedTurn {
                 let destination = dir.join(format!("attachment-{index}-{file_name}"));
                 fs::copy(source, &destination)?;
                 set_private_file(&destination)?;
-                guarded_prompt = guarded_prompt.replace(
+                prepared_prompt = prepared_prompt.replace(
                     source.to_string_lossy().as_ref(),
                     destination.to_string_lossy().as_ref(),
                 );
             }
             let prompt_file = if cli == CliName::GrokBuild {
                 let path = dir.join("prompt.txt");
-                fs::write(&path, &guarded_prompt)?;
+                fs::write(&path, &prepared_prompt)?;
                 set_private_file(&path)?;
                 Some(path)
             } else {
@@ -144,17 +196,15 @@ impl IsolatedTurn {
                 None
             };
             let home_dir = if cli == CliName::Antigravity {
-                let host_home = host_home.ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::NotFound,
-                        "Antigravity cannot locate the authenticated user home",
-                    )
-                })?;
-                Some(prepare_antigravity_home(&dir, host_home)?)
+                Some(prepare_antigravity_home(
+                    &dir,
+                    host_home,
+                    purpose.uses_canvas_mcp(),
+                )?)
             } else {
                 None
             };
-            Ok((guarded_prompt, prompt_file, claude_config_dir, home_dir))
+            Ok((prepared_prompt, prompt_file, claude_config_dir, home_dir))
         })();
         match result {
             Ok((prompt, prompt_file, claude_config_dir, home_dir)) => Ok(Some(Self {
@@ -190,11 +240,23 @@ impl IsolatedTurn {
     fn home_dir(&self) -> Option<&Path> {
         self.home_dir.as_deref()
     }
+
+    pub fn append_cli_args(&self, args: &mut Vec<String>) {
+        let Some(home) = self.home_dir() else {
+            return;
+        };
+        args.push(format!(
+            "--gemini_dir={}",
+            home.join(".gemini").to_string_lossy()
+        ));
+        args.push("--app_data_dir=antigravity-cli".into());
+    }
 }
 
 /// Add only per-turn configuration to the already-filtered child environment.
-/// Never forward a host Antigravity HOME or `CLAUDE_CONFIG_DIR`: either can
-/// contain always-approve policy, unrelated MCP servers, hooks, or plugins.
+/// Antigravity keeps the real HOME so macOS Keychain can find its login key;
+/// hidden CLI directory flags redirect all Gemini config and app data to the
+/// private turn. Grok uses an isolated `CLAUDE_CONFIG_DIR`.
 pub fn append_isolated_env(env: &mut Vec<(String, String)>, turn: Option<&IsolatedTurn>) {
     let Some(turn) = turn else {
         return;
@@ -215,78 +277,61 @@ pub fn append_isolated_env(env: &mut Vec<(String, String)>, turn: Option<&Isolat
             .find(|(key, _)| key == "SYSTEMROOT")
             .map(|(_, root)| format!(r"{root}\System32;{root}"))
             .unwrap_or_else(|| r"C:\Windows\System32;C:\Windows".to_string());
-        const HOME_KEYS: &[&str] = &[
-            "HOME",
-            "PATH",
-            "USERPROFILE",
-            "APPDATA",
-            "LOCALAPPDATA",
-            "TMPDIR",
-            "TMP",
-            "TEMP",
-        ];
-        env.retain(|(key, _)| !HOME_KEYS.contains(&key.as_str()));
+        const PRIVATE_KEYS: &[&str] = &["PATH", "TMPDIR", "TMP", "TEMP"];
+        env.retain(|(key, _)| !PRIVATE_KEYS.contains(&key.as_str()));
         let value = |path: &Path| path.to_string_lossy().into_owned();
         env.extend([
-            ("HOME".to_string(), value(home)),
             ("PATH".to_string(), safe_path),
-            ("USERPROFILE".to_string(), value(home)),
-            ("APPDATA".to_string(), value(&home.join("AppData/Roaming"))),
-            (
-                "LOCALAPPDATA".to_string(),
-                value(&home.join("AppData/Local")),
-            ),
             ("TMPDIR".to_string(), value(&home.join("tmp"))),
             ("TMP".to_string(), value(&home.join("tmp"))),
             ("TEMP".to_string(), value(&home.join("tmp"))),
         ]);
+        #[cfg(target_os = "macos")]
+        {
+            env.retain(|(key, _)| key != "BROWSER");
+            env.push(("BROWSER".to_string(), "/usr/bin/false".to_string()));
+        }
     }
 }
 
-/// Build a minimal Antigravity profile under the private turn workspace.
-/// Authentication remains available through the OS keyring, while settings, plugins,
-/// skills, hooks, permission grants, histories, and unrelated MCP servers are
-/// deliberately outside the child's HOME.
-fn prepare_antigravity_home(turn_dir: &Path, host_home: &Path) -> io::Result<PathBuf> {
-    let source_path = host_home
-        .join(".gemini")
-        .join("config")
-        .join("mcp_config.json");
-    let source: serde_json::Value =
-        serde_json::from_slice(&fs::read(&source_path)?).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("invalid Antigravity MCP config: {e}"),
-            )
-        })?;
-    let server = source
-        .get("mcpServers")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|servers| servers.get("openpencil"))
-        .and_then(serde_json::Value::as_object)
-        .ok_or_else(|| {
+fn prepare_antigravity_home(
+    turn_dir: &Path,
+    host_home: Option<&Path>,
+    use_canvas_mcp: bool,
+) -> io::Result<PathBuf> {
+    let server_url = if use_canvas_mcp {
+        let host_home = host_home.ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                "Antigravity requires OpenPencil MCP to be enabled in Settings",
+                "Antigravity cannot locate user home",
             )
         })?;
-    if server.get("disabled").and_then(serde_json::Value::as_bool) == Some(true) {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Antigravity OpenPencil MCP connection is disabled",
-        ));
-    }
-    let server_url = server
-        .get("serverUrl")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Antigravity OpenPencil MCP serverUrl is missing",
-            )
-        })?;
-    let port = validate_openpencil_url(server_url)?;
-    validate_live_mcp_record(host_home, port)?;
+        let source_path = host_home.join(".gemini/config/mcp_config.json");
+        let source: serde_json::Value = serde_json::from_slice(&fs::read(source_path)?)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let server = source["mcpServers"]["openpencil"]
+            .as_object()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Antigravity requires OpenPencil MCP to be enabled in Settings",
+                )
+            })?;
+        if server.get("disabled").and_then(serde_json::Value::as_bool) == Some(true) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Antigravity OpenPencil MCP connection is disabled",
+            ));
+        }
+        let url = server
+            .get("serverUrl")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing serverUrl"))?;
+        validate_live_mcp_record(host_home, validate_openpencil_url(url)?)?;
+        Some(url.to_owned())
+    } else {
+        None
+    };
 
     let home = turn_dir.join("home");
     let gemini = home.join(".gemini");
@@ -305,17 +350,21 @@ fn prepare_antigravity_home(turn_dir: &Path, host_home: &Path) -> io::Result<Pat
         set_private_dir(path)?;
     }
 
-    let mcp_config = serde_json::json!({
-        "mcpServers": {
-            "openpencil": { "serverUrl": server_url }
-        }
-    });
+    let mcp_config = server_url.as_deref().map_or_else(
+        || serde_json::json!({"mcpServers": {}}),
+        |url| serde_json::json!({"mcpServers": {"openpencil": {"serverUrl": url}}}),
+    );
+    let allow = if server_url.is_some() {
+        serde_json::json!([ANTIGRAVITY_MCP_PERMISSION])
+    } else {
+        serde_json::json!([])
+    };
     let settings = serde_json::json!({
         "toolPermission": "strict",
         "allowNonWorkspaceAccess": false,
         "enableTerminalSandbox": true,
         "permissions": {
-            "allow": [ANTIGRAVITY_MCP_PERMISSION],
+            "allow": allow,
             "deny": ANTIGRAVITY_DENY_RULES,
             "ask": []
         }
@@ -528,6 +577,18 @@ pub fn friendly_stderr_error(cli: Option<CliName>, stderr: &str) -> Option<Strin
     None
 }
 
+pub fn friendly_stdout_error(cli: Option<CliName>, line: &str) -> Option<String> {
+    if cli != Some(CliName::Antigravity) {
+        return None;
+    }
+    let line = line.trim().to_ascii_lowercase();
+    (line.starts_with("authentication required")
+        || line.starts_with("waiting for authentication")
+        || line.starts_with("or, paste the authorization code")
+        || line.contains("accounts.google.com/o/oauth2/auth?"))
+    .then(|| "Antigravity is not authenticated. Run `agy` once in a terminal.".into())
+}
+
 #[cfg(unix)]
 fn set_private_dir(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
@@ -553,134 +614,6 @@ fn set_private_file(_path: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn test_dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "openpencil-{label}-{}-{}",
-            std::process::id(),
-            TURN_SEQ.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
-    fn seed_antigravity_mcp(home: &Path, value: serde_json::Value) {
-        let path = home.join(".gemini/config/mcp_config.json");
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, serde_json::to_vec(&value).unwrap()).unwrap();
-        let record_path = home.join(".openpencil/.op-mcp-port");
-        fs::create_dir_all(record_path.parent().unwrap()).unwrap();
-        fs::write(
-            record_path,
-            serde_json::to_vec(&serde_json::json!({
-                "port": 3100,
-                "writerPid": std::process::id(),
-                "transport": "json-rpc",
-                "token": "must-not-copy"
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn antigravity_turn_uses_private_home_and_minimal_policy() {
-        let host_home = test_dir("agy-host-home");
-        seed_antigravity_mcp(
-            &host_home,
-            serde_json::json!({
-                "mcpServers": {
-                    "openpencil": {
-                        "serverUrl": "http://127.0.0.1:3100/mcp",
-                        "headers": {"Authorization": "must-not-copy"}
-                    },
-                    "other": {"serverUrl": "https://example.com/mcp"}
-                }
-            }),
-        );
-        assert!(validate_live_mcp_record(&host_home, 3101).is_err());
-        let turn = IsolatedTurn::prepare_with_host_home(
-            Some(CliName::Antigravity),
-            "design a screen",
-            &[],
-            Some(&host_home),
-        )
-        .unwrap()
-        .unwrap();
-        let private_home = turn.home_dir().unwrap().to_path_buf();
-        assert!(private_home.starts_with(turn.cwd()));
-
-        let mcp: serde_json::Value = serde_json::from_slice(
-            &fs::read(private_home.join(".gemini/config/mcp_config.json")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(
-            mcp,
-            serde_json::json!({"mcpServers": {"openpencil": {
-                "serverUrl": "http://127.0.0.1:3100/mcp"
-            }}})
-        );
-        let settings: serde_json::Value = serde_json::from_slice(
-            &fs::read(private_home.join(".gemini/antigravity-cli/settings.json")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(settings["toolPermission"], "strict");
-        assert_eq!(settings["allowNonWorkspaceAccess"], false);
-        assert_eq!(settings["enableTerminalSandbox"], true);
-        assert_eq!(
-            settings["permissions"]["allow"],
-            serde_json::json!([ANTIGRAVITY_MCP_PERMISSION])
-        );
-        assert_eq!(
-            settings["permissions"]["deny"],
-            serde_json::json!(ANTIGRAVITY_DENY_RULES)
-        );
-
-        let mut env = vec![
-            ("HOME".into(), "/host/home".into()),
-            ("PATH".into(), "/host/bin".into()),
-            ("APPDATA".into(), "/host/appdata".into()),
-            ("TMPDIR".into(), "/host/tmp".into()),
-            ("GOOGLE_API_KEY".into(), "provider-auth".into()),
-        ];
-        append_isolated_env(&mut env, Some(&turn));
-        let private_home_text = private_home.to_string_lossy().into_owned();
-        assert!(env
-            .iter()
-            .any(|(key, value)| key == "HOME" && value == &private_home_text));
-        assert!(!env.iter().any(|(_, value)| value.starts_with("/host/")));
-        assert!(env
-            .iter()
-            .any(|(key, value)| key == "GOOGLE_API_KEY" && value == "provider-auth"));
-        let cwd = turn.cwd().to_path_buf();
-        drop(turn);
-        assert!(!cwd.exists());
-        let _ = fs::remove_dir_all(host_home);
-    }
-
-    #[test]
-    fn antigravity_rejects_non_loopback_or_disabled_mcp() {
-        for server in [
-            serde_json::json!({"serverUrl": "https://example.com/mcp"}),
-            serde_json::json!({"serverUrl": "http://127.0.0.1:3100/mcp", "disabled": true}),
-        ] {
-            let host_home = test_dir("agy-unsafe-home");
-            seed_antigravity_mcp(
-                &host_home,
-                serde_json::json!({"mcpServers": {"openpencil": server}}),
-            );
-            let error = IsolatedTurn::prepare_with_host_home(
-                Some(CliName::Antigravity),
-                "unsafe config must fail",
-                &[],
-                Some(&host_home),
-            )
-            .err()
-            .expect("unsafe config should fail");
-            assert!(matches!(error.kind(), io::ErrorKind::PermissionDenied));
-            let _ = fs::remove_dir_all(host_home);
-        }
-    }
 
     #[test]
     fn grok_prompt_file_is_private_and_removed_with_workspace() {
@@ -742,6 +675,23 @@ mod tests {
     }
 
     #[test]
+    fn grok_generation_prompt_is_unguarded_and_still_private() {
+        let turn = IsolatedTurn::prepare_generation(
+            Some(CliName::GrokBuild),
+            "return only I(...) JavaScript",
+            &[],
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(turn.prompt(), "return only I(...) JavaScript");
+        assert_eq!(
+            fs::read_to_string(turn.prompt_file().unwrap()).unwrap(),
+            turn.prompt()
+        );
+        assert!(turn.claude_config_dir().is_some());
+    }
+
+    #[test]
     fn non_agent_cli_does_not_get_an_isolated_turn() {
         assert!(IsolatedTurn::prepare(Some(CliName::Codex), "hi", &[])
             .unwrap()
@@ -759,6 +709,15 @@ mod tests {
             friendly_stderr_error(Some(CliName::Antigravity), "permission required")
                 .unwrap()
                 .contains("interactive permission")
+        );
+        assert!(friendly_stdout_error(
+            Some(CliName::Antigravity),
+            "Authentication required. Please visit the URL to log in:"
+        )
+        .unwrap()
+        .contains("agy"));
+        assert!(
+            friendly_stdout_error(Some(CliName::GrokBuild), "Authentication required").is_none()
         );
     }
 
