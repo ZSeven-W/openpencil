@@ -233,6 +233,68 @@ export const VERSION = '2.3.4';
   );
 });
 
+test('SDK entry rendering ignores escaped block-comment markers in regex literals', () => {
+  const input = String.raw`const pattern = /[\/*]/;
+export const VERSION = '1.0.0';
+`;
+
+  assert.equal(
+    renderSdkEntry(input, '2.3.4'),
+    String.raw`const pattern = /[\/*]/;
+export const VERSION = '2.3.4';
+`,
+  );
+});
+
+test('SDK entry rendering ignores comment markers inside regex character classes', () => {
+  const input = `const pattern = /[/*]/;
+export const VERSION = '1.0.0';
+`;
+
+  assert.equal(
+    renderSdkEntry(input, '2.3.4'),
+    `const pattern = /[/*]/;
+export const VERSION = '2.3.4';
+`,
+  );
+});
+
+test('SDK entry rendering ignores escaped line-comment markers in regex literals', () => {
+  const input = String.raw`const pattern = /\//;
+export const VERSION = '1.0.0';
+`;
+
+  assert.equal(
+    renderSdkEntry(input, '2.3.4'),
+    String.raw`const pattern = /\//;
+export const VERSION = '2.3.4';
+`,
+  );
+});
+
+test('SDK entry rendering distinguishes division expressions from comments and regex literals', () => {
+  const input = `const ratio = left / right;
+/*
+export const VERSION = 'block-comment-only';
+*/
+const half = total / 2;
+// export const VERSION = 'line-comment-only';
+export const VERSION = '1.0.0';
+`;
+
+  assert.equal(
+    renderSdkEntry(input, '2.3.4'),
+    `const ratio = left / right;
+/*
+export const VERSION = 'block-comment-only';
+*/
+const half = total / 2;
+// export const VERSION = 'line-comment-only';
+export const VERSION = '2.3.4';
+`,
+  );
+});
+
 test('Bun lock inspection finds every versioned SDK workspace and ignores the root workspace', () => {
   const lockfile = `{
     "workspaces": {
