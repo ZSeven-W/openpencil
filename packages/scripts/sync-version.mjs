@@ -4,8 +4,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const packagesRoot = resolve(scriptDirectory, '..');
-const repositoryRoot = resolve(packagesRoot, '..');
+const defaultPackagesRoot = resolve(scriptDirectory, '..');
+const defaultRepositoryRoot = resolve(defaultPackagesRoot, '..');
 
 const manifestPaths = [
   'package.json',
@@ -21,6 +21,7 @@ const sdkEntryPaths = [
 ];
 
 const sdkWorkspaceNames = ['op-web-sdk', 'op-web-sdk-react', 'op-web-sdk-vue'];
+const managedPaths = [...manifestPaths, ...sdkEntryPaths, 'bun.lock'];
 
 const versionExportPattern = /^([\t ]*)export const VERSION = '([^'\r\n]*)';([\t ]*)$/gm;
 
@@ -30,8 +31,179 @@ export function renderPackageManifest(source, version) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
+function maskSdkCommentsAndTemplates(source) {
+  const masked = source.split('');
+  let state = 'code';
+
+  const mask = (index) => {
+    if (source[index] !== '\n' && source[index] !== '\r') {
+      masked[index] = ' ';
+    }
+  };
+
+  function maskQuoted(start, quote) {
+    let index = start;
+    while (index < source.length) {
+      const character = source[index];
+      mask(index);
+      if (index > start && character === quote) {
+        return index + 1;
+      }
+      if (character === '\\') {
+        mask(index + 1);
+        index += 2;
+      } else {
+        index += 1;
+      }
+    }
+    return index;
+  }
+
+  function maskLineComment(start) {
+    let index = start;
+    while (index < source.length && source[index] !== '\n' && source[index] !== '\r') {
+      mask(index);
+      index += 1;
+    }
+    return index;
+  }
+
+  function maskBlockComment(start) {
+    let index = start;
+    while (index < source.length) {
+      mask(index);
+      if (source[index] === '*' && source[index + 1] === '/') {
+        mask(index + 1);
+        return index + 2;
+      }
+      index += 1;
+    }
+    return index;
+  }
+
+  function maskTemplateExpression(start) {
+    let depth = 1;
+    let index = start;
+    while (index < source.length) {
+      const character = source[index];
+      const next = source[index + 1];
+      if (character === "'" || character === '"') {
+        index = maskQuoted(index, character);
+        continue;
+      }
+      if (character === '`') {
+        index = maskTemplateLiteral(index);
+        continue;
+      }
+      if (character === '/' && next === '/') {
+        index = maskLineComment(index);
+        continue;
+      }
+      if (character === '/' && next === '*') {
+        index = maskBlockComment(index);
+        continue;
+      }
+
+      mask(index);
+      if (character === '{') {
+        depth += 1;
+      } else if (character === '}') {
+        depth -= 1;
+        index += 1;
+        if (depth === 0) {
+          return index;
+        }
+        continue;
+      }
+      index += 1;
+    }
+    return index;
+  }
+
+  function maskTemplateLiteral(start) {
+    mask(start);
+    let index = start + 1;
+    while (index < source.length) {
+      const character = source[index];
+      const next = source[index + 1];
+      if (character === '\\') {
+        mask(index);
+        mask(index + 1);
+        index += 2;
+      } else if (character === '`') {
+        mask(index);
+        return index + 1;
+      } else if (character === '$' && next === '{') {
+        mask(index);
+        mask(index + 1);
+        index = maskTemplateExpression(index + 2);
+      } else {
+        mask(index);
+        index += 1;
+      }
+    }
+    return index;
+  }
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+
+    if (state === 'single-quote' || state === 'double-quote') {
+      if (character === '\\') {
+        index += 1;
+      } else if (
+        (state === 'single-quote' && character === "'") ||
+        (state === 'double-quote' && character === '"')
+      ) {
+        state = 'code';
+      }
+      continue;
+    }
+
+    if (state === 'line-comment') {
+      if (character === '\n' || character === '\r') {
+        state = 'code';
+      } else {
+        mask(index);
+      }
+      continue;
+    }
+
+    if (state === 'block-comment') {
+      mask(index);
+      if (character === '*' && next === '/') {
+        mask(index + 1);
+        index += 1;
+        state = 'code';
+      }
+      continue;
+    }
+
+    if (character === "'") {
+      state = 'single-quote';
+    } else if (character === '"') {
+      state = 'double-quote';
+    } else if (character === '`') {
+      index = maskTemplateLiteral(index) - 1;
+    } else if (character === '/' && next === '/') {
+      mask(index);
+      mask(index + 1);
+      index += 1;
+      state = 'line-comment';
+    } else if (character === '/' && next === '*') {
+      mask(index);
+      mask(index + 1);
+      index += 1;
+      state = 'block-comment';
+    }
+  }
+
+  return masked.join('');
+}
+
 function sdkVersionMatches(source) {
-  return [...source.matchAll(versionExportPattern)];
+  return [...maskSdkCommentsAndTemplates(source).matchAll(versionExportPattern)];
 }
 
 export function renderSdkEntry(source, version) {
@@ -40,9 +212,9 @@ export function renderSdkEntry(source, version) {
     throw new Error(`Expected exactly one public VERSION export, found ${matches.length}`);
   }
 
-  return source.replace(versionExportPattern, (_declaration, prefix, _current, suffix) => {
-    return `${prefix}export const VERSION = '${version}';${suffix}`;
-  });
+  const [declaration, prefix, _current, suffix] = matches[0];
+  const start = matches[0].index;
+  return `${source.slice(0, start)}${prefix}export const VERSION = '${version}';${suffix}${source.slice(start + declaration.length)}`;
 }
 
 function skipTrivia(source, start) {
@@ -233,7 +405,7 @@ function repositoryPath(packageRelativePath) {
   return `packages/${packageRelativePath}`;
 }
 
-async function readConsumers() {
+async function readConsumers(packagesRoot) {
   const manifestConsumers = await Promise.all(
     manifestPaths.map(async (path) => {
       const source = await readFile(resolve(packagesRoot, path), 'utf8');
@@ -265,7 +437,7 @@ async function readConsumers() {
   return [...manifestConsumers, ...sdkConsumers, ...lockConsumers];
 }
 
-async function renderVersionedFiles(version) {
+async function renderVersionedFiles(version, packagesRoot) {
   const manifests = await Promise.all(
     manifestPaths.map(async (path) => {
       const absolutePath = resolve(packagesRoot, path);
@@ -299,13 +471,20 @@ async function renderVersionedFiles(version) {
   return [...manifests, ...sdkEntries];
 }
 
-function canonicalVersion() {
-  const output = execFileSync('sh', ['scripts/workspace-version.sh', 'Cargo.toml'], {
-    cwd: repositoryRoot,
+function defaultRunCommand(command, arguments_, { cwd, captureOutput = false }) {
+  return execFileSync(command, arguments_, {
+    cwd,
     encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
+    stdio: captureOutput ? ['ignore', 'pipe', 'inherit'] : 'inherit',
   });
-  const version = output.trim();
+}
+
+async function canonicalVersion(repositoryRoot, runCommand) {
+  const output = await runCommand('sh', ['scripts/workspace-version.sh', 'Cargo.toml'], {
+    cwd: repositoryRoot,
+    captureOutput: true,
+  });
+  const version = String(output).trim();
   if (version.length === 0 || /\s/.test(version)) {
     throw new Error('scripts/workspace-version.sh returned an invalid version');
   }
@@ -321,34 +500,128 @@ function reportDrift(drift) {
   }
 }
 
-export async function main(arguments_) {
-  const check = arguments_.length === 1 && arguments_[0] === '--check';
-  if (arguments_.length > 0 && !check) {
-    throw new Error('Usage: node scripts/sync-version.mjs [--check]');
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function snapshotManagedFiles(packagesRoot) {
+  return Promise.all(
+    managedPaths.map(async (path) => ({
+      absolutePath: resolve(packagesRoot, path),
+      contents: await readFile(resolve(packagesRoot, path)),
+    })),
+  );
+}
+
+async function writeManagedFiles(files, writeManagedFile) {
+  const results = await Promise.allSettled(
+    files.map(({ absolutePath, contents }) => writeManagedFile(absolutePath, contents)),
+  );
+  const failure = results.find((result) => result.status === 'rejected');
+  if (failure !== undefined) {
+    throw failure.reason;
+  }
+}
+
+async function restoreManagedFiles(snapshot, writeManagedFile) {
+  await writeManagedFiles(snapshot, writeManagedFile);
+}
+
+function postWriteValidationError(drift) {
+  const consumers = drift
+    .map(({ path, expectedVersion, actualVersion }) => {
+      return `${path} (expected ${expectedVersion}, actual ${actualVersion ?? 'missing or invalid'})`;
+    })
+    .join('; ');
+  return new Error(`Post-write validation failed: ${consumers}`);
+}
+
+export function parseArguments(arguments_) {
+  if (arguments_.length === 0) {
+    return 'write';
+  }
+  if (arguments_.length === 1 && arguments_[0] === '--check') {
+    return 'check';
+  }
+  throw new Error('Usage: node scripts/sync-version.mjs [--check]');
+}
+
+export async function synchronizeVersions({
+  mode,
+  repositoryRoot = defaultRepositoryRoot,
+  packagesRoot = defaultPackagesRoot,
+  runCommand = defaultRunCommand,
+  writeManagedFile = writeFile,
+}) {
+  if (mode !== 'write' && mode !== 'check') {
+    throw new Error(`Unknown synchronization mode: ${mode}`);
   }
 
-  const version = canonicalVersion();
-  if (!check) {
-    const rendered = await renderVersionedFiles(version);
-    await Promise.all(
-      rendered
-        .filter(({ source, output }) => source !== output)
-        .map(({ absolutePath, output }) => writeFile(absolutePath, output)),
-    );
-    execFileSync('bun', ['install', '--lockfile-only'], {
+  const version = await canonicalVersion(repositoryRoot, runCommand);
+  if (mode === 'check') {
+    const drift = collectVersionDrift(version, await readConsumers(packagesRoot));
+    return { version, drift };
+  }
+
+  const rendered = await renderVersionedFiles(version, packagesRoot);
+  const snapshot = await snapshotManagedFiles(packagesRoot);
+  try {
+    await runCommand('bun', ['--version'], {
       cwd: packagesRoot,
-      stdio: 'inherit',
+      captureOutput: true,
+    });
+  } catch (error) {
+    throw new Error(`Bun preflight failed: ${errorMessage(error)}. Install Bun and retry.`, {
+      cause: error,
     });
   }
 
-  const drift = collectVersionDrift(version, await readConsumers());
+  try {
+    await writeManagedFiles(
+      rendered
+        .filter(({ source, output }) => source !== output)
+        .map(({ absolutePath, output }) => ({ absolutePath, contents: output })),
+      writeManagedFile,
+    );
+    try {
+      await runCommand('bun', ['install', '--lockfile-only'], {
+        cwd: packagesRoot,
+        captureOutput: false,
+      });
+    } catch (error) {
+      throw new Error(`Bun lockfile regeneration failed: ${errorMessage(error)}`, {
+        cause: error,
+      });
+    }
+
+    const drift = collectVersionDrift(version, await readConsumers(packagesRoot));
+    if (drift.length > 0) {
+      throw postWriteValidationError(drift);
+    }
+    return { version, drift };
+  } catch (error) {
+    try {
+      await restoreManagedFiles(snapshot, writeManagedFile);
+    } catch (rollbackError) {
+      throw new Error(
+        `Version synchronization failed (${errorMessage(error)}) and rollback failed (${errorMessage(rollbackError)}). Restore the managed package files from version control.`,
+        { cause: rollbackError },
+      );
+    }
+    throw error;
+  }
+}
+
+export async function main(arguments_) {
+  const mode = parseArguments(arguments_);
+  const { version, drift } = await synchronizeVersions({ mode });
   if (drift.length > 0) {
     reportDrift(drift);
     process.exitCode = 1;
     return;
   }
 
-  const action = check ? 'Verified' : 'Synchronized';
+  const action = mode === 'check' ? 'Verified' : 'Synchronized';
   console.log(`${action} package and SDK versions at ${version}.`);
 }
 
