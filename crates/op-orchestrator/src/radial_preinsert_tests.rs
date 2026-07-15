@@ -79,6 +79,9 @@ fn canonical_fixed_ring() -> Value {
 }
 
 fn find_id<'a>(value: &'a Value, id: &str) -> Option<&'a Value> {
+    if let Some(values) = value.as_array() {
+        return values.iter().find_map(|value| find_id(value, id));
+    }
     if value.get("id").and_then(Value::as_str) == Some(id) {
         return Some(value);
     }
@@ -378,7 +381,11 @@ fn missing_centre_layout_is_measured_as_the_jian_default_row() {
         width > height,
         "default row measurement must be wider than tall"
     );
-    assert!(!check_generated_nodes(&nodes, 390.0).has_fatal());
+    let after = check_generated_nodes(&nodes, 390.0);
+    assert!(
+        !after.has_fatal(),
+        "repaired default-row centre must pass self-check: {after:?}; repaired={repaired}"
+    );
 }
 
 #[test]

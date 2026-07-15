@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 //! `op-orchestrator` — S3a 设计编排器(单屏顺序骨架)。
 //!
 //! 把 TS `apps/web/src/services/ai/orchestrator.ts` 的阶段 1-4
