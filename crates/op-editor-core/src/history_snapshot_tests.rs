@@ -383,7 +383,7 @@ fn repair_swap_is_copy_on_write_and_does_not_contaminate_a_shared_sibling_snapsh
     // A doc whose top-level entry "inst1" is a NON-Ref node — the
     // contamination signature a scope-time snapshot would carry.
     let mut doc = PenDocument {
-        version: "0.8.0".into(),
+        version: "1.0.0".into(),
         ..empty()
     };
     doc.children = vec![
@@ -432,7 +432,7 @@ fn repair_swap_is_copy_on_write_and_does_not_contaminate_a_shared_sibling_snapsh
 
 fn empty() -> PenDocument {
     PenDocument {
-        version: "0.8.0".into(),
+        version: "1.0.0".into(),
         name: None,
         themes: None,
         variables: None,

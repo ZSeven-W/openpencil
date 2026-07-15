@@ -13,7 +13,7 @@ use op_editor_core::{NodeId, PenNodeExt};
 mod fill_history_tests;
 
 const COMPONENT_DOC: &str = r##"{
-  "version":"0.8.0",
+  "version":"1.0.0",
   "children":[
     {"type":"frame","id":"card","name":"Card","reusable":true,"x":0,"y":0,"width":200,"height":100,
      "fill":[{"type":"solid","color":"#222222"}],
@@ -344,7 +344,7 @@ fn remote_icon_insert_bakes_svg_d_as_path_node() {
 }
 
 const STROKE_RECT_DOC: &str = r##"{
-  "version":"0.8.0",
+  "version":"1.0.0",
   "children":[
     {"type":"rectangle","id":"r1","name":"Box","x":0,"y":0,"width":100,"height":50}
   ]
@@ -518,7 +518,7 @@ fn scene_fill(host: &mut WidgetHostNative, id: &str) -> Option<op_editor_ui::Col
 fn remove_fill_clears_scene_fill_on_plain_frame() {
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"frame","id":"f1","name":"Box","x":0,"y":0,"width":100,"height":50,
            "fill":[{"type":"solid","color":"#ff0000"}]}
         ]}"##,
@@ -556,7 +556,7 @@ fn remove_fill_clears_scene_fill_on_plain_frame() {
 fn remove_fill_clears_scene_fill_on_nested_child() {
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"frame","id":"screen","name":"Screen","x":0,"y":0,"width":200,"height":200,
            "children":[
              {"type":"rectangle","id":"bar","name":"Bar","x":10,"y":10,"width":120,"height":40,
@@ -587,7 +587,7 @@ fn remove_fill_clears_scene_fill_on_nested_child() {
 fn remove_all_multi_fills_clears_scene_fill() {
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"frame","id":"f1","name":"Box","x":0,"y":0,"width":100,"height":50,
            "fill":[{"type":"solid","color":"#ff0000"},{"type":"solid","color":"#00ff00"}]}
         ]}"##,
@@ -618,7 +618,7 @@ fn remove_variable_bound_fill_clears_scene_color() {
     use jian_ops_schema::variable::{VariableKind, VariableScalar};
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"r1","name":"Box","x":0,"y":0,"width":50,"height":50,
            "fill":[{"type":"solid","color":"$brand"}]}
         ]}"##,

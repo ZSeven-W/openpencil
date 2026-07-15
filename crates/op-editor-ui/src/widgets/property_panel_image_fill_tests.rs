@@ -12,7 +12,7 @@ use op_editor_core::NodeId;
 
 fn image_fill_state_with_url(url: &str) -> op_editor_core::EditorState {
     let mut state = state_from(&format!(
-        r##"{{ "version": "0.8.0", "children": [
+        r##"{{ "version": "1.0.0", "children": [
               {{"type":"rectangle","id":"n60","name":"Photo fill",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{{"type":"image","url":"{}","mode":"fill",

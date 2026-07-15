@@ -12,7 +12,7 @@ use crate::{Point2D, Rect};
 use op_editor_core::NodeId;
 
 const COMPONENT_DOC: &str = r##"{
-  "version":"0.8.0",
+  "version":"1.0.0",
   "children":[
     {"type":"frame","id":"card","name":"Card","reusable":true,"x":0,"y":0,"width":200,"height":100,
      "fill":[{"type":"solid","color":"#222222"}],
@@ -80,7 +80,7 @@ fn reusable_component_snapshot_flags_is_reusable() {
 fn registered_group_component_snapshot_flags_is_reusable() {
     let mut state = state_from(
         r##"{
-          "version":"0.8.0",
+          "version":"1.0.0",
           "children":[
             {"type":"group","id":"text_group","name":"Text Group",
              "children":[{"type":"text","id":"label","name":"Label","content":"Hello"}]}

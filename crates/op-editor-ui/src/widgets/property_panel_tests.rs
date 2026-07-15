@@ -63,7 +63,7 @@ fn for_selection_with_real_node_builds_snapshot() {
 #[test]
 fn scene_aware_panel_reports_resolved_fill_and_hug_dimensions() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"ff","name":"Frame",
                "width":"fill_container","height":"fit_content","children":[]}
         ]}"##,
@@ -90,7 +90,7 @@ fn scene_aware_panel_reports_resolved_fill_and_hug_dimensions() {
 #[test]
 fn scene_aware_panel_keeps_unbounded_group_aggregate_dimensions() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"group","id":"g","name":"Group","children":[
                 {"type":"rectangle","id":"child","x":10,"y":20,
                  "width":70,"height":30}
@@ -216,7 +216,7 @@ fn group_snapshot_aggregates_child_bounds() {
 #[test]
 fn polygon_selection_exposes_sides_layer_input() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"polygon","id":"poly","name":"Hex",
                "x":40,"y":40,"width":120,"height":120,
                "polygonCount":6}
@@ -250,7 +250,7 @@ fn polygon_selection_exposes_sides_layer_input() {
 #[test]
 fn ellipse_selection_exposes_arc_layer_inputs() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"ellipse","id":"ell","name":"Arc",
                "x":40,"y":40,"width":120,"height":100,
                "startAngle":30,"sweepAngle":270,"innerRadius":0.25}
@@ -387,7 +387,7 @@ fn hit_test_action_export_section_returns_picker_toggles() {
 #[test]
 fn color_variables_add_fill_and_stroke_binding_buttons() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"rect","name":"Rect",
                "x":40,"y":40,"width":160,"height":100,
                "fill":[{"type":"solid","color":"#ffffff"}],
@@ -439,7 +439,7 @@ fn color_variables_add_fill_and_stroke_binding_buttons() {
 #[test]
 fn color_variable_picker_emits_bind_and_unbind_rows() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"rect","name":"Rect",
                "x":40,"y":40,"width":160,"height":100,
                "fill":[{"type":"solid","color":"#ffffff"}],
@@ -511,7 +511,7 @@ fn fill_width_keeps_both_numeric_inputs_visible_and_hittable() {
     use op_editor_core::PropertyFocus;
     let fill = {
         let mut s = state_from(
-            r##"{ "version": "0.8.0", "children": [
+            r##"{ "version": "1.0.0", "children": [
                   {"type":"frame","id":"ff","name":"Frame",
                    "x":40,"y":40,"width":"fill_container","height":240,
                    "layout":"vertical","children":[]}
@@ -549,7 +549,7 @@ fn both_dimensions_fill_keep_the_size_input_row() {
     };
     let panel_for = |w: &str, h: &str| {
         let json = format!(
-            r##"{{ "version": "0.8.0", "children": [
+            r##"{{ "version": "1.0.0", "children": [
                   {{"type":"frame","id":"ff","name":"Frame",
                    "x":40,"y":40,"width":{w},"height":{h},
                    "layout":"vertical","children":[]}}
@@ -599,7 +599,7 @@ fn both_dimensions_fill_keep_the_size_input_row() {
 fn fill_and_hug_inputs_paint_snapshot_size_and_numeric_commit_makes_fixed() {
     use op_editor_core::PropertyFocus;
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"ff","name":"Frame",
                "x":40,"y":40,"width":"fill_container","height":"fit_content",
                "layout":"vertical","children":[
@@ -656,7 +656,7 @@ fn padding_mode_derives_from_values_and_drives_input_count() {
     };
     let padding_rects = |padding: &str| {
         let json = format!(
-            r##"{{ "version": "0.8.0", "children": [
+            r##"{{ "version": "1.0.0", "children": [
                   {{"type":"frame","id":"f","name":"F","x":0,"y":0,
                    "width":300,"height":200,"layout":"vertical",
                    "padding":{padding},"children":[]}}
@@ -691,7 +691,7 @@ fn padding_mode_derives_from_values_and_drives_input_count() {
 #[test]
 fn flex_advanced_rows_do_not_overlap_gap_modes() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"f","name":"Frame",
                "x":40,"y":40,"width":360,"height":240,
                "layout":"horizontal","gap":0,

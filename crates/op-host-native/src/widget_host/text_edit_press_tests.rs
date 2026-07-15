@@ -17,7 +17,7 @@ const VIEWPORT_W: f32 = 1440.0;
 const VIEWPORT_H: f32 = 900.0;
 
 /// `t1` text node (400, 60, 200×60) with two authored lines.
-const TWO_LINES: &str = r#"{"version":"0.8.0","children":[
+const TWO_LINES: &str = r#"{"version":"1.0.0","children":[
   {"type":"text","id":"t1","name":"Label","x":400,"y":60,"width":200,"height":60,
    "content":"hello\nworld","fontSize":20,"lineHeight":1}
 ]}"#;

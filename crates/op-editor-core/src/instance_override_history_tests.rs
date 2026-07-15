@@ -3,7 +3,7 @@ use crate::walkers::find_node;
 use jian_ops_schema::node::container::{AlignItems, JustifyContent};
 
 const HISTORY_DOC: &str = r##"{
-  "version":"0.8.0",
+  "version":"1.0.0",
   "children":[
     {"type":"frame","id":"master","name":"Master","reusable":true,
      "x":0,"y":0,"width":100,"height":100,"layout":"vertical",

@@ -13,7 +13,7 @@ fn panel_rect() -> Rect {
 
 fn sided_stroke_state() -> op_editor_core::EditorState {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"rect","name":"Rect",
                "x":40,"y":40,"width":160,"height":100,
                "fill":[{"type":"solid","color":"#ffffff"}],

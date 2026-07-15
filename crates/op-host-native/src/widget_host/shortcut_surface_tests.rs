@@ -12,9 +12,9 @@ fn seed(host: &mut WidgetHostNative, json: &str) {
     host.mark_paint_dirty_for_test();
 }
 
-const ONE_RECT: &str = r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":400,"y":300,"width":100,"height":50}]}"#;
+const ONE_RECT: &str = r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":400,"y":300,"width":100,"height":50}]}"#;
 
-const ONE_FRAME: &str = r#"{"version":"0.8.0","children":[{"type":"frame","id":"f1","name":"Card","x":0,"y":0,"width":100,"height":50}]}"#;
+const ONE_FRAME: &str = r#"{"version":"1.0.0","children":[{"type":"frame","id":"f1","name":"Card","x":0,"y":0,"width":100,"height":50}]}"#;
 
 #[test]
 fn panel_toggle_shortcuts_flip_their_flags() {
@@ -78,7 +78,7 @@ fn paste_figma_nodes_centres_fresh_ids_and_selects() {
     let mut host = WidgetHostNative::new();
     seed(&mut host, ONE_FRAME);
     let incoming = jian_ops_schema::load_str(
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
             {"type":"rectangle","id":"r1","name":"A","x":0,"y":0,"width":100,"height":100},
             {"type":"rectangle","id":"r2","name":"B","x":100,"y":0,"width":100,"height":100}
         ]}"#,

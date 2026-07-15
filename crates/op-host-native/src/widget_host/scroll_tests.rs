@@ -1,7 +1,7 @@
 use super::WidgetHostNative;
 
 fn nested_frame_doc(depth: usize) -> String {
-    let mut src = String::from(r#"{"version":"0.8.0","children":["#);
+    let mut src = String::from(r#"{"version":"1.0.0","children":["#);
     for i in 0..depth {
         src.push_str(&format!(
             r##"{{"type":"frame","id":"nest-{i:05}","name":"Nested Layer {i:05}","x":8,"y":6,"width":400,"height":220,"fill":[{{"type":"solid","color":"#ffffff20"}}],"stroke":{{"thickness":1,"fill":[{{"type":"solid","color":"#0088ff"}}]}},"children":["##

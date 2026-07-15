@@ -971,7 +971,7 @@ mod tests {
     use jian_ops_schema::node::PenNode;
 
     fn nested_frame_doc(depth: usize) -> String {
-        let mut src = String::from(r#"{"version":"0.8.0","children":["#);
+        let mut src = String::from(r#"{"version":"1.0.0","children":["#);
         for i in 0..depth {
             src.push_str(&format!(
                 r##"{{"type":"frame","id":"nest-{i:05}","name":"Nested Layer {i:05}","x":8,"y":6,"width":400,"height":220,"fill":[{{"type":"solid","color":"#ffffff20"}}],"stroke":{{"thickness":1,"fill":[{{"type":"solid","color":"#0088ff"}}]}},"children":["##
@@ -1027,7 +1027,7 @@ mod tests {
         // LLM-authored image node: `imageSearchQuery` / `imagePrompt` but no
         // `src`. jian's `ImageNode.src` is required, so this must be repaired
         // on load rather than rejected (the web app opened these files fine).
-        let doc = r#"{"version":"0.8.0","children":[{"id":"hero","type":"image","name":"Hero","width":120,"height":80,"imageSearchQuery":"pizza","imagePrompt":"a hot pizza"}]}"#;
+        let doc = r#"{"version":"1.0.0","children":[{"id":"hero","type":"image","name":"Hero","width":120,"height":80,"imageSearchQuery":"pizza","imagePrompt":"a hot pizza"}]}"#;
         let loaded = load_canonical(doc).expect("image node without src must load");
         assert_eq!(loaded.value.children.len(), 1, "the image node should load");
     }
@@ -1037,7 +1037,7 @@ mod tests {
         // Older TS files write a PenNode `fill` as a bare color string where
         // jian expects `Vec<PenFill>`. Must be wrapped, not rejected. The
         // type-less `StyledTextSegment.fill` (also a string) stays a string.
-        let doc = r##"{"version":"0.8.0","children":[{"id":"bg","type":"frame","name":"BG","x":0,"y":0,"width":100,"height":100,"fill":"#1A1D2E","children":[]}]}"##;
+        let doc = r##"{"version":"1.0.0","children":[{"id":"bg","type":"frame","name":"BG","x":0,"y":0,"width":100,"height":100,"fill":"#1A1D2E","children":[]}]}"##;
         let loaded = load_canonical(doc).expect("string fill must load");
         assert_eq!(loaded.value.children.len(), 1, "the frame should load");
     }

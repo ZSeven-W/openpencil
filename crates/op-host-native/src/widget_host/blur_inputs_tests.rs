@@ -14,7 +14,7 @@ use op_editor_core::{own_bounds, NodeId};
 const VW: f32 = 1200.0;
 const VH: f32 = 800.0;
 
-const ONE_RECT: &str = r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#;
+const ONE_RECT: &str = r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#;
 
 /// Seed a host's `editor_state` from a canonical `.op` JSON snippet.
 fn seed(host: &mut WidgetHostNative, json: &str) {

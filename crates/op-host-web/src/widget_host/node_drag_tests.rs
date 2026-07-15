@@ -9,7 +9,7 @@ const VH: f32 = 800.0;
 fn seed(host: &mut WidgetHost) {
     seed_json(
         host,
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"box","name":"Box","x":100,"y":100,"width":120,"height":80,
            "fill":[{"type":"solid","color":"#2563EB"}]}
         ]}"##,
@@ -110,7 +110,7 @@ fn option_dragging_vertical_layout_child_up_copies_before_source() {
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"stack","name":"Stack","x":400,"y":60,"width":200,"height":300,
           "layout":"vertical","gap":8,
           "children":[
@@ -144,7 +144,7 @@ fn option_dragging_horizontal_layout_child_left_copies_before_source() {
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"row","name":"Row","x":400,"y":60,"width":360,"height":120,
           "layout":"horizontal","gap":8,
           "children":[
@@ -178,7 +178,7 @@ fn arrow_nudge_reorders_selected_child_on_layout_axis() {
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"stack","name":"Stack","x":400,"y":60,"width":200,"height":300,
           "layout":"vertical","gap":8,
           "children":[
@@ -200,7 +200,7 @@ fn arrow_nudge_reorders_selected_child_on_layout_axis() {
 fn select_tool_dragging_flex_child_reorders_during_preview_like_native() {
     let mut host = WidgetHost::new();
     let doc = jian_ops_schema::load_str(
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"stack","name":"Stack","x":400,"y":60,"width":200,"height":300,
           "layout":"vertical","gap":8,
           "children":[
@@ -271,7 +271,7 @@ fn select_tool_dragging_flex_child_to_blank_canvas_previews_as_page_root() {
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"stack","name":"Stack","x":400,"y":60,"width":200,"height":300,
           "layout":"vertical","gap":8,
           "children":[
@@ -319,7 +319,7 @@ fn select_tool_dragging_fill_sized_child_to_blank_canvas_freezes_resolved_size()
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"screen","name":"Screen","x":400,"y":60,"width":360,"height":220,
           "layout":"vertical","gap":8,
           "children":[
@@ -367,7 +367,7 @@ fn select_tool_dragging_child_into_sibling_frame_reparents_like_native() {
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"src","name":"Source","x":400,"y":60,"width":200,"height":120,
            "children":[
              {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
@@ -399,7 +399,7 @@ fn select_tool_dragging_child_into_other_layout_uses_cross_container_placeholder
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"src","name":"Source","x":400,"y":60,"width":200,"height":120,
            "children":[
              {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
@@ -447,7 +447,7 @@ fn select_tool_dragging_child_to_blank_canvas_makes_it_page_root_like_native() {
     let mut host = WidgetHost::new();
     seed_json(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"card","name":"Card","x":400,"y":60,"width":200,"height":100,
            "children":[
              {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
@@ -475,7 +475,7 @@ fn select_tool_dragging_child_to_blank_canvas_makes_it_page_root_like_native() {
 fn dragging_a_selection_with_a_locked_node_does_not_drift_it_in_the_scene() {
     let mut host = WidgetHost::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"free","name":"Free","x":100,"y":100,"width":80,"height":60},
           {"type":"rectangle","id":"locked","name":"Locked","x":300,"y":100,"width":80,"height":60,"locked":true}
         ]}"##,

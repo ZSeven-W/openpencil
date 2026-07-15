@@ -78,7 +78,7 @@ fn multi_select_caps_keep_size_hide_fill_and_stroke() {
 fn multi_select_panel_shows_even_when_all_zero_size() {
     // Symmetry with single-select: a 0x0 node still shows the panel.
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n50","name":"A"},
               {"type":"rectangle","id":"n51","name":"B"}
         ]}"##,
@@ -96,7 +96,7 @@ fn multi_select_panel_shows_even_when_all_zero_size() {
 fn padding_pin_does_not_leak_into_a_different_selection() {
     use op_editor_core::PaddingEditMode;
     let mut state = state_from(
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"a","name":"A","x":0,"y":0,"width":100,"height":100},
           {"type":"frame","id":"b","name":"B","x":200,"y":0,"width":100,"height":100}
         ]}"#,

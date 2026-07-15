@@ -7,7 +7,7 @@ use op_editor_ui::{KeyCode, KeyEvent, KeyLocation, KeyState, KeyValue, Modifiers
 
 fn seed_text_edit(host: &mut WidgetHost, content: &str) {
     let doc = jian_ops_schema::load_str(&format!(
-        r##"{{"version":"0.8.0","children":[
+        r##"{{"version":"1.0.0","children":[
           {{"type":"text","id":"t1","name":"Title","x":0,"y":0,"width":100,"height":24,
            "content":{content:?},"font_size":16,"fills":[{{"type":"solid","color":"#111827"}}]}}
         ]}}"##

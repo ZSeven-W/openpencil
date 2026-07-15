@@ -647,7 +647,7 @@ mod tests {
         let mut host = WidgetHostNative::new();
         let doc = jian_ops_schema::load_str(
             r#"{
-              "version":"0.8.0",
+              "version":"1.0.0",
               "children":[
                 {"type":"frame","id":"left","name":"Left","x":900,"y":120,"width":240,"height":320},
                 {"type":"frame","id":"right","name":"Right","x":1320,"y":220,"width":260,"height":280}
@@ -695,7 +695,7 @@ mod tests {
         let mut host = WidgetHostNative::new();
         let doc = jian_ops_schema::load_str(
             r#"{
-              "version":"0.8.0",
+              "version":"1.0.0",
               "children":[{
                 "type":"frame","id":"root","name":"Explore",
                 "x":12,"y":24,"width":390,"height":"fit_content",

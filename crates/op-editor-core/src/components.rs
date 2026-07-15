@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn from_document_indexes_reusable_frames() {
         let mut doc = jian_ops_schema::PenDocument {
-            version: "0.8.0".into(),
+            version: "1.0.0".into(),
             name: None,
             themes: None,
             variables: None,

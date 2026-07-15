@@ -460,7 +460,7 @@ mod tests {
     use crate::ref_resolve::resolve_refs_for_canvas;
 
     const DOC: &str = r##"{
-      "version":"0.8.0",
+      "version":"1.0.0",
       "children":[
         {"type":"frame","id":"card","name":"Card","reusable":true,"x":0,"y":0,"width":200,"height":100,
          "fill":[{"type":"solid","color":"#222222"}],

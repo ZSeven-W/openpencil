@@ -23,7 +23,7 @@ fn state_from(src: &str) -> EditorState {
 /// Four sibling rectangles `n1..n4` in a single-page document.
 fn four_rects() -> EditorState {
     state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n1","name":"A","width":10,"height":10},
               {"type":"rectangle","id":"n2","name":"B","width":10,"height":10},
               {"type":"rectangle","id":"n3","name":"C","width":10,"height":10},
@@ -94,7 +94,7 @@ fn whole_document_replacement_needs_owner_rotation_to_avoid_stale_rows() {
     // host's layer-panel owner never rotates on its own.
     let doc_a = four_rects(); // rows A/B/C/D
     let doc_b = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"m1","name":"W","width":10,"height":10},
               {"type":"rectangle","id":"m2","name":"X","width":10,"height":10}
         ]}"##,
@@ -181,7 +181,7 @@ fn empty_document_yields_one_default_page_no_layers() {
 #[test]
 fn collapsed_node_hides_its_children() {
     let state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"n1","name":"Frame","width":100,"height":100,
                "children":[
                  {"type":"rectangle","id":"n2","name":"Child","width":10,"height":10}
@@ -205,7 +205,7 @@ fn unnamed_node_row_falls_back_to_kind_label() {
     // `name`. The layer row must then show the kind label (TS parity:
     // `node.name ?? node.type`) instead of a blank label.
     let state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n1","width":10,"height":10},
               {"type":"frame","id":"n2","width":20,"height":20},
               {"type":"rectangle","id":"n3","name":"Hero","width":10,"height":10}
@@ -226,7 +226,7 @@ fn ghost_item_for_unnamed_node_falls_back_to_kind_label() {
     // The drag-ghost row (host paints it at the cursor) shares the same
     // name-or-kind fallback so a nameless node isn't a blank ghost.
     let state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"ellipse","id":"n1","width":10,"height":10}
         ]}"##,
     );
@@ -503,7 +503,7 @@ fn access_node_advertises_tree_role_and_layers_label() {
 #[test]
 fn from_document_scopes_to_active_page_only() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [], "pages": [
+        r##"{ "version": "1.0.0", "children": [], "pages": [
               {"id":"n1","name":"Page 1","children":[
                 {"type":"frame","id":"n2","name":"P1-Node","width":10,"height":10}]},
               {"id":"n3","name":"Page 2","children":[
@@ -606,7 +606,7 @@ fn drop_target_at_in_empty_area_below_rows_drops_at_end() {
 }
 
 fn nested_frame_doc(depth: usize) -> String {
-    let mut src = String::from(r#"{"version":"0.8.0","children":["#);
+    let mut src = String::from(r#"{"version":"1.0.0","children":["#);
     for i in 0..depth {
         src.push_str(&format!(
             r##"{{"type":"frame","id":"nest-{i:05}","name":"Nested Layer {i:05}","x":8,"y":6,"width":400,"height":220,"fill":[{{"type":"solid","color":"#ffffff20"}}],"stroke":{{"thickness":1,"fill":[{{"type":"solid","color":"#0088ff"}}]}},"children":["##

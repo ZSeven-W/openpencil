@@ -107,7 +107,7 @@ mod tests {
     use crate::WidgetHostNative;
     use op_editor_core::NodeId;
 
-    const TEXT_DOC: &str = r#"{"version":"0.8.0","children":[
+    const TEXT_DOC: &str = r#"{"version":"1.0.0","children":[
       {"type":"text","id":"t1","name":"Label","x":0,"y":0,"width":100,"height":40,
        "content":"hello","fontSize":20}
     ]}"#;

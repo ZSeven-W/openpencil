@@ -470,7 +470,7 @@ mod tests {
     fn active_page_bbox_resolves_fit_content_root_height() {
         let doc = jian_ops_schema::load_str(
             r#"{
-              "version":"0.8.0",
+              "version":"1.0.0",
               "children":[{
                 "type":"frame", "id":"root", "name":"Explore",
                 "x":12, "y":24, "width":390, "height":"fit_content",
@@ -511,7 +511,7 @@ mod tests {
     fn canonical_document_is_not_mistaken_for_legacy() {
         // A canonical `.op` file has a *string* `version` — it must not
         // trip the legacy detector.
-        let canonical = r#"{"version":"0.8.0","children":[]}"#;
+        let canonical = r#"{"version":"1.0.0","children":[]}"#;
         assert!(!looks_like_legacy_doc_payload(canonical));
     }
 

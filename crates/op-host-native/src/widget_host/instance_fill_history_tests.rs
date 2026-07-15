@@ -11,7 +11,7 @@ use op_editor_core::NodeId;
 fn native_move_fill_action_dispatches_as_one_undoable_edit() {
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[{
+        r##"{"version":"1.0.0","children":[{
           "type":"rectangle","id":"rect","name":"Rect",
           "x":0,"y":0,"width":10,"height":10,
           "fill":[
@@ -53,7 +53,7 @@ fn native_move_fill_action_dispatches_as_one_undoable_edit() {
 fn native_instance_move_fill_undo_restores_the_original_ref() {
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"master","name":"Master","reusable":true,
            "x":0,"y":0,"width":10,"height":10,
            "fill":[
@@ -135,7 +135,7 @@ fn native_compound_instance_alignment_undo_redo_preserves_each_history_state() {
 
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"frame","id":"master","name":"Master","reusable":true,
            "x":0,"y":0,"width":100,"height":100,"layout":"vertical",
            "justifyContent":"start","alignItems":"start","children":[]},

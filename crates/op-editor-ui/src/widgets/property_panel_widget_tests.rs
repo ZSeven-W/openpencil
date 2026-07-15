@@ -23,7 +23,7 @@ fn widget_state(src: &str) -> op_editor_core::EditorState {
 
 #[test]
 fn widget_section_hidden_unless_experimental_enabled() {
-    let src = r##"{ "version": "0.8.0", "children": [
+    let src = r##"{ "version": "1.0.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":24,"y":32,"width":220,"height":40,"placeholder":"Email"}
         ]}"##;
@@ -50,7 +50,7 @@ fn widget_section_hidden_unless_experimental_enabled() {
 #[test]
 fn text_input_selection_exposes_widget_text_rows() {
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":24,"y":32,"width":220,"height":40,
                "placeholder":"Email address","value":"kai@example.com"}
@@ -78,7 +78,7 @@ fn text_input_selection_exposes_widget_text_rows() {
 #[test]
 fn property_panel_text_input_fields_expose_icon_and_bind_rows() {
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":24,"y":32,"width":220,"height":40,
                "leadingIcon":"mail","trailingIcon":"eye",
@@ -113,7 +113,7 @@ fn checkbox_selection_hides_icon_and_bind_rows() {
     // Icon + bind editing is Phase-1 scoped to the input kinds; a
     // Checkbox widget shows neither.
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"checkbox","id":"cb","name":"Agree","x":0,"y":0,"width":18,"height":18,
                "label":"Accept","checked":false}
         ]}"##,
@@ -133,7 +133,7 @@ fn checkbox_selection_hides_icon_and_bind_rows() {
 #[test]
 fn slider_selection_exposes_widget_range_rows() {
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"slider","id":"volume","name":"Volume",
                "x":24,"y":32,"width":220,"height":24,
                "min":0,"max":100,"step":5,"value":50}
@@ -165,7 +165,7 @@ fn slider_selection_exposes_widget_range_rows() {
 #[test]
 fn frame_selection_hides_widget_section() {
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"f1","name":"Frame","x":0,"y":0,"width":200,"height":100}
         ]}"##,
     );
@@ -188,7 +188,7 @@ fn frame_selection_hides_widget_section() {
 fn checkbox_selection_emits_toggle_checked_action() {
     use super::property_panel::PropertyPanelAction;
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"checkbox","id":"cb","name":"Agree","x":0,"y":0,"width":18,"height":18,
                "label":"Accept","checked":false}
         ]}"##,
@@ -214,7 +214,7 @@ fn checkbox_selection_emits_toggle_checked_action() {
 fn committing_placeholder_updates_text_input_node() {
     use jian_ops_schema::node::PenNode;
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":0,"y":0,"width":220,"height":40,"placeholder":"Email"}
         ]}"##,
@@ -235,7 +235,7 @@ fn committing_placeholder_updates_text_input_node() {
 fn committing_slider_max_updates_node() {
     use jian_ops_schema::node::PenNode;
     let mut state = widget_state(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"slider","id":"sl","name":"Vol","x":0,"y":0,"width":220,"height":24,
                "min":0,"max":100,"step":1,"value":50}
         ]}"##,
