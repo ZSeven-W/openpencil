@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 Framework UI GPU-Skia — widget/render/event
 │   ├── casement/             Fork winit
 │   └── agent/                Runtime agen Rust lintas produk (agent-rs)
-└── .githooks/                Pre-commit sinkronisasi versi dari nama branch
+└── .githooks/                Pemeriksaan drift versi pre-commit
 ```
 
 ## Pintasan Keyboard
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# Sinkronisasi versi (jalankan dari root repositori)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 Kontribusi sangat disambut! Lihat [CLAUDE.md](./CLAUDE.md) untuk detail arsitektur dan gaya kode.
 
 1. Fork dan clone
-2. Atur sinkronisasi versi: `git config core.hooksPath .githooks`
+2. Aktifkan pemeriksaan drift versi: `git config core.hooksPath .githooks`
 3. Buat cabang: `git checkout -b feat/my-feature`
 4. Jalankan pemeriksaan: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Commit dengan [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`

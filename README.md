@@ -479,7 +479,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI framework — widgets/render/events
 │   ├── casement/             winit fork
 │   └── agent/                Cross-product Rust agent runtime (agent-rs)
-└── .githooks/                Pre-commit version consistency check
+└── .githooks/                Pre-commit version drift check
 ```
 
 ## Keyboard Shortcuts
@@ -516,6 +516,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# Version synchronization (run from repository root)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -555,7 +557,7 @@ cargo deny check && cargo deny --target wasm32-unknown-unknown check bans       
 Contributions are welcome! See [CLAUDE.md](./CLAUDE.md) for architecture details and code style.
 
 1. Fork and clone
-2. Set up version sync: `git config core.hooksPath .githooks`
+2. Enable the version drift check: `git config core.hooksPath .githooks`
 3. Create a branch: `git checkout -b feat/my-feature`
 4. Run checks: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Commit with [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`

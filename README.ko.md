@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI 프레임워크 — 위젯/렌더/이벤트
 │   ├── casement/             winit 포크
 │   └── agent/                제품 공용 Rust 에이전트 런타임 (agent-rs)
-└── .githooks/                pre-commit 버전 일관성 검사
+└── .githooks/                pre-commit 버전 드리프트 검사
 ```
 
 ## 키보드 단축키
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# 버전 동기화 (저장소 루트에서 실행)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 기여를 환영합니다! 아키텍처 세부 정보와 코드 스타일은 [CLAUDE.md](./CLAUDE.md)를 참고하세요.
 
 1. 포크 후 클론
-2. 버전 동기화 설정: `git config core.hooksPath .githooks`
+2. 버전 드리프트 검사 설정: `git config core.hooksPath .githooks`
 3. 브랜치 생성: `git checkout -b feat/my-feature`
 4. 검사 실행: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. [Conventional Commits](https://www.conventionalcommits.org/) 형식으로 커밋: `feat(canvas): add rotation snapping`

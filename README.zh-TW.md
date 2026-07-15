@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI 框架 — 元件/渲染/事件
 │   ├── casement/             winit fork
 │   └── agent/                跨產品 Rust Agent 執行環境（agent-rs）
-└── .githooks/                Pre-commit 版本號同步（從分支名稱）
+└── .githooks/                Pre-commit 版本漂移檢查
 ```
 
 ## 鍵盤快捷鍵
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# 版本同步（從存放庫根目錄執行）
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 歡迎貢獻！請查閱 [CLAUDE.md](./CLAUDE.md) 了解架構細節和程式碼風格。
 
 1. Fork 並複製存放庫
-2. 設定版本同步：`git config core.hooksPath .githooks`
+2. 啟用版本漂移檢查：`git config core.hooksPath .githooks`
 3. 建立分支：`git checkout -b feat/my-feature`
 4. 執行檢查：`cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. 使用 [Conventional Commits](https://www.conventionalcommits.org/) 提交：`feat(canvas): add rotation snapping`

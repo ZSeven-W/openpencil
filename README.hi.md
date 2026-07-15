@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI फ़्रेमवर्क — विजेट/रेंडर/इवेंट
 │   ├── casement/             winit फ़ोर्क
 │   └── agent/                क्रॉस-प्रोडक्ट Rust एजेंट रनटाइम (agent-rs)
-└── .githooks/                ब्रांच नाम से प्री-कमिट वर्शन सिंक
+└── .githooks/                प्री-कमिट वर्शन ड्रिफ्ट जाँच
 ```
 
 ## कीबोर्ड शॉर्टकट
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# वर्शन सिंक्रोनाइज़ेशन (रिपॉज़िटरी रूट से चलाएँ)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 योगदान का स्वागत है! आर्किटेक्चर विवरण और कोड स्टाइल के लिए [CLAUDE.md](./CLAUDE.md) देखें।
 
 1. फ़ोर्क और क्लोन करें
-2. वर्शन सिंक सेटअप करें: `git config core.hooksPath .githooks`
+2. वर्शन ड्रिफ्ट जाँच सक्षम करें: `git config core.hooksPath .githooks`
 3. ब्रांच बनाएँ: `git checkout -b feat/my-feature`
 4. चेक चलाएँ: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. [Conventional Commits](https://www.conventionalcommits.org/) के साथ कमिट करें: `feat(canvas): add rotation snapping`

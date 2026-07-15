@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 Framework de UI GPU-Skia — widgets/renderização/eventos
 │   ├── casement/             Fork do winit
 │   └── agent/                Runtime de agente Rust compartilhado entre produtos (agent-rs)
-└── .githooks/                Verificação de consistência de versão no pre-commit
+└── .githooks/                Verificação pre-commit de divergência de versões
 ```
 
 ## Atalhos de Teclado
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# Sincronização de versões (execute na raiz do repositório)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 Contribuições são bem-vindas! Consulte o [CLAUDE.md](./CLAUDE.md) para detalhes de arquitetura e estilo de código.
 
 1. Faça fork e clone
-2. Configure a sincronização de versão: `git config core.hooksPath .githooks`
+2. Ative a verificação de divergência de versões: `git config core.hooksPath .githooks`
 3. Crie uma branch: `git checkout -b feat/my-feature`
 4. Execute as verificações: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Faça commit com [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`

@@ -130,6 +130,23 @@ assert_status 2 'argument rejection'
 assert_contains 'usage: scripts/sync-version.sh' 'argument rejection'
 pass 'sync entrypoint rejects positional versions with actionable usage'
 
+repo=$(new_repo reader_failure)
+printf '%s\n' \
+    '[workspace]' \
+    'members = []' \
+    '' \
+    '[workspace.package]' \
+    'version = "not-semver"' > "$repo/Cargo.toml"
+run_sync "$repo"
+assert_status 1 'canonical reader failure'
+assert_contains 'sync-version: canonical version read failed; set a valid SemVer at [workspace.package].version in Cargo.toml' \
+    'canonical reader failure'
+if [[ -e "$repo/calls.log" ]]; then
+    printf '%s\n' "$(cat "$repo/calls.log")" >&2
+    fail 'canonical reader failure invoked Cargo, Bun, or the version guard'
+fi
+pass 'canonical reader failures stop before Cargo, Bun, and the version guard'
+
 repo=$(new_repo external_cwd)
 run_sync "$repo"
 assert_status 0 'external cwd'
