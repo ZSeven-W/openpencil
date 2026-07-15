@@ -135,6 +135,24 @@ export const VERSION = '2.3.4';
   );
 });
 
+test('SDK entry rendering replaces only the initializer and preserves its quote style', () => {
+  const input = `export  const VERSION: string = "1.0.0"; // keep this formatting
+`;
+
+  assert.equal(
+    renderSdkEntry(input, '2.3.4'),
+    `export  const VERSION: string = "2.3.4"; // keep this formatting
+`,
+  );
+});
+
+test('SDK entry rendering reports TypeScript parse errors with a source location', () => {
+  assert.throws(
+    () => renderSdkEntry("const broken = ;\nexport const VERSION = '1.0.0';\n", '2.3.4'),
+    /unable to parse SDK entry: 1:\d+:/i,
+  );
+});
+
 test('SDK entry rendering rejects a missing VERSION export', () => {
   assert.throws(
     () => renderSdkEntry(`export { mount } from './mount';\n`, '2.3.4'),
@@ -148,6 +166,28 @@ export const VERSION = '1.0.1';
 `;
 
   assert.throws(() => renderSdkEntry(input, '2.3.4'), /exactly one.*VERSION export/i);
+});
+
+test('SDK entry rendering rejects non-exported, non-const, and nested VERSION declarations', () => {
+  assert.throws(
+    () => renderSdkEntry("const VERSION = '1.0.0';\n", '2.3.4'),
+    /exactly one.*VERSION export/i,
+  );
+  assert.throws(
+    () => renderSdkEntry("export let VERSION = '1.0.0';\n", '2.3.4'),
+    /exactly one.*VERSION export/i,
+  );
+  assert.throws(
+    () =>
+      renderSdkEntry(
+        `namespace Internal {
+  export const VERSION = '1.0.0';
+}
+`,
+        '2.3.4',
+      ),
+    /exactly one.*VERSION export/i,
+  );
 });
 
 test('SDK entry rendering does not count declaration text inside a comment', () => {
@@ -290,6 +330,38 @@ export const VERSION = 'block-comment-only';
 */
 const half = total / 2;
 // export const VERSION = 'line-comment-only';
+export const VERSION = '2.3.4';
+`,
+  );
+});
+
+test('SDK entry rendering ignores regex literals after export default', () => {
+  const input = `export default /[/*]/;
+export const VERSION = '1.0.0';
+`;
+
+  assert.equal(
+    renderSdkEntry(input, '2.3.4'),
+    `export default /[/*]/;
+export const VERSION = '2.3.4';
+`,
+  );
+});
+
+test('SDK entry rendering ignores postfix division inside template interpolation', () => {
+  const input = `const documentation = \`
+\${count++ / total}
+export const VERSION = 'documentation-only';
+\`;
+export const VERSION = '1.0.0';
+`;
+
+  assert.equal(
+    renderSdkEntry(input, '2.3.4'),
+    `const documentation = \`
+\${count++ / total}
+export const VERSION = 'documentation-only';
+\`;
 export const VERSION = '2.3.4';
 `,
   );

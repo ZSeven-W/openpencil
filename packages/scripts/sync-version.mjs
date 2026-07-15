@@ -3,6 +3,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import ts from 'typescript';
+
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultPackagesRoot = resolve(scriptDirectory, '..');
 const defaultRepositoryRoot = resolve(defaultPackagesRoot, '..');
@@ -23,296 +25,83 @@ const sdkEntryPaths = [
 const sdkWorkspaceNames = ['op-web-sdk', 'op-web-sdk-react', 'op-web-sdk-vue'];
 const managedPaths = [...manifestPaths, ...sdkEntryPaths, 'bun.lock'];
 
-const versionExportPattern = /^([\t ]*)export const VERSION = '([^'\r\n]*)';([\t ]*)$/gm;
-
 export function renderPackageManifest(source, version) {
   const manifest = JSON.parse(source);
   manifest.version = version;
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-function maskSdkCommentsAndTemplates(source) {
-  const masked = source.split('');
-  const regexPrefixKeywords = new Set([
-    'await',
-    'case',
-    'delete',
-    'else',
-    'in',
-    'instanceof',
-    'new',
-    'of',
-    'return',
-    'throw',
-    'typeof',
-    'void',
-    'yield',
-  ]);
-
-  const mask = (index) => {
-    if (source[index] !== '\n' && source[index] !== '\r') {
-      masked[index] = ' ';
-    }
-  };
-
-  function isEscaped(index) {
-    let backslashes = 0;
-    for (let cursor = index - 1; cursor >= 0 && source[cursor] === '\\'; cursor -= 1) {
-      backslashes += 1;
-    }
-    return backslashes % 2 === 1;
+function formatParseDiagnostic(sourceFile, diagnostic) {
+  const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+  if (diagnostic.start === undefined) {
+    return message;
   }
 
-  function skipQuoted(start, quote) {
-    let index = start + 1;
-    while (index < source.length) {
-      if (source[index] === '\\') {
-        index += 2;
-      } else if (source[index] === quote) {
-        return index + 1;
-      } else {
-        index += 1;
-      }
-    }
-    return index;
-  }
-
-  function maskQuoted(start, quote) {
-    let index = start;
-    while (index < source.length) {
-      const character = source[index];
-      mask(index);
-      if (index > start && character === quote) {
-        return index + 1;
-      }
-      if (character === '\\') {
-        mask(index + 1);
-        index += 2;
-      } else {
-        index += 1;
-      }
-    }
-    return index;
-  }
-
-  function maskLineComment(start) {
-    let index = start;
-    while (index < source.length && source[index] !== '\n' && source[index] !== '\r') {
-      mask(index);
-      index += 1;
-    }
-    return index;
-  }
-
-  function maskBlockComment(start) {
-    let index = start;
-    while (index < source.length) {
-      mask(index);
-      if (source[index] === '*' && source[index + 1] === '/') {
-        mask(index + 1);
-        return index + 2;
-      }
-      index += 1;
-    }
-    return index;
-  }
-
-  function scanRegexLiteral(start, maskContents) {
-    let inCharacterClass = false;
-    let index = start + 1;
-    if (maskContents) {
-      mask(start);
-    }
-    while (index < source.length) {
-      const character = source[index];
-      if (character === '\n' || character === '\r') {
-        return index;
-      }
-      if (maskContents) {
-        mask(index);
-      }
-      if (character === '\\') {
-        if (maskContents) {
-          mask(index + 1);
-        }
-        index += 2;
-      } else if (character === '[') {
-        inCharacterClass = true;
-        index += 1;
-      } else if (character === ']') {
-        inCharacterClass = false;
-        index += 1;
-      } else if (character === '/' && !inCharacterClass) {
-        index += 1;
-        while (/[a-z]/i.test(source[index] ?? '')) {
-          if (maskContents) {
-            mask(index);
-          }
-          index += 1;
-        }
-        return index;
-      } else {
-        index += 1;
-      }
-    }
-    return index;
-  }
-
-  function scanIdentifier(start, maskContents) {
-    let index = start;
-    while (/[\w$]/.test(source[index] ?? '')) {
-      if (maskContents) {
-        mask(index);
-      }
-      index += 1;
-    }
-    return {
-      end: index,
-      canStartRegex: regexPrefixKeywords.has(source.slice(start, index)),
-    };
-  }
-
-  function maskTemplateExpression(start) {
-    let depth = 1;
-    let index = start;
-    let canStartRegex = true;
-    while (index < source.length) {
-      const character = source[index];
-      const next = source[index + 1];
-      if (character === "'" || character === '"') {
-        index = maskQuoted(index, character);
-        canStartRegex = false;
-        continue;
-      }
-      if (character === '`') {
-        index = maskTemplateLiteral(index);
-        canStartRegex = false;
-        continue;
-      }
-      if (character === '/' && next === '/' && !isEscaped(index)) {
-        index = maskLineComment(index);
-        continue;
-      }
-      if (character === '/' && next === '*' && !isEscaped(index)) {
-        index = maskBlockComment(index);
-        continue;
-      }
-      if (character === '/' && canStartRegex) {
-        index = scanRegexLiteral(index, true);
-        canStartRegex = false;
-        continue;
-      }
-      if (/[A-Za-z_$]/.test(character)) {
-        const identifier = scanIdentifier(index, true);
-        index = identifier.end;
-        canStartRegex = identifier.canStartRegex;
-        continue;
-      }
-
-      mask(index);
-      if (character === '{') {
-        depth += 1;
-        canStartRegex = true;
-      } else if (character === '}') {
-        depth -= 1;
-        index += 1;
-        if (depth === 0) {
-          return index;
-        }
-        canStartRegex = false;
-        continue;
-      } else if (/\d/.test(character) || '.)]'.includes(character)) {
-        canStartRegex = false;
-      } else if (!/\s/.test(character)) {
-        canStartRegex = true;
-      }
-      index += 1;
-    }
-    return index;
-  }
-
-  function maskTemplateLiteral(start) {
-    mask(start);
-    let index = start + 1;
-    while (index < source.length) {
-      const character = source[index];
-      const next = source[index + 1];
-      if (character === '\\') {
-        mask(index);
-        mask(index + 1);
-        index += 2;
-      } else if (character === '`') {
-        mask(index);
-        return index + 1;
-      } else if (character === '$' && next === '{') {
-        mask(index);
-        mask(index + 1);
-        index = maskTemplateExpression(index + 2);
-      } else {
-        mask(index);
-        index += 1;
-      }
-    }
-    return index;
-  }
-
-  let canStartRegex = true;
-  for (let index = 0; index < source.length; ) {
-    const character = source[index];
-    const next = source[index + 1];
-    if (/\s/.test(character)) {
-      index += 1;
-      continue;
-    }
-    if (character === "'" || character === '"') {
-      index = skipQuoted(index, character);
-      canStartRegex = false;
-      continue;
-    }
-    if (character === '`') {
-      index = maskTemplateLiteral(index);
-      canStartRegex = false;
-      continue;
-    }
-    if (character === '/' && next === '/' && !isEscaped(index)) {
-      index = maskLineComment(index);
-      continue;
-    }
-    if (character === '/' && next === '*' && !isEscaped(index)) {
-      index = maskBlockComment(index);
-      continue;
-    }
-    if (character === '/' && canStartRegex) {
-      index = scanRegexLiteral(index, false);
-      canStartRegex = false;
-      continue;
-    }
-    if (/[A-Za-z_$]/.test(character)) {
-      const identifier = scanIdentifier(index, false);
-      index = identifier.end;
-      canStartRegex = identifier.canStartRegex;
-      continue;
-    }
-    canStartRegex = !(/\d/.test(character) || '.)]}'.includes(character));
-    index += 1;
-  }
-
-  return masked.join('');
+  const { line, character } = sourceFile.getLineAndCharacterOfPosition(diagnostic.start);
+  return `${line + 1}:${character + 1}: ${message}`;
 }
 
 function sdkVersionMatches(source) {
-  return [...maskSdkCommentsAndTemplates(source).matchAll(versionExportPattern)];
+  const sourceFile = ts.createSourceFile(
+    'sdk-entry.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  if (sourceFile.parseDiagnostics.length > 0) {
+    const details = sourceFile.parseDiagnostics
+      .map((diagnostic) => formatParseDiagnostic(sourceFile, diagnostic))
+      .join('; ');
+    throw new Error(`Unable to parse SDK entry: ${details}`);
+  }
+
+  const matches = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+
+    const isExported =
+      statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
+      false;
+    const isConst = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0;
+    if (!isExported || !isConst) {
+      continue;
+    }
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== 'VERSION' ||
+        declaration.initializer === undefined ||
+        !ts.isStringLiteral(declaration.initializer)
+      ) {
+        continue;
+      }
+
+      matches.push({
+        start: declaration.initializer.getStart(sourceFile),
+        end: declaration.initializer.getEnd(),
+        version: declaration.initializer.text,
+      });
+    }
+  }
+
+  return matches;
 }
 
 export function renderSdkEntry(source, version) {
   const matches = sdkVersionMatches(source);
   if (matches.length !== 1) {
-    throw new Error(`Expected exactly one public VERSION export, found ${matches.length}`);
+    throw new Error(
+      `Expected exactly one public VERSION export (a top-level exported const with a string literal initializer), found ${matches.length}`,
+    );
   }
 
-  const [declaration, prefix, _current, suffix] = matches[0];
-  const start = matches[0].index;
-  return `${source.slice(0, start)}${prefix}export const VERSION = '${version}';${suffix}${source.slice(start + declaration.length)}`;
+  const [match] = matches;
+  const quote = source[match.start] === '"' ? '"' : "'";
+  return `${source.slice(0, match.start)}${quote}${version}${quote}${source.slice(match.end)}`;
 }
 
 function skipTrivia(source, start) {
@@ -520,7 +309,7 @@ async function readConsumers(packagesRoot) {
       const matches = sdkVersionMatches(source);
       return {
         path: repositoryPath(path),
-        actualVersion: matches.length === 1 ? matches[0][2] : undefined,
+        actualVersion: matches.length === 1 ? matches[0].version : undefined,
       };
     }),
   );
