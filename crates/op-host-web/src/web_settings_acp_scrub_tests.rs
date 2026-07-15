@@ -1,5 +1,5 @@
 use super::*;
-use op_editor_core::EditorState;
+use op_editor_core::{AgentProvider, EditorState};
 
 #[test]
 fn legacy_acp_in_separate_credentials_is_removed_without_losing_builtin_keys() {
@@ -189,7 +189,10 @@ fn legacy_acp_configuration_is_removed_without_loading_or_migrating_it() {
     assert!(!writes[0].1.contains("legacy-env-secret"));
     assert!(!writes[0].1.contains("legacy-url-secret"));
     assert!(state.editor_ui.agent_settings.acp_agents.is_empty());
-    assert_eq!(state.editor_ui.agent_settings.connected, [false; 5]);
+    assert_eq!(
+        state.editor_ui.agent_settings.connected,
+        [false; AgentProvider::ALL.len()]
+    );
 }
 
 #[test]

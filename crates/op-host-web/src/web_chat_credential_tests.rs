@@ -1,4 +1,5 @@
 use super::*;
+use op_editor_core::chat::{AgentProvider, ModelEntry};
 
 fn state_with_queued_send(text: &str) -> EditorState {
     let mut state = EditorState::new();
