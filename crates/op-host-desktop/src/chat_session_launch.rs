@@ -608,12 +608,19 @@ fn provider_for_agent(agent_idx: usize, chat_session: bool) -> Option<Box<dyn Ch
         })),
         4 => SubprocessProvider::for_cli(CliName::Gemini)
             .map(|p| Box::new(p) as Box<dyn ChatProvider>),
-        5 => SubprocessProvider::for_cli(CliName::Antigravity)
-            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
-        6 => SubprocessProvider::for_cli(CliName::GrokBuild)
-            .map(|p| Box::new(p) as Box<dyn ChatProvider>),
+        5 => subprocess_provider(CliName::Antigravity, chat_session),
+        6 => subprocess_provider(CliName::GrokBuild, chat_session),
         _ => None,
     }
+}
+
+fn subprocess_provider(cli: CliName, chat: bool) -> Option<Box<dyn ChatProvider>> {
+    let provider = if chat {
+        SubprocessProvider::for_cli(cli)
+    } else {
+        SubprocessProvider::for_cli_generation(cli)
+    };
+    provider.map(|p| Box::new(p) as Box<dyn ChatProvider>)
 }
 
 /// Provider for non-chat consumers (design orchestrator LLM, codegen)

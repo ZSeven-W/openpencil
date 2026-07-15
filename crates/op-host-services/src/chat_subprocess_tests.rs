@@ -190,6 +190,27 @@ fn antigravity_and_grok_use_documented_one_shot_flags() {
 }
 
 #[test]
+fn generation_mode_disables_canvas_mcp_but_keeps_cli_containment() {
+    let grok = SubprocessProvider::for_cli_generation(CliName::GrokBuild).unwrap();
+    assert_eq!(grok.turn_purpose, safety::TurnPurpose::Generation);
+    assert!(!grok.args.iter().any(|arg| arg == safety::GROK_MCP_ALLOW));
+    let tools = grok.args.iter().position(|arg| arg == "--tools").unwrap();
+    assert_eq!(grok.args[tools + 1], "");
+    assert!(grok
+        .args
+        .windows(2)
+        .any(|pair| pair == ["--sandbox", "strict"]));
+    assert!(grok.args.iter().any(|arg| arg == "--disable-web-search"));
+
+    let antigravity = SubprocessProvider::for_cli_generation(CliName::Antigravity).unwrap();
+    assert_eq!(antigravity.turn_purpose, safety::TurnPurpose::Generation);
+    assert_eq!(
+        antigravity.args,
+        ["--sandbox", "--print-timeout", "90s", "--mode", "plan"]
+    );
+}
+
+#[test]
 fn grok_default_model_keeps_cli_default_but_named_model_uses_m_flag() {
     let grok = SubprocessProvider::for_cli(CliName::GrokBuild).unwrap();
     let default_args = grok.turn_args(&request_with_model(Some("default")));

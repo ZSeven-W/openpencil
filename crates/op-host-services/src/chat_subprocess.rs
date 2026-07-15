@@ -136,6 +136,7 @@ pub struct SubprocessProvider {
     /// filtering, line parsing, stderr capture, and timeout quirks).
     /// `None` for custom `with_binary` providers — generic behavior.
     cli: Option<CliName>,
+    turn_purpose: safety::TurnPurpose,
 }
 
 impl SubprocessProvider {
@@ -145,6 +146,15 @@ impl SubprocessProvider {
     /// in `chat_http_server.rs`) and Copilot (official SDK transport
     /// in `chat_copilot.rs`) — neither has a stdio wire.
     pub fn for_cli(cli: CliName) -> Option<Self> {
+        Self::for_cli_with_purpose(cli, safety::TurnPurpose::CanvasAgent)
+    }
+
+    /// Build a tool-free provider for orchestrator, subtask, and codegen turns.
+    pub fn for_cli_generation(cli: CliName) -> Option<Self> {
+        Self::for_cli_with_purpose(cli, safety::TurnPurpose::Generation)
+    }
+
+    fn for_cli_with_purpose(cli: CliName, turn_purpose: safety::TurnPurpose) -> Option<Self> {
         // Per-CLI model selector (third tuple slot): Codex takes
         // `--model <id>` and Gemini `-m <id>` — matching the TS
         // reference (`codex-client.ts` / `gemini-client.ts`). Claude
@@ -196,13 +206,13 @@ impl SubprocessProvider {
                 vec!["-".into()],
             ),
             CliName::Antigravity => (
-                safety::antigravity_args(),
+                safety::antigravity_args(turn_purpose),
                 PromptMode::FlagArg("-p"),
                 Some("--model"),
                 Vec::new(),
             ),
             CliName::GrokBuild => (
-                safety::grok_args(),
+                safety::grok_args(turn_purpose),
                 PromptMode::PromptFile("--prompt-file"),
                 Some("-m"),
                 Vec::new(),
@@ -224,6 +234,7 @@ impl SubprocessProvider {
             native_effort_config: cli == CliName::Codex,
             tail_args,
             cli: Some(cli),
+            turn_purpose,
         })
     }
 
@@ -260,6 +271,7 @@ impl SubprocessProvider {
             native_effort_config: false,
             tail_args: Vec::new(),
             cli: None,
+            turn_purpose: safety::TurnPurpose::Generation,
         }
     }
 
@@ -398,7 +410,15 @@ impl ChatProvider for SubprocessProvider {
             _ => prompt_with_system_prompt(&request.system_prompt, prompt),
         };
         let attachment_paths = guard.as_ref().map(|g| g.paths()).unwrap_or(&[]);
-        let isolation = match safety::IsolatedTurn::prepare(cli, &prompt, attachment_paths) {
+        let prepared_turn = match self.turn_purpose {
+            safety::TurnPurpose::CanvasAgent => {
+                safety::IsolatedTurn::prepare(cli, &prompt, attachment_paths)
+            }
+            safety::TurnPurpose::Generation => {
+                safety::IsolatedTurn::prepare_generation(cli, &prompt, attachment_paths)
+            }
+        };
+        let isolation = match prepared_turn {
             Ok(turn) => turn,
             Err(e) => {
                 return Box::new(
@@ -416,6 +436,9 @@ impl ChatProvider for SubprocessProvider {
             prompt = turn.prompt().to_string();
         }
         let mut args_with_prompt = self.turn_args(&request);
+        if let Some(turn) = &isolation {
+            turn.append_cli_args(&mut args_with_prompt);
+        }
         // PromptMode::PositionalArg: append `-- <prompt>` so the CLI
         // picks up the message as a CLI argument (Claude Code mode).
         // PromptMode::Stdin (default): leave argv untouched; the
@@ -603,6 +626,13 @@ impl ChatProvider for SubprocessProvider {
                     }
                     result = lines.next_line() => match result {
                         Ok(Some(line)) => {
+                            if let Some(message) = safety::friendly_stdout_error(cli, &line) {
+                                let _ = tx.send(ChatDelta::Error(message)).await;
+                                let _ = tx.send(ChatDelta::Done { stop_reason: StopReason::Aborted }).await;
+                                terminal_error = true;
+                                let _ = child.start_kill();
+                                break;
+                            }
                             // Per-CLI parse: Codex / Gemini skip
                             // unparsed lines (TS parity); generic
                             // CLIs degrade them to raw text.
