@@ -31,6 +31,10 @@ if [ "$APP_VERSION" != "$CANONICAL_VERSION" ]; then
     "$APP_VERSION" "$CANONICAL_VERSION" >&2
   exit 1
 fi
+if [ "${OPENPENCIL_VALIDATE_VERSION_ONLY:-}" = 1 ]; then
+  printf '%s\n' "$APP_VERSION"
+  exit 0
+fi
 BIN="$ROOT/target/release/openpencil-desktop"
 ICON="$ROOT/crates/op-host-desktop/assets/icon.icns"
 ENTITLEMENTS="$ROOT/crates/op-host-desktop/entitlements.plist"

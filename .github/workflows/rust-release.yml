@@ -81,11 +81,35 @@ permissions:
   packages: write
 
 jobs:
+  version:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Cargo and tag versions
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo_version="$(scripts/workspace-version.sh)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ "$tag_version" != "$cargo_version" ]]; then
+              echo "::error::release tag version $tag_version does not match Cargo workspace version $cargo_version"
+              exit 1
+            fi
+          fi
+          echo "version=$cargo_version" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.label }}
+    needs: version
     runs-on: ${{ matrix.runner }}
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
       HAS_APPLE_CERTIFICATE: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' && secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && 'true' || 'false' }}
       HAS_WINDOWS_CERTIFICATE: ${{ secrets.WIN_CSC_LINK != '' && secrets.WIN_CSC_KEY_PASSWORD != '' && 'true' || 'false' }}
       TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
@@ -152,18 +176,6 @@ jobs:
             libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libegl1-mesa-dev libgles2-mesa-dev libgbm-dev \
             libfreetype-dev libfontconfig1-dev
-      - name: Compute release version
-        shell: bash
-        run: |
-          cargo_version="$(scripts/workspace-version.sh)"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tag_version="${GITHUB_REF_NAME#v}"
-            if [[ "$tag_version" != "$cargo_version" ]]; then
-              echo "::error::release tag version $tag_version does not match Cargo workspace version $cargo_version"
-              exit 1
-            fi
-          fi
-          echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
       - name: Build (host)
         run: cargo build -p op-host-desktop -p op-cli --target ${{ matrix.target }} --release
       - name: Package archives (unix)
@@ -460,8 +472,11 @@ jobs:
 
   web-docker:
     name: Build and push web Docker image
+    needs: version
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
     outputs:
       image: ${{ steps.meta.outputs.image }}
       tag: ${{ steps.meta.outputs.tag }}
@@ -481,7 +496,7 @@ jobs:
         id: meta
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$OP_VERSION"
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/openpencil-web"
           tag="${image}:v${version}"
           echo "image=${image}" >> "$GITHUB_OUTPUT"
@@ -497,9 +512,11 @@ jobs:
 
   sdk-packages:
     name: Build and publish web SDK npm packages
+    needs: version
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -532,6 +549,9 @@ jobs:
       - name: Install package workspace dependencies
         working-directory: packages
         run: bun install --frozen-lockfile
+      - name: Verify package versions
+        working-directory: packages
+        run: bun run sync-version:check
       - name: Configure npm auth
         shell: bash
         run: |
@@ -567,7 +587,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="$OP_VERSION"
           publish_pkg() {
             local name="$1"
             local tarball="$2"
@@ -595,10 +615,11 @@ jobs:
 
   release-draft:
     name: Create / update GitHub prerelease
-    needs: [build, web-docker, sdk-packages]
+    needs: [version, build, web-docker, sdk-packages]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
       TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -637,8 +658,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="$GITHUB_REF_NAME"
-          version="${tag#v}"
+          version="$OP_VERSION"
 
           sha_file() {
             sha256sum "release-files/$1" | awk '{print $1}'
@@ -685,7 +705,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="$OP_VERSION"
           note="RELEASE_NOTES/v${version}.md"
           if [ ! -f "$note" ]; then
             echo "::error::missing release note: $note"
@@ -708,10 +728,11 @@ jobs:
 
   package-managers:
     name: Update Homebrew tap and Scoop bucket
-    needs: [release-draft]
+    needs: [version, release-draft]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
       TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
       HOMEBREW_TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY || 'ZSeven-W/homebrew-openpencil' }}
       SCOOP_BUCKET_REPOSITORY: ${{ vars.SCOOP_BUCKET_REPOSITORY || 'ZSeven-W/scoop-openpencil' }}
@@ -731,7 +752,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="$OP_VERSION"
           mkdir -p release-assets
           gh release download "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
@@ -762,7 +783,6 @@ jobs:
           }
 
           {
-            echo "OP_VERSION=$version"
             echo "MAC_ARM_DMG_SHA=$(sha_file "OpenPencil-${version}-arm64-mac.dmg")"
             echo "MAC_X64_DMG_SHA=$(sha_file "OpenPencil-${version}-x64-mac.dmg")"
             echo "CLI_MAC_ARM_SHA=$(sha_file "op-cli-macos-aarch64.tar.gz")"

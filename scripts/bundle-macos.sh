@@ -57,6 +57,10 @@ if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
     "$APP_VERSION" "$CANONICAL_VERSION" >&2
   exit 1
 fi
+if [[ "${OPENPENCIL_VALIDATE_VERSION_ONLY:-}" == 1 ]]; then
+  printf '%s\n' "$APP_VERSION"
+  exit 0
+fi
 TARGET_TRIPLE="${OPENPENCIL_TARGET:-}"
 
 # Locate cargo-bundle. Tries PATH first, then a workspace-local

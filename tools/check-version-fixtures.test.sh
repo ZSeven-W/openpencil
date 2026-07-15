@@ -61,6 +61,96 @@ assert_no_success_output() {
     assert_not_contains 'skipping literal fixture drift scan' "$label"
 }
 
+write_workflow_fixture() {
+    repo=$1
+    dependency_mode=$2
+    publish_version_mode=$3
+    template="$repo/.github/workflows/rust-release.yml.in"
+
+    cat > "$template" <<'SCRIPT'
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        shell: bash
+        run: |
+          cargo_version="$(scripts/workspace-version.sh)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ "$tag_version" != "$cargo_version" ]]; then
+              exit 1
+            fi
+          fi
+          echo "version=$cargo_version" >> "$GITHUB_OUTPUT"
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - run: echo build
+  web-docker:
+__WEB_NEEDS__
+    runs-on: ubuntu-latest
+    env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - run: |
+          version="__PUBLISH_VERSION__"
+          echo "$version"
+  sdk-packages:
+__SDK_NEEDS__
+    runs-on: ubuntu-latest
+    env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - run: bun run sync-version:check
+      - run: |
+          version="__PUBLISH_VERSION__"
+          echo "$version"
+  release-draft:
+    needs: [version, build, web-docker, sdk-packages]
+    runs-on: ubuntu-latest
+    env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - run: version="$OP_VERSION"
+  package-managers:
+    needs: [version, release-draft]
+    runs-on: ubuntu-latest
+    env:
+      OP_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - run: version="$OP_VERSION"
+SCRIPT
+
+    if [[ "$publish_version_mode" == independent ]]; then
+        publish_version='${GITHUB_REF_NAME#v}'
+    else
+        publish_version='$OP_VERSION'
+    fi
+
+    awk -v dependency_mode="$dependency_mode" -v publish_version="$publish_version" '
+        $0 == "__WEB_NEEDS__" {
+            if (dependency_mode == "required") print "    needs: version"
+            next
+        }
+        $0 == "__SDK_NEEDS__" {
+            if (dependency_mode == "required") print "    needs: version"
+            next
+        }
+        {
+            gsub(/__PUBLISH_VERSION__/, publish_version)
+            print
+        }
+    ' "$template" > "$repo/.github/workflows/rust-release.yml"
+    rm "$template"
+}
+
 new_repo() {
     name=$1
     version=$2
@@ -90,9 +180,16 @@ WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CANONICAL_VERSION="$("$WS_ROOT/scripts/workspace-version.sh")"
 APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
 if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
+    printf 'bundle-macos: error: OPENPENCIL_VERSION (%s) must match Cargo workspace version (%s)\n' \
+        "$APP_VERSION" "$CANONICAL_VERSION" >&2
     exit 1
 fi
+if [[ "${OPENPENCIL_VALIDATE_VERSION_ONLY:-}" == 1 ]]; then
+    printf '%s\n' "$APP_VERSION"
+    exit 0
+fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
+touch "$WS_ROOT/packaging-side-effect"
 SCRIPT
 
     cat > "$repo/tools/bundle-macos.sh" <<'SCRIPT'
@@ -101,13 +198,23 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CANONICAL_VERSION="$("$ROOT/scripts/workspace-version.sh")"
 APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
 if [ "$APP_VERSION" != "$CANONICAL_VERSION" ]; then
+    printf 'bundle-macos: error: OPENPENCIL_VERSION (%s) must match Cargo workspace version (%s)\n' \
+        "$APP_VERSION" "$CANONICAL_VERSION" >&2
     exit 1
 fi
+if [ "${OPENPENCIL_VALIDATE_VERSION_ONLY:-}" = 1 ]; then
+    printf '%s\n' "$APP_VERSION"
+    exit 0
+fi
 <key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
+touch "$ROOT/packaging-side-effect"
 SCRIPT
 
     cat > "$repo/scripts/package-windows.nsi" <<'SCRIPT'
 ; makensis "/DVERSION=X.Y.Z" "/DOUT_FILE=OpenPencil-X.Y.Z-x64-win-setup.exe"
+!ifndef VERSION
+  !define VERSION "0.0.0"
+!endif
 SCRIPT
 
     cat > "$repo/scripts/install-op.sh" <<'SCRIPT'
@@ -115,19 +222,7 @@ SCRIPT
 # set OP_VERSION explicitly, e.g. OP_VERSION=X.Y.Z ./install-op.sh
 SCRIPT
 
-    cat > "$repo/.github/workflows/rust-release.yml" <<'SCRIPT'
-- name: Compute release version
-  shell: bash
-  run: |
-    cargo_version="$(scripts/workspace-version.sh)"
-    if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-      tag_version="${GITHUB_REF_NAME#v}"
-      if [[ "$tag_version" != "$cargo_version" ]]; then
-        exit 1
-      fi
-    fi
-    echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
-SCRIPT
+    write_workflow_fixture "$repo" required canonical
 
     printf '%s\n' "$repo"
 }
@@ -299,6 +394,85 @@ assert_contains 'error: release tags must be compared with the Cargo workspace v
     'commented release checks'
 assert_no_success_output 'commented release checks'
 pass 'commented release derivation and comparison do not satisfy the guard'
+
+repo=$(new_repo macos_noop_mismatch_and_reassignment 0.8.1)
+cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CANONICAL_VERSION="$("$WS_ROOT/scripts/workspace-version.sh")"
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
+    :
+fi
+if [[ "${OPENPENCIL_VALIDATE_VERSION_ONLY:-}" == 1 ]]; then
+    printf '%s\n' "$APP_VERSION"
+    exit 0
+fi
+APP_VERSION="0.8.2"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
+touch "$WS_ROOT/packaging-side-effect"
+SCRIPT
+run_guard "$repo"
+assert_status 1 'macOS no-op mismatch and reassignment'
+assert_contains 'scripts/bundle-macos.sh:1:' 'macOS no-op mismatch and reassignment'
+assert_contains 'error: expected exactly one active APP_VERSION assignment' \
+    'macOS no-op mismatch and reassignment'
+assert_contains 'error: mismatched OPENPENCIL_VERSION must fail validation with actionable error' \
+    'macOS no-op mismatch and reassignment'
+if [[ -e "$repo/packaging-side-effect" ]]; then
+    fail 'macOS no-op mismatch and reassignment: validation executed packaging side effects'
+fi
+assert_no_success_output 'macOS no-op mismatch and reassignment'
+pass 'macOS validation rejects no-op mismatch bodies and APP_VERSION reassignment'
+
+repo=$(new_repo arbitrary_stale_example_version 0.8.1)
+printf '%s\n' '# stale example: OP_VERSION=0.8.2' >> "$repo/scripts/install-op.sh"
+run_guard "$repo"
+assert_status 1 'arbitrary stale example version'
+assert_contains 'scripts/install-op.sh:' 'arbitrary stale example version'
+assert_contains 'error: version examples must use X.Y.Z or <version>, not a SemVer release' \
+    'arbitrary stale example version'
+assert_no_success_output 'arbitrary stale example version'
+pass 'arbitrary stale SemVer examples are rejected'
+
+repo=$(new_repo embedded_version_like_substring 0.8.1)
+printf '%s\n' '# identifier build0.8.2candidate is not a version token' \
+    >> "$repo/scripts/install-op.sh"
+run_guard "$repo"
+assert_status 0 'embedded version-like substring'
+assert_contains 'packaging and release versions derive from Cargo workspace version 0.8.1' \
+    'embedded version-like substring'
+pass 'version-like substrings inside larger identifiers are allowed'
+
+repo=$(new_repo nsis_defensive_fallback 0.8.1)
+run_guard "$repo"
+assert_status 0 'NSIS defensive fallback'
+assert_contains 'packaging and release versions derive from Cargo workspace version 0.8.1' \
+    'NSIS defensive fallback'
+pass 'NSIS 0.0.0 defensive fallback remains allowed'
+
+repo=$(new_repo publish_jobs_without_version_dependency 0.8.1)
+write_workflow_fixture "$repo" missing canonical
+run_guard "$repo"
+assert_status 1 'publish jobs without version dependency'
+assert_contains '.github/workflows/rust-release.yml:1:' \
+    'publish jobs without version dependency'
+assert_contains 'error: web-docker must depend on the version preflight job' \
+    'publish jobs without version dependency'
+assert_contains 'error: sdk-packages must depend on the version preflight job' \
+    'publish jobs without version dependency'
+assert_no_success_output 'publish jobs without version dependency'
+pass 'web Docker and SDK publishing cannot start before version preflight'
+
+repo=$(new_repo independent_publish_tag_versions 0.8.1)
+write_workflow_fixture "$repo" required independent
+run_guard "$repo"
+assert_status 1 'independent publish tag versions'
+assert_contains '.github/workflows/rust-release.yml:' 'independent publish tag versions'
+assert_contains 'error: publish paths must consume the canonical version job output' \
+    'independent publish tag versions'
+assert_no_success_output 'independent publish tag versions'
+pass 'publish paths cannot derive independent versions from the tag'
 
 repo=$(new_repo collision_still_checks_packaging 1.0.0)
 printf '%s\n' 'APP_VERSION="${OPENPENCIL_VERSION:-0.8.1}"' \

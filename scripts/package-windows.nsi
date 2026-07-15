@@ -38,7 +38,7 @@
 ;
 ; VIProductVersion is intentionally omitted: it requires a strict 4-part
 ; numeric version and would break compiles for pre-release tags like
-; 0.9.0-beta.1.
+; X.Y.Z-beta.1.
 
 Unicode true
 
