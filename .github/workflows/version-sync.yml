@@ -85,6 +85,11 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
 
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
+
       - name: Install SDK dependencies
         working-directory: packages
         run: bun install --frozen-lockfile
