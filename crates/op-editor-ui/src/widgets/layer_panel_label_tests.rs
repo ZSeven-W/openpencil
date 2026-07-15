@@ -2,7 +2,8 @@
 
 use super::layer_panel::{LayerPanel, LayerPanelHit, LAYER_PANEL_WIDTH, LAYER_ROW_HEIGHT};
 use super::layer_panel_paint::{
-    approx_text_width, layer_trailing_icon_xs, paint_rename_input, ROW_FONT,
+    approx_text_width, layer_action_gutter_left, layer_trailing_icon_xs, paint_rename_input,
+    ROW_FONT,
 };
 use super::{PaintCx, Widget};
 use crate::theme::Theme;
@@ -181,13 +182,11 @@ fn long_layer_name_ellipsizes_before_stable_action_gutter() {
     );
 
     let row = first_layer_row(&panel, rect);
-    let trailing_right = row.origin.x + row.size.x - 8.0;
-    let lock_x = trailing_right - 14.0;
-    let eye_x = lock_x - 22.0;
+    let gutter_left = layer_action_gutter_left(row);
     let content_clip = Rect::xywh(
         row.origin.x,
         row.origin.y,
-        eye_x - 6.0 - row.origin.x,
+        gutter_left - row.origin.x,
         row.size.y,
     );
     assert!(
@@ -196,9 +195,8 @@ fn long_layer_name_ellipsizes_before_stable_action_gutter() {
     );
     let label_right = label.origin.x + approx_text_width(&label.content, ROW_FONT);
     assert!(
-        label_right <= eye_x - 6.0 + f32::EPSILON,
-        "layer label right edge {label_right} should stay before action gutter at {}",
-        eye_x - 6.0
+        label_right <= gutter_left + f32::EPSILON,
+        "layer label right edge {label_right} should stay before action gutter at {gutter_left}"
     );
 
     let mut hovered_state = state;
@@ -236,13 +234,13 @@ fn horizontal_scroll_expands_label_budget_to_fixed_action_edge() {
         "scrolling content left should expose more of the label without moving fixed actions"
     );
     let row = first_layer_row(&scrolled_panel, rect);
-    let (eye_x, _) = layer_trailing_icon_xs(row);
+    let gutter_left = layer_action_gutter_left(row);
     let label_right =
         scrolled_label.origin.x + approx_text_width(&scrolled_label.content, ROW_FONT);
     assert!(
-        label_right <= eye_x - 6.0 + f32::EPSILON,
-        "translated label right edge {label_right} should stay before action gutter at {}",
-        eye_x - 6.0
+        label_right <= gutter_left + f32::EPSILON,
+        "translated label right edge {label_right} should stay before action gutter at \
+         {gutter_left}"
     );
 }
 
@@ -263,8 +261,7 @@ fn wide_layer_name_ellipsis_fits_backend_measured_width() {
     );
 
     let row = first_layer_row(&panel, rect);
-    let (eye_x, _) = layer_trailing_icon_xs(row);
-    let available_w = eye_x - 6.0 - origin.x;
+    let available_w = layer_action_gutter_left(row) - origin.x;
     let measured_w = backend.measure_text_family(&content, ROW_FONT, "system-ui");
     assert!(
         measured_w <= available_w + f32::EPSILON,
