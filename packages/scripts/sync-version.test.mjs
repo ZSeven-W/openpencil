@@ -98,6 +98,42 @@ test('Bun lock inspection finds every versioned SDK workspace and ignores the ro
   });
 });
 
+test('Bun lock inspection ignores structural delimiters in block comments after primitive values', () => {
+  const lockfile = `{
+    "lockfileVersion": 1 /* comma, brace }, bracket ] */,
+    "workspaces": {
+      "op-web-sdk": { "version": "1.0.0" },
+    },
+  }`;
+
+  assert.deepEqual(inspectBunLockWorkspaceVersions(lockfile), {
+    'op-web-sdk': '1.0.0',
+  });
+});
+
+test('Bun lock inspection ignores structural delimiters in line comments after primitive values', () => {
+  const lockfile = `{
+    "lockfileVersion": 1 // comma, brace }, bracket ]
+    ,
+    "workspaces": {
+      "op-web-sdk": { "version": "1.0.0" },
+    },
+  }`;
+
+  assert.deepEqual(inspectBunLockWorkspaceVersions(lockfile), {
+    'op-web-sdk': '1.0.0',
+  });
+});
+
+test('Bun lock inspection still rejects unterminated block comments after primitive values', () => {
+  const lockfile = `{
+    "lockfileVersion": 1 /* unterminated }, ],
+    "workspaces": {},
+  }`;
+
+  assert.throws(() => inspectBunLockWorkspaceVersions(lockfile), /unterminated block comment/i);
+});
+
 test('drift collection reports each stale path with expected and actual versions', () => {
   assert.deepEqual(
     collectVersionDrift('2.3.4', [

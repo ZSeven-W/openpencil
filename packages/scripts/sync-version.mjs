@@ -148,7 +148,15 @@ function skipJsoncValue(source, start) {
   }
 
   let index = valueStart;
-  while (index < source.length && !',}]'.includes(source[index])) {
+  while (index < source.length) {
+    const afterTrivia = skipTrivia(source, index);
+    if (afterTrivia !== index) {
+      index = afterTrivia;
+      continue;
+    }
+    if (',}]'.includes(source[index])) {
+      break;
+    }
     index += 1;
   }
   return index;
