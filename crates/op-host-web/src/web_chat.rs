@@ -411,9 +411,11 @@ mod tests {
     #[test]
     fn prepare_turn_carries_model_and_message() {
         let mut state = state_with_queued_send("design a login page");
-        state.chat.available_models = vec![ModelEntry::new(
+        state.chat.available_models = vec![ModelEntry::builtin_with_display_name(
             AgentProvider::ClaudeCode,
-            "claude-sonnet-4-5",
+            "daemon-builtin:server-1",
+            "Server API Key",
+            "builtin:server-1:claude-sonnet-4-5",
             "Claude Sonnet 4.5",
         )];
         state.chat.selected_model = 0;
@@ -423,7 +425,7 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_str(&prepared.body_json).expect("body is JSON");
         assert_eq!(body["provider"], "claude-code");
-        assert_eq!(body["model"], "claude-sonnet-4-5");
+        assert_eq!(body["model"], "builtin:server-1:claude-sonnet-4-5");
         assert_eq!(body["user"], "design a login page");
         assert_eq!(body["max_output_tokens"], 4096);
         assert_eq!(body["agent_team_size"], 3);

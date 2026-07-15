@@ -183,6 +183,13 @@ fn validate_general_semantics(payload: &SettingsPayload) -> Result<(), String> {
         return Err("browser MCP port would be normalized".into());
     }
     if payload
+        .mcp_cli_enabled
+        .as_ref()
+        .is_some_and(|enabled| enabled.len() != McpCli::ALL.len())
+    {
+        return Err("browser MCP CLI flags would be normalized".into());
+    }
+    if payload
         .recent_files
         .as_ref()
         .is_some_and(|recent| recent.len() > RECENT_FILE_CAP)
