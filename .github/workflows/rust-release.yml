@@ -169,13 +169,36 @@ jobs:
           key: release-${{ matrix.target }}
       - name: Install Linux GL/EGL prereqs
         if: runner.os == 'Linux'
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          set -euo pipefail
+          packages=(
             libxkbcommon-dev libxkbcommon-x11-dev \
             libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libegl1-mesa-dev libgles2-mesa-dev libgbm-dev \
             libfreetype-dev libfontconfig1-dev
+          )
+          for attempt in 1 2 3 4; do
+            if sudo apt-get \
+                -o Acquire::ForceIPv4=true \
+                -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=30 \
+                update && \
+              sudo apt-get \
+                -o Acquire::ForceIPv4=true \
+                -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=30 \
+                install --yes "${packages[@]}"; then
+              break
+            fi
+            if [[ "$attempt" == 4 ]]; then
+              echo "::error::apt prerequisites failed after $attempt attempts"
+              exit 1
+            fi
+            delay=$((attempt * 20))
+            echo "::warning::apt prerequisites attempt $attempt failed; retrying in ${delay}s"
+            sleep "$delay"
+          done
       - name: Build (host)
         run: cargo build -p op-host-desktop -p op-cli --target ${{ matrix.target }} --release
       - name: Package archives (unix)
