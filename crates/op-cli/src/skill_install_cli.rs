@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 const BUNDLE_JSON: &str = include_str!("../assets/skill-bundle.json");
 const VERSION_SENTINEL: &str = "__OPENPENCIL_VERSION__";
+// Top-level bundle version plus five embedded plugin/package manifest versions.
+const EXPECTED_VERSION_SENTINEL_COUNT: usize = 6;
 const REPO: &str = "zseven-w/openpencil-skill";
 const REPO_URL: &str = "https://github.com/zseven-w/openpencil-skill.git";
 const SKILL_NAME: &str = "openpencil-skill";
@@ -263,18 +265,25 @@ fn uninstall_opencode(home: &Path) -> Result<(), String> {
     write_json_object(&config_path, &config)
 }
 
-fn load_bundle() -> Result<SkillBundle, String> {
-    if !BUNDLE_JSON.contains(VERSION_SENTINEL) {
+fn render_bundle_template(template: &str, version: &str) -> Result<String, String> {
+    let sentinel_count = template.matches(VERSION_SENTINEL).count();
+    if sentinel_count != EXPECTED_VERSION_SENTINEL_COUNT {
         return Err(format!(
-            "embedded skill bundle template missing version sentinel {VERSION_SENTINEL:?}"
+            "embedded skill bundle template expected {EXPECTED_VERSION_SENTINEL_COUNT} version \
+             sentinels {VERSION_SENTINEL:?}, found {sentinel_count}"
         ));
     }
-    let rendered = BUNDLE_JSON.replace(VERSION_SENTINEL, env!("CARGO_PKG_VERSION"));
+    let rendered = template.replace(VERSION_SENTINEL, version);
     if rendered.contains(VERSION_SENTINEL) {
         return Err(
             "embedded skill bundle still contains the version sentinel after rendering".into(),
         );
     }
+    Ok(rendered)
+}
+
+fn load_bundle() -> Result<SkillBundle, String> {
+    let rendered = render_bundle_template(BUNDLE_JSON, env!("CARGO_PKG_VERSION"))?;
     let value: Value =
         serde_json::from_str(&rendered).map_err(|e| format!("parse skill bundle: {e}"))?;
     let version = value
@@ -301,7 +310,10 @@ fn load_bundle() -> Result<SkillBundle, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::load_bundle;
+    use super::{
+        load_bundle, render_bundle_template, BUNDLE_JSON, EXPECTED_VERSION_SENTINEL_COUNT,
+        VERSION_SENTINEL,
+    };
     use serde_json::Value;
 
     #[test]
@@ -312,7 +324,7 @@ mod tests {
         assert_eq!(bundle.version, cargo_version);
         for (path, content) in &bundle.files {
             assert!(
-                !content.contains("__OPENPENCIL_VERSION__"),
+                !content.contains(VERSION_SENTINEL),
                 "rendered bundle file {path:?} still contains the version sentinel"
             );
         }
@@ -358,6 +370,28 @@ mod tests {
                 "embedded marketplace plugin version differs from Cargo"
             );
         }
+    }
+
+    #[test]
+    fn bundle_renderer_rejects_missing_version_sentinels() {
+        let error = render_bundle_template("{}", env!("CARGO_PKG_VERSION"))
+            .expect_err("template without version sentinels should fail");
+        let expected = format!("expected {EXPECTED_VERSION_SENTINEL_COUNT}");
+
+        assert!(error.contains(&expected), "unexpected error: {error}");
+        assert!(error.contains("found 0"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn bundle_renderer_rejects_partially_templated_versions() {
+        let partial_template = BUNDLE_JSON.replacen(VERSION_SENTINEL, env!("CARGO_PKG_VERSION"), 1);
+        let error = render_bundle_template(&partial_template, env!("CARGO_PKG_VERSION"))
+            .expect_err("template with only five version sentinels should fail");
+        let expected = format!("expected {EXPECTED_VERSION_SENTINEL_COUNT}");
+        let found = format!("found {}", EXPECTED_VERSION_SENTINEL_COUNT - 1);
+
+        assert!(error.contains(&expected), "unexpected error: {error}");
+        assert!(error.contains(&found), "unexpected error: {error}");
     }
 }
 
