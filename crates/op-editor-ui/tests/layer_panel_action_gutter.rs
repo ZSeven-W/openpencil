@@ -6,6 +6,7 @@ const PANEL_RECT: Rect = Rect::xywh(0.0, 0.0, 180.0, 168.0);
 const LAYER_ROW_HEIGHT: f32 = 28.0;
 const ROW_FONT: f32 = 13.0;
 const MEASURED_CHAR_WIDTH: f32 = 5.2;
+const BRAND_LABEL: &str = "Google Brand Mark";
 
 const FIXTURE: &str = r#"
 {
@@ -35,27 +36,46 @@ const FIXTURE: &str = r#"
 struct CapturedText {
     content: String,
     origin: Point2D,
+    active_clip: Option<Rect>,
 }
 
 #[derive(Debug, Clone, Copy)]
 struct CapturedStroke {
     top_left: Point2D,
     size: f32,
+    active_clip: Option<Rect>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CapturedRoundFill {
+    rect: Rect,
+    radius: f32,
+    active_clip: Option<Rect>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct RecordingState {
+    translation: Point2D,
+    active_clip: Option<Rect>,
 }
 
 #[derive(Default)]
 struct RecordingBackend {
-    translation: Point2D,
-    saved_translations: Vec<Point2D>,
+    state: RecordingState,
+    saved_states: Vec<RecordingState>,
     texts: Vec<CapturedText>,
     clips: Vec<Rect>,
     fill_rects: Vec<Rect>,
+    round_fills: Vec<CapturedRoundFill>,
     stroke_svg_paths: Vec<CapturedStroke>,
 }
 
 impl RecordingBackend {
     fn translated_point(&self, point: Point2D) -> Point2D {
-        Point2D::new(point.x + self.translation.x, point.y + self.translation.y)
+        Point2D::new(
+            point.x + self.state.translation.x,
+            point.y + self.state.translation.y,
+        )
     }
 
     fn translated_rect(&self, rect: Rect) -> Rect {
@@ -85,17 +105,26 @@ impl RenderBackend for RecordingBackend {
                     origin.x + run.origin.x,
                     origin.y + run.origin.y,
                 )),
+                active_clip: self.state.active_clip,
             });
         }
     }
 
     fn clip_rect(&mut self, rect: Rect) {
-        self.clips.push(self.translated_rect(rect));
+        let clip = self.translated_rect(rect);
+        self.clips.push(clip);
+        self.state.active_clip = Some(clip);
     }
 
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
 
-    fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+    fn fill_round_rect(&mut self, rect: Rect, radius: f32, _: Color) {
+        self.round_fills.push(CapturedRoundFill {
+            rect: self.translated_rect(rect),
+            radius,
+            active_clip: self.state.active_clip,
+        });
+    }
 
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
 
@@ -103,22 +132,23 @@ impl RenderBackend for RecordingBackend {
         self.stroke_svg_paths.push(CapturedStroke {
             top_left: self.translated_point(top_left),
             size,
+            active_clip: self.state.active_clip,
         });
     }
 
     fn save(&mut self) {
-        self.saved_translations.push(self.translation);
+        self.saved_states.push(self.state);
     }
 
     fn restore(&mut self) {
-        self.translation = self
-            .saved_translations
+        self.state = self
+            .saved_states
             .pop()
             .expect("paint restore must match a save");
     }
 
     fn translate(&mut self, offset: Point2D) {
-        self.translation += offset;
+        self.state.translation += offset;
     }
 
     fn resize(&mut self, _: u32, _: u32) {}
@@ -152,8 +182,13 @@ fn paint(panel: &LayerPanel) -> RecordingBackend {
         PANEL_RECT,
     );
     assert!(
-        backend.saved_translations.is_empty(),
+        backend.saved_states.is_empty(),
         "paint must balance save/restore"
+    );
+    assert_eq!(
+        backend.state,
+        RecordingState::default(),
+        "paint must restore translation and clip state"
     );
     backend
 }
@@ -213,6 +248,38 @@ fn has_stroke_at(backend: &RecordingBackend, top_left: Point2D, size: f32) -> bo
         .stroke_svg_paths
         .iter()
         .any(|stroke| point_close(stroke.top_left, top_left) && close(stroke.size, size))
+}
+
+fn assert_longest_measured_ellipsis(
+    backend: &mut RecordingBackend,
+    original: &str,
+    rendered: &str,
+    available_w: f32,
+) {
+    let prefix = rendered
+        .strip_suffix('…')
+        .expect("truncated label ends with an ellipsis");
+    let remainder = original
+        .strip_prefix(prefix)
+        .expect("rendered prefix comes from the original label");
+    let next_scalar = remainder
+        .chars()
+        .next()
+        .expect("ellipsized label omits at least one Unicode scalar");
+
+    let rendered_w = backend.measure_text_family(rendered, ROW_FONT, "system-ui");
+    assert!(
+        rendered_w <= available_w + f32::EPSILON,
+        "rendered candidate {rendered:?} width {rendered_w} exceeds budget {available_w}"
+    );
+
+    let next_candidate = format!("{prefix}{next_scalar}…");
+    let next_w = backend.measure_text_family(&next_candidate, ROW_FONT, "system-ui");
+    assert!(
+        next_w > available_w,
+        "rendered candidate is not maximal: next candidate {next_candidate:?} width {next_w} \
+         still fits budget {available_w}"
+    );
 }
 
 #[test]
@@ -285,6 +352,12 @@ fn normal_and_hovered_rows_share_one_action_gutter() {
         + normal.measure_text_family(&normal_label.content, ROW_FONT, "system-ui");
     let clip_right = rect_right(normal_clip);
     let backing_left = backing.origin.x;
+    assert_longest_measured_ellipsis(
+        &mut normal,
+        BRAND_LABEL,
+        &normal_label.content,
+        backing_left - normal_label.origin.x,
+    );
     assert!(
         close(clip_right, backing_left)
             && close(backing_left, intended_gutter_left)
@@ -314,17 +387,54 @@ fn drag_ghost_clips_and_measured_truncates_at_the_action_gutter() {
     assert!(ghost_label.content.starts_with("Google"));
     assert!(close(ghost_label.origin.y, 33.0));
 
-    let ghost_clip = backend.clips.iter().copied().find(|clip| {
-        point_close(clip.origin, ghost_row.origin) && close(clip.size.y, ghost_row.size.y)
-    });
+    let ghost_clip = backend
+        .clips
+        .iter()
+        .copied()
+        .find(|clip| {
+            point_close(clip.origin, ghost_row.origin) && close(clip.size.y, ghost_row.size.y)
+        })
+        .expect("ghost content clip paints");
+    let ghost_background = backend
+        .round_fills
+        .iter()
+        .find(|fill| fill.rect == ghost_row && close(fill.radius, 6.0))
+        .expect("ghost rounded background paints");
+    assert_eq!(
+        ghost_background.active_clip, None,
+        "ghost background must paint before the content clip"
+    );
+    assert_eq!(
+        ghost_label.active_clip,
+        Some(ghost_clip),
+        "ghost label must paint inside the canonical content clip"
+    );
+    let ghost_icon = backend
+        .stroke_svg_paths
+        .iter()
+        .find(|stroke| {
+            point_close(stroke.top_left, Point2D::new(36.0, 22.0)) && close(stroke.size, 14.0)
+        })
+        .expect("14px ghost icon paints");
+    assert_eq!(
+        ghost_icon.active_clip,
+        Some(ghost_clip),
+        "ghost icon must paint inside the canonical content clip"
+    );
     let measured_label_right = ghost_label.origin.x
         + backend.measure_text_family(&ghost_label.content, ROW_FONT, "system-ui");
-    let clip_right = ghost_clip.map(rect_right);
+    let clip_right = rect_right(ghost_clip);
+    assert_longest_measured_ellipsis(
+        &mut backend,
+        BRAND_LABEL,
+        &ghost_label.content,
+        intended_gutter_left - ghost_label.origin.x,
+    );
     assert!(
-        clip_right.is_some_and(|right| close(right, intended_gutter_left))
+        close(clip_right, intended_gutter_left)
             && ghost_label.content.ends_with('…')
             && measured_label_right <= intended_gutter_left + f32::EPSILON,
-        "drag ghost must clip and truncate at {intended_gutter_left}: clip right={clip_right:?}, \
+        "drag ghost must clip and truncate at {intended_gutter_left}: clip right={clip_right}, \
          label={:?}, measured label right={measured_label_right}",
         ghost_label.content
     );
