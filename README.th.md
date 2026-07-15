@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 เฟรมเวิร์ก UI แบบ GPU-Skia — widget/render/event
 │   ├── casement/             winit fork
 │   └── agent/                Rust agent runtime ข้ามผลิตภัณฑ์ (agent-rs)
-└── .githooks/                Pre-commit version sync จาก branch name
+└── .githooks/                การตรวจสอบความสอดคล้องของเวอร์ชันก่อน commit
 ```
 
 ## คีย์ลัด
@@ -378,8 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
-cd packages && bun run sync-version               # Sync SDK versions from root Cargo.toml
-cd packages && bun run sync-version:check         # Verify SDK versions match root Cargo.toml
+scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
+tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
 
 ## การมีส่วนร่วม

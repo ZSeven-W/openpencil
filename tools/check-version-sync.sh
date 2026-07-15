@@ -5,6 +5,14 @@ set -euo pipefail
 script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
 repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
 fixture_version=1.0.0
+
+for required_command in cargo jq bun rg; do
+    if ! command -v "$required_command" >/dev/null 2>&1; then
+        printf 'version-sync: required command not found: %s\n' "$required_command" >&2
+        exit 1
+    fi
+done
+
 current_version=$(bash "$repo_root/scripts/workspace-version.sh")
 
 cd "$repo_root"
@@ -170,8 +178,110 @@ reject_matches() {
     fi
 }
 
+validate_workspace_package_versions() {
+    if ! metadata=$(cargo metadata --no-deps --format-version 1 --locked); then
+        report_missing Cargo.lock \
+            'cargo metadata --locked failed; run scripts/sync-version.sh to refresh the lockfile'
+        return
+    fi
+
+    mismatch_status=0
+    mismatches=$(printf '%s\n' "$metadata" | jq -r \
+        --arg crates_prefix "$repo_root/crates/" \
+        --arg expected "$current_version" '
+            .packages[]?
+            | select(.name | startswith("op-"))
+            | select(.manifest_path | startswith($crates_prefix))
+            | select(.version != $expected)
+            | [.manifest_path, .name, .version]
+            | @tsv
+        ' 2>&1) || mismatch_status=$?
+    if [[ "$mismatch_status" -ne 0 ]]; then
+        printf '%s\n' "$mismatches" >&2
+        report_missing Cargo.toml 'failed to inspect cargo metadata with jq'
+        return
+    fi
+
+    if [[ -n "$mismatches" ]]; then
+        while IFS=$'\t' read -r manifest package package_version; do
+            relative_manifest=${manifest#"$repo_root"/}
+            printf '%s:1: error: workspace package %s has version %s; expected %s\n' \
+                "$relative_manifest" "$package" "$package_version" "$current_version" >&2
+            errors=1
+        done <<< "$mismatches"
+    fi
+}
+
+validate_package_versions() {
+    package_status=0
+    package_output=$(cd packages && bun run sync-version:check 2>&1) || package_status=$?
+    if [[ "$package_status" -ne 0 ]]; then
+        printf '%s\n' "$package_output" >&2
+        report_missing packages \
+            'bun run sync-version:check failed; run scripts/sync-version.sh to repair package drift'
+    fi
+}
+
+validate_release_tag() {
+    tag_name=
+    if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+        tag_name=${GITHUB_REF#refs/tags/}
+    elif [[ -z "${GITHUB_REF:-}" && "${GITHUB_REF_NAME:-}" == v* ]]; then
+        tag_name=$GITHUB_REF_NAME
+    fi
+
+    if [[ -n "$tag_name" && "${tag_name#v}" != "$current_version" ]]; then
+        report_missing environment \
+            "release tag ${tag_name} does not match Cargo workspace version ${current_version}"
+    fi
+}
+
+validate_cli_bundle_version_template() {
+    bundle=crates/op-cli/assets/skill-bundle.json
+    sentinel=__OPENPENCIL_VERSION__
+    sentinel_count=$(rg --fixed-strings --count-matches -- "$sentinel" "$bundle" || true)
+    if [[ "${sentinel_count:-0}" != 6 ]]; then
+        report_missing "$bundle" \
+            "expected exactly 6 version sentinels ${sentinel} (found ${sentinel_count:-0})"
+    fi
+    reject_matches fixed "$bundle" "$current_version" \
+        'embedded CLI bundle must not contain the canonical version literal'
+}
+
+validate_rust_product_version_producers() {
+    require_statement crates/op-editor-core/src/state.rs \
+        'version:[[:space:]]*env!\("CARGO_PKG_VERSION"\)[.]to_owned\(\),' \
+        'empty documents must derive their version from CARGO_PKG_VERSION'
+
+    host_support=crates/op-editor-core/src/host_support.rs
+    host_version_count=$(rg --fixed-strings --count-matches -- \
+        'src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"))' \
+        "$host_support" || true)
+    if [[ "$host_version_count" != 3 ]]; then
+        report_missing "$host_support" \
+            "expected 3 document templates to derive from CARGO_PKG_VERSION (found ${host_version_count:-0})"
+    fi
+
+    cli_source=crates/op-cli/src/app_control_cli.rs
+    require_regex "$cli_source" 'env!\("CARGO_PKG_VERSION"\)' \
+        'CLI starter documents must derive their version from CARGO_PKG_VERSION'
+    reject_matches regex "$cli_source" \
+        '"version"[^[:cntrl:]]*"[0-9]+[.][0-9]+[.][0-9]+' \
+        'CLI starter documents must not hard-code a product version'
+
+    reject_matches regex crates/op-host-desktop/Cargo.toml \
+        '^[[:space:]]*op-host-native[[:space:]]*=.*path[[:space:]]*=.*version[[:space:]]*=' \
+        'local op-host-native dependency must not duplicate the product version'
+}
+
+validate_workspace_package_versions
+validate_package_versions
+validate_release_tag
+validate_cli_bundle_version_template
+validate_rust_product_version_producers
+
 if [[ "$current_version" == "$fixture_version" ]]; then
-    printf 'version-fixtures: current product version %s equals stable fixture version %s; skipping literal fixture drift scan because stable fixtures and product-version literals are indistinguishable\n' \
+    printf 'version-sync: current product version %s equals stable fixture version %s; skipping literal fixture drift scan because stable fixtures and product-version literals are indistinguishable\n' \
         "$current_version" "$fixture_version"
     fixture_scan_skipped=1
 else
@@ -187,15 +297,15 @@ else
         crates) || rg_status=$?
 
     if [[ "$rg_status" -gt 1 ]]; then
-        printf 'version-fixtures: failed to scan Rust sources with rg (status %s)\n' "$rg_status" >&2
+        printf 'version-sync: failed to scan Rust sources with rg (status %s)\n' "$rg_status" >&2
         exit "$rg_status"
     fi
 
     if [[ -n "$matches" ]]; then
-        printf 'version-fixtures: ordinary Rust fixtures copy current product version %s:\n' \
+        printf 'version-sync: ordinary Rust fixtures copy current product version %s:\n' \
             "$current_version" >&2
         printf '%s\n' "$matches" >&2
-        printf 'version-fixtures: use stable %s test data unless a test explicitly covers compatibility, migration, or updates\n' \
+        printf 'version-sync: use stable %s test data unless a test explicitly covers compatibility, migration, or updates\n' \
             "$fixture_version" >&2
         errors=1
     fi
@@ -319,8 +429,8 @@ if [[ "$errors" -ne 0 ]]; then
 fi
 
 if [[ "$fixture_scan_skipped" -eq 0 ]]; then
-    printf 'version-fixtures: no ordinary Rust fixtures copy current product version %s\n' \
+    printf 'version-sync: no ordinary Rust fixtures copy current product version %s\n' \
         "$current_version"
 fi
-printf 'version-fixtures: packaging and release versions derive from Cargo workspace version %s\n' \
+printf 'version-sync: all managed versions derive from Cargo workspace version %s\n' \
     "$current_version"

@@ -1,0 +1,102 @@
+name: Version consistency
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**/Cargo.toml"
+      - "crates/op-cli/assets/skill-bundle.json"
+      - "crates/op-cli/src/app_control_cli.rs"
+      - "crates/op-editor-core/src/host_support.rs"
+      - "crates/op-editor-core/src/state.rs"
+      - "packages/package.json"
+      - "packages/bun.lock"
+      - "packages/op-web-sdk/package.json"
+      - "packages/op-web-sdk/src/index.ts"
+      - "packages/op-web-sdk-react/package.json"
+      - "packages/op-web-sdk-react/src/index.ts"
+      - "packages/op-web-sdk-vue/package.json"
+      - "packages/op-web-sdk-vue/src/index.ts"
+      - "packages/scripts/sync-version.mjs"
+      - "packages/scripts/sync-version.test.mjs"
+      - "scripts/workspace-version.sh"
+      - "scripts/workspace-version.test.sh"
+      - "scripts/sync-version.sh"
+      - "scripts/sync-version.test.sh"
+      - "scripts/bundle-macos.sh"
+      - "scripts/package-windows.nsi"
+      - "scripts/install-op.sh"
+      - "tools/check-version-sync.sh"
+      - "tools/check-version-sync.test.sh"
+      - "tools/bundle-macos.sh"
+      - ".githooks/pre-commit"
+      - ".github/workflows/rust-release.yml"
+      - ".github/workflows/version-sync.yml"
+  push:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**/Cargo.toml"
+      - "crates/op-cli/assets/skill-bundle.json"
+      - "crates/op-cli/src/app_control_cli.rs"
+      - "crates/op-editor-core/src/host_support.rs"
+      - "crates/op-editor-core/src/state.rs"
+      - "packages/package.json"
+      - "packages/bun.lock"
+      - "packages/op-web-sdk/package.json"
+      - "packages/op-web-sdk/src/index.ts"
+      - "packages/op-web-sdk-react/package.json"
+      - "packages/op-web-sdk-react/src/index.ts"
+      - "packages/op-web-sdk-vue/package.json"
+      - "packages/op-web-sdk-vue/src/index.ts"
+      - "packages/scripts/sync-version.mjs"
+      - "packages/scripts/sync-version.test.mjs"
+      - "scripts/workspace-version.sh"
+      - "scripts/workspace-version.test.sh"
+      - "scripts/sync-version.sh"
+      - "scripts/sync-version.test.sh"
+      - "scripts/bundle-macos.sh"
+      - "scripts/package-windows.nsi"
+      - "scripts/install-op.sh"
+      - "tools/check-version-sync.sh"
+      - "tools/check-version-sync.test.sh"
+      - "tools/bundle-macos.sh"
+      - ".githooks/pre-commit"
+      - ".github/workflows/rust-release.yml"
+      - ".github/workflows/version-sync.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  version-sync:
+    name: Verify synchronized versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install SDK dependencies
+        working-directory: packages
+        run: bun install --frozen-lockfile
+
+      - name: Test canonical version reader
+        run: scripts/workspace-version.test.sh
+
+      - name: Test version synchronization entrypoint
+        run: scripts/sync-version.test.sh
+
+      - name: Test repository version guard
+        run: tools/check-version-sync.test.sh
+
+      - name: Check repository version consistency
+        run: tools/check-version-sync.sh

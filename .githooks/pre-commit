@@ -1,30 +1,14 @@
 #!/bin/sh
-#
-# Pre-commit hook: read version from branch name (e.g. v0.5.0)
-# and sync to all package.json files
-#
+set -eu
 
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
+cd "$repo_root"
 
-# Extract version from branch name like v0.5.0, v1.2.3, release/v2.0.0
-VERSION=$(echo "$BRANCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
-
-if [ -n "$VERSION" ]; then
-  CHANGED=0
-  for f in package.json apps/*/package.json packages/*/package.json; do
-    if [ -f "$f" ]; then
-      CURRENT=$(jq -r '.version' "$f")
-      if [ "$CURRENT" != "$VERSION" ]; then
-        jq --arg v "$VERSION" '.version=$v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-        git add "$f"
-        CHANGED=1
-      fi
-    fi
-  done
-
-  if [ "$CHANGED" = "1" ]; then
-    echo "[version-sync] branch $BRANCH → $VERSION"
-  fi
+echo "[pre-commit] checking version consistency"
+if ! tools/check-version-sync.sh; then
+  echo "[pre-commit] version consistency check failed. Run: scripts/sync-version.sh"
+  exit 1
 fi
 
 # --- Rust format + lint gates (same checks as CI) ---
