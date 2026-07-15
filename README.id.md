@@ -378,7 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
-cd packages && bun run bump <version>             # Sync SDK package.json versions
+cd packages && bun run sync-version               # Sync SDK versions from root Cargo.toml
+cd packages && bun run sync-version:check         # Verify SDK versions match root Cargo.toml
 ```
 
 ## Berkontribusi
