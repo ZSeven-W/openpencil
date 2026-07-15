@@ -10,7 +10,7 @@ Run these from `packages/`:
 
 - **Lint / format the SDK:** `bun run lint` (oxlint) / `bun run format` (oxfmt).
 - **Iconify catalog (Rust assets):** `bun run generate-iconify-catalog` — `scripts/generate-iconify-catalog.mjs` reads `@iconify-json/*` and writes `crates/op-editor-ui/assets/iconify-catalog-{core,brands}.json` (the icon catalog embedded in / served by the Rust web target).
-- **Bump SDK versions:** `bun run bump <version>` (syncs the SDK `package.json`s; Rust versions live in Cargo.toml).
+- **Sync SDK versions:** `bun run sync-version` reads the canonical version from root `Cargo.toml` and updates all SDK consumers; verify with `bun run sync-version:check`.
 
 ## op-web-sdk (`op-web-sdk/`)
 
