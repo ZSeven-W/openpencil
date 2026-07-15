@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const BUNDLE_JSON: &str = include_str!("../assets/skill-bundle.json");
+const VERSION_SENTINEL: &str = "__OPENPENCIL_VERSION__";
 const REPO: &str = "zseven-w/openpencil-skill";
 const REPO_URL: &str = "https://github.com/zseven-w/openpencil-skill.git";
 const SKILL_NAME: &str = "openpencil-skill";
@@ -263,8 +264,19 @@ fn uninstall_opencode(home: &Path) -> Result<(), String> {
 }
 
 fn load_bundle() -> Result<SkillBundle, String> {
+    if !BUNDLE_JSON.contains(VERSION_SENTINEL) {
+        return Err(format!(
+            "embedded skill bundle template missing version sentinel {VERSION_SENTINEL:?}"
+        ));
+    }
+    let rendered = BUNDLE_JSON.replace(VERSION_SENTINEL, env!("CARGO_PKG_VERSION"));
+    if rendered.contains(VERSION_SENTINEL) {
+        return Err(
+            "embedded skill bundle still contains the version sentinel after rendering".into(),
+        );
+    }
     let value: Value =
-        serde_json::from_str(BUNDLE_JSON).map_err(|e| format!("parse skill bundle: {e}"))?;
+        serde_json::from_str(&rendered).map_err(|e| format!("parse skill bundle: {e}"))?;
     let version = value
         .get("version")
         .and_then(Value::as_str)
@@ -285,6 +297,68 @@ fn load_bundle() -> Result<SkillBundle, String> {
         files.push((path.clone(), content.to_string()));
     }
     Ok(SkillBundle { version, files })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_bundle;
+    use serde_json::Value;
+
+    #[test]
+    fn embedded_bundle_renders_cargo_version_everywhere() {
+        let bundle = load_bundle().expect("embedded skill bundle should load");
+        let cargo_version = env!("CARGO_PKG_VERSION");
+
+        assert_eq!(bundle.version, cargo_version);
+        for (path, content) in &bundle.files {
+            assert!(
+                !content.contains("__OPENPENCIL_VERSION__"),
+                "rendered bundle file {path:?} still contains the version sentinel"
+            );
+        }
+
+        for path in [
+            ".claude-plugin/plugin.json",
+            ".cursor-plugin/plugin.json",
+            "package.json",
+            "gemini-extension.json",
+        ] {
+            let content = bundle
+                .files
+                .iter()
+                .find_map(|(candidate, content)| (candidate == path).then_some(content))
+                .unwrap_or_else(|| panic!("embedded bundle missing {path}"));
+            let manifest: Value = serde_json::from_str(content)
+                .unwrap_or_else(|error| panic!("parse embedded {path}: {error}"));
+            assert_eq!(
+                manifest.get("version").and_then(Value::as_str),
+                Some(cargo_version),
+                "embedded {path} version differs from Cargo"
+            );
+        }
+
+        let marketplace_content = bundle
+            .files
+            .iter()
+            .find_map(|(path, content)| {
+                (path == ".claude-plugin/marketplace.json").then_some(content)
+            })
+            .expect("embedded bundle missing .claude-plugin/marketplace.json");
+        let marketplace: Value = serde_json::from_str(marketplace_content)
+            .expect("parse embedded .claude-plugin/marketplace.json");
+        let plugins = marketplace
+            .get("plugins")
+            .and_then(Value::as_array)
+            .expect("embedded marketplace plugins must be an array");
+        assert!(!plugins.is_empty(), "embedded marketplace has no plugins");
+        for plugin in plugins {
+            assert_eq!(
+                plugin.get("version").and_then(Value::as_str),
+                Some(cargo_version),
+                "embedded marketplace plugin version differs from Cargo"
+            );
+        }
+    }
 }
 
 fn write_bundle_to(dest: &Path, bundle: &SkillBundle) -> Result<(), String> {
