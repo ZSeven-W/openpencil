@@ -41,8 +41,9 @@ pub(crate) const LAYER_ROW_HEIGHT: f32 = 28.0;
 pub(crate) const ROW_PAD_X: f32 = 12.0;
 pub(crate) const SECTION_GAP: f32 = 8.0;
 use crate::widgets::layer_panel_paint::{
-    layer_content_clip_rect, layer_label_available_width, layer_trailing_icon_xs, paint_drag_ghost,
-    paint_rename_input, paint_section_header, truncate_to_fit, truncate_to_fit_measured, ROW_FONT,
+    layer_action_gutter_left, layer_content_clip_rect, layer_label_available_width,
+    layer_trailing_icon_xs, paint_drag_ghost, paint_rename_input, paint_section_header,
+    truncate_to_fit, truncate_to_fit_measured, ROW_FONT,
 };
 
 /// One row in the layers tree — flat depth-walked view.
@@ -666,15 +667,15 @@ impl Widget for LayerPanel {
             let trailing_y = row.origin.y + 7.0;
             let show_eye = hovered && !item.renaming;
             let show_lock = hovered && !item.renaming;
-            // Opaque backing behind the hover icon cluster: a long label
-            // runs right up to the row edge and the eye/lock glyphs were
-            // drawn straight over its letters. Rebuild the row surface
-            // locally (panel bg + the row's own wash) so the icons sit on
-            // clean ground.
+            // Opaque backing starts at the canonical action-gutter edge,
+            // matching the content clip so labels and trailing actions
+            // never overlap. Rebuild the row surface locally (panel bg +
+            // the row's own wash) so the icons sit on clean ground.
             if show_eye || show_lock {
+                let gutter_left = layer_action_gutter_left(row);
                 let backing = Rect {
-                    origin: Point2D::new(eye_x - 8.0, row.origin.y),
-                    size: Point2D::new(row.origin.x + row.size.x - (eye_x - 8.0), row.size.y),
+                    origin: Point2D::new(gutter_left, row.origin.y),
+                    size: Point2D::new(row.origin.x + row.size.x - gutter_left, row.size.y),
                 };
                 cx.backend.fill_rect(backing, self.theme.card);
                 if selected {

@@ -73,12 +73,16 @@ pub(super) fn layer_trailing_icon_xs(row: Rect) -> (f32, f32) {
     (eye_x, lock_x)
 }
 
-pub(super) fn layer_content_clip_rect(row: Rect, renaming: bool) -> Rect {
+pub(super) fn layer_action_gutter_left(row: Rect) -> f32 {
     let (eye_x, _) = layer_trailing_icon_xs(row);
+    eye_x - 8.0
+}
+
+pub(super) fn layer_content_clip_rect(row: Rect, renaming: bool) -> Rect {
     let right_edge = if renaming {
         row.origin.x + row.size.x - 8.0
     } else {
-        eye_x - 6.0
+        layer_action_gutter_left(row)
     };
     Rect {
         origin: row.origin,
@@ -118,6 +122,8 @@ pub(super) fn paint_drag_ghost(
         a: 0.85,
         ..theme.foreground
     };
+    cx.backend.save();
+    cx.backend.clip_rect(layer_content_clip_rect(row, false));
     let icon_x = row.origin.x + ROW_PAD_X + ghost.depth as f32 * 12.0 + 18.0;
     draw_icon(
         cx.backend,
@@ -127,15 +133,19 @@ pub(super) fn paint_drag_ghost(
         fg,
         1.4,
     );
+    let label_x = icon_x + 20.0;
+    let available_w = layer_label_available_width(row, label_x, 0.0, false);
+    let display = truncate_to_fit_measured(cx.backend, &ghost.label, ROW_FONT, available_w);
     let label = TextLayout::single_run(
-        &ghost.label,
+        &display,
         "system-ui",
         ROW_FONT,
         (fg).to_jian(),
         Point2D::new(0.0, 0.0),
     );
     cx.backend
-        .draw_text(&label, Point2D::new(icon_x + 20.0, row.origin.y + 17.0));
+        .draw_text(&label, Point2D::new(label_x, row.origin.y + 17.0));
+    cx.backend.restore();
 }
 
 /// Paint an inline rename input — flat input look (no boxed
