@@ -19,15 +19,6 @@ report_missing() {
     errors=1
 }
 
-require_fixed() {
-    file=$1
-    needle=$2
-    message=$3
-    if [[ ! -f "$file" ]] || ! rg --fixed-strings --quiet -- "$needle" "$file"; then
-        report_missing "$file" "$message"
-    fi
-}
-
 require_regex() {
     file=$1
     pattern=$2
@@ -35,6 +26,15 @@ require_regex() {
     if [[ ! -f "$file" ]] || ! rg --quiet -- "$pattern" "$file"; then
         report_missing "$file" "$message"
     fi
+}
+
+require_statement() {
+    file=$1
+    statement_pattern=$2
+    message=$3
+    require_regex "$file" \
+        "^[[:space:]]*${statement_pattern}[[:space:]]*(#.*)?$" \
+        "$message"
 }
 
 reject_matches() {
@@ -99,23 +99,29 @@ fi
 
 for macos_script in scripts/bundle-macos.sh tools/bundle-macos.sh; do
     if [[ "$macos_script" == scripts/bundle-macos.sh ]]; then
-        require_fixed "$macos_script" \
-            'CANONICAL_VERSION="$("$WS_ROOT/scripts/workspace-version.sh")"' \
+        require_statement "$macos_script" \
+            'CANONICAL_VERSION[[:space:]]*=[[:space:]]*"\$\("\$WS_ROOT/scripts/workspace-version[.]sh"\)"' \
             'macOS packaging must assign CANONICAL_VERSION from scripts/workspace-version.sh'
-        require_fixed "$macos_script" 'CFBundleShortVersionString $APP_VERSION' \
+        require_statement "$macos_script" \
+            '/usr/libexec/PlistBuddy[[:space:]]+-c[[:space:]]+"Set :CFBundleShortVersionString \$APP_VERSION"[[:space:]]+"\$PLIST"' \
             'CFBundleShortVersionString must use APP_VERSION'
+        require_statement "$macos_script" \
+            'if[[:space:]]+\[\[[[:space:]]*"\$APP_VERSION"[[:space:]]*!=[[:space:]]*"\$CANONICAL_VERSION"[[:space:]]*\]\][[:space:]]*;[[:space:]]*then' \
+            'OPENPENCIL_VERSION overrides must be rejected when they differ from Cargo'
     else
-        require_fixed "$macos_script" \
-            'CANONICAL_VERSION="$("$ROOT/scripts/workspace-version.sh")"' \
+        require_statement "$macos_script" \
+            'CANONICAL_VERSION[[:space:]]*=[[:space:]]*"\$\("\$ROOT/scripts/workspace-version[.]sh"\)"' \
             'macOS packaging must assign CANONICAL_VERSION from scripts/workspace-version.sh'
-        require_fixed "$macos_script" \
-            'CFBundleShortVersionString</key><string>${APP_VERSION}' \
+        require_statement "$macos_script" \
+            '<key>CFBundleShortVersionString</key><string>\$\{APP_VERSION\}</string>' \
             'CFBundleShortVersionString must use APP_VERSION'
+        require_statement "$macos_script" \
+            'if[[:space:]]+\[[[:space:]]*"\$APP_VERSION"[[:space:]]*!=[[:space:]]*"\$CANONICAL_VERSION"[[:space:]]*\][[:space:]]*;[[:space:]]*then' \
+            'OPENPENCIL_VERSION overrides must be rejected when they differ from Cargo'
     fi
-    require_fixed "$macos_script" 'APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"' \
+    require_statement "$macos_script" \
+        'APP_VERSION[[:space:]]*=[[:space:]]*"\$\{OPENPENCIL_VERSION:-\$CANONICAL_VERSION\}"' \
         'OPENPENCIL_VERSION must default to the Cargo workspace version'
-    require_fixed "$macos_script" '"$APP_VERSION" != "$CANONICAL_VERSION"' \
-        'OPENPENCIL_VERSION overrides must be rejected when they differ from Cargo'
     reject_matches regex "$macos_script" \
         'OPENPENCIL_VERSION:-[0-9]+[.][0-9]+[.][0-9]+' \
         'OPENPENCIL_VERSION must fall back to the Cargo workspace version'
@@ -136,13 +142,17 @@ for example_file in scripts/package-windows.nsi scripts/install-op.sh; do
 done
 
 release_workflow=.github/workflows/rust-release.yml
-require_fixed "$release_workflow" 'cargo_version="$(scripts/workspace-version.sh)"' \
+require_statement "$release_workflow" \
+    'cargo_version[[:space:]]*=[[:space:]]*"\$\(scripts/workspace-version[.]sh\)"' \
     'release version computation must invoke scripts/workspace-version.sh'
-require_fixed "$release_workflow" 'tag_version="${GITHUB_REF_NAME#v}"' \
+require_statement "$release_workflow" \
+    'tag_version[[:space:]]*=[[:space:]]*"\$\{GITHUB_REF_NAME#v\}"' \
     'release version computation must derive the version from v* tags'
-require_fixed "$release_workflow" '"$tag_version" != "$cargo_version"' \
+require_statement "$release_workflow" \
+    'if[[:space:]]+\[\[[[:space:]]*"\$tag_version"[[:space:]]*!=[[:space:]]*"\$cargo_version"[[:space:]]*\]\][[:space:]]*;[[:space:]]*then' \
     'release tags must be compared with the Cargo workspace version'
-require_fixed "$release_workflow" 'echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"' \
+require_statement "$release_workflow" \
+    'echo[[:space:]]+"OP_VERSION=\$cargo_version"[[:space:]]*>>[[:space:]]*"\$GITHUB_ENV"' \
     'OP_VERSION must always be written from the Cargo workspace version'
 reject_matches fixed "$release_workflow" 'echo "OP_VERSION=${GITHUB_REF_NAME#v}"' \
     'OP_VERSION must not be written directly from the release tag'

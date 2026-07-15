@@ -242,6 +242,64 @@ assert_contains 'error: release tags must be compared with the Cargo workspace v
 assert_no_success_output 'release missing tag equality'
 pass 'release workflow must reject tags that differ from Cargo'
 
+repo=$(new_repo macos_readers_commented_out 0.8.1)
+cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CANONICAL_VERSION="0.0.0"
+# CANONICAL_VERSION="$("$WS_ROOT/scripts/workspace-version.sh")"
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
+    exit 1
+fi
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
+SCRIPT
+cat > "$repo/tools/bundle-macos.sh" <<'SCRIPT'
+#!/bin/sh
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CANONICAL_VERSION="0.0.0"
+# CANONICAL_VERSION="$("$ROOT/scripts/workspace-version.sh")"
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [ "$APP_VERSION" != "$CANONICAL_VERSION" ]; then
+    exit 1
+fi
+<key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
+SCRIPT
+run_guard "$repo"
+assert_status 1 'commented macOS readers'
+assert_contains 'scripts/bundle-macos.sh:1:' 'commented macOS readers'
+assert_contains 'tools/bundle-macos.sh:1:' 'commented macOS readers'
+assert_contains 'error: macOS packaging must assign CANONICAL_VERSION from scripts/workspace-version.sh' \
+    'commented macOS readers'
+assert_no_success_output 'commented macOS readers'
+pass 'commented macOS reader assignments do not satisfy the guard'
+
+repo=$(new_repo release_checks_commented_out 0.8.1)
+cat > "$repo/.github/workflows/rust-release.yml" <<'SCRIPT'
+- name: Compute release version
+  shell: bash
+  run: |
+    cargo_version="0.0.0"
+    # cargo_version="$(scripts/workspace-version.sh)"
+    if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+      tag_version="${GITHUB_REF_NAME#v}"
+      if [[ "$tag_version" == "$cargo_version" ]]; then
+        :
+      fi
+      # if [[ "$tag_version" != "$cargo_version" ]]; then
+    fi
+    echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
+SCRIPT
+run_guard "$repo"
+assert_status 1 'commented release checks'
+assert_contains '.github/workflows/rust-release.yml:1:' 'commented release checks'
+assert_contains 'error: release version computation must invoke scripts/workspace-version.sh' \
+    'commented release checks'
+assert_contains 'error: release tags must be compared with the Cargo workspace version' \
+    'commented release checks'
+assert_no_success_output 'commented release checks'
+pass 'commented release derivation and comparison do not satisfy the guard'
+
 repo=$(new_repo collision_still_checks_packaging 1.0.0)
 printf '%s\n' 'APP_VERSION="${OPENPENCIL_VERSION:-0.8.1}"' \
     >> "$repo/tools/bundle-macos.sh"
