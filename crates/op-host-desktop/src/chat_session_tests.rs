@@ -476,100 +476,52 @@ fn attach_tool_result_marks_error_status() {
     assert_eq!(v["result"]["error"], "unknown node");
 }
 
-/// Scripted tool-looping provider: emits a ToolUse card, blocks on the
-/// injected executor (the UI tool channel), then streams the result
-/// as text — the provider side of GAP #32 without any network.
-struct ToolLoopProvider {
-    executor: std::sync::Arc<dyn op_ai::chat_provider::ChatToolExecutor>,
-    tool: &'static str,
-    args: &'static str,
-}
-
-struct ToolLoopIter {
-    executor: std::sync::Arc<dyn op_ai::chat_provider::ChatToolExecutor>,
-    tool: &'static str,
-    args: &'static str,
-    step: u8,
-}
-
-impl Iterator for ToolLoopIter {
-    type Item = ChatDelta;
-    fn next(&mut self) -> Option<ChatDelta> {
-        self.step += 1;
-        match self.step {
-            1 => Some(ChatDelta::ToolUse {
-                name: self.tool.into(),
-                args: op_host_services::chat_agent_loop::tool_card_envelope("create", self.args),
-            }),
-            2 => {
-                // Blocks until the UI thread (the test's pump loop)
-                // executes the call and acks.
-                let result = self.executor.execute(self.tool, self.args);
-                Some(ChatDelta::TextDelta(format!(
-                    "tool said: {}",
-                    result.content
-                )))
-            }
-            3 => Some(ChatDelta::Done {
-                stop_reason: StopReason::EndTurn,
-            }),
-            _ => None,
-        }
-    }
-}
-
-impl op_ai::chat_provider::ChatProvider for ToolLoopProvider {
-    fn provider_label(&self) -> &str {
-        "tool-loop"
-    }
-    fn send(&self, _request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        Box::new(ToolLoopIter {
-            executor: self.executor.clone(),
-            tool: self.tool,
-            args: self.args,
-            step: 0,
-        })
-    }
-}
-
 #[test]
 fn pump_executes_scripted_tool_call_against_live_state() {
-    // End-to-end-ish host test: a scripted insert_node tool call flows
-    // worker → tool channel → pump → execute_chat_tool → apply path,
-    // mutating the live document and updating the transcript card.
+    // Reproduce both sends landing between the two channel observations. The
+    // request must not overtake the still-unpolled ToolUse card.
     let mut host = WidgetHostNative::new();
     host.editor_state_mut()
         .chat
         .messages
         .push(ChatMessage::assistant_streaming());
     let before = host.editor_state().active_children().len();
-
-    let (executor, tool_rx) = op_host_services::chat_canvas_tools::chat_tool_channel();
-    let provider = Box::new(ToolLoopProvider {
-        executor: std::sync::Arc::new(executor),
-        tool: "insert_node",
-        args: r##"{"kind":"rect","name":"Card","x":"5","y":"5","width":"50","height":"50","fill_hex":"#00ff00"}"##,
+    let (delta_tx, delta_rx) = std::sync::mpsc::channel();
+    let (tool_tx, tool_rx) = std::sync::mpsc::channel();
+    let (ack_tx, ack_rx) = std::sync::mpsc::sync_channel(1);
+    let mut current = Some(ChatSession::from_channels(delta_rx, Some(tool_rx)));
+    let args = r##"{"kind":"rect","name":"Card","x":"5","y":"5","width":"50","height":"50","fill_hex":"#00ff00"}"##;
+    pump_with_channel_interleave(&mut host, &mut current, None, None, (1200.0, 800.0), || {
+        delta_tx
+            .send(ChatDelta::ToolUse {
+                name: "insert_node".into(),
+                args: op_host_services::chat_agent_loop::tool_card_envelope("create", args),
+            })
+            .unwrap();
+        tool_tx
+            .send(op_editor_host_core::chat::ChatToolRequest {
+                name: "insert_node".into(),
+                args_json: args.into(),
+                ack: ack_tx,
+            })
+            .unwrap();
     });
-    let mut current = Some(ChatSession::start_with_tools(
-        provider,
-        ChatRequest {
-            user_message: "add a card".into(),
-            max_output_tokens: 64,
-            ..Default::default()
-        },
-        Some(tool_rx),
-    ));
+    pump(&mut host, &mut current, None, None, (1200.0, 800.0));
 
-    for _ in 0..2000 {
-        pump(&mut host, &mut current, None, None, (1200.0, 800.0));
-        if current.is_none() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
+    ack_rx
+        .try_recv()
+        .expect("the second pump must execute and acknowledge the tool");
+    delta_tx
+        .send(ChatDelta::TextDelta("tool said: ok".into()))
+        .unwrap();
+    delta_tx
+        .send(ChatDelta::Done {
+            stop_reason: StopReason::EndTurn,
+        })
+        .unwrap();
+    pump(&mut host, &mut current, None, None, (1200.0, 800.0));
     assert!(current.is_none(), "turn must finish");
 
-    // The tool call mutated the live document through the apply path.
     assert_eq!(host.editor_state().active_children().len(), before + 1);
     use op_editor_core::PenNodeExt;
     assert!(host
@@ -578,7 +530,6 @@ fn pump_executes_scripted_tool_call_against_live_state() {
         .iter()
         .any(|n| n.base().name.as_deref() == Some("Card")));
 
-    // Transcript: card recorded, result attached, answer text landed.
     let msg = host.editor_state().chat.messages.last().unwrap();
     assert_eq!(msg.tool_calls.len(), 1);
     let v: serde_json::Value = serde_json::from_str(&msg.tool_calls[0].args).unwrap();
@@ -640,7 +591,7 @@ impl op_ai::chat_provider::ChatProvider for FinalizeLoopProvider {
 #[test]
 fn pump_runs_loop_finalize_backstop_against_live_state() {
     // Proof for Track-1 Step 4: the loop-end `finalize()` flows worker → tool
-    // channel → `drain_tool_requests` LOOP_FINALIZE_OP interception →
+    // channel → `execute_tool_requests` LOOP_FINALIZE_OP interception →
     // `op_orchestrator::apply_loop_finalize` against the live document, so a
     // roleless "Header" frame gets the navbar role resolved.
     use op_editor_core::PenNodeExt;

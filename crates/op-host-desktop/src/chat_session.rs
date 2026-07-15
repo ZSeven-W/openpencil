@@ -45,9 +45,34 @@ pub fn pump(
     agent_identity: Option<(&str, &str)>,
     viewport_size: (f32, f32),
 ) -> bool {
+    pump_with_channel_interleave(
+        host,
+        current,
+        running_tab,
+        agent_identity,
+        viewport_size,
+        || {},
+    )
+}
+
+fn pump_with_channel_interleave(
+    host: &mut WidgetHostNative,
+    current: &mut Option<ChatSession>,
+    running_tab: Option<usize>,
+    agent_identity: Option<(&str, &str)>,
+    viewport_size: (f32, f32),
+    between_channel_observations: impl FnOnce(),
+) -> bool {
     let Some(session) = current.as_mut() else {
         return false;
     };
+    // Snapshot tool requests before polling deltas. A worker always publishes
+    // ToolUse before forwarding its request, so every captured request's card
+    // is already visible to the following poll. Requests that arrive between
+    // these observations wait for the next pump instead of overtaking their
+    // still-unpolled card and leaving it permanently `running`.
+    let tool_requests = session.drain_tool_requests();
+    between_channel_observations();
     let poll = session.poll();
     let mut changed = false;
     if !poll.is_idle() {
@@ -70,9 +95,10 @@ pub fn pump(
             changed = true;
         }
     }
-    if drain_tool_requests(
+    if execute_tool_requests(
         host.editor_state_mut(),
         session,
+        tool_requests,
         running_tab,
         agent_identity,
     ) {
@@ -148,20 +174,20 @@ fn agent_message_index(
         })
 }
 
-/// Drain every pending canvas tool request from the in-flight turn and execute
-/// it against the live `EditorState`.
+/// Execute one pump cycle's captured canvas tool requests against the live
+/// `EditorState`.
 ///
 /// Canvas mutations write to the shared document (not a per-tab field), but a
 /// tool-call card's result is recorded on the BOUND tab's transcript
 /// (`running_tab`), so a tab switch mid-run doesn't drop the card on the wrong
 /// tab.
-fn drain_tool_requests(
+fn execute_tool_requests(
     state: &mut EditorState,
     session: &mut ChatSession,
+    requests: Vec<op_editor_host_core::chat::ChatToolRequest>,
     running_tab: Option<usize>,
     agent_identity: Option<(&str, &str)>,
 ) -> bool {
-    let requests = session.drain_tool_requests();
     if requests.is_empty() {
         return false;
     }
