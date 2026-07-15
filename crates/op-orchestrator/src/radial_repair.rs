@@ -468,6 +468,7 @@ fn radial_stack_repair(v: &Value, rects: &HashMap<String, Rect>) -> Option<Vec<E
         return None;
     }
     let kids = children(v);
+    let already_overlaid = v.get("layout").and_then(Value::as_str) == Some("none");
     let layer_order = radial_layer_order(v)?;
     let id = v.get("id").and_then(Value::as_str)?;
     let arc_sizes: Vec<(f64, f64)> = layer_order
@@ -569,8 +570,21 @@ fn radial_stack_repair(v: &Value, rects: &HashMap<String, Rect>) -> Option<Vec<E
         } else {
             child_size(child, rects).unwrap_or((max_arc, max_arc))
         };
-        let x = ((parent_w - cw) / 2.0).round();
-        let y = ((parent_h - ch) / 2.0).round();
+        // Flex flow can distort resolved child sizes before the first overlay,
+        // but once overlaid the final layout bounds include platform-specific
+        // intrinsic content growth and are the geometry we must centre.
+        let resolved = already_overlaid
+            .then(|| rects.get(child_id))
+            .flatten()
+            .filter(|rect| valid_size(rect.w, rect.h));
+        let positioned_w = resolved
+            .filter(|_| !force_arc_size && !force_estimated_width)
+            .map_or(cw, |rect| rect.w);
+        let positioned_h = resolved
+            .filter(|_| !force_arc_size && !force_estimated_height)
+            .map_or(ch, |rect| rect.h);
+        let x = ((parent_w - positioned_w) / 2.0).round();
+        let y = ((parent_h - positioned_h) / 2.0).round();
         cmds.push(EditorCommand::UpdateNode {
             node_id: NodeId::new(child_id.to_string()),
             x: Some(x as i32),
@@ -745,3 +759,7 @@ fn children(v: &Value) -> &[Value] {
         .map(Vec::as_slice)
         .unwrap_or(&[])
 }
+
+#[cfg(test)]
+#[path = "radial_repair_tests.rs"]
+mod tests;
