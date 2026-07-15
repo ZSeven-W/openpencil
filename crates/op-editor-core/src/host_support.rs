@@ -765,7 +765,7 @@ mod tests {
               {"type":"rectangle","id":"n11","x":10,"y":0,"width":20,"height":20}
             ]
         }"##;
-        let doc = jian_ops_schema::load_str(&src)
+        let doc = jian_ops_schema::load_str(src)
             .expect("fixture parses")
             .value;
         let mut s = EditorState::from_document(doc);

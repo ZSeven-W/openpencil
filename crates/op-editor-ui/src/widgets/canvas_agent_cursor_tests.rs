@@ -597,7 +597,7 @@ mod paint_tests {
 mod scan_gate_tests {
     use crate::layout_scene::{NodeKind, SceneNode};
     use crate::widgets::canvas_generation_scan::generating_paint_sets;
-    use crate::Rect;
+    use crate::{Color, Rect};
     use op_editor_core::agent_indicators::AgentIndicators;
 
     /// Pencil lights sections in WORK ORDER: while an earlier shell is
@@ -609,6 +609,7 @@ mod scan_gate_tests {
         sidebar.bounds = Rect::xywh(0.0, 0.0, 260.0, 900.0);
         let mut sidebar_child = SceneNode::leaf("nav", NodeKind::Frame);
         sidebar_child.bounds = Rect::xywh(0.0, 0.0, 260.0, 48.0);
+        sidebar_child.fill = Some(Color::BLACK);
         sidebar.children = vec![sidebar_child];
         let mut main = SceneNode::leaf("main", NodeKind::Frame);
         main.bounds = Rect::xywh(260.0, 0.0, 1180.0, 900.0);
@@ -648,14 +649,20 @@ mod scan_gate_tests {
         // side jumped from plain black to finished content with no scan).
         let mut filled_header = SceneNode::leaf("header-shell", NodeKind::Frame);
         filled_header.bounds = Rect::xywh(0.0, 0.0, 1440.0, 90.0);
-        filled_header.children = vec![SceneNode::leaf("h-child", NodeKind::Text)];
+        let mut header_content = SceneNode::leaf("h-child", NodeKind::Rect);
+        header_content.bounds = Rect::xywh(0.0, 0.0, 120.0, 32.0);
+        header_content.fill = Some(Color::BLACK);
+        filled_header.children = vec![header_content];
         let mut sidebar2 = SceneNode::leaf("sidebar", NodeKind::Frame);
         sidebar2.bounds = Rect::xywh(0.0, 0.0, 260.0, 900.0);
         // Filled through: the deck is GLOBAL in document order, so a still-
         // empty shell nested in the sidebar would legitimately outrank the
         // main column (it comes first in the fill order).
         let mut nav2 = SceneNode::leaf("nav2", NodeKind::Frame);
-        nav2.children = vec![SceneNode::leaf("nav2-child", NodeKind::Text)];
+        let mut nav_content = SceneNode::leaf("nav2-child", NodeKind::Rect);
+        nav_content.bounds = Rect::xywh(0.0, 0.0, 120.0, 32.0);
+        nav_content.fill = Some(Color::BLACK);
+        nav2.children = vec![nav_content];
         sidebar2.children = vec![nav2];
         let mut main2 = SceneNode::leaf("main", NodeKind::Frame);
         main2.bounds = Rect::xywh(260.0, 0.0, 1180.0, 900.0);
@@ -683,11 +690,17 @@ mod scan_gate_tests {
         search.bounds = Rect::xywh(0.0, 150.0, 390.0, 60.0);
         let mut wrapper = SceneNode::leaf("wrapper", NodeKind::Frame);
         wrapper.bounds = Rect::xywh(0.0, 60.0, 390.0, 700.0);
-        wrapper.children = vec![header, search];
+        let mut existing_content = SceneNode::leaf("existing-content", NodeKind::Rect);
+        existing_content.bounds = Rect::xywh(0.0, 220.0, 390.0, 100.0);
+        existing_content.fill = Some(Color::BLACK);
+        wrapper.children = vec![header, search, existing_content];
 
         let mut status = SceneNode::leaf("status", NodeKind::Frame);
         status.bounds = Rect::xywh(0.0, 0.0, 390.0, 44.0);
-        status.children = vec![SceneNode::leaf("clock", NodeKind::Text)];
+        let mut clock = SceneNode::leaf("clock", NodeKind::Rect);
+        clock.bounds = Rect::xywh(0.0, 0.0, 64.0, 24.0);
+        clock.fill = Some(Color::BLACK);
+        status.children = vec![clock];
         let mut bottom_nav = SceneNode::leaf("bottom-nav", NodeKind::Frame);
         bottom_nav.bounds = Rect::xywh(0.0, 770.0, 390.0, 74.0);
 

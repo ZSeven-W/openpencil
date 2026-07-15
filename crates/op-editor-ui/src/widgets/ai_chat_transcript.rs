@@ -196,9 +196,7 @@ pub(crate) fn build_item(
     } else {
         msg.activities.len()
     };
-    let mut progress_steps: Vec<ParsedStep> = if msg.activities.is_empty() {
-        legacy_progress_steps
-    } else if activity_interleave {
+    let mut progress_steps: Vec<ParsedStep> = if msg.activities.is_empty() || activity_interleave {
         legacy_progress_steps
     } else {
         msg.activities.iter().map(activity_step).collect()
