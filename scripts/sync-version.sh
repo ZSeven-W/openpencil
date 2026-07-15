@@ -12,7 +12,7 @@ script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
 repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
 
 if ! canonical_version=$("$repo_root/scripts/workspace-version.sh"); then
-    printf 'sync-version: failed to read the canonical Cargo workspace version\n' >&2
+    printf 'sync-version: canonical version read failed; set a valid SemVer at [workspace.package].version in Cargo.toml\n' >&2
     exit 1
 fi
 

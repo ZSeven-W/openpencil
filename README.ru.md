@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI-фреймворк — виджеты/рендеринг/события
 │   ├── casement/             Форк winit
 │   └── agent/                Кроссплатформенный Rust-рантайм агентов (agent-rs)
-└── .githooks/                Pre-commit синхронизация версий из имени ветки
+└── .githooks/                Pre-commit проверка расхождений версий
 ```
 
 ## Горячие клавиши
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# Синхронизация версий (запускайте из корня репозитория)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 Мы приветствуем вклад в проект! Подробности об архитектуре и стиле кода смотрите в [CLAUDE.md](./CLAUDE.md).
 
 1. Сделайте форк и клонируйте репозиторий
-2. Настройте синхронизацию версий: `git config core.hooksPath .githooks`
+2. Включите проверку расхождений версий: `git config core.hooksPath .githooks`
 3. Создайте ветку: `git checkout -b feat/my-feature`
 4. Запустите проверки: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Сделайте коммит в формате [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`

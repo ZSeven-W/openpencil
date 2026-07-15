@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI フレームワーク — ウィジェット/レンダー/イベント
 │   ├── casement/             winit フォーク
 │   └── agent/                製品横断 Rust エージェントランタイム（agent-rs）
-└── .githooks/                ブランチ名からのプレコミットバージョン同期
+└── .githooks/                プレコミットのバージョンドリフト検査
 ```
 
 ## キーボードショートカット
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# バージョン同期（リポジトリルートから実行）
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 コントリビューションを歓迎します！アーキテクチャの詳細とコードスタイルについては [CLAUDE.md](./CLAUDE.md) をご覧ください。
 
 1. フォークしてクローン
-2. バージョン同期を設定：`git config core.hooksPath .githooks`
+2. バージョンドリフト検査を有効化：`git config core.hooksPath .githooks`
 3. ブランチを作成：`git checkout -b feat/my-feature`
 4. チェックを実行：`cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. [Conventional Commits](https://www.conventionalcommits.org/) 形式でコミット：`feat(canvas): add rotation snapping`

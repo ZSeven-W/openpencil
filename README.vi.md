@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 Framework UI GPU-Skia — widget/render/event
 │   ├── casement/             Bản fork của winit
 │   └── agent/                Runtime tác nhân Rust đa sản phẩm (agent-rs)
-└── .githooks/                Pre-commit đồng bộ phiên bản từ tên nhánh
+└── .githooks/                Kiểm tra độ lệch phiên bản trước commit
 ```
 
 ## Phím tắt
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# Đồng bộ phiên bản (chạy từ thư mục gốc của kho mã)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 Chào mừng đóng góp! Xem [CLAUDE.md](./CLAUDE.md) để biết chi tiết về kiến trúc và phong cách mã.
 
 1. Fork và clone
-2. Thiết lập đồng bộ phiên bản: `git config core.hooksPath .githooks`
+2. Bật kiểm tra độ lệch phiên bản: `git config core.hooksPath .githooks`
 3. Tạo branch: `git checkout -b feat/my-feature`
 4. Chạy kiểm tra: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Commit theo [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`

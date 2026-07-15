@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 เฟรมเวิร์ก UI แบบ GPU-Skia — widget/render/event
 │   ├── casement/             winit fork
 │   └── agent/                Rust agent runtime ข้ามผลิตภัณฑ์ (agent-rs)
-└── .githooks/                การตรวจสอบความสอดคล้องของเวอร์ชันก่อน commit
+└── .githooks/                การตรวจสอบความคลาดเคลื่อนของเวอร์ชันก่อน commit
 ```
 
 ## คีย์ลัด
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# การซิงค์เวอร์ชัน (เรียกใช้จากรากของ repository)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 ยินดีต้อนรับการมีส่วนร่วมทุกรูปแบบ! ดู [CLAUDE.md](./CLAUDE.md) สำหรับรายละเอียดสถาปัตยกรรมและรูปแบบโค้ด
 
 1. Fork และ clone
-2. ตั้งค่า version sync: `git config core.hooksPath .githooks`
+2. เปิดใช้การตรวจสอบความคลาดเคลื่อนของเวอร์ชัน: `git config core.hooksPath .githooks`
 3. สร้าง branch: `git checkout -b feat/my-feature`
 4. รันการตรวจสอบ: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. Commit ด้วย [Conventional Commits](https://www.conventionalcommits.org/): `feat(canvas): add rotation snapping`

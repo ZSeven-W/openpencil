@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI çatısı — widget/render/event
 │   ├── casement/             winit çatalı
 │   └── agent/                Ürünler arası Rust ajan çalışma ortamı (agent-rs)
-└── .githooks/                Dal adından ön-commit sürüm eşitleme
+└── .githooks/                Ön-commit sürüm sapması denetimi
 ```
 
 ## Klavye Kısayolları
@@ -378,6 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
+
+# Sürüm eşitleme (depo kökünden çalıştırın)
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
@@ -387,7 +389,7 @@ tools/check-version-sync.sh                        # Verify all managed versions
 Katkılarınızı bekliyoruz! Mimari ayrıntılar ve kod stili için [CLAUDE.md](./CLAUDE.md) dosyasına bakın.
 
 1. Fork'layın ve klonlayın
-2. Sürüm eşitlemeyi ayarlayın: `git config core.hooksPath .githooks`
+2. Sürüm sapması denetimini etkinleştirin: `git config core.hooksPath .githooks`
 3. Dal oluşturun: `git checkout -b feat/my-feature`
 4. Kontrolleri çalıştırın: `cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 5. [Conventional Commits](https://www.conventionalcommits.org/) formatıyla commit yapın: `feat(canvas): add rotation snapping`
