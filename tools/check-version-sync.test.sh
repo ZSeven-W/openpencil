@@ -224,9 +224,15 @@ JSON
 version: env!("CARGO_PKG_VERSION").to_owned(),
 RUST
     cat > "$repo/crates/op-editor-core/src/host_support.rs" <<'RUST'
+pub fn sample() {
 let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+}
+pub fn starter() {
 let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
-let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+}
+#[cfg(test)]
+mod tests {
+}
 RUST
     cat > "$repo/crates/op-cli/src/app_control_cli.rs" <<'RUST'
 const MINIMAL_DOCUMENT: &str = concat!(env!("CARGO_PKG_VERSION"));
@@ -234,6 +240,36 @@ RUST
     cat > "$repo/crates/op-host-desktop/Cargo.toml" <<'TOML'
 op-host-native = { path = "../op-host-native", features = ["gl-host"] }
 TOML
+    cat > "$repo/crates/example/Cargo.toml" <<'TOML'
+[package]
+name = "op-example"
+version.workspace = true
+edition.workspace = true
+TOML
+
+    cat > "$repo/README.md" <<'MARKDOWN'
+| Image | Includes |
+| --- | --- |
+| `ghcr.io/zseven-w/openpencil-web:vX.Y.Z` | Rust web host |
+
+```bash
+VERSION="$(scripts/workspace-version.sh)"
+docker run -d -p 3100:3100 "ghcr.io/zseven-w/openpencil-web:v${VERSION}"
+```
+
+The TypeScript editor was retired at `v0.7.5`.
+MARKDOWN
+
+    cat > "$repo/.github/workflows/version-sync.yml" <<'YAML'
+name: Version consistency
+on:
+  pull_request:
+    paths:
+      - "README*.md"
+  push:
+    paths:
+      - "README*.md"
+YAML
 
     cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -698,6 +734,8 @@ assert_contains 'crates/op-host-desktop/Cargo.toml:1: error: local op-host-nativ
     'versioned local product dependency'
 assert_no_success_output 'versioned local product dependency'
 pass 'local product dependencies do not repeat the workspace version'
+
+. "$script_dir/check-version-sync-policy.test-cases.sh"
 
 repo=$(new_repo guard_is_read_only 0.8.1)
 before_snapshot=$(repo_snapshot "$repo")
