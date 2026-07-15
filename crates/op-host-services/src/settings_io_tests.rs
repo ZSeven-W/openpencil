@@ -2,6 +2,15 @@ use super::*;
 
 #[path = "settings_io_checked_tests.rs"]
 mod checked_tests;
+
+fn settings_save_test_root(case: &str) -> std::path::PathBuf {
+    let sequence = SETTINGS_TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "openpencil-settings-save-{}-{sequence}-{case}",
+        std::process::id()
+    ))
+}
+
 #[test]
 fn persisted_locale_overrides_system_locale_seed() {
     assert_eq!(
@@ -409,11 +418,7 @@ fn openverse_oauth_round_trips_through_payload() {
 
 #[test]
 fn checked_save_reports_an_unwritable_parent() {
-    let root = std::env::temp_dir().join(format!(
-        "openpencil-settings-save-{}-{}",
-        std::process::id(),
-        std::thread::current().name().unwrap_or("unnamed")
-    ));
+    let root = settings_save_test_root("unwritable-parent");
     let blocking_parent = root.join("not-a-directory");
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(&blocking_parent, b"block").unwrap();
@@ -428,11 +433,7 @@ fn checked_save_reports_an_unwritable_parent() {
 #[cfg(unix)]
 #[test]
 fn checked_save_does_not_reuse_an_existing_temporary_path() {
-    let root = std::env::temp_dir().join(format!(
-        "openpencil-settings-unique-temp-{}-{}",
-        std::process::id(),
-        std::thread::current().name().unwrap_or("unnamed")
-    ));
+    let root = settings_save_test_root("unique-temp");
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let path = root.join("settings.json");
@@ -449,11 +450,7 @@ fn checked_save_does_not_reuse_an_existing_temporary_path() {
 
 #[test]
 fn checked_save_removes_the_temporary_file_after_a_replace_failure() {
-    let root = std::env::temp_dir().join(format!(
-        "openpencil-settings-replace-failure-{}-{}",
-        std::process::id(),
-        std::thread::current().name().unwrap_or("unnamed")
-    ));
+    let root = settings_save_test_root("replace-failure");
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let path = root.join("settings.json");
@@ -475,11 +472,7 @@ fn checked_save_removes_the_temporary_file_after_a_replace_failure() {
 fn checked_save_enforces_private_permissions_on_the_final_file() {
     use std::os::unix::fs::PermissionsExt;
 
-    let root = std::env::temp_dir().join(format!(
-        "openpencil-settings-private-mode-{}-{}",
-        std::process::id(),
-        std::thread::current().name().unwrap_or("unnamed")
-    ));
+    let root = settings_save_test_root("private-mode");
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let path = root.join("settings.json");
