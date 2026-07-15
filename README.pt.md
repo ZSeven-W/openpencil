@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 Framework de UI GPU-Skia — widgets/renderização/eventos
 │   ├── casement/             Fork do winit
 │   └── agent/                Runtime de agente Rust compartilhado entre produtos (agent-rs)
-└── .githooks/                Sincronização de versão no pre-commit a partir do nome da branch
+└── .githooks/                Verificação de consistência de versão no pre-commit
 ```
 
 ## Atalhos de Teclado
@@ -378,8 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
-cd packages && bun run sync-version               # Sync SDK versions from root Cargo.toml
-cd packages && bun run sync-version:check         # Verify SDK versions match root Cargo.toml
+scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
+tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
 
 ## Contribuindo

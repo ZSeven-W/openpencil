@@ -341,7 +341,7 @@ openpencil/
 │   ├── jian/                 GPU-Skia UI 프레임워크 — 위젯/렌더/이벤트
 │   ├── casement/             winit 포크
 │   └── agent/                제품 공용 Rust 에이전트 런타임 (agent-rs)
-└── .githooks/                브랜치 이름에서 버전 동기화를 위한 pre-commit
+└── .githooks/                pre-commit 버전 일관성 검사
 ```
 
 ## 키보드 단축키
@@ -378,8 +378,8 @@ cargo run -p op-cli -- <args>        # CLI (binary: op)
 # Web SDK / JS tooling (run from packages/)
 cd packages && bun run lint          # Lint the web SDK (oxlint); also: bun run format
 cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon catalog assets
-cd packages && bun run sync-version               # Sync SDK versions from root Cargo.toml
-cd packages && bun run sync-version:check         # Verify SDK versions match root Cargo.toml
+scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
+tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
 
 ## 기여하기

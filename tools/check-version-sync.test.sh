@@ -3,9 +3,9 @@
 set -euo pipefail
 
 script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
-guard_source="$script_dir/check-version-fixtures.sh"
+guard_source="$script_dir/check-version-sync.sh"
 reader_source="$script_dir/../scripts/workspace-version.sh"
-temp_root=$(mktemp -d "${TMPDIR:-/tmp}/check-version-fixtures.XXXXXX")
+temp_root=$(mktemp -d "${TMPDIR:-/tmp}/check-version-sync.XXXXXX")
 trap 'rm -rf "$temp_root"' EXIT HUP INT TERM
 
 tests_run=0
@@ -60,6 +60,38 @@ assert_no_success_output() {
     assert_not_contains 'no ordinary Rust fixtures copy current product version' "$label"
     assert_not_contains 'skipping literal fixture drift scan' "$label"
 }
+
+cargo() {
+    if [[ "$*" != 'metadata --no-deps --format-version 1 --locked' ]]; then
+        printf 'unexpected cargo arguments: %s\n' "$*" >&2
+        return 41
+    fi
+    repo_root=$PWD
+    canonical=$("$repo_root/scripts/workspace-version.sh")
+    package_version=$canonical
+    if [[ -f "$repo_root/.fake-cargo-version" ]]; then
+        package_version=$(sed -n '1p' "$repo_root/.fake-cargo-version")
+    fi
+    if [[ -e "$repo_root/.fake-cargo-warning" ]]; then
+        printf 'warning: fake Cargo metadata warning\n' >&2
+    fi
+    printf '{"packages":[{"name":"op-example","version":"%s","manifest_path":"%s/crates/example/Cargo.toml"}]}\n' \
+        "$package_version" "$repo_root"
+}
+
+bun() {
+    repo_root=$(CDPATH= cd "$PWD/.." && pwd)
+    if [[ "$PWD" != "$repo_root/packages" || "$*" != 'run sync-version:check' ]]; then
+        printf 'unexpected bun invocation: cwd=%s args=%s\n' "$PWD" "$*" >&2
+        return 42
+    fi
+    if [[ -e "$repo_root/.fake-bun-fail" ]]; then
+        printf 'package versions are stale\n' >&2
+        return 43
+    fi
+}
+
+export -f cargo bun
 
 write_workflow_fixture() {
     repo=$1
@@ -158,14 +190,19 @@ new_repo() {
 
     mkdir -p \
         "$repo/.github/workflows" \
+        "$repo/packages" \
         "$repo/tools" \
         "$repo/scripts" \
+        "$repo/crates/op-cli/assets" \
+        "$repo/crates/op-cli/src" \
+        "$repo/crates/op-editor-core/src" \
+        "$repo/crates/op-host-desktop" \
         "$repo/crates/example/src" \
         "$repo/crates/op-host-desktop/src"
     git -C "$repo" init -q
-    cp "$guard_source" "$repo/tools/check-version-fixtures.sh"
+    cp "$guard_source" "$repo/tools/check-version-sync.sh"
     cp "$reader_source" "$repo/scripts/workspace-version.sh"
-    chmod +x "$repo/tools/check-version-fixtures.sh" "$repo/scripts/workspace-version.sh"
+    chmod +x "$repo/tools/check-version-sync.sh" "$repo/scripts/workspace-version.sh"
     printf '%s\n' \
         '[workspace]' \
         'members = []' \
@@ -173,6 +210,26 @@ new_repo() {
         '[workspace.package]' \
         "version = \"$version\"" \
         'edition = "2024"' > "$repo/Cargo.toml"
+    printf '%s\n' 'version = 4' > "$repo/Cargo.lock"
+    printf '%s\n' '{"name":"fixture-packages"}' > "$repo/packages/package.json"
+
+    cat > "$repo/crates/op-cli/assets/skill-bundle.json" <<'JSON'
+{"one":"__OPENPENCIL_VERSION__","two":"__OPENPENCIL_VERSION__","three":"__OPENPENCIL_VERSION__","four":"__OPENPENCIL_VERSION__","five":"__OPENPENCIL_VERSION__","six":"__OPENPENCIL_VERSION__"}
+JSON
+    cat > "$repo/crates/op-editor-core/src/state.rs" <<'RUST'
+version: env!("CARGO_PKG_VERSION").to_owned(),
+RUST
+    cat > "$repo/crates/op-editor-core/src/host_support.rs" <<'RUST'
+let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+RUST
+    cat > "$repo/crates/op-cli/src/app_control_cli.rs" <<'RUST'
+const MINIMAL_DOCUMENT: &str = concat!(env!("CARGO_PKG_VERSION"));
+RUST
+    cat > "$repo/crates/op-host-desktop/Cargo.toml" <<'TOML'
+op-host-native = { path = "../op-host-native", features = ["gl-host"] }
+TOML
 
     cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -229,8 +286,18 @@ SCRIPT
 
 run_guard() {
     repo=$1
+    shift
     case_status=0
-    case_output=$(cd "$repo" && bash tools/check-version-fixtures.sh 2>&1) || case_status=$?
+    case_output=$(cd "$repo" && env "$@" \
+        bash tools/check-version-sync.sh 2>&1) || case_status=$?
+}
+
+repo_snapshot() {
+    repo=$1
+    find "$repo" -type f ! -path "$repo/.git/*" -exec shasum {} + |
+        LC_ALL=C sort |
+        shasum |
+        awk '{print $1}'
 }
 
 repo=$(new_repo v_prefixed_stale_version 0.8.1)
@@ -470,14 +537,14 @@ printf '%s\n' '# identifier build0.8.2candidate is not a version token' \
     >> "$repo/scripts/install-op.sh"
 run_guard "$repo"
 assert_status 0 'embedded version-like substring'
-assert_contains 'packaging and release versions derive from Cargo workspace version 0.8.1' \
+assert_contains 'all managed versions derive from Cargo workspace version 0.8.1' \
     'embedded version-like substring'
 pass 'version-like substrings inside larger identifiers are allowed'
 
 repo=$(new_repo nsis_defensive_fallback 0.8.1)
 run_guard "$repo"
 assert_status 0 'NSIS defensive fallback'
-assert_contains 'packaging and release versions derive from Cargo workspace version 0.8.1' \
+assert_contains 'all managed versions derive from Cargo workspace version 0.8.1' \
     'NSIS defensive fallback'
 pass 'NSIS 0.0.0 defensive fallback remains allowed'
 
@@ -517,5 +584,105 @@ assert_contains 'error: OPENPENCIL_VERSION must fall back to the Cargo workspace
 assert_not_contains 'no ordinary Rust fixtures copy current product version' \
     'fixture-version collision packaging check'
 pass 'fixture-version collision still runs packaging checks'
+
+repo=$(new_repo cargo_metadata_version_mismatch 0.8.1)
+printf '%s\n' '0.8.0' > "$repo/.fake-cargo-version"
+run_guard "$repo"
+assert_status 1 'Cargo metadata version mismatch'
+assert_contains 'crates/example/Cargo.toml:1: error: workspace package op-example has version 0.8.0; expected 0.8.1' \
+    'Cargo metadata version mismatch'
+assert_no_success_output 'Cargo metadata version mismatch'
+pass 'workspace op-* packages under crates must match the canonical Cargo version'
+
+repo=$(new_repo cargo_metadata_warning 0.8.1)
+touch "$repo/.fake-cargo-warning"
+run_guard "$repo"
+assert_status 0 'Cargo metadata warning'
+assert_contains 'warning: fake Cargo metadata warning' 'Cargo metadata warning'
+pass 'Cargo warnings do not corrupt the metadata JSON passed to jq'
+
+repo=$(new_repo package_version_drift 0.8.1)
+touch "$repo/.fake-bun-fail"
+run_guard "$repo"
+assert_status 1 'package version drift'
+assert_contains 'packages:1: error: bun run sync-version:check failed' 'package version drift'
+assert_no_success_output 'package version drift'
+pass 'web SDK package drift is reported by the read-only guard'
+
+repo=$(new_repo matching_release_tag 0.8.1)
+run_guard "$repo" GITHUB_REF=refs/tags/v0.8.1 GITHUB_REF_NAME=v0.8.1
+assert_status 0 'matching release tag'
+pass 'matching v* release tags pass the repository guard'
+
+repo=$(new_repo mismatched_release_tag 0.8.1)
+run_guard "$repo" GITHUB_REF=refs/tags/v0.8.2 GITHUB_REF_NAME=v0.8.2
+assert_status 1 'mismatched release tag'
+assert_contains 'environment:1: error: release tag v0.8.2 does not match Cargo workspace version 0.8.1' \
+    'mismatched release tag'
+assert_no_success_output 'mismatched release tag'
+pass 'mismatched v* release tags are rejected outside the release workflow too'
+
+repo=$(new_repo cli_bundle_wrong_sentinel_count 0.8.1)
+sed -i.bak 's/,"six":"__OPENPENCIL_VERSION__"//' \
+    "$repo/crates/op-cli/assets/skill-bundle.json"
+rm "$repo/crates/op-cli/assets/skill-bundle.json.bak"
+run_guard "$repo"
+assert_status 1 'CLI bundle sentinel count'
+assert_contains 'crates/op-cli/assets/skill-bundle.json:1: error: expected exactly 6 version sentinels' \
+    'CLI bundle sentinel count'
+assert_no_success_output 'CLI bundle sentinel count'
+pass 'embedded CLI bundle retains exactly six version sentinels'
+
+repo=$(new_repo cli_bundle_without_sentinels 0.8.1)
+sed -i.bak 's/__OPENPENCIL_VERSION__/__MISSING_VERSION__/g' \
+    "$repo/crates/op-cli/assets/skill-bundle.json"
+rm "$repo/crates/op-cli/assets/skill-bundle.json.bak"
+run_guard "$repo"
+assert_status 1 'CLI bundle missing sentinels'
+assert_contains 'crates/op-cli/assets/skill-bundle.json:1: error: expected exactly 6 version sentinels' \
+    'CLI bundle missing sentinels'
+assert_contains '(found 0)' 'CLI bundle missing sentinels'
+assert_no_success_output 'CLI bundle missing sentinels'
+pass 'embedded CLI bundle reports zero missing version sentinels actionably'
+
+repo=$(new_repo cli_bundle_numeric_product_version 0.8.1)
+printf '%s\n' '{"stale":"0.8.1"}' >> "$repo/crates/op-cli/assets/skill-bundle.json"
+run_guard "$repo"
+assert_status 1 'CLI bundle numeric product version'
+assert_contains 'crates/op-cli/assets/skill-bundle.json:' 'CLI bundle numeric product version'
+assert_contains 'error: embedded CLI bundle must not contain the canonical version literal' \
+    'CLI bundle numeric product version'
+assert_no_success_output 'CLI bundle numeric product version'
+pass 'embedded CLI bundle cannot duplicate the numeric product version'
+
+repo=$(new_repo hardcoded_rust_product_version 0.8.1)
+printf '%s\n' 'version: "0.8.1".to_owned(),' > "$repo/crates/op-editor-core/src/state.rs"
+run_guard "$repo"
+assert_status 1 'hardcoded Rust product version'
+assert_contains 'crates/op-editor-core/src/state.rs:1: error: empty documents must derive their version from CARGO_PKG_VERSION' \
+    'hardcoded Rust product version'
+assert_no_success_output 'hardcoded Rust product version'
+pass 'Rust product-version producers remain derived from Cargo metadata'
+
+repo=$(new_repo versioned_local_product_dependency 0.8.1)
+printf '%s\n' \
+    'op-host-native = { path = "../op-host-native", version = "0.8.1", features = ["gl-host"] }' \
+    > "$repo/crates/op-host-desktop/Cargo.toml"
+run_guard "$repo"
+assert_status 1 'versioned local product dependency'
+assert_contains 'crates/op-host-desktop/Cargo.toml:1: error: local op-host-native dependency must not duplicate the product version' \
+    'versioned local product dependency'
+assert_no_success_output 'versioned local product dependency'
+pass 'local product dependencies do not repeat the workspace version'
+
+repo=$(new_repo guard_is_read_only 0.8.1)
+before_snapshot=$(repo_snapshot "$repo")
+run_guard "$repo"
+assert_status 0 'read-only guard'
+after_snapshot=$(repo_snapshot "$repo")
+if [[ "$before_snapshot" != "$after_snapshot" ]]; then
+    fail 'read-only guard changed repository file contents'
+fi
+pass 'repository-wide version guard does not write files'
 
 printf '1..%s\n' "$tests_run"
