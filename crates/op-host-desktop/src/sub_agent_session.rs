@@ -16,7 +16,7 @@
 //! `chat_session::pump` would borrow `host` and the sub sessions at the
 //! same time. Instead, the spawn interception is split in two:
 //!
-//! 1. [`chat_session::drain_tool_requests`] detects `spawn_agents`,
+//! 1. [`chat_session::execute_tool_requests`] detects `spawn_agents`,
 //!    parses the specs, and **stashes** them via [`stash_pending_spawn`]
 //!    — then acks the tool. (A module-level [`Mutex`] stash; the UI is
 //!    single-threaded so the lock is always uncontended.)
@@ -82,14 +82,14 @@ pub(crate) struct SubAgentSession {
 // Pending-spawn stash (host picks it up after the parent pump)
 // ---------------------------------------------------------------------------
 
-/// Module-level stash for specs parsed inside `drain_tool_requests` but
+/// Module-level stash for specs parsed inside `execute_tool_requests` but
 /// launched by `app_handler` after the parent pump. The UI thread is the
 /// only accessor, so the lock is always uncontended; the `Mutex` just
 /// satisfies `static` interior mutability without `unsafe`.
 static PENDING_SPAWN: Mutex<Option<Vec<SpawnSpec>>> = Mutex::new(None);
 
 /// Set while [`pump_sub_agents`] is pumping a sub's turn. The spawn
-/// interception in `chat_session::drain_tool_requests` reads it via
+/// interception in `chat_session::execute_tool_requests` reads it via
 /// [`nested_spawn_active`] to drop a SUB's `spawn_agents` call (only the
 /// top-level loop spawns). UI-thread-only, so a plain atomic suffices.
 static SUB_AGENT_ACTIVE: AtomicBool = AtomicBool::new(false);
