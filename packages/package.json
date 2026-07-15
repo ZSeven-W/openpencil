@@ -7,19 +7,20 @@
     "name": "ZSeven-W",
     "email": "xkayshen@gmail.com"
   },
-  "type": "module",
   "workspaces": [
     "op-web-sdk",
     "op-web-sdk-react",
     "op-web-sdk-vue"
   ],
+  "type": "module",
   "scripts": {
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "generate-iconify-catalog": "node scripts/generate-iconify-catalog.mjs",
-    "bump": "sh -c 'V=$0; [ -z \"$V\" ] && echo \"Usage: bun run bump <version>\" && exit 1; for f in package.json */package.json; do [ -f \"$f\" ] && jq --arg v \"$V\" \".version=\\$v\" \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\" && echo \"$f → $V\"; done'"
+    "sync-version": "node scripts/sync-version.mjs",
+    "sync-version:check": "node scripts/sync-version.mjs --check"
   },
   "devDependencies": {
     "@iconify-json/feather": "^1.2.1",
