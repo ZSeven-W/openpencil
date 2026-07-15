@@ -24,6 +24,13 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CANONICAL_VERSION="$("$ROOT/scripts/workspace-version.sh")"
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [ "$APP_VERSION" != "$CANONICAL_VERSION" ]; then
+  printf 'bundle-macos: error: OPENPENCIL_VERSION (%s) must match Cargo workspace version (%s)\n' \
+    "$APP_VERSION" "$CANONICAL_VERSION" >&2
+  exit 1
+fi
 BIN="$ROOT/target/release/openpencil-desktop"
 ICON="$ROOT/crates/op-host-desktop/assets/icon.icns"
 ENTITLEMENTS="$ROOT/crates/op-host-desktop/entitlements.plist"
@@ -75,7 +82,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>icon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleShortVersionString</key><string>0.8.1</string>
+  <key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>

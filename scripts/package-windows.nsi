@@ -25,10 +25,10 @@
 ;
 ; Compile (relative paths resolve against this script's directory, so the
 ; workflow passes absolute /D defines):
-;   makensis "/DVERSION=0.8.1" "/DARCH=x64" ^
+;   makensis "/DVERSION=X.Y.Z" "/DARCH=x64" ^
 ;     "/DBIN_DIR=D:\w\target\x86_64-pc-windows-msvc\release" ^
 ;     "/DICON_FILE=D:\w\crates\op-host-desktop\assets\icon.ico" ^
-;     "/DOUT_FILE=D:\w\OpenPencil-0.8.1-x64-win-setup.exe" ^
+;     "/DOUT_FILE=D:\w\OpenPencil-X.Y.Z-x64-win-setup.exe" ^
 ;     scripts\package-windows.nsi
 ;
 ; NOT compiled locally (no makensis on the macOS dev machine) — first real

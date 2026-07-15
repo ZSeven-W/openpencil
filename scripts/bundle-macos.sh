@@ -29,7 +29,8 @@
 # first).
 #
 # CI / cross-build controls (all optional, default = local behavior):
-#   OPENPENCIL_VERSION     CFBundleShortVersionString (default 0.8.1)
+#   OPENPENCIL_VERSION     CFBundleShortVersionString (default: root Cargo
+#                          workspace version; overrides must match it)
 #   OPENPENCIL_TARGET      cargo target triple (e.g. x86_64-apple-darwin);
 #                          builds + bundles for that triple and reads the
 #                          bundle from target/<triple>/release/bundle/osx
@@ -49,7 +50,13 @@
 set -euo pipefail
 
 WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_VERSION="${OPENPENCIL_VERSION:-0.8.1}"
+CANONICAL_VERSION="$("$WS_ROOT/scripts/workspace-version.sh")"
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
+  printf 'bundle-macos: error: OPENPENCIL_VERSION (%s) must match Cargo workspace version (%s)\n' \
+    "$APP_VERSION" "$CANONICAL_VERSION" >&2
+  exit 1
+fi
 TARGET_TRIPLE="${OPENPENCIL_TARGET:-}"
 
 # Locate cargo-bundle. Tries PATH first, then a workspace-local

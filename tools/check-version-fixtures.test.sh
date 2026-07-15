@@ -67,6 +67,7 @@ new_repo() {
     repo="$temp_root/$name"
 
     mkdir -p \
+        "$repo/.github/workflows" \
         "$repo/tools" \
         "$repo/scripts" \
         "$repo/crates/example/src" \
@@ -82,6 +83,51 @@ new_repo() {
         '[workspace.package]' \
         "version = \"$version\"" \
         'edition = "2024"' > "$repo/Cargo.toml"
+
+    cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CANONICAL_VERSION="$("$WS_ROOT/scripts/workspace-version.sh")"
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
+    exit 1
+fi
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
+SCRIPT
+
+    cat > "$repo/tools/bundle-macos.sh" <<'SCRIPT'
+#!/bin/sh
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CANONICAL_VERSION="$("$ROOT/scripts/workspace-version.sh")"
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [ "$APP_VERSION" != "$CANONICAL_VERSION" ]; then
+    exit 1
+fi
+<key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
+SCRIPT
+
+    cat > "$repo/scripts/package-windows.nsi" <<'SCRIPT'
+; makensis "/DVERSION=X.Y.Z" "/DOUT_FILE=OpenPencil-X.Y.Z-x64-win-setup.exe"
+SCRIPT
+
+    cat > "$repo/scripts/install-op.sh" <<'SCRIPT'
+# OP_VERSION=X.Y.Z ./install-op.sh
+# set OP_VERSION explicitly, e.g. OP_VERSION=X.Y.Z ./install-op.sh
+SCRIPT
+
+    cat > "$repo/.github/workflows/rust-release.yml" <<'SCRIPT'
+- name: Compute release version
+  shell: bash
+  run: |
+    cargo_version="$(scripts/workspace-version.sh)"
+    if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+      tag_version="${GITHUB_REF_NAME#v}"
+      if [[ "$tag_version" != "$cargo_version" ]]; then
+        exit 1
+      fi
+    fi
+    echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
+SCRIPT
 
     printf '%s\n' "$repo"
 }
@@ -145,5 +191,69 @@ assert_contains 'stable fixtures and product-version literals are indistinguisha
 assert_not_contains 'no ordinary Rust fixtures copy current product version' \
     'fixture-version collision'
 pass 'fixture-version collision is documented and skipped'
+
+repo=$(new_repo hardcoded_macos_version 0.8.1)
+printf '%s\n' 'APP_VERSION="${OPENPENCIL_VERSION:-0.8.1}"' \
+    >> "$repo/scripts/bundle-macos.sh"
+run_guard "$repo"
+assert_status 1 'hardcoded macOS version'
+assert_contains 'scripts/bundle-macos.sh:' 'hardcoded macOS version'
+assert_contains 'error: OPENPENCIL_VERSION must fall back to the Cargo workspace version' \
+    'hardcoded macOS version'
+assert_no_success_output 'hardcoded macOS version'
+pass 'hardcoded macOS package version is rejected with file and line guidance'
+
+repo=$(new_repo macos_reader_comment_only 0.8.1)
+cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+# scripts/workspace-version.sh
+APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
+if [[ "$APP_VERSION" != "$CANONICAL_VERSION" ]]; then
+    exit 1
+fi
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $OTHER_VERSION" "$PLIST"
+SCRIPT
+run_guard "$repo"
+assert_status 1 'macOS reader comment only'
+assert_contains 'scripts/bundle-macos.sh:1:' 'macOS reader comment only'
+assert_contains 'error: macOS packaging must assign CANONICAL_VERSION from scripts/workspace-version.sh' \
+    'macOS reader comment only'
+assert_contains 'error: CFBundleShortVersionString must use APP_VERSION' \
+    'macOS reader comment only'
+assert_no_success_output 'macOS reader comment only'
+pass 'macOS packaging must invoke the reader and use the resolved version'
+
+repo=$(new_repo release_missing_tag_equality 0.8.1)
+cat > "$repo/.github/workflows/rust-release.yml" <<'SCRIPT'
+- name: Compute release version
+  shell: bash
+  run: |
+    cargo_version="$(scripts/workspace-version.sh)"
+    if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+      tag_version="${GITHUB_REF_NAME#v}"
+    fi
+    echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
+SCRIPT
+run_guard "$repo"
+assert_status 1 'release missing tag equality'
+assert_contains '.github/workflows/rust-release.yml:1:' 'release missing tag equality'
+assert_contains 'error: release tags must be compared with the Cargo workspace version' \
+    'release missing tag equality'
+assert_no_success_output 'release missing tag equality'
+pass 'release workflow must reject tags that differ from Cargo'
+
+repo=$(new_repo collision_still_checks_packaging 1.0.0)
+printf '%s\n' 'APP_VERSION="${OPENPENCIL_VERSION:-0.8.1}"' \
+    >> "$repo/tools/bundle-macos.sh"
+run_guard "$repo"
+assert_status 1 'fixture-version collision packaging check'
+assert_contains 'skipping literal fixture drift scan' \
+    'fixture-version collision packaging check'
+assert_contains 'tools/bundle-macos.sh:' 'fixture-version collision packaging check'
+assert_contains 'error: OPENPENCIL_VERSION must fall back to the Cargo workspace version' \
+    'fixture-version collision packaging check'
+assert_not_contains 'no ordinary Rust fixtures copy current product version' \
+    'fixture-version collision packaging check'
+pass 'fixture-version collision still runs packaging checks'
 
 printf '1..%s\n' "$tests_run"
