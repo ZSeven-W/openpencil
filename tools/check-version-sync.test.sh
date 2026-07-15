@@ -66,7 +66,11 @@ cargo() {
         printf 'unexpected cargo arguments: %s\n' "$*" >&2
         return 41
     fi
-    repo_root=$PWD
+    repo_root=$(pwd -P)
+    if [[ -e "$repo_root/.fake-cargo-empty" ]]; then
+        printf '%s\n' '{"packages":[]}'
+        return
+    fi
     canonical=$("$repo_root/scripts/workspace-version.sh")
     package_version=$canonical
     if [[ -f "$repo_root/.fake-cargo-version" ]]; then
@@ -593,6 +597,26 @@ assert_contains 'crates/example/Cargo.toml:1: error: workspace package op-exampl
     'Cargo metadata version mismatch'
 assert_no_success_output 'Cargo metadata version mismatch'
 pass 'workspace op-* packages under crates must match the canonical Cargo version'
+
+repo=$(new_repo cargo_metadata_without_local_packages 0.8.1)
+touch "$repo/.fake-cargo-empty"
+run_guard "$repo"
+assert_status 1 'Cargo metadata without local packages'
+assert_contains 'Cargo.toml:1: error: cargo metadata found no local op-* workspace packages under crates' \
+    'Cargo metadata without local packages'
+assert_no_success_output 'Cargo metadata without local packages'
+pass 'zero local op-* packages is an actionable metadata failure'
+
+repo=$(new_repo symlinked_repo_package_mismatch 0.8.1)
+printf '%s\n' '0.8.0' > "$repo/.fake-cargo-version"
+logical_repo="$temp_root/symlinked_repo_package_mismatch_logical"
+ln -s "$repo" "$logical_repo"
+run_guard "$logical_repo"
+assert_status 1 'symlinked repository package mismatch'
+assert_contains 'crates/example/Cargo.toml:1: error: workspace package op-example has version 0.8.0; expected 0.8.1' \
+    'symlinked repository package mismatch'
+assert_no_success_output 'symlinked repository package mismatch'
+pass 'symlinked repository invocation still validates physical Cargo manifest paths'
 
 repo=$(new_repo cargo_metadata_warning 0.8.1)
 touch "$repo/.fake-cargo-warning"

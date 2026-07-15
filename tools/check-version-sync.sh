@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
-repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
+script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
+repo_root=$(CDPATH= cd "$script_dir/.." && pwd -P)
 fixture_version=1.0.0
 
 for required_command in cargo jq bun rg; do
@@ -185,31 +185,36 @@ validate_workspace_package_versions() {
         return
     fi
 
-    mismatch_status=0
-    mismatches=$(printf '%s\n' "$metadata" | jq -r \
+    package_rows_status=0
+    package_rows=$(printf '%s\n' "$metadata" | jq -r \
         --arg crates_prefix "$repo_root/crates/" \
-        --arg expected "$current_version" '
+        '
             .packages[]?
             | select(.name | startswith("op-"))
             | select(.manifest_path | startswith($crates_prefix))
-            | select(.version != $expected)
             | [.manifest_path, .name, .version]
             | @tsv
-        ' 2>&1) || mismatch_status=$?
-    if [[ "$mismatch_status" -ne 0 ]]; then
-        printf '%s\n' "$mismatches" >&2
+        ' 2>&1) || package_rows_status=$?
+    if [[ "$package_rows_status" -ne 0 ]]; then
+        printf '%s\n' "$package_rows" >&2
         report_missing Cargo.toml 'failed to inspect cargo metadata with jq'
         return
     fi
 
-    if [[ -n "$mismatches" ]]; then
-        while IFS=$'\t' read -r manifest package package_version; do
+    if [[ -z "$package_rows" ]]; then
+        report_missing Cargo.toml \
+            'cargo metadata found no local op-* workspace packages under crates; verify workspace members and repository path resolution'
+        return
+    fi
+
+    while IFS=$'\t' read -r manifest package package_version; do
+        if [[ "$package_version" != "$current_version" ]]; then
             relative_manifest=${manifest#"$repo_root"/}
             printf '%s:1: error: workspace package %s has version %s; expected %s\n' \
                 "$relative_manifest" "$package" "$package_version" "$current_version" >&2
             errors=1
-        done <<< "$mismatches"
-    fi
+        fi
+    done <<< "$package_rows"
 }
 
 validate_package_versions() {

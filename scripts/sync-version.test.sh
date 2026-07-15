@@ -209,6 +209,17 @@ assert_file_contains "$workflow" 'bun install --frozen-lockfile' 'version sync d
 assert_file_contains "$workflow" 'packages/bun.lock' 'version sync managed paths'
 assert_file_contains "$workflow" 'packages/scripts/sync-version.mjs' 'version sync implementation paths'
 assert_file_not_matches "$workflow" 'packages/\*\*' 'version sync focused path filters'
+for trigger in pull_request push; do
+    trigger_block=$(awk -v trigger="$trigger" '
+        $0 == "  " trigger ":" { in_trigger = 1; next }
+        in_trigger && ($0 ~ /^  [a-z_]+:$/ || $0 ~ /^[^ ]/) { exit }
+        in_trigger { print }
+    ' "$workflow")
+    rust_source_filter_count=$(grep -Fc -- '      - "crates/**/*.rs"' <<< "$trigger_block" || true)
+    if [[ "$rust_source_filter_count" -ne 1 ]]; then
+        fail "version sync workflow $trigger paths must include crates/**/*.rs exactly once (found $rust_source_filter_count)"
+    fi
+done
 assert_file_contains "$workflow" 'scripts/workspace-version.test.sh' 'version reader tests'
 assert_file_contains "$workflow" 'scripts/sync-version.test.sh' 'version sync tests'
 assert_file_contains "$workflow" 'tools/check-version-sync.test.sh' 'version guard tests'
