@@ -233,6 +233,36 @@ run_guard() {
     case_output=$(cd "$repo" && bash tools/check-version-fixtures.sh 2>&1) || case_status=$?
 }
 
+repo=$(new_repo v_prefixed_stale_version 0.8.1)
+printf '%s\n' '# pin v0.8.2' >> "$repo/scripts/install-op.sh"
+run_guard "$repo"
+assert_status 1 'v-prefixed stale version'
+assert_contains 'scripts/install-op.sh:' 'v-prefixed stale version'
+assert_contains 'error: version examples must use X.Y.Z or <version>, not a SemVer release' \
+    'v-prefixed stale version'
+assert_no_success_output 'v-prefixed stale version'
+pass 'v-prefixed stale SemVer examples are rejected'
+
+repo=$(new_repo sentence_final_stale_version 0.8.1)
+printf '%s\n' '# pin 0.8.2.' >> "$repo/scripts/install-op.sh"
+run_guard "$repo"
+assert_status 1 'sentence-final stale version'
+assert_contains 'scripts/install-op.sh:' 'sentence-final stale version'
+assert_contains 'error: version examples must use X.Y.Z or <version>, not a SemVer release' \
+    'sentence-final stale version'
+assert_no_success_output 'sentence-final stale version'
+pass 'sentence-final stale SemVer examples are rejected'
+
+repo=$(new_repo prerelease_build_stale_version 0.8.1)
+printf '%s\n' '# pin v0.8.2-beta.1+build.5.' >> "$repo/scripts/install-op.sh"
+run_guard "$repo"
+assert_status 1 'pre-release/build stale version'
+assert_contains 'scripts/install-op.sh:' 'pre-release/build stale version'
+assert_contains 'error: version examples must use X.Y.Z or <version>, not a SemVer release' \
+    'pre-release/build stale version'
+assert_no_success_output 'pre-release/build stale version'
+pass 'pre-release and build metadata remain part of the rejected token'
+
 repo=$(new_repo ordinary_current 0.8.1)
 printf '%s\n' 'const DOC: &str = r#"{"version":"0.8.1","children":[]}"#;' \
     > "$repo/crates/example/src/lib.rs"

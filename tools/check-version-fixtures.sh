@@ -116,7 +116,7 @@ validate_macos_version_behavior() {
 
 reject_example_semver_tokens() {
     file=$1
-    semver_pattern='(^|[^0-9A-Za-z.])((0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-[0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?([+][0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?)([^0-9A-Za-z.]|$)'
+    semver_pattern='(^|[^0-9A-Za-z.])(v?(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-[0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?([+][0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?)([^0-9A-Za-z.]|[.]+([^0-9A-Za-z.]|$)|$)'
     rg_status=0
     matches=$(rg --line-number --with-filename --color never -- \
         "$semver_pattern" "$file") || rg_status=$?
