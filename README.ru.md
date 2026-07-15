@@ -123,14 +123,15 @@ cargo run -p op-host-desktop
 
 | Образ | Содержит |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host, wasm bundle и ресурсы CanvasKit |
+| `ghcr.io/zseven-w/openpencil-web:vX.Y.Z` | Rust web host, wasm bundle и ресурсы CanvasKit |
 
 Веб-интерфейс показывает только встроенные профили агентов; инструменты Claude/Codex/OpenCode/Copilot/Gemini CLI не входят в Docker-образы.
 
 **Запуск:**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
+VERSION="$(scripts/workspace-version.sh)"
+docker run -d -p 3100:3100 "ghcr.io/zseven-w/openpencil-web:v${VERSION}"
 ```
 
 Затем откройте `http://localhost:3100/`.
@@ -308,7 +309,7 @@ OpenPencil переписан с нуля на **Rust** ([#129](https://github.c
 - **Нативная доступность** — AccessKit на macOS, Windows и Linux, плюс DOM-зеркало на вебе, вместо опоры на дерево доступности браузера.
 - **Одно типизированное пространство** — хост MCP, CLI, AI-провайдеры, генерация кода, импорт Figma и интеграция с Git — всё в одном Rust-пространстве с контролем цепочки поставок через `cargo-deny` в CI.
 
-> **Статус:** редактор на TypeScript был выведен из эксплуатации в `v0.7.5` и сохранился только в истории git; этот репозиторий — это Rust-пространство. Релиз `v0.8.1` на Rust находится в активной разработке (см. [Дорожная карта](#дорожная-карта) ниже).
+> **Статус:** редактор на TypeScript был выведен из эксплуатации в `v0.7.5` и сохранился только в истории git; этот репозиторий — это Rust-пространство. Продукт на Rust находится в активной разработке (см. [Дорожная карта](#дорожная-карта) ниже).
 
 ## Структура проекта
 

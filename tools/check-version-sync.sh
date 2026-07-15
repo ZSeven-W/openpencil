@@ -149,6 +149,60 @@ reject_example_semver_tokens() {
     fi
 }
 
+validate_top_level_readmes() {
+    semver_pattern='(?<![0-9A-Za-z.])v?(?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)[.](?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*)?(?:[+][0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*)?(?![0-9A-Za-z]|[.][0-9A-Za-z])'
+    readme_files=(README*.md)
+
+    for file in "${readme_files[@]}"; do
+        rg_status=0
+        matches=$(rg --pcre2 --only-matching --line-number --with-filename \
+            --color never -- "$semver_pattern" "$file") || rg_status=$?
+        if [[ "$rg_status" -gt 1 ]]; then
+            printf '%s:1: error: failed to scan README version policy (rg status %s)\n' \
+                "$file" "$rg_status" >&2
+            errors=1
+            continue
+        fi
+
+        if [[ -n "$matches" ]]; then
+            while IFS=: read -r match_file match_line token; do
+                if [[ "$token" == v0.7.5 ]]; then
+                    continue
+                fi
+                printf '%s:%s: error: top-level READMEs must not contain active product SemVer releases; use vX.Y.Z or the workspace-version reader\n' \
+                    "$match_file" "$match_line" >&2
+                errors=1
+            done <<< "$matches"
+        fi
+    done
+}
+
+validate_version_sync_ci_readme_paths() {
+    ci_workflow=.github/workflows/version-sync.yml
+    if [[ ! -f "$ci_workflow" ]]; then
+        report_missing "$ci_workflow" \
+            'version-sync CI must run for top-level README changes in pull requests and pushes'
+        return
+    fi
+
+    read -r pull_request_readmes push_readmes < <(
+        awk '
+            /^  pull_request:[[:space:]]*$/ { event = "pull_request"; next }
+            /^  push:[[:space:]]*$/ { event = "push"; next }
+            /^[^[:space:]]/ { event = "" }
+            /^[[:space:]]*-[[:space:]]+"README[*][.]md"[[:space:]]*$/ {
+                if (event == "pull_request") pull_request_count++
+                if (event == "push") push_count++
+            }
+            END { print pull_request_count + 0, push_count + 0 }
+        ' "$ci_workflow"
+    )
+    if [[ "$pull_request_readmes" != 1 || "$push_readmes" != 1 ]]; then
+        report_missing "$ci_workflow" \
+            'version-sync CI must run for top-level README changes in pull requests and pushes'
+    fi
+}
+
 reject_matches() {
     mode=$1
     file=$2
@@ -174,6 +228,68 @@ reject_matches() {
         while IFS=: read -r match_file match_line _; do
             printf '%s:%s: error: %s\n' "$match_file" "$match_line" "$message" >&2
         done <<< "$matches"
+        errors=1
+    fi
+}
+
+validate_manifest_workspace_version() {
+    manifest=$1
+    relative_manifest=$2
+
+    if [[ ! -f "$manifest" ]]; then
+        report_missing "$relative_manifest" \
+            'local op-* package manifest returned by cargo metadata does not exist'
+        return
+    fi
+
+    manifest_result=$(awk '
+        BEGIN {
+            in_package = 0
+            inheritance_count = 0
+            package_header_line = 1
+            declaration_line = 0
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+
+            if (line ~ /^[[:space:]]*\[[^]]+\][[:space:]]*(#.*)?$/) {
+                header = line
+                sub(/[[:space:]]*#.*/, "", header)
+                gsub(/[[:space:]]/, "", header)
+                in_package = (header == "[package]")
+                if (in_package && package_header_line == 1) {
+                    package_header_line = NR
+                }
+                next
+            }
+
+            if (!in_package || line ~ /^[[:space:]]*#/) {
+                next
+            }
+
+            code = line
+            sub(/[[:space:]]*#.*/, "", code)
+            if (code ~ /^[[:space:]]*version[.]workspace[[:space:]]*=[[:space:]]*true[[:space:]]*$/) {
+                inheritance_count++
+                if (declaration_line == 0) declaration_line = NR
+                next
+            }
+            if (declaration_line == 0 &&
+                    code ~ /^[[:space:]]*version([.]workspace)?[[:space:]]*=/) {
+                declaration_line = NR
+            }
+        }
+        END {
+            diagnostic_line = declaration_line == 0 ? package_header_line : declaration_line
+            printf "%d\t%d\n", inheritance_count, diagnostic_line
+        }
+    ' "$manifest")
+    IFS=$'\t' read -r inheritance_count diagnostic_line <<< "$manifest_result"
+
+    if [[ "$inheritance_count" != 1 ]]; then
+        printf '%s:%s: error: local op-* package must declare exactly one active version.workspace = true in [package] (found %s)\n' \
+            "$relative_manifest" "$diagnostic_line" "$inheritance_count" >&2
         errors=1
     fi
 }
@@ -208,8 +324,9 @@ validate_workspace_package_versions() {
     fi
 
     while IFS=$'\t' read -r manifest package package_version; do
+        relative_manifest=${manifest#"$repo_root"/}
+        validate_manifest_workspace_version "$manifest" "$relative_manifest"
         if [[ "$package_version" != "$current_version" ]]; then
-            relative_manifest=${manifest#"$repo_root"/}
             printf '%s:1: error: workspace package %s has version %s; expected %s\n' \
                 "$relative_manifest" "$package" "$package_version" "$current_version" >&2
             errors=1
@@ -259,12 +376,25 @@ validate_rust_product_version_producers() {
         'empty documents must derive their version from CARGO_PKG_VERSION'
 
     host_support=crates/op-editor-core/src/host_support.rs
-    host_version_count=$(rg --fixed-strings --count-matches -- \
-        'src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"))' \
-        "$host_support" || true)
-    if [[ "$host_version_count" != 3 ]]; then
+    read -r host_production_version_count host_test_version_count < <(
+        awk \
+            -v needle='src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"))' \
+            '
+                /^#[[:space:]]*\[cfg\(test\)\][[:space:]]*$/ { in_tests = 1 }
+                index($0, needle) {
+                    if (in_tests) test_count++
+                    else production_count++
+                }
+                END { print production_count + 0, test_count + 0 }
+            ' "$host_support"
+    )
+    if [[ "$host_production_version_count" != 2 ]]; then
         report_missing "$host_support" \
-            "expected 3 document templates to derive from CARGO_PKG_VERSION (found ${host_version_count:-0})"
+            "expected exactly 2 production document templates to derive from CARGO_PKG_VERSION (found ${host_production_version_count:-0})"
+    fi
+    if [[ "$host_test_version_count" != 0 ]]; then
+        report_missing "$host_support" \
+            'ordinary test fixtures must use stable 1.0.0 instead of CARGO_PKG_VERSION'
     fi
 
     cli_source=crates/op-cli/src/app_control_cli.rs
@@ -284,6 +414,8 @@ validate_package_versions
 validate_release_tag
 validate_cli_bundle_version_template
 validate_rust_product_version_producers
+validate_top_level_readmes
+validate_version_sync_ci_readme_paths
 
 if [[ "$current_version" == "$fixture_version" ]]; then
     printf 'version-sync: current product version %s equals stable fixture version %s; skipping literal fixture drift scan because stable fixtures and product-version literals are indistinguishable\n' \

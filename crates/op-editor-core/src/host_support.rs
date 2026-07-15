@@ -758,14 +758,13 @@ mod tests {
     #[test]
     fn replace_paths_with_polyline_inherits_first_source_style() {
         let src = r##"{
-            "version": "__OPENPENCIL_VERSION__",
+            "version": "1.0.0",
             "children": [
               {"type":"rectangle","id":"n10","x":0,"y":0,"width":20,"height":20,
                "fill":[{"type":"solid","color":"#ff0000"}]},
               {"type":"rectangle","id":"n11","x":10,"y":0,"width":20,"height":20}
             ]
         }"##;
-        let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
         let doc = jian_ops_schema::load_str(&src)
             .expect("fixture parses")
             .value;

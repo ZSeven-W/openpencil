@@ -123,14 +123,15 @@ cargo run -p op-host-desktop
 
 | 映像檔 | 包含 |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host、wasm bundle 和 CanvasKit 資源 |
+| `ghcr.io/zseven-w/openpencil-web:vX.Y.Z` | Rust web host、wasm bundle 和 CanvasKit 資源 |
 
 Web UI 僅公開內建 agent profiles；Docker 映像檔不再內建 Claude/Codex/OpenCode/Copilot/Gemini CLI 工具。
 
 **執行：**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
+VERSION="$(scripts/workspace-version.sh)"
+docker run -d -p 3100:3100 "ghcr.io/zseven-w/openpencil-web:v${VERSION}"
 ```
 
 然後開啟 `http://localhost:3100/`。
@@ -308,7 +309,7 @@ OpenPencil 已以 **Rust** 從頭重寫完成（[#129](https://github.com/ZSeven
 - **原生無障礙支援** — 在 macOS、Windows 和 Linux 使用 AccessKit，在 Web 上使用 DOM 鏡像，而非依賴瀏覽器的 a11y 樹狀結構。
 - **單一型別檢查 workspace** — MCP 宿主、CLI、AI 供應商、程式碼生成、Figma 匯入和 Git 整合全部位於單一 Rust workspace，並由 CI 中的 `cargo-deny` 進行供應鏈管控。
 
-> **狀態：** TypeScript 版編輯器已在 `v0.7.5` 退役，僅存於 Git 歷史紀錄中；本存放庫即為 Rust workspace。`v0.8.1` 的 Rust 版本正在積極開發中（請見下方路線圖）。
+> **狀態：** TypeScript 版編輯器已在 `v0.7.5` 退役，僅存於 Git 歷史紀錄中；本存放庫即為 Rust workspace。Rust 產品正在積極開發中（請見下方路線圖）。
 
 ## 專案結構
 

@@ -123,14 +123,15 @@ Rust release ที่มี tag จะเผยแพร่ image แบบ web
 
 | Image | รวม |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host, wasm bundle และ CanvasKit assets |
+| `ghcr.io/zseven-w/openpencil-web:vX.Y.Z` | Rust web host, wasm bundle และ CanvasKit assets |
 
 Web UI แสดงเฉพาะ built-in agent profiles เท่านั้น เครื่องมือ Claude/Codex/OpenCode/Copilot/Gemini CLI จะไม่ถูกบันเดิลใน Docker images
 
 **รัน:**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
+VERSION="$(scripts/workspace-version.sh)"
+docker run -d -p 3100:3100 "ghcr.io/zseven-w/openpencil-web:v${VERSION}"
 ```
 
 จากนั้นเปิด `http://localhost:3100/`
@@ -308,7 +309,7 @@ OpenPencil ถูกเขียนใหม่ตั้งแต่ต้นด
 - **Accessibility แบบ native** — AccessKit บน macOS, Windows และ Linux พร้อม DOM mirror บนเว็บ แทนที่จะพึ่งพา a11y tree ของ browser
 - **Workspace ที่ตรวจสอบ type เดียว** — MCP host, CLI, AI providers, code generation, Figma import และ Git integration ทั้งหมดอยู่ใน Rust workspace เดียว พร้อม `cargo-deny` ตรวจสอบ supply-chain ใน CI
 
-> **สถานะ:** editor แบบ TypeScript ถูกเลิกใช้ที่ `v0.7.5` และเหลืออยู่เพียงใน git history เท่านั้น รีโปนี้คือ Rust workspace รุ่น Rust `v0.8.1` อยู่ระหว่างการพัฒนาอย่างต่อเนื่อง (ดู Roadmap ด้านล่าง)
+> **สถานะ:** editor แบบ TypeScript ถูกเลิกใช้ที่ `v0.7.5` และเหลืออยู่เพียงใน git history เท่านั้น รีโปนี้คือ Rust workspace ผลิตภัณฑ์ Rust อยู่ระหว่างการพัฒนาอย่างต่อเนื่อง (ดู Roadmap ด้านล่าง)
 
 ## โครงสร้างโปรเจกต์
 

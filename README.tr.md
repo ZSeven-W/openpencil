@@ -123,14 +123,15 @@ Etiketli Rust sürümleri tek bir web host görüntüsü yayımlar. AI CLI'ları
 
 | Görüntü | İçerik |
 | --- | --- |
-| `ghcr.io/zseven-w/openpencil-web:v0.8.1` | Rust web host, wasm bundle ve CanvasKit varlıkları |
+| `ghcr.io/zseven-w/openpencil-web:vX.Y.Z` | Rust web host, wasm bundle ve CanvasKit varlıkları |
 
 Web UI yalnızca yerleşik agent profillerini gösterir; Claude/Codex/OpenCode/Copilot/Gemini CLI araçları Docker görüntülerine dahil değildir.
 
 **Çalıştır:**
 
 ```bash
-docker run -d -p 3100:3100 ghcr.io/zseven-w/openpencil-web:v0.8.1
+VERSION="$(scripts/workspace-version.sh)"
+docker run -d -p 3100:3100 "ghcr.io/zseven-w/openpencil-web:v${VERSION}"
 ```
 
 Ardından `http://localhost:3100/` adresini açın.
@@ -308,7 +309,7 @@ OpenPencil, sıfırdan **Rust** ile yeniden yazıldı ([#129](https://github.com
 - **Yerel erişilebilirlik** — tarayıcının a11y ağacına güvenmek yerine macOS, Windows ve Linux'ta AccessKit; web'de ise bir DOM aynası.
 - **Tek tip denetimli çalışma alanı** — MCP sunucusu, CLI, AI sağlayıcıları, kod üretimi, Figma içe aktarma ve Git entegrasyonu; CI'da `cargo-deny` tedarik zinciri denetimi ile tek bir Rust çalışma alanında bulunur.
 
-> **Durum:** TypeScript editörü `v0.7.5` sürümünde kullanımdan kaldırıldı ve yalnızca git geçmişinde bulunuyor; bu depo artık Rust çalışma alanıdır. `v0.8.1` Rust sürümü etkin geliştirme aşamasındadır (aşağıdaki Yol Haritası'na bakın).
+> **Durum:** TypeScript editörü `v0.7.5` sürümünde kullanımdan kaldırıldı ve yalnızca git geçmişinde bulunuyor; bu depo artık Rust çalışma alanıdır. Rust ürünü etkin geliştirme aşamasındadır (aşağıdaki Yol Haritası'na bakın).
 
 ## Proje Yapısı
 

@@ -5,6 +5,7 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - "README*.md"
       - "crates/**/Cargo.toml"
       - "crates/**/*.rs"
       - "crates/op-cli/assets/skill-bundle.json"
@@ -27,6 +28,7 @@ on:
       - "scripts/install-op.sh"
       - "tools/check-version-sync.sh"
       - "tools/check-version-sync.test.sh"
+      - "tools/check-version-sync-policy.test-cases.sh"
       - "tools/bundle-macos.sh"
       - ".githooks/pre-commit"
       - ".github/workflows/rust-release.yml"
@@ -35,6 +37,7 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - "README*.md"
       - "crates/**/Cargo.toml"
       - "crates/**/*.rs"
       - "crates/op-cli/assets/skill-bundle.json"
@@ -57,6 +60,7 @@ on:
       - "scripts/install-op.sh"
       - "tools/check-version-sync.sh"
       - "tools/check-version-sync.test.sh"
+      - "tools/check-version-sync-policy.test-cases.sh"
       - "tools/bundle-macos.sh"
       - ".githooks/pre-commit"
       - ".github/workflows/rust-release.yml"
