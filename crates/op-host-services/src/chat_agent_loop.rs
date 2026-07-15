@@ -39,7 +39,7 @@ pub struct AgentLoopConfig {
     pub model: String,
     pub system_prompt: String,
     pub history: Vec<(ChatHistoryRole, String)>,
-    pub user_prompt: String,
+    pub user_prompt: Value,
     pub max_output_tokens: u32,
     pub tools: Vec<ChatToolDef>,
     pub executor: Arc<dyn ChatToolExecutor>,

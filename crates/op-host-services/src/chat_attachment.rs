@@ -21,6 +21,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use base64::Engine;
 use op_ai::chat_provider::{ChatDelta, StopReason};
 use op_editor_core::chat::{ChatAttachment, ThinkingMode};
+use serde_json::{json, Value};
 
 /// Per-process counter making each turn's temp directory unique.
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -29,6 +30,49 @@ static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 /// providers add their own wrapper).
 pub fn attachment_to_base64(att: &ChatAttachment) -> String {
     base64::engine::general_purpose::STANDARD.encode(&att.data)
+}
+
+/// Build Anthropic user content with native base64 image blocks.
+pub fn anthropic_user_content(prompt: &str, images: &[ChatAttachment]) -> Value {
+    if images.is_empty() {
+        return Value::String(prompt.to_string());
+    }
+    let mut content = Vec::with_capacity(images.len() + 1);
+    if !prompt.is_empty() {
+        content.push(json!({ "type": "text", "text": prompt }));
+    }
+    content.extend(images.iter().map(|image| {
+        json!({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": image.media_type,
+                "data": attachment_to_base64(image),
+            },
+        })
+    }));
+    Value::Array(content)
+}
+
+/// Build OpenAI-compatible user content with native data-URL images.
+pub fn openai_user_content(prompt: &str, images: &[ChatAttachment]) -> Value {
+    if images.is_empty() {
+        return Value::String(prompt.to_string());
+    }
+    let mut content = Vec::with_capacity(images.len() + 1);
+    if !prompt.is_empty() {
+        content.push(json!({ "type": "text", "text": prompt }));
+    }
+    content.extend(images.iter().map(|image| {
+        let data = attachment_to_base64(image);
+        json!({
+            "type": "image_url",
+            "image_url": {
+                "url": format!("data:{};base64,{data}", image.media_type),
+            },
+        })
+    }));
+    Value::Array(content)
 }
 
 /// Best-effort MIME type from a file path's extension. Falls back to

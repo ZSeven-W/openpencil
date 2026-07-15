@@ -131,25 +131,36 @@ impl ChatProvider for ConfiguredBuiltinProvider {
     }
 
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        let ChatRequest {
+            system_prompt,
+            user_message,
+            history,
+            max_output_tokens,
+            thinking,
+            effort,
+            attachments,
+            ..
+        } = request;
+        let native_images_enabled = supports_native_image_input(&self.model);
+        let (native_images, fallback_attachments): (Vec<_>, Vec<_>) = attachments
+            .into_iter()
+            .partition(|attachment| native_images_enabled && attachment.is_image());
         let (mut prompt, guard) = match crate::chat_attachment::prompt_with_attachments(
-            &request.user_message,
-            &request.attachments,
+            &user_message,
+            &fallback_attachments,
         ) {
             Ok(pair) => pair,
             Err(e) => return crate::chat_attachment::attachment_error_turn(e),
         };
         let mut directive = String::new();
-        if let Some(d) = crate::chat_attachment::thinking_directive(request.thinking) {
+        if let Some(d) = crate::chat_attachment::thinking_directive(thinking) {
             directive.push_str(d);
         }
-        if request.effort != EffortLevel::Low {
+        if effort != EffortLevel::Low {
             if !directive.is_empty() {
                 directive.push(' ');
             }
-            directive.push_str(&format!(
-                "Apply {} reasoning effort.",
-                request.effort.as_str()
-            ));
+            directive.push_str(&format!("Apply {} reasoning effort.", effort.as_str()));
         }
         if !directive.is_empty() {
             prompt = format!("{directive}\n\n{prompt}");
@@ -158,23 +169,30 @@ impl ChatProvider for ConfiguredBuiltinProvider {
         // resolves the skill corpus; only fall back to the in-prompt
         // preamble when the caller sent no system prompt — otherwise
         // the skills would ride the wire twice.
-        if request.system_prompt.trim().is_empty() {
-            let preamble = resolved_skill_preamble(&request.user_message);
+        if system_prompt.trim().is_empty() {
+            let preamble = resolved_skill_preamble(&user_message);
             if !preamble.is_empty() {
                 prompt = format!("{preamble}\n\n---\n\n{prompt}");
             }
         }
 
+        let user_content = match self.kind {
+            BuiltinAgentKind::Anthropic => {
+                crate::chat_attachment::anthropic_user_content(&prompt, &native_images)
+            }
+            BuiltinAgentKind::OpenAiCompat => {
+                crate::chat_attachment::openai_user_content(&prompt, &native_images)
+            }
+        };
+
         let provider = self.clone();
-        let system_prompt = request.system_prompt;
-        let history = request.history;
-        let max_output_tokens = request.max_output_tokens.max(1);
+        let max_output_tokens = max_output_tokens.max(1);
         // Only force MiniMax thinking off when the CALLER asked for it
         // (the orchestrator sets `Disabled`; normal chat defaults to
         // `Adaptive` and must keep M3's reasoning). Codex review caught
         // an earlier version disabling thinking unconditionally for all
         // MiniMax chat.
-        let disable_thinking = request.thinking == ThinkingMode::Disabled;
+        let disable_thinking = thinking == ThinkingMode::Disabled;
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         shared_runtime().spawn(async move {
             let _guard = guard;
@@ -193,7 +211,7 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                     model: provider.model.clone(),
                     system_prompt,
                     history,
-                    user_prompt: prompt,
+                    user_prompt: user_content,
                     max_output_tokens,
                     tools: provider.tools.clone(),
                     executor,
@@ -216,7 +234,7 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                             provider,
                             system_prompt,
                             history,
-                            prompt,
+                            user_content,
                             max_output_tokens,
                             &tx,
                         )
@@ -227,7 +245,7 @@ impl ChatProvider for ConfiguredBuiltinProvider {
                             provider,
                             system_prompt,
                             history,
-                            prompt,
+                            user_content,
                             max_output_tokens,
                             disable_thinking,
                             &tx,
@@ -264,6 +282,10 @@ impl ChatProvider for ConfiguredBuiltinProvider {
 pub(crate) fn is_minimax_model(model: &str) -> bool {
     let m = model.to_ascii_lowercase();
     m.starts_with("minimax") || m.starts_with("abab")
+}
+
+pub(crate) fn supports_native_image_input(model: &str) -> bool {
+    model.trim().eq_ignore_ascii_case("MiniMax-M3")
 }
 
 /// GLM-4.5+/GLM-5.x（智谱 / 方舟 coding plan）同为推理模型：reasoning 走
@@ -369,7 +391,7 @@ async fn run_openai_chat(
     provider: ConfiguredBuiltinProvider,
     system_prompt: String,
     history: Vec<(ChatHistoryRole, String)>,
-    prompt: String,
+    prompt: Value,
     max_output_tokens: u32,
     disable_thinking: bool,
     tx: &mpsc::Sender<ChatDelta>,
@@ -438,7 +460,7 @@ async fn run_anthropic_chat(
     provider: ConfiguredBuiltinProvider,
     system_prompt: String,
     history: Vec<(ChatHistoryRole, String)>,
-    prompt: String,
+    prompt: Value,
     max_output_tokens: u32,
     tx: &mpsc::Sender<ChatDelta>,
 ) -> Result<bool, String> {

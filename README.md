@@ -250,6 +250,13 @@ docker run -p 3100:3100 openpencil-web-rust
 | **GitHub Copilot**          | `copilot login` then connect in Agent Settings (`Cmd+,`)                                          |
 | **Gemini CLI**              | Connect in Agent Settings (`Cmd+,`)                                                               |
 
+The MiniMax preset defaults to `MiniMax-M3` and sends attached images as native multimodal content. The model and Base URL fields remain editable, so existing `MiniMax-M2.7` profiles continue to work and either regional endpoint can be selected:
+
+| Region | OpenAI-compatible Base URL | Anthropic-compatible Base URL |
+| ------ | -------------------------- | ----------------------------- |
+| Global | `https://api.minimax.io/v1` | `https://api.minimax.io/anthropic` |
+| China | `https://api.minimaxi.com/v1` | `https://api.minimaxi.com/anthropic` |
+
 **Model Capability Profiles** — automatically adapts prompts, thinking mode, and timeouts per model tier. Full-tier models (Claude) get complete prompts; standard-tier (GPT-4o, Gemini, DeepSeek) disable thinking; basic-tier (MiniMax, Qwen, Llama, Mistral) get simplified nested-JSON prompts for maximum reliability.
 
 **i18n** — Full interface localization in 15 languages: English, 简体中文, 繁體中文, 日本語, 한국어, Français, Español, Deutsch, Português, Русский, हिन्दी, Türkçe, ไทย, Tiếng Việt, Bahasa Indonesia.

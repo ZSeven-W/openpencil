@@ -28,6 +28,8 @@ pub mod chat_claude;
 pub mod chat_copilot;
 pub mod chat_http_server;
 pub mod chat_intent;
+#[cfg(test)]
+mod chat_minimax_image_tests;
 pub mod chat_provider_llm;
 pub mod chat_runtime;
 pub mod chat_spawn;

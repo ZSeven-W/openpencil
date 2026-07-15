@@ -150,7 +150,7 @@ pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 19] = [
         key: BuiltinAgentPresetKey::MiniMax,
         display_name: "MiniMax",
         kind: BuiltinAgentKind::Anthropic,
-        model: "MiniMax-M2.7",
+        model: "MiniMax-M3",
         base_url: "https://api.minimaxi.com/anthropic",
         alt_kind: Some(BuiltinAgentKind::OpenAiCompat),
         alt_base_url: Some("https://api.minimaxi.com/v1"),

@@ -94,7 +94,7 @@ fn builtin_agent_draft_can_select_ts_builtin_provider_preset() {
     assert_eq!(draft.display_name, "MiniMax");
     assert_eq!(draft.kind, BuiltinAgentKind::Anthropic);
     assert_eq!(draft.base_url, "https://api.minimaxi.com/anthropic");
-    assert_eq!(draft.model, "MiniMax-M2.7");
+    assert_eq!(draft.model, "MiniMax-M3");
     assert_eq!(draft.api_key, "sk-test");
 }
 
