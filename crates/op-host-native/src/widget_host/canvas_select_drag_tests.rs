@@ -22,7 +22,7 @@ fn seed(host: &mut WidgetHostNative, json: &str) {
 /// `card` frame (400, 60, 200×200) with a nested `leaf` rect at
 /// relative (40, 40) — leaf renders at doc (440..490, 100..150) —
 /// plus a far-away top-level `other` rect at (650, 60, 40×40).
-const NESTED: &str = r#"{"version":"0.8.0","children":[
+const NESTED: &str = r#"{"version":"1.0.0","children":[
   {"type":"frame","id":"card","name":"Card","x":400,"y":60,"width":200,"height":200,
    "children":[
      {"type":"rectangle","id":"leaf","name":"Leaf","x":40,"y":40,"width":50,"height":50}
@@ -33,7 +33,7 @@ const NESTED: &str = r#"{"version":"0.8.0","children":[
 /// Four selection depths at the shared probe point: root > l1 > l2 > l3.
 /// Every nested node contains doc (470, 130), while `other` remains available
 /// for multi-selection and outside-scope tests.
-const FOUR_LEVEL: &str = r#"{"version":"0.8.0","children":[
+const FOUR_LEVEL: &str = r#"{"version":"1.0.0","children":[
   {"type":"frame","id":"root","name":"Root","x":400,"y":60,"width":240,"height":240,
    "children":[
      {"type":"frame","id":"l1","name":"Level 1","x":20,"y":20,"width":200,"height":200,
@@ -231,7 +231,7 @@ fn overlapping_rect_stack(count: usize) -> String {
         })
         .collect::<Vec<_>>()
         .join(",");
-    format!(r#"{{"version":"0.8.0","children":[{children}]}}"#)
+    format!(r#"{{"version":"1.0.0","children":[{children}]}}"#)
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn promotion_inside_entered_container_stops_at_its_child() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"card","name":"Card","x":400,"y":60,"width":200,"height":200,
            "children":[
              {"type":"frame","id":"inner","name":"Inner","x":20,"y":20,"width":150,"height":150,
@@ -282,7 +282,7 @@ fn promotion_inside_entered_container_stops_at_its_child() {
 
 /// Vertical auto-layout stack at (400, 60) with three 80×40 flow
 /// children (gap 8): a 60..100, b 108..148, c 156..196 in doc y.
-const VSTACK: &str = r#"{"version":"0.8.0","children":[
+const VSTACK: &str = r#"{"version":"1.0.0","children":[
   {"type":"frame","id":"stack","name":"Stack","x":400,"y":60,"width":200,"height":300,
    "layout":"vertical","gap":8,
    "children":[
@@ -292,7 +292,7 @@ const VSTACK: &str = r#"{"version":"0.8.0","children":[
    ]}
 ]}"#;
 
-const HSTACK: &str = r#"{"version":"0.8.0","children":[
+const HSTACK: &str = r#"{"version":"1.0.0","children":[
   {"type":"frame","id":"row","name":"Row","x":400,"y":60,"width":360,"height":120,
    "layout":"horizontal","gap":8,
    "children":[
@@ -541,7 +541,7 @@ fn child_dragged_into_other_layout_uses_cross_container_placeholder() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"src","name":"Source","x":400,"y":60,"width":200,"height":120,
            "children":[
              {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
@@ -601,7 +601,7 @@ fn text_dragged_fully_outside_parent_reparents_to_page_root() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"card","name":"Card","x":400,"y":60,"width":200,"height":100,
            "children":[
              {"type":"text","id":"label","name":"Label","x":20,"y":20,
@@ -638,7 +638,7 @@ fn shape_dragged_outside_parent_becomes_page_root() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"card","name":"Card","x":400,"y":60,"width":200,"height":100,
            "children":[
              {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
@@ -669,7 +669,7 @@ fn shape_dragged_into_sibling_frame_reparents_to_that_frame() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"src","name":"Source","x":400,"y":60,"width":200,"height":120,
            "children":[
              {"type":"rectangle","id":"box","name":"Box","x":20,"y":20,"width":50,"height":50}
@@ -710,7 +710,7 @@ fn root_shape_dragged_into_frame_becomes_that_frame_child() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"box","name":"Box","x":400,"y":80,"width":50,"height":50},
           {"type":"frame","id":"target","name":"Target","x":700,"y":60,"width":220,"height":160,
            "children":[]}

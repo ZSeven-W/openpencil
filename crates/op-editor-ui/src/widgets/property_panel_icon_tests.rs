@@ -94,7 +94,7 @@ fn text_size_section_does_not_emit_clip_content_action() {
 #[test]
 fn icon_font_selection_exposes_icon_picker_action() {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"icon_font","id":"icon","name":"Search",
                "x":40,"y":40,"width":24,"height":24,
                "iconFontName":"search","iconFontFamily":"lucide"}

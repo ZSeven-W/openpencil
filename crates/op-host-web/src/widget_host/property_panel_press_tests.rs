@@ -154,7 +154,7 @@ fn property_panel_action_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -186,7 +186,7 @@ fn web_disabling_fill_height_freezes_resolved_height_then_numeric_input_resizes_
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"screen","width":390,"height":710,
                "layout":"vertical","gap":0,"children":[
                  {"type":"frame","id":"content","name":"Content Wrapper",
@@ -226,7 +226,7 @@ fn web_property_panel_component_button_creates_and_detaches_component() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"card","name":"Card",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#FFFFFF"}],
@@ -263,7 +263,7 @@ fn web_property_panel_group_component_button_switches_to_detach() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"group","id":"text_group","name":"Text Group",
                "children":[
                  {"type":"text","id":"label","name":"Label","content":"Hello"}
@@ -299,7 +299,7 @@ fn web_property_panel_background_consumes_clicks() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"group","id":"text_group","name":"Text Group",
                "children":[
                  {"type":"text","id":"label","name":"Label","content":"Hello"}
@@ -322,7 +322,7 @@ fn web_property_panel_background_consumes_clicks() {
 
 #[test]
 fn web_property_panel_instance_buttons_go_to_master_and_detach_instance() {
-    const COMPONENT_DOC: &str = r##"{ "version":"0.8.0", "children": [
+    const COMPONENT_DOC: &str = r##"{ "version":"1.0.0", "children": [
               {"type":"frame","id":"card","name":"Card","reusable":true,
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#FFFFFF"}],
@@ -359,7 +359,7 @@ fn web_property_panel_size_action_on_instance_routes_to_descendants_override() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version":"0.8.0", "children": [
+        r##"{ "version":"1.0.0", "children": [
               {"type":"frame","id":"card","name":"Card","reusable":true,
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#FFFFFF"}],
@@ -399,7 +399,7 @@ fn web_property_panel_layout_actions_write_selected_node() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -453,7 +453,7 @@ fn web_property_panel_padding_mode_gear_opens_and_selects_mode() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"group","id":"text_group","name":"Text Group",
                "layout":"vertical","gap":8,
                "children":[
@@ -489,7 +489,7 @@ fn web_property_panel_fill_add_and_remove_match_native() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"No fill",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[]}
@@ -519,7 +519,7 @@ fn web_property_panel_text_layout_actions_match_native() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"text","id":"label","name":"Label","content":"Hello",
                "x":40,"y":40,"width":180,"height":40,
                "fontSize":24}
@@ -554,7 +554,7 @@ fn web_property_panel_widget_checked_toggle_matches_native() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"checkbox","id":"cb","name":"Agree",
                "x":40,"y":40,"width":18,"height":18,
                "label":"Accept","checked":false}

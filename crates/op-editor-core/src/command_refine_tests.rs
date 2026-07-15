@@ -39,7 +39,7 @@ use jian_ops_schema::node::PenNode;
 
 /// Parse a single node fixture by wrapping it in a canonical doc.
 fn node_from(json: &str) -> PenNode {
-    let doc = format!(r#"{{"version":"0.8.0","children":[{json}]}}"#);
+    let doc = format!(r#"{{"version":"1.0.0","children":[{json}]}}"#);
     jian_ops_schema::load_str(&doc)
         .expect("fixture parses")
         .value

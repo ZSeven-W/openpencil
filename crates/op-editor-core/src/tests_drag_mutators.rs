@@ -565,7 +565,7 @@ fn incremental_container_resize_never_accumulates_descendant_changes() {
 #[test]
 fn single_axis_resize_freezes_only_that_axis_and_preserves_child_keywords() {
     let doc = jian_ops_schema::load_str(
-        r#"{"version":"0.8.0","children":[{"type":"frame","id":"root","width":"fill_container","height":"fit_content","layout":"vertical","children":[{"type":"rectangle","id":"child","width":"fill_container","height":40}]}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"frame","id":"root","width":"fill_container","height":"fit_content","layout":"vertical","children":[{"type":"rectangle","id":"child","width":"fill_container","height":40}]}]}"#,
     )
     .expect("keyword fixture parses")
     .value;

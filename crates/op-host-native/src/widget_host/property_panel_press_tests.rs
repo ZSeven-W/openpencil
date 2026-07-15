@@ -95,7 +95,7 @@ fn property_panel_action_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -128,7 +128,7 @@ fn fill_width_input_seeds_from_resolved_canvas_width() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"root","width":390,"height":710,
                "layout":"vertical","children":[
                  {"type":"frame","id":"fill","width":"fill_container",
@@ -152,7 +152,7 @@ fn disabling_fill_height_freezes_resolved_height_then_numeric_input_resizes_scen
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"screen","width":390,"height":710,
                "layout":"vertical","gap":0,"children":[
                  {"type":"frame","id":"content","name":"Content Wrapper",
@@ -201,7 +201,7 @@ fn property_panel_background_consumes_clicks() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"group","id":"shape_group","name":"Shape Group",
                "children":[
                  {"type":"rectangle","id":"box","name":"Box","width":80,"height":40}
@@ -227,7 +227,7 @@ fn native_property_panel_group_component_button_switches_to_detach() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"frame","id":"screen","name":"Screen",
                "x":40,"y":40,"width":360,"height":640,
                "children":[

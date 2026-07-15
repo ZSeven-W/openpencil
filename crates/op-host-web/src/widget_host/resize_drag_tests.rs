@@ -7,7 +7,7 @@ const VH: f32 = 800.0;
 
 fn seed(host: &mut WidgetHost) {
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"box","name":"Box","x":100,"y":100,"width":120,"height":80,
            "fill":[{"type":"solid","color":"#2563EB"}]}
         ]}"##,
@@ -22,7 +22,7 @@ fn seed(host: &mut WidgetHost) {
 
 fn seed_container(host: &mut WidgetHost) {
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"frame","id":"box","name":"Frame","x":100,"y":100,
            "width":120,"height":80,"layout":"none","children":[
              {"type":"rectangle","id":"child","name":"Child","x":10,"y":12,

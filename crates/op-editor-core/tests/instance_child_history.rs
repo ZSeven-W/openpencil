@@ -6,7 +6,7 @@ use op_editor_core::{
 
 fn state() -> EditorState {
     let doc = jian_ops_schema::load_str(
-        r##"{"version":"0.8.0","children":[
+        r##"{"version":"1.0.0","children":[
           {"type":"frame","id":"master","name":"Master","reusable":true,
            "x":0,"y":0,"width":100,"height":100,"children":[
              {"type":"rectangle","id":"surface","name":"Surface",

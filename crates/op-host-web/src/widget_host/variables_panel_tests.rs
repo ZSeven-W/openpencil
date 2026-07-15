@@ -50,7 +50,7 @@ fn selected_two_variant_color_host() -> WidgetHost {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -326,7 +326,7 @@ fn variable_row_edit_commits_prior_property_focus_on_web() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}

@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn export_kit_document_builds_download_name_and_json() {
-        let src = r#"{"version":"0.8.0","name":"My Kit!","children":[{"type":"frame","id":"button","name":"Primary Button","reusable":true,"x":0,"y":0,"width":120,"height":40,"children":[]}]}"#;
+        let src = r#"{"version":"1.0.0","name":"My Kit!","children":[{"type":"frame","id":"button","name":"Primary Button","reusable":true,"x":0,"y":0,"width":120,"height":40,"children":[]}]}"#;
         let doc = op_pen_loader::load_canonical(src)
             .expect("canonical doc")
             .value;
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn save_request_body_embeds_document_and_active_page_index() {
-        let src = r#"{"version":"0.8.0","children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[{"type":"rectangle","id":"save-node","name":"Save Node","x":0,"y":0,"width":80,"height":40}]}]}"#;
+        let src = r#"{"version":"1.0.0","children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[{"type":"rectangle","id":"save-node","name":"Save Node","x":0,"y":0,"width":80,"height":40}]}]}"#;
         let doc = op_pen_loader::load_canonical(src)
             .expect("canonical doc")
             .value;
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn export_pdf_request_body_embeds_current_document() {
-        let src = r#"{"version":"0.8.0","children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[{"type":"rectangle","id":"pdf-node","name":"PDF Node","x":0,"y":0,"width":80,"height":40}]}]}"#;
+        let src = r#"{"version":"1.0.0","children":[],"pages":[{"id":"p1","name":"One","children":[]},{"id":"p2","name":"Two","children":[{"type":"rectangle","id":"pdf-node","name":"PDF Node","x":0,"y":0,"width":80,"height":40}]}]}"#;
         let doc = op_pen_loader::load_canonical(src)
             .expect("canonical doc")
             .value;
@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn export_raster_request_body_embeds_format_scale_document_and_single_selection() {
-        let src = r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"raster-node","name":"Raster Node","x":0,"y":0,"width":80,"height":40}]}"#;
+        let src = r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"raster-node","name":"Raster Node","x":0,"y":0,"width":80,"height":40}]}"#;
         let doc = op_pen_loader::load_canonical(src)
             .expect("canonical doc")
             .value;
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn import_kit_source_extracts_components_with_supplied_id() {
-        let src = r#"{"version":"0.8.0","name":"Imported System","children":[{"type":"frame","id":"card","name":"Profile Card","reusable":true,"x":0,"y":0,"width":240,"height":120,"children":[]}]}"#;
+        let src = r#"{"version":"1.0.0","name":"Imported System","children":[{"type":"frame","id":"card","name":"Profile Card","reusable":true,"x":0,"y":0,"width":240,"height":120,"children":[]}]}"#;
 
         let kit = import_kit_source(src, "web-kit-1".to_string())
             .expect("import parses")

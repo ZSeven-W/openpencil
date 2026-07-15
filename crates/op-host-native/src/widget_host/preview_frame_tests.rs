@@ -21,7 +21,7 @@ fn load(src: &str) -> jian_ops_schema::PenDocument {
 fn phone_doc(height: u32) -> jian_ops_schema::PenDocument {
     load(&format!(
         r##"{{
-            "version": "0.8.0",
+            "version": "1.0.0",
             "children": [{{
                 "type": "frame", "id": "screen", "x": 0, "y": 0,
                 "width": 390, "height": {height},
@@ -35,7 +35,7 @@ fn phone_doc(height: u32) -> jian_ops_schema::PenDocument {
 fn narrow_semantic_nav_doc() -> jian_ops_schema::PenDocument {
     load(
         r##"{
-            "version": "0.8.0",
+            "version": "1.0.0",
             "children": [{
                 "type": "frame", "id": "screen", "x": 0, "y": 0,
                 "width": 390, "height": 2000,

@@ -409,7 +409,7 @@ mod tests {
     }
 
     const DOC_WITH_INSTANCE: &str = r##"{
-      "version":"0.8.0",
+      "version":"1.0.0",
       "children":[
         {"type":"frame","id":"card","name":"Card","reusable":true,"x":0,"y":0,"width":200,"height":100,
          "fill":[{"type":"solid","color":"#222222"}],
@@ -471,7 +471,7 @@ mod tests {
     fn unknown_target_and_cycles_drop_instead_of_panicking() {
         let doc = doc_from(
             r##"{
-              "version":"0.8.0",
+              "version":"1.0.0",
               "children":[
                 {"type":"ref","id":"dangling","ref":"missing"},
                 {"type":"frame","id":"a","name":"A","reusable":true,
@@ -508,7 +508,7 @@ mod tests {
     // empty (a high-`cornerRadius` `fit_content` card collapses to a
     // white circle).
     const DOC_WITH_SLOT_INSTANCE: &str = r##"{
-      "version":"0.8.0",
+      "version":"1.0.0",
       "children":[
         {"type":"frame","id":"cardMaster","name":"Card/Default","reusable":true,
          "width":"fit_content","height":"fit_content","cornerRadius":24,"padding":16,
@@ -562,7 +562,7 @@ mod tests {
         // the slot-fallback path).
         let doc = doc_from(
             r##"{
-              "version":"0.8.0",
+              "version":"1.0.0",
               "children":[
                 {"type":"frame","id":"master","name":"Master","reusable":true,
                  "width":200,"height":100,

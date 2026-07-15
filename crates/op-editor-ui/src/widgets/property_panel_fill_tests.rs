@@ -20,7 +20,7 @@ fn panel_rect() -> Rect {
 
 fn selected_rect_state() -> op_editor_core::EditorState {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"rect","name":"Rect",
                "x":40,"y":40,"width":160,"height":100,
                "fill":[{"type":"solid","color":"#112233"}]}
@@ -32,7 +32,7 @@ fn selected_rect_state() -> op_editor_core::EditorState {
 
 fn selected_three_fill_state() -> op_editor_core::EditorState {
     let mut state = state_from(
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"rect","name":"Rect",
                "x":40,"y":40,"width":160,"height":100,
                "fill":[
@@ -91,7 +91,7 @@ fn fill_type_picker_hit_uses_shared_outside_protocol() {
 fn fill_type_picker_hit_anchors_to_instance_toggle_action_rect() {
     let mut state = state_from(
         r##"{
-          "version":"0.8.0",
+          "version":"1.0.0",
           "children":[
             {"type":"frame","id":"card","name":"Card","reusable":true,
              "x":0,"y":0,"width":"fill_container","height":"fill_container",

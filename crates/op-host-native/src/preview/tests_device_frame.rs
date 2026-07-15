@@ -24,7 +24,7 @@ fn enter(doc: &jian_ops_schema::PenDocument) -> PreviewSession {
 fn phone_doc_with_bottom_nav(nav_extra: &str) -> jian_ops_schema::PenDocument {
     load(&format!(
         r##"{{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             {{ "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,
@@ -83,7 +83,7 @@ fn framed_root_app_mode_returns_mounted_screen_root() {
 fn zero_height_semantic_nav_is_rejected() {
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,
@@ -102,7 +102,7 @@ fn zero_height_semantic_nav_is_rejected() {
 
 #[test]
 fn framed_root_none_for_empty_page() {
-    let doc = load(r##"{ "version": "0.8.0", "children": [] }"##);
+    let doc = load(r##"{ "version": "1.0.0", "children": [] }"##);
     let session = enter(&doc);
     assert!(session.framed_root().is_none());
 }
@@ -127,7 +127,7 @@ fn desktop_never_pins() {
 fn semantic_nav_pins_even_when_narrow() {
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,
@@ -150,7 +150,7 @@ fn semantic_nav_pins_even_when_narrow() {
 fn top_nav_with_semantic_role_does_not_pin() {
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,
@@ -179,7 +179,7 @@ fn hidden_nav_is_rejected() {
 fn heuristic_rejects_each_missing_gate() {
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,
@@ -196,7 +196,7 @@ fn heuristic_rejects_each_missing_gate() {
 
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,
@@ -213,7 +213,7 @@ fn heuristic_rejects_each_missing_gate() {
 
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,
@@ -233,7 +233,7 @@ fn heuristic_rejects_each_missing_gate() {
 fn oversized_or_hidden_candidates_are_rejected() {
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "screen", "x": 0, "y": 0,
               "width": 390, "height": 800,

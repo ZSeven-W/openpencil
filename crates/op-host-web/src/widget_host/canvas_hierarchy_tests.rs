@@ -7,7 +7,7 @@ use op_editor_ui::Point2D;
 const VIEWPORT_W: f32 = 1200.0;
 const VIEWPORT_H: f32 = 800.0;
 
-const FOUR_LEVELS: &str = r#"{"version":"0.8.0","children":[
+const FOUR_LEVELS: &str = r#"{"version":"1.0.0","children":[
   {"type":"frame","id":"root","name":"Root Frame","x":500,"y":100,"width":300,"height":300,
    "children":[
      {"type":"frame","id":"level-1","name":"Level 1","x":20,"y":20,"width":240,"height":240,

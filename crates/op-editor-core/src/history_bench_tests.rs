@@ -30,7 +30,7 @@ use std::time::Instant;
 
 fn empty_doc() -> PenDocument {
     PenDocument {
-        version: "0.8.0".into(),
+        version: "1.0.0".into(),
         name: None,
         themes: None,
         variables: None,

@@ -47,7 +47,7 @@ fn layer_hover_does_not_refresh_stale_canvas_layout_scene() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     host.editor_state_mut().editor_ui.hovered_layer_id = Some(NodeId::new("n1"));
     host.mark_paint_dirty_for_test();
@@ -76,7 +76,7 @@ fn file_menu_cursor_move_clears_stale_layer_hover() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     host.last_viewport_w = 1200.0;
     host.last_viewport_h = 800.0;
@@ -123,7 +123,7 @@ fn property_panel_blank_hover_consumes_and_clears_lower_hover() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"group","id":"shape_group","name":"Shape Group",
                "children":[
                  {"type":"rectangle","id":"box","name":"Box","width":80,"height":40}
@@ -150,7 +150,7 @@ fn opening_file_menu_clears_stale_layer_hover() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     host.last_viewport_w = 1200.0;
     host.last_viewport_h = 800.0;
@@ -186,7 +186,7 @@ fn layer_row_selection_does_not_dirty_canvas_layout_scene() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50},{"type":"rectangle","id":"n2","name":"n2","x":120,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50},{"type":"rectangle","id":"n2","name":"n2","x":120,"y":0,"width":100,"height":50}]}"#,
     );
     let _ = host.layout_scene();
     assert!(!host.editor_state_dirty);
@@ -216,7 +216,7 @@ fn layer_right_press_does_not_dirty_canvas_layout_scene() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50},{"type":"rectangle","id":"n2","name":"n2","x":120,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50},{"type":"rectangle","id":"n2","name":"n2","x":120,"y":0,"width":100,"height":50}]}"#,
     );
     let _ = host.layout_scene();
     assert!(!host.editor_state_dirty);
@@ -247,7 +247,7 @@ fn layer_right_press_does_not_refresh_stale_canvas_layout_scene() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     host.mark_paint_dirty_for_test();
 
@@ -381,7 +381,7 @@ fn three_rects(boxes: [(f64, f64, f64, f64); 3], ids: [&str; 3]) -> String {
         )
     };
     format!(
-        r#"{{"version":"0.8.0","children":[{},{},{}]}}"#,
+        r#"{{"version":"1.0.0","children":[{},{},{}]}}"#,
         node(ids[0], boxes[0]),
         node(ids[1], boxes[1]),
         node(ids[2], boxes[2]),
@@ -708,7 +708,7 @@ fn toolbar_panel_actions_open_variables_and_design_panels() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     host.editor_state_mut().editor_ui.property_tab = op_editor_core::PropertyTab::Design;
     host.editor_state_mut().chat.collapsed = true;
@@ -763,7 +763,7 @@ fn explicit_variables_toolbar_opens_floating_variables_panel() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{"version":"0.8.0","children":[{"type":"frame","id":"frame-1","name":"Frame","x":0,"y":0,"width":100,"height":50}]}"##,
+        r##"{"version":"1.0.0","children":[{"type":"frame","id":"frame-1","name":"Frame","x":0,"y":0,"width":100,"height":50}]}"##,
     );
     host.editor_state_mut().selection.anchor = NodeId::new("frame-1");
     host.editor_state_mut().selection.set = vec![NodeId::new("frame-1")];
@@ -1123,7 +1123,7 @@ fn image_adjustment_drag_updates_live_after_press() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n60","name":"Photo fill",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"image","url":"","mode":"fill",
@@ -1161,7 +1161,7 @@ fn image_fill_actions_refresh_the_render_scene() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n61","name":"Photo fill",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"image","url":"data:image/png;base64,AA==","mode":"fill",
@@ -1212,7 +1212,7 @@ fn corner_radius_property_focus_updates_selected_rectangle() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Rounded",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -1251,7 +1251,7 @@ fn property_focus_commit_reads_text_input_state() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -1274,7 +1274,7 @@ fn widget_leading_icon_focus_commits_onto_text_input() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":24,"y":32,"width":220,"height":40,"placeholder":"Email"}
         ]}"##,
@@ -1302,7 +1302,7 @@ fn widget_bind_key_focus_writes_state_binding() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"text_input","id":"email","name":"Email",
                "x":24,"y":32,"width":220,"height":40,"placeholder":"Email"}
         ]}"##,
@@ -1330,7 +1330,7 @@ fn property_focus_commit_is_undoable() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -1357,7 +1357,7 @@ fn property_press_seeds_text_input_state() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -1464,7 +1464,7 @@ fn property_step_reads_and_updates_text_input_state() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -1506,7 +1506,7 @@ fn polygon_sides_property_focus_updates_selected_polygon() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"polygon","id":"poly","name":"Polygon",
                "x":40,"y":40,"width":120,"height":120,
                "polygonCount":3}
@@ -1540,7 +1540,7 @@ fn ellipse_arc_property_focus_updates_selected_ellipse() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"ellipse","id":"ell","name":"Ellipse",
                "x":40,"y":40,"width":120,"height":100}
         ]}"##,
@@ -1883,7 +1883,7 @@ fn layer_context_create_component_click_promotes_frame() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"n10","name":"Card","x":0,"y":0,"width":100,"height":80,
            "children":[]}
         ]}"#,
@@ -1914,7 +1914,7 @@ fn property_panel_create_component_click_promotes_selected_frame() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"n20","name":"Hero","x":0,"y":0,"width":120,"height":90,
            "children":[]}
         ]}"#,
@@ -2349,7 +2349,7 @@ fn codegen_hover_tracks_idle_generate_button() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     host.last_viewport_w = 1200.0;
     host.last_viewport_h = 800.0;
@@ -2391,7 +2391,7 @@ fn codegen_preview_drag_selects_code_text() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
@@ -2426,7 +2426,7 @@ fn codegen_preview_wheel_scrolls_code_not_property_panel() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n-code","name":"n-code","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
@@ -2462,7 +2462,7 @@ fn property_tab_hover_tracks_inactive_design_tab() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{"type":"rectangle","id":"n-tabs","name":"n-tabs","x":0,"y":0,"width":100,"height":50}]}"#,
+        r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n-tabs","name":"n-tabs","x":0,"y":0,"width":100,"height":50}]}"#,
     );
     host.last_viewport_w = 1200.0;
     host.last_viewport_h = 800.0;

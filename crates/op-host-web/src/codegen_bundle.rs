@@ -57,7 +57,7 @@ mod tests {
     /// `test_support` is `#[cfg(test)]`-private to its crate).
     fn two_rect_state() -> EditorState {
         let doc = jian_ops_schema::load_str(
-            r#"{"version":"0.8.0","children":[
+            r#"{"version":"1.0.0","children":[
                 {"type":"rectangle","id":"n1","name":"A","x":0,"y":0,"width":10,"height":10},
                 {"type":"rectangle","id":"n2","name":"B","x":20,"y":0,"width":10,"height":10}
             ]}"#,

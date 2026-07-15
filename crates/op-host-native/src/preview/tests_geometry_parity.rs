@@ -79,7 +79,7 @@ fn assert_same_bounds(design: &LayoutScene, preview: &LayoutScene, id: &str) {
 fn preserve_geometry_doc() -> jian_ops_schema::PenDocument {
     load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "root", "x": 0, "y": 0,
               "width": 400, "height": 300,
@@ -125,7 +125,7 @@ fn preview_matches_design_for_preserve_geometry_doc() {
 fn role_frame_doc() -> jian_ops_schema::PenDocument {
     load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "root", "x": 0, "y": 0,
               "width": 400, "height": 600,
@@ -237,7 +237,7 @@ fn preview_matches_design_for_free_layout_doc() {
     let _guard = crate::font_registry_test_support::lock();
     let doc = load(
         r##"{
-        "version": "0.8.0",
+        "version": "1.0.0",
         "children": [
             { "type": "frame", "id": "root", "x": 40, "y": 40,
               "width": 300, "height": 200,

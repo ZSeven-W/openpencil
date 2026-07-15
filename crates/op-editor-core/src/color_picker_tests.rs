@@ -59,7 +59,7 @@ fn add_layer_blur_appends_blur_effect() {
 fn add_effect_on_effectless_node_creates_no_undo_state() {
     // An icon_font node carries no `effects` list. Adding an
     // effect must be a no-op that leaves NO empty undo/dirty state.
-    let src = r#"{"version":"0.8.0","children":[
+    let src = r#"{"version":"1.0.0","children":[
         {"type":"icon_font","id":"i1","name":"Icon",
          "x":0,"y":0,"width":20,"height":20,"iconFontName":"star"}
     ]}"#;

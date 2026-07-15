@@ -19,7 +19,7 @@ fn path_host() -> WidgetHost {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"path","id":"n60","name":"p","x":300,"y":300,
            "anchors":[{"x":300,"y":300},{"x":380,"y":300},{"x":380,"y":360}]}
         ]}"#,
@@ -59,7 +59,7 @@ fn handle_drag_preserves_grab_offset_and_anchor_type_like_native() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"path","id":"n60","name":"p","x":300,"y":300,
            "anchors":[{"x":300,"y":300},
                       {"x":380,"y":300,"handleOut":{"x":20,"y":0}},

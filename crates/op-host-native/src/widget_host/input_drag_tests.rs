@@ -24,7 +24,7 @@ fn three_rects(boxes: [(f64, f64, f64, f64); 3], ids: [&str; 3]) -> String {
         )
     };
     format!(
-        r#"{{"version":"0.8.0","children":[{},{},{}]}}"#,
+        r#"{{"version":"1.0.0","children":[{},{},{}]}}"#,
         node(ids[0], boxes[0]),
         node(ids[1], boxes[1]),
         node(ids[2], boxes[2]),
@@ -36,7 +36,7 @@ fn bottom_right_handle_resizes_only_selected_container() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"frame","name":"frame","x":100,"y":80,
           "width":200,"height":160,"layout":"none","children":[
             {"type":"rectangle","id":"child","name":"child","x":12,"y":18,
@@ -91,7 +91,7 @@ fn edge_handle_freezes_only_its_axis_and_preserves_descendants() {
         let mut host = WidgetHostNative::new();
         seed(
             &mut host,
-            r#"{"version":"0.8.0","children":[{
+            r#"{"version":"1.0.0","children":[{
               "type":"frame","id":"frame","name":"frame","x":100,"y":80,
               "width":"fill_container","height":"fit_content","layout":"vertical",
               "children":[
@@ -138,7 +138,7 @@ fn fill_child_reflows_to_resized_parent_without_authored_mutation() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"frame","name":"frame","x":100,"y":80,
           "width":200,"height":160,"layout":"vertical","children":[
             {"type":"rectangle","id":"child","name":"child",
@@ -186,7 +186,7 @@ fn anchor_press_release_without_motion_does_not_push_history() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"path","id":"n60","name":"p","x":0,"y":0,
            "anchors":[{"x":0,"y":0},{"x":50,"y":25}]}
         ]}"#,
@@ -224,7 +224,7 @@ fn anchor_drag_back_to_start_lands_at_start() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"path","id":"n60","name":"p","x":0,"y":0,
            "anchors":[{"x":0,"y":0},{"x":50,"y":25}]}
         ]}"#,
@@ -266,7 +266,7 @@ fn anchor_drag_with_motion_pushes_one_history_entry() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"path","id":"n60","name":"p","x":0,"y":0,
            "anchors":[{"x":0,"y":0},{"x":50,"y":25}]}
         ]}"#,
@@ -349,7 +349,7 @@ fn node_drag_snap_does_not_trap_incremental_cursor_motion() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"moving","name":"moving","x":90,"y":0,"width":10,"height":10},
           {"type":"rectangle","id":"guide","name":"guide","x":105,"y":100,"width":100,"height":20}
         ]}"#,
@@ -396,7 +396,7 @@ fn node_drag_skips_smart_guides_for_large_documents() {
             1000 + i * 10
         ));
     }
-    let doc = format!(r#"{{"version":"0.8.0","children":[{}]}}"#, nodes.join(","));
+    let doc = format!(r#"{{"version":"1.0.0","children":[{}]}}"#, nodes.join(","));
     let mut host = WidgetHostNative::new();
     seed(&mut host, &doc);
     host.editor_state_mut()
@@ -428,7 +428,7 @@ fn node_drag_keeps_flex_child_in_layout_flow() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[{
+        r#"{"version":"1.0.0","children":[{
           "type":"frame","id":"frame","name":"frame","x":100,"y":100,
           "width":200,"height":200,"layout":"vertical","gap":8,
           "children":[
@@ -478,7 +478,7 @@ fn dragging_a_selection_with_a_locked_node_does_not_drift_it_in_the_scene() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"free","name":"free","x":100,"y":100,"width":80,"height":60},
           {"type":"rectangle","id":"locked","name":"locked","x":600,"y":100,"width":80,"height":60,"locked":true}
         ]}"#,
@@ -525,7 +525,7 @@ fn incremental_drag_then_doc_restored_to_cached_value_rebuilds_the_scene() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"free","name":"free","x":100,"y":100,"width":80,"height":60}
         ]}"#,
     );

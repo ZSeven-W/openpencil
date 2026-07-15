@@ -1026,7 +1026,7 @@ mod tests {
     /// A bare rectangle node fixture, parsed from `.op` JSON so it
     /// stays robust to schema growth.
     fn rect_node() -> PenNode {
-        let src = r#"{"version":"0.8.0","children":[
+        let src = r#"{"version":"1.0.0","children":[
             {"type":"rectangle","id":"r1","name":"R",
              "x":0,"y":0,"width":10,"height":10}
         ]}"#;

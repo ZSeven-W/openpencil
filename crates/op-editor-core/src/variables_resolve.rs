@@ -900,7 +900,7 @@ mod tests {
         // `$ref` string and whose gap is a `$spacing` token must
         // render concrete values with NO transient editor cache.
         let mut doc = doc_from(
-            r##"{"version":"0.8.0","variables":{"brand":{"type":"color","value":"#ff8800"}},
+            r##"{"version":"1.0.0","variables":{"brand":{"type":"color","value":"#ff8800"}},
                 "children":[{"type":"frame","id":"f1","name":"f1","x":0,"y":0,"width":100,"height":50,
                   "fill":[{"type":"solid","color":"$brand"}],"layout":"vertical","gap":"$spacing-2",
                   "children":[{"type":"text","id":"t1","name":"t1","content":"$brand"}]}]}"##,
@@ -928,7 +928,7 @@ mod tests {
     #[test]
     fn replace_refs_renames_tokens_and_freezes_values_on_delete() {
         let mut doc = doc_from(
-            r##"{"version":"0.8.0","variables":{"brand":{"type":"color","value":"#ff8800"}},
+            r##"{"version":"1.0.0","variables":{"brand":{"type":"color","value":"#ff8800"}},
                 "children":[{"type":"rectangle","id":"r1","name":"r1","x":0,"y":0,"width":10,"height":10,
                   "fill":[{"type":"solid","color":"$brand"}]}]}"##,
         );
@@ -971,7 +971,7 @@ mod tests {
     #[test]
     fn effective_theme_layers_active_over_axis_defaults() {
         let doc = doc_from(
-            r#"{"version":"0.8.0","themes":{"Mode":["Light","Dark"],"Density":["Comfort","Compact"]},"children":[]}"#,
+            r#"{"version":"1.0.0","themes":{"Mode":["Light","Dark"],"Density":["Comfort","Compact"]},"children":[]}"#,
         );
         let active = Theme::from([("Mode".to_string(), "Dark".to_string())]);
         let theme = effective_theme(&doc, &active);

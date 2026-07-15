@@ -42,7 +42,7 @@ fn preserving_geometry_keeps_authored_nested_positions() {
 
 #[test]
 fn minimal_empty_doc() {
-    let r = load(r#"{"version":"0.8.0","children":[]}"#);
+    let r = load(r#"{"version":"1.0.0","children":[]}"#);
     assert_eq!(r.payload.pages.len(), 1);
     assert!(r.payload.pages[0].children.is_empty());
 }

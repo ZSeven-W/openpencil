@@ -103,7 +103,7 @@ impl RenderBackend for LayerLabelBackend {
 
 fn state_with_layer_name(name: &str) -> EditorState {
     let source = format!(
-        r#"{{"version":"0.8.0","children":[{{"type":"rectangle","id":"n1","name":"{name}","width":10,"height":10}}]}}"#
+        r#"{{"version":"1.0.0","children":[{{"type":"rectangle","id":"n1","name":"{name}","width":10,"height":10}}]}}"#
     );
     let doc = jian_ops_schema::load_str(&source)
         .expect("layer-label fixture parses")

@@ -104,7 +104,7 @@ mod tests {
 
     fn state_with_rect(x: f64) -> EditorState {
         let doc = jian_ops_schema::load_str(&format!(
-            r#"{{"version":"0.8.0","children":[
+            r#"{{"version":"1.0.0","children":[
               {{"type":"rectangle","id":"r","name":"r","x":{x},"y":0,"width":40,"height":20}}
             ]}}"#
         ))

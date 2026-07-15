@@ -463,7 +463,7 @@ mod tests {
 
     fn doc_with(children: Vec<PenNode>) -> PenDocument {
         PenDocument {
-            version: "0.8.0".to_string(),
+            version: "1.0.0".to_string(),
             name: Some("Source".to_string()),
             themes: None,
             variables: None,
@@ -546,7 +546,7 @@ mod tests {
         let kit = import_kit_from_document(&doc, "kit-1".to_string()).expect("kit");
         assert_eq!(kit.id, "kit-1");
         assert_eq!(kit.name, "Design System");
-        assert_eq!(kit.version, "0.8.0");
+        assert_eq!(kit.version, "1.0.0");
         assert!(!kit.built_in);
         assert_eq!(kit.components.len(), 2);
         let button = &kit.components[0];

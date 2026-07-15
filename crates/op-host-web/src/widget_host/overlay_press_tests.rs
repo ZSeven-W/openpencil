@@ -68,7 +68,7 @@ fn painted_inside(backend: &CaptureBackend, target: Rect) -> bool {
 
 fn seed_layer_doc(host: &mut WidgetHost) {
     let doc = jian_ops_schema::load_str(
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
             {"type":"rectangle","id":"n1","name":"Header","x":0,"y":0,"width":100,"height":50}
         ]}"#,
     )

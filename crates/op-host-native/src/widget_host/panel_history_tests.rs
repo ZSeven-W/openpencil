@@ -29,7 +29,7 @@ fn two_rects_host() -> WidgetHostNative {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"a","name":"a","x":0,"y":0,"width":40,"height":40},
           {"type":"rectangle","id":"b","name":"b","x":60,"y":0,"width":40,"height":40}
         ]}"#,
@@ -42,7 +42,7 @@ fn three_pages_host() -> WidgetHostNative {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[],"pages":[
+        r#"{"version":"1.0.0","children":[],"pages":[
           {"id":"p1","name":"One","children":[
             {"type":"rectangle","id":"r1","name":"r1","x":0,"y":0,"width":10,"height":10}]},
           {"id":"p2","name":"Two","children":[
@@ -262,7 +262,7 @@ fn delete_last_page_guard_pushes_no_history() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[],"pages":[
+        r#"{"version":"1.0.0","children":[],"pages":[
           {"id":"p1","name":"Only","children":[]}
         ]}"#,
     );
@@ -382,7 +382,7 @@ fn context_menu_boolean_union_is_undoable() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"rectangle","id":"a","name":"a","x":0,"y":0,"width":40,"height":40},
           {"type":"rectangle","id":"b","name":"b","x":20,"y":0,"width":40,"height":40}
         ]}"#,
@@ -419,7 +419,7 @@ fn context_menu_create_and_detach_component_are_undoable() {
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
           {"type":"frame","id":"f1","name":"Card","x":0,"y":0,
            "width":100,"height":80,"children":[]}
         ]}"#,

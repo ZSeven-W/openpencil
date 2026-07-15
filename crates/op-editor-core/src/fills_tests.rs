@@ -8,7 +8,7 @@ use jian_ops_schema::style::{PenFill, PenStroke, SidedThickness, StrokeThickness
 
 fn three_fill_state() -> crate::EditorState {
     let src = r##"{
-      "version":"0.8.0",
+      "version":"1.0.0",
       "children":[{
         "type":"rectangle","id":"n1","name":"R",
         "x":0,"y":0,"width":10,"height":10,
@@ -204,7 +204,7 @@ fn node_stroke_width_reads_max_sided_edge() {
 }
 
 fn rect_node() -> PenNode {
-    let src = r#"{"version":"0.8.0","children":[
+    let src = r#"{"version":"1.0.0","children":[
         {"type":"rectangle","id":"r1","name":"R",
          "x":0,"y":0,"width":10,"height":10}
     ]}"#;

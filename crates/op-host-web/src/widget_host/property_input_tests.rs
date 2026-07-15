@@ -24,7 +24,7 @@ fn web_move_fill_action_dispatches_as_one_undoable_edit() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{"version":"0.8.0","children":[{
+        r##"{"version":"1.0.0","children":[{
           "type":"rectangle","id":"rect","name":"Rect",
           "x":0,"y":0,"width":10,"height":10,
           "fill":[
@@ -147,7 +147,7 @@ fn web_property_action_press_commits_prior_property_input() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -177,7 +177,7 @@ fn web_toolbar_press_commits_property_input_before_tool_switch() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -223,7 +223,7 @@ fn web_property_press_reseeds_from_committed_snapshot() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -250,7 +250,7 @@ fn web_effect_param_refocus_reseeds_from_committed_snapshot() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Shadowed",
                "x":40,"y":40,"width":180,"height":120,
                "effects":[{"type":"shadow","offsetX":12,"offsetY":4,
@@ -288,7 +288,7 @@ fn web_effect_param_commit_on_instance_creates_override() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version":"0.8.0", "children":[
+        r##"{ "version":"1.0.0", "children":[
               {"type":"rectangle","id":"card","name":"Card","reusable":true,
                "x":0,"y":0,"width":200,"height":100,
                "effects":[{"type":"shadow","offsetX":12,"offsetY":4,
@@ -347,7 +347,7 @@ fn web_effect_param_focus_commits_prior_property_input() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -406,7 +406,7 @@ fn web_property_focus_commit_reads_text_input_state() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -428,7 +428,7 @@ fn web_property_focus_commit_is_undoable() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version": "0.8.0", "children": [
+        r##"{ "version": "1.0.0", "children": [
               {"type":"rectangle","id":"n62","name":"Wide",
                "x":40,"y":40,"width":180,"height":120,
                "fill":[{"type":"solid","color":"#BDC7D9"}]}
@@ -454,7 +454,7 @@ fn web_property_focus_commit_on_instance_undo_restores_ref() {
     let mut host = WidgetHost::new();
     seed(
         &mut host,
-        r##"{ "version":"0.8.0", "children":[
+        r##"{ "version":"1.0.0", "children":[
               {"type":"rectangle","id":"card","name":"Card","reusable":true,
                "x":0,"y":0,"width":200,"height":100,
                "fill":[{"type":"solid","color":"#222222"}]},

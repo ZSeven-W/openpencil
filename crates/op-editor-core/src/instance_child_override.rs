@@ -140,7 +140,7 @@ mod tests {
     use crate::EditorState;
 
     const DOC: &str = r##"{
-      "version":"0.8.0",
+      "version":"1.0.0",
       "children":[
         {"type":"frame","id":"button","name":"Button","reusable":true,
          "width":120,"height":40,"children":[
@@ -159,7 +159,7 @@ mod tests {
     fn rich_color_state() -> EditorState {
         let doc = jian_ops_schema::load_str(
             r##"{
-              "version":"0.8.0",
+              "version":"1.0.0",
               "children":[
                 {"type":"frame","id":"card","name":"Card","reusable":true,
                  "width":120,"height":80,"children":[

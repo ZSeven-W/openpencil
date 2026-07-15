@@ -9,7 +9,7 @@ const VIEWPORT_H: f32 = 800.0;
 
 fn seed(host: &mut WidgetHost) {
     let doc = jian_ops_schema::load_str(
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
             {"type":"rectangle","id":"n1","name":"Header","x":0,"y":0,"width":100,"height":50},
             {"type":"rectangle","id":"n2","name":"Card","x":120,"y":0,"width":100,"height":50}
         ]}"#,

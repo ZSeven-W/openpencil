@@ -633,7 +633,7 @@ fn system_experimental_switch_toggles_preference() {
 fn disabling_experimental_exits_active_preview() {
     let mut host = WidgetHostNative::new();
     let doc = jian_ops_schema::load_str(
-        r#"{"version":"0.8.0","children":[
+        r#"{"version":"1.0.0","children":[
             {"type":"frame","id":"root","name":"Root","x":0,"y":0,"width":200,"height":200,
              "children":[
                {"type":"rectangle","id":"r","name":"R","x":10,"y":10,"width":50,"height":50}

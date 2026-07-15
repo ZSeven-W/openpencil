@@ -412,7 +412,7 @@ mod tests {
     /// Bare empty document — no variables, no pages, no children.
     fn empty_doc() -> PenDocument {
         PenDocument {
-            version: "0.8.0".into(),
+            version: "1.0.0".into(),
             name: None,
             themes: None,
             variables: None,
