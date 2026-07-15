@@ -9,7 +9,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const PID_FILE_NAME: &str = "openpencil-mcp-server.pid";
 const PORT_FILE_NAME: &str = "openpencil-mcp-server.port";
 const TOKEN_FILE_NAME: &str = "openpencil-mcp-server.token";
-const MINIMAL_DOCUMENT: &str = "{\n  \"version\": \"0.8.0\",\n  \"name\": \"OpenPencil CLI Session\",\n  \"children\": []\n}\n";
+const MINIMAL_DOCUMENT: &str = concat!(
+    "{\n  \"version\": \"",
+    env!("CARGO_PKG_VERSION"),
+    "\",\n  \"name\": \"OpenPencil CLI Session\",\n  \"children\": []\n}\n"
+);
 
 /// Rust live-canvas discovery file (`~/.openpencil/.op-mcp-port`), written
 /// by the running editor when its `McpLiveServer` binds. Deliberately

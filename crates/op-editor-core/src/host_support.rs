@@ -35,7 +35,7 @@ impl EditorState {
     /// [`EditorState::starter`] (a single empty Frame) instead.
     pub fn sample() -> Self {
         let src = r##"{
-            "version": "0.8.0",
+            "version": "__OPENPENCIL_VERSION__",
             "children": [
               {"type":"frame","id":"n10","name":"Frame",
                "x":40,"y":40,"width":360,"height":240,
@@ -56,7 +56,8 @@ impl EditorState {
                ]}
             ]
         }"##;
-        let doc = jian_ops_schema::load_str(src)
+        let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+        let doc = jian_ops_schema::load_str(&src)
             .expect("EditorState::sample() fixture parses")
             .value;
         let mut state = Self::from_document(doc);
@@ -69,7 +70,7 @@ impl EditorState {
     /// document geometry. No default selection and no demo decoration.
     pub fn starter() -> Self {
         let src = r##"{
-            "version": "0.8.0",
+            "version": "__OPENPENCIL_VERSION__",
             "children": [
               {"type":"frame","id":"n10","name":"Frame",
                "x":0,"y":0,"width":1200,"height":800,
@@ -77,7 +78,8 @@ impl EditorState {
                "children":[]}
             ]
         }"##;
-        let doc = jian_ops_schema::load_str(src)
+        let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+        let doc = jian_ops_schema::load_str(&src)
             .expect("EditorState::starter() fixture parses")
             .value;
         Self::from_document(doc)
@@ -644,6 +646,7 @@ mod tests {
     #[test]
     fn sample_has_the_demo_tree_and_anchors_selection() {
         let s = EditorState::sample();
+        assert_eq!(s.doc.version, env!("CARGO_PKG_VERSION"));
         assert_eq!(s.doc.children.len(), 1);
         assert_eq!(s.selection.anchor, NodeId::new("n11"));
         // The frame + its two children are present.
@@ -653,6 +656,7 @@ mod tests {
     #[test]
     fn starter_is_a_single_empty_frame_with_nothing_selected() {
         let s = EditorState::starter();
+        assert_eq!(s.doc.version, env!("CARGO_PKG_VERSION"));
         // Exactly one top-level node — the starter Frame. The
         // `max_node_id() == 10` check proves no demo children:
         // the n11..n14 sample tree would lift it to 14.
@@ -754,14 +758,15 @@ mod tests {
     #[test]
     fn replace_paths_with_polyline_inherits_first_source_style() {
         let src = r##"{
-            "version": "0.8.0",
+            "version": "__OPENPENCIL_VERSION__",
             "children": [
               {"type":"rectangle","id":"n10","x":0,"y":0,"width":20,"height":20,
                "fill":[{"type":"solid","color":"#ff0000"}]},
               {"type":"rectangle","id":"n11","x":10,"y":0,"width":20,"height":20}
             ]
         }"##;
-        let doc = jian_ops_schema::load_str(src)
+        let src = src.replace("__OPENPENCIL_VERSION__", env!("CARGO_PKG_VERSION"));
+        let doc = jian_ops_schema::load_str(&src)
             .expect("fixture parses")
             .value;
         let mut s = EditorState::from_document(doc);
