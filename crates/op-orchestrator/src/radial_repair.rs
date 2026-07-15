@@ -119,15 +119,21 @@ fn authored_radial_patch(v: &Value) -> Option<AuthoredRadialPatch> {
         if !valid_size(width, height) {
             return None;
         }
-        if !is_arc_ellipse(child) && (width > geometry.parent_w || height > geometry.parent_h) {
+        let width_patch = (!has_numeric(child, "width")).then_some(width.round());
+        let height_patch = (!has_numeric(child, "height")).then_some(height.round());
+        let positioned_width = width_patch.unwrap_or(width);
+        let positioned_height = height_patch.unwrap_or(height);
+        if !is_arc_ellipse(child)
+            && (positioned_width > geometry.parent_w || positioned_height > geometry.parent_h)
+        {
             return None;
         }
         patches.push(AuthoredChildPatch {
             index,
-            x: ((geometry.parent_w - width) / 2.0).round(),
-            y: ((geometry.parent_h - height) / 2.0).round(),
-            width: (!has_numeric(child, "width")).then_some(width.round()),
-            height: (!has_numeric(child, "height")).then_some(height.round()),
+            x: ((geometry.parent_w - positioned_width) / 2.0).round(),
+            y: ((geometry.parent_h - positioned_height) / 2.0).round(),
+            width: width_patch,
+            height: height_patch,
         });
     }
     Some(AuthoredRadialPatch {

@@ -198,7 +198,7 @@ fn cleanup_recenters_radial_stack_after_geometry_changes_wrapper_width() {
         "layout":"vertical","padding":[0,24],"children":[
             {"type":"frame","id":"card","name":"Activity Card","width":"fill_container",
              "height":"fit_content","layout":"vertical","padding":20,"gap":20,"children":[
-                {"type":"frame","id":"ring","name":"Ring","width":320,"height":120,
+                {"type":"frame","id":"ring","name":"Ring","width":360,"height":120,
                  "layout":"horizontal","gap":0,"alignItems":"center","justifyContent":"center","children":[
                     {"type":"ellipse","id":"track","name":"Ring Track","width":120,"height":120,
                      "innerRadius":0.86},
