@@ -10,6 +10,7 @@
         "@iconify-json/simple-icons": "^1.2.71",
         "oxfmt": "^0.42.0",
         "oxlint": "^1.57.0",
+        "typescript": "^5.7.2",
       },
     },
     "op-web-sdk": {
