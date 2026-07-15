@@ -33,13 +33,49 @@ export function renderPackageManifest(source, version) {
 
 function maskSdkCommentsAndTemplates(source) {
   const masked = source.split('');
-  let state = 'code';
+  const regexPrefixKeywords = new Set([
+    'await',
+    'case',
+    'delete',
+    'else',
+    'in',
+    'instanceof',
+    'new',
+    'of',
+    'return',
+    'throw',
+    'typeof',
+    'void',
+    'yield',
+  ]);
 
   const mask = (index) => {
     if (source[index] !== '\n' && source[index] !== '\r') {
       masked[index] = ' ';
     }
   };
+
+  function isEscaped(index) {
+    let backslashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && source[cursor] === '\\'; cursor -= 1) {
+      backslashes += 1;
+    }
+    return backslashes % 2 === 1;
+  }
+
+  function skipQuoted(start, quote) {
+    let index = start + 1;
+    while (index < source.length) {
+      if (source[index] === '\\') {
+        index += 2;
+      } else if (source[index] === quote) {
+        return index + 1;
+      } else {
+        index += 1;
+      }
+    }
+    return index;
+  }
 
   function maskQuoted(start, quote) {
     let index = start;
@@ -81,39 +117,114 @@ function maskSdkCommentsAndTemplates(source) {
     return index;
   }
 
+  function scanRegexLiteral(start, maskContents) {
+    let inCharacterClass = false;
+    let index = start + 1;
+    if (maskContents) {
+      mask(start);
+    }
+    while (index < source.length) {
+      const character = source[index];
+      if (character === '\n' || character === '\r') {
+        return index;
+      }
+      if (maskContents) {
+        mask(index);
+      }
+      if (character === '\\') {
+        if (maskContents) {
+          mask(index + 1);
+        }
+        index += 2;
+      } else if (character === '[') {
+        inCharacterClass = true;
+        index += 1;
+      } else if (character === ']') {
+        inCharacterClass = false;
+        index += 1;
+      } else if (character === '/' && !inCharacterClass) {
+        index += 1;
+        while (/[a-z]/i.test(source[index] ?? '')) {
+          if (maskContents) {
+            mask(index);
+          }
+          index += 1;
+        }
+        return index;
+      } else {
+        index += 1;
+      }
+    }
+    return index;
+  }
+
+  function scanIdentifier(start, maskContents) {
+    let index = start;
+    while (/[\w$]/.test(source[index] ?? '')) {
+      if (maskContents) {
+        mask(index);
+      }
+      index += 1;
+    }
+    return {
+      end: index,
+      canStartRegex: regexPrefixKeywords.has(source.slice(start, index)),
+    };
+  }
+
   function maskTemplateExpression(start) {
     let depth = 1;
     let index = start;
+    let canStartRegex = true;
     while (index < source.length) {
       const character = source[index];
       const next = source[index + 1];
       if (character === "'" || character === '"') {
         index = maskQuoted(index, character);
+        canStartRegex = false;
         continue;
       }
       if (character === '`') {
         index = maskTemplateLiteral(index);
+        canStartRegex = false;
         continue;
       }
-      if (character === '/' && next === '/') {
+      if (character === '/' && next === '/' && !isEscaped(index)) {
         index = maskLineComment(index);
         continue;
       }
-      if (character === '/' && next === '*') {
+      if (character === '/' && next === '*' && !isEscaped(index)) {
         index = maskBlockComment(index);
+        continue;
+      }
+      if (character === '/' && canStartRegex) {
+        index = scanRegexLiteral(index, true);
+        canStartRegex = false;
+        continue;
+      }
+      if (/[A-Za-z_$]/.test(character)) {
+        const identifier = scanIdentifier(index, true);
+        index = identifier.end;
+        canStartRegex = identifier.canStartRegex;
         continue;
       }
 
       mask(index);
       if (character === '{') {
         depth += 1;
+        canStartRegex = true;
       } else if (character === '}') {
         depth -= 1;
         index += 1;
         if (depth === 0) {
           return index;
         }
+        canStartRegex = false;
         continue;
+      } else if (/\d/.test(character) || '.)]'.includes(character)) {
+        canStartRegex = false;
+      } else if (!/\s/.test(character)) {
+        canStartRegex = true;
       }
       index += 1;
     }
@@ -145,58 +256,45 @@ function maskSdkCommentsAndTemplates(source) {
     return index;
   }
 
-  for (let index = 0; index < source.length; index += 1) {
+  let canStartRegex = true;
+  for (let index = 0; index < source.length; ) {
     const character = source[index];
     const next = source[index + 1];
-
-    if (state === 'single-quote' || state === 'double-quote') {
-      if (character === '\\') {
-        index += 1;
-      } else if (
-        (state === 'single-quote' && character === "'") ||
-        (state === 'double-quote' && character === '"')
-      ) {
-        state = 'code';
-      }
-      continue;
-    }
-
-    if (state === 'line-comment') {
-      if (character === '\n' || character === '\r') {
-        state = 'code';
-      } else {
-        mask(index);
-      }
-      continue;
-    }
-
-    if (state === 'block-comment') {
-      mask(index);
-      if (character === '*' && next === '/') {
-        mask(index + 1);
-        index += 1;
-        state = 'code';
-      }
-      continue;
-    }
-
-    if (character === "'") {
-      state = 'single-quote';
-    } else if (character === '"') {
-      state = 'double-quote';
-    } else if (character === '`') {
-      index = maskTemplateLiteral(index) - 1;
-    } else if (character === '/' && next === '/') {
-      mask(index);
-      mask(index + 1);
+    if (/\s/.test(character)) {
       index += 1;
-      state = 'line-comment';
-    } else if (character === '/' && next === '*') {
-      mask(index);
-      mask(index + 1);
-      index += 1;
-      state = 'block-comment';
+      continue;
     }
+    if (character === "'" || character === '"') {
+      index = skipQuoted(index, character);
+      canStartRegex = false;
+      continue;
+    }
+    if (character === '`') {
+      index = maskTemplateLiteral(index);
+      canStartRegex = false;
+      continue;
+    }
+    if (character === '/' && next === '/' && !isEscaped(index)) {
+      index = maskLineComment(index);
+      continue;
+    }
+    if (character === '/' && next === '*' && !isEscaped(index)) {
+      index = maskBlockComment(index);
+      continue;
+    }
+    if (character === '/' && canStartRegex) {
+      index = scanRegexLiteral(index, false);
+      canStartRegex = false;
+      continue;
+    }
+    if (/[A-Za-z_$]/.test(character)) {
+      const identifier = scanIdentifier(index, false);
+      index = identifier.end;
+      canStartRegex = identifier.canStartRegex;
+      continue;
+    }
+    canStartRegex = !(/\d/.test(character) || '.)]}'.includes(character));
+    index += 1;
   }
 
   return masked.join('');
