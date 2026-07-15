@@ -694,6 +694,8 @@ fn empty_reveals_use_plain_node_paint_path() {
 
 #[test]
 fn unselected_scene_skips_overlay_stroke() {
+    let _guard = crate::agent_indicator_test_support::lock();
+    op_editor_core::agent_indicators::clear();
     let state = sample_state();
     let scene = sample_scene();
     // No selection — only the frame's own stroke paints.
