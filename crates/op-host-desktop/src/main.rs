@@ -327,6 +327,10 @@ impl DesktopApp {
         let fit_blank_frame = initial_file.is_none();
         // Best-effort prefs restore onto the host's `EditorState`.
         op_host_services::settings_io::load(host.editor_state_mut());
+        // Zode is a desktop-local integration. Keep it out of the shared
+        // settings loader so `--serve-web` never exposes machine-local Zode
+        // providers that the browser settings UI cannot manage.
+        op_host_services::zode_import::import_zode_builtin_agents(host.editor_state_mut());
         // Imported UIKits + browser-open flag (`uikits.json`). Skipped
         // under test like the update / model probes — unit tests must
         // not see a developer machine's kit store.
