@@ -443,6 +443,8 @@ OpenPencil은 무료이며 오픈소스입니다. 개발은 이 도구를 유용
 </a>
 — 질문하기, 디자인 공유, 기능 제안.
 
+**인정 커뮤니티: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

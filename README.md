@@ -611,6 +611,8 @@ Thanks to **[MrQyun](https://github.com/mrqyun)** — want your name here too? *
 </a>
 — Ask questions, share designs, suggest features.
 
+**Recognized community: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

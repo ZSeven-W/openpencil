@@ -443,6 +443,8 @@ Gracias a **[MrQyun](https://github.com/mrqyun)** — ¿quieres ver tu nombre aq
 </a>
 — Haz preguntas, comparte diseños y sugiere funciones.
 
+**Comunidad reconocida: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

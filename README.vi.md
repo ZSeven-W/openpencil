@@ -443,6 +443,8 @@ Cảm ơn **[MrQyun](https://github.com/mrqyun)** — muốn tên mình xuất h
 </a>
 — Đặt câu hỏi, chia sẻ thiết kế, đề xuất tính năng.
 
+**Cộng đồng được công nhận: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">
