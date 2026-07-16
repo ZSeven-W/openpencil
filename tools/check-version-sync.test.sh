@@ -328,7 +328,7 @@ run_guard() {
     repo=$1
     shift
     case_status=0
-    case_output=$(cd "$repo" && env "$@" \
+    case_output=$(cd "$repo" && env GITHUB_REF= GITHUB_REF_NAME= "$@" \
         bash tools/check-version-sync.sh 2>&1) || case_status=$?
 }
 
@@ -407,6 +407,13 @@ assert_status 1 'canonical reader failure'
 assert_contains 'workspace-version: invalid version' 'canonical reader failure'
 assert_no_success_output 'canonical reader failure'
 pass 'canonical reader failure has no misleading success output'
+
+repo=$(new_repo inherited_tag_environment 1.0.0)
+GITHUB_REF=refs/tags/v0.8.1 GITHUB_REF_NAME=v0.8.1 run_guard "$repo"
+assert_status 0 'inherited tag environment'
+assert_not_contains 'release tag v0.8.1 does not match Cargo workspace version 1.0.0' \
+    'inherited tag environment'
+pass 'test cases do not inherit the workflow tag environment'
 
 repo=$(new_repo fixture_version_collision 1.0.0)
 printf '%s\n' \
