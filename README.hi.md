@@ -443,6 +443,8 @@ OpenPencil मुफ़्त और ओपन-सोर्स है। इस�
 </a>
 — प्रश्न पूछें, डिज़ाइन साझा करें, सुविधाएँ सुझाएँ।
 
+**मान्यता प्राप्त समुदाय: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

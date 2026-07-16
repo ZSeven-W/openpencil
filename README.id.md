@@ -443,6 +443,8 @@ Terima kasih kepada **[MrQyun](https://github.com/mrqyun)** — ingin nama Anda 
 </a>
 — Ajukan pertanyaan, bagikan desain, sarankan fitur.
 
+**Komunitas yang diakui: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

@@ -443,6 +443,8 @@ OpenPencil 免費且開源,開發完全由覺得它好用的人們贊助 —— 
 </a>
 — 提問、分享設計、提出功能建議。
 
+**認可社群：[LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

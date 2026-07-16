@@ -443,6 +443,8 @@ OpenPencil бесплатен и open source. Разработка финанс�
 </a>
 — Задавайте вопросы, делитесь дизайнами, предлагайте функции.
 
+**Признанное сообщество: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

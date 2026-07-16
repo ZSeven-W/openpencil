@@ -443,6 +443,8 @@ OpenPencil เป็นซอฟต์แวร์ฟรีและโอเพ
 </a>
 — ถามคำถาม แชร์ดีไซน์ เสนอฟีเจอร์
 
+**ชุมชนที่ได้รับการยอมรับ: [LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">

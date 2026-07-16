@@ -447,6 +447,8 @@ OpenPencil 免费开源,开发完全由觉得它好用的人们资助 —— 感
 
 <img src="./screenshot/557517811-62010928-d91a-4223-bc10-9ee7a4fbf043.jpg" alt="飞书交流群" width="240" />
 
+**认可社区：[LINUX DO](https://linux.do/)**
+
 ## Star History
 
 <a href="https://star-history.com/#ZSeven-W/openpencil&Date">
