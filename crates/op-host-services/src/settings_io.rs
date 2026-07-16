@@ -549,17 +549,22 @@ fn load_checked_from_path(state: &mut EditorState, path: &Path) -> Result<(), St
 /// Strict load used by web startup. A missing file is a normal first-run state,
 /// but an existing file must be readable and losslessly loadable so the daemon
 /// cannot later overwrite unknown settings or miss browser-owned credentials.
+/// External application configs are intentionally not imported here: the web
+/// model catalog must reflect web/OpenPencil settings only, rather than expose
+/// machine-local Zode providers that the browser settings UI cannot manage.
 pub fn load_checked(state: &mut EditorState) -> Result<(), String> {
     if let Some(detected) = detect_system_locale() {
         state.editor_ui.locale = detected;
     }
     let path = settings_path().ok_or_else(|| "failed to resolve settings file path".to_string())?;
     load_checked_from_path(state, &path)?;
-    crate::zode_import::import_zode_builtin_agents(state);
     Ok(())
 }
 
-/// Best-effort load. Returns silently on missing file / parse error.
+/// Best-effort OpenPencil settings load. Returns silently on missing file /
+/// parse error. Host-specific imports belong to the host startup path rather
+/// than this shared loader so the web daemon cannot inherit desktop-only
+/// configuration sources.
 pub fn load(state: &mut EditorState) {
     // Seed the locale from the OS BEFORE the settings file is read.
     // `apply_payload`'s persisted-locale arm overrides this when a
@@ -575,12 +580,6 @@ pub fn load(state: &mut EditorState) {
             }
         }
     }
-    // Merge any Zode CLI providers (`~/.zode/config.json`) as built-in
-    // custom models. Runs AFTER the persisted agents load so the
-    // backend-dedupe sees them; best-effort and a no-op when Zode isn't
-    // configured. Must not be skipped by a missing OpenPencil settings
-    // file, so it sits outside the load above.
-    crate::zode_import::import_zode_builtin_agents(state);
 }
 
 /// Read the host OS's preferred locale (env-var driven, no extra
