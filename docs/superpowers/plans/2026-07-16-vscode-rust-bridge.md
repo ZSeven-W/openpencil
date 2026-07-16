@@ -198,8 +198,11 @@ impl SyncGate {
     /// instead of comparing cached values (a compare-based observer misses
     /// edges that rise AND fall between ticks, e.g. a fast open completing
     /// before the next tick; a latch cannot lose the event):
-    /// set by note_synced when it clears a pending open (holds the open's
-    /// generation) — drain to emit `opened`.
+    /// set by note_synced when it clears a pending open. Holds the
+    /// GENERATION PASSED TO note_synced — i.e. the now-live document's
+    /// generation, NOT the open's original target (they differ when an
+    /// AcceptRemote pull-apply completes the open with a newer replacement
+    /// generation; `opened` must name the document actually on screen).
     pub fn take_opened_edge(&mut self) -> Option<u64>;
     /// set by note_conflict (holds the server version) — drain to emit
     /// `sync-conflict`. CLEARED by note_synced and resolve_accept_remote:
@@ -367,7 +370,9 @@ fn accept_remote_keeps_open_pending_until_the_pull_applies() {
     assert!(g.open_pending());       // still pending: opened not yet emittable
     assert!(g.pull_allowed((2, 0))); // the resolving pull may proceed
     g.note_synced(3, 0);             // remote applied (gen 3 >= target 2)
-    assert!(!g.open_pending());      // bridge emits `opened` on this edge
+    assert!(!g.open_pending());
+    // the latch names the NOW-LIVE generation (3), not the open's target (2):
+    assert_eq!(g.take_opened_edge(), Some(3));
 }
 
 #[test]
@@ -947,7 +952,7 @@ git commit -m "feat(web): route live sync through the shared gate with condition
 - Produces: `pub(crate) fn install(inner: Rc<RefCell<Ck>>, sync: SharedSync)`——不返回句柄：监听器 Closure 用与本文件其它页面级监听器相同的 `Closure::forget` 模式**刻意泄漏**（桥与页面同生命周期；若返回 owning handle，`mount_ck` 返回时 drop 会拆掉桥）。window `message` 监听器：
   - **来源校验**：`event.source == window.parent`（`js_sys::Reflect` 比较）且 origin 锁定（首条合法 `init` 的 `event.origin` 记录后，后续不符即丢弃）；非桥消息（`BridgeInbound::parse` 返回 None）静默忽略；
   - `Init { token }` → 存 `thread_local BRIDGE_TOKEN` → 触发 daemon 引导序列（见启动顺序）→ 回 `event_ready(gen, rev)`；
-  - `OpenDocument { json }` → **同步序幕（首个 await 之前，顺序固定）**：`replace_document`（generation 自增，得到目标 generation `G`）→ `gate.note_open_pending(G)`（open 完成从此 generation 作用域化——若 push_busy 正被某个飞行中的周期推送占用，该推送的确认携带的是 open 之前序列化的旧 generation 对，`note_synced` 按 `generation >= G` 判定不会误清 open 状态）+ 占用 `push_busy`（占用可能需等待当前推送结束，但状态已在同步序幕落好，等待期间 pull 已被 open_pull_block 挡住）→ **探测-条件推送**：`GET /api/mcp/version`（token 通道）取 daemon 当前版本 `V`（**不能用 `last_version()`**——bootstrap 期它是 0 而 sync-reset 已 bump 过版本，必 409），`wrap_push_body_with_base(&doc_json, V)` 条件推送 → 成功则原子 `client.mark_pushed(&doc_json, returned_version)` + `gate.note_synced(pair)`（一并清 open_pending/open_pull_block）——`opened` **不在此直发**：`note_synced` 清除 pending open 时置 opened 闩锁，观察者 `take_opened_edge()` 消费后发出（所有 `opened` 发射单点化且时序免疫）。**409 = 探测与推送之间有并发 MCP 写入落地**：重新探测并重试**一次**；仍 409 → `gate.note_conflict(v)`、**不发 `opened`**、释放 `push_busy`——冲突事件由**唯一的过渡发射器**（`gate.conflict()` None→Some 的 tick 观察者，见下文出站事件）发出，此处**不得**直接再发 `event_sync_conflict`（防重复）；宿主走既有 resolve-conflict 协议裁决（无版本覆盖会静默丢弃并发写入，违反 spec「两个版本都不丢」，明确禁止）；
+  - `OpenDocument { json }` → **同步序幕（首个 await 之前，顺序固定）**：`replace_document`（generation 自增，得到目标 generation `G`）→ `gate.note_open_pending(G)`（open 完成从此 generation 作用域化——若 push_busy 正被某个飞行中的周期推送占用，该推送的确认携带的是 open 之前序列化的旧 generation 对，`note_synced` 按 `generation >= G` 判定不会误清 open 状态）+ 占用 `push_busy`（占用可能需等待当前推送结束，但状态已在同步序幕落好，等待期间 pull 已被 open_pull_block 挡住）→ **探测-条件推送**：`GET /api/mcp/version`（token 通道）取 daemon 当前版本 `V`（**不能用 `last_version()`**——bootstrap 期它是 0 而 sync-reset 已 bump 过版本，必 409），`wrap_push_body_with_base(&doc_json, V)` 条件推送 → 成功则原子 `client.mark_pushed(&doc_json, returned_version)` + `gate.note_synced(pair)`（一并清 open_pending/open_pull_block）——`opened` **不在此直发**：`note_synced` 清除 pending open 时置 opened 闩锁，观察者 `take_opened_edge()` 消费后发出（所有 `opened` 发射单点化且时序免疫）。**409 = 探测与推送之间有并发 MCP 写入落地**：重新探测并重试**一次**；仍 409 → `gate.note_conflict(v)`（**置冲突闩**）、**不发 `opened`**、释放 `push_busy`——冲突事件由观察者 `take_conflict_edge()` 消费闩锁后发出（见下文出站事件），此处**不得**直接再发 `event_sync_conflict`（防重复）；宿主走既有 resolve-conflict 协议裁决（无版本覆盖会静默丢弃并发写入，违反 spec「两个版本都不丢」，明确禁止）；
   - `Snapshot { purpose, request_id }` → **独立检测，不依赖 tick**：先查 `gate.conflict()`——`Some(v)` 时不推送、直接回 `event_snapshot_conflict(request_id, v)`（冲突挂起期间 snapshot 行为由此定义：宿主必须先走 resolve-conflict）；无冲突则序列化 doc 并同步捕获 `pair`（原子性由此保证）→ `gate.needs_push(pair)` 为真则经 snapshot 通道推送（`SyncGate::snapshot_push_allowed` 无上限；带 baseVersion；尊重 `push_busy` 串行，busy 时排队至当前推送响应后重试）→ 确认后**原子更新两者**：`client.mark_pushed(&doc_json, returned_version)` + `gate.note_synced(pair)`（漏掉 mark_pushed 会让 `last_version()` 过期——poller 会把自己的快照当远端更新回放、下次推送用旧 baseVersion 制造假冲突）→ `event_snapshot_result(request_id, doc_json, gen, rev)`；推送冲突 → `gate.note_conflict(v)` + `event_snapshot_conflict(request_id, v)`；
   - `SaveCommitted { generation, revision }` → `mark_saved_revision_at`（过期静默丢弃）；
   - `ResolveConflict { mode, request_id }`：
