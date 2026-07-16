@@ -5,8 +5,18 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::Viewport;
 
 const LABEL_SIDE_PADDING: f32 = 4.0;
+const LABEL_FONT_SIZE: f32 = 12.0;
 const GENERATING_ICON_SIZE: f32 = 14.0;
 const GENERATING_ICON_GAP: f32 = 4.0;
+
+/// `draw_text` takes a baseline while icons take a top-left corner. Keep the
+/// existing frame-label baseline fixed and align the icon with the text line's
+/// visual center using the same cap-height approximation as
+/// `jian_widgets::centered_text_baseline_y`.
+fn generating_icon_top(text_baseline_y: f32) -> f32 {
+    let text_center_y = text_baseline_y - LABEL_FONT_SIZE * 0.35;
+    text_center_y - GENERATING_ICON_SIZE / 2.0
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct FrameLabel {
@@ -144,7 +154,7 @@ pub(super) fn paint_frame_labels(
         let layout = TextLayout::single_run(
             &label.text,
             "system-ui",
-            12.0,
+            LABEL_FONT_SIZE,
             jian_core::scene::Color::rgba(
                 (label.color.r * 255.0) as u8,
                 (label.color.g * 255.0) as u8,
@@ -154,12 +164,13 @@ pub(super) fn paint_frame_labels(
             Point2D::ZERO,
         )
         .with_font_weight(500);
+        let text_baseline_y = sy - 18.0;
         let mut text_x = hit_rect.origin.x + LABEL_SIDE_PADDING;
         if label.generating {
             draw_icon(
                 cx.backend,
                 Icon::Sparkles,
-                Point2D::new(text_x, hit_rect.origin.y + 7.0),
+                Point2D::new(text_x, generating_icon_top(text_baseline_y)),
                 GENERATING_ICON_SIZE,
                 label.color,
                 1.5,
@@ -167,6 +178,19 @@ pub(super) fn paint_frame_labels(
             text_x += GENERATING_ICON_SIZE + GENERATING_ICON_GAP;
         }
         cx.backend
-            .draw_text(&layout, Point2D::new(text_x, sy - 18.0));
+            .draw_text(&layout, Point2D::new(text_x, text_baseline_y));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generating_icon_center_matches_text_line_center() {
+        let baseline_y = 40.0;
+        let icon_center_y = generating_icon_top(baseline_y) + GENERATING_ICON_SIZE / 2.0;
+        let text_center_y = baseline_y - LABEL_FONT_SIZE * 0.35;
+        assert!((icon_center_y - text_center_y).abs() < f32::EPSILON);
     }
 }
