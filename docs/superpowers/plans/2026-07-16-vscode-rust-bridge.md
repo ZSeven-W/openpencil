@@ -166,9 +166,10 @@ pub struct SyncGate {
 impl SyncGate {
     /// After a pull apply (new baseline = post-apply pair) or a push
     /// confirmation (baseline = the pair serialized into that push).
-    /// Clears conflict + accept_expected; clears open_pending/open_pull_block
-    /// ONLY when `generation >= open target generation` (older confirmations
-    /// leave the pending open untouched).
+    /// Clears conflict + accept_expected + any UNDRAINED conflict latch
+    /// (a resolved conflict must not be announced); clears
+    /// open_pending/open_pull_block ONLY when `generation >= open target
+    /// generation` (older confirmations leave the pending open untouched).
     pub fn note_synced(&mut self, generation: u64, revision: u64);
     pub fn note_conflict(&mut self, server_version: u64); // also clears accept_expected
     /// Set SYNCHRONOUSLY in the OpenDocument prologue, right after
@@ -180,10 +181,11 @@ impl SyncGate {
     pub fn note_open_pending(&mut self, target_generation: u64);
     pub fn open_pending(&self) -> bool;
     /// Accept-remote resolution: forget the baseline, clear the conflict
-    /// (retaining its server version inside accept_expected), lift
-    /// open_pull_block, and record `current` as the expected pair for the
-    /// resolving pull — but KEEP open_pending: it clears when that pull's
-    /// apply calls note_synced (bridge's cue to emit `opened`).
+    /// AND any undrained conflict latch (retaining the server version
+    /// inside accept_expected), lift open_pull_block, and record `current`
+    /// as the expected pair for the resolving pull — but KEEP open_pending:
+    /// it clears when that pull's apply calls note_synced (bridge's cue to
+    /// emit `opened`).
     pub fn resolve_accept_remote(&mut self, current: (u64, u64));
     /// Wiring escape hatch for a broken accept window: returns the retained
     /// server version when accept_expected is set and `current` moved past
@@ -200,8 +202,11 @@ impl SyncGate {
     /// generation) — drain to emit `opened`.
     pub fn take_opened_edge(&mut self) -> Option<u64>;
     /// set by note_conflict (holds the server version) — drain to emit
-    /// `sync-conflict`. Resolution paths don't need any cache discipline:
-    /// a back-to-back second conflict simply sets the latch again.
+    /// `sync-conflict`. CLEARED by note_synced and resolve_accept_remote:
+    /// a conflict resolved before the observer drained the latch must NOT
+    /// be announced (stale emission would pop a ghost dialog on the host).
+    /// A back-to-back second conflict simply sets the latch again after
+    /// the resolution cleared it — still reported.
     pub fn take_conflict_edge(&mut self) -> Option<u64>;
     /// Pulls allowed when open_pull_block is clear, no conflict pending,
     /// AND no unpushed local edits. None baseline (mount) allows the
@@ -321,6 +326,21 @@ fn back_to_back_conflicts_both_latch() {
     g.resolve_accept_remote((1, 1));
     g.note_conflict(8); // second conflict lands before any observer tick
     assert_eq!(g.take_conflict_edge(), Some(8)); // not lost
+    assert_eq!(g.take_conflict_edge(), None);
+}
+
+#[test]
+fn resolved_conflict_latch_is_not_announced() {
+    // conflict latched, then resolved BEFORE the observer drained it —
+    // a stale emission would pop a ghost dialog on the host:
+    let mut g = SyncGate::default();
+    g.note_synced(1, 0);
+    g.note_conflict(7);
+    g.resolve_accept_remote((1, 1)); // resolution clears the pending latch
+    assert_eq!(g.take_conflict_edge(), None);
+
+    g.note_conflict(9);
+    g.note_synced(1, 2); // UseLocal-style completion also clears it
     assert_eq!(g.take_conflict_edge(), None);
 }
 
