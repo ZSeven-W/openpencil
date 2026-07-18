@@ -44,7 +44,9 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, ChatToolExecutor, StopReason};
+use op_ai::chat_provider::{
+    ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, ChatToolExecutor, StopReason,
+};
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
 use op_orchestrator::{AppendContext, DesignRequest};
@@ -67,6 +69,45 @@ pub enum DesignIntent {
     New,
     Modify,
     Chat,
+}
+
+const RETRY_PHRASES: &[&str] = &[
+    "retry",
+    "try again",
+    "run it again",
+    "please try again",
+    "vuelve a intentar",
+    "intenta de nuevo",
+    "reintenta",
+    "otra vez",
+];
+
+fn is_retry_phrase(text: &str) -> bool {
+    let normalized = text
+        .trim()
+        .trim_matches(|c: char| !c.is_alphanumeric())
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    RETRY_PHRASES.contains(&normalized.as_str())
+}
+
+/// Resolve a short retry utterance to the most recent actionable user request.
+/// The transcript remains unchanged; callers use this only as the effective
+/// instruction sent to stateless design/modify providers.
+pub fn resolve_retry_instruction(user_text: &str, history: &[(ChatHistoryRole, String)]) -> String {
+    if !is_retry_phrase(user_text) {
+        return user_text.to_string();
+    }
+    history
+        .iter()
+        .rev()
+        .find_map(|(role, text)| {
+            (*role == ChatHistoryRole::User && !text.trim().is_empty() && !is_retry_phrase(text))
+                .then(|| text.clone())
+        })
+        .unwrap_or_else(|| user_text.to_string())
 }
 
 /// TS `CLASSIFY_PROMPT` — verbatim.
@@ -755,30 +796,66 @@ fn strip_base64_data_uris(value: &mut serde_json::Value) {
     }
 }
 
+struct ModifyNodeParse {
+    nodes: Vec<crate::chat_canvas_tools::DesignModificationOp>,
+    diagnostic: Option<String>,
+}
+
+fn parse_modify_response(full_response: &str) -> ModifyNodeParse {
+    if full_response.trim().is_empty() {
+        return ModifyNodeParse {
+            nodes: Vec::new(),
+            diagnostic: Some("the model returned no text".into()),
+        };
+    }
+
+    let script = op_mcp::script_runner::run_script_to_program(full_response);
+    let nodes: Vec<crate::chat_canvas_tools::DesignModificationOp> = script
+        .as_ref()
+        .ok()
+        .map(|program| op_mcp::parse_program_objects(program).into_iter().collect())
+        .unwrap_or_default();
+    if !nodes.is_empty() {
+        return ModifyNodeParse {
+            nodes,
+            diagnostic: None,
+        };
+    }
+
+    match op_orchestrator::parse::parse_nodes(full_response) {
+        Ok(nodes) if !nodes.is_empty() => ModifyNodeParse {
+            nodes: nodes
+                .into_iter()
+                .map(|node| {
+                    (
+                        "null".to_string(),
+                        serde_json::to_value(node).unwrap_or(serde_json::Value::Null),
+                    )
+                })
+                .collect(),
+            diagnostic: None,
+        },
+        parsed => {
+            let script_detail = match script {
+                Ok(_) => "response contained no I(...) operations".to_string(),
+                Err(_) => "response was not valid modification JavaScript".to_string(),
+            };
+            let node_detail = match parsed {
+                Ok(_) => "node response contained no nodes".to_string(),
+                Err(_) => "response was not valid node JSON".to_string(),
+            };
+            ModifyNodeParse {
+                nodes: Vec::new(),
+                diagnostic: Some(format!("{script_detail}; {node_detail}")),
+            }
+        }
+    }
+}
+
 pub(crate) fn parse_modify_nodes(
     full_response: &str,
 ) -> Vec<crate::chat_canvas_tools::DesignModificationOp> {
-    let nodes = op_mcp::script_runner::run_script_to_program(full_response)
-        .ok()
-        .map(|program| {
-            op_mcp::parse_program_objects(&program)
-                .into_iter()
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    if !nodes.is_empty() {
-        return nodes;
-    }
-    op_orchestrator::parse::parse_nodes(full_response)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|node| {
-            (
-                "null".to_string(),
-                serde_json::to_value(node).unwrap_or(serde_json::Value::Null),
-            )
-        })
-        .collect()
+    parse_modify_response(full_response).nodes
 }
 
 /// Build the modification plan: target selection per
@@ -890,7 +967,9 @@ const MODIFY_RETRY_REMINDER: &str =
 struct ModifyTurnParse {
     full_response: String,
     nodes: Vec<crate::chat_canvas_tools::DesignModificationOp>,
+    parse_diagnostic: Option<String>,
     stream_error: Option<String>,
+    retryable_completion: bool,
 }
 
 fn applied_modify_nodes_json(
@@ -912,6 +991,7 @@ fn stream_and_parse_modify_turn(
 ) -> ModifyTurnParse {
     let mut full_response = String::new();
     let mut stream_error: Option<String> = None;
+    let mut retryable_completion = false;
     for delta in provider.send(request) {
         match delta {
             ChatDelta::TextDelta(s) => full_response.push_str(&s),
@@ -922,22 +1002,47 @@ fn stream_and_parse_modify_turn(
                 stream_error = Some(msg);
                 break;
             }
-            ChatDelta::Done { .. } => break,
+            ChatDelta::Done { stop_reason } => {
+                retryable_completion = stop_reason == StopReason::EndTurn;
+                break;
+            }
         }
     }
 
     // TS order: parse first; a stream error only surfaces when no
     // nodes could be extracted (design-generator.ts:158-165).
-    let nodes = parse_modify_nodes(&full_response);
+    let parsed = parse_modify_response(&full_response);
     ModifyTurnParse {
         full_response,
-        nodes,
+        nodes: parsed.nodes,
+        parse_diagnostic: parsed.diagnostic,
         stream_error,
+        retryable_completion,
     }
 }
 
-fn with_modify_retry_reminder(mut request: ChatRequest) -> ChatRequest {
+fn bounded_feedback(text: &str, max_chars: usize) -> String {
+    let mut chars = text.chars();
+    let mut bounded = chars.by_ref().take(max_chars).collect::<String>();
+    if chars.next().is_some() {
+        bounded.push_str("...");
+    }
+    bounded
+}
+
+fn with_modify_retry_feedback(mut request: ChatRequest, failed: &ModifyTurnParse) -> ChatRequest {
     request.system_prompt.push_str(MODIFY_RETRY_REMINDER);
+    let diagnostic = failed
+        .stream_error
+        .as_deref()
+        .or(failed.parse_diagnostic.as_deref())
+        .unwrap_or("no applicable nodes were extracted");
+    request.user_message.push_str(
+        "\n\nRETRY FEEDBACK:\nThe previous response produced no applicable edit. Rewrite the requested modification as valid I(parent, node) JavaScript.\nParser feedback: ",
+    );
+    request
+        .user_message
+        .push_str(&bounded_feedback(diagnostic, 500));
     request
 }
 
@@ -1043,14 +1148,19 @@ pub fn run_modify_turn(
     }
 
     let mut parsed = stream_and_parse_modify_turn(provider, request.clone());
-    if parsed.nodes.is_empty() {
-        parsed = stream_and_parse_modify_turn(provider, with_modify_retry_reminder(request));
+    let mut retried = false;
+    if parsed.nodes.is_empty() && parsed.stream_error.is_none() && parsed.retryable_completion {
+        retried = true;
+        let retry_request = with_modify_retry_feedback(request, &parsed);
+        parsed = stream_and_parse_modify_turn(provider, retry_request);
     }
 
     let ModifyTurnParse {
         full_response,
         nodes,
+        parse_diagnostic: _,
         stream_error,
+        retryable_completion: _,
     } = parsed;
     if !nodes.is_empty() {
         let args = serde_json::json!({
@@ -1086,8 +1196,11 @@ pub fn run_modify_turn(
 
     let message = if let Some(err) = stream_error {
         err
+    } else if retried {
+        "The model did not return an applicable edit after one automatic retry. Name the element and the exact change, or retry the previous instruction."
+            .to_string()
     } else {
-        "The model returned a description instead of an applyable edit. Try rephrasing (e.g. name the element to add) or run it again."
+        "The model did not return an applicable edit. Name the element and the exact change, or retry the previous instruction."
             .to_string()
     };
     let _ = chat_tx.send(ChatDelta::Error(message));

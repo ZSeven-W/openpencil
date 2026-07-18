@@ -67,6 +67,7 @@ pub fn launch_if_pending(
         return false;
     };
     host.mark_editor_state_dirty();
+    let effective_user_text = resolve_turn_user_text(host.editor_state(), &user_text);
     // TS parity (ai-chat-handlers.ts:560-679): builtin / ACP entries
     // take their own early-return paths; ONLY external CLI providers
     // run the standard-mode classify → modify/new/chat pipeline.
@@ -77,21 +78,26 @@ pub fn launch_if_pending(
         .map(|entry| entry.builtin_provider_id.is_some() || entry.acp_agent_id().is_some())
         .unwrap_or(false);
     if !is_builtin_or_acp {
-        if launch_cli_standard_turn(host, &user_text, current_chat, current_design) {
+        if launch_cli_standard_turn(host, &effective_user_text, current_chat, current_design) {
             return true;
         }
         // CLI transport construction failed — fall through to the
         // honest-error path below.
-    } else if should_launch_direct_modify(host.editor_state(), &user_text) {
-        if launch_direct_modify_turn(host, &user_text, current_chat, current_design) {
+    } else if should_launch_direct_modify(host.editor_state(), &effective_user_text) {
+        if launch_direct_modify_turn(host, &effective_user_text, current_chat, current_design) {
             return true;
         }
-    } else if matches!(classify_intent(&user_text), Intent::Design) {
+    } else if matches!(classify_intent(&effective_user_text), Intent::Design) {
         // Phase 2.3: When the design-agent-loop flag is ON and a built-in
         // provider is configured, run the agentic tool-loop with the 14-tool
         // design toolset instead of the orchestrator pipeline. Flag OFF falls
         // through to the orchestrator path below — byte-for-byte unchanged.
-        if launch_design_loop_turn(host, user_text.clone(), current_chat, current_design) {
+        if launch_design_loop_turn(
+            host,
+            effective_user_text.clone(),
+            current_chat,
+            current_design,
+        ) {
             return true;
         }
         // Orchestrator path — unchanged when flag is OFF or no built-in
@@ -110,10 +116,11 @@ pub fn launch_if_pending(
             }
             let append_context = op_host_services::chat_intent::detect_append_intent(
                 host.editor_state(),
-                &user_text,
+                &effective_user_text,
             );
             let initial_state = host.editor_state().clone();
-            let request = build_design_request(user_text, &initial_state, append_context);
+            let request =
+                build_design_request(effective_user_text.clone(), &initial_state, append_context);
             *current_design = Some(op_host_services::design_session::start(
                 llm,
                 request,
@@ -160,7 +167,7 @@ pub fn launch_if_pending(
         let attachments = std::mem::take(&mut chat.pending_attachments);
         let req = ChatRequest {
             system_prompt,
-            user_message: user_text,
+            user_message: effective_user_text.clone(),
             history,
             max_output_tokens: 4096,
             thinking,
@@ -213,7 +220,7 @@ pub fn launch_if_pending(
     // this turn only. Every turn now carries the context-rich chat
     // system prompt (TS buildChatSystemPrompt port) — CLI transports
     // fold it (plus a history digest) into their prompt string.
-    let system_prompt = build_chat_system_prompt(host.editor_state(), &user_text);
+    let system_prompt = build_chat_system_prompt(host.editor_state(), &effective_user_text);
     let model = selected_cli_model_id(host);
     let chat = &mut host.editor_state_mut().chat;
     let thinking = chat.thinking_mode;
@@ -221,7 +228,7 @@ pub fn launch_if_pending(
     let attachments = std::mem::take(&mut chat.pending_attachments);
     let req = ChatRequest {
         system_prompt,
-        user_message: user_text,
+        user_message: effective_user_text,
         history,
         max_output_tokens: 4096,
         thinking,
@@ -231,6 +238,15 @@ pub fn launch_if_pending(
     };
     *current_chat = Some(ChatSession::start(provider, req));
     true
+}
+
+fn resolve_turn_user_text(state: &EditorState, user_text: &str) -> String {
+    let history = trim_chat_history(
+        &chat_history_from_transcript(&state.chat.messages),
+        DEFAULT_MAX_MESSAGES,
+        DEFAULT_MAX_CHARS,
+    );
+    op_host_services::chat_intent::resolve_retry_instruction(user_text, &history)
 }
 
 fn should_launch_direct_modify(state: &EditorState, user_text: &str) -> bool {

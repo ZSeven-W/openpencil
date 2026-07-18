@@ -102,3 +102,29 @@ fn no_selection_modify_keyword_behavior_is_unchanged() {
         "explicit modify wording should still launch direct modify without a selection"
     );
 }
+
+#[test]
+fn retry_reuses_last_instruction_with_the_current_selection() {
+    let mut state = state_with_selected_card();
+    state.chat.messages.push(op_editor_core::ChatMessage::user(
+        "add a stronger border to the selected card",
+    ));
+    state
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant(
+            "error: no applicable edit was returned",
+        ));
+    let instruction = resolve_turn_user_text(&state, "vuelve a intentar");
+    let plan = op_host_services::chat_intent::build_modify_plan(&state, &instruction)
+        .expect("selected card produces a modify plan");
+
+    assert!(should_launch_direct_modify(&state, &instruction));
+    assert!(plan
+        .user_message
+        .contains("add a stronger border to the selected card"));
+    assert!(plan.user_message.contains("popular-card"));
+    assert!(!plan
+        .user_message
+        .contains("INSTRUCTION:\nvuelve a intentar"));
+}
