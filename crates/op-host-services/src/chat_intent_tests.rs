@@ -1104,7 +1104,12 @@ fn run_modify_turn_script_response_applies_nodes_and_marks_applied() {
             id:"hero",
             type:"frame",
             name:"Hero Rewritten",
-            children:[{type:"text", name:"Progress Label", content:"0:42"}]
+            children:[{
+                type:"text",
+                name:"Progress Label",
+                content:"0:42",
+                fontSize:"$type-caption-size"
+            }]
         });
     "##;
 
@@ -1112,6 +1117,11 @@ fn run_modify_turn_script_response_applies_nodes_and_marks_applied() {
 
     assert_eq!(nodes[0].0, "null");
     assert_eq!(nodes[0].1["id"], serde_json::json!("hero"));
+    assert_eq!(
+        nodes[0].1["children"][0]["fontSize"],
+        serde_json::json!(12),
+        "script modification nodes must receive the same numeric-token normalization as JSON responses"
+    );
     assert_eq!(
         deltas[0],
         ChatDelta::TextDelta(

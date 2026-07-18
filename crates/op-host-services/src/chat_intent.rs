@@ -813,7 +813,15 @@ fn parse_modify_response(full_response: &str) -> ModifyNodeParse {
     let nodes: Vec<crate::chat_canvas_tools::DesignModificationOp> = script
         .as_ref()
         .ok()
-        .map(|program| op_mcp::parse_program_objects(program).into_iter().collect())
+        .map(|program| {
+            op_mcp::parse_program_objects(program)
+                .into_iter()
+                .map(|(parent, mut node)| {
+                    op_orchestrator::parse::normalize_generated_node_json(&mut node);
+                    (parent, node)
+                })
+                .collect()
+        })
         .unwrap_or_default();
     if !nodes.is_empty() {
         return ModifyNodeParse {

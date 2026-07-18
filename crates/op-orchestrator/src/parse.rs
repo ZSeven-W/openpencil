@@ -301,7 +301,9 @@ fn deserialize_roots(roots: Vec<serde_json::Value>) -> Result<Vec<PenNode>, Pars
     Ok(nodes)
 }
 
-pub(crate) fn normalize_generated_node_json(value: &mut serde_json::Value) {
+/// Normalize model-generated node JSON shorthands and numeric design tokens.
+/// This does not assign ids or validate the result against [`PenNode`].
+pub fn normalize_generated_node_json(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Array(items) => {
             for item in items {
