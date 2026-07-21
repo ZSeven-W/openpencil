@@ -147,6 +147,26 @@ scoop install openpencil
 
 **Linux / Windows direct download:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
 
+**Nix (Linux x86_64):**
+
+```bash
+nix develop
+nix run .                         # launch the desktop app
+nix build .#openpencil            # native web host + CanvasKit web bundle
+nix build .#op-cli                # the `op` CLI
+nix build .#prebuilt              # use the matching upstream desktop archive
+nix build .#prebuilt-cli          # use the matching upstream CLI archive
+nix build .#web-sdk-packages      # npm tarballs for the web SDKs
+nix build .#appimage              # portable desktop AppImage
+```
+
+The flake uses the pinned Rust toolchain from `rust-toolchain.toml` and is
+currently published for `x86_64-linux`. A Debian package is not produced by
+the flake yet; use the upstream release artifacts when a `.deb` is required.
+The `prebuilt` outputs require the upstream GitHub release for the workspace
+version to publish matching Linux archives; otherwise use the source-built
+outputs above.
+
 **CLI (`op`):**
 
 ```bash
