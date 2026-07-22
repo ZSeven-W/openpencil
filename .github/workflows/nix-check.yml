@@ -1,0 +1,76 @@
+name: Nix flake checks
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "flake.nix"
+      - "flake.lock"
+      - "crates/op-host-desktop/assets/icon.png"
+      - ".github/workflows/nix-check.yml"
+  push:
+    branches: ["**"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "flake.nix"
+      - "flake.lock"
+      - "crates/op-host-desktop/assets/icon.png"
+      - ".github/workflows/nix-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flake:
+    name: Build and smoke-test prebuilt outputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Enable Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Evaluate flake checks
+        run: nix flake check --no-build --show-trace
+
+      - name: Build prebuilt packages
+        run: nix build .#prebuilt .#prebuilt-cli --no-link
+
+      - name: Install headless display server
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes xvfb
+
+      - name: Smoke-test prebuilt CLI
+        run: |
+          output="$(nix run .#prebuilt-cli -- --version)"
+          printf '%s\n' "$output"
+          printf '%s\n' "$output" | grep -Eq '^\{"version":"[0-9]+\.[0-9]+\.[0-9]+"\}$'
+
+      - name: Smoke-test prebuilt desktop
+        shell: bash
+        run: |
+          set +e
+          timeout 20s xvfb-run -a nix run .#prebuilt >/tmp/openpencil-desktop.log 2>&1
+          status=$?
+          set -e
+          if [[ "$status" -ne 0 && "$status" -ne 124 ]]; then
+            cat /tmp/openpencil-desktop.log
+            exit "$status"
+          fi
+          if grep -Eq 'error while loading|cannot open shared object|No such file' /tmp/openpencil-desktop.log; then
+            cat /tmp/openpencil-desktop.log
+            exit 1
+          fi
+
+      - name: Run the clean NixOS runtime test
+        run: nix build .#checks.x86_64-linux.prebuilt-runtime --no-link
