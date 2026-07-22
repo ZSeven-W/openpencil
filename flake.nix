@@ -517,7 +517,6 @@
           )}
         '';
 
->>>>>>> 46a2ad0d (feat(integration): expose declarative harness surface)
         appimage = rs-harbor.lib.mkAppImage {
           inherit nix-appimage system version;
           pname = "openpencil";
