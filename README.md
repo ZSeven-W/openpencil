@@ -156,6 +156,8 @@ nix build .#openpencil            # native web host + CanvasKit web bundle
 nix build .#op-cli                # the `op` CLI
 nix build .#prebuilt              # use the matching upstream desktop archive
 nix build .#prebuilt-cli          # use the matching upstream CLI archive
+nix build .#web-server            # native GL-free web server + web bundle
+nix build .#runtime-prebuilt      # prebuilt desktop + `op` CLI runtime
 nix build .#web-sdk-packages      # npm tarballs for the web SDKs
 nix build .#appimage              # portable desktop AppImage
 ```
