@@ -103,6 +103,16 @@
           libxcb-wm
         ];
         runtimeLibraries = nativeLibraries;
+        # Release archives are Ubuntu-built ELF binaries.  Patch their
+        # interpreter and shared-library references into the Nix store before
+        # wrapping them, otherwise they fail before LD_LIBRARY_PATH is read.
+        prebuiltDesktopRuntimeLibraries =
+          runtimeLibraries
+          ++ [
+            pkgs.zlib
+            pkgs.stdenv.cc.cc.lib
+          ];
+        prebuiltCliRuntimeLibraries = [pkgs.stdenv.cc.cc.lib];
 
         source = pkgs.runCommand "openpencil-source-${version}" {} ''
           mkdir -p $out/vendor/agent $out/vendor/casement $out/vendor/jian
@@ -211,7 +221,8 @@
             hash = "sha256-pcJ4l4e7UYQcI2jNCJ3lxoc7o5h3vKCGzj3hl1O42NU=";
           };
           dontUnpack = true;
-          nativeBuildInputs = [pkgs.makeWrapper];
+          nativeBuildInputs = [pkgs.autoPatchelfHook pkgs.makeWrapper];
+          buildInputs = prebuiltDesktopRuntimeLibraries;
           installPhase = ''
             runHook preInstall
             tar -xzf "$src" -C "$TMPDIR"
@@ -232,7 +243,7 @@
           '';
           postFixup = ''
             wrapProgram $out/bin/openpencil-desktop \
-              --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath runtimeLibraries}
+              --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath prebuiltDesktopRuntimeLibraries}
           '';
         };
 
@@ -244,6 +255,8 @@
             hash = "sha256-lWxl3h93gOwXnKGtSxL9VneaR1pbdr78pNpxQ6ZaUYg=";
           };
           dontUnpack = true;
+          nativeBuildInputs = [pkgs.autoPatchelfHook];
+          buildInputs = prebuiltCliRuntimeLibraries;
           installPhase = ''
             runHook preInstall
             tar -xzf "$src" -C "$TMPDIR"
@@ -394,6 +407,42 @@
             touch $out
           '';
 
+        # Exercise the same `nix run` surface that users consume, inside a
+        # clean NixOS VM rather than only evaluating the derivations.
+        prebuiltTestFlake = pkgs.writeTextDir "flake.nix" ''
+          {
+            outputs = {self}: {
+              apps.x86_64-linux.prebuilt = {
+                type = "app";
+                program = "${prebuiltDesktopPackage}/bin/openpencil-desktop";
+              };
+              apps.x86_64-linux.prebuilt-cli = {
+                type = "app";
+                program = "${prebuiltCliPackage}/bin/op";
+              };
+            };
+          }
+        '';
+
+        prebuiltRuntimeTest = pkgs.testers.runNixOSTest ({...}: {
+          name = "openpencil-prebuilt-runtime";
+          nodes.machine = {pkgs, ...}: {
+            system.stateVersion = "25.11";
+            virtualisation.memorySize = 2048;
+            nix.settings.experimental-features = ["nix-command" "flakes"];
+            environment.etc."openpencil-test-flake".source = prebuiltTestFlake;
+            environment.systemPackages = [
+              prebuiltDesktopPackage
+              prebuiltCliPackage
+              pkgs.xvfb-run
+            ];
+          };
+          testScript = ''
+            machine.succeed("nix run --offline /etc/openpencil-test-flake#prebuilt-cli -- --version | grep -F ${version}")
+            machine.succeed("set +e; timeout 15s xvfb-run -a nix run --offline /etc/openpencil-test-flake#prebuilt >/tmp/openpencil.log 2>&1; rc=$?; test $rc -eq 0 -o $rc -eq 124; ! grep -E 'error while loading|cannot open shared object|No such file' /tmp/openpencil.log")
+          '';
+        });
+
         appimage = rs-harbor.lib.mkAppImage {
           inherit nix-appimage system version;
           pname = "openpencil";
@@ -463,6 +512,9 @@
           web-sdk-wasm = webSdkWasm;
           web-sdk-packages = webSdkPackages;
           python = pythonCheck;
+          prebuilt = prebuiltDesktopPackage;
+          prebuilt-cli = prebuiltCliPackage;
+          prebuilt-runtime = prebuiltRuntimeTest;
           flake-format = pkgs.runCommand "openpencil-flake-format" {} ''
             ${pkgs.alejandra}/bin/alejandra --check ${./flake.nix}
             touch $out
