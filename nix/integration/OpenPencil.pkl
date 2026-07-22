@@ -1,0 +1,116 @@
+/// Stable integration contract exported by the OpenPencil flake.
+
+class PackageOutputs {
+  sourceRuntime: String
+  prebuiltRuntime: String
+  skills: String
+}
+
+class Executables {
+  desktop: String
+  cli: String
+}
+
+class McpTransport {
+  kind: String
+  args: Listing<String> = new Listing {}
+  urlTemplate: String? = null
+  launcherArgs: Listing<String> = new Listing {}
+  loopbackOnly: Boolean = true
+}
+
+class HarnessAdapter {
+  format: String
+  configPath: String
+  serverKey: String
+}
+
+class Integration {
+  schemaVersion: Int
+  id: String
+  systems: Listing<String>
+  packages: PackageOutputs
+  executables: Executables
+  documentTemplate: String
+  mcp: Mapping<String, McpTransport>
+  harnesses: Mapping<String, HarnessAdapter>
+  skillnetManifest: String
+  skills: Listing<String>
+}
+
+integration = new Integration {
+  schemaVersion = 1
+  id = "openpencil"
+  systems = new Listing { "x86_64-linux" }
+  packages = new PackageOutputs {
+    sourceRuntime = "runtime"
+    prebuiltRuntime = "runtime-prebuilt"
+    skills = "skills"
+  }
+  executables = new Executables {
+    desktop = "openpencil-desktop"
+    cli = "op"
+  }
+  documentTemplate = "share/openpencil/default.op"
+  mcp = new {
+    ["stdio"] = new McpTransport {
+      kind = "stdio"
+      args = new Listing { "--mcp"; "{document}" }
+    }
+    ["http"] = new McpTransport {
+      kind = "http"
+      urlTemplate = "http://127.0.0.1:{port}/mcp"
+      launcherArgs = new Listing { "--live-mcp"; "{port}" }
+      loopbackOnly = true
+    }
+  }
+  harnesses = new {
+    ["claude"] = new HarnessAdapter {
+      format = "json"
+      configPath = "~/.claude.json"
+      serverKey = "openpencil"
+    }
+    ["codex"] = new HarnessAdapter {
+      format = "toml"
+      configPath = "~/.codex/config.toml"
+      serverKey = "openpencil"
+    }
+    ["gemini"] = new HarnessAdapter {
+      format = "json"
+      configPath = "~/.gemini/settings.json"
+      serverKey = "openpencil"
+    }
+    ["opencode"] = new HarnessAdapter {
+      format = "json"
+      configPath = "~/.opencode/config.json"
+      serverKey = "openpencil"
+    }
+    ["kiro"] = new HarnessAdapter {
+      format = "json"
+      configPath = "~/.kiro/settings.json"
+      serverKey = "openpencil"
+    }
+    ["copilot"] = new HarnessAdapter {
+      format = "json"
+      configPath = "~/.config/github-copilot/mcp.json"
+      serverKey = "openpencil"
+    }
+    ["antigravity"] = new HarnessAdapter {
+      format = "json"
+      configPath = "~/.gemini/config/mcp_config.json"
+      serverKey = "openpencil"
+    }
+    ["grok-build"] = new HarnessAdapter {
+      format = "toml"
+      configPath = "~/.grok/config.toml"
+      serverKey = "openpencil"
+    }
+    ["hermes"] = new HarnessAdapter {
+      format = "nix"
+      configPath = "services.infernix.hermes-agent.mcpServers"
+      serverKey = "openpencil"
+    }
+  }
+  skillnetManifest = "share/skillnet/openpencil/Skillnet.pkl"
+  skills = new Listing { "openpencil-design" }
+}

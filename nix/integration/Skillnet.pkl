@@ -1,0 +1,15 @@
+/// Skillnet manifest shipped in the immutable OpenPencil skills bundle.
+
+class Skill {
+  role: String = "entrypoint"
+  dependencies: Listing<String> = new Listing {}
+  source: String? = null
+}
+
+schemaVersion = 1
+skills: Mapping<String, Skill> = new {
+  ["openpencil-design"] = new Skill {
+    role = "entrypoint"
+    source = "skills/openpencil-design"
+  }
+}
