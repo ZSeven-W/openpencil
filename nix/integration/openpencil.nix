@@ -1,0 +1,11 @@
+{ integration = { __pkl_class = "Integration"; schemaVersion = 1; id = "openpencil"; systems = [
+      "x86_64-linux"
+    ]; packages = { __pkl_class = "PackageOutputs"; sourceRuntime = "runtime"; prebuiltRuntime = "runtime-prebuilt"; skills = "skills"; }; executables = { __pkl_class = "Executables"; desktop = "openpencil-desktop"; cli = "op"; }; documentTemplate = "share/openpencil/default.op"; mcp = { stdio = { __pkl_class = "McpTransport"; kind = "stdio"; args = [
+          "--mcp"
+          "{document}"
+        ]; urlTemplate = null; launcherArgs = [ ]; loopbackOnly = true; }; http = { __pkl_class = "McpTransport"; kind = "http"; args = [ ]; urlTemplate = "http://127.0.0.1:{port}/mcp"; launcherArgs = [
+          "--live-mcp"
+          "{port}"
+        ]; loopbackOnly = true; }; }; harnesses = { claude = { __pkl_class = "HarnessAdapter"; format = "json"; configPath = "~/.claude.json"; serverKey = "openpencil"; }; codex = { __pkl_class = "HarnessAdapter"; format = "toml"; configPath = "~/.codex/config.toml"; serverKey = "openpencil"; }; gemini = { __pkl_class = "HarnessAdapter"; format = "json"; configPath = "~/.gemini/settings.json"; serverKey = "openpencil"; }; opencode = { __pkl_class = "HarnessAdapter"; format = "json"; configPath = "~/.opencode/config.json"; serverKey = "openpencil"; }; kiro = { __pkl_class = "HarnessAdapter"; format = "json"; configPath = "~/.kiro/settings.json"; serverKey = "openpencil"; }; copilot = { __pkl_class = "HarnessAdapter"; format = "json"; configPath = "~/.config/github-copilot/mcp.json"; serverKey = "openpencil"; }; antigravity = { __pkl_class = "HarnessAdapter"; format = "json"; configPath = "~/.gemini/config/mcp_config.json"; serverKey = "openpencil"; }; grok-build = { __pkl_class = "HarnessAdapter"; format = "toml"; configPath = "~/.grok/config.toml"; serverKey = "openpencil"; }; hermes = { __pkl_class = "HarnessAdapter"; format = "nix"; configPath = "services.infernix.hermes-agent.mcpServers"; serverKey = "openpencil"; }; }; skillnetManifest = "share/skillnet/openpencil/Skillnet.pkl"; skills = [
+      "openpencil-design"
+    ]; }; }
