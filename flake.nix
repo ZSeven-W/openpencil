@@ -481,6 +481,18 @@
           '';
         };
 
+        runtimePrebuiltToolsCheck = pkgs.runCommand "openpencil-runtime-prebuilt-tools-${version}" {} ''
+          test -x ${runtimePrebuiltPackage}/bin/openpencil-desktop
+          test -x ${runtimePrebuiltPackage}/bin/op
+          touch "$out"
+        '';
+
+        webServerToolsCheck = pkgs.runCommand "openpencil-web-server-tools-${version}" {} ''
+          test -x ${webServerPackage}/bin/op-host-web-server
+          test -d ${webServerPackage}/bin/web-bundle
+          touch "$out"
+        '';
+
         skillBundle = builtins.fromJSON (
           builtins.replaceStrings
           ["__OPENPENCIL_VERSION__"]
@@ -597,6 +609,8 @@
           prebuilt = prebuiltDesktopPackage;
           prebuilt-cli = prebuiltCliPackage;
           prebuilt-runtime = prebuiltRuntimeTest;
+          prebuilt-runtime-tools = runtimePrebuiltToolsCheck;
+          web-server-tools = webServerToolsCheck;
           integration-manifest =
             pkgs.runCommand "openpencil-integration-manifest" {
               nativeBuildInputs = [nix-pklx.packages.${system}.pklx];

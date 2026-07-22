@@ -10,7 +10,8 @@ For each supported system the contract names these package outputs:
 
 - `runtime`: source-built desktop and CLI runtime;
 - `runtime-prebuilt`: the matching release binaries, wrapped so `op` can find
-  the desktop executable;
+  the desktop executable (exports both `openpencil-desktop` and `op`);
+- `web-server`: the source-built `op-host-web-server` plus its web bundle;
 - `skills`: an immutable Skillnet bundle containing `Skillnet.pkl` and the
   OpenPencil design skill.
 
