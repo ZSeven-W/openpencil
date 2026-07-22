@@ -3,6 +3,7 @@
 class PackageOutputs {
   sourceRuntime: String
   prebuiltRuntime: String
+  webServer: String
   skills: String
 }
 
@@ -45,6 +46,7 @@ integration = new Integration {
   packages = new PackageOutputs {
     sourceRuntime = "runtime"
     prebuiltRuntime = "runtime-prebuilt"
+    webServer = "web-server"
     skills = "skills"
   }
   executables = new Executables {
