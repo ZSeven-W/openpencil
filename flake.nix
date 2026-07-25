@@ -378,7 +378,7 @@
           lockfile = ./packages/bun.lock;
           version = "1.3.14";
           installFlags = ["--cwd" "packages"];
-          hash = "sha256-phYvVM1A5DIVXUgfCEECE0FNCu4F1p0M2XiGJuH9DO8=";
+          hash = "sha256-EgiAPVlnJky8IPH1rZguhoclsfuyL9s8BjWJOV20H0s=";
         };
         webSdkPackages = pkgs.stdenvNoCC.mkDerivation {
           pname = "openpencil-web-sdk-packages";
