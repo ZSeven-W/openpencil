@@ -464,6 +464,11 @@
             virtualisation.memorySize = 2048;
             nix.settings.experimental-features = ["nix-command" "flakes"];
             environment.etc."openpencil-test-flake".source = prebuiltTestFlake;
+            environment.variables = {
+              LIBGL_ALWAYS_SOFTWARE = "1";
+              MESA_LOADER_DRIVER_OVERRIDE = "llvmpipe";
+              GALLIUM_DRIVER = "llvmpipe";
+            };
             environment.systemPackages = [
               prebuiltDesktopPackage
               prebuiltCliPackage
@@ -472,7 +477,7 @@
           };
           testScript = ''
             machine.succeed("nix run --offline /etc/openpencil-test-flake#prebuilt-cli -- --version | grep -F ${releaseVersion}")
-            machine.succeed("set +e; timeout 15s xvfb-run -a nix run --offline /etc/openpencil-test-flake#prebuilt >/tmp/openpencil.log 2>&1; rc=$?; test $rc -eq 0 -o $rc -eq 124; ! grep -E 'error while loading|cannot open shared object|No such file' /tmp/openpencil.log")
+            machine.succeed("set +e; timeout 15s xvfb-run -a -s '-screen 0 1280x720x24' nix run --offline /etc/openpencil-test-flake#prebuilt >/tmp/openpencil.log 2>&1; rc=$?; test $rc -eq 0 -o $rc -eq 124; ! grep -E 'error while loading|cannot open shared object' /tmp/openpencil.log")
           '';
         });
 

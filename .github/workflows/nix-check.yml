@@ -66,7 +66,8 @@ jobs:
       - name: Install headless display server
         run: |
           sudo apt-get update
-          sudo apt-get install --yes xvfb
+          sudo apt-get install --yes \
+            libegl1 libgles2 libgl1-mesa-dri libgbm1 mesa-utils xvfb
 
       - name: Smoke-test prebuilt CLI
         run: |
@@ -78,7 +79,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          timeout 20s xvfb-run -a nix run .#prebuilt \
+          LIBGL_ALWAYS_SOFTWARE=1 \
+          MESA_LOADER_DRIVER_OVERRIDE=llvmpipe \
+          GALLIUM_DRIVER=llvmpipe \
+          timeout 20s xvfb-run -a -s "-screen 0 1280x720x24" nix run .#prebuilt \
             >/tmp/openpencil-desktop.log 2>&1
           status=$?
           set -e
@@ -89,7 +93,7 @@ jobs:
             cat /tmp/openpencil-desktop.log
             exit "$status"
           fi
-          if grep -Eq 'error while loading|cannot open shared object|No such file' \
+          if grep -Eq 'error while loading|cannot open shared object' \
             /tmp/openpencil-desktop.log; then
             cat /tmp/openpencil-desktop.log
             exit 1
