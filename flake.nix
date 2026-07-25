@@ -270,7 +270,7 @@
           inherit version;
           src = pkgs.fetchurl {
             url = "https://github.com/ZSeven-W/openpencil/releases/download/v${version}/op-cli-linux-x86_64.tar.gz";
-            hash = "sha256-lWxl3h93gOwXnKGtSxL9VneaR1pbdr78pNpxQ6ZaUYg=";
+            hash = "sha256-rv+xEUhX57gQ5mzZ7JJ/qIPd4Ms+vwpu4miR4oiNIKI=";
           };
           dontUnpack = true;
           nativeBuildInputs = [pkgs.autoPatchelfHook];
