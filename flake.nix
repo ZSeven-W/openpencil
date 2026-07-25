@@ -378,7 +378,12 @@
           lockfile = ./packages/bun.lock;
           version = "1.3.14";
           installFlags = ["--cwd" "packages"];
-          hash = "sha256-EgiAPVlnJky8IPH1rZguhoclsfuyL9s8BjWJOV20H0s=";
+          # Bun's hoisted aliases are order-dependent when multiple versions
+          # are present; nested consumers already point at the correct ones.
+          postInstallNormalize = ''
+            rm -f packages/node_modules/.bun/node_modules/{string-width,strip-ansi,wrap-ansi}
+          '';
+          hash = "sha256-jaGVEagUeYrM2MzjUPvvzIF7DJwafLXJiWLWtts38SI=";
         };
         webSdkPackages = pkgs.stdenvNoCC.mkDerivation {
           pname = "openpencil-web-sdk-packages";
