@@ -870,6 +870,14 @@ jobs:
             echo "::error::missing op-cli artifacts"
             exit 1
           fi
+          for file in \
+            release-files/openpencil-desktop-linux-x86_64.tar.gz \
+            release-files/op-cli-linux-x86_64.tar.gz; do
+            if [ ! -f "$file" ]; then
+              echo "::error::missing Linux x86_64 Nix manifest asset: $file"
+              exit 1
+            fi
+          done
           if [ "${#sdk[@]}" -ne 3 ]; then
             echo "::error::expected 3 SDK tarballs, found ${#sdk[@]}"
             exit 1
@@ -959,6 +967,34 @@ jobs:
           name: ${{ steps.body.outputs.title }}
           body_path: release-body.md
           files: release-files/*
+      - name: Update latest published Nix release manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$OP_VERSION"
+          sri_hash() {
+            printf 'sha256-%s' "$(openssl dgst -sha256 -binary "release-files/$1" | base64 -w0)"
+          }
+          manifest="$(jq -n \
+            --arg version "$version" \
+            --arg desktopHash "$(sri_hash openpencil-desktop-linux-x86_64.tar.gz)" \
+            --arg cliHash "$(sri_hash op-cli-linux-x86_64.tar.gz)" \
+            '{version: $version, desktopHash: $desktopHash, cliHash: $cliHash}')"
+
+          git fetch origin main
+          git switch --create update-release-manifest origin/main
+          printf '%s\n' "$manifest" > nix/release-manifest.json
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add nix/release-manifest.json
+          if git diff --cached --quiet; then
+            echo "release manifest already current"
+            exit 0
+          fi
+          git commit -m "chore(release): update Nix release manifest for v${version}"
+          git push origin HEAD:main
 
   package-managers:
     name: Update Homebrew tap and Scoop bucket

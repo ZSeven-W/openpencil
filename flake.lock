@@ -353,17 +353,17 @@
     "jian": {
       "flake": false,
       "locked": {
-        "lastModified": 1783960960,
-        "narHash": "sha256-fAkDS8L7HciXXR51t79yURXlqxv0fPrkz31aua3dx6U=",
+        "lastModified": 1784811987,
+        "narHash": "sha256-9SPcztfg1WvPSKH7SHu3rYZa5X9ifpm3LJzMRAFiTJU=",
         "owner": "ZSeven-W",
         "repo": "jian",
-        "rev": "bd185eec6bdc8d2a29a0ed87872932f338be6cfc",
+        "rev": "df2376a018acbd8ec8d9fac58b05dde14a405aca",
         "type": "github"
       },
       "original": {
         "owner": "ZSeven-W",
         "repo": "jian",
-        "rev": "bd185eec6bdc8d2a29a0ed87872932f338be6cfc",
+        "rev": "df2376a018acbd8ec8d9fac58b05dde14a405aca",
         "type": "github"
       }
     },

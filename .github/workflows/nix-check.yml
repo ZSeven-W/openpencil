@@ -7,6 +7,7 @@ on:
       - "Cargo.lock"
       - "flake.nix"
       - "flake.lock"
+      - "nix/release-manifest.json"
       - "nix/integration/**"
       - "crates/op-host-desktop/assets/icon.png"
       - ".github/workflows/nix-check.yml"
@@ -17,6 +18,7 @@ on:
       - "Cargo.lock"
       - "flake.nix"
       - "flake.lock"
+      - "nix/release-manifest.json"
       - "nix/integration/**"
       - "crates/op-host-desktop/assets/icon.png"
       - ".github/workflows/nix-check.yml"
@@ -46,6 +48,20 @@ jobs:
 
       - name: Build prebuilt packages
         run: nix build .#prebuilt .#prebuilt-cli --no-link
+
+      - name: Build representative source outputs
+        run: |
+          nix build \
+            .#op-cli \
+            .#web-server \
+            .#web-bundle \
+            .#web-sdk-wasm \
+            .#web-sdk-packages \
+            .#appimage \
+            --no-link
+
+      - name: Verify generated integration sidecar
+        run: nix build .#checks.x86_64-linux.integration-sidecar --no-link
 
       - name: Install headless display server
         run: |

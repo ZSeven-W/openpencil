@@ -43,7 +43,7 @@
       flake = false;
     };
     jian = {
-      url = "github:ZSeven-W/jian/bd185eec6bdc8d2a29a0ed87872932f338be6cfc";
+      url = "github:ZSeven-W/jian/df2376a018acbd8ec8d9fac58b05dde14a405aca";
       flake = false;
     };
   };
@@ -78,6 +78,8 @@
           overlays = [(import rust-overlay)];
         };
         version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
+        releaseManifest = builtins.fromJSON (builtins.readFile ./nix/release-manifest.json);
+        releaseVersion = releaseManifest.version;
 
         toolchain = rs-harbor.lib.mkToolchain {
           inherit pkgs;
@@ -233,10 +235,10 @@
         # asset can avoid compiling Rust and Skia.
         prebuiltDesktopPackage = pkgs.stdenvNoCC.mkDerivation {
           pname = "openpencil-prebuilt";
-          inherit version;
+          version = releaseVersion;
           src = pkgs.fetchurl {
-            url = "https://github.com/ZSeven-W/openpencil/releases/download/v${version}/openpencil-desktop-linux-x86_64.tar.gz";
-            hash = "sha256-pcJ4l4e7UYQcI2jNCJ3lxoc7o5h3vKCGzj3hl1O42NU=";
+            url = "https://github.com/ZSeven-W/openpencil/releases/download/v${releaseVersion}/openpencil-desktop-linux-x86_64.tar.gz";
+            hash = releaseManifest.desktopHash;
           };
           dontUnpack = true;
           nativeBuildInputs = [pkgs.autoPatchelfHook pkgs.makeWrapper];
@@ -267,10 +269,10 @@
 
         prebuiltCliPackage = pkgs.stdenvNoCC.mkDerivation {
           pname = "openpencil-cli-prebuilt";
-          inherit version;
+          version = releaseVersion;
           src = pkgs.fetchurl {
-            url = "https://github.com/ZSeven-W/openpencil/releases/download/v${version}/op-cli-linux-x86_64.tar.gz";
-            hash = "sha256-rv+xEUhX57gQ5mzZ7JJ/qIPd4Ms+vwpu4miR4oiNIKI=";
+            url = "https://github.com/ZSeven-W/openpencil/releases/download/v${releaseVersion}/op-cli-linux-x86_64.tar.gz";
+            hash = releaseManifest.cliHash;
           };
           dontUnpack = true;
           nativeBuildInputs = [pkgs.autoPatchelfHook];
@@ -464,7 +466,7 @@
             ];
           };
           testScript = ''
-            machine.succeed("nix run --offline /etc/openpencil-test-flake#prebuilt-cli -- --version | grep -F ${version}")
+            machine.succeed("nix run --offline /etc/openpencil-test-flake#prebuilt-cli -- --version | grep -F ${releaseVersion}")
             machine.succeed("set +e; timeout 15s xvfb-run -a nix run --offline /etc/openpencil-test-flake#prebuilt >/tmp/openpencil.log 2>&1; rc=$?; test $rc -eq 0 -o $rc -eq 124; ! grep -E 'error while loading|cannot open shared object|No such file' /tmp/openpencil.log")
           '';
         });
@@ -616,6 +618,16 @@
               SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
             } ''
               pklx eval ${./nix/integration/OpenPencil.pkl} -o "$out"
+            '';
+          integration-sidecar =
+            pkgs.runCommand "openpencil-integration-sidecar" {
+              nativeBuildInputs = [nix-pklx.packages.${system}.pklx pkgs.diffutils];
+              SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+            } ''
+              generated="$TMPDIR/openpencil.nix"
+              pklx eval ${./nix/integration/OpenPencil.pkl} -o "$generated"
+              diff -u ${./nix/integration/openpencil.nix} "$generated"
+              touch "$out"
             '';
           flake-format = pkgs.runCommand "openpencil-flake-format" {} ''
             ${pkgs.alejandra}/bin/alejandra --check ${./flake.nix}
