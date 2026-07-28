@@ -256,11 +256,20 @@ EOF
 
     cat > "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache.rs" <<'EOF'
 pub struct CollabJwksCacheLimits;
+#[cfg(test)]
+#[path = "collab_policy_cache_tests.rs"]
+mod policy_tests;
 EOF
 
     cat > "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache_cancellation_tests.rs" <<'EOF'
 #![cfg(test)]
 fn deterministic_test_key(seed: u8) {
+    let _ = SigningKey::from_bytes(&[seed; 32]);
+}
+EOF
+
+    cat > "$fixture_root/crates/op-auth-bridge/src/collab_policy_cache_tests.rs" <<'EOF'
+fn deterministic_policy_test_key(seed: u8) {
     let _ = SigningKey::from_bytes(&[seed; 32]);
 }
 EOF
@@ -296,7 +305,25 @@ EOF
 
     cat > "$fixture_root/crates/op-auth-bridge/src/collab_verifier.rs" <<'EOF'
 #[cfg(test)]
-fn production_trust_root_rejects_the_public_test_issuer() {}
+mod tests {
+    #[test]
+    fn production_signed_policy_path_never_falls_back_to_raw_jwks() {}
+}
+EOF
+
+    cat > "$fixture_root/crates/op-auth-bridge/src/collab_union_policy.rs" <<'EOF'
+#[cfg(test)]
+#[path = "collab_union_policy_tests.rs"]
+mod tests;
+EOF
+
+    cat > "$fixture_root/crates/op-auth-bridge/src/collab_union_policy_tests.rs" <<'EOF'
+fn deterministic_union_policy_test_key(seed: u8) {
+    let _ = SigningKey::from_bytes(&[seed; 32]);
+}
+
+#[test]
+fn verifies_the_frozen_go_production_root_fixture() {}
 EOF
 
     cat > "$fixture_root/crates/op-auth-bridge/tests/collab_verifier.rs" <<'EOF'
@@ -535,6 +562,13 @@ printf '%s\n' \
 expect_failure "rejects deterministic key material in production source" \
     "deterministic signing/key seed leaked"
 
+new_fixture deterministic-production-seed-after-test-module
+printf '%s\n' \
+    'const PRODUCTION_SIGNING_SEED: [u8; 32] = [9; 32];' \
+    >> "$fixture_root/crates/op-auth-bridge/src/collab_verifier.rs"
+expect_failure "scans production items after an inline cfg(test) module" \
+    "deterministic signing/key seed leaked"
+
 new_fixture deterministic-external-test-without-cfg
 sed '/#!\[cfg(test)\]/d' \
     "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache_cancellation_tests.rs" \
@@ -544,6 +578,36 @@ mv \
     "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache_cancellation_tests.rs"
 expect_failure "requires an explicit cfg(test) boundary for external unit tests" \
     "deterministic signing/key seed leaked"
+
+new_fixture deterministic-path-test-without-parent-cfg
+sed '/#\[cfg(test)\]/d' \
+    "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache.rs" \
+    > "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache.rs.next"
+mv \
+    "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache.rs.next" \
+    "$fixture_root/crates/op-auth-bridge/src/collab_jwks_cache.rs"
+expect_failure "requires cfg(test) on path-based external unit-test modules" \
+    "deterministic signing/key seed leaked"
+
+new_fixture production-root-fixture-regression-removed
+sed '/verifies_the_frozen_go_production_root_fixture/d' \
+    "$fixture_root/crates/op-auth-bridge/src/collab_union_policy_tests.rs" \
+    > "$fixture_root/crates/op-auth-bridge/src/collab_union_policy_tests.rs.next"
+mv \
+    "$fixture_root/crates/op-auth-bridge/src/collab_union_policy_tests.rs.next" \
+    "$fixture_root/crates/op-auth-bridge/src/collab_union_policy_tests.rs"
+expect_failure "requires the split production root fixture regression" \
+    "production trust-root fixture regression test"
+
+new_fixture production-policy-fail-closed-regression-removed
+sed '/production_signed_policy_path_never_falls_back_to_raw_jwks/d' \
+    "$fixture_root/crates/op-auth-bridge/src/collab_verifier.rs" \
+    > "$fixture_root/crates/op-auth-bridge/src/collab_verifier.rs.next"
+mv \
+    "$fixture_root/crates/op-auth-bridge/src/collab_verifier.rs.next" \
+    "$fixture_root/crates/op-auth-bridge/src/collab_verifier.rs"
+expect_failure "requires the split production policy fail-closed regression" \
+    "production/test issuer isolation regression test"
 
 new_fixture sensitive-key-file
 : > "$fixture_root/crates/op-collab-transport/peer.key"

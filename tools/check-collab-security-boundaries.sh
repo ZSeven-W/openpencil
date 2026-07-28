@@ -48,6 +48,66 @@ collab_rust_source_files() {
     collab_boundary_files | grep -E '\.rs$' || true
 }
 
+# Rust permits a large test module to live in a sibling file:
+#
+#   #[cfg(test)]
+#   #[path = "module_tests.rs"]
+#   mod tests;
+#
+# The sibling has no useful crate-level cfg of its own because the parent
+# declaration is the compilation boundary. Resolve those declarations instead
+# of treating every `src/*.rs` file as production source.
+cfg_test_external_module_files() {
+    local source_file
+    local source_dir
+    local relative_path
+    while IFS= read -r source_file; do
+        source_dir=${source_file%/*}
+        while IFS= read -r relative_path; do
+            printf '%s/%s\n' "$source_dir" "$relative_path"
+        done < <(awk '
+            function reset_attributes() {
+                cfg_test = 0
+                module_path = ""
+            }
+
+            /^[[:space:]]*#\[cfg\(test\)\][[:space:]]*$/ {
+                cfg_test = 1
+                next
+            }
+
+            cfg_test && /^[[:space:]]*#\[path[[:space:]]*=/ {
+                line = $0
+                sub(/^[^"]*"/, "", line)
+                sub(/".*$/, "", line)
+                module_path = line
+                next
+            }
+
+            cfg_test && /^[[:space:]]*(pub(\([^)]*\))?[[:space:]]+)?mod[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*;[[:space:]]*$/ {
+                if (module_path != "") {
+                    print module_path
+                }
+                reset_attributes()
+                next
+            }
+
+            cfg_test && /^[[:space:]]*$/ {
+                next
+            }
+
+            cfg_test && /^[[:space:]]*#\[[^]]+\][[:space:]]*$/ {
+                next
+            }
+
+            {
+                reset_attributes()
+            }
+        ' "$source_file")
+    done < <(find crates/op-auth-bridge/src -type f -name '*.rs' \
+        | LC_ALL=C sort)
+}
+
 record_failure() {
     failures+=("$1")
 }
@@ -80,6 +140,43 @@ require_literal_count() {
     if [[ "$count" -lt "$minimum" ]]; then
         record_failure "$label: expected '$literal' at least $minimum times in $file"
     fi
+}
+
+require_cfg_test_literal() {
+    local literal=$1
+    local label=$2
+    local source_file
+    local cfg_test_external_sources
+    cfg_test_external_sources=$(cfg_test_external_module_files)
+
+    while IFS= read -r source_file; do
+        if ! grep -Fq -- "$literal" "$source_file"; then
+            continue
+        fi
+
+        if printf '%s\n' "$cfg_test_external_sources" \
+            | grep -Fxq -- "$source_file"; then
+            return
+        fi
+
+        if awk -v literal="$literal" '
+            /^[[:space:]]*#\[cfg\(test\)\][[:space:]]*$/ {
+                inside_test_boundary = 1
+                next
+            }
+            inside_test_boundary && index($0, literal) {
+                found = 1
+            }
+            END {
+                exit(found ? 0 : 1)
+            }
+        ' "$source_file"; then
+            return
+        fi
+    done < <(find crates/op-auth-bridge/src -type f -name '*.rs' \
+        | LC_ALL=C sort)
+
+    record_failure "$label: expected cfg(test) coverage containing '$literal'"
 }
 
 for required in \
@@ -457,9 +554,16 @@ require_literal crates/op-auth-bridge/src/collab_test_issuer.rs \
 if grep -Fq "https://sso.zseven.cn" crates/op-auth-bridge/src/collab_test_issuer.rs; then
     record_failure "test issuer fixture must not contain the production issuer"
 fi
-require_literal crates/op-auth-bridge/src/collab_verifier.rs \
-    "production_trust_root_rejects_the_public_test_issuer" \
-    "production/test trust-root isolation test"
+# Production trust isolation is deliberately split across the signed-policy
+# parser and verifier. One regression freezes the production root fixture; the
+# other proves the production path fails closed instead of accepting the raw
+# public test issuer JWKS.
+require_cfg_test_literal \
+    "verifies_the_frozen_go_production_root_fixture" \
+    "production trust-root fixture regression test"
+require_cfg_test_literal \
+    "production_signed_policy_path_never_falls_back_to_raw_jwks" \
+    "production/test issuer isolation regression test"
 
 if [[ -f crates/op-auth-bridge/tests/collab_verifier.rs ]] \
     && ! sed -n '1,5p' crates/op-auth-bridge/tests/collab_verifier.rs \
@@ -468,16 +572,60 @@ if [[ -f crates/op-auth-bridge/tests/collab_verifier.rs ]] \
 fi
 
 production_fixture_hits=
+cfg_test_external_sources=$(cfg_test_external_module_files)
 while IFS= read -r source_file; do
     case "$source_file" in
         */tests/*|*/collab_test_issuer.rs)
             continue
             ;;
     esac
+    if printf '%s\n' "$cfg_test_external_sources" \
+        | grep -Fxq -- "$source_file"; then
+        continue
+    fi
     hits=$(awk '
-        /^[[:space:]]*#\[cfg\(test\)\][[:space:]]*$/ { exit }
         /^[[:space:]]*#!\[cfg\(test\)\][[:space:]]*$/ { exit }
-        { print FNR ":" $0 }
+
+        function brace_delta(line, opens, closes, copy) {
+            copy = line
+            opens = gsub(/\{/, "{", copy)
+            copy = line
+            closes = gsub(/\}/, "}", copy)
+            return opens - closes
+        }
+
+        test_module_depth > 0 {
+            test_module_depth += brace_delta($0)
+            next
+        }
+
+        /^[[:space:]]*#\[cfg\(test\)\][[:space:]]*$/ {
+            pending_test_module = 1
+            next
+        }
+
+        pending_test_module &&
+        /^[[:space:]]*#\[[^]]+\][[:space:]]*$/ {
+            next
+        }
+
+        pending_test_module &&
+        /^[[:space:]]*mod[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\{/ {
+            test_module_depth = brace_delta($0)
+            pending_test_module = 0
+            next
+        }
+
+        pending_test_module &&
+        /^[[:space:]]*mod[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*;[[:space:]]*$/ {
+            pending_test_module = 0
+            next
+        }
+
+        {
+            pending_test_module = 0
+            print FNR ":" $0
+        }
     ' "$source_file" \
         | grep -E 'SigningKey::from_bytes|[A-Z][A-Z0-9_]*_SEED[[:space:]]*:' \
         || true)

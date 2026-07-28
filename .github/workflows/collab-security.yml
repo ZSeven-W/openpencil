@@ -109,7 +109,9 @@ jobs:
       - name: Test production/test trust-root isolation
         run: |
           cargo test --locked -p op-auth-bridge --features test-issuer \
-            production_trust_root_rejects_the_public_test_issuer
+            verifies_the_frozen_go_production_root_fixture
+          cargo test --locked -p op-auth-bridge --features test-issuer \
+            production_signed_policy_path_never_falls_back_to_raw_jwks
           cargo test --locked -p op-auth-bridge --features test-issuer \
             --test collab_verifier
 
