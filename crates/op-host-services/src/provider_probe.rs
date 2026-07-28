@@ -158,7 +158,7 @@ fn install_command_for_platform(
             if macos {
                 "brew install github/copilot/copilot"
             } else if windows {
-                "winget install GitHub.CopilotCLI"
+                "winget install GitHub.Copilot"
             } else {
                 "See documentation"
             }
