@@ -181,6 +181,36 @@ fn install_opencode_writes_scanned_skills_dir_and_prunes_legacy_plugin_entry() {
 }
 
 #[test]
+fn install_omp_writes_agent_skills_dir_and_uninstall_removes_it() {
+    let home = std::env::temp_dir().join(format!("op-cli-skill-omp-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).expect("temp home");
+
+    // A stale plain file squatting on the discovery entry must be replaced,
+    // not silently kept (same shadowing failure mode as opencode).
+    let link = home.join(".omp/agent/skills/openpencil-skill");
+    std::fs::create_dir_all(link.parent().unwrap()).expect("skills dir");
+    std::fs::write(&link, "stale").expect("seed stale entry");
+
+    skill_install_cli::install_target_at_home("omp", &home).expect("install omp");
+    skill_install_cli::install_target_at_home("omp", &home).expect("install is idempotent");
+
+    // The skill lands where omp scans user skills: ~/.omp/agent/skills/**/SKILL.md.
+    assert!(
+        link.join("openpencil-design/SKILL.md").exists(),
+        "SKILL.md must be reachable under ~/.omp/agent/skills"
+    );
+    assert!(home
+        .join(".omp/openpencil-skill/skills/openpencil-design/SKILL.md")
+        .exists());
+
+    skill_install_cli::uninstall_target_at_home("omp", &home).expect("uninstall omp");
+    assert!(std::fs::symlink_metadata(&link).is_err());
+    assert!(!home.join(".omp/openpencil-skill").exists());
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
 fn status_json_matches_ts_running_shape_without_requiring_server() {
     assert_eq!(
         status_json_from_running(DEFAULT_PORT, false),

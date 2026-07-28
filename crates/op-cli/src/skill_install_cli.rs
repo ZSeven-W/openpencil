@@ -22,6 +22,7 @@ enum Target {
     Codex,
     Cursor,
     OpenCode,
+    Omp,
 }
 
 impl Target {
@@ -31,8 +32,9 @@ impl Target {
             "codex" => Ok(Target::Codex),
             "cursor" => Ok(Target::Cursor),
             "opencode" | "open-code" => Ok(Target::OpenCode),
+            "omp" | "oh-my-pi" => Ok(Target::Omp),
             _ => Err(format!(
-                "unknown target {raw:?}; available: claude, codex, cursor, opencode"
+                "unknown target {raw:?}; available: claude, codex, cursor, opencode, omp"
             )),
         }
     }
@@ -43,6 +45,7 @@ impl Target {
             Target::Codex => "codex",
             Target::Cursor => "cursor",
             Target::OpenCode => "opencode",
+            Target::Omp => "omp",
         }
     }
 }
@@ -107,7 +110,7 @@ fn resolve_targets(
     let detected = detect_targets(home);
     if detected.is_empty() && matches!(action, Action::Install) {
         return Err(
-            "no supported AI coding agents detected; pass --target claude|codex|cursor|opencode"
+            "no supported AI coding agents detected; pass --target claude|codex|cursor|opencode|omp"
                 .into(),
         );
     }
@@ -128,6 +131,11 @@ fn detect_targets(home: &Path) -> Vec<Target> {
     if command_exists("opencode") {
         targets.push(Target::OpenCode);
     }
+    // omp reads user skills from ~/.omp/agent/skills; probe both the CLI and
+    // the config dir — either alone is a valid install.
+    if command_exists("omp") || home.join(".omp").exists() {
+        targets.push(Target::Omp);
+    }
     targets
 }
 
@@ -147,6 +155,7 @@ fn install_target(target: Target, home: &Path, bundle: &SkillBundle) -> Result<(
         Target::Codex => install_codex(home, bundle),
         Target::Cursor => write_bundle_to(&home.join(".cursor/plugins").join(SKILL_NAME), bundle),
         Target::OpenCode => install_opencode(home, bundle),
+        Target::Omp => install_omp(home, bundle),
     }
 }
 
@@ -156,6 +165,7 @@ fn uninstall_target(target: Target, home: &Path) -> Result<(), String> {
         Target::Codex => uninstall_codex(home),
         Target::Cursor => remove_path(&home.join(".cursor/plugins").join(SKILL_NAME)),
         Target::OpenCode => uninstall_opencode(home),
+        Target::Omp => uninstall_omp(home),
     }
 }
 
@@ -257,6 +267,31 @@ fn uninstall_opencode(home: &Path) -> Result<(), String> {
     remove_path(&home.join(".config/opencode/skills").join(SKILL_NAME))?;
     remove_path(&home.join(".config/opencode").join(SKILL_NAME))?;
     prune_opencode_plugin_entry(home)
+}
+
+fn install_omp(home: &Path, bundle: &SkillBundle) -> Result<(), String> {
+    // omp discovers user skills from ~/.omp/agent/skills. ~/.agents/skills is
+    // also scanned but is shared with the codex target, which would make
+    // install/uninstall ownership ambiguous — stage the bundle under ~/.omp
+    // and link the dedicated discovery path instead.
+    let bundle_dir = home.join(".omp").join(SKILL_NAME);
+    write_bundle_to(&bundle_dir, bundle)?;
+
+    let skills_dir = home.join(".omp/agent/skills");
+    fs::create_dir_all(&skills_dir).map_err(|e| format!("create {}: {e}", skills_dir.display()))?;
+    let link_path = skills_dir.join(SKILL_NAME);
+    let link_target = bundle_dir.join("skills");
+    // The discovery entry is owned by this installer: recreate it on every
+    // install so a stale symlink, plain file, or outdated copied directory
+    // can't shadow the freshly written bundle.
+    remove_path(&link_path)?;
+    link_or_copy_dir(&link_target, &link_path)?;
+    Ok(())
+}
+
+fn uninstall_omp(home: &Path) -> Result<(), String> {
+    remove_path(&home.join(".omp/agent/skills").join(SKILL_NAME))?;
+    remove_path(&home.join(".omp").join(SKILL_NAME))
 }
 
 /// Remove the legacy `openpencil-skill@git+…` plugin entry (older installers
@@ -539,6 +574,12 @@ mod tests {
 
         assert!(error.contains(&expected), "unexpected error: {error}");
         assert!(error.contains(&found), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn omp_is_an_install_target() {
+        assert_eq!(super::Target::parse("omp").map(|t| t.key()), Ok("omp"));
+        assert_eq!(super::Target::parse("oh-my-pi").map(|t| t.key()), Ok("omp"));
     }
 
     #[test]
