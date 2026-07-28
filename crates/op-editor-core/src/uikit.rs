@@ -15,8 +15,6 @@ use jian_ops_schema::sizing::SizingBehavior;
 use serde_json::{Map, Value};
 
 use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
-use crate::pen_node_ext::PenNodeExt;
-use crate::{walkers, EditorState, NodeId};
 
 /// Browser-side grouping for a [`KitComponent`]. Mirrors the TS
 /// `ComponentCategory` enum so locale-table keys line up.
@@ -428,115 +426,7 @@ pub fn builtin_kits() -> Vec<UIKit> {
     vec![builtin_starter_kit(), crate::uikit_shadcn::shadcn_kit()]
 }
 
-impl EditorState {
-    /// Instantiate a UIKit component onto the active page: deep-clone
-    /// the template with fresh ids, place its top-left at `(doc_x,
-    /// doc_y)`, rename to the component label, push, single-select,
-    /// and snapshot the document for undo. Returns the new node's id;
-    /// `None` when the kit / component is missing or the id allocator
-    /// is exhausted.
-    pub fn instantiate_kit_component(
-        &mut self,
-        kit_id: &str,
-        component_id: &str,
-        doc_x: f64,
-        doc_y: f64,
-    ) -> Option<NodeId> {
-        self.instantiate_kit_component_under_parent(
-            kit_id,
-            component_id,
-            &NodeId::NONE,
-            doc_x,
-            doc_y,
-            None,
-        )
-    }
-
-    /// Parent-aware variant used by the batch-design `K()` op. Overrides are
-    /// applied while the authored kit ids still exist, so
-    /// `descendants["shadcn-btn-primary-label"]` can target template children
-    /// before the final fresh document ids are minted.
-    pub fn instantiate_kit_component_under_parent(
-        &mut self,
-        kit_id: &str,
-        component_id: &str,
-        parent_id: &NodeId,
-        doc_x: f64,
-        doc_y: f64,
-        overrides_json: Option<&str>,
-    ) -> Option<NodeId> {
-        if parent_id.is_real() {
-            match walkers::find_node(self.active_children(), parent_id) {
-                Some(parent) if parent.is_container() => {}
-                _ => return None,
-            }
-        }
-        let (template, label, kit_vars) = {
-            let kit = self.ui_kits.iter().find(|k| k.id == kit_id)?;
-            let comp = kit.components.iter().find(|c| c.id == component_id)?;
-            (
-                comp.template.clone(),
-                comp.name.clone(),
-                kit.variables.clone(),
-            )
-        };
-        let mut authored = template.clone();
-        authored.base_mut().name = Some(label);
-        // Template children are authored parent-relative, so placing
-        // the instance only needs the ROOT origin moved to
-        // `(doc_x, doc_y)` — descendants ride along at their authored
-        // offsets (`translate_subtree` shifts the root alone).
-        let dx = doc_x - authored.base().x.unwrap_or(0.0);
-        let dy = doc_y - authored.base().y.unwrap_or(0.0);
-        walkers::translate_subtree(&mut authored, dx, dy);
-        if !apply_kit_overrides(&mut authored, overrides_json) {
-            return None;
-        }
-        let snap = self.snapshot_for_history();
-        // Copy referenced `$variable` definitions from the kit into the
-        // target document so kit fills/spacing keep resolving (TS
-        // `component-browser-card.tsx:24-34`: only definitions absent
-        // from the target document are copied). Divergence: TS issues
-        // per-variable `setVariable` store actions (each undoable);
-        // Rust folds the copies into the SAME history snapshot as the
-        // insert so the whole instantiate is one undo step.
-        if let Some(vars) = kit_vars {
-            let mut refs = std::collections::BTreeSet::new();
-            crate::uikit_io::collect_template_variable_refs(&template, &mut refs);
-            for r in refs {
-                let name = r.strip_prefix('$').unwrap_or(&r);
-                if let Some(def) = vars.get(name) {
-                    let doc_vars = self.doc.variables.get_or_insert_with(Default::default);
-                    if !doc_vars.contains_key(name) {
-                        doc_vars.insert(name.to_string(), def.clone());
-                    }
-                }
-            }
-        }
-        let mut next_id = self.max_node_id().checked_add(1)?;
-        let mut taken = std::collections::HashSet::new();
-        let mut clone = walkers::deep_clone_with_new_ids(&authored, &mut next_id, &mut taken);
-        // TS deletes the clone's root `reusable` flag so the inserted
-        // instance is standalone (`component-browser-card.tsx:36-40`);
-        // without this an instantiated imported-kit component would be
-        // re-collected by the next kit export.
-        if let PenNode::Frame(f) = &mut clone {
-            f.reusable = None;
-        }
-        let new_id = NodeId::new(clone.base().id.clone());
-        if parent_id.is_real() {
-            let parent = walkers::find_node_mut(self.active_children_mut(), parent_id)?;
-            parent.children_mut()?.push(clone);
-        } else {
-            self.active_children_mut().push(clone);
-        }
-        self.set_single_selection(new_id.clone());
-        self.history_push_past(snap);
-        Some(new_id)
-    }
-}
-
-fn apply_kit_overrides(node: &mut PenNode, overrides_json: Option<&str>) -> bool {
+pub(crate) fn apply_kit_overrides(node: &mut PenNode, overrides_json: Option<&str>) -> bool {
     let Some(raw) = overrides_json else {
         return true;
     };
@@ -626,6 +516,8 @@ fn set_first_text_content(value: &mut Value, text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pen_node_ext::PenNodeExt;
+    use crate::EditorState;
 
     #[test]
     fn starter_kit_covers_six_categories() {

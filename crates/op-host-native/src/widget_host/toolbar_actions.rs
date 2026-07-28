@@ -10,22 +10,8 @@ impl WidgetHostNative {
     ) -> bool {
         use op_editor_ui::widgets::ToolbarAction;
         match action {
-            ToolbarAction::Undo => {
-                let acted = self.editor_state.undo();
-                if acted {
-                    self.mark_dirty();
-                    self.refresh_missing_fonts_after_history_change();
-                }
-                acted
-            }
-            ToolbarAction::Redo => {
-                let acted = self.editor_state.redo();
-                if acted {
-                    self.mark_dirty();
-                    self.refresh_missing_fonts_after_history_change();
-                }
-                acted
-            }
+            ToolbarAction::Undo => self.apply_undo(),
+            ToolbarAction::Redo => self.apply_redo(),
             ToolbarAction::ToggleVariablesPanel => {
                 self.editor_state.editor_ui.toggle_variables_panel();
                 self.mark_dirty();

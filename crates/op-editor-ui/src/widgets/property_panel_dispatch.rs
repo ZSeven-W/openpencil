@@ -99,6 +99,8 @@ pub fn updates_document(action: &PropertyPanelAction) -> bool {
     )
 }
 
+pub use crate::widgets::property_panel_collab::collab_gate_action;
+
 /// Translate the widget-facade compositing target into the core one.
 pub fn compositing_picker_target(
     target: CompositingTarget,

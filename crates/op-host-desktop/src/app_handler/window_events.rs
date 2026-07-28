@@ -3,10 +3,7 @@
 //! `app_handler.rs` spine to keep it under the 800-line cap; pure code
 //! motion.
 
-use crate::{
-    chat_session, figma_import_session, html_import_session, image_drop_host, persistence,
-    DesktopApp,
-};
+use crate::{chat_session, image_drop_host, persistence, DesktopApp};
 use std::path::PathBuf;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;
@@ -156,10 +153,7 @@ impl DesktopApp {
         if op_host_services::doc_io::is_supported_figma_import(&path) {
             let _ = self.begin_figma_import(path);
         } else if op_host_services::doc_io::is_supported_html_import(&path) {
-            figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
-            html_import_session::cancel(&mut self.host, &mut self.current_html_import);
-            self.current_html_import = Some(html_import_session::spawn(&mut self.host, path));
-            self.request_redraw(true);
+            let _ = self.begin_html_import(path);
         } else if op_host_services::doc_io::is_supported_document(&path) {
             if persistence::open_path(
                 &mut self.host,

@@ -93,6 +93,13 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.component_browser_category = cat;
             }
             ComponentBrowserHit::InsertComponent(kit_id, comp_id) => {
+                if !self.collab_allows_document_mutation(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::UIKit,
+                    ),
+                ) {
+                    return true;
+                }
                 // The desktop host drains this against the viewport
                 // centre — it owns the viewport metrics needed to
                 // compute the document-space drop point.

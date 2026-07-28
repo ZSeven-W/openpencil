@@ -4,10 +4,11 @@
 //! pushed on commit only when the path has ≥ 2 anchors (a 1-anchor
 //! path is invisible — no real change to undo).
 
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::{make_path, PenNodeExt};
 use crate::state::EditorState;
-use crate::walkers::{self, find_node, find_node_mut};
+use crate::walkers::{find_node, find_node_mut};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::node::{PenPathAnchor, PenPathHandle, PenPathPointType};
 
@@ -47,10 +48,25 @@ impl EditorState {
     /// Start a fresh Pen-tool path at `first` (document coords).
     /// Returns the new node's id, or `None` on allocator overflow.
     pub fn start_pen_path(&mut self, next_id: &mut u64, first: (f64, f64)) -> Option<NodeId> {
-        let safe = self.max_node_id().checked_add(1)?;
-        *next_id = (*next_id).max(safe);
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, *next_id).ok()?;
+        let result = self
+            .start_pen_path_with_allocator(&mut allocator, first)
+            .ok()
+            .flatten();
+        if result.is_some() {
+            *next_id = allocator.next_counter();
+        }
+        result
+    }
+
+    /// Allocator-aware form of [`Self::start_pen_path`].
+    pub fn start_pen_path_with_allocator(
+        &mut self,
+        allocator: &mut dyn IdAllocator,
+        first: (f64, f64),
+    ) -> Result<Option<NodeId>, IdAllocError> {
         let mut taken = self.collect_node_ids();
-        let id = walkers::alloc_n_id(next_id, &mut taken)?;
+        let id = allocator.allocate(&mut taken)?;
         // Snapshot BEFORE any mutation so a later undo restores the
         // pre-pen document.
         let pre = self.snapshot_for_history();
@@ -69,7 +85,7 @@ impl EditorState {
         // release bows the just-placed anchor into mirrored handles.
         self.ui.pen_dragging_handle = true;
         self.set_single_selection(id.clone());
-        Some(id)
+        Ok(Some(id))
     }
 
     /// Append an anchor to the in-progress path, re-fitting bounds.

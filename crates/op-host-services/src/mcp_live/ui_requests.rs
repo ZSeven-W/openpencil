@@ -81,16 +81,15 @@ pub(super) fn request_screenshot(
     )??)
 }
 
-/// Ask the UI thread to swap in an already-loaded document. `Err` means the
-/// request channel closed or the UI ack timed out — a server fault → HTTP 500.
-/// (Load/validation failures are handled on the caller's thread BEFORE this,
-/// and surface as HTTP 400.)
+/// Ask the UI thread to swap in an already-loaded document. `Ok(false)` means
+/// collaboration rejected the replacement; `Err` is a channel/timeout fault.
+/// Load/validation failures are handled before this call and surface as 400.
 pub(super) fn request_replace(
     req_tx: &Sender<UiRequest>,
     wake_ui: &UiWake,
     doc: jian_ops_schema::PenDocument,
     editor_meta: op_pen_loader::EditorMeta,
-) -> Result<(), McpLiveError> {
+) -> Result<bool, McpLiveError> {
     let (ack_tx, ack_rx) = mpsc::sync_channel(1);
     req_tx
         .send(UiRequest::ReplaceDocument {

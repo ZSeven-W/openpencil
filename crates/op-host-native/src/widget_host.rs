@@ -75,6 +75,11 @@ mod chat_send_tests;
 mod click;
 #[cfg(test)]
 mod codegen_framework_tests;
+#[cfg(test)]
+mod collaboration_id_tests;
+#[cfg(test)]
+mod collaboration_install_tests;
+mod collaboration_policy;
 mod color_picker_press;
 mod component_browser_press;
 mod cursor_hint;
@@ -391,6 +396,10 @@ pub struct WidgetHostNative {
     /// Bumped past the highest sample id so new + sample nodes
     /// never collide on the same key.
     pub(in crate::widget_host) next_node_id: u64,
+    /// Session-owned allocator for collaboration-authored ids. Standalone
+    /// paths keep using `next_node_id`; while this is `Some`, every supported
+    /// document creation path must use this allocator instead.
+    pub(in crate::widget_host) collab_id_allocator: Option<op_editor_core::DocumentIdAllocator>,
     /// Host-supplied frame timestamp in milliseconds. Focused
     /// `TextInputState`s use this for caret blink. The
     /// inspector_window runner refreshes this once per
@@ -641,6 +650,13 @@ impl WidgetHostNative {
         // mutate the document — commit any pending variable-row
         // edit first so the dirty draft lands before this op runs.
         self.commit_variable_row_focus_if_any();
+        if !self.collab_allows_document_mutation(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::NodeReplacement,
+            ),
+        ) {
+            return true;
+        }
         // The skia `Path::op` math runs against the layout-resolved
         // `LayoutScene` + the editor selection; the result polyline
         // is committed back through an `EditorState` mutator so the
@@ -665,19 +681,32 @@ impl WidgetHostNative {
             .map(op_editor_core::NodeId::new)
             .collect();
         let pre = self.editor_state.snapshot_for_history();
-        let new_id = self.editor_state.replace_paths_with_polyline(
-            &source_ids,
-            &result.contours,
-            &mut self.next_node_id,
-        );
+        let new_id = if let Some(allocator) = self.collab_id_allocator.as_mut() {
+            self.editor_state
+                .replace_paths_with_polyline_with_allocator(
+                    &source_ids,
+                    &result.contours,
+                    allocator,
+                )
+        } else {
+            Ok(self.editor_state.replace_paths_with_polyline(
+                &source_ids,
+                &result.contours,
+                &mut self.next_node_id,
+            ))
+        };
         match new_id {
-            Some(id) => {
+            Err(error) => {
+                self.show_collab_id_error(error);
+                true
+            }
+            Ok(Some(id)) => {
                 self.editor_state.history_push_past(pre);
                 self.editor_state.set_single_selection(id);
                 self.mark_dirty();
                 true
             }
-            None => false,
+            Ok(None) => false,
         }
     }
 }

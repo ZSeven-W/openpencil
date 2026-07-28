@@ -4,10 +4,10 @@
 //! preserve paint order: a group inserts where its first member
 //! sat; ungroup splices the group's children back in-place.
 
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::{make_group, PenNodeExt};
 use crate::state::EditorState;
-use crate::walkers;
 use jian_ops_schema::node::PenNode;
 
 impl EditorState {
@@ -16,23 +16,39 @@ impl EditorState {
     /// same-parent (top-level) selections. Returns the new group's
     /// id, or `None` when the selection is empty / spans parents.
     pub fn group_selected(&mut self, next_id: &mut u64) -> Option<NodeId> {
-        if self.selection.set.is_empty() {
-            return None;
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, *next_id).ok()?;
+        let result = self
+            .group_selected_with_allocator(&mut allocator)
+            .ok()
+            .flatten();
+        if result.is_some() {
+            *next_id = allocator.next_counter();
         }
-        let safe = self.max_node_id().checked_add(1)?;
-        *next_id = (*next_id).max(safe);
-        let mut live = self.collect_node_ids();
-        let group_id = walkers::alloc_n_id(next_id, &mut live)?;
+        result
+    }
 
+    /// Allocator-aware form of [`Self::group_selected`].
+    pub fn group_selected_with_allocator(
+        &mut self,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<Option<NodeId>, IdAllocError> {
+        if self.selection.set.is_empty() {
+            return Ok(None);
+        }
         let selected = self.selection.set.clone();
-        let children = self.active_children_mut();
         // Every selection must be a top-level child for v1 grouping.
         let mut indices: Vec<usize> = Vec::with_capacity(selected.len());
+        let children = self.active_children();
         for id in &selected {
-            let idx = children.iter().position(|c| c.id_str() == id.as_str())?;
+            let Some(idx) = children.iter().position(|c| c.id_str() == id.as_str()) else {
+                return Ok(None);
+            };
             indices.push(idx);
         }
         indices.sort_unstable();
+        let mut live = self.collect_node_ids();
+        let group_id = allocator.allocate(&mut live)?;
+        let children = self.active_children_mut();
         let insert_at = indices[0];
         // Drain in reverse so removal indices stay valid.
         let mut taken: Vec<PenNode> = Vec::with_capacity(indices.len());
@@ -44,7 +60,7 @@ impl EditorState {
         children.insert(insert_at, group);
         self.selection.set = vec![group_id.clone()];
         self.selection.anchor = group_id.clone();
-        Some(group_id)
+        Ok(Some(group_id))
     }
 
     /// Replace the selected `Group` node with its children inline.

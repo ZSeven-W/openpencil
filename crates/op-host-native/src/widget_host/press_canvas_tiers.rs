@@ -142,6 +142,13 @@ impl WidgetHostNative {
         // the sweep handle can overlap the right-mid resize grip.
         if let Some((node_id, handle)) = self.arc_handle_hit(x, y, viewport_width, viewport_height)
         {
+            if !self.collab_allows_document_mutation(
+                op_editor_core::CollabDocumentMutation::Unsupported(
+                    op_editor_core::CollabUnsupportedFeature::UnsupportedNodeProperty,
+                ),
+            ) {
+                return true;
+            }
             let pre = self.editor_state.snapshot_for_history();
             self.arc_handle_drag = Some(super::ArcHandleDragState {
                 node_id: op_editor_core::NodeId::new(&node_id),
@@ -158,6 +165,11 @@ impl WidgetHostNative {
             &self.editor_state,
             Point2D::new(x, y),
         ) {
+            if !self.collab_allows_document_mutation(
+                op_editor_core::CollabDocumentMutation::NodePropertyBatch,
+            ) {
+                return true;
+            }
             let (start_authored_x, start_authored_y) = self
                 .editor_state
                 .selected_node()
@@ -192,6 +204,13 @@ impl WidgetHostNative {
         )
         .is_some()
         {
+            if !self.collab_allows_document_mutation(
+                op_editor_core::CollabDocumentMutation::NodeProperty(
+                    op_editor_core::CollabNodeField::Rotation,
+                ),
+            ) {
+                return true;
+            }
             if let Some(node) = self
                 .layout_scene
                 .active_page()

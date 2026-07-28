@@ -9,6 +9,7 @@
 
 use super::WidgetHostNative;
 use op_editor_ui::widgets::missing_fonts_flow as fonts_flow;
+use op_editor_ui::widgets::{MissingFontsHit, MissingFontsPanel};
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHostNative {
@@ -43,6 +44,17 @@ impl WidgetHostNative {
         viewport_rect: Rect,
         point: Point2D,
     ) -> bool {
+        let hit = MissingFontsPanel::for_editor(&self.editor_state)
+            .map(|panel| panel.hit_test(panel_rect, viewport_rect, point));
+        if matches!(hit, Some(MissingFontsHit::SelectFont(_)))
+            && !self.collab_allows_document_mutation(
+                op_editor_core::CollabDocumentMutation::Unsupported(
+                    op_editor_core::CollabUnsupportedFeature::Typography,
+                ),
+            )
+        {
+            return true;
+        }
         if !fonts_flow::press(&mut self.editor_state, panel_rect, viewport_rect, point) {
             return false;
         }

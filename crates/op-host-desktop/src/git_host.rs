@@ -200,7 +200,10 @@ impl DesktopApp {
                 // lands (`poll_git_pull_job`) — confirm first so
                 // unsaved in-memory edits are not silently lost. A
                 // second Pull while one is in flight is ignored.
-                if self.git_pull_job.is_none() && self.confirm_document_reload() {
+                if self.git_pull_job.is_none()
+                    && self.collaboration_allows_git_worktree_rewrite()
+                    && self.confirm_document_reload()
+                {
                     if let Some(repo) = self.git_session.authed_repo() {
                         self.git_pull_job = Some(git_jobs::GitPullJob::spawn(repo));
                         // Snapshot the document so the post-pull reload
@@ -276,7 +279,13 @@ impl DesktopApp {
                 // No committer identity yet → show the signature form and
                 // defer the commit (the message stays put; `save_author_identity`
                 // re-fires this action). TS `authorIdentity === null` path.
-                let needs_author = !message.is_empty()
+                let collaboration_allows_milestone = message.is_empty()
+                    || self.host.gate_collaboration_action(
+                        op_editor_core::CollabGateAction::SaveShared,
+                        op_editor_core::CollabEditSource::User,
+                    );
+                let needs_author = collaboration_allows_milestone
+                    && !message.is_empty()
                     && !self
                         .git_session
                         .repo()
@@ -291,7 +300,10 @@ impl DesktopApp {
                     // commit box, so typing lands in the name/email fields.
                     panel.defocus_commit_input(0);
                     panel.commit_no_changes = false;
-                } else if !message.is_empty() && self.finish_background_saves() {
+                } else if collaboration_allows_milestone
+                    && !message.is_empty()
+                    && self.finish_background_saves()
+                {
                     // A milestone performs its own synchronous save before staging.
                     // Drain any UI-requested save first so an older background
                     // snapshot cannot rename over the milestone afterward.
@@ -458,7 +470,11 @@ impl DesktopApp {
             }
             GitPanelAction::LoadCommitDiff(index) => self.load_expanded_commit_diff(index),
             GitPanelAction::EnterTrackedPicker => self.enter_tracked_picker(),
-            GitPanelAction::BindTrackedFile(path, open) => self.bind_tracked_file(path, open),
+            GitPanelAction::BindTrackedFile(path, open) => {
+                if !open || self.collaboration_allows_git_worktree_rewrite() {
+                    self.bind_tracked_file(path, open);
+                }
+            }
             GitPanelAction::ClearAuthor => self.clear_commit_author(),
             GitPanelAction::CloseRepo => self.close_repo(),
             GitPanelAction::EnterSshKeys => self.enter_ssh_keys(),
@@ -489,7 +505,7 @@ impl DesktopApp {
         label: &str,
         op: impl FnOnce(&op_git::GitRepo) -> Result<(), op_git::GitError>,
     ) {
-        if !self.confirm_document_reload() {
+        if !self.collaboration_allows_git_worktree_rewrite() || !self.confirm_document_reload() {
             return;
         }
         let ok = match self.git_session.repo() {
@@ -506,9 +522,34 @@ impl DesktopApp {
             self.reload_tracked_document();
         }
     }
+
+    /// Git pull is the only current background job that can rewrite the
+    /// tracked document. Start/Join/Retry calls this before changing the
+    /// collaboration phase: a ready result is drained while the document is
+    /// still standalone; an in-flight result returns `false`, keeping the
+    /// transition fail-closed until a later UI turn.
+    pub(crate) fn settle_git_before_collaboration_transition(&mut self) -> bool {
+        if self.git_pull_job.is_none() {
+            return true;
+        }
+        let _ = self.poll_git_pull_job();
+        self.git_pull_job.is_none()
+    }
+
+    /// A worktree rewrite is a whole-document replacement from the editor's
+    /// perspective. Keep this typed seam shared by synchronous Git actions,
+    /// the async pull launch, and the final reload sink.
+    pub(crate) fn collaboration_allows_git_worktree_rewrite(&mut self) -> bool {
+        self.host.gate_collaboration_action(
+            op_editor_core::CollabGateAction::ReplaceDocument,
+            op_editor_core::CollabEditSource::ExternalSync,
+        )
+    }
 }
 
 mod auth_error;
+#[cfg(test)]
+mod collab_tests;
 mod patch;
 mod repo_ops;
 

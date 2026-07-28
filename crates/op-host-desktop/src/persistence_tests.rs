@@ -20,6 +20,202 @@ fn temp_op_path(tag: &str) -> PathBuf {
     p
 }
 
+fn bind_collaboration_for_save_as(
+    host: &mut WidgetHostNative,
+    phase: op_editor_core::CollabConnectionPhase,
+    role: op_editor_core::CollabUiRole,
+    pending_edit: op_editor_core::CollabPendingEditUi,
+) {
+    let collab = &mut host.editor_state_mut().editor_ui.collab;
+    assert!(collab.set_authenticated_session(
+        phase,
+        op_editor_core::AuthenticatedCollabSession {
+            session_name: "Shared design".into(),
+            role,
+            share_endpoint: None,
+        },
+        Vec::new(),
+    ));
+    collab.pending_edit = pending_edit;
+}
+
+#[test]
+fn synchronous_save_as_requires_background_fork_for_active_owner_and_guest() {
+    for role in [
+        op_editor_core::CollabUiRole::Owner,
+        op_editor_core::CollabUiRole::Editor,
+    ] {
+        let mut host = WidgetHostNative::new();
+        bind_collaboration_for_save_as(
+            &mut host,
+            op_editor_core::CollabConnectionPhase::Active,
+            role,
+            op_editor_core::CollabPendingEditUi::None,
+        );
+        let original = PathBuf::from("shared-source.op");
+        let mut current_path = Some(original.clone());
+        let mut synchronous_writer_called = false;
+
+        let outcome = handle_save_as_with(
+            &mut host,
+            &mut current_path,
+            None,
+            |_| {
+                synchronous_writer_called = true;
+                Ok(Some(PathBuf::from("unsafe-fork.op")))
+            },
+            |_, _| {},
+        );
+
+        assert_eq!(outcome, SaveActionOutcome::BackgroundForkRequired);
+        assert!(!synchronous_writer_called);
+        assert_eq!(current_path, Some(original));
+        assert!(host
+            .editor_state()
+            .editor_ui
+            .collab
+            .authenticated_session()
+            .is_some());
+    }
+}
+
+#[test]
+fn ended_guest_with_pending_edit_still_requires_background_fork() {
+    let mut host = WidgetHostNative::new();
+    bind_collaboration_for_save_as(
+        &mut host,
+        op_editor_core::CollabConnectionPhase::Ended,
+        op_editor_core::CollabUiRole::Editor,
+        op_editor_core::CollabPendingEditUi::Submitting,
+    );
+    let mut current_path = Some(PathBuf::from("shared-source.op"));
+    let mut synchronous_writer_called = false;
+
+    let outcome = handle_save_as_with(
+        &mut host,
+        &mut current_path,
+        None,
+        |_| {
+            synchronous_writer_called = true;
+            Ok(Some(PathBuf::from("unsafe-fork.op")))
+        },
+        |_, _| {},
+    );
+
+    assert_eq!(outcome, SaveActionOutcome::BackgroundForkRequired);
+    assert!(!synchronous_writer_called);
+    assert_eq!(
+        host.editor_state().editor_ui.collab.pending_edit,
+        op_editor_core::CollabPendingEditUi::Submitting
+    );
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .collab
+        .authenticated_session()
+        .is_some());
+}
+
+#[test]
+fn run_action_preserves_the_typed_background_fork_requirement() {
+    let mut host = WidgetHostNative::new();
+    bind_collaboration_for_save_as(
+        &mut host,
+        op_editor_core::CollabConnectionPhase::Active,
+        op_editor_core::CollabUiRole::Owner,
+        op_editor_core::CollabPendingEditUi::None,
+    );
+    let mut current_path = Some(PathBuf::from("shared-source.op"));
+
+    assert_eq!(
+        run_action(
+            op_editor_core::editor_ui_state::FileAction::SaveAs,
+            &mut host,
+            &mut current_path,
+            None,
+        ),
+        ActionOutcome::SaveAsForkRequired
+    );
+    assert_eq!(current_path, Some(PathBuf::from("shared-source.op")));
+
+    current_path = None;
+    assert_eq!(
+        run_action(
+            op_editor_core::editor_ui_state::FileAction::Save,
+            &mut host,
+            &mut current_path,
+            None,
+        ),
+        ActionOutcome::SaveAsForkRequired
+    );
+    assert!(current_path.is_none());
+}
+
+#[test]
+fn standalone_synchronous_save_as_success_rebinds_and_marks_saved() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().mark_document_changed();
+    let target = PathBuf::from("standalone-fork.op");
+    let mut current_path = Some(PathBuf::from("old.op"));
+
+    let outcome = handle_save_as_with(
+        &mut host,
+        &mut current_path,
+        None,
+        |_| Ok(Some(target.clone())),
+        |_, _| panic!("successful Save As must not report an error"),
+    );
+
+    assert_eq!(outcome, SaveActionOutcome::Saved);
+    assert_eq!(current_path.as_deref(), Some(target.as_path()));
+    assert_eq!(
+        host.editor_state().editor_ui.file_name_display.as_deref(),
+        Some("standalone-fork.op")
+    );
+    assert!(!host.editor_state().is_dirty());
+}
+
+#[test]
+fn standalone_synchronous_save_as_cancel_does_not_rebind() {
+    let mut host = WidgetHostNative::new();
+    let original = PathBuf::from("old.op");
+    let mut current_path = Some(original.clone());
+
+    let outcome = handle_save_as_with(
+        &mut host,
+        &mut current_path,
+        None,
+        |_| Ok(None),
+        |_, _| panic!("cancelled Save As must not report an error"),
+    );
+
+    assert_eq!(outcome, SaveActionOutcome::Cancelled);
+    assert_eq!(current_path, Some(original));
+}
+
+#[test]
+fn standalone_synchronous_save_as_failure_does_not_rebind() {
+    let mut host = WidgetHostNative::new();
+    let original = PathBuf::from("old.op");
+    let mut current_path = Some(original.clone());
+    let mut reported = false;
+
+    let outcome = handle_save_as_with(
+        &mut host,
+        &mut current_path,
+        None,
+        |_| Err(DocIoError::Io("synthetic write failure".into())),
+        |_, error| {
+            reported = true;
+            assert_eq!(error, &DocIoError::Io("synthetic write failure".into()));
+        },
+    );
+
+    assert_eq!(outcome, SaveActionOutcome::Failed);
+    assert!(reported);
+    assert_eq!(current_path, Some(original));
+}
+
 #[test]
 fn new_file_action_resets_to_starter_frame() {
     let mut host = WidgetHostNative::new();

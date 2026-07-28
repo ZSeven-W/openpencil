@@ -24,6 +24,9 @@ pub enum TopBarButton {
     ToggleLocale,
     /// Agents-and-MCP chip — opens the agent settings modal.
     OpenAgentSettings,
+    /// Collaboration status / participant chip — opens the shared
+    /// collaboration panel.
+    OpenCollaboration,
     /// Git-branch button beside the file name — toggles the git panel.
     ToggleGitPanel,
     /// Maximize icon — toggles window fullscreen.

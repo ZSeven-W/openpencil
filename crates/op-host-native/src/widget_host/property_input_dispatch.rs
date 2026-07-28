@@ -105,6 +105,14 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.figma_import_hover = None;
             }
             FigmaImportHit::DropZone => {
+                if !self.collab_allows_document_mutation_from(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+                    ),
+                    op_editor_core::CollabEditSource::Import,
+                ) {
+                    return;
+                }
                 use op_editor_core::figma_import_state::ImportSource;
                 self.editor_state.editor_ui.pending_file_action =
                     Some(match self.editor_state.editor_ui.import_source {
@@ -115,6 +123,14 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.figma_import_hover = None;
             }
             FigmaImportHit::Page(index) => {
+                if !self.collab_allows_document_mutation_from(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+                    ),
+                    op_editor_core::CollabEditSource::Import,
+                ) {
+                    return;
+                }
                 self.editor_state.editor_ui.pending_file_action =
                     Some(FileAction::FinishFigmaImport(
                         op_editor_core::FigmaImportSelection::Page(index),
@@ -123,6 +139,14 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.figma_import_hover = None;
             }
             FigmaImportHit::ImportAll => {
+                if !self.collab_allows_document_mutation_from(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+                    ),
+                    op_editor_core::CollabEditSource::Import,
+                ) {
+                    return;
+                }
                 self.editor_state.editor_ui.pending_file_action = Some(
                     FileAction::FinishFigmaImport(op_editor_core::FigmaImportSelection::All),
                 );
@@ -166,6 +190,23 @@ impl WidgetHostNative {
                 let Some(choice) = menu.choice_for_row(row) else {
                     return;
                 };
+                let gate_action = match choice {
+                    FileMenuChoice::NewFile
+                    | FileMenuChoice::OpenFile
+                    | FileMenuChoice::OpenRecent(_) => {
+                        op_editor_core::CollabGateAction::ReplaceDocument
+                    }
+                    FileMenuChoice::Save => op_editor_core::CollabGateAction::SaveShared,
+                    FileMenuChoice::SaveAs => op_editor_core::CollabGateAction::SaveFork,
+                    FileMenuChoice::ExportImage
+                    | FileMenuChoice::ExportAllFrames
+                    | FileMenuChoice::ClearRecent => op_editor_core::CollabGateAction::LocalUi,
+                };
+                if !self.collab_allows_user_action(gate_action) {
+                    self.editor_state.editor_ui.file_menu_open = false;
+                    self.editor_state.editor_ui.file_menu.hover = None;
+                    return;
+                }
                 self.editor_state.editor_ui.pending_file_action = Some(match choice {
                     FileMenuChoice::NewFile => FileAction::New,
                     FileMenuChoice::OpenFile => FileAction::Open,
@@ -195,6 +236,18 @@ impl WidgetHostNative {
     /// editable value box). Parses the shared draft and writes it
     /// via `SetEffectParam`; a non-numeric draft is discarded.
     pub(in crate::widget_host) fn commit_effect_param_focus_if_any(&mut self) {
+        if self.editor_state.editor_ui.effect_param_focus.is_some()
+            && !self.collab_allows_document_mutation(
+                op_editor_core::CollabDocumentMutation::Unsupported(
+                    op_editor_core::CollabUnsupportedFeature::Effects,
+                ),
+            )
+        {
+            if commit::discard_effect_param_focus(&mut self.editor_state) {
+                self.mark_dirty();
+            }
+            return;
+        }
         if commit::commit_effect_param_focus(&mut self.editor_state) {
             self.mark_dirty();
         }
@@ -205,6 +258,14 @@ impl WidgetHostNative {
         self.commit_variables_panel_header_focus_if_any();
         self.commit_variable_row_focus_if_any();
         self.commit_effect_param_focus_if_any();
+        if let Some(focus) = self.editor_state.ui.property_focus {
+            if !self.collab_allows_document_mutation(focus.collab_document_mutation()) {
+                if commit::discard_property_focus(&mut self.editor_state) {
+                    self.mark_dirty();
+                }
+                return;
+            }
+        }
         if commit::commit_property_focus(&mut self.editor_state) {
             self.mark_dirty();
         }

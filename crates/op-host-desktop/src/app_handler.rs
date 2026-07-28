@@ -12,8 +12,8 @@ mod scheduling;
 mod window_events;
 
 use crate::{
-    a11y, chat_session, cursor_icon, figma_import_session, frame, html_import_session, menu,
-    persistence, window_state, DesktopApp, DesktopEvent, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
+    a11y, chat_session, cursor_icon, frame, menu, persistence, window_state, DesktopApp,
+    DesktopEvent, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
 use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
@@ -31,6 +31,9 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // drained as soon as the event loop wakes. Applies mark the document
         // dirty and schedule a paint; snapshots just ack with no repaint.
         if self.poll_mcp_server() {
+            self.request_redraw(true);
+        }
+        if self.collab_runtime.poll(&mut self.host) {
             self.request_redraw(true);
         }
         if self.mcp_shutdown_requested() {
@@ -326,10 +329,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             if op_host_services::doc_io::is_supported_figma_import(&path) {
                 let _ = self.begin_figma_import(path);
             } else if op_host_services::doc_io::is_supported_html_import(&path) {
-                figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
-                html_import_session::cancel(&mut self.host, &mut self.current_html_import);
-                self.current_html_import = Some(html_import_session::spawn(&mut self.host, path));
-                self.request_redraw(true);
+                let _ = self.begin_html_import(path);
             } else if persistence::open_path(
                 &mut self.host,
                 path,
@@ -397,6 +397,11 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                         "teardown-backstop",
                     );
                     event_loop.exit();
+                }
+            }
+            DesktopEvent::CollabWake => {
+                if self.collab_runtime.poll(&mut self.host) {
+                    self.request_redraw(true);
                 }
             }
             DesktopEvent::ImageDecodeReady => {
@@ -568,6 +573,8 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        // Queue an authenticated Bye before transport workers are stopped.
+        self.collab_runtime.leave(&mut self.host);
         // macOS Cmd+Q / Alt+F4 / WM-close can deliver `exiting` without
         // `CloseRequested`; flush MCP port draft before snapshotting so
         // a focused-but-uncommitted edit isn't silently dropped.

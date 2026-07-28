@@ -794,15 +794,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.connectedProviders" => "已连接（{{providers}}）",
         "providerProbe.connectedProvidersMore" => "已连接（{{providers}} +{{count}}）",
         "providerProbe.connectedViaOpenCodeServer" => "已通过 OpenCode 服务连接",
-        "providerProbe.connectedAs" => "已以 @{{login}}{{method}} 身份连接",
-        "providerProbe.connectedViaGithub" => "已通过 GitHub 连接",
-        "importProgress.figmaTitle" => "正在解析 Figma 文件…",
-        "importProgress.htmlTitle" => "正在解析 HTML 和页面资源…",
-        "importProgress.htmlSubtitle" => "正在读取样式和图片，请稍候",
-        "importProgress.largeFileSubtitle" => "大型文件需要几秒钟，请稍候",
-        "account.signedOutHint" => "登录后即可同步你的设置与偏好",
-        "code.noUsableCode" => "AI 未返回可用代码。请重试，或切换 AI 模型后再试。",
-        "code.previousResultKept" => "上次生成的代码仍已保留",
         _ => return super::zh_cn_git::lookup(key),
     })
 }

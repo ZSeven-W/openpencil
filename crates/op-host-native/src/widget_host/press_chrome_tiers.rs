@@ -134,6 +134,7 @@ impl WidgetHostNative {
                 | TopBarHit::ToggleTheme
                 | TopBarHit::ToggleLocale
                 | TopBarHit::OpenAgentSettings
+                | TopBarHit::Collaboration
                 | TopBarHit::ToggleFileMenu
                 | TopBarHit::OpenImportMenu => return Some(true),
                 TopBarHit::ToggleFullscreen => {

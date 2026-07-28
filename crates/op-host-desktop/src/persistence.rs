@@ -20,16 +20,16 @@ use crate::persistence_error::DocumentOpenError;
 /// dialogs always seed an explicit `.op` file name.
 pub(crate) const DOCUMENT_EXTENSIONS: &[&str] = &["op", "pen"];
 
-/// Pop a Save dialog (rfd native) and write the current document to
-/// the chosen path. `Ok(Some(path))` on success, `Ok(None)` on user
-/// cancel, `Err` on IO / encode failure.
+/// Pop a Save dialog (rfd native) and write a standalone document to the
+/// chosen path. `Ok(Some(path))` on success, `Ok(None)` on user cancel, `Err`
+/// on IO / encode failure.
 ///
 /// Reports `doc_io::DocIoError` — the serializer's own reason — rather than
 /// wrapping it: cancellation is already modelled by `Ok(None)`, so the only
 /// thing that can fail here is the write, and a one-variant wrapper would add
 /// no distinction. (Open is different and does get a wrapper; see
 /// [`crate::persistence_error::DocumentOpenError`].)
-pub fn save_as_dialog(state: &EditorState) -> Result<Option<PathBuf>, DocIoError> {
+fn save_as_dialog(state: &EditorState) -> Result<Option<PathBuf>, DocIoError> {
     let Some(path) = pick_save_as_path(state) else {
         return Ok(None);
     };
@@ -37,9 +37,9 @@ pub fn save_as_dialog(state: &EditorState) -> Result<Option<PathBuf>, DocIoError
     Ok(Some(path))
 }
 
-/// Pop only the native Save-As picker. The ordinary desktop path uses this
-/// before handing serialization to [`crate::save_session`]; synchronous
-/// close/reload confirmation keeps using [`save_as_dialog`].
+/// Pop only the native Save-As picker. Every ordinary desktop and close/reload
+/// path uses this before handing serialization to [`crate::save_session`].
+/// [`save_as_dialog`] remains only as the standalone synchronous residual.
 pub fn pick_save_as_path(state: &EditorState) -> Option<PathBuf> {
     rfd::FileDialog::new()
         .set_title(op_i18n::translate(
@@ -51,28 +51,54 @@ pub fn pick_save_as_path(state: &EditorState) -> Option<PathBuf> {
         .save_file()
 }
 
-/// Cmd+S — save to `current_path` if known, else fall through to
-/// Save As. Updates `current_path` + window title on success.
-/// Returns `true` when the document was written to disk, `false` on
-/// an IO error or a cancelled Save-As dialog — so the caller can
-/// tell a real save from a no-op (e.g. the unsaved-changes prompt).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use = "a Save As outcome may require scheduling a collaboration fork"]
+pub(crate) enum SaveActionOutcome {
+    Saved,
+    Cancelled,
+    Failed,
+    Rejected,
+    BackgroundForkRequired,
+}
+
+impl SaveActionOutcome {
+    fn into_action_outcome(self) -> ActionOutcome {
+        match self {
+            Self::Saved => ActionOutcome::Saved,
+            Self::BackgroundForkRequired => ActionOutcome::SaveAsForkRequired,
+            Self::Cancelled | Self::Failed | Self::Rejected => ActionOutcome::Noop,
+        }
+    }
+}
+
+/// Cmd+S — save to `current_path` if known, else fall through to Save As.
+/// Collaboration-bound Save As returns an explicit background-fork request;
+/// this synchronous residual never detaches a session identity.
 pub fn handle_save(
     host: &mut WidgetHostNative,
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
-) -> bool {
+) -> SaveActionOutcome {
+    let action = if current_path.is_some() {
+        op_editor_core::CollabGateAction::SaveShared
+    } else {
+        op_editor_core::CollabGateAction::SaveFork
+    };
+    if !host.gate_collaboration_action(action, op_editor_core::CollabEditSource::User) {
+        return SaveActionOutcome::Rejected;
+    }
     if let Some(path) = current_path.clone() {
         match save_to_path(host.editor_state(), &path) {
             Err(e) => {
                 eprintln!("[save] {e}");
                 show_error_dialog(host, ErrorKind::Save, Some(&path), &e.to_string());
-                return false;
+                return SaveActionOutcome::Failed;
             }
             Ok(()) => {
                 crate::settings_io::touch_recent(host, &path);
                 set_display_name(host, Some(&path));
                 host.editor_state_mut().mark_saved_revision();
-                return true;
+                return SaveActionOutcome::Saved;
             }
         }
     }
@@ -99,13 +125,48 @@ fn fit_loaded_document(host: &mut WidgetHostNative, window: Option<&winit::windo
     host.mark_editor_state_dirty();
 }
 
-/// Cmd+Shift+S — always pop the Save dialog.
+pub(crate) fn requires_background_save_as_fork(state: &EditorState) -> bool {
+    let collab = &state.editor_ui.collab;
+    if collab.authenticated_session().is_some()
+        || collab.pending_edit != op_editor_core::CollabPendingEditUi::None
+    {
+        return true;
+    }
+    // Authentication metadata is intentionally absent during these
+    // transitions. Fail closed until the runtime returns to a genuinely
+    // unbound phase.
+    !matches!(
+        collab.phase,
+        op_editor_core::CollabConnectionPhase::Idle
+            | op_editor_core::CollabConnectionPhase::Discovering
+    )
+}
+
+/// Legacy synchronous Save As. Standalone documents still use the native
+/// dialog directly; a collaboration identity is routed back to the desktop's
+/// background fork dispatcher before any picker or write can run.
 pub fn handle_save_as(
     host: &mut WidgetHostNative,
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
-) -> bool {
-    match save_as_dialog(host.editor_state()) {
+) -> SaveActionOutcome {
+    handle_save_as_with(host, current_path, window, save_as_dialog, |host, error| {
+        eprintln!("[save as] {error}");
+        show_error_dialog(host, ErrorKind::Save, None, &error.to_string());
+    })
+}
+
+fn handle_save_as_with(
+    host: &mut WidgetHostNative,
+    current_path: &mut Option<PathBuf>,
+    window: Option<&winit::window::Window>,
+    save: impl FnOnce(&EditorState) -> Result<Option<PathBuf>, DocIoError>,
+    report_error: impl FnOnce(&WidgetHostNative, &DocIoError),
+) -> SaveActionOutcome {
+    if requires_background_save_as_fork(host.editor_state()) {
+        return SaveActionOutcome::BackgroundForkRequired;
+    }
+    match save(host.editor_state()) {
         Ok(Some(path)) => {
             crate::settings_io::touch_recent(host, &path);
             // Mirror handle_save: refresh the in-chrome file name too, not
@@ -115,13 +176,12 @@ pub fn handle_save_as(
             host.editor_state_mut().mark_saved_revision();
             *current_path = Some(path);
             refresh_title(current_path, window);
-            true
+            SaveActionOutcome::Saved
         }
-        Ok(None) => false,
+        Ok(None) => SaveActionOutcome::Cancelled,
         Err(e) => {
-            eprintln!("[save as] {e}");
-            show_error_dialog(host, ErrorKind::Save, None, &e.to_string());
-            false
+            report_error(host, &e);
+            SaveActionOutcome::Failed
         }
     }
 }
@@ -129,7 +189,13 @@ pub fn handle_save_as(
 fn load_into_host(
     host: &mut WidgetHostNative,
     path: &std::path::Path,
-) -> Result<PathBuf, DocumentOpenError> {
+) -> Result<Option<PathBuf>, DocumentOpenError> {
+    if !host.gate_collaboration_action(
+        op_editor_core::CollabGateAction::ReplaceDocument,
+        op_editor_core::CollabEditSource::User,
+    ) {
+        return Ok(None);
+    }
     let loaded_source_state = crate::figma_import_session::capture_output_state(path)?;
     let locale = host.editor_state().editor_ui.locale;
     let loaded = load_editor_state_with_report(path, locale);
@@ -149,12 +215,14 @@ fn load_into_host(
         "[open] {} active-page top-level nodes",
         state.active_children().len()
     );
-    host.replace_editor_state(state);
+    if !host.replace_editor_state(state) {
+        return Ok(None);
+    }
     host.editor_state_mut().mark_saved_revision();
     host.force_rotate_layer_panel_owner();
     host.mark_editor_state_dirty();
     host.arm_missing_fonts_detection();
-    Ok(bound_path)
+    Ok(Some(bound_path))
 }
 
 /// Cmd+O — pop the Open dialog and replace the current document.
@@ -175,13 +243,14 @@ pub fn handle_open(
         None => return false,
     };
     match load_into_host(host, &path) {
-        Ok(bound_path) => {
+        Ok(Some(bound_path)) => {
             fit_loaded_document(host, window);
             crate::settings_io::touch_recent(host, &bound_path);
             *current_path = Some(bound_path);
             refresh_title(current_path, window);
             true
         }
+        Ok(None) => false,
         Err(e) => {
             eprintln!("[open] {e}");
             show_error_dialog(host, ErrorKind::Open, Some(&path), &e.to_string());
@@ -198,13 +267,14 @@ pub fn open_path(
     window: Option<&winit::window::Window>,
 ) -> bool {
     match load_into_host(host, &path) {
-        Ok(bound_path) => {
+        Ok(Some(bound_path)) => {
             fit_loaded_document(host, window);
             crate::settings_io::touch_recent(host, &bound_path);
             *current_path = Some(bound_path);
             refresh_title(current_path, window);
             true
         }
+        Ok(None) => false,
         Err(e) => {
             eprintln!("[open] {e}");
             show_error_dialog(host, ErrorKind::Open, Some(&path), &e.to_string());
@@ -271,9 +341,17 @@ pub fn run_action(
     use op_editor_core::editor_ui_state::FileAction;
     match action {
         FileAction::New => {
+            if !host.gate_collaboration_action(
+                op_editor_core::CollabGateAction::ReplaceDocument,
+                op_editor_core::CollabEditSource::User,
+            ) {
+                return ActionOutcome::Noop;
+            }
             let mut state = EditorState::starter();
             preserve_app_preferences(host.editor_state(), &mut state);
-            host.replace_editor_state(state);
+            if !host.replace_editor_state(state) {
+                return ActionOutcome::Noop;
+            }
             let (vw, vh) = viewport_size_for_window(window);
             host.fit_content_to_viewport(vw, vh);
             host.editor_state_mut().mark_saved_revision();
@@ -287,10 +365,8 @@ pub fn run_action(
             ActionOutcome::Saved
         }
         FileAction::Open => ActionOutcome::saved_or_noop(handle_open(host, current_path, window)),
-        FileAction::Save => ActionOutcome::saved_or_noop(handle_save(host, current_path, window)),
-        FileAction::SaveAs => {
-            ActionOutcome::saved_or_noop(handle_save_as(host, current_path, window))
-        }
+        FileAction::Save => handle_save(host, current_path, window).into_action_outcome(),
+        FileAction::SaveAs => handle_save_as(host, current_path, window).into_action_outcome(),
         FileAction::ExportImage => {
             // main.rs intercepts ExportImage to open the picker; this
             // fallback keeps external callers working.
@@ -342,13 +418,14 @@ pub fn run_action(
             };
             let path = std::path::PathBuf::from(&entry.path);
             match load_into_host(host, &path) {
-                Ok(bound_path) => {
+                Ok(Some(bound_path)) => {
                     fit_loaded_document(host, window);
                     crate::settings_io::touch_recent(host, &bound_path);
                     *current_path = Some(bound_path);
                     refresh_title(current_path, window);
                     ActionOutcome::Saved
                 }
+                Ok(None) => ActionOutcome::Noop,
                 Err(e) => {
                     // File missing / parse failure → tell the user and
                     // drop the stale entry from recents.
@@ -369,6 +446,12 @@ pub fn run_action(
             ActionOutcome::Noop
         }
         FileAction::ImportHtml => {
+            if !host.gate_collaboration_action(
+                op_editor_core::CollabGateAction::ReplaceDocument,
+                op_editor_core::CollabEditSource::Import,
+            ) {
+                return ActionOutcome::Noop;
+            }
             let path = match rfd::FileDialog::new()
                 .set_title(op_i18n::translate(
                     host.editor_state().editor_ui.locale,
@@ -385,6 +468,12 @@ pub fn run_action(
             ActionOutcome::HtmlImportStarted(path)
         }
         FileAction::ImportFigma => {
+            if !host.gate_collaboration_action(
+                op_editor_core::CollabGateAction::ReplaceDocument,
+                op_editor_core::CollabEditSource::Import,
+            ) {
+                return ActionOutcome::Noop;
+            }
             let path = match rfd::FileDialog::new()
                 .set_title(op_i18n::translate(
                     host.editor_state().editor_ui.locale,
@@ -406,15 +495,42 @@ pub fn run_action(
         }
         FileAction::FinishFigmaImport(selection) => ActionOutcome::FigmaImportSelection(selection),
         FileAction::ImportImageOrSvg => {
-            crate::persistence_image::handle_import_image_or_svg(host);
+            if host.gate_collaboration_action(
+                op_editor_core::CollabGateAction::Document(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+                    ),
+                ),
+                op_editor_core::CollabEditSource::Import,
+            ) {
+                crate::persistence_image::handle_import_image_or_svg(host);
+            }
             ActionOutcome::Noop
         }
         FileAction::PickFillImage => {
-            crate::persistence_image::handle_pick_fill_image(host);
+            if host.gate_collaboration_action(
+                op_editor_core::CollabGateAction::Document(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+                    ),
+                ),
+                op_editor_core::CollabEditSource::Import,
+            ) {
+                crate::persistence_image::handle_pick_fill_image(host);
+            }
             ActionOutcome::Noop
         }
         FileAction::RelinkImage => {
-            crate::persistence_image::handle_relink_image(host);
+            if host.gate_collaboration_action(
+                op_editor_core::CollabGateAction::Document(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+                    ),
+                ),
+                op_editor_core::CollabEditSource::Import,
+            ) {
+                crate::persistence_image::handle_relink_image(host);
+            }
             ActionOutcome::Noop
         }
     }

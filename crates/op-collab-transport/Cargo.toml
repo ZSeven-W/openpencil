@@ -1,0 +1,52 @@
+[package]
+name = "op-collab-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Native Noise/TCP transport and LAN discovery for OpenPencil collaboration"
+
+[features]
+default = ["native"]
+native = ["dep:keyring", "dep:secret-service", "dep:windows-sys"]
+mdns = ["native", "dep:mdns-sd"]
+test-support = []
+
+[dependencies]
+op-collab = { path = "../op-collab" }
+base64 = "0.22"
+getrandom = "0.3"
+libc = "0.2"
+polling = "3"
+snow = "0.9"
+socket2 = "0.6"
+thiserror = { workspace = true }
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+zeroize = { version = "1", features = ["derive"] }
+
+mdns-sd = { version = "0.13", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = [
+  "apple-native",
+], optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security_Credentials",
+], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = [
+  "async-io",
+  "async-secret-service",
+  "crypto-rust",
+], optional = true }
+secret-service = { version = "4", default-features = false, optional = true }
+
+[dev-dependencies]
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+serde_json = { workspace = true }
+static_assertions = "1"

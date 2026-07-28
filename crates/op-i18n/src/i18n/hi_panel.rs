@@ -25,6 +25,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "{{name}} मॉडल क्वेरी के लिए प्रमाणीकरण आवश्यक है। साइन इन करने के लिए एक बार {{command}} चलाएँ।"
         }
         "providerProbe.unrecognizedModelCatalog" => "{{name}} ने एक अपरिचित मॉडल सूची लौटाई",
-        _ => return None,
+        _ => return super::hi_collab::lookup(key),
     })
 }

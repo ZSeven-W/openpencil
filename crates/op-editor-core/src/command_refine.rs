@@ -1,5 +1,6 @@
 //! Deterministic cleanup used by `EditorCommand::RefineDesign`.
 
+use crate::id_allocator::{IdAllocError, IdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
@@ -17,18 +18,26 @@ pub struct RefineFix {
 }
 
 impl EditorState {
-    /// Refine a generated design root. Returns `None` when the root is
-    /// invalid/missing and `Some(changed)` when the command is accepted.
-    pub(crate) fn cmd_refine_design(
+    /// Allocator-aware document refine used by command collaboration paths.
+    pub(crate) fn cmd_refine_design_with_allocator(
         &mut self,
         root_id: &NodeId,
         _canvas_width: Option<i32>,
-    ) -> Option<bool> {
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<Option<bool>, IdAllocError> {
         if !root_id.is_real() {
-            return None;
+            return Ok(None);
         }
-        let root = walkers::find_node_mut(self.active_children_mut(), root_id)?;
-        Some(!refine_subtree(root).is_empty())
+        let Some(mut staged) = walkers::find_node(self.active_children(), root_id).cloned() else {
+            return Ok(None);
+        };
+        let mut taken = ids_outside_subtree(&self.doc, &staged);
+        let fixes = refine_subtree_with_allocator(&mut staged, allocator, &mut taken)?;
+        let Some(live) = walkers::find_node_mut(self.active_children_mut(), root_id) else {
+            return Ok(None);
+        };
+        *live = staged;
+        Ok(Some(!fixes.is_empty()))
     }
 }
 
@@ -47,6 +56,100 @@ pub fn refine_subtree(root: &mut PenNode) -> Vec<RefineFix> {
     sanitize_screen_frame_bounds(root, &mut fixes);
     adjust_root_height_to_content(root, &mut fixes);
     fixes
+}
+
+/// Refine an installed subtree while minting every repaired id from
+/// `allocator`. The caller supplies ids owned by the rest of the document.
+pub fn refine_subtree_with_allocator(
+    root: &mut PenNode,
+    allocator: &mut dyn IdAllocator,
+    taken: &mut std::collections::HashSet<NodeId>,
+) -> Result<Vec<RefineFix>, IdAllocError> {
+    let mut fixes = Vec::new();
+    apply_no_emoji_icon_heuristic(root, &mut fixes);
+    ensure_unique_node_ids_with_allocator(root, allocator, taken, &mut fixes)?;
+    sanitize_auto_layout_child_positions(root, &mut fixes);
+    sanitize_screen_frame_bounds(root, &mut fixes);
+    adjust_root_height_to_content(root, &mut fixes);
+    Ok(fixes)
+}
+
+fn ensure_unique_node_ids_with_allocator(
+    node: &mut PenNode,
+    allocator: &mut dyn IdAllocator,
+    taken: &mut std::collections::HashSet<NodeId>,
+    fixes: &mut Vec<RefineFix>,
+) -> Result<(), IdAllocError> {
+    let original = node.base().id.clone();
+    let trimmed = original.trim();
+    let candidate = NodeId::new(trimmed);
+    let preserve = !trimmed.is_empty() && trimmed == original && taken.insert(candidate);
+    if !preserve {
+        let fresh = allocator.allocate(taken)?;
+        node.base_mut().id = fresh.as_str().to_string();
+        fixes.push(RefineFix {
+            node_id: fresh.into(),
+            node_name: node.base().name.clone(),
+            fix: format!("Reminted duplicate/blank id (was {original:?})"),
+        });
+    }
+    if let Some(children) = node.children_mut() {
+        for child in children {
+            ensure_unique_node_ids_with_allocator(child, allocator, taken, fixes)?;
+        }
+    }
+    Ok(())
+}
+
+fn ids_outside_subtree(
+    doc: &jian_ops_schema::PenDocument,
+    subtree: &PenNode,
+) -> std::collections::HashSet<NodeId> {
+    use std::collections::HashMap;
+
+    fn count_node(node: &PenNode, counts: &mut HashMap<NodeId, usize>) {
+        if let Some(id) = NodeId::new_opt(node.id_str()) {
+            *counts.entry(id).or_default() += 1;
+        }
+        if let Some(children) = node.children() {
+            for child in children {
+                count_node(child, counts);
+            }
+        }
+    }
+
+    fn subtract_node(node: &PenNode, counts: &mut HashMap<NodeId, usize>) {
+        if let Some(id) = NodeId::new_opt(node.id_str()) {
+            if let Some(count) = counts.get_mut(&id) {
+                *count = count.saturating_sub(1);
+            }
+        }
+        if let Some(children) = node.children() {
+            for child in children {
+                subtract_node(child, counts);
+            }
+        }
+    }
+
+    let mut counts = HashMap::new();
+    for node in &doc.children {
+        count_node(node, &mut counts);
+    }
+    if let Some(pages) = doc.pages.as_ref() {
+        for page in pages {
+            if let Some(id) = NodeId::new_opt(&page.id) {
+                *counts.entry(id).or_default() += 1;
+            }
+            for node in &page.children {
+                count_node(node, &mut counts);
+            }
+        }
+    }
+    subtract_node(subtree, &mut counts);
+    counts
+        .into_iter()
+        .filter_map(|(id, count)| (count > 0).then_some(id))
+        .collect()
 }
 
 /// TS `ensureUniqueNodeIds` port (`design-node-sanitization.ts:142`):

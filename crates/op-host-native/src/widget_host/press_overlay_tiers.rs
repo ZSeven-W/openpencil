@@ -12,7 +12,7 @@ use super::press_ctx::PressCtx;
 use super::WidgetHostNative;
 use op_editor_core::host_press_transitions as core_press;
 use op_editor_ui::widgets::press_flow::{self, LocalePickerPress, OpenLayerMenuPress};
-use op_editor_ui::widgets::{ImportMenu, ImportMenuChoice};
+use op_editor_ui::widgets::{CollabPanel, ImportMenu, ImportMenuChoice, TopBar, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHostNative {
@@ -137,6 +137,43 @@ impl WidgetHostNative {
         let (x, y) = (ctx.x, ctx.y);
         let viewport_width = ctx.viewport_width;
         let viewport_height = ctx.viewport_height;
+        // Shared collaboration popover. Like the account/locale menus it is
+        // modal within the dropdown tier: a press outside closes and is
+        // swallowed, while a row/button only queues a runtime-owned action.
+        if self.editor_state.editor_ui.collab.panel.open {
+            let top_bar_rect = Rect::xywh(0.0, 0.0, viewport_width, TOP_BAR_HEIGHT);
+            let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
+            if let Some(panel) = CollabPanel::for_editor_ui(&self.editor_state.editor_ui) {
+                let panel_rect = panel.rect_at(
+                    top_bar.collaboration_chip_rect_estimated(top_bar_rect),
+                    Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+                );
+                let point = Point2D::new(x, y);
+                if let Some(hit) = panel.hit_test(panel_rect, point) {
+                    match hit {
+                        op_editor_ui::widgets::CollabPanelHit::CopyShareEndpoint(endpoint) => {
+                            self.editor_state.chat.queue_copy_text(endpoint);
+                        }
+                        hit => {
+                            let _ = op_editor_ui::widgets::collab_ui::apply_panel_hit(
+                                &mut self.editor_state.editor_ui,
+                                hit,
+                            );
+                        }
+                    }
+                } else {
+                    self.editor_state.editor_ui.collab.panel.open = false;
+                    self.editor_state
+                        .editor_ui
+                        .collab
+                        .panel
+                        .join_address_focused = false;
+                    self.blur_text_inputs_on_blank_press();
+                }
+                self.mark_dirty();
+                return Some(true);
+            }
+        }
         // 0ab. Shape picker overlay.
         if self.dispatch_shape_picker_press(x, y, viewport_width, viewport_height) {
             return Some(true);

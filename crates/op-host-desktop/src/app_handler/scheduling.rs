@@ -67,6 +67,10 @@ impl DesktopApp {
     /// made casement re-fire it immediately, spinning the loop at
     /// full speed until the next real event.
     pub(super) fn schedule_next_wake(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(deadline) = self.collab_runtime.next_presence_deadline() {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+            return;
+        }
         // Chat / design / Figma-import worker active → wake ~30 fps to
         // pump results and animate the loading overlay's spinner.
         if self.current_chat.is_some()
@@ -99,6 +103,8 @@ impl DesktopApp {
             // paint recorded (the next pump picks them up).
             || self.remote_images.is_pending()
             || op_editor_ui::widgets::canvas_viewport_image::has_pending_remote_image_requests()
+            || self.collab_avatars.is_pending()
+            || op_editor_ui::collab_avatar_runtime::has_pending_collab_avatar_requests()
             || self.image_decodes.is_pending()
             || op_editor_ui::widgets::canvas_viewport_image::has_pending_decodes()
             || self
@@ -166,6 +172,8 @@ impl DesktopApp {
             || self.model_probe.is_pending()
             || self.image_search.is_pending()
             || self.image_panel.is_pending()
+            || self.collab_avatars.is_pending()
+            || op_editor_ui::collab_avatar_runtime::has_pending_collab_avatar_requests()
             || self.image_decodes.is_pending()
             || op_editor_ui::widgets::canvas_viewport_image::has_pending_decodes()
             || self

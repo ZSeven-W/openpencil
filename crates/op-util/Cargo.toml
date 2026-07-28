@@ -8,6 +8,6 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "OpenPencil dependency-free leaf utilities: canonical hex-color parsing, JSON/XML string escaping"
+description = "OpenPencil dependency-free leaf utilities: collaboration ids, hex colors, and JSON/XML escaping"
 
 [dependencies]

@@ -15,7 +15,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jian_ops_schema::node::PenNode;
 use op_editor_core::pen_node_ext::PenNodeExt;
-use op_editor_core::{EditorCommand, EditorState};
+use op_editor_core::{
+    CollabEditSource, CollabGateAction, CollabGatePolicy, EditorCommand, EditorState,
+};
 
 pub mod error;
 #[cfg(feature = "mcp-debug-tools")]
@@ -124,11 +126,12 @@ enum UiRequest {
     /// is parsed/loaded OFF the UI thread (so a large document never pins the
     /// UI thread, and the stateful lock is held only for the swap); the UI pump
     /// just swaps the already-loaded document into the live `EditorState`. The
-    /// ack is `()` — the in-memory swap is infallible once the load succeeded.
+    /// The bool ack is false when the current collaboration session rejects
+    /// whole-document replacement.
     ReplaceDocument {
         doc: Box<jian_ops_schema::PenDocument>,
         editor_meta: op_pen_loader::EditorMeta,
-        ack: SyncSender<()>,
+        ack: SyncSender<bool>,
     },
     /// Editor-only live-sync update. Page switches must not install an
     /// identical whole document as an undoable replacement.
@@ -244,6 +247,17 @@ impl McpLiveServer {
                     cmd,
                     ack,
                 }) => {
+                    if let Err(reason) = CollabGatePolicy::from(&state.editor_ui.collab)
+                        .check_command(&cmd, CollabEditSource::Mcp)
+                    {
+                        state.editor_ui.collab.set_notice(
+                            reason.notice_kind(),
+                            crate::design_agent_tools::reveal_now_millis(),
+                        );
+                        let _ = ack.send(ApplyAck { applied: false });
+                        outcome.repaint = true;
+                        continue;
+                    }
                     let layout_dirty = command_invalidates_layout(&cmd);
                     // Snapshot BEFORE apply, only for the one tool the canvas
                     // radar-scan cares about — `design_agent_tools.rs`'s
@@ -270,13 +284,24 @@ impl McpLiveServer {
                     editor_meta,
                     ack,
                 }) => {
+                    if let Err(reason) = CollabGatePolicy::from(&state.editor_ui.collab)
+                        .check(CollabGateAction::ReplaceDocument, CollabEditSource::Mcp)
+                    {
+                        state.editor_ui.collab.set_notice(
+                            reason.notice_kind(),
+                            crate::design_agent_tools::reveal_now_millis(),
+                        );
+                        let _ = ack.send(false);
+                        outcome.repaint = true;
+                        continue;
+                    }
                     // The document was already loaded off the UI thread; just
                     // swap it in (preserving editor chrome). Layout is computed
                     // by the renderer at paint, so the swap + dirty flag
                     // repaints the new document with no extra layout pass here.
                     state.replace_document(*doc);
                     op_pen_loader::apply_editor_meta(state, editor_meta);
-                    let _ = ack.send(());
+                    let _ = ack.send(true);
                     outcome.repaint = true;
                     outcome.layout_dirty = true;
                     outcome.document_replaced = true;

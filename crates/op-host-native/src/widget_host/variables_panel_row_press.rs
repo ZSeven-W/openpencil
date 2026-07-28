@@ -9,6 +9,9 @@ use jian_ops_schema::variable::{VariableScalar, VariableValue};
 
 impl WidgetHostNative {
     pub(in crate::widget_host) fn press_variable_name_cell(&mut self, idx: usize) -> bool {
+        if !self.collab_allows_variables_mutation() {
+            return true;
+        }
         use op_editor_core::editor_ui_state::VariableRowFocus;
         let is_double = matches!(
             self.editor_state.editor_ui.last_variable_name_click,
@@ -53,6 +56,9 @@ impl WidgetHostNative {
         x: f32,
         y: f32,
     ) -> bool {
+        if !self.collab_allows_variables_mutation() {
+            return true;
+        }
         use op_editor_ui::scene_vars::VariableKind as UiVariableKind;
         let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
         let Some((name, kind)) = var_table
@@ -129,6 +135,9 @@ impl WidgetHostNative {
         x: f32,
         y: f32,
     ) -> bool {
+        if !self.collab_allows_variables_mutation() {
+            return true;
+        }
         let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
         let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
             return true;
@@ -167,6 +176,9 @@ impl WidgetHostNative {
     /// Row-menu Rename — seeds the name draft with select-all (TS
     /// focuses the input and `.select()`s it).
     pub(in crate::widget_host) fn start_variable_row_rename(&mut self, idx: usize) -> bool {
+        if !self.collab_allows_variables_mutation() {
+            return true;
+        }
         use op_editor_core::editor_ui_state::VariableRowFocus;
         let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
         let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
@@ -200,6 +212,9 @@ impl WidgetHostNative {
     /// in the tree to its concrete value first (TS `removeVariable`),
     /// under one history snapshot.
     pub(in crate::widget_host) fn delete_variable_row(&mut self, idx: usize) -> bool {
+        if !self.collab_allows_variables_mutation() {
+            return true;
+        }
         let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);
         let Some(name) = var_table.variables.get(idx).map(|v| v.name.clone()) else {
             self.close_variable_menus();
@@ -226,6 +241,9 @@ impl WidgetHostNative {
         x: f32,
         y: f32,
     ) -> bool {
+        if !self.collab_allows_variables_mutation() {
+            return true;
+        }
         use op_editor_core::editor_ui_state::VariableRowFocus;
         use op_editor_ui::scene_vars::VariableKind as UiVariableKind;
         let var_table = op_pen_loader::editor_state_var_table(&self.editor_state);

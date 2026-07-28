@@ -23,6 +23,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.modelQueryFailedRunLogin" => "La requête de modèles {{name}} a échoué. Exécutez {{command}} une fois pour vous authentifier.",
         "providerProbe.modelQueryNeedsAuth" => "La requête de modèles {{name}} nécessite une authentification. Exécutez {{command}} une fois pour vous connecter.",
         "providerProbe.unrecognizedModelCatalog" => "{{name}} a renvoyé un catalogue de modèles non reconnu",
-        _ => return None,
+        _ => return super::fr_collab::lookup(key),
     })
 }

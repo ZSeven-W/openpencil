@@ -204,9 +204,14 @@ pub fn pump(
             // saved baseline of 0. HTML imports have no adjacent `.op` yet,
             // so explicitly mint an unsaved revision before installation.
             prepared.state.mark_document_changed();
-            host.install_imported_state_with_drop_hook(prepared.state, || {
+            if !host.install_imported_state_with_drop_hook(prepared.state, || {
                 crate::heap_pressure::schedule_relief("HTML replaced-document drop");
-            });
+            }) {
+                host.editor_state_mut().editor_ui.figma_import_in_progress = false;
+                host.mark_editor_state_dirty();
+                *session = None;
+                return PumpOutcome::Cancelled;
+            }
             // HTML imports do not auto-create an adjacent `.op`; their next
             // Save intentionally routes through Save As.
             *current_path = None;

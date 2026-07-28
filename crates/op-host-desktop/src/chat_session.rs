@@ -5,7 +5,7 @@
 //! provider routing plus UI-thread tool execution against `WidgetHostNative`.
 
 use op_ai::chat_provider::ChatToolResult;
-use op_editor_core::{ChatMessage, ChatRole, ChatState, EditorState};
+use op_editor_core::{ChatMessage, ChatRole, ChatState};
 pub use op_editor_host_core::chat::ChatSession;
 #[cfg(test)]
 pub use op_editor_host_core::chat::{apply_poll_to_message, ChatPoll};
@@ -60,6 +60,16 @@ pub(crate) fn finalize_design_session_if_needed(
         return;
     };
     if !session.is_design_loop() || session.loop_finalized() {
+        return;
+    }
+    if !host.gate_collaboration_action(
+        op_editor_core::CollabGateAction::Document(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::BulkWrite,
+            ),
+        ),
+        op_editor_core::CollabEditSource::Ai,
+    ) {
         return;
     }
     let state = host.editor_state_mut();
@@ -145,13 +155,7 @@ fn pump_with_channel_interleave(
             changed = true;
         }
     }
-    if execute_tool_requests(
-        host.editor_state_mut(),
-        session,
-        tool_requests,
-        running_tab,
-        agent_identity,
-    ) {
+    if execute_tool_requests(host, session, tool_requests, running_tab, agent_identity) {
         changed = true;
         // Keep the design in view while it generates:
         //  - first fit when the first SIZED root lands ("the artboard sits
@@ -219,6 +223,28 @@ fn agent_message_index(
         })
 }
 
+fn allow_ai_bulk_write(host: &mut WidgetHostNative) -> bool {
+    host.gate_collaboration_action(
+        op_editor_core::CollabGateAction::Document(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::BulkWrite,
+            ),
+        ),
+        op_editor_core::CollabEditSource::Ai,
+    )
+}
+
+fn collaboration_ai_rejection() -> ChatToolResult {
+    ChatToolResult {
+        content: serde_json::json!({
+            "success": false,
+            "error": "AI document mutation is unavailable during collaboration"
+        })
+        .to_string(),
+        is_error: true,
+    }
+}
+
 /// Execute one pump cycle's captured canvas tool requests against the live
 /// `EditorState`.
 ///
@@ -227,7 +253,7 @@ fn agent_message_index(
 /// (`running_tab`), so a tab switch mid-run doesn't drop the card on the wrong
 /// tab.
 fn execute_tool_requests(
-    state: &mut EditorState,
+    host: &mut WidgetHostNative,
     session: &mut ChatSession,
     requests: Vec<op_editor_host_core::chat::ChatToolRequest>,
     running_tab: Option<usize>,
@@ -260,6 +286,19 @@ fn execute_tool_requests(
                 .ok()
                 .and_then(|v| v.get("checkOnly").and_then(|b| b.as_bool()))
                 .unwrap_or(false);
+            if !check_only && !allow_ai_bulk_write(host) {
+                let result = collaboration_ai_rejection();
+                let state = host.editor_state_mut();
+                changed |= attach_tool_result_to_transcript_with(
+                    state.chat.run_tab_mut(running_tab),
+                    &req.name,
+                    &result,
+                    agent_identity,
+                );
+                let _ = req.ack.send(result);
+                continue;
+            }
+            let state = host.editor_state_mut();
             // The quality tally is a by-product of the REAL finalize only —
             // the `checkOnly` probe runs no repair pass, so it must report an
             // empty summary rather than inherit the last real run's numbers.
@@ -318,6 +357,7 @@ fn execute_tool_requests(
         // `op_host_services::loop_blocker_ledger`'s module doc) — so an
         // issue a later batch already fixed simply stops appearing here.
         if req.name == op_ai::chat_provider::CHECK_BLOCKERS_OP {
+            let state = host.editor_state();
             let report = op_host_services::loop_blocker_ledger::detect_blockers(state);
             let blockers: Vec<serde_json::Value> = report
                 .blockers
@@ -334,6 +374,22 @@ fn execute_tool_requests(
             });
             continue;
         }
+        // AI/MCP document tools are intentionally disabled while a shared
+        // session is bound. Re-check at the UI-thread sink because this
+        // request may have been produced before a Start/Join transition.
+        if !allow_ai_bulk_write(host) {
+            let result = collaboration_ai_rejection();
+            let state = host.editor_state_mut();
+            changed |= attach_tool_result_to_transcript_with(
+                state.chat.run_tab_mut(running_tab),
+                &req.name,
+                &result,
+                agent_identity,
+            );
+            let _ = req.ack.send(result);
+            continue;
+        }
+        let state = host.editor_state_mut();
         // Intercept `spawn_agents`: parse the specs, stash them for the
         // host to launch after this (parent) pump, and ack immediately
         // (fire-and-forget). A SUB calling `spawn_agents` is refused —

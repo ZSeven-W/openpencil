@@ -14,10 +14,12 @@ impl WidgetHost {
     /// `navigator.clipboard` writes there; the direct browser write stays
     /// as a best-effort in every mode.
     pub(in crate::widget_host) fn host_copy_text(&self, text: &str) {
-        if self.editor_state.editor_ui.embed == op_editor_core::EmbedHost::VsCode {
-            crate::web_clipboard::post_copy_to_parent(text);
-        }
-        crate::web_clipboard::copy_text(text);
+        dispatch_web_copy(
+            self.editor_state.editor_ui.embed,
+            text,
+            crate::web_clipboard::copy_text,
+            crate::web_clipboard::post_copy_to_parent,
+        );
     }
 
     /// Single-key tool switch (V / R / O / L / T / F / P / Y / H). Mirrors the
@@ -474,5 +476,47 @@ impl WidgetHost {
             return true;
         }
         false
+    }
+}
+
+fn dispatch_web_copy(
+    embed: op_editor_core::EmbedHost,
+    text: &str,
+    direct: impl FnOnce(&str),
+    relay: impl FnOnce(&str),
+) {
+    if embed == op_editor_core::EmbedHost::VsCode {
+        relay(text);
+    }
+    direct(text);
+}
+
+#[cfg(test)]
+mod copy_tests {
+    use super::dispatch_web_copy;
+    use std::cell::RefCell;
+
+    #[test]
+    fn browser_copy_uses_direct_clipboard_and_vscode_keeps_relay_fallback() {
+        let direct = RefCell::new(Vec::new());
+        let relay = RefCell::new(Vec::new());
+        dispatch_web_copy(
+            op_editor_core::EmbedHost::None,
+            "192.168.1.8:43120",
+            |text| direct.borrow_mut().push(text.to_string()),
+            |text| relay.borrow_mut().push(text.to_string()),
+        );
+        assert_eq!(direct.borrow().as_slice(), ["192.168.1.8:43120"]);
+        assert!(relay.borrow().is_empty());
+
+        direct.borrow_mut().clear();
+        dispatch_web_copy(
+            op_editor_core::EmbedHost::VsCode,
+            "192.168.1.8:43120",
+            |text| direct.borrow_mut().push(text.to_string()),
+            |text| relay.borrow_mut().push(text.to_string()),
+        );
+        assert_eq!(direct.borrow().as_slice(), ["192.168.1.8:43120"]);
+        assert_eq!(relay.borrow().as_slice(), ["192.168.1.8:43120"]);
     }
 }

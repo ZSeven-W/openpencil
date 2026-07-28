@@ -86,6 +86,9 @@ fn mime_for(path: &Path) -> &'static str {
 /// raster formats land as a single `ImageNode` carrying the file as
 /// a `data:` URL. On cancel: silent no-op. On read error: log.
 pub fn handle_import_image_or_svg(host: &mut WidgetHostNative) {
+    if !allow_external_asset_import(host) {
+        return;
+    }
     let Some(path) = pick_image_path(host) else {
         return;
     };
@@ -146,6 +149,9 @@ pub fn handle_import_image_or_svg(host: &mut WidgetHostNative) {
 /// Handle the Fill section's `图片` body click. Writes the picked
 /// image into the selected node's first `PenFill` as `Image { url }`.
 pub fn handle_pick_fill_image(host: &mut WidgetHostNative) {
+    if !allow_external_asset_import(host) {
+        return;
+    }
     let Some(path) = pick_image_path(host) else {
         return;
     };
@@ -153,6 +159,9 @@ pub fn handle_pick_fill_image(host: &mut WidgetHostNative) {
 }
 
 fn apply_pick_fill_image(host: &mut WidgetHostNative, path: &Path) {
+    if !allow_external_asset_import(host) {
+        return;
+    }
     let embedded = match read_as_data_url(path) {
         Ok(embedded) => embedded,
         Err(e) => {
@@ -189,6 +198,9 @@ fn apply_pick_fill_image(host: &mut WidgetHostNative, path: &Path) {
 /// gap (shared-.op portability audit, 2026-07-18): the fixed reference
 /// is real content, not another local pointer.
 pub fn handle_relink_image(host: &mut WidgetHostNative) {
+    if !allow_external_asset_import(host) {
+        return;
+    }
     let Some(path) = pick_image_path(host) else {
         return;
     };
@@ -198,6 +210,9 @@ pub fn handle_relink_image(host: &mut WidgetHostNative) {
 /// Core of [`handle_relink_image`], factored out so the embed-then-write
 /// behavior is testable without a real file-picker dialog.
 fn apply_relink(host: &mut WidgetHostNative, path: &Path) {
+    if !allow_external_asset_import(host) {
+        return;
+    }
     let embedded = match read_as_data_url(path) {
         Ok(embedded) => embedded,
         Err(e) => {
@@ -220,6 +235,17 @@ fn apply_relink(host: &mut WidgetHostNative, path: &Path) {
     // next pump (it re-probes the new src).
     state.editor_ui.image_panel.asset_check = None;
     host.mark_editor_state_dirty();
+}
+
+fn allow_external_asset_import(host: &mut WidgetHostNative) -> bool {
+    host.gate_collaboration_action(
+        op_editor_core::CollabGateAction::Document(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+            ),
+        ),
+        op_editor_core::CollabEditSource::Import,
+    )
 }
 
 #[cfg(test)]

@@ -29,6 +29,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.unrecognizedModelCatalog" => {
             "{{name}} mengembalikan katalog model yang tidak dikenali"
         }
-        _ => return None,
+        _ => return super::id_collab::lookup(key),
     })
 }

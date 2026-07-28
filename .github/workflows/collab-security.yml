@@ -1,0 +1,121 @@
+name: P2P collaboration security boundaries
+
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'crates/op-collab/**'
+      - 'crates/op-collab-smoke/**'
+      - 'crates/op-collab-transport/**'
+      - 'crates/op-auth-bridge/**'
+      - 'crates/op-util/**'
+      - 'crates/op-editor-core/**'
+      - 'crates/op-editor-host-core/**'
+      - 'crates/op-editor-ui/**'
+      - 'crates/op-host-native/**'
+      - 'crates/op-host-desktop/**'
+      - 'crates/op-host-services/**'
+      - 'crates/op-i18n/**'
+      - 'docs/security/p2p-collaboration-threat-model.md'
+      - 'docs/testing/p2p-collaboration-platform-acceptance.md'
+      - 'tools/check-collab-security-boundaries.sh'
+      - 'tools/check-collab-security-boundaries.test.sh'
+      - 'tools/check-op-auth-prebuilt.sh'
+      - 'tools/check-op-auth-prebuilt.test.sh'
+      - 'tools/package-op-auth-prebuilt.sh'
+      - '.github/workflows/collab-security.yml'
+      - '.github/workflows/collab-platform-acceptance.yml'
+  push:
+    branches: ['**']
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'crates/op-collab/**'
+      - 'crates/op-collab-smoke/**'
+      - 'crates/op-collab-transport/**'
+      - 'crates/op-auth-bridge/**'
+      - 'crates/op-util/**'
+      - 'crates/op-editor-core/**'
+      - 'crates/op-editor-host-core/**'
+      - 'crates/op-editor-ui/**'
+      - 'crates/op-host-native/**'
+      - 'crates/op-host-desktop/**'
+      - 'crates/op-host-services/**'
+      - 'crates/op-i18n/**'
+      - 'docs/security/p2p-collaboration-threat-model.md'
+      - 'docs/testing/p2p-collaboration-platform-acceptance.md'
+      - 'tools/check-collab-security-boundaries.sh'
+      - 'tools/check-collab-security-boundaries.test.sh'
+      - 'tools/check-op-auth-prebuilt.sh'
+      - 'tools/check-op-auth-prebuilt.test.sh'
+      - 'tools/package-op-auth-prebuilt.sh'
+      - '.github/workflows/collab-security.yml'
+      - '.github/workflows/collab-platform-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collaboration-security:
+    name: Static boundaries and targeted tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable, pinned 2026-07-28
+        with:
+          toolchain: '1.94'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          shared-key: collab-security
+
+      - name: Check boundary-script syntax
+        run: |
+          bash -n tools/check-collab-security-boundaries.sh
+          bash -n tools/check-collab-security-boundaries.test.sh
+          bash -n tools/check-op-auth-prebuilt.sh
+          bash -n tools/check-op-auth-prebuilt.test.sh
+          bash -n tools/package-op-auth-prebuilt.sh
+
+      - name: Mutation-test the boundary gate
+        run: |
+          bash tools/check-collab-security-boundaries.test.sh
+          bash tools/check-op-auth-prebuilt.test.sh
+
+      - name: Verify public/private and secret boundaries
+        run: |
+          bash tools/check-collab-security-boundaries.sh
+          bash tools/check-op-auth-prebuilt.sh
+
+      - name: Compile the public protocol core for wasm
+        run: |
+          cargo check --locked --target wasm32-unknown-unknown \
+            -p op-collab --no-default-features
+
+      - name: Test protocol state machines, properties, and resource limits
+        run: |
+          cargo test --locked -p op-collab
+          cargo test --locked -p op-collab-transport config::tests
+          cargo test --locked -p op-collab-transport frame::tests
+
+      - name: Test production/test trust-root isolation
+        run: |
+          cargo test --locked -p op-auth-bridge --features test-issuer \
+            production_trust_root_rejects_the_public_test_issuer
+          cargo test --locked -p op-auth-bridge --features test-issuer \
+            --test collab_verifier
+
+      - name: Verify every committed authentication archive
+        run: cargo test --locked -p op-auth-bridge --test prebuilt_provenance
+
+      - name: Exercise two-process authenticated collaboration
+        run: |
+          cargo run --locked -p op-collab-smoke --features test-issuer -- run

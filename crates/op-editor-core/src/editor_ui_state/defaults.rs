@@ -20,6 +20,7 @@ impl Default for EditorUiState {
             locale: Locale::ZhCn,
             locale_picker: jian_widgets::components::select::SelectState::default(),
             preferred_agent_team_size: 1,
+            collab: Default::default(),
             file_menu_open: false,
             file_menu: Default::default(),
             pending_file_action: None,

@@ -3,10 +3,14 @@
 //! account UI hidden while the build stays green on every platform.
 
 use crate::status::AuthStatus;
-use crate::AuthInitConfig;
+use crate::{AuthInitConfig, CollabTicketProvider, UNAVAILABLE_COLLAB_TICKET_PROVIDER};
 
 pub(crate) fn available() -> bool {
     false
+}
+
+pub(crate) fn collab_ticket_provider() -> &'static dyn CollabTicketProvider {
+    &UNAVAILABLE_COLLAB_TICKET_PROVIDER
 }
 
 pub(crate) fn init(_config: &AuthInitConfig) -> bool {

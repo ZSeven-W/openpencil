@@ -7,6 +7,27 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+publish = false
+readme = "README.md"
+exclude = ["prebuilt/**"]
+
+[features]
+default = []
+# Deterministic, non-production signing keys for downstream integration tests.
+# Production verifier configuration never trusts this fixture issuer.
+test-issuer = []
 
 [dependencies]
+base64 = "0.22"
+ed25519-dalek = { version = "2.2", default-features = false, features = ["std", "zeroize"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
+zeroize = "1"
+
+[build-dependencies]
+ed25519-dalek = { version = "2.2", default-features = false, features = ["std"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+sha2 = "0.10"

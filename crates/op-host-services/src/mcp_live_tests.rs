@@ -337,6 +337,95 @@ fn pump_flags_document_replaced_only_for_replace_document_requests() {
     assert!(!state.editor_ui.preserve_authored_geometry);
 }
 
+fn set_active_collaboration(state: &mut EditorState, role: op_editor_core::CollabUiRole) {
+    assert!(state.editor_ui.collab.set_authenticated_session(
+        op_editor_core::CollabConnectionPhase::Active,
+        op_editor_core::AuthenticatedCollabSession {
+            session_name: "Live session".to_string(),
+            role,
+            share_endpoint: None,
+        },
+        Vec::new(),
+    ));
+}
+
+#[test]
+fn pump_rejects_mcp_document_writes_during_active_collaboration() {
+    let (req_tx, req_rx) = mpsc::channel();
+    let (stop_tx, _stop_rx) = mpsc::channel();
+    let mut server = fresh_mcp_server(req_rx, stop_tx);
+    let mut state = EditorState::new();
+    set_active_collaboration(&mut state, op_editor_core::CollabUiRole::Owner);
+    let before = state.doc.clone();
+
+    let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+    req_tx
+        .send(UiRequest::Apply {
+            tool_name: "insert_node".to_string(),
+            cmd: EditorCommand::InsertNode {
+                kind: "rect".to_string(),
+                name: "Blocked".to_string(),
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+                fill_hex: None,
+                target_parent: op_editor_core::NodeId::NONE,
+                page_id: None,
+            },
+            ack: ack_tx,
+        })
+        .expect("queue MCP write");
+
+    let outcome = server.pump(&mut state);
+    assert!(!ack_rx.try_recv().expect("apply ack").applied);
+    assert_eq!(state.doc, before);
+    assert!(outcome.repaint);
+    assert!(!outcome.layout_dirty);
+    assert!(matches!(
+        state.editor_ui.collab.notice.map(|notice| notice.kind),
+        Some(op_editor_core::CollabNoticeKind::Reject(
+            op_editor_core::CollabRejectUiCode::Unsupported
+        ))
+    ));
+}
+
+#[test]
+fn pump_rejects_whole_document_sync_during_active_collaboration() {
+    let (req_tx, req_rx) = mpsc::channel();
+    let (stop_tx, _stop_rx) = mpsc::channel();
+    let mut server = fresh_mcp_server(req_rx, stop_tx);
+    let mut state = EditorState::new();
+    set_active_collaboration(&mut state, op_editor_core::CollabUiRole::Owner);
+    let before = state.doc.clone();
+    let replacement = op_pen_loader::load_canonical(
+        r#"{"version":"1.0","children":[],"pages":[{"id":"new","name":"New","children":[]}]}"#,
+    )
+    .expect("replacement")
+    .value;
+
+    let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+    req_tx
+        .send(UiRequest::ReplaceDocument {
+            doc: Box::new(replacement),
+            editor_meta: op_pen_loader::EditorMeta::default(),
+            ack: ack_tx,
+        })
+        .expect("queue whole-document sync");
+
+    let outcome = server.pump(&mut state);
+    assert!(!ack_rx.try_recv().expect("replace ack"));
+    assert_eq!(state.doc, before);
+    assert!(!outcome.document_replaced);
+    assert!(!outcome.layout_dirty);
+    assert!(matches!(
+        state.editor_ui.collab.notice.map(|notice| notice.kind),
+        Some(op_editor_core::CollabNoticeKind::UnsupportedEdit(
+            op_editor_core::CollabUnsupportedFeature::ReplaceDocument
+        ))
+    ));
+}
+
 // ── MCP-driven canvas generation indicators ─────────────────────────
 //
 // No dedicated lock around the shared `agent_indicators` registry —

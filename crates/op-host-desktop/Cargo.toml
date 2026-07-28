@@ -84,6 +84,12 @@ op-editor-host-core = { path = "../op-editor-host-core" }
 op-config-store = { path = "../op-config-store" }
 # Device-login bridge (prebuilt proprietary library or inert stub).
 op-auth-bridge = { path = "../op-auth-bridge" }
+# Open collaboration protocol + the native Noise/TCP/mDNS transport. The
+# production ticket issuer remains behind op-auth-bridge's private ABI; this
+# host only consumes opaque tickets and verifies them against the pinned,
+# public JWKS endpoint.
+op-collab = { path = "../op-collab" }
+op-collab-transport = { path = "../op-collab-transport", features = ["mdns"] }
 # D′ architecture: pre-validation adapter translates PlannedFix → EditorCommand.
 op-design-lint = { path = "../op-design-lint" }
 # AI code-generation pipeline. The `ai` feature compiles the pull-based
@@ -240,6 +246,7 @@ async-trait = "0.1"
 # with the SDK's. We still talk to 127.0.0.1, but rustls is a
 # small price for not having two parallel TLS stacks.
 reqwest = { version = "0.12", default-features = false, features = [
+  "blocking",
   "rustls-tls",
   "json",
   "stream",
@@ -257,6 +264,11 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 futures = { version = "0.3", default-features = false, features = ["std"] }
+getrandom = "0.3"
+thiserror = { workspace = true }
+socket2 = "0.6"
+subtle = "2.6"
+if-addrs = "0.13"
 
 # Native menu bar (`src/menu.rs`). winit owns the window but has no
 # menu primitive, so `muda` builds the NSMenu and routes selections
@@ -310,3 +322,6 @@ accesskit_windows = "0.33"
 # handle). Scaffolded + compiled here; on-device Orca verification is pending.
 [target.'cfg(target_os = "linux")'.dependencies]
 accesskit_unix = "0.22"
+
+[dev-dependencies]
+static_assertions = "1"

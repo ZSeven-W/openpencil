@@ -6,6 +6,7 @@
 //!   a P6 follow-up; Step 4 paints only.
 
 use crate::theme::Theme;
+use crate::widgets::collab_ui::CollabTopBarModel;
 use crate::widgets::editor_state_ext::{theme_for, translate};
 use crate::widgets::icons::{draw_icon, draw_import_icon, Icon};
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
@@ -47,6 +48,10 @@ pub(super) const PREVIEW_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
 pub(super) const AGENT_ICON_CHIP: f32 = 20.0;
 pub(super) const AGENT_ICON_LOGO: f32 = 12.0;
 pub(super) const AGENT_ICON_OVERLAP: f32 = 6.0;
+/// Collaboration participant chips are slightly smaller than provider
+/// logos so the status stays visually secondary to the agent launcher.
+pub(super) const COLLAB_AVATAR_CHIP: f32 = 18.0;
+pub(super) const COLLAB_AVATAR_OVERLAP: f32 = 5.0;
 /// Diameter of a macOS-style window-control dot.
 pub(super) const TRAFFIC_DOT: f32 = 12.0;
 /// Centre-to-centre spacing of the 3 window-control dots.
@@ -79,6 +84,10 @@ pub enum TopBarHit {
     ToggleLocale,
     /// Agents and MCP chip — open the agent settings modal.
     OpenAgentSettings,
+    /// Collaboration status / participant chip — open the collaboration
+    /// panel. The chip is absent when this build has no collaboration
+    /// runtime.
+    Collaboration,
     /// Git-branch button next to the file name — toggle the git panel.
     ToggleGitPanel,
     /// Maximize icon (rightmost of the right cluster) — toggle window
@@ -106,6 +115,8 @@ pub struct TopBar {
     /// Number of enabled MCP CLI integrations — the `· N MCP` half
     /// of the chip status.
     pub mcp_count: u32,
+    /// Sanitized collaboration status and epoch-local participant avatars.
+    pub collab: CollabTopBarModel,
     pub theme: Theme,
     pub label_edited: &'static str,
     pub label_agents_and_mcp: &'static str,
@@ -167,6 +178,7 @@ impl TopBar {
             agent_count: 1,
             connected: [false; 6],
             mcp_count: 0,
+            collab: CollabTopBarModel::default(),
             theme: Theme::dark(),
             label_edited: "",
             label_agents_and_mcp: "Agents & MCP",
@@ -220,6 +232,7 @@ impl TopBar {
             agent_count,
             connected,
             mcp_count,
+            collab: CollabTopBarModel::for_editor_ui(ui),
             theme: theme_for(ui),
             label_edited: translate(ui, "topbar.edited"),
             label_agents_and_mcp: if ui.embed == op_editor_core::EmbedHost::VsCode {
@@ -413,6 +426,12 @@ impl TopBar {
             let account = self.account_button_rect(rect);
             if (account).contains(point) {
                 return Some(TopBarHit::Account);
+            }
+        }
+        if self.collab.visible {
+            let collab = self.collaboration_chip_rect_estimated(rect);
+            if collab.contains(point) {
+                return Some(TopBarHit::Collaboration);
             }
         }
         // Agent chip hit area — slightly larger than the painted

@@ -125,6 +125,9 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn apply_live_node_drag_preview(&mut self, drag: &NodeDragState) {
+        if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeMove) {
+            return;
+        }
         if self.editor_state.selection_count() != 1 {
             self.update_node_drag_preview(drag);
             return;
@@ -175,6 +178,9 @@ impl WidgetHostNative {
     /// children were already translated live.
     pub(in crate::widget_host) fn commit_node_drag(&mut self, drag: &NodeDragState) -> bool {
         if !drag.moved {
+            return false;
+        }
+        if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeMove) {
             return false;
         }
         // Free-node translations were committed live into the doc;

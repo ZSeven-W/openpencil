@@ -308,7 +308,7 @@ impl EditorState {
     }
 }
 
-fn drop_document_after_replace(doc: jian_ops_schema::PenDocument) {
+pub(crate) fn drop_document_after_replace(doc: jian_ops_schema::PenDocument) {
     if document_max_depth(&doc) <= 512 {
         drop(doc);
         return;

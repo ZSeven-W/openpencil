@@ -17,6 +17,17 @@ impl WidgetHostNative {
         // Effect-parameter focus: step the value, commit via
         // `SetEffectParam`, and reflect it back into the draft.
         if let Some(ef) = self.editor_state.editor_ui.effect_param_focus {
+            if !self.collab_allows_document_mutation(
+                op_editor_core::CollabDocumentMutation::Unsupported(
+                    op_editor_core::CollabUnsupportedFeature::Effects,
+                ),
+            ) {
+                let _ = op_editor_ui::widgets::property_panel_commit::discard_effect_param_focus(
+                    &mut self.editor_state,
+                );
+                self.mark_dirty();
+                return true;
+            }
             let current: f32 = self
                 .editor_state
                 .ui
@@ -60,6 +71,13 @@ impl WidgetHostNative {
         // Hex colour fields aren't numerically steppable.
         if focus.is_hex() {
             return false;
+        }
+        if !self.collab_allows_document_mutation(focus.collab_document_mutation()) {
+            let _ = op_editor_ui::widgets::property_panel_commit::discard_property_focus(
+                &mut self.editor_state,
+            );
+            self.mark_dirty();
+            return true;
         }
         let current: f32 = self
             .editor_state
@@ -144,6 +162,9 @@ impl WidgetHostNative {
     pub fn apply_nudge(&mut self, dx: f32, dy: f32) -> bool {
         if self.input_active() {
             return false;
+        }
+        if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeMove) {
+            return true;
         }
         if shared::nudge_selection(&mut self.editor_state, dx, dy) {
             self.mark_dirty();

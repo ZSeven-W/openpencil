@@ -57,18 +57,40 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.design_md_panel.expanded ^= 1u8 << index;
             }
             DesignMdHit::Import => {
-                self.editor_state.editor_ui.design_md_panel.request =
-                    Some(op_editor_core::DesignMdRequest::Import);
+                if self.collab_allows_document_mutation_from(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::RootMetadata,
+                    ),
+                    op_editor_core::CollabEditSource::Import,
+                ) {
+                    self.editor_state.editor_ui.design_md_panel.request =
+                        Some(op_editor_core::DesignMdRequest::Import);
+                }
             }
             DesignMdHit::AutoGenerate => {
-                self.editor_state.editor_ui.design_md_panel.request =
-                    Some(op_editor_core::DesignMdRequest::AutoGenerate);
+                if self.collab_allows_document_mutation_from(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::RootMetadata,
+                    ),
+                    op_editor_core::CollabEditSource::Ai,
+                ) {
+                    self.editor_state.editor_ui.design_md_panel.request =
+                        Some(op_editor_core::DesignMdRequest::AutoGenerate);
+                }
             }
             DesignMdHit::Export => {
                 self.editor_state.editor_ui.design_md_panel.request =
                     Some(op_editor_core::DesignMdRequest::Export);
             }
             DesignMdHit::Remove => {
+                if !self.collab_allows_document_mutation(
+                    op_editor_core::CollabDocumentMutation::Unsupported(
+                        op_editor_core::CollabUnsupportedFeature::RootMetadata,
+                    ),
+                ) {
+                    self.mark_dirty();
+                    return true;
+                }
                 // Clearing the brief mutates the document — snapshot
                 // first so a stray remove is undoable.
                 let snap = self.editor_state.snapshot_for_history();

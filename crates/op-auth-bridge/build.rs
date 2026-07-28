@@ -5,8 +5,12 @@
 use std::env;
 use std::path::PathBuf;
 
+#[path = "prebuilt_provenance.rs"]
+mod prebuilt_provenance;
+
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(op_auth_prebuilt)");
+    println!("cargo:rustc-check-cfg=cfg(op_auth_collab_ticket_prebuilt)");
     println!("cargo:rerun-if-changed=prebuilt");
 
     let target = env::var("TARGET").unwrap_or_default();
@@ -19,11 +23,31 @@ fn main() {
     } else {
         "libop_auth.a"
     };
-    if !prebuilt_dir.join(artifact).is_file() {
+    let artifact_path = prebuilt_dir.join(artifact);
+    if !artifact_path.is_file() {
         return;
     }
+    let validated = match prebuilt_provenance::validate_prebuilt(
+        &manifest_dir.join("prebuilt"),
+        &prebuilt_dir,
+        &target,
+        artifact,
+        &env::var("CARGO_PKG_VERSION").unwrap_or_default(),
+    ) {
+        Ok(validated) => validated,
+        Err(error) => {
+            println!("cargo:warning=ignoring op-auth prebuilt: {error}");
+            return;
+        }
+    };
+    let abi_version = validated.abi_version;
 
     println!("cargo:rustc-cfg=op_auth_prebuilt");
+    if abi_version == 2 {
+        debug_assert!(validated.signed_provenance);
+        println!("cargo:rustc-cfg=op_auth_collab_ticket_prebuilt");
+    }
+    println!("cargo:rustc-env=OP_AUTH_PREBUILT_ABI_VERSION={abi_version}");
     println!("cargo:rustc-link-search=native={}", prebuilt_dir.display());
     // `-bundle`: keep the archive out of this crate's rlib and hand it to
     // the final link instead. Bundled foreign objects would otherwise be

@@ -15,6 +15,14 @@ impl WidgetHost {
     /// Push a typed character into the focused chat / settings input.
     /// Returns true if anything changed.
     pub fn apply_text(&mut self, c: char) -> bool {
+        if let Some(changed) =
+            op_editor_ui::widgets::collab_ui::join_address_text(&mut self.editor_state.editor_ui, c)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.apply_image_panel_text(c) {
             return true;
         }
@@ -103,6 +111,14 @@ impl WidgetHost {
     }
 
     pub fn apply_backspace(&mut self) -> bool {
+        if let Some(changed) = op_editor_ui::widgets::collab_ui::join_address_backspace(
+            &mut self.editor_state.editor_ui,
+        ) {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.apply_image_panel_backspace() {
             return true;
         }
@@ -203,6 +219,14 @@ impl WidgetHost {
     }
 
     pub fn apply_send(&mut self) -> bool {
+        if let Some(queued) =
+            op_editor_ui::widgets::collab_ui::join_address_submit(&mut self.editor_state.editor_ui)
+        {
+            if queued {
+                self.mark_dirty();
+            }
+            return true;
+        }
         // The image popover is painted above every editor input. Submit or
         // swallow Enter before consulting any independently stale focus below.
         if self.apply_image_panel_send() {

@@ -1,0 +1,27 @@
+[package]
+name = "op-collab-smoke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Two-process authenticated collaboration smoke test for OpenPencil"
+
+[features]
+default = []
+test-issuer = ["dep:op-auth-bridge", "op-auth-bridge/test-issuer"]
+
+[[bin]]
+name = "op-collab-smoke"
+path = "src/main.rs"
+required-features = ["test-issuer"]
+
+[dependencies]
+anyhow = { workspace = true }
+base64 = "0.22"
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+op-auth-bridge = { path = "../op-auth-bridge", optional = true }
+op-collab = { path = "../op-collab" }
+op-collab-transport = { path = "../op-collab-transport" }
+serde_json = { workspace = true }

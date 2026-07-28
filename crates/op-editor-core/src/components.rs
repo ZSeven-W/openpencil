@@ -11,6 +11,7 @@ use crate::component_backing::{
     find_node_and_location, find_node_in_document, resolve_document_location, shallow_root,
     DocumentComponentBacking, DocumentNodeLocation,
 };
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
@@ -454,26 +455,39 @@ impl EditorState {
     /// ids. The inserted clone is standalone, so any reusable marker
     /// on the prototype root is cleared.
     pub fn instantiate_component(&mut self, component_id: &NodeId) -> Option<NodeId> {
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, 1).ok()?;
+        self.instantiate_component_with_allocator(component_id, &mut allocator)
+            .ok()
+            .flatten()
+    }
+
+    /// Allocator-aware form of [`Self::instantiate_component`].
+    pub fn instantiate_component_with_allocator(
+        &mut self,
+        component_id: &NodeId,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<Option<NodeId>, IdAllocError> {
         let (template, name) = {
-            let component = self.components.find_by_id(component_id)?;
-            let template = self
-                .components
-                .resolved_root(&self.doc, component_id)?
-                .clone();
+            let Some(component) = self.components.find_by_id(component_id) else {
+                return Ok(None);
+            };
+            let Some(template) = self.components.resolved_root(&self.doc, component_id) else {
+                return Ok(None);
+            };
+            let template = template.clone();
             (template, component.name.clone())
         };
-        let snap = self.snapshot_for_history();
-        let mut next_id = self.next_node_id_seed()?;
         let mut taken = self.collect_node_ids();
-        let mut clone = walkers::deep_clone_with_new_ids(&template, &mut next_id, &mut taken);
+        let mut clone = walkers::deep_clone_with_allocator(&template, allocator, &mut taken)?;
         set_reusable(&mut clone, false);
         walkers::translate_subtree(&mut clone, 20.0, 20.0);
         clone.base_mut().name = Some(name);
         let new_id = NodeId::new(clone.base().id.clone());
+        let snap = self.snapshot_for_history();
         self.active_children_mut().push(clone);
         self.set_single_selection(new_id.clone());
         self.history_push_past(snap);
-        Some(new_id)
+        Ok(Some(new_id))
     }
 
     /// Point an authored canonical Ref at another registered component.
@@ -512,7 +526,21 @@ impl EditorState {
     /// instance props overlaid, fresh ids — replacing the Ref in
     /// place. Returns the surviving node's id.
     pub fn detach_component(&mut self, node_id: &NodeId) -> Option<NodeId> {
-        let node = walkers::find_node(self.active_children(), node_id)?.clone();
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, 1).ok()?;
+        self.detach_component_with_allocator(node_id, &mut allocator)
+            .ok()
+            .flatten()
+    }
+
+    /// Allocator-aware form of [`Self::detach_component`].
+    pub fn detach_component_with_allocator(
+        &mut self,
+        node_id: &NodeId,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<Option<NodeId>, IdAllocError> {
+        let Some(node) = walkers::find_node(self.active_children(), node_id).cloned() else {
+            return Ok(None);
+        };
         let registered_component = self.components.find_by_id(node_id).is_some();
         let reusable_frame = matches!(&node, PenNode::Frame(frame) if frame.reusable == Some(true));
         if is_component_root(&node) && (registered_component || reusable_frame) {
@@ -522,27 +550,32 @@ impl EditorState {
             }
             self.components.remove(node_id);
             self.history_push_past(snap);
-            return Some(node_id.clone());
+            return Ok(Some(node_id.clone()));
         }
 
         match &node {
             PenNode::Ref(reference) => {
-                let component =
-                    crate::ref_resolve::find_component_node(&self.doc, &reference.target)?;
-                let merged = crate::ref_resolve::materialize_instance(&node, &component)?;
-                let snap = self.snapshot_for_history();
-                let mut next_id = self.next_node_id_seed()?;
+                let Some(component) =
+                    crate::ref_resolve::find_component_node(&self.doc, &reference.target)
+                else {
+                    return Ok(None);
+                };
+                let Some(merged) = crate::ref_resolve::materialize_instance(&node, &component)
+                else {
+                    return Ok(None);
+                };
                 let mut taken = self.collect_node_ids();
-                let detached = walkers::deep_clone_with_new_ids(&merged, &mut next_id, &mut taken);
+                let detached = walkers::deep_clone_with_allocator(&merged, allocator, &mut taken)?;
                 let new_id = NodeId::new(detached.base().id.clone());
+                let snap = self.snapshot_for_history();
                 if !replace_node_in_children(self.active_children_mut(), node_id, detached) {
-                    return None;
+                    return Ok(None);
                 }
                 self.set_single_selection(new_id.clone());
                 self.history_push_past(snap);
-                Some(new_id)
+                Ok(Some(new_id))
             }
-            _ => None,
+            _ => Ok(None),
         }
     }
 

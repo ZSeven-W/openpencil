@@ -27,5 +27,8 @@ mod state_ops;
 mod tree_ops;
 
 pub use builders::{build_leaf_node, kind_is_valid, WIDGET_KINDS};
-pub(crate) use tree_ops::remap_subtree_ids;
-pub use tree_ops::{remap_subtree_ids_mapping, replace_node_in_children};
+pub(crate) use tree_ops::remap_subtree_ids_with_allocator;
+pub use tree_ops::{
+    remap_subtree_ids, remap_subtree_ids_mapping, remap_subtree_ids_mapping_with_allocator,
+    replace_node_in_children,
+};

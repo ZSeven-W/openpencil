@@ -250,7 +250,9 @@ pub(super) fn launch_design_loop_turn(
     crate::chat_session::finalize_design_session_if_needed(host, current_chat, "teardown-backstop");
     *current_chat = None;
     *current_design = None;
-    if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
+    if super::super::allow_ai_bulk_write(host)
+        && clear_fresh_starter_frame_for_design(host.editor_state_mut())
+    {
         host.mark_editor_state_dirty();
     }
     let history = trim_chat_history(

@@ -11,6 +11,7 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema", optional 
 op-ai = { path = "../op-ai", optional = true }
 op-ai-skills = { path = "../op-ai-skills", optional = true }
 op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
+op-collab = { path = "../op-collab" }
 op-editor-core = { path = "../op-editor-core" }
 op-orchestrator = { path = "../op-orchestrator", optional = true }
 # Non-optional: `settings_payload` (shared settings serde shapes) is part of
@@ -18,6 +19,7 @@ op-orchestrator = { path = "../op-orchestrator", optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
+thiserror = { workspace = true }
 
 [features]
 default = ["chat", "codegen", "design"]
@@ -31,3 +33,6 @@ codegen = [
   "dep:tracing",
 ]
 design = ["dep:op-orchestrator"]
+
+[dev-dependencies]
+serde_json = { workspace = true }

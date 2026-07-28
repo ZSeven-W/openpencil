@@ -76,7 +76,7 @@ pub(super) fn serve_document_sync<S: std::io::Read + std::io::Write>(
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
     match request_replace(req_tx, wake_ui, loaded.value, editor_meta) {
-        Ok(()) => {
+        Ok(true) => {
             let version = LIVE_SYNC_VERSION.fetch_add(1, Ordering::Relaxed) + 1;
             write_http(
                 stream,
@@ -84,6 +84,13 @@ pub(super) fn serve_document_sync<S: std::io::Read + std::io::Write>(
                 &crate::mcp_serve::document_sync_ok(version),
             )
         }
+        Ok(false) => write_http(
+            stream,
+            "409 Conflict",
+            &crate::mcp_serve::rest_error_body(
+                "whole-document sync is disabled while collaboration is active",
+            ),
+        ),
         // The UI thread is gone or didn't ack in time — a server fault, mapped
         // to 500 (TS throws → 500 for server-side failures).
         Err(transport_err) => write_http(

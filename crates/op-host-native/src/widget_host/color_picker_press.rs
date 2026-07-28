@@ -25,7 +25,22 @@ impl WidgetHostNative {
         let picker = ColorPicker::for_state(&self.editor_state, state.clone());
         let panel = picker.rect(viewport_width, viewport_height);
         let point = Point2D::new(x, y);
-        match picker.hit_test(panel, point) {
+        let hit = picker.hit_test(panel, point);
+        if matches!(
+            hit,
+            Some(
+                ColorPickerHit::HexInput
+                    | ColorPickerHit::RgbInput(_)
+                    | ColorPickerHit::Eyedropper
+                    | ColorPickerHit::Inside
+                    | ColorPickerHit::SvBox
+                    | ColorPickerHit::HueSlider
+            )
+        ) && !self.collab_allows_color_picker_mutation()
+        {
+            return true;
+        }
+        match hit {
             Some(ColorPickerHit::Close) => {
                 let _ = self.editor_state.close_color_picker();
                 self.mark_dirty();

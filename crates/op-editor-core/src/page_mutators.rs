@@ -7,8 +7,9 @@
 //! multi-page: the root `children` migrate into "Page 1" so no
 //! nodes are lost.
 
-use crate::command_node::{build_leaf_node, remap_subtree_ids};
+use crate::command_node::{build_leaf_node, remap_subtree_ids_with_allocator};
 use crate::fills::set_primary_fill_hex;
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
@@ -50,21 +51,21 @@ impl EditorState {
     /// `Some([])` (via the read/write fallback in `active_children`)
     /// would be stranded the moment `add_page` minted a fresh Page 1
     /// alongside them.
-    fn ensure_pages(&mut self) -> &mut Vec<PenPage> {
+    fn ensure_pages_with_allocator(
+        &mut self,
+        allocator: &mut dyn IdAllocator,
+        taken: &mut std::collections::HashSet<NodeId>,
+    ) -> Result<(), IdAllocError> {
         let needs_init = self.doc.pages.as_ref().is_none_or(|pages| pages.is_empty());
         if needs_init {
             // Mint the page id BEFORE moving the root children out —
             // `max_node_id` must see the nodes that are migrating so
             // the new page id can't collide with one of them.
-            let id = self
-                .max_node_id()
-                .checked_add(1)
-                .map(|n| format!("n{n}"))
-                .unwrap_or_else(|| "page-1".to_string());
+            let id = allocator.allocate(taken)?;
             let root = std::mem::take(&mut self.doc.children);
-            self.doc.pages = Some(vec![make_page(id, "Page 1".to_string(), root)]);
+            self.doc.pages = Some(vec![make_page(id.into(), "Page 1".to_string(), root)]);
         }
-        self.doc.pages.as_mut().unwrap()
+        Ok(())
     }
 
     /// Switch the active page to `idx`. False when out of bounds.
@@ -98,6 +99,19 @@ impl EditorState {
     /// root children into one explicit page within this single mutation.
     /// `None` and blank strings both mean the old omitted/default state.
     pub fn set_active_page_background_color(&mut self, color: Option<String>) -> bool {
+        let Ok(mut allocator) = SequentialIdAllocator::for_document(&self.doc, 1) else {
+            return false;
+        };
+        self.set_active_page_background_color_with_allocator(color, &mut allocator)
+            .unwrap_or(false)
+    }
+
+    /// Allocator-aware form of [`Self::set_active_page_background_color`].
+    pub fn set_active_page_background_color_with_allocator(
+        &mut self,
+        color: Option<String>,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         let color = color.and_then(|color| {
             let color = color.trim();
             (!color.is_empty()).then(|| color.to_string())
@@ -105,9 +119,10 @@ impl EditorState {
         let needs_page = self.doc.pages.as_ref().is_none_or(|pages| pages.is_empty());
         if needs_page {
             if color.is_none() {
-                return false;
+                return Ok(false);
             }
-            self.ensure_pages();
+            let mut taken = self.collect_node_ids();
+            self.ensure_pages_with_allocator(allocator, &mut taken)?;
         }
         let pages = self
             .doc
@@ -116,10 +131,10 @@ impl EditorState {
             .expect("ensure_pages initialized pages");
         let index = self.ui.active_page_index.min(pages.len() - 1);
         if pages[index].background_color == color {
-            return false;
+            return Ok(false);
         }
         pages[index].background_color = color;
-        true
+        Ok(true)
     }
 
     /// Append a fresh empty page named `"Page N"` and switch to it.
@@ -142,38 +157,61 @@ impl EditorState {
         name: Option<String>,
         children: Option<Vec<PenNode>>,
     ) -> Option<usize> {
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, 1).ok()?;
+        self.add_page_with_allocator(name, children, &mut allocator)
+            .ok()
+            .flatten()
+    }
+
+    /// Allocator-aware page insertion used by collaboration sessions.
+    pub fn add_page_with_allocator(
+        &mut self,
+        name: Option<String>,
+        children: Option<Vec<PenNode>>,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<Option<usize>, IdAllocError> {
         let custom_name = match name {
-            Some(name) if name.trim().is_empty() => return None,
+            Some(name) if name.trim().is_empty() => return Ok(None),
             Some(name) => Some(name),
             None => None,
         };
-        // Migrate to multi-page form FIRST so the migrated "Page 1"
-        // id is part of the id space before the new page id is
-        // minted — otherwise both could land on `n{max+1}`.
-        self.ensure_pages();
-        let mut next_id = self.max_node_id().checked_add(1)?;
-        let mut taken = self.collect_node_ids();
-        let page_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
-        let page_children = match children {
-            Some(mut children) => {
-                if !remap_subtree_ids(&mut children, &mut next_id, &mut taken) {
-                    return None;
+        let before_doc = self.doc.clone();
+        let before_page = self.ui.active_page_index;
+        let before_selection = self.selection.clone();
+        let result = (|| {
+            // Migrate to multi-page form FIRST so the migrated "Page 1"
+            // id is part of the id space before the new page id is minted.
+            let mut taken = self.collect_node_ids();
+            self.ensure_pages_with_allocator(allocator, &mut taken)?;
+            let page_id = allocator.allocate(&mut taken)?;
+            let page_children = match children {
+                Some(mut children) => {
+                    remap_subtree_ids_with_allocator(&mut children, allocator, &mut taken)?;
+                    children
                 }
-                children
-            }
-            None => {
-                let frame_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
-                vec![make_blank_page_frame(&frame_id)?]
-            }
-        };
-        let pages = self.doc.pages.as_mut().unwrap();
-        let n = pages.len() + 1;
-        let page_name = custom_name.unwrap_or_else(|| format!("Page {n}"));
-        pages.push(make_page(page_id.into(), page_name, page_children));
-        let new_index = pages.len() - 1;
-        self.ui.active_page_index = new_index;
-        self.clear_selection();
-        Some(new_index)
+                None => {
+                    let frame_id = allocator.allocate(&mut taken)?;
+                    let Some(frame) = make_blank_page_frame(&frame_id) else {
+                        return Ok(None);
+                    };
+                    vec![frame]
+                }
+            };
+            let pages = self.doc.pages.as_mut().unwrap();
+            let n = pages.len() + 1;
+            let page_name = custom_name.unwrap_or_else(|| format!("Page {n}"));
+            pages.push(make_page(page_id.into(), page_name, page_children));
+            let new_index = pages.len() - 1;
+            self.ui.active_page_index = new_index;
+            self.clear_selection();
+            Ok(Some(new_index))
+        })();
+        if !matches!(&result, Ok(Some(_))) {
+            self.doc = before_doc;
+            self.ui.active_page_index = before_page;
+            self.selection = before_selection;
+        }
+        result
     }
 
     /// Append the reusable masters of an imported component library
@@ -195,14 +233,35 @@ impl EditorState {
     /// page is appended after it, so the caller's active page keeps
     /// pointing at the design.
     pub fn append_components_page_masters(&mut self, masters: Vec<PenNode>) -> usize {
-        if masters.is_empty() {
+        let Ok(mut allocator) = SequentialIdAllocator::for_document(&self.doc, 1) else {
             return 0;
+        };
+        self.append_components_page_masters_with_allocator(masters, &mut allocator)
+            .unwrap_or(0)
+    }
+
+    /// Allocator-aware form of [`Self::append_components_page_masters`].
+    pub fn append_components_page_masters_with_allocator(
+        &mut self,
+        masters: Vec<PenNode>,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<usize, IdAllocError> {
+        if masters.is_empty() {
+            return Ok(0);
         }
         // Preserve the active design page across the migration: a
         // single-page document moves its `doc.children` into page 0,
         // and the components page is appended at the end.
         let active = self.ui.active_page_index;
-        self.ensure_pages();
+        let before_doc = self.doc.clone();
+        let before_selection = self.selection.clone();
+        let mut taken = self.collect_node_ids();
+        if let Err(error) = self.ensure_pages_with_allocator(allocator, &mut taken) {
+            self.doc = before_doc;
+            self.ui.active_page_index = active;
+            self.selection = before_selection;
+            return Err(error);
+        }
 
         // Find (or create) the dedicated components page.
         let page_idx = match self
@@ -217,14 +276,18 @@ impl EditorState {
             None => {
                 // Mint a non-colliding page id without disturbing the
                 // master ids (which must stay verbatim for refs).
-                let page_id = self
-                    .max_node_id()
-                    .checked_add(1)
-                    .map(|n| format!("n{n}"))
-                    .unwrap_or_else(|| "components-page".to_string());
+                let page_id = match allocator.allocate(&mut taken) {
+                    Ok(page_id) => page_id,
+                    Err(error) => {
+                        self.doc = before_doc;
+                        self.ui.active_page_index = active;
+                        self.selection = before_selection;
+                        return Err(error);
+                    }
+                };
                 let pages = self.doc.pages.as_mut().unwrap();
                 pages.push(make_page(
-                    page_id,
+                    page_id.into(),
                     COMPONENTS_PAGE_NAME.to_string(),
                     Vec::new(),
                 ));
@@ -253,7 +316,7 @@ impl EditorState {
         // The components page is hidden side storage — never the active
         // page. Restore the caller's active index (page 0 = design).
         self.ui.active_page_index = active;
-        added
+        Ok(added)
     }
 
     /// Duplicate the page at `idx`, inserting the clone after it.
@@ -266,39 +329,63 @@ impl EditorState {
     /// Duplicate the page at `idx`, optionally overriding the clone's
     /// display name. Empty / whitespace-only custom names are rejected.
     pub fn duplicate_page_with_name(&mut self, idx: usize, name: Option<String>) -> Option<usize> {
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, 1).ok()?;
+        self.duplicate_page_with_allocator(idx, name, &mut allocator)
+            .ok()
+            .flatten()
+    }
+
+    /// Allocator-aware page duplication used by collaboration sessions.
+    pub fn duplicate_page_with_allocator(
+        &mut self,
+        idx: usize,
+        name: Option<String>,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<Option<usize>, IdAllocError> {
         let custom_name = match name {
-            Some(name) if name.trim().is_empty() => return None,
+            Some(name) if name.trim().is_empty() => return Ok(None),
             Some(name) => Some(name),
             None => None,
         };
-        // `ensure_pages` first so a single-page document is migrated
-        // before the id space is snapshotted — otherwise the cloned
-        // page id could collide with the migrated "Page 1" id.
-        self.ensure_pages();
-        let mut next_id = self.max_node_id().checked_add(1)?;
-        let mut taken = self.collect_node_ids();
-        let pages = self.doc.pages.as_ref().unwrap();
-        let source = pages.get(idx)?;
-        let new_page_id = walkers::alloc_n_id(&mut next_id, &mut taken)?;
-        let new_children: Vec<PenNode> = source
-            .children
-            .iter()
-            .map(|c| walkers::deep_clone_with_new_ids(c, &mut next_id, &mut taken))
-            .collect();
-        let clone_name = custom_name.unwrap_or_else(|| format!("{} copy", source.name));
-        let clone = PenPage {
-            id: new_page_id.into(),
-            name: clone_name,
-            children: new_children,
-            background_color: source.background_color.clone(),
-            state: source.state.clone(),
-            lifecycle: source.lifecycle.clone(),
-        };
-        let new_index = idx + 1;
-        self.doc.pages.as_mut().unwrap().insert(new_index, clone);
-        self.ui.active_page_index = new_index;
-        self.clear_selection();
-        Some(new_index)
+        let before_doc = self.doc.clone();
+        let before_page = self.ui.active_page_index;
+        let before_selection = self.selection.clone();
+        let result = (|| {
+            // `ensure_pages` first so a single-page document is migrated
+            // before the id space is snapshotted.
+            let mut taken = self.collect_node_ids();
+            self.ensure_pages_with_allocator(allocator, &mut taken)?;
+            let pages = self.doc.pages.as_ref().unwrap();
+            let Some(source) = pages.get(idx) else {
+                return Ok(None);
+            };
+            let new_page_id = allocator.allocate(&mut taken)?;
+            let new_children: Result<Vec<PenNode>, IdAllocError> = source
+                .children
+                .iter()
+                .map(|child| walkers::deep_clone_with_allocator(child, allocator, &mut taken))
+                .collect();
+            let clone_name = custom_name.unwrap_or_else(|| format!("{} copy", source.name));
+            let clone = PenPage {
+                id: new_page_id.into(),
+                name: clone_name,
+                children: new_children?,
+                background_color: source.background_color.clone(),
+                state: source.state.clone(),
+                lifecycle: source.lifecycle.clone(),
+            };
+            let new_index = idx + 1;
+            self.doc.pages.as_mut().unwrap().insert(new_index, clone);
+            self.ui.active_page_index = new_index;
+            self.clear_selection();
+            Ok(Some(new_index))
+        })();
+        if !matches!(&result, Ok(Some(_))) {
+            self.doc = before_doc;
+            self.ui.active_page_index = before_page;
+            self.selection = before_selection;
+        }
+        result
     }
 
     /// Set a page's name directly. Rejects out-of-range indices and

@@ -30,5 +30,11 @@
     <string>vi</string>
     <string>id</string>
   </array>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>OpenPencil uses your local network to discover and connect to collaboration sessions you start or join.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_openpencil-collab._tcp</string>
+  </array>
 </dict>
 </plist>

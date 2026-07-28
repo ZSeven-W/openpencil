@@ -13,6 +13,7 @@
 //! mutators stay page-model-agnostic.
 
 use crate::geometry::{union_aggregate_bounds, DocRect};
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::selection::SelectionState;
@@ -419,28 +420,48 @@ impl EditorState {
     /// clone as the next sibling offset by `offset_doc_px`. Returns
     /// the new anchor id (last clone) on success.
     pub fn duplicate_selected(&mut self, next_id: &mut u64, offset_doc_px: f64) -> Option<NodeId> {
-        if self.selection.set.is_empty() {
-            return None;
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, *next_id).ok()?;
+        let result = self
+            .duplicate_selected_with_allocator(&mut allocator, offset_doc_px)
+            .ok()
+            .flatten();
+        if result.is_some() {
+            *next_id = allocator.next_counter();
         }
-        let safe = self.max_node_id().checked_add(1)?;
-        *next_id = (*next_id).max(safe);
+        result
+    }
+
+    /// Allocator-aware form of [`Self::duplicate_selected`].
+    pub fn duplicate_selected_with_allocator(
+        &mut self,
+        allocator: &mut dyn IdAllocator,
+        offset_doc_px: f64,
+    ) -> Result<Option<NodeId>, IdAllocError> {
+        if self.selection.set.is_empty() {
+            return Ok(None);
+        }
         let mut taken = self.collect_node_ids();
         let targets = self.selection.set.clone();
-        let children = self.active_children_mut();
+        let mut staged_children = self.active_children().to_vec();
         let mut new_ids: Vec<NodeId> = Vec::with_capacity(targets.len());
         for target in &targets {
-            if let Some(new_id) =
-                duplicate_in_children(children, target, next_id, &mut taken, offset_doc_px)
-            {
+            if let Some(new_id) = duplicate_in_children_with_allocator(
+                &mut staged_children,
+                target,
+                allocator,
+                &mut taken,
+                offset_doc_px,
+            )? {
                 new_ids.push(new_id);
             }
         }
         if new_ids.is_empty() {
-            return None;
+            return Ok(None);
         }
+        *self.active_children_mut() = staged_children;
         self.selection.anchor = new_ids.last().cloned().unwrap();
         self.selection.set = new_ids;
-        Some(self.selection.anchor.clone())
+        Ok(Some(self.selection.anchor.clone()))
     }
 
     /// Bump the anchor node up / down one position among its
@@ -709,13 +730,13 @@ fn subtree_all_editable(node: &PenNode) -> bool {
 /// for reusable components (`clipboard.rs`), which mirrors TS
 /// `duplicateNode`: the minted instance lands next to the live
 /// component, not at the paste anchor.
-pub(crate) fn duplicate_in_children(
+pub(crate) fn duplicate_in_children_with_allocator(
     children: &mut Vec<PenNode>,
     target: &NodeId,
-    next_id: &mut u64,
+    allocator: &mut dyn IdAllocator,
     taken: &mut HashSet<NodeId>,
     offset: f64,
-) -> Option<NodeId> {
+) -> Result<Option<NodeId>, IdAllocError> {
     if let Some(idx) = children.iter().position(|n| n.id_str() == target.as_str()) {
         // TS parity: duplicating a reusable component mints a Ref
         // INSTANCE pointing at it, not a deep clone — the duplicate
@@ -724,35 +745,40 @@ pub(crate) fn duplicate_in_children(
         // ref expansion.
         if let PenNode::Frame(frame) = &children[idx] {
             if frame.reusable == Some(true) {
-                let new_id = walkers::alloc_n_id(next_id, taken)?;
+                let new_id = allocator.allocate(taken)?;
                 let x = frame.base.x.unwrap_or(0.0) + offset;
                 let y = frame.base.y.unwrap_or(0.0) + offset;
-                let instance: PenNode = serde_json::from_value(serde_json::json!({
+                let instance: Option<PenNode> = serde_json::from_value(serde_json::json!({
                     "type": "ref",
                     "id": new_id.as_str(),
                     "ref": frame.base.id,
                     "x": x,
                     "y": y,
                 }))
-                .ok()?;
+                .ok();
+                let Some(instance) = instance else {
+                    return Ok(None);
+                };
                 children.insert(idx + 1, instance);
-                return Some(new_id);
+                return Ok(Some(new_id));
             }
         }
-        let size = walkers::subtree_size(&children[idx]);
-        next_id.checked_add(size)?;
-        let mut clone = walkers::deep_clone_with_new_ids(&children[idx], next_id, taken);
+        let mut clone = walkers::deep_clone_with_allocator(&children[idx], allocator, taken)?;
         walkers::translate_subtree(&mut clone, offset, offset);
-        let new_id = NodeId::new_opt(clone.id_str())?;
+        let Some(new_id) = NodeId::new_opt(clone.id_str()) else {
+            return Ok(None);
+        };
         children.insert(idx + 1, clone);
-        return Some(new_id);
+        return Ok(Some(new_id));
     }
     for child in children.iter_mut() {
         if let Some(grand) = child.children_mut() {
-            if let Some(new_id) = duplicate_in_children(grand, target, next_id, taken, offset) {
-                return Some(new_id);
+            if let Some(new_id) =
+                duplicate_in_children_with_allocator(grand, target, allocator, taken, offset)?
+            {
+                return Ok(Some(new_id));
             }
         }
     }
-    None
+    Ok(None)
 }

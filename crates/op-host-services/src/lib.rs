@@ -78,6 +78,7 @@ mod provider_dial;
 pub mod provider_probe;
 pub mod provider_probe_host;
 pub mod provider_probe_models;
+pub mod public_https_client;
 pub mod quality_credential;
 pub mod settings_io;
 pub mod settings_io_error;

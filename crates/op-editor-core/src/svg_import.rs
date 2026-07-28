@@ -51,11 +51,12 @@ use scale::*;
 use style::*;
 use xml::*;
 
+use crate::command_node::build_leaf_node;
 use crate::fills::set_primary_fill_hex;
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
-use crate::{command_node::build_leaf_node, walkers};
 use jian_ops_schema::node::path::{PathFillRule, PenPathHandle};
 use jian_ops_schema::node::{PathNode, PenNode, PenNodeBase, PenPathAnchor};
 use jian_ops_schema::sizing::SizingBehavior;
@@ -176,16 +177,32 @@ impl EditorState {
         offset: (f64, f64),
         name: Option<&str>,
     ) -> usize {
-        self.import_svg_impl(next_id, svg, offset, name)
+        let Ok(mut allocator) = SequentialIdAllocator::for_document(&self.doc, *next_id) else {
+            return 0;
+        };
+        let result = self.import_svg_named_with_allocator(&mut allocator, svg, offset, name);
+        *next_id = allocator.next_counter();
+        result.unwrap_or(0)
     }
 
-    fn import_svg_impl(
+    /// Parse and import an SVG using a session-owned document allocator.
+    pub fn import_svg_with_allocator(
         &mut self,
-        next_id: &mut u64,
+        allocator: &mut dyn IdAllocator,
+        svg: &str,
+        offset: (f64, f64),
+    ) -> Result<usize, IdAllocError> {
+        self.import_svg_named_with_allocator(allocator, svg, offset, None)
+    }
+
+    /// Named allocator-aware form of [`Self::import_svg_named`].
+    pub fn import_svg_named_with_allocator(
+        &mut self,
+        allocator: &mut dyn IdAllocator,
         svg: &str,
         offset: (f64, f64),
         group_name: Option<&str>,
-    ) -> usize {
+    ) -> Result<usize, IdAllocError> {
         // TS-parity pipeline (`packages/pen-engine/src/core/svg-parser.ts`):
         //  1. Extract the root `<svg>` attrs + compute a viewBox-aware
         //     scale so a 24×24 icon doesn't render at 24 px.
@@ -195,29 +212,25 @@ impl EditorState {
         //     enclosed children.
         let (body, root_attrs) = match extract_svg_root(svg) {
             Some(p) => p,
-            None => return 0,
+            None => return Ok(0),
         };
         let (scale, root_ctx) = compute_root_scale(&root_attrs);
         let tree = parse_svg_tree(body);
         if tree.is_empty() {
-            return 0;
-        }
-        if let Some(safe) = self.max_node_id().checked_add(1) {
-            *next_id = (*next_id).max(safe);
+            return Ok(0);
         }
         let mut taken = self.collect_node_ids();
         let mut built: Vec<PenNode> = Vec::new();
         for el in &tree {
             if let Some(node) =
-                element_to_node_ctx(el, &root_ctx, scale, offset, next_id, &mut taken)
+                element_to_node_ctx(el, &root_ctx, scale, offset, allocator, &mut taken)?
             {
                 built.push(node);
             }
         }
         if built.is_empty() {
-            return 0;
+            return Ok(0);
         }
-        let pre = self.snapshot_for_history();
         let count = built.len();
         // Wrap the imported nodes in a Group so the user can move /
         // delete the SVG as a unit instead of `count` flat siblings
@@ -225,13 +238,7 @@ impl EditorState {
         // element SVGs (logos, an `<svg>` wrapping one `<path>`) also
         // benefit because future grouping ops then have a stable
         // container to attach to.
-        let Some(group_id) = walkers::alloc_n_id(next_id, &mut taken) else {
-            // Allocator exhausted — fall back to the flat extend so we
-            // don't drop the user's import on the floor.
-            self.active_children_mut().extend(built);
-            self.history_push_past(pre);
-            return count;
-        };
+        let group_id = allocator.allocate(&mut taken)?;
         use jian_ops_schema::node::container::ContainerProps;
         use jian_ops_schema::node::{GroupNode, PenNode};
         let group = PenNode::Group(GroupNode {
@@ -254,9 +261,10 @@ impl EditorState {
             gestures: None,
             route: None,
         });
+        let pre = self.snapshot_for_history();
         self.active_children_mut().push(group);
         self.set_single_selection(group_id);
         self.history_push_past(pre);
-        count
+        Ok(count)
     }
 }

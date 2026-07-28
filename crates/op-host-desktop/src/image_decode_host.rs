@@ -106,7 +106,9 @@ impl ImageDecodeHost {
         let free = MAX_QUEUED_DECODES.saturating_sub(self.in_flight);
         for pending in take_pending_decodes(free) {
             let id = pending.id;
-            let Some(bytes) = cached_bytes_for(id) else {
+            let Some(bytes) = cached_bytes_for(id)
+                .or_else(|| op_editor_ui::collab_avatar_runtime::cached_collab_avatar_bytes(id))
+            else {
                 mark_decode_done(id);
                 continue;
             };
@@ -267,6 +269,48 @@ mod tests {
         }
         let image = backend.raster_image(id).expect("installed raster");
         assert_eq!(image.dimensions(), (3, 2).into());
+    }
+
+    #[test]
+    fn worker_uses_the_bounded_avatar_cache_without_gui_decode() {
+        let _decode_guard = DECODE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let _avatar_guard = crate::collab_avatar_host::lock_avatar_test_registry();
+        let key = "avatar-decode-participant";
+        let url = "https://cdn.example/avatar-decode.png";
+        op_editor_ui::collab_avatar_runtime::begin_collab_avatar_generation(0xDEC0);
+        assert!(op_editor_ui::collab_avatar_runtime::register_collab_avatar_url(key, Some(url)));
+        assert!(op_editor_ui::collab_avatar_runtime::collab_avatar_image(key).is_none());
+        let request = op_editor_ui::collab_avatar_runtime::take_collab_avatar_requests(1)
+            .pop()
+            .expect("avatar request queued");
+        assert!(
+            op_editor_ui::collab_avatar_runtime::complete_collab_avatar_request(
+                &request,
+                Some(encode_test_png())
+            )
+        );
+        let image = op_editor_ui::collab_avatar_runtime::collab_avatar_image(key)
+            .expect("avatar bytes are ready");
+        note_pending_decode(image.image_id, 64);
+
+        let mut host = ImageDecodeHost::new();
+        let mut backend = NativeBackend::with_dpi(1.0);
+        assert!(host.pump(&mut backend), "first pump submits avatar decode");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !backend.image_decoded(image.image_id, &[], 64) {
+            host.pump(&mut backend);
+            assert!(Instant::now() < deadline, "avatar decode never landed");
+            std::thread::yield_now();
+        }
+        assert_eq!(
+            backend
+                .raster_image(image.image_id)
+                .expect("installed avatar raster")
+                .dimensions(),
+            (3, 2).into()
+        );
     }
 
     #[test]

@@ -39,6 +39,16 @@ impl WidgetHostNative {
             }
             IconPickerHit::SelectIcon { collection, name } => {
                 let replace_selection = self.editor_state.editor_ui.icon_picker_replace_selection;
+                let unsupported = if replace_selection {
+                    op_editor_core::CollabUnsupportedFeature::NodeReplacement
+                } else {
+                    op_editor_core::CollabUnsupportedFeature::UnsupportedNodeKind
+                };
+                if !self.collab_allows_document_mutation(
+                    op_editor_core::CollabDocumentMutation::Unsupported(unsupported),
+                ) {
+                    return true;
+                }
                 if replace_selection {
                     let svg_path = self
                         .editor_state

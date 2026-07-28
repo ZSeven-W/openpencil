@@ -273,6 +273,28 @@ pub fn apply_shared_top_bar_hit(
             state.chat.blur_input(now_ms);
             TopBarPress::Handled
         }
+        TopBarHit::Collaboration => {
+            let phase = state.editor_ui.collab.phase;
+            let panel = &mut state.editor_ui.collab.panel;
+            panel.open = !panel.open;
+            panel.hover = None;
+            if panel.open {
+                panel.view = if phase.is_authenticated() {
+                    op_editor_core::CollabPanelView::Session
+                } else if phase == op_editor_core::CollabConnectionPhase::Discovering {
+                    op_editor_core::CollabPanelView::Join
+                } else {
+                    op_editor_core::CollabPanelView::Home
+                };
+                state.editor_ui.file_menu_open = false;
+                state.editor_ui.import_menu_open = false;
+                state.editor_ui.import_menu.open = false;
+                core_press::close_locale_picker(&mut state.editor_ui);
+                state.editor_ui.account_menu_open = false;
+            }
+            state.chat.blur_input(now_ms);
+            TopBarPress::Handled
+        }
         TopBarHit::OpenImportMenu => {
             core_press::toggle_import_menu(&mut state.editor_ui);
             TopBarPress::Handled

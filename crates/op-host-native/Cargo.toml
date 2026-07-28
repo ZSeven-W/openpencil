@@ -67,6 +67,10 @@ serde_json = { workspace = true }
 # `op_editor_core::EditorState`. The host derives a read-only paint
 # `Document` from it each frame (see `widget_host.rs`).
 op-editor-core = { path = "../op-editor-core" }
+# Transport-neutral collaboration/editor actor seam. Default host-core
+# features pull AI/design integrations, none of which the native cache adapter
+# needs.
+op-editor-host-core = { path = "../op-editor-host-core", default-features = false }
 # Device-login client bridge — links the proprietary prebuilt library when
 # one exists for the target, else compiles an inert stub (login hidden).
 op-auth-bridge = { path = "../op-auth-bridge" }

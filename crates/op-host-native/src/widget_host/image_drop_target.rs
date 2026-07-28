@@ -99,6 +99,14 @@ impl WidgetHostNative {
         src: &str,
         original_size: Option<[f32; 2]>,
     ) -> bool {
+        if !self.collab_allows_document_mutation_from(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+            ),
+            op_editor_core::CollabEditSource::Import,
+        ) {
+            return true;
+        }
         if !self
             .editor_state
             .apply_image_drop(target, src, original_size)
@@ -118,6 +126,14 @@ impl WidgetHostNative {
         pixel_size: Option<(u32, u32)>,
         centre: (f64, f64),
     ) -> Option<NodeId> {
+        if !self.collab_allows_document_mutation_from(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+            ),
+            op_editor_core::CollabEditSource::Import,
+        ) {
+            return None;
+        }
         let (pixel_width, pixel_height) = pixel_size.unwrap_or((300, 200));
         let id = self.editor_state.insert_image_node_at_doc_point_sized(
             name,

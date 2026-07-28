@@ -334,6 +334,10 @@ pub enum ActionOutcome {
     /// (`html_import_session::spawn`), which applies the parsed document
     /// when it lands.
     HtmlImportStarted(PathBuf),
+    /// A legacy synchronous Save-As entry reached a collaboration-bound
+    /// document. The desktop runner must schedule its background Save-As fork
+    /// flow; synchronous persistence has no authority to detach the session.
+    SaveAsForkRequired,
     /// Nothing to reconcile — export, recent-list edits, or a user
     /// cancel / error.
     Noop,

@@ -18,12 +18,12 @@ impl WidgetHostNative {
             return true;
         }
         if self.editor_state.color_picker_hex_focused() {
-            self.editor_state.color_picker_blur_hex();
+            self.collab_blur_color_picker_inputs();
             self.mark_dirty();
             return true;
         }
         if self.editor_state.color_picker_rgb_focused() {
-            self.editor_state.color_picker_blur_rgb();
+            self.collab_blur_color_picker_inputs();
             self.mark_dirty();
             return true;
         }

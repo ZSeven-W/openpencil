@@ -48,6 +48,7 @@ pub mod path_anchor_context_menu;
 pub mod property_panel;
 pub mod property_panel_action;
 pub mod property_panel_code;
+pub mod property_panel_collab;
 pub mod property_panel_commit;
 pub mod property_panel_compositing;
 pub mod property_panel_corner;
@@ -134,6 +135,7 @@ mod canvas_agent_cursor_motion_tests;
 mod canvas_agent_cursor_presence_tests;
 #[cfg(test)]
 mod canvas_agent_cursor_tests;
+mod canvas_collab_presence;
 mod canvas_frame_labels;
 mod canvas_generation_scan;
 #[cfg(test)]
@@ -167,6 +169,9 @@ pub mod editor_state_ext;
 
 // Host-shared press/click dispatch flows (native + web widget hosts).
 pub mod chat_click_flow;
+mod collab_avatar_paint;
+pub mod collab_panel;
+pub mod collab_ui;
 pub mod cursor_hover_flow;
 pub mod drag_flow;
 pub mod host_canvas_geometry;
@@ -354,6 +359,7 @@ pub use ai_chat_panel::{
 };
 pub use ai_chat_transcript_design::{parse_design_json_nodes, DesignParseError};
 pub use align_toolbar::{AlignToolbar, AlignToolbarHit, ALIGN_TOOLBAR_HEIGHT, ALIGN_TOOLBAR_WIDTH};
+pub use collab_panel::{CollabPanel, CollabPanelHit, COLLAB_PANEL_WIDTH};
 pub use component_browser_panel::{
     ComponentBrowserHit, ComponentBrowserPanel, COMPONENT_BROWSER_PANEL_H,
     COMPONENT_BROWSER_PANEL_W,

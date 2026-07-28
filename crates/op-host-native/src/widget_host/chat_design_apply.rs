@@ -10,6 +10,14 @@ impl WidgetHostNative {
         message_index: usize,
         code: &str,
     ) -> bool {
+        if !self.collab_allows_document_mutation_from(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::BulkWrite,
+            ),
+            op_editor_core::CollabEditSource::Ai,
+        ) {
+            return true;
+        }
         let Ok(nodes) = op_editor_ui::widgets::parse_design_json_nodes(code) else {
             return true;
         };

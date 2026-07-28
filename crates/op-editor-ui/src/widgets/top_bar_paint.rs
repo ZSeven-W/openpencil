@@ -334,6 +334,18 @@ impl TopBar {
                 self.is_pressed(TopBarButton::OpenAccount),
             );
         }
+        if self.collab.visible {
+            let collab_rect = self.collaboration_chip_rect_estimated(rect);
+            paint_collaboration_chip(
+                cx,
+                &self.theme,
+                &self.collab,
+                collab_rect,
+                self.is_hovered(TopBarButton::OpenCollaboration),
+                self.is_pressed(TopBarButton::OpenCollaboration),
+            );
+            rx = collab_rect.origin.x;
+        }
         // `rx` now points at the LEFT edge of the chip's anchor —
         // the chip anchors immediately to its left (small gap).
 
@@ -443,6 +455,105 @@ impl TopBar {
         // controls.
         paint_divider(cx, &self.theme, rx - DIVIDER_GAP - DIVIDER_W, center_y);
     }
+}
+
+fn paint_collaboration_chip(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    model: &crate::widgets::collab_ui::CollabTopBarModel,
+    rect: Rect,
+    hovered: bool,
+    pressed: bool,
+) {
+    let foreground = crate::widgets::button::paint_ghost_button_feedback(
+        cx.backend, theme, rect, hovered, pressed,
+    );
+    let tone = match model.tone {
+        crate::widgets::collab_ui::CollabTopBarTone::Neutral => theme.muted_foreground,
+        crate::widgets::collab_ui::CollabTopBarTone::Progress => theme.primary,
+        crate::widgets::collab_ui::CollabTopBarTone::Connected => Color {
+            r: 0.063,
+            g: 0.725,
+            b: 0.506,
+            a: 1.0,
+        },
+        crate::widgets::collab_ui::CollabTopBarTone::Warning => Color {
+            r: 0.961,
+            g: 0.62,
+            b: 0.043,
+            a: 1.0,
+        },
+        crate::widgets::collab_ui::CollabTopBarTone::ReadOnly => theme.muted_foreground,
+        crate::widgets::collab_ui::CollabTopBarTone::Ended => Color {
+            r: 0.937,
+            g: 0.267,
+            b: 0.267,
+            a: 1.0,
+        },
+    };
+    let center_y = rect.origin.y + rect.size.y / 2.0;
+    let mut x = rect.origin.x + 9.0;
+    if model.avatars.is_empty() {
+        draw_icon(
+            cx.backend,
+            Icon::Users,
+            Point2D::new(x, center_y - ICON_SIZE / 2.0),
+            ICON_SIZE,
+            tone,
+            1.4,
+        );
+        x += ICON_SIZE + 6.0;
+    } else {
+        for avatar in &model.avatars {
+            let chip = Rect::xywh(
+                x,
+                center_y - COLLAB_AVATAR_CHIP / 2.0,
+                COLLAB_AVATAR_CHIP,
+                COLLAB_AVATAR_CHIP,
+            );
+            crate::widgets::collab_avatar_paint::paint_collab_avatar(
+                cx,
+                avatar,
+                chip,
+                8.0,
+                chip.origin.y + 12.0,
+            );
+            cx.backend
+                .stroke_round_rect(chip, COLLAB_AVATAR_CHIP / 2.0, theme.card, 1.0);
+            x += COLLAB_AVATAR_CHIP - COLLAB_AVATAR_OVERLAP;
+        }
+        x += COLLAB_AVATAR_OVERLAP;
+        if model.participant_overflow > 0 {
+            let overflow = format!("+{}", model.participant_overflow);
+            let overflow_layout = TextLayout::single_run(
+                &overflow,
+                "system-ui",
+                9.0,
+                theme.muted_foreground.to_jian(),
+                Point2D::ZERO,
+            );
+            cx.backend
+                .draw_text(&overflow_layout, Point2D::new(x, center_y + 3.0));
+            x += cx.backend.measure_text(&overflow, 9.0) + 4.0;
+        }
+        x += 6.0;
+    }
+
+    cx.backend
+        .fill_round_rect(Rect::xywh(x, center_y - 3.0, 6.0, 6.0), 3.0, tone);
+    x += 10.0;
+    cx.backend.save();
+    cx.backend.clip_rect(rect);
+    let label = TextLayout::single_run(
+        &model.label,
+        "system-ui",
+        11.0,
+        foreground.to_jian(),
+        Point2D::ZERO,
+    );
+    cx.backend
+        .draw_text(&label, Point2D::new(x, center_y + 4.0));
+    cx.backend.restore();
 }
 
 /// User-avatar button: a generic outline glyph when signed out, or a

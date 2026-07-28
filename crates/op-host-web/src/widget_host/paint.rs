@@ -337,6 +337,26 @@ impl WidgetHost {
             picker.paint(&mut cx, picker_rect);
         }
 
+        // Shared collaboration popover. Web builds normally keep the
+        // capability unavailable for M1, but the real surface is present for
+        // future satellite hosts and never reaches native transport APIs.
+        if let Some(panel) =
+            op_editor_ui::widgets::CollabPanel::for_editor_ui(&self.editor_state.editor_ui)
+        {
+            let top_bar =
+                op_editor_ui::widgets::TopBar::for_editor_ui(&self.editor_state.editor_ui)
+                    .with_traffic_controls(false);
+            let anchor = top_bar.collaboration_chip_rect_estimated(top_bar_rect);
+            let panel_rect = panel.rect_at(
+                anchor,
+                Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+            );
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            panel.paint(&mut cx, panel_rect);
+        }
+
         // File-menu dropdown — anchored under TopBar's folder+chevron
         // button (native §10b).
         if let Some(menu_rect) = self.file_menu_rect(viewport_width) {

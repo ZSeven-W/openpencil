@@ -80,6 +80,9 @@ impl<'a> CanvasViewport<'a> {
                 .filter(|_| matches!(state.tool, op_editor_core::Tool::Select))
                 .map(|id| id.as_str().to_string()),
             frame_labels: collect_frame_labels(state),
+            collab_presence: crate::widgets::canvas_collab_presence::snapshot(
+                &state.editor_ui.collab,
+            ),
             fast_interaction: false,
             cull_override: None,
         }
@@ -131,6 +134,7 @@ impl<'a> CanvasViewport<'a> {
             now_ms: 0,
             hovered: None,
             frame_labels: Vec::new(),
+            collab_presence: Vec::new(),
             fast_interaction: false,
             cull_override: None,
         }

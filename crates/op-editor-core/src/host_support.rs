@@ -8,22 +8,11 @@
 //! collected here as additive, tested `EditorState` methods so the
 //! host never forks tree-mutation logic of its own.
 
-use crate::command_node::build_leaf_node;
-use crate::fills::{set_primary_fill_hex, set_primary_stroke_hex};
 use crate::node_id::NodeId;
 use crate::state::EditorState;
 use crate::tool::Tool;
-use crate::walkers::{find_node, find_node_mut};
-use jian_ops_schema::node::{IconFontNode, PathNode, PenNode, PenNodeBase};
-use jian_ops_schema::sizing::SizingBehavior;
-use jian_ops_schema::style::{PenEffect, PenFill, PenStroke};
-
-#[derive(Default)]
-struct BooleanPathStyle {
-    fill: Option<Vec<PenFill>>,
-    stroke: Option<PenStroke>,
-    effects: Option<Vec<PenEffect>>,
-}
+use crate::walkers::find_node_mut;
+use jian_ops_schema::node::PenNode;
 
 impl EditorState {
     /// Build an editor state seeded with the demo sample document —
@@ -109,78 +98,15 @@ impl EditorState {
         init_w: f64,
         init_h: f64,
     ) -> Option<NodeId> {
-        // `(canonical kind, display name)` for each creatable tool.
-        // The Pen tool spawns a `path` named "Path"; form widgets map
-        // through `Tool::widget_kind`; other tools map straight
-        // through. `Select` / `Hand` are not creatable.
-        let (kind, name): (&str, &str) = match tool {
-            Tool::Rect => ("rect", "Rectangle"),
-            Tool::Ellipse => ("ellipse", "Ellipse"),
-            Tool::Polygon => ("polygon", "Polygon"),
-            Tool::Line => ("line", "Line"),
-            Tool::Pen => ("path", "Path"),
-            Tool::Frame => ("frame", "Frame"),
-            Tool::Text => ("text", "Text"),
-            Tool::TextInput => ("text_input", "Text Input"),
-            Tool::TextArea => ("text_area", "Text Area"),
-            Tool::NumberInput => ("number_input", "Number Input"),
-            Tool::Select_ => ("select", "Select"),
-            Tool::RadioGroup => ("radio_group", "Radio Group"),
-            Tool::Switch => ("switch", "Switch"),
-            Tool::Checkbox => ("checkbox", "Checkbox"),
-            Tool::Slider => ("slider", "Slider"),
-            Tool::Progress => ("progress", "Progress"),
-            Tool::Tabs => ("tabs", "Tabs"),
-            Tool::Select | Tool::Hand => return None,
-        };
-        // Widgets click-create at their spec default box; other tools
-        // keep the caller's drag-init size.
-        let (w, h) = match crate::widget_default_size(kind) {
-            Some((dw, dh)) => (dw, dh),
-            None => (
-                init_w.round().max(0.0) as i32,
-                init_h.round().max(0.0) as i32,
-            ),
-        };
-        // Allocator-collision guard — lift the counter past the
-        // document's id space before minting.
-        let safe = self.max_node_id().checked_add(1)?;
-        *next_id = (*next_id).max(safe);
-        let id = NodeId::new(format!("n{}", *next_id));
-        *next_id = (*next_id).checked_add(1)?;
-        let mut node = build_leaf_node(
-            kind,
-            id.as_str(),
-            name,
-            doc_x.round() as i32,
-            doc_y.round() as i32,
-            w,
-            h,
-        )?;
-        // Default paints — match the shell-core host's create path:
-        // shape tools get a light-grey body fill; Line / Pen get a
-        // 2-px black stroke; Frame gets a white fill. Form widgets keep
-        // the factory's own default props (no extra fill/stroke).
-        match tool {
-            Tool::Rect | Tool::Ellipse | Tool::Polygon => {
-                set_primary_fill_hex(&mut node, "#BDC7D9");
-            }
-            Tool::Line | Tool::Pen => {
-                set_primary_stroke_hex(&mut node, "#000000");
-            }
-            Tool::Frame => {
-                set_primary_fill_hex(&mut node, "#FFFFFF");
-            }
-            _ => {}
+        let mut allocator = crate::SequentialIdAllocator::for_document(&self.doc, *next_id).ok()?;
+        let result = self
+            .create_node_for_tool_with_allocator(tool, &mut allocator, doc_x, doc_y, init_w, init_h)
+            .ok()
+            .flatten();
+        if result.is_some() {
+            *next_id = allocator.next_counter();
         }
-        // Insert at the FRONT (index 0), not the back. The canvas paints
-        // `children.iter().rev()` (so `children[0]` is the top-most / front
-        // layer) and the layer panel lists `children[0]` at the top — so a
-        // newly drawn shape must land at index 0 to float above existing
-        // siblings (e.g. a Rectangle drawn over a Frame), matching standard
-        // design-tool behavior. `push` (append) buried new shapes at the back.
-        self.active_children_mut().insert(0, node);
-        Some(id)
+        result
     }
 
     /// Insert `node` at the page root, directly above the selection's top-level
@@ -195,7 +121,7 @@ impl EditorState {
     /// child), and nesting into a clipped frame could hide it. Falls back to
     /// appending at the page root (back) when nothing is selected. Callers
     /// select the new node afterwards.
-    fn insert_node_above_selection(&mut self, node: PenNode) {
+    pub(crate) fn insert_node_above_selection(&mut self, node: PenNode) {
         let sel = self.selection.anchor.clone();
         if sel.is_real() {
             if let Some(idx) = self
@@ -216,7 +142,10 @@ impl EditorState {
     /// Returns the new node id on success; `None` when the id allocator is
     /// exhausted.
     pub fn insert_image_node_at_viewport(&mut self, name: &str, src: &str) -> Option<NodeId> {
-        self.insert_image_node_at_viewport_with_dimensions(name, src, 300.0, 200.0)
+        let mut allocator = crate::DocumentIdAllocator::sequential_for_document(&self.doc).ok()?;
+        self.insert_image_node_at_viewport_with_allocator(name, src, &mut allocator)
+            .ok()
+            .flatten()
     }
 
     /// Insert an Image node centred on the current viewport, preserving the
@@ -229,16 +158,16 @@ impl EditorState {
         pixel_width: u32,
         pixel_height: u32,
     ) -> Option<NodeId> {
-        if pixel_width == 0 || pixel_height == 0 {
-            return None;
-        }
-        let scale = (300.0 / f64::from(pixel_width.max(pixel_height))).min(1.0);
-        self.insert_image_node_at_viewport_with_dimensions(
+        let mut allocator = crate::DocumentIdAllocator::sequential_for_document(&self.doc).ok()?;
+        self.insert_image_node_at_viewport_sized_with_allocator(
             name,
             src,
-            f64::from(pixel_width) * scale,
-            f64::from(pixel_height) * scale,
+            pixel_width,
+            pixel_height,
+            &mut allocator,
         )
+        .ok()
+        .flatten()
     }
 
     /// Like [`Self::insert_image_node_at_viewport_sized`], but centred on an
@@ -252,89 +181,17 @@ impl EditorState {
         pixel_height: u32,
         centre: (f64, f64),
     ) -> Option<NodeId> {
-        if pixel_width == 0 || pixel_height == 0 {
-            return None;
-        }
-        let scale = (300.0 / f64::from(pixel_width.max(pixel_height))).min(1.0);
-        self.insert_image_node_with_dimensions(
+        let mut allocator = crate::DocumentIdAllocator::sequential_for_document(&self.doc).ok()?;
+        self.insert_image_node_at_doc_point_sized_with_allocator(
             name,
             src,
-            f64::from(pixel_width) * scale,
-            f64::from(pixel_height) * scale,
+            pixel_width,
+            pixel_height,
             centre,
+            &mut allocator,
         )
-    }
-
-    fn insert_image_node_at_viewport_with_dimensions(
-        &mut self,
-        name: &str,
-        src: &str,
-        width: f64,
-        height: f64,
-    ) -> Option<NodeId> {
-        let pan_x = self.viewport.pan_x as f64;
-        let pan_y = self.viewport.pan_y as f64;
-        let zoom = self.viewport.zoom.max(0.001) as f64;
-        self.insert_image_node_with_dimensions(
-            name,
-            src,
-            width,
-            height,
-            (-pan_x / zoom, -pan_y / zoom),
-        )
-    }
-
-    fn insert_image_node_with_dimensions(
-        &mut self,
-        name: &str,
-        src: &str,
-        width: f64,
-        height: f64,
-        centre: (f64, f64),
-    ) -> Option<NodeId> {
-        use jian_ops_schema::node::image::ImageNode;
-        use jian_ops_schema::node::PenNode;
-        use jian_ops_schema::sizing::SizingBehavior;
-        let (centre_x, centre_y) = centre;
-        let safe = self.max_node_id().checked_add(1)?;
-        let id = NodeId::new(format!("n{}", safe));
-        let _next_id = safe.checked_add(1)?;
-        self.commit_history();
-        let node = PenNode::Image(ImageNode {
-            base: jian_ops_schema::node::base::PenNodeBase {
-                id: id.as_str().to_string(),
-                name: Some(name.to_string()),
-                x: Some(centre_x - width / 2.0),
-                y: Some(centre_y - height / 2.0),
-                ..Default::default()
-            },
-            src: src.into(),
-            object_fit: None,
-            width: Some(SizingBehavior::Number(width)),
-            height: Some(SizingBehavior::Number(height)),
-            corner_radius: None,
-            effects: None,
-            exposure: None,
-            contrast: None,
-            saturation: None,
-            temperature: None,
-            tint: None,
-            highlights: None,
-            shadows: None,
-            image_prompt: None,
-            image_search_query: None,
-            state: None,
-            bindings: None,
-            events: None,
-            lifecycle: None,
-            semantics: None,
-            gestures: None,
-            route: None,
-            limits: Default::default(),
-        });
-        self.insert_node_above_selection(node);
-        self.set_single_selection(id.clone());
-        Some(id)
+        .ok()
+        .flatten()
     }
 
     /// Insert a Lucide `icon_font` node centered at the given document
@@ -348,47 +205,16 @@ impl EditorState {
         center_x: f64,
         center_y: f64,
     ) -> Option<NodeId> {
-        let icon_name = icon_name.trim();
-        if icon_name.is_empty() {
-            return None;
-        }
-        const SIZE: f64 = 32.0;
-        let safe = self.max_node_id().checked_add(1)?;
-        let id = NodeId::new(format!("n{}", safe));
-        self.commit_history();
-        let node = PenNode::IconFont(IconFontNode {
-            base: PenNodeBase {
-                id: id.as_str().to_string(),
-                name: Some(icon_name.to_string()),
-                x: Some(center_x - SIZE / 2.0),
-                y: Some(center_y - SIZE / 2.0),
-                ..Default::default()
-            },
-            icon_font_name: icon_name.to_string(),
-            icon_font_family: Some(family.to_string()),
-            width: Some(jian_ops_schema::sizing::SizingBehavior::Number(SIZE)),
-            height: Some(jian_ops_schema::sizing::SizingBehavior::Number(SIZE)),
-            fill: Some(vec![jian_ops_schema::style::PenFill::Solid(
-                jian_ops_schema::style::SolidFillBody {
-                    color: "#111827".to_string(),
-                    explain: None,
-                    opacity: None,
-                    blend_mode: None,
-                },
-            )]),
-            stroke: None,
-            state: None,
-            bindings: None,
-            events: None,
-            lifecycle: None,
-            semantics: None,
-            gestures: None,
-            route: None,
-            limits: Default::default(),
-        });
-        self.insert_node_above_selection(node);
-        self.set_single_selection(id.clone());
-        Some(id)
+        let mut allocator = crate::DocumentIdAllocator::sequential_for_document(&self.doc).ok()?;
+        self.insert_icon_font_node_at_with_allocator(
+            icon_name,
+            family,
+            center_x,
+            center_y,
+            &mut allocator,
+        )
+        .ok()
+        .flatten()
     }
 
     /// Insert a remote icon with baked SVG path data, centered at the
@@ -407,56 +233,17 @@ impl EditorState {
         center_x: f64,
         center_y: f64,
     ) -> Option<NodeId> {
-        let icon_name = icon_name.trim();
-        if icon_name.is_empty() {
-            return None;
-        }
-        let Some(d) = svg_path_d.map(str::trim).filter(|d| !d.is_empty()) else {
-            return self.insert_icon_font_node_at(icon_name, family, center_x, center_y);
-        };
-        const SIZE: f64 = 32.0;
-        let safe = self.max_node_id().checked_add(1)?;
-        let id = NodeId::new(format!("n{}", safe));
-        let icon_id = format!("{}:{}", family.trim(), icon_name);
-        self.commit_history();
-        let node = PenNode::Path(PathNode {
-            base: PenNodeBase {
-                id: id.as_str().to_string(),
-                name: Some(icon_id.clone()),
-                x: Some(center_x - SIZE / 2.0),
-                y: Some(center_y - SIZE / 2.0),
-                ..Default::default()
-            },
-            icon_id: Some(icon_id),
-            d: Some(d.to_string()),
-            anchors: None,
-            closed: None,
-            fill_rule: None,
-            mask: None,
-            width: Some(SizingBehavior::Number(SIZE)),
-            height: Some(SizingBehavior::Number(SIZE)),
-            fill: Some(vec![jian_ops_schema::style::PenFill::Solid(
-                jian_ops_schema::style::SolidFillBody {
-                    color: "#111827".to_string(),
-                    explain: None,
-                    opacity: None,
-                    blend_mode: None,
-                },
-            )]),
-            stroke: None,
-            effects: None,
-            state: None,
-            bindings: None,
-            events: None,
-            lifecycle: None,
-            semantics: None,
-            gestures: None,
-            route: None,
-            limits: Default::default(),
-        });
-        self.insert_node_above_selection(node);
-        self.set_single_selection(id.clone());
-        Some(id)
+        let mut allocator = crate::DocumentIdAllocator::sequential_for_document(&self.doc).ok()?;
+        self.insert_icon_node_at_with_allocator(
+            icon_name,
+            family,
+            svg_path_d,
+            center_x,
+            center_y,
+            &mut allocator,
+        )
+        .ok()
+        .flatten()
     }
 
     /// Replace the selected icon node with another Lucide glyph.
@@ -530,123 +317,22 @@ impl EditorState {
         contours: &[Vec<(f64, f64)>],
         next_id: &mut u64,
     ) -> Option<NodeId> {
-        // Keep only contours with real extent (≥2 points).
-        let usable: Vec<&Vec<(f64, f64)>> = contours.iter().filter(|c| c.len() >= 2).collect();
-        if usable.is_empty() {
-            return None;
+        let mut allocator = crate::SequentialIdAllocator::for_document(&self.doc, *next_id).ok()?;
+        let result = self
+            .replace_paths_with_polyline_with_allocator(source_ids, contours, &mut allocator)
+            .ok()
+            .flatten();
+        if result.is_some() {
+            *next_id = allocator.next_counter();
         }
-        let safe = self.max_node_id().checked_add(1)?;
-        *next_id = (*next_id).max(safe);
-        let id = NodeId::new(format!("n{}", *next_id));
-        *next_id = (*next_id).checked_add(1)?;
-        let style = source_ids
-            .iter()
-            .find_map(|src| find_node(self.active_children(), src).map(boolean_path_style))
-            .unwrap_or_default();
-        let (min_x, min_y, max_x, max_y) = usable.iter().flat_map(|c| c.iter()).fold(
-            (
-                f64::INFINITY,
-                f64::INFINITY,
-                f64::NEG_INFINITY,
-                f64::NEG_INFINITY,
-            ),
-            |(min_x, min_y, max_x, max_y), (x, y)| {
-                (min_x.min(*x), min_y.min(*y), max_x.max(*x), max_y.max(*y))
-            },
-        );
-        let width = (max_x - min_x).max(0.0);
-        let height = (max_y - min_y).max(0.0);
-        // Remove every source shape from the active page.
-        for src in source_ids {
-            crate::walkers::remove_from_children(self.active_children_mut(), src);
-        }
-        // Compound `d` in node-local coordinates (origin at the bbox min):
-        // one `M … L … Z` subpath per contour.
-        let mut d = String::new();
-        for contour in &usable {
-            for (i, (x, y)) in contour.iter().enumerate() {
-                let lx = *x - min_x;
-                let ly = *y - min_y;
-                if i == 0 {
-                    d.push_str(&format!("M {:.2} {:.2}", lx, ly));
-                } else {
-                    d.push_str(&format!(" L {:.2} {:.2}", lx, ly));
-                }
-            }
-            d.push_str(" Z");
-        }
-        let node = PenNode::Path(PathNode {
-            base: PenNodeBase {
-                id: id.as_str().to_string(),
-                name: Some("Boolean Result".to_string()),
-                x: Some(min_x),
-                y: Some(min_y),
-                ..Default::default()
-            },
-            icon_id: None,
-            d: Some(d),
-            anchors: None,
-            closed: Some(true),
-            fill_rule: None,
-            mask: None,
-            width: Some(SizingBehavior::Number(width)),
-            height: Some(SizingBehavior::Number(height)),
-            fill: style.fill,
-            stroke: style.stroke,
-            effects: style.effects,
-            state: None,
-            bindings: None,
-            events: None,
-            lifecycle: None,
-            semantics: None,
-            gestures: None,
-            route: None,
-            limits: Default::default(),
-        });
-        self.active_children_mut().push(node);
-        Some(id)
-    }
-}
-
-fn boolean_path_style(node: &PenNode) -> BooleanPathStyle {
-    match node {
-        PenNode::Frame(n) => BooleanPathStyle {
-            fill: n.container.fill.clone(),
-            stroke: n.container.stroke.clone(),
-            effects: n.container.effects.clone(),
-        },
-        PenNode::Rectangle(n) => BooleanPathStyle {
-            fill: n.container.fill.clone(),
-            stroke: n.container.stroke.clone(),
-            effects: n.container.effects.clone(),
-        },
-        PenNode::Ellipse(n) => BooleanPathStyle {
-            fill: n.fill.clone(),
-            stroke: n.stroke.clone(),
-            effects: n.effects.clone(),
-        },
-        PenNode::Polygon(n) => BooleanPathStyle {
-            fill: n.fill.clone(),
-            stroke: n.stroke.clone(),
-            effects: n.effects.clone(),
-        },
-        PenNode::Path(n) => BooleanPathStyle {
-            fill: n.fill.clone(),
-            stroke: n.stroke.clone(),
-            effects: n.effects.clone(),
-        },
-        PenNode::Line(n) => BooleanPathStyle {
-            fill: None,
-            stroke: n.stroke.clone(),
-            effects: n.effects.clone(),
-        },
-        _ => BooleanPathStyle::default(),
+        result
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jian_ops_schema::sizing::SizingBehavior;
 
     #[test]
     fn sample_has_the_demo_tree_and_anchors_selection() {

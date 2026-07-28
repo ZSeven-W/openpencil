@@ -274,6 +274,8 @@ jobs:
             export MACOS_SIGN_IDENTITY
           fi
           bash scripts/bundle-macos.sh
+          bash tools/check-macos-bundle-plist.sh \
+            "target/${{ matrix.target }}/release/bundle/osx/OpenPencil.app/Contents/Info.plist"
       - name: Notarize macOS app
         if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
         shell: bash

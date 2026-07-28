@@ -5,10 +5,10 @@
 //! motion.
 
 use crate::{
-    figma_import_session, git_session, html_import_session, image_decode_host, image_panel_host,
-    image_search_session, ime_window, init_auth_runtime, kit_persistence, persistence,
-    remote_image_host, save_session, single_instance, theme_preset_host, update_check, DesktopApp,
-    PaintedPageIdentity, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
+    collab_avatar_host, figma_import_session, git_session, html_import_session, image_decode_host,
+    image_panel_host, image_search_session, ime_window, init_auth_runtime, kit_persistence,
+    persistence, remote_image_host, save_session, single_instance, theme_preset_host, update_check,
+    DesktopApp, PaintedPageIdentity, INITIAL_VIEWPORT_H, INITIAL_VIEWPORT_W,
 };
 use op_host_native::WidgetHostNative;
 use std::path::PathBuf;
@@ -101,6 +101,7 @@ impl DesktopApp {
             rotate_cursor: None,
             current_path: None,
             save_session: save_session::SaveSession::new(),
+            collab_fork_saves: Vec::new(),
             error: None,
             design_loop_indicator: None,
             design_session_indicator: None,
@@ -122,8 +123,10 @@ impl DesktopApp {
             image_search: image_search_session::ImageSearchSession::new(),
             image_panel: image_panel_host::ImagePanelJobs::new(),
             remote_images: remote_image_host::RemoteImageSession::new(),
+            collab_avatars: collab_avatar_host::CollabAvatarHost::new(),
             image_decodes: image_decode_host::ImageDecodeHost::new(),
             mcp_wake_proxy: None,
+            collab_runtime: crate::collab_runtime::DesktopCollabRuntime::new(),
             forwarded_files: single_instance::ForwardQueue::default(),
             iconify_job: None,
             kit_browser_open_persisted,
@@ -312,6 +315,12 @@ impl DesktopApp {
     /// Confirm the adjacent `.op` destination before disturbing any active
     /// import. Cancel therefore leaves the current worker and document intact.
     pub(crate) fn begin_figma_import(&mut self, path: PathBuf) -> bool {
+        if !self.host.gate_collaboration_action(
+            op_editor_core::CollabGateAction::ReplaceDocument,
+            op_editor_core::CollabEditSource::Import,
+        ) {
+            return false;
+        }
         if self
             .current_figma_import
             .as_ref()
@@ -329,6 +338,21 @@ impl DesktopApp {
             path,
             output_mode,
         ));
+        self.request_redraw(true);
+        true
+    }
+
+    /// Start an HTML/ZIP whole-document import after a current-phase gate.
+    pub(crate) fn begin_html_import(&mut self, path: PathBuf) -> bool {
+        if !self.host.gate_collaboration_action(
+            op_editor_core::CollabGateAction::ReplaceDocument,
+            op_editor_core::CollabEditSource::Import,
+        ) {
+            return false;
+        }
+        figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
+        html_import_session::cancel(&mut self.host, &mut self.current_html_import);
+        self.current_html_import = Some(html_import_session::spawn(&mut self.host, path));
         self.request_redraw(true);
         true
     }
@@ -366,12 +390,7 @@ impl DesktopApp {
                     // `pump` applies accepted imports when the worker finishes.
                     opened = self.begin_figma_import(path);
                 } else if is_html {
-                    figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
-                    html_import_session::cancel(&mut self.host, &mut self.current_html_import);
-                    self.current_html_import =
-                        Some(html_import_session::spawn(&mut self.host, path));
-                    self.request_redraw(true);
-                    opened = true;
+                    opened = self.begin_html_import(path);
                 } else if persistence::open_path(
                     &mut self.host,
                     path,
@@ -415,11 +434,7 @@ impl DesktopApp {
             if is_fig {
                 opened = self.begin_figma_import(path);
             } else if is_html {
-                figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
-                html_import_session::cancel(&mut self.host, &mut self.current_html_import);
-                self.current_html_import = Some(html_import_session::spawn(&mut self.host, path));
-                self.request_redraw(true);
-                opened = true;
+                opened = self.begin_html_import(path);
             } else if persistence::open_path(
                 &mut self.host,
                 path,
@@ -475,16 +490,7 @@ impl DesktopApp {
         match choice {
             rfd::MessageDialogResult::Yes => {
                 self.host.commit_variable_row_focus_if_any_pub();
-                if persistence::handle_save(
-                    &mut self.host,
-                    &mut self.current_path,
-                    self.window.as_ref(),
-                ) {
-                    self.mark_document_saved();
-                    true
-                } else {
-                    false
-                }
+                self.request_background_save() && self.finish_background_saves()
             }
             rfd::MessageDialogResult::No => true,
             _ => false,
@@ -519,16 +525,7 @@ impl DesktopApp {
                 // Save, then close only if the document actually
                 // persisted (a cancelled Save-As must abort the close).
                 self.host.commit_variable_row_focus_if_any_pub();
-                if persistence::handle_save(
-                    &mut self.host,
-                    &mut self.current_path,
-                    self.window.as_ref(),
-                ) {
-                    self.mark_document_saved();
-                    true
-                } else {
-                    false
-                }
+                self.request_background_save() && self.finish_background_saves()
             }
             rfd::MessageDialogResult::No => true,
             _ => false,

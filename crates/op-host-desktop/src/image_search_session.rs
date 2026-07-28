@@ -8,7 +8,10 @@ use std::sync::{Arc, Mutex};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::{ImageFillBody, ImageFillMode, PenFill};
 use op_editor_core::agent_settings::ImageGenProfile;
-use op_editor_core::{walkers, EditorState, NodeId};
+use op_editor_core::{
+    walkers, CollabDocumentMutation, CollabEditSource, CollabGateAction, CollabGateReason,
+    CollabUnsupportedFeature, EditorState, NodeId,
+};
 // Provider plumbing shared with the web daemon (single-sourced in
 // op-host-services): keyword simplification, Openverse token exchange, and
 // image mime handling. The desktop keeps its own `fetch_image_data_url`
@@ -280,6 +283,13 @@ impl ImageSearchSession {
         state: &EditorState,
         scene: Option<&op_editor_ui::layout_scene::LayoutScene>,
     ) -> bool {
+        // Automatic enrichment is an external-asset mutation, which M1 does
+        // not admit into a bound collaboration document. Check before
+        // starting network/provider work; do not show a rejection merely
+        // because a collaborative canvas contains an empty placeholder.
+        if collaboration_image_result_gate(state).is_err() {
+            return false;
+        }
         // Perf gate: this runs on every `RedrawRequested`. Skip the whole-tree
         // walk when the document content AND active page are unchanged since
         // the last scan, and no session-set mutation (job completion/failure,
@@ -377,6 +387,16 @@ impl ImageSearchSession {
                     // revision, but the gate invalidation still covers the
                     // failure path.)
                     self.last_scanned = None;
+                    // A job may have started while the document was standalone
+                    // and become ready only after Start/Join. Re-check the
+                    // current phase and role immediately before the raw node
+                    // mutation, discard the result on rejection, and keep it
+                    // retryable after the collaboration session is left.
+                    if let Err(reason) = collaboration_image_result_gate(state) {
+                        state.editor_ui.collab.set_notice(reason.notice_kind(), 0);
+                        changed = true;
+                        continue;
+                    }
                     if job.intent.is_some() && current_intents.is_none() {
                         #[cfg(test)]
                         {
@@ -574,7 +594,20 @@ use targets::{
     is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic,
 };
 
+fn collaboration_image_result_gate(state: &EditorState) -> Result<(), CollabGateReason> {
+    state.editor_ui.collab.gate(
+        CollabGateAction::Document(CollabDocumentMutation::Unsupported(
+            CollabUnsupportedFeature::ExternalAssets,
+        )),
+        CollabEditSource::ExternalSync,
+    )
+}
+
 pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str) -> bool {
+    if let Err(reason) = collaboration_image_result_gate(state) {
+        state.editor_ui.collab.set_notice(reason.notice_kind(), 0);
+        return false;
+    }
     let url = url.trim();
     if url.is_empty() {
         return false;

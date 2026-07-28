@@ -3,9 +3,9 @@
 //! subtree id remapper. Carved off `command_node.rs` to keep every file
 //! under the 800-line cap.
 
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
-use crate::walkers;
 use jian_ops_schema::node::PenNode;
 use std::collections::HashSet;
 
@@ -105,15 +105,24 @@ pub(super) fn apply_copy_overrides(node: &mut PenNode, overrides_json: Option<&s
 
 /// Reassign every node id in `nodes` (recursively, including
 /// `children`) to a fresh unique id. `next_id` + `taken` are the same
-/// allocator pair [`walkers::alloc_n_id`] uses; `taken` must be seeded
+/// allocator pair [`crate::walkers::alloc_n_id`] uses; `taken` must be seeded
 /// with the document's live ids. Returns `false` on id-space
 /// exhaustion.
-pub(crate) fn remap_subtree_ids(
+pub fn remap_subtree_ids(
     nodes: &mut [PenNode],
     next_id: &mut u64,
     taken: &mut HashSet<NodeId>,
 ) -> bool {
     remap_subtree_ids_mapping(nodes, next_id, taken).is_some()
+}
+
+/// Allocator-aware form of [`remap_subtree_ids`].
+pub(crate) fn remap_subtree_ids_with_allocator(
+    nodes: &mut [PenNode],
+    allocator: &mut dyn IdAllocator,
+    taken: &mut HashSet<NodeId>,
+) -> Result<(), IdAllocError> {
+    remap_subtree_ids_mapping_with_allocator(nodes, allocator, taken).map(drop)
 }
 
 /// Like [`remap_subtree_ids`] but returns the `(old_id, new_id)` pairs in
@@ -128,29 +137,42 @@ pub fn remap_subtree_ids_mapping(
     next_id: &mut u64,
     taken: &mut HashSet<NodeId>,
 ) -> Option<Vec<(String, String)>> {
+    let mut allocator = SequentialIdAllocator::new(*next_id);
+    let result = remap_subtree_ids_mapping_with_allocator(nodes, &mut allocator, taken).ok();
+    *next_id = allocator.next_counter();
+    result
+}
+
+/// Allocator-aware id remap with a typed exhaustion failure.
+pub fn remap_subtree_ids_mapping_with_allocator(
+    nodes: &mut [PenNode],
+    allocator: &mut dyn IdAllocator,
+    taken: &mut HashSet<NodeId>,
+) -> Result<Vec<(String, String)>, IdAllocError> {
+    let mut staged = nodes.to_vec();
     let mut map = Vec::new();
-    remap_collect(nodes, next_id, taken, &mut map).then_some(map)
+    remap_collect(&mut staged, allocator, taken, &mut map)?;
+    for (destination, remapped) in nodes.iter_mut().zip(staged) {
+        *destination = remapped;
+    }
+    Ok(map)
 }
 
 fn remap_collect(
     nodes: &mut [PenNode],
-    next_id: &mut u64,
+    allocator: &mut dyn IdAllocator,
     taken: &mut HashSet<NodeId>,
     map: &mut Vec<(String, String)>,
-) -> bool {
+) -> Result<(), IdAllocError> {
     for node in nodes.iter_mut() {
-        let Some(fresh) = walkers::alloc_n_id(next_id, taken) else {
-            return false;
-        };
+        let fresh = allocator.allocate(taken)?;
         let old = node.base().id.clone();
         let new = fresh.as_str().to_string();
         node.base_mut().id = new.clone();
         map.push((old, new));
         if let Some(children) = node.children_mut() {
-            if !remap_collect(children, next_id, taken, map) {
-                return false;
-            }
+            remap_collect(children, allocator, taken, map)?;
         }
     }
-    true
+    Ok(())
 }

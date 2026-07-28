@@ -90,6 +90,13 @@ impl WidgetHostNative {
         if self.editor_state.selection.is_empty() {
             return false;
         }
+        if !self.collab_allows_document_mutation(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::ClipboardPaste,
+            ),
+        ) {
+            return true;
+        }
         self.editor_state.commit_history();
         let ok = self.editor_state.cut_selected();
         if ok {
@@ -103,10 +110,44 @@ impl WidgetHostNative {
         if self.input_active() {
             return false;
         }
-        let pasted = shared::paste_clipboard_at_default_offset(
-            &mut self.editor_state,
-            &mut self.next_node_id,
-        );
+        if !self.collab_allows_document_mutation(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::ClipboardPaste,
+            ),
+        ) {
+            return true;
+        }
+        let result = if let Some(allocator) = self.collab_id_allocator.as_mut() {
+            if self.editor_state.clipboard.is_empty() {
+                Ok(Vec::new())
+            } else {
+                let snapshot = self.editor_state.snapshot_for_history();
+                let result = self
+                    .editor_state
+                    .paste_clipboard_with_allocator(allocator, 10.0);
+                if result.as_ref().is_ok_and(|ids| !ids.is_empty()) {
+                    self.editor_state.history_push_past(snapshot);
+                }
+                result
+            }
+        } else {
+            let pasted = shared::paste_clipboard_at_default_offset(
+                &mut self.editor_state,
+                &mut self.next_node_id,
+            );
+            Ok(if pasted {
+                vec![self.editor_state.selection.anchor.clone()]
+            } else {
+                Vec::new()
+            })
+        };
+        let pasted = match result {
+            Ok(ids) => !ids.is_empty(),
+            Err(error) => {
+                self.show_collab_id_error(error);
+                return true;
+            }
+        };
         if pasted {
             self.mark_dirty();
         }
@@ -226,6 +267,9 @@ impl WidgetHostNative {
         if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
         }
+        if !self.collab_allows_user_action(op_editor_core::CollabGateAction::GlobalUndo) {
+            return true;
+        }
         let ok = self.editor_state.undo();
         if ok {
             self.mark_dirty();
@@ -243,6 +287,9 @@ impl WidgetHostNative {
         self.commit_variable_row_focus_if_any();
         if self.editor_state.ui.layer_rename.is_some() || self.editor_state.chat.focused {
             return false;
+        }
+        if !self.collab_allows_user_action(op_editor_core::CollabGateAction::GlobalRedo) {
+            return true;
         }
         let ok = self.editor_state.redo();
         if ok {
@@ -266,12 +313,23 @@ impl WidgetHostNative {
         if self.editor_state.selection.is_empty() {
             return false;
         }
+        if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::Group) {
+            return true;
+        }
         let snap = self.editor_state.snapshot_for_history();
-        if self
-            .editor_state
-            .group_selected(&mut self.next_node_id)
-            .is_some()
-        {
+        let result = if let Some(allocator) = self.collab_id_allocator.as_mut() {
+            self.editor_state.group_selected_with_allocator(allocator)
+        } else {
+            Ok(self.editor_state.group_selected(&mut self.next_node_id))
+        };
+        let grouped = match result {
+            Ok(id) => id.is_some(),
+            Err(error) => {
+                self.show_collab_id_error(error);
+                return true;
+            }
+        };
+        if grouped {
             self.editor_state.history_push_past(snap);
             self.mark_dirty();
             return true;
@@ -292,6 +350,9 @@ impl WidgetHostNative {
         }
         if self.editor_state.selection.is_empty() {
             return false;
+        }
+        if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::Ungroup) {
+            return true;
         }
         let snap = self.editor_state.snapshot_for_history();
         if self.editor_state.ungroup_selected() {
@@ -380,11 +441,40 @@ impl WidgetHostNative {
         {
             return true;
         }
+        if !self.collab_allows_document_mutation_from(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+            ),
+            op_editor_core::CollabEditSource::Import,
+        ) {
+            return true;
+        }
 
         // The import modal covers every editor text surface. Commit canvas /
         // layer editing, then reuse the canonical chrome-input blur path so a
         // hidden property, chat, or model-picker input cannot keep receiving
         // keyboard/IME events behind the scrim.
+        let rename_mutation =
+            self.editor_state
+                .ui
+                .layer_rename
+                .as_ref()
+                .map(|rename| match &rename.target {
+                    op_editor_core::ui_draft::LayerContextTarget::Layer(_) => {
+                        op_editor_core::CollabDocumentMutation::NodeProperty(
+                            op_editor_core::CollabNodeField::Name,
+                        )
+                    }
+                    op_editor_core::ui_draft::LayerContextTarget::Page(_) => {
+                        op_editor_core::CollabDocumentMutation::Unsupported(
+                            op_editor_core::CollabUnsupportedFeature::PageStructure,
+                        )
+                    }
+                });
+        if rename_mutation.is_some_and(|mutation| !self.collab_allows_document_mutation(mutation)) {
+            let _ = self.editor_state.rename_cancel();
+        }
+        self.collab_blur_color_picker_inputs();
         shared::commit_editing_for_modal(&mut self.editor_state);
         self.blur_text_inputs_on_blank_press();
         self.close_image_popovers_for_higher_overlay();
@@ -398,6 +488,13 @@ impl WidgetHostNative {
     /// path as the property-panel Create Component button).
     pub fn apply_create_component(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
+        if !self.collab_allows_document_mutation(
+            op_editor_core::CollabDocumentMutation::Unsupported(
+                op_editor_core::CollabUnsupportedFeature::Components,
+            ),
+        ) {
+            return true;
+        }
         let id = self.editor_state.selection.anchor.clone();
         let acted = id.is_real() && self.editor_state.create_component_from_node_name(&id);
         if acted {
@@ -443,7 +540,9 @@ impl WidgetHostNative {
     pub fn apply_set_tool(&mut self, tool: op_editor_core::Tool) {
         self.exit_image_crop_edit();
         self.commit_variable_row_focus_if_any();
-        self.cancel_pen_on_tool_switch(tool);
+        if !self.cancel_pen_on_tool_switch(tool) {
+            return;
+        }
         shared::set_active_tool(&mut self.editor_state, tool);
         self.mark_dirty();
     }
@@ -479,6 +578,9 @@ impl WidgetHostNative {
     pub fn apply_reorder(&mut self, direction: ReorderDirection) -> bool {
         if self.input_active() {
             return false;
+        }
+        if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeMove) {
+            return true;
         }
         // Translate the shell-core reorder direction (kept as the
         // public API type) into the op-editor-core equivalent.

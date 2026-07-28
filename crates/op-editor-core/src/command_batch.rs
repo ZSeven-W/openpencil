@@ -35,7 +35,7 @@
 
 use crate::command::EditorCommand;
 use crate::command_apply::command_marks_document_dirty;
-use crate::EditorState;
+use crate::{EditorState, IdAllocError, IdAllocator};
 
 /// `true` when every piece of editor state `cmd` primarily mutates is
 /// covered by the pre-batch rollback snapshot (document, selection,
@@ -143,16 +143,20 @@ impl EditorState {
     /// failure. On success the whole batch lands as a SINGLE undo step
     /// (intermediate history entries pushed by sub-commands are
     /// collapsed into one pre-batch snapshot).
-    pub(crate) fn cmd_batch(&mut self, commands: Vec<EditorCommand>) -> bool {
+    pub(crate) fn cmd_batch_with_allocator(
+        &mut self,
+        commands: Vec<EditorCommand>,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         if commands.is_empty() {
-            return false;
+            return Ok(false);
         }
         // Pre-validate the whole program BEFORE executing anything: a
         // sub-command outside the snapshot-covered set (see module
         // docs) rejects the batch with ZERO state change — nothing
         // ran, so there is nothing to roll back.
         if !commands.iter().all(batchable) {
-            return false;
+            return Ok(false);
         }
         let marks_document_dirty = commands.iter().any(command_marks_document_dirty);
         let pre = self.snapshot_for_history();
@@ -161,7 +165,8 @@ impl EditorState {
         // rolled-back batch restores redo intact. O(1) move, no clone.
         let saved_future = std::mem::take(&mut self.history.future);
         for cmd in commands {
-            if !self.apply(cmd) {
+            let outcome = self.apply_with_allocator(cmd, allocator);
+            if !matches!(&outcome, Ok(true)) {
                 // Restore the pre-batch history bookkeeping first (this
                 // is batch-specific — a plain restore does not touch the
                 // undo/redo stacks): drop any sub-command undo entries
@@ -177,7 +182,7 @@ impl EditorState {
                 // restored document no longer carries, silently skipping
                 // later merges of that key.
                 self.restore(pre);
-                return false;
+                return outcome;
             }
         }
         // Collapse any per-sub-command history entries into one batch
@@ -189,6 +194,6 @@ impl EditorState {
             self.sync_dirty_flag();
             self.history_push_past(pre);
         }
-        true
+        Ok(true)
     }
 }

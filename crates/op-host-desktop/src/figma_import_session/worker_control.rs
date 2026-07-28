@@ -33,6 +33,19 @@ impl CancellationToken {
     }
 }
 
+/// Wait until no Figma prepare/convert/publish worker owns the process gate.
+///
+/// Collaboration transitions call this only after cancelling the associated
+/// token. Once it returns, an old standalone import cannot publish an
+/// adjacent `.op` after the shared session becomes active.
+pub(super) fn wait_until_idle() {
+    drop(
+        WORKER_GATE
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -17,6 +17,17 @@ editor-*.png
 scripts/ab-corpus/runs/
 
 docs/
+# Keep internal planning documents ignored, but publish the reviewed
+# collaboration security contract with the open implementation.
+!/docs/
+/docs/*
+!/docs/security/
+/docs/security/*
+!/docs/security/p2p-collaboration-threat-model.md
+!/docs/testing/
+/docs/testing/*
+!/docs/testing/p2p-collaboration-platform-acceptance.md
+
 # The bare `docs/` pattern above also shadows this test-fixture dir, which
 # MUST be tracked (the CI diagnostics-golden drift guard reads it).
 !crates/op-design-lint/tests/fixtures/docs/

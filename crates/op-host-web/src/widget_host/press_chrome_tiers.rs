@@ -156,6 +156,7 @@ impl WidgetHost {
                 | TopBarHit::ToggleTheme
                 | TopBarHit::ToggleLocale
                 | TopBarHit::OpenAgentSettings
+                | TopBarHit::Collaboration
                 | TopBarHit::ToggleFileMenu
                 | TopBarHit::OpenImportMenu => {}
                 TopBarHit::ToggleGitPanel => {

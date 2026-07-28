@@ -7,13 +7,24 @@
 //! skipping its post-event epilogue — return `false` here; the
 //! dispatcher turns that back into the same early return.
 
-use crate::{
-    chat_attachment, chat_session, figma_import_session, frame, html_import_session, persistence,
-    DesktopApp,
-};
+use crate::{chat_attachment, chat_session, figma_import_session, frame, persistence, DesktopApp};
 use winit::dpi::PhysicalPosition;
 use winit::event::MouseScrollDelta;
 use winit::event_loop::ActiveEventLoop;
+
+fn dispatch_background_save_as_if_required(
+    outcome: &op_host_services::doc_io::ActionOutcome,
+    schedule: impl FnOnce() -> bool,
+) -> bool {
+    if !matches!(
+        outcome,
+        op_host_services::doc_io::ActionOutcome::SaveAsForkRequired
+    ) {
+        return false;
+    }
+    let _ = schedule();
+    true
+}
 
 impl DesktopApp {
     pub(super) fn on_cursor_moved(&mut self, position: PhysicalPosition<f64>) -> bool {
@@ -174,6 +185,10 @@ impl DesktopApp {
                 return false;
             }
         }
+        // One pointer gesture is one collaboration transaction. The runtime
+        // snapshots immediately before the host can mutate the document;
+        // ordered remote frames queue until the matching release below.
+        self.collab_runtime.begin_local_edit(&mut self.host);
         let consumed = self.host.apply_press(
             self.cursor_x,
             self.cursor_y,
@@ -280,52 +295,50 @@ impl DesktopApp {
                     self.host.commit_variable_row_focus_if_any_pub();
                     self.request_background_save_as();
                 } else {
-                    match persistence::run_action(
+                    let outcome = persistence::run_action(
                         action,
                         &mut self.host,
                         &mut self.current_path,
                         self.window.as_ref(),
-                    ) {
-                        // `mark_document_saved` cancels any
-                        // in-flight Figma import internally, so a
-                        // stale worker can't overwrite the fresh
-                        // document when its result lands.
-                        op_host_services::doc_io::ActionOutcome::Saved => {
-                            self.mark_document_saved()
-                        }
-                        // User picked a `.fig`; confirm its output,
-                        // then replace any prior import session and let
-                        // `pump` apply the document once parsing finishes.
-                        op_host_services::doc_io::ActionOutcome::FigmaImportStarted(path) => {
-                            let _ = self.begin_figma_import(path);
-                        }
-                        op_host_services::doc_io::ActionOutcome::FigmaImportSelection(
-                            selection,
-                        ) => {
-                            if figma_import_session::finish_selection(
-                                &mut self.host,
-                                &mut self.current_figma_import,
-                                selection,
-                            ) {
-                                self.request_redraw(true);
+                    );
+                    if !dispatch_background_save_as_if_required(&outcome, || {
+                        self.request_background_save_as()
+                    }) {
+                        match outcome {
+                            // `mark_document_saved` cancels any
+                            // in-flight Figma import internally, so a
+                            // stale worker can't overwrite the fresh
+                            // document when its result lands.
+                            op_host_services::doc_io::ActionOutcome::Saved => {
+                                self.mark_document_saved()
                             }
+                            // User picked a `.fig`; confirm its output,
+                            // then replace any prior import session and let
+                            // `pump` apply the document once parsing finishes.
+                            op_host_services::doc_io::ActionOutcome::FigmaImportStarted(path) => {
+                                let _ = self.begin_figma_import(path);
+                            }
+                            op_host_services::doc_io::ActionOutcome::FigmaImportSelection(
+                                selection,
+                            ) => {
+                                if figma_import_session::finish_selection(
+                                    &mut self.host,
+                                    &mut self.current_figma_import,
+                                    selection,
+                                ) {
+                                    self.request_redraw(true);
+                                }
+                            }
+                            // User picked a saved page or ZIP project; same
+                            // background session discipline as the Figma branch.
+                            op_host_services::doc_io::ActionOutcome::HtmlImportStarted(path) => {
+                                let _ = self.begin_html_import(path);
+                            }
+                            op_host_services::doc_io::ActionOutcome::SaveAsForkRequired => {
+                                unreachable!("required Save As fork was dispatched above")
+                            }
+                            op_host_services::doc_io::ActionOutcome::Noop => {}
                         }
-                        // User picked a saved page or ZIP project; same
-                        // background session discipline as the Figma branch.
-                        op_host_services::doc_io::ActionOutcome::HtmlImportStarted(path) => {
-                            figma_import_session::cancel(
-                                &mut self.host,
-                                &mut self.current_figma_import,
-                            );
-                            html_import_session::cancel(
-                                &mut self.host,
-                                &mut self.current_html_import,
-                            );
-                            self.current_html_import =
-                                Some(html_import_session::spawn(&mut self.host, path));
-                            self.request_redraw(true);
-                        }
-                        op_host_services::doc_io::ActionOutcome::Noop => {}
                     }
                 }
             }
@@ -385,6 +398,7 @@ impl DesktopApp {
         let consumed = self
             .host
             .apply_release_with_viewport(self.viewport_width, self.viewport_height);
+        self.collab_runtime.finish_local_edit(&mut self.host);
         self.sync_native_ime();
         if consumed {
             self.request_redraw(true);
@@ -441,5 +455,43 @@ impl DesktopApp {
         if consumed {
             self.request_redraw(true);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dispatch_background_save_as_if_required;
+    use op_host_services::doc_io::ActionOutcome;
+
+    #[test]
+    fn typed_save_as_fork_outcome_invokes_the_background_dispatcher() {
+        let mut scheduled = 0;
+        assert!(dispatch_background_save_as_if_required(
+            &ActionOutcome::SaveAsForkRequired,
+            || {
+                scheduled += 1;
+                true
+            }
+        ));
+        assert_eq!(scheduled, 1);
+        assert!(dispatch_background_save_as_if_required(
+            &ActionOutcome::SaveAsForkRequired,
+            || {
+                scheduled += 1;
+                false
+            }
+        ));
+        assert_eq!(
+            scheduled, 2,
+            "picker cancellation is still a handled dispatch, not a sync fallback"
+        );
+        assert!(!dispatch_background_save_as_if_required(
+            &ActionOutcome::Noop,
+            || {
+                scheduled += 1;
+                true
+            }
+        ));
+        assert_eq!(scheduled, 2);
     }
 }

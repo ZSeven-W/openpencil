@@ -256,8 +256,14 @@ impl DesktopApp {
                         consumed = self.host.toggle_preview_with_cached_viewport();
                     }
                     "d" => consumed = self.host.apply_duplicate(),
-                    "z" => consumed = self.host.apply_undo(),
-                    "y" => consumed = self.host.apply_redo(),
+                    "z" => {
+                        consumed = self.collab_runtime.request_undo(&mut self.host)
+                            || self.host.apply_undo()
+                    }
+                    "y" => {
+                        consumed = self.collab_runtime.reject_redo(&mut self.host)
+                            || self.host.apply_redo()
+                    }
                     "g" => consumed = self.host.apply_group(),
                     "j" => consumed = self.host.apply_toggle_chat(),
                     // Cmd/Ctrl+T — open a fresh chat tab (MT.3). Preserves
@@ -295,7 +301,10 @@ impl DesktopApp {
                     }
                     _ if image_popover_open => consumed = true,
                     _ if settings_focused => {}
-                    "z" => consumed = self.host.apply_redo(),
+                    "z" => {
+                        consumed = self.collab_runtime.reject_redo(&mut self.host)
+                            || self.host.apply_redo()
+                    }
                     "g" => consumed = self.host.apply_ungroup(),
                     "c" => consumed = self.host.apply_toggle_code_panel(),
                     "v" => consumed = self.host.apply_toggle_variables_panel(),
@@ -471,14 +480,9 @@ impl DesktopApp {
         self.host.apply_paste()
     }
 
-    /// Stage a clipboard image as a chat attachment (Cmd+V while the
-    /// chat input is focused). Mirrors the TS chat input's paste
-    /// handler (`ai-chat-input.tsx:85-94`): image data wins over text
-    /// and the paste is consumed even when nothing stages — TS
-    /// filters oversized files after `preventDefault()`, and
-    /// `add_attachment` enforces the same 4 × 5 MB caps here.
+    /// Stage a clipboard image as a chat attachment. Image data wins over
+    /// text, and `add_attachment` enforces the shared count/size limits.
     fn paste_image_into_chat(&mut self, image: crate::clipboard::ClipboardImage) {
-        // TS names pasted clipboard images "pasted-image.png".
         self.host
             .editor_state_mut()
             .chat
@@ -490,6 +494,16 @@ impl DesktopApp {
     }
 
     fn paste_image_to_canvas(&mut self, image: crate::clipboard::ClipboardImage) -> bool {
+        if !self.host.gate_collaboration_action(
+            op_editor_core::CollabGateAction::Document(
+                op_editor_core::CollabDocumentMutation::Unsupported(
+                    op_editor_core::CollabUnsupportedFeature::ClipboardPaste,
+                ),
+            ),
+            op_editor_core::CollabEditSource::User,
+        ) {
+            return true;
+        }
         let encoded = base64::engine::general_purpose::STANDARD.encode(&image.png);
         let src = format!("data:image/png;base64,{encoded}");
         let inserted = self

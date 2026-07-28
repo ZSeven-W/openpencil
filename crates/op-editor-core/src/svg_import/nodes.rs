@@ -11,31 +11,31 @@ pub(super) fn element_to_node_ctx(
     parent_ctx: &StyleCtx,
     scale: f64,
     offset: (f64, f64),
-    next_id: &mut u64,
+    allocator: &mut dyn crate::IdAllocator,
     taken: &mut std::collections::HashSet<NodeId>,
-) -> Option<PenNode> {
+) -> Result<Option<PenNode>, crate::IdAllocError> {
     let ctx = merge_style_ctx(parent_ctx, &el.attrs);
     if el.tag == "g" || el.tag == "svg" {
         let mut kids: Vec<PenNode> = Vec::new();
         for child in &el.children {
-            if let Some(node) = element_to_node_ctx(child, &ctx, scale, offset, next_id, taken) {
+            if let Some(node) = element_to_node_ctx(child, &ctx, scale, offset, allocator, taken)? {
                 kids.push(node);
             }
         }
         if kids.is_empty() {
-            return None;
+            return Ok(None);
         }
         if kids.len() == 1 {
-            return Some(kids.into_iter().next().unwrap());
+            return Ok(kids.into_iter().next());
         }
-        let id = walkers::alloc_n_id(next_id, taken)?;
+        let id = allocator.allocate(taken)?;
         use jian_ops_schema::node::container::ContainerProps;
         use jian_ops_schema::node::GroupNode;
         let name = el
             .attr("id")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "Group".to_string());
-        return Some(PenNode::Group(GroupNode {
+        return Ok(Some(PenNode::Group(GroupNode {
             base: PenNodeBase {
                 id: id.into(),
                 name: Some(name),
@@ -50,7 +50,7 @@ pub(super) fn element_to_node_ctx(
             semantics: None,
             gestures: None,
             route: None,
-        }));
+        })));
     }
     // Convert via the legacy element builder, then scale + apply
     // inherited fill/stroke.
@@ -71,8 +71,8 @@ pub(super) fn element_to_node_ctx(
     let stroke = resolve_svg_stroke(&scaled.attrs, &ctx, scale);
     if scaled.tag == "path" {
         if let Some(d) = scaled.attr("d") {
-            let id = walkers::alloc_n_id(next_id, taken)?;
-            return path_node_from_svg_d(
+            let id = allocator.allocate(taken)?;
+            return Ok(path_node_from_svg_d(
                 id,
                 el.attr("id").unwrap_or("Path"),
                 d,
@@ -80,11 +80,13 @@ pub(super) fn element_to_node_ctx(
                 fill_hex,
                 stroke,
                 ctx.fill_rule,
-            );
+            ));
         }
     }
-    let id = walkers::alloc_n_id(next_id, taken)?;
-    let mut node = element_to_node(&scaled, id, offset)?;
+    let id = allocator.allocate(taken)?;
+    let Some(mut node) = element_to_node(&scaled, id, offset) else {
+        return Ok(None);
+    };
     if let PenNode::Path(path) = &mut node {
         path.fill_rule = ctx.fill_rule;
     }
@@ -98,7 +100,7 @@ pub(super) fn element_to_node_ctx(
     } else if let Some(hex) = fill_hex.as_deref() {
         set_primary_fill_hex(&mut node, hex);
     }
-    Some(node)
+    Ok(Some(node))
 }
 
 /// Build a `PenNode` from one parsed SVG element. `None` for

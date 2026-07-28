@@ -71,6 +71,11 @@ impl DesktopApp {
         event_loop: &ActiveEventLoop,
     ) {
         use menu::MenuAction as A;
+        // Native menu accelerators bypass winit key delivery on macOS and
+        // Windows, so each menu dispatch gets the same one-shot transaction
+        // boundary as a keyboard command.
+        let transaction = !matches!(action, A::Undo | A::Redo)
+            && self.collab_runtime.begin_local_edit(&mut self.host);
         let consumed = match action {
             A::New => {
                 if persistence::run_action(
@@ -140,8 +145,8 @@ impl DesktopApp {
                 );
                 true
             }
-            A::Undo => self.host.apply_undo(),
-            A::Redo => self.host.apply_redo(),
+            A::Undo => self.collab_runtime.request_undo(&mut self.host) || self.host.apply_undo(),
+            A::Redo => self.collab_runtime.reject_redo(&mut self.host) || self.host.apply_redo(),
             // Route through the input-aware dispatch (not the raw
             // `host.apply_*`) so Cmd+X / C / V cut, copy, and paste work
             // inside focused text fields. On macOS / Windows the Edit-menu
@@ -269,6 +274,9 @@ impl DesktopApp {
                 false
             }
         };
+        if transaction {
+            self.collab_runtime.finish_local_edit(&mut self.host);
+        }
         if consumed {
             self.request_redraw(true);
         }

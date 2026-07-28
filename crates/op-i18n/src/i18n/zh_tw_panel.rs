@@ -25,6 +25,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "{{name}} 模型查詢需要驗證。請先執行 {{command}} 登入。"
         }
         "providerProbe.unrecognizedModelCatalog" => "{{name}} 傳回無法辨識的模型清單",
-        _ => return None,
+        _ => return super::zh_tw_collab::lookup(key),
     })
 }

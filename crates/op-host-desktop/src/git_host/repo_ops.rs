@@ -45,6 +45,13 @@ impl DesktopApp {
     /// Reload the tracked document from disk after a git op rewrote
     /// it, marking the in-memory state as saved.
     pub(crate) fn reload_tracked_document(&mut self) {
+        // Re-check at the final in-memory replacement sink. Synchronous Git
+        // actions already gate before touching the worktree; this second
+        // check also fails closed if an async pull somehow outlives a role /
+        // phase transition.
+        if !self.collaboration_allows_git_worktree_rewrite() {
+            return;
+        }
         if let Some(path) = self.current_path.clone() {
             if persistence::open_path(
                 &mut self.host,
@@ -67,7 +74,7 @@ impl DesktopApp {
     pub(super) fn run_branch_merge(&mut self, other: &str) {
         // A clean merge reloads the document — confirm first so the
         // reload cannot silently discard unsaved in-memory edits.
-        if !self.confirm_document_reload() {
+        if !self.collaboration_allows_git_worktree_rewrite() || !self.confirm_document_reload() {
             return;
         }
         let Some(result) = self.git_session.merge_branch(other) else {
@@ -108,6 +115,9 @@ impl DesktopApp {
     /// `git_panel.merge_resolve`). A clean re-run completes the merge
     /// and reloads the document.
     pub(super) fn apply_merge_resolution(&mut self) {
+        if !self.collaboration_allows_git_worktree_rewrite() {
+            return;
+        }
         let Some(state) = self
             .host
             .editor_state_mut()

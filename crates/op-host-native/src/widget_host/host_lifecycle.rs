@@ -62,6 +62,7 @@ impl WidgetHostNative {
             marquee_drag: None,
             layer_drag: None,
             next_node_id: 100,
+            collab_id_allocator: None,
             now_ms: 0,
             interaction_hot_until_ms: 0,
             pan_cache: None,

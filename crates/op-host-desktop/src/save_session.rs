@@ -19,6 +19,7 @@ use crate::DesktopEvent;
 mod error;
 pub(crate) use error::SaveError;
 
+#[must_use = "the enqueue outcome determines whether a Save As acquired fork authority"]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EnqueueOutcome {
     Started,
@@ -194,7 +195,13 @@ impl SaveSession {
     ) -> EnqueueOutcome {
         let generation = state.document_generation();
         let revision = state.document_revision();
-        if self.matches_pending(&path, document_epoch, generation, revision) {
+        if self.matches_pending(
+            &path,
+            set_current_path,
+            document_epoch,
+            generation,
+            revision,
+        ) {
             return EnqueueOutcome::AlreadyPending;
         }
 
@@ -250,27 +257,39 @@ impl SaveSession {
     fn matches_pending(
         &self,
         path: &Path,
+        set_current_path: bool,
         document_epoch: u64,
         generation: u64,
         revision: u64,
     ) -> bool {
-        let same = |job_path: &Path, job_epoch: u64, job_generation: u64, job_revision: u64| {
+        let same = |job_path: &Path,
+                    job_sets_current_path: bool,
+                    job_epoch: u64,
+                    job_generation: u64,
+                    job_revision: u64| {
             job_path == path
+                && job_sets_current_path == set_current_path
                 && job_epoch == document_epoch
                 && job_generation == generation
                 && job_revision == revision
         };
-        self.running
-            .as_ref()
-            .is_some_and(|job| same(&job.path, job.document_epoch, job.generation, job.revision))
-            || self.queued.as_ref().is_some_and(|request| {
-                same(
-                    &request.path,
-                    request.snapshot.document_epoch,
-                    request.snapshot.generation,
-                    request.snapshot.revision,
-                )
-            })
+        self.running.as_ref().is_some_and(|job| {
+            same(
+                &job.path,
+                job.set_current_path,
+                job.document_epoch,
+                job.generation,
+                job.revision,
+            )
+        }) || self.queued.as_ref().is_some_and(|request| {
+            same(
+                &request.path,
+                request.set_current_path,
+                request.snapshot.document_epoch,
+                request.snapshot.generation,
+                request.snapshot.revision,
+            )
+        })
     }
 
     /// Pick only an in-flight snapshot that belongs to the live document.
@@ -384,8 +403,32 @@ impl SaveSession {
 }
 
 impl crate::DesktopApp {
+    /// Complete every standalone document writer before Start/Join/Retry may
+    /// bind the document to collaboration. This is a phase-transition barrier:
+    /// no old Save/Save As or adjacent Figma publication can land after the
+    /// shared identity becomes active.
+    pub(crate) fn settle_document_io_before_collaboration(&mut self) {
+        let _ = self.finish_background_saves();
+        crate::figma_import_session::cancel_and_wait_before_collaboration(
+            &mut self.host,
+            &mut self.current_figma_import,
+        );
+        crate::html_import_session::cancel(&mut self.host, &mut self.current_html_import);
+    }
+
     /// Queue Cmd+S without running JSON serialization on the winit thread.
     pub(crate) fn request_background_save(&mut self) -> bool {
+        let gate = if self.current_path.is_some() {
+            op_editor_core::CollabGateAction::SaveShared
+        } else {
+            op_editor_core::CollabGateAction::SaveFork
+        };
+        if !self
+            .host
+            .gate_collaboration_action(gate, op_editor_core::CollabEditSource::User)
+        {
+            return false;
+        }
         let document_epoch = self.host.document_epoch();
         let path = self
             .save_session
@@ -405,19 +448,55 @@ impl crate::DesktopApp {
             return true;
         }
         let set_current_path = self.current_path.as_deref() != Some(path.as_path());
-        self.enqueue_background_save(path, set_current_path)
+        let _ = self.enqueue_background_save(path, set_current_path);
+        true
     }
 
     /// Show the native picker synchronously, then queue only the expensive
     /// snapshot serialization and disk write.
     pub(crate) fn request_background_save_as(&mut self) -> bool {
+        if !self.host.gate_collaboration_action(
+            op_editor_core::CollabGateAction::SaveFork,
+            op_editor_core::CollabEditSource::User,
+        ) {
+            return false;
+        }
+        let collaboration_bound =
+            crate::persistence::requires_background_save_as_fork(self.host.editor_state());
         let Some(path) = crate::persistence::pick_save_as_path(self.host.editor_state()) else {
             return false;
         };
-        self.enqueue_background_save(path, true)
+        if collaboration_bound
+            && !collaboration_fork_target_is_safe(self.current_path.as_deref(), &path)
+        {
+            let detail =
+                "Save As must use a different, resolvable path while collaboration is active.";
+            eprintln!(
+                "[save] rejected collaboration fork target {}: {detail}",
+                path.display()
+            );
+            crate::persistence::show_error_dialog_public(
+                &self.host,
+                op_host_services::doc_io::ErrorKind::Save,
+                Some(&path),
+                detail,
+            );
+            return false;
+        }
+        let identity = (
+            self.host.document_epoch(),
+            self.host.editor_state().document_generation(),
+            self.host.editor_state().document_revision(),
+            path.clone(),
+        );
+        let outcome = self.enqueue_background_save(path, true);
+        if collaboration_bound {
+            return self.confirm_collaboration_fork_enqueue(identity, outcome);
+        }
+        true
     }
 
-    fn enqueue_background_save(&mut self, path: PathBuf, set_current_path: bool) -> bool {
+    fn enqueue_background_save(&mut self, path: PathBuf, set_current_path: bool) -> EnqueueOutcome {
         let outcome = match (set_current_path, self.current_path.clone()) {
             (true, Some(source_path)) => self.save_session.enqueue_clean_bound_op_save_as(
                 self.host.editor_state(),
@@ -436,7 +515,36 @@ impl crate::DesktopApp {
             ),
         };
         eprintln!("[save] request {outcome:?}");
-        true
+        outcome
+    }
+
+    /// Register leave authority only for the exact Save-As request that was
+    /// accepted by `SaveSession`. `AlreadyPending` is not fresh authority: it
+    /// is valid only when the same fork was registered by its original
+    /// accepted enqueue.
+    fn confirm_collaboration_fork_enqueue(
+        &mut self,
+        identity: (u64, u64, u64, PathBuf),
+        outcome: EnqueueOutcome,
+    ) -> bool {
+        match outcome {
+            EnqueueOutcome::Started | EnqueueOutcome::Queued => {
+                if !self.collab_fork_saves.contains(&identity) {
+                    self.collab_fork_saves.push(identity);
+                }
+                true
+            }
+            EnqueueOutcome::AlreadyPending => {
+                let registered = self.collab_fork_saves.contains(&identity);
+                if !registered {
+                    eprintln!(
+                        "[save] refused unregistered pending save as collaboration fork: {}",
+                        identity.3.display()
+                    );
+                }
+                registered
+            }
+        }
     }
 
     /// Drain one non-blocking completion after `DesktopEvent::SaveReady`.
@@ -474,6 +582,19 @@ impl crate::DesktopApp {
             revision,
             result,
         } = completion;
+        let fork = self
+            .collab_fork_saves
+            .iter()
+            .position(|candidate| {
+                candidate.0 == document_epoch
+                    && candidate.1 == generation
+                    && candidate.2 == revision
+                    && candidate.3 == path
+            })
+            .map(|index| {
+                self.collab_fork_saves.remove(index);
+            })
+            .is_some();
         if let Err(error) = result {
             eprintln!("[save] {}: {error}", path.display());
             crate::persistence::show_error_dialog_public(
@@ -522,6 +643,9 @@ impl crate::DesktopApp {
         self.host.mark_editor_state_dirty();
         self.image_search.reset();
         self.rebind_git_session_for_current_path();
+        if fork {
+            self.collab_runtime.leave(&mut self.host);
+        }
         true
     }
 }
@@ -537,7 +661,7 @@ fn can_skip_unchanged_current_save(
 
 fn can_copy_clean_bound_op(state: &EditorState, source: &Path, target: &Path) -> bool {
     !state.is_dirty()
-        && source != target
+        && paths_provably_distinct(source, target)
         && source.is_file()
         && source
             .extension()
@@ -545,227 +669,61 @@ fn can_copy_clean_bound_op(state: &EditorState, source: &Path, target: &Path) ->
             .is_some_and(|extension| extension.eq_ignore_ascii_case("op"))
 }
 
+fn collaboration_fork_target_is_safe(current_path: Option<&Path>, target: &Path) -> bool {
+    current_path.is_none_or(|current| paths_provably_distinct(current, target))
+}
+
+/// Resolve an existing path, or a not-yet-created leaf below an existing
+/// directory, to an absolute comparison identity. Ambiguous paths fail closed:
+/// a collaboration fork must prove that it cannot overwrite the shared path.
+fn path_comparison_identity(path: &Path) -> Option<PathBuf> {
+    match std::fs::canonicalize(path) {
+        Ok(canonical) => return Some(canonical),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return None,
+    }
+    let file_name = path.file_name()?;
+    let parent = path.parent()?;
+    let parent = if parent.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        parent
+    };
+    std::fs::canonicalize(parent)
+        .ok()
+        .map(|canonical_parent| canonical_parent.join(file_name))
+}
+
+fn paths_provably_distinct(left: &Path, right: &Path) -> bool {
+    let Some(left) = path_comparison_identity(left) else {
+        return false;
+    };
+    let Some(right) = path_comparison_identity(right) else {
+        return false;
+    };
+    paths_differ_on_platform(&left, &right)
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn paths_differ_on_platform(left: &Path, right: &Path) -> bool {
+    // Conservatively reject case-only changes on the platforms commonly
+    // backed by case-insensitive filesystems. Existing case-sensitive paths
+    // still canonicalize above; this may reject a valid fork but cannot let an
+    // equivalent shared path through.
+    !left
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&right.to_string_lossy())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn paths_differ_on_platform(left: &Path, right: &Path) -> bool {
+    left != right
+}
+
 #[cfg(test)]
 #[path = "save_session/clean_copy_tests.rs"]
 mod clean_copy_tests;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn temp_op_path(tag: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "openpencil-save-session-{tag}-{}-{}.op",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ))
-    }
-
-    #[test]
-    fn worker_saves_the_captured_revision_not_later_edits() {
-        let path = temp_op_path("snapshot");
-        let mut state = EditorState::new();
-        state.doc.name = Some("captured".into());
-        state.mark_document_changed();
-        let revision = state.document_revision();
-        let mut session = SaveSession::new();
-        assert_eq!(
-            session.enqueue(&state, 0, path.clone(), true, None),
-            EnqueueOutcome::Started
-        );
-        state.doc.name = Some("edited-after-save".into());
-        state.mark_document_changed();
-
-        let completion = session.wait_next().expect("save completion");
-        assert!(completion.result.is_ok());
-        assert_eq!(completion.revision, revision);
-        let loaded =
-            op_host_services::doc_io::load_editor_state(&path, op_editor_core::Locale::EnUs)
-                .expect("load saved snapshot");
-        assert_eq!(loaded.doc.name.as_deref(), Some("captured"));
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn identical_in_flight_request_is_not_duplicated() {
-        let path = temp_op_path("dedupe");
-        let state = EditorState::new();
-        let mut session = SaveSession::new();
-        assert_eq!(
-            session.enqueue(&state, 0, path.clone(), false, None),
-            EnqueueOutcome::Started
-        );
-        assert_eq!(
-            session.enqueue(&state, 0, path.clone(), false, None),
-            EnqueueOutcome::AlreadyPending
-        );
-        assert!(session.wait_next().expect("save completion").result.is_ok());
-        assert!(!session.is_active());
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn pending_target_is_scoped_to_the_document_epoch() {
-        let path = temp_op_path("target-epoch");
-        let state = EditorState::new();
-        let mut session = SaveSession::new();
-        assert_eq!(
-            session.enqueue(&state, 7, path.clone(), true, None),
-            EnqueueOutcome::Started
-        );
-        assert_eq!(session.latest_target(7), Some(path.as_path()));
-        assert_eq!(session.latest_target(8), None);
-        assert!(session.wait_next().expect("save completion").result.is_ok());
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn unchanged_bound_document_skips_snapshot_only_while_the_file_exists() {
-        let path = temp_op_path("unchanged-skip");
-        std::fs::write(&path, b"existing OP").expect("write bound file marker");
-        let mut state = EditorState::new();
-        state.mark_saved_revision();
-
-        assert!(can_skip_unchanged_current_save(
-            &state,
-            Some(&path),
-            &path,
-            false
-        ));
-        assert!(!can_skip_unchanged_current_save(
-            &state,
-            Some(&path),
-            &path,
-            true
-        ));
-        state.mark_document_changed();
-        assert!(!can_skip_unchanged_current_save(
-            &state,
-            Some(&path),
-            &path,
-            false
-        ));
-        std::fs::remove_file(&path).expect("remove bound file marker");
-        state.mark_saved_revision();
-        assert!(!can_skip_unchanged_current_save(
-            &state,
-            Some(&path),
-            &path,
-            false
-        ));
-    }
-
-    #[test]
-    fn next_capture_reuses_only_the_live_in_flight_snapshot() {
-        let path = temp_op_path("capture-anchor");
-        let mut state = EditorState::new();
-        let mut session = SaveSession::new();
-        assert_eq!(
-            session.enqueue(&state, 7, path.clone(), false, None),
-            EnqueueOutcome::Started
-        );
-
-        let first = session.running.as_ref().expect("running snapshot");
-        assert!(std::ptr::eq(
-            session
-                .capture_anchor(7, state.document_generation())
-                .unwrap(),
-            first.snapshot.as_ref()
-        ));
-        assert!(session
-            .capture_anchor(8, state.document_generation())
-            .is_none());
-
-        state.doc.name = Some("new revision".into());
-        state.mark_document_changed();
-        assert_eq!(
-            session.enqueue(&state, 7, path.clone(), false, None),
-            EnqueueOutcome::Queued
-        );
-        let queued = session.queued.as_ref().expect("queued snapshot");
-        assert!(std::ptr::eq(
-            session
-                .capture_anchor(7, state.document_generation())
-                .unwrap(),
-            queued.snapshot.as_ref()
-        ));
-
-        while let Some(completion) = session.wait_next() {
-            assert!(completion.result.is_ok());
-        }
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn queued_requests_coalesce_to_the_latest_revision_and_commit_in_order() {
-        let path = temp_op_path("coalesce");
-        let mut state = EditorState::new();
-        state.doc.name = Some("first".into());
-        state.mark_document_changed();
-        let first_revision = state.document_revision();
-        let mut session = SaveSession::new();
-        assert_eq!(
-            session.enqueue(&state, 0, path.clone(), false, None),
-            EnqueueOutcome::Started
-        );
-
-        state.doc.name = Some("superseded".into());
-        state.mark_document_changed();
-        assert_eq!(
-            session.enqueue(&state, 0, path.clone(), false, None),
-            EnqueueOutcome::Queued
-        );
-        state.doc.name = Some("latest".into());
-        state.mark_document_changed();
-        let latest_revision = state.document_revision();
-        assert_eq!(
-            session.enqueue(&state, 0, path.clone(), false, None),
-            EnqueueOutcome::Queued
-        );
-
-        let first = session.wait_next().expect("first save completion");
-        assert!(first.result.is_ok());
-        assert_eq!(first.revision, first_revision);
-        let latest = session.wait_next().expect("latest save completion");
-        assert!(latest.result.is_ok());
-        assert_eq!(latest.revision, latest_revision);
-        assert!(!session.is_active());
-
-        let loaded =
-            op_host_services::doc_io::load_editor_state(&path, op_editor_core::Locale::EnUs)
-                .expect("load final saved snapshot");
-        assert_eq!(loaded.doc.name.as_deref(), Some("latest"));
-        let _ = std::fs::remove_file(path);
-    }
-
-    #[test]
-    fn stale_epoch_ack_cannot_rebind_save_as_to_a_replaced_document() {
-        let mut app = crate::DesktopApp::new(None);
-        let old_epoch = app.host.document_epoch();
-        let old_generation = app.host.editor_state().document_generation();
-        let old_revision = app.host.editor_state().document_revision();
-        app.host.replace_editor_state(EditorState::new());
-        assert_ne!(app.host.document_epoch(), old_epoch);
-
-        let applied = app.apply_save_completion(SaveCompletion {
-            path: PathBuf::from("stale-save-as.op"),
-            set_current_path: true,
-            document_epoch: old_epoch,
-            generation: old_generation,
-            revision: old_revision,
-            result: Ok(()),
-        });
-
-        assert!(applied);
-        assert!(app.current_path.is_none());
-        assert!(app
-            .host
-            .editor_state()
-            .editor_ui
-            .file_name_display
-            .is_none());
-    }
-}
+#[path = "save_session/tests.rs"]
+mod tests;

@@ -1,0 +1,20 @@
+[package]
+name = "op-collab"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Transport-free collaboration protocol and exact document operations for OpenPencil"
+
+[dependencies]
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+op-util = { path = "../op-util" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = "1.5"
+thiserror = { workspace = true }
+zeroize = "1"
+
+[dev-dependencies]
+static_assertions = "1"

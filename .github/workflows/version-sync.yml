@@ -24,12 +24,16 @@ on:
       - "scripts/sync-version.sh"
       - "scripts/sync-version.test.sh"
       - "scripts/bundle-macos.sh"
+      - "crates/op-host-desktop/Info.plist"
       - "scripts/package-windows.nsi"
       - "scripts/install-op.sh"
       - "tools/check-version-sync.sh"
       - "tools/check-version-sync.test.sh"
       - "tools/check-version-sync-policy.test-cases.sh"
       - "tools/bundle-macos.sh"
+      - "tools/macos-local-network-plist.sh"
+      - "tools/check-macos-bundle-plist.sh"
+      - "tools/check-macos-bundle-plist.test.sh"
       - ".githooks/pre-commit"
       - ".github/workflows/rust-release.yml"
       - ".github/workflows/version-sync.yml"
@@ -56,12 +60,16 @@ on:
       - "scripts/sync-version.sh"
       - "scripts/sync-version.test.sh"
       - "scripts/bundle-macos.sh"
+      - "crates/op-host-desktop/Info.plist"
       - "scripts/package-windows.nsi"
       - "scripts/install-op.sh"
       - "tools/check-version-sync.sh"
       - "tools/check-version-sync.test.sh"
       - "tools/check-version-sync-policy.test-cases.sh"
       - "tools/bundle-macos.sh"
+      - "tools/macos-local-network-plist.sh"
+      - "tools/check-macos-bundle-plist.sh"
+      - "tools/check-macos-bundle-plist.test.sh"
       - ".githooks/pre-commit"
       - ".github/workflows/rust-release.yml"
       - ".github/workflows/version-sync.yml"
@@ -105,3 +113,9 @@ jobs:
 
       - name: Check repository version consistency
         run: tools/check-version-sync.sh
+
+      - name: Test macOS bundle privacy metadata guard
+        run: bash tools/check-macos-bundle-plist.test.sh
+
+      - name: Check macOS bundle privacy metadata
+        run: bash tools/check-macos-bundle-plist.sh

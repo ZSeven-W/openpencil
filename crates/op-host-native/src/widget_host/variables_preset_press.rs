@@ -168,6 +168,10 @@ impl WidgetHostNative {
                 // popover swallows them).
             }
             PresetMenuHit::Load(idx) => {
+                if !self.collab_allows_variables_mutation() {
+                    self.close_preset_menu();
+                    return true;
+                }
                 // handleLoadPreset — merge + close the menu. One
                 // history snapshot per gesture, like the other
                 // variables-panel mutations.
@@ -192,6 +196,10 @@ impl WidgetHostNative {
                 }
             }
             PresetMenuHit::Import => {
+                if !self.collab_allows_variables_mutation() {
+                    self.close_preset_menu();
+                    return true;
+                }
                 // handleImportFromFile closes the menu, then the host
                 // runs the file dialog (pending IO drained desktop-side).
                 self.close_preset_menu();

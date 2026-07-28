@@ -111,8 +111,19 @@ pub(super) fn apply_insert_node_on_active_page(
     height: i32,
     fill_hex: &Option<String>,
     target_parent: &NodeId,
-) -> bool {
-    state.cmd_insert_node(kind, name, x, y, width, height, fill_hex, target_parent)
+    allocator: &mut dyn crate::IdAllocator,
+) -> Result<bool, crate::IdAllocError> {
+    state.cmd_insert_node_with_allocator(
+        kind,
+        name,
+        x,
+        y,
+        width,
+        height,
+        fill_hex,
+        target_parent,
+        allocator,
+    )
 }
 
 pub(super) fn apply_import_svg_on_active_page(
@@ -121,21 +132,19 @@ pub(super) fn apply_import_svg_on_active_page(
     x: i32,
     y: i32,
     target_parent: &NodeId,
-) -> bool {
-    let Some(mut next_id) = state.next_node_id_seed() else {
-        return false;
-    };
+    allocator: &mut dyn crate::IdAllocator,
+) -> Result<bool, crate::IdAllocError> {
     if target_parent.is_real() {
         match find_node(state.active_children(), target_parent) {
             Some(parent) if parent.is_container() => {}
-            _ => return false,
+            _ => return Ok(false),
         }
     }
     // `import_svg` pushes its own history snapshot when it inserts ≥ 1
     // node.
-    let count = state.import_svg(&mut next_id, svg, (x as f64, y as f64));
+    let count = state.import_svg_with_allocator(allocator, svg, (x as f64, y as f64))?;
     if count == 0 {
-        return false;
+        return Ok(false);
     }
     if target_parent.is_real() {
         let Some(imported_root) = state
@@ -143,10 +152,55 @@ pub(super) fn apply_import_svg_on_active_page(
             .last()
             .map(|node| NodeId::new(node.id_str()))
         else {
-            return false;
+            return Ok(false);
         };
-        imported_root.is_real() && state.cmd_move_node(&imported_root, target_parent, None)
+        Ok(imported_root.is_real() && state.cmd_move_node(&imported_root, target_parent, None))
     } else {
-        true
+        Ok(true)
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn apply_kit_component_on_page(
+    state: &mut EditorState,
+    kit_id: &str,
+    component_id: &str,
+    target_parent: &NodeId,
+    doc_x: f64,
+    doc_y: f64,
+    overrides_json: Option<&str>,
+    page_id: Option<&str>,
+    allocator: &mut dyn crate::IdAllocator,
+) -> Result<bool, crate::IdAllocError> {
+    let Some(target_page_index) = command_page_index(state, page_id) else {
+        return Ok(false);
+    };
+    let original_page_index = state.ui.active_page_index;
+    let original_selection = state.selection.clone();
+    let cross_page = page_id.is_some() && target_page_index != original_page_index;
+    if page_id.is_some() {
+        state.ui.active_page_index = target_page_index;
+    }
+    let changed = state
+        .instantiate_kit_component_under_parent_with_allocator(
+            kit_id,
+            component_id,
+            target_parent,
+            doc_x,
+            doc_y,
+            overrides_json,
+            allocator,
+        )
+        .map(|id| id.is_some());
+    if cross_page {
+        state.ui.active_page_index = original_page_index;
+        state.selection = original_selection.clone();
+        if matches!(&changed, Ok(true)) {
+            if let Some(snapshot) = state.history.past.back_mut() {
+                snapshot.active_page_index = original_page_index;
+                snapshot.selection = original_selection;
+            }
+        }
+    }
+    changed
 }

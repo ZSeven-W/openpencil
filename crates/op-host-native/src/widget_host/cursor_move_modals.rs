@@ -103,6 +103,10 @@ impl WidgetHostNative {
         }
         if let Some(state) = self.editor_state.ui.color_picker.clone() {
             if let Some(kind) = state.drag {
+                if !self.collab_allows_color_picker_mutation() {
+                    self.editor_state.color_picker_set_drag(None);
+                    return Some(true);
+                }
                 use op_editor_core::ui_draft::ColorPickerDrag;
                 use op_editor_ui::widgets::color_picker::ColorPicker;
                 let picker = ColorPicker::for_state(&self.editor_state, state.clone());

@@ -501,6 +501,23 @@ impl WidgetHostNative {
             picker.paint(&mut cx, picker_rect);
         }
 
+        // Collaboration popover — a real shared widget anchored to the
+        // collaboration status chip. It consumes only sanitized UI state;
+        // the native session actor drains queued actions separately.
+        if let Some(panel) =
+            op_editor_ui::widgets::CollabPanel::for_editor_ui(&self.editor_state.editor_ui)
+        {
+            let anchor = top_bar.collaboration_chip_rect_estimated(top_bar_rect);
+            let panel_rect = panel.rect_at(
+                anchor,
+                Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+            );
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            panel.paint(&mut cx, panel_rect);
+        }
+
         // 10b. File-menu dropdown — anchored under TopBar's
         //      folder+chevron button.
         if ui.file_menu_open {

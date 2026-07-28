@@ -5,7 +5,10 @@
 use std::sync::OnceLock;
 
 use crate::status::AuthStatus;
-use crate::{AuthInitConfig, REQUIRED_ABI_VERSION};
+use crate::{
+    supports_base_abi, AuthInitConfig, CollabTicketProvider, MAX_SUPPORTED_ABI_VERSION,
+    REQUIRED_ABI_VERSION, UNAVAILABLE_COLLAB_TICKET_PROVIDER,
+};
 
 #[repr(C)]
 struct OpAuthStatus {
@@ -28,17 +31,42 @@ extern "C" {
 pub(crate) fn available() -> bool {
     static ABI_OK: OnceLock<bool> = OnceLock::new();
     *ABI_OK.get_or_init(|| {
-        // SAFETY: no arguments; the symbol exists whenever this module compiles.
-        let version = unsafe { op_auth_abi_version() };
-        let matches = version == REQUIRED_ABI_VERSION;
-        if !matches {
+        let version = linked_abi_version();
+        let supported = supports_base_abi(version);
+        if !supported {
             eprintln!(
-                "op-auth-bridge: prebuilt library ABI {version} does not match \
-                 required {REQUIRED_ABI_VERSION}; account features disabled"
+                "op-auth-bridge: prebuilt library ABI {version} is outside \
+                 supported range {REQUIRED_ABI_VERSION}..={MAX_SUPPORTED_ABI_VERSION}; \
+                 account features disabled"
             );
         }
-        matches
+        supported
     })
+}
+
+fn linked_abi_version() -> u32 {
+    static ABI_VERSION: OnceLock<u32> = OnceLock::new();
+    *ABI_VERSION.get_or_init(|| {
+        // SAFETY: no arguments; the symbol exists whenever this module compiles.
+        unsafe { op_auth_abi_version() }
+    })
+}
+
+pub(crate) fn collab_ticket_provider() -> &'static dyn CollabTicketProvider {
+    if !available() {
+        return &UNAVAILABLE_COLLAB_TICKET_PROVIDER;
+    }
+    #[cfg(op_auth_collab_ticket_prebuilt)]
+    {
+        if linked_abi_version() >= crate::COLLAB_TICKET_ABI_VERSION {
+            return crate::real_collab_ticket::provider();
+        }
+        &UNAVAILABLE_COLLAB_TICKET_PROVIDER
+    }
+    #[cfg(not(op_auth_collab_ticket_prebuilt))]
+    {
+        &UNAVAILABLE_COLLAB_TICKET_PROVIDER
+    }
 }
 
 pub(crate) fn init(config: &AuthInitConfig) -> bool {

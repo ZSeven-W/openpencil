@@ -23,6 +23,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.modelQueryFailedRunLogin" => "{{name}} のモデル取得に失敗しました。{{command}} を一度実行して認証してください。",
         "providerProbe.modelQueryNeedsAuth" => "{{name}} のモデル取得には認証が必要です。{{command}} を一度実行してサインインしてください。",
         "providerProbe.unrecognizedModelCatalog" => "{{name}} が認識できないモデル一覧を返しました",
-        _ => return None,
+        _ => return super::ja_collab::lookup(key),
     })
 }

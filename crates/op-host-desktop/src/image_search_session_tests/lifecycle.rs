@@ -52,6 +52,64 @@ fn poll_into_applies_finished_job_to_placeholder_frame() {
 }
 
 #[test]
+fn poll_discards_standalone_image_result_after_collaboration_binds() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state
+        .active_children_mut()
+        .push(image_node("img1", "", Some("burger fries")));
+    let revision = state.document_revision();
+
+    // Model the race explicitly: the external lookup was launched while the
+    // document was standalone, then the editor joined as a collaborator
+    // before the worker result reached the UI-thread sink.
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(Some("https://result.example.com/burger.jpg".to_string()))
+        .unwrap();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["img1".to_string()]),
+        jobs: vec![ImageSearchJob {
+            node_id: NodeId::new("img1"),
+            intent: None,
+            rx,
+        }],
+        ..Default::default()
+    };
+    assert!(state.editor_ui.collab.set_authenticated_session(
+        op_editor_core::CollabConnectionPhase::Active,
+        op_editor_core::AuthenticatedCollabSession {
+            session_name: "Shared design".into(),
+            role: op_editor_core::CollabUiRole::Editor,
+            share_endpoint: None,
+        },
+        Vec::new(),
+    ));
+
+    assert!(
+        session.poll_into(&mut state),
+        "discarding the result publishes a collaboration notice"
+    );
+    let PenNode::Image(image) = &state.active_children()[0] else {
+        panic!("image")
+    };
+    assert!(image.src.is_empty(), "external result must not land");
+    assert_eq!(
+        state.document_revision(),
+        revision,
+        "a rejected result must not dirty document content"
+    );
+    assert!(session.jobs.is_empty());
+    assert!(session.in_flight.is_empty());
+    assert!(!session.completed.contains("img1"));
+    assert_eq!(
+        state.editor_ui.collab.notice.map(|notice| notice.kind),
+        Some(op_editor_core::CollabNoticeKind::UnsupportedEdit(
+            op_editor_core::CollabUnsupportedFeature::ExternalAssets,
+        ))
+    );
+}
+
+#[test]
 fn successful_apply_does_not_suppress_later_unfilled_retry() {
     let mut state = EditorState::default();
     state.active_children_mut().clear();

@@ -29,6 +29,8 @@ jobs:
       - name: Forward — bucket A crates compile on wasm32
         run: |
           cargo check --target wasm32-unknown-unknown \
+            -p op-collab --no-default-features
+          cargo check --target wasm32-unknown-unknown \
             -p op-host-web --no-default-features --features web
 
   wasm32-deny:

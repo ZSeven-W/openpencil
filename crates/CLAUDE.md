@@ -33,18 +33,20 @@ crates/
 ├── op-editor-ui/         Platform-free widgets + RenderBackend facade (wasm32-clean); re-exports the render scene from jian-scene + scene_vars from op-editor-core
 ├── op-editor-core/       Canonical `.op` (PenDocument) editor state + EditorCommand + scene_vars (design-variable resolution)
 ├── op-editor-host-core/  Transport-free host state machines shared by all hosts
+├── op-collab/            Open, transport-free collaboration protocol + canonical hash + exact document apply (wasm32-clean)
 ├── op-host-native/       Native host lib: WidgetHostNative + skia-safe GL backend (desktop + mobile)
 ├── op-host-web/          Browser bundle entry: wasm32-unknown-unknown cdylib, CanvasKit renderer
 ├── op-host-desktop/      Desktop binary `openpencil-desktop` (winit + skia-safe GL); also the `--serve-web` daemon
 ├── op-cli/               `op` command-line tool
-├── op-util/              Dependency-free leaf: hex-colour parsing + JSON / XML escaping
+├── op-util/              Dependency-free leaf: shared collaboration-id grammar + hex-colour / JSON / XML helpers
 └── …                     op-mcp / op-ai / op-ai-skills / op-codegen / op-orchestrator / op-figma /
                           op-git / op-opmerge / op-pen-loader / op-design-lint / op-config-store /
                           op-process-io / op-acp / op-i18n / op-rpc-transport / op-smoke /
                           op-host-services / op-host-web-server / op-html / op-auth-bridge / op-web-sdk
 ```
 
-`op-util` is the workspace's single source for three helpers that had drifted
+`op-util` is the workspace's single source for the collaboration namespace/id
+grammar and three helpers that had drifted
 into many copies: `hex_color` (nine divergent implementations, one of which
 panicked on non-ASCII input), `json_escape` (one copy was lossy), and
 `xml_escape` (one copy omitted the quote entity — an attribute-injection gap).

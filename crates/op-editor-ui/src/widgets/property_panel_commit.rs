@@ -238,6 +238,34 @@ pub fn commit_effect_param_focus(state: &mut EditorState) -> bool {
     true
 }
 
+/// Drop an effect-parameter draft without applying it.
+///
+/// Collaboration gates use this after a role/phase change so a draft that was
+/// focused while editable cannot commit after the session becomes read-only.
+pub fn discard_effect_param_focus(state: &mut EditorState) -> bool {
+    if state.editor_ui.effect_param_focus.take().is_none() {
+        return false;
+    }
+    clear_property_draft(state);
+    true
+}
+
+/// Drop a PropertyPanel draft without applying it.
+pub fn discard_property_focus(state: &mut EditorState) -> bool {
+    if state.ui.property_focus.take().is_none() {
+        return false;
+    }
+    clear_property_draft(state);
+    true
+}
+
+fn clear_property_draft(state: &mut EditorState) {
+    state.ui.property_draft_select_all = false;
+    state.ui.property_input.set_text("");
+    state.ui.property_input_draft.clear();
+    state.ui.property_caret_pos = 0;
+}
+
 /// Commit the focused property input. Returns `true` when a focus was
 /// taken, i.e. the host should mark dirty.
 ///

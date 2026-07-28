@@ -49,6 +49,34 @@ impl WidgetHostNative {
         // front covers every arm below, including the resize + close
         // arms that used to drop the draft on this host.
         self.commit_property_focus_if_any();
+        let edit_intent = matches!(
+            &hit,
+            VariablesPanelHit::RowMenuRename(_)
+                | VariablesPanelHit::RowMenuDelete(_)
+                | VariablesPanelHit::ColorSwatch { .. }
+                | VariablesPanelHit::ThemeMenuRename(_)
+                | VariablesPanelHit::ThemeMenuDelete(_)
+                | VariablesPanelHit::AddTheme
+                | VariablesPanelHit::AddVariant
+                | VariablesPanelHit::VariantMenuRename(_)
+                | VariablesPanelHit::VariantMenuDelete(_)
+                | VariablesPanelHit::AddVariableColor
+                | VariablesPanelHit::AddVariableNumber
+                | VariablesPanelHit::AddVariableString
+                | VariablesPanelHit::NameCell(_)
+                | VariablesPanelHit::ValueCell { .. }
+                | VariablesPanelHit::Row(_)
+        );
+        if edit_intent
+            && !self.collab_allows_document_mutation(
+                op_editor_core::CollabDocumentMutation::Unsupported(
+                    op_editor_core::CollabUnsupportedFeature::VariablesThemes,
+                ),
+            )
+        {
+            self.close_variable_menus();
+            return true;
+        }
         match hit {
             VariablesPanelHit::Resize(edge) => {
                 // Edge press arms a resize drag; cursor moves write the
@@ -163,6 +191,9 @@ impl WidgetHostNative {
     }
 
     fn add_variable(&mut self, base: &str, kind: VariableKind, default: VariableScalar) -> bool {
+        if !self.collab_allows_variables_mutation() {
+            return true;
+        }
         vars_flow::add_variable(&mut self.editor_state, base, kind, default, self.now_ms);
         self.mark_dirty();
         true

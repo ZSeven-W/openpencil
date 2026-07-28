@@ -22,6 +22,54 @@ impl DesktopApp {
             self.redraw_dirty = true;
             return false;
         }
+        if self.collab_runtime.refresh_availability(&mut self.host) {
+            self.redraw_dirty = true;
+        }
+        let collaboration_transition_pending = matches!(
+            self.host
+                .editor_state()
+                .editor_ui
+                .collab
+                .pending_action
+                .as_ref(),
+            Some(
+                op_editor_core::CollabUiAction::Start
+                    | op_editor_core::CollabUiAction::JoinDiscovered { .. }
+                    | op_editor_core::CollabUiAction::JoinAddress { .. }
+                    | op_editor_core::CollabUiAction::Retry
+            )
+        );
+        let collaboration_transition_ready = if collaboration_transition_pending {
+            self.settle_document_io_before_collaboration();
+            self.settle_git_before_collaboration_transition()
+        } else {
+            true
+        };
+        if collaboration_transition_ready && self.collab_runtime.drain_ui_action(&mut self.host) {
+            self.redraw_dirty = true;
+        }
+        if self.collab_runtime.take_save_as_fork_request() {
+            self.request_background_save_as();
+            self.redraw_dirty = true;
+        }
+        if self.collab_runtime.poll(&mut self.host) {
+            self.redraw_dirty = true;
+        }
+        for status in self.collab_runtime.drain_status_events() {
+            eprintln!("[collab] {status:?}");
+        }
+        let collab_cursor = self.host.canvas_doc_point(
+            self.cursor_x,
+            self.cursor_y,
+            self.viewport_width,
+            self.viewport_height,
+        );
+        if self
+            .collab_runtime
+            .publish_local_presence(&mut self.host, collab_cursor)
+        {
+            self.redraw_dirty = true;
+        }
         // Route any accessibility action requests (#67) from the
         // screen reader back into host state before painting, so a
         // Focus / activation reflects in this frame.
@@ -269,6 +317,9 @@ impl DesktopApp {
         // fetches; store landed bytes into the painter's
         // shared cache so this frame (or the next) draws them.
         if self.remote_images.pump() {
+            self.redraw_dirty = true;
+        }
+        if self.collab_avatars.pump() {
             self.redraw_dirty = true;
         }
         if let Some(backend) = self.backend.as_mut() {

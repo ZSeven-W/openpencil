@@ -5,6 +5,7 @@
 //! repeated paste works). Cut is atomic — a failed delete leg
 //! restores the prior clipboard so a no-op cut looks like a no-op.
 
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
@@ -56,22 +57,32 @@ impl EditorState {
     /// Returns the new ids, or empty on no-op (empty clipboard / id
     /// overflow).
     pub fn paste_clipboard(&mut self, next_id: &mut u64, offset_doc_px: f64) -> Vec<NodeId> {
-        if self.clipboard.is_empty() {
-            return Vec::new();
-        }
-        let Some(safe) = self.max_node_id().checked_add(1) else {
+        let Ok(mut allocator) = SequentialIdAllocator::for_document(&self.doc, *next_id) else {
             return Vec::new();
         };
-        *next_id = (*next_id).max(safe);
-        // Verify total subtree headroom before any mint.
-        let total: u64 = self.clipboard.iter().map(walkers::subtree_size).sum();
-        if next_id.checked_add(total).is_none() {
-            return Vec::new();
+        let result = self
+            .paste_clipboard_with_allocator(&mut allocator, offset_doc_px)
+            .unwrap_or_default();
+        if !result.is_empty() {
+            *next_id = allocator.next_counter();
+        }
+        result
+    }
+
+    /// Allocator-aware form of [`Self::paste_clipboard`].
+    pub fn paste_clipboard_with_allocator(
+        &mut self,
+        allocator: &mut dyn IdAllocator,
+        offset_doc_px: f64,
+    ) -> Result<Vec<NodeId>, IdAllocError> {
+        if self.clipboard.is_empty() {
+            return Ok(Vec::new());
         }
         let mut taken = self.collect_node_ids();
         let originals = self.clipboard.clone();
         let anchor = self.selection.set.first().cloned();
-        let children = self.active_children_mut();
+        let mut staged_children = self.active_children().to_vec();
+        let children = &mut staged_children;
         // Resolve the paste target before any mutation.
         let (parent, mut insert_index): (Option<NodeId>, Option<usize>) = match anchor
             .as_ref()
@@ -104,20 +115,20 @@ impl EditorState {
                         |n| matches!(n, PenNode::Frame(fr) if fr.reusable == Some(true)),
                     );
                     if live_reusable {
-                        if let Some(minted) = crate::mutators::duplicate_in_children(
+                        if let Some(minted) = crate::mutators::duplicate_in_children_with_allocator(
                             children,
                             &cid,
-                            next_id,
+                            allocator,
                             &mut taken,
                             offset_doc_px,
-                        ) {
+                        )? {
                             new_ids.push(minted);
                             continue;
                         }
                     }
                 }
             }
-            let mut clone = walkers::deep_clone_with_new_ids(original, next_id, &mut taken);
+            let mut clone = walkers::deep_clone_with_allocator(original, allocator, &mut taken)?;
             walkers::translate_subtree(&mut clone, offset_doc_px, offset_doc_px);
             let id = NodeId::new_opt(clone.id_str());
             if !walkers::insert_into_parent(children, parent.as_ref(), insert_index, clone) {
@@ -131,9 +142,10 @@ impl EditorState {
             }
         }
         if !new_ids.is_empty() {
+            *self.active_children_mut() = staged_children;
             self.selection.anchor = new_ids[0].clone();
             self.selection.set = new_ids.clone();
         }
-        new_ids
+        Ok(new_ids)
     }
 }

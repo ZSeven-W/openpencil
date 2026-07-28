@@ -130,6 +130,10 @@ pub struct CanvasViewport<'a> {
     /// carries no node names); painted screen-space above each root
     /// frame (TS `drawFrameLabelColored`).
     pub(super) frame_labels: Vec<FrameLabel>,
+    /// Bounded collaboration cursor/selection projection. It is painted
+    /// below the local selection overlay, so local edit affordances remain
+    /// visually authoritative.
+    pub(super) collab_presence: Vec<crate::widgets::canvas_collab_presence::CollabPresencePaint>,
     /// True while a pan/zoom gesture is live — the scene paints in
     /// interactive-degrade mode (effect layers + sub-pixel leaves
     /// skip); the host schedules a full-quality repaint on gesture end.
@@ -383,6 +387,13 @@ impl<'a> Widget for CanvasViewport<'a> {
                 viewport_origin,
                 viewport,
                 rect,
+            );
+            super::canvas_collab_presence::paint(
+                cx,
+                &page.children,
+                &self.collab_presence,
+                rect,
+                viewport,
             );
         }
 

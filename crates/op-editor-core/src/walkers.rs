@@ -6,6 +6,7 @@
 //! reached through the [`PenNodeExt`] uniform-access trait so each
 //! walk stays variant-agnostic.
 
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use jian_ops_schema::node::PenNode;
@@ -284,13 +285,10 @@ pub fn max_id_walk(node: &PenNode) -> u64 {
 /// advancing past any candidate already present in `taken`. Returns
 /// `None` only on `u64` counter exhaustion.
 pub fn alloc_n_id(next_id: &mut u64, taken: &mut HashSet<NodeId>) -> Option<NodeId> {
-    loop {
-        let candidate = NodeId::new(format!("n{}", *next_id));
-        *next_id = next_id.checked_add(1)?;
-        if taken.insert(candidate.clone()) {
-            return Some(candidate);
-        }
-    }
+    let mut allocator = SequentialIdAllocator::new(*next_id);
+    let allocated = allocator.allocate(taken).ok();
+    *next_id = allocator.next_counter();
+    allocated
 }
 
 /// Node count in `node`'s subtree, including `node` itself.
@@ -311,18 +309,46 @@ pub fn deep_clone_with_new_ids(
     next_id: &mut u64,
     taken: &mut HashSet<NodeId>,
 ) -> PenNode {
+    try_deep_clone_with_new_ids(node, next_id, taken)
+        .expect("legacy deep clone preflight must reserve sufficient id headroom")
+}
+
+/// Typed standalone form of [`deep_clone_with_new_ids`].
+///
+/// New code should prefer [`deep_clone_with_allocator`] so a session-owned
+/// collaboration namespace can flow through the whole subtree.
+pub fn try_deep_clone_with_new_ids(
+    node: &PenNode,
+    next_id: &mut u64,
+    taken: &mut HashSet<NodeId>,
+) -> Result<PenNode, IdAllocError> {
+    let mut allocator = SequentialIdAllocator::new(*next_id);
+    let result = deep_clone_with_allocator(node, &mut allocator, taken);
+    *next_id = allocator.next_counter();
+    result
+}
+
+/// Deep-clone a subtree while allocating every canonical id from `allocator`.
+///
+/// On exhaustion no partial node is returned and no fallback id is fabricated.
+/// Allocator counters may advance on failure; session allocators deliberately
+/// never reuse an id attempt.
+pub fn deep_clone_with_allocator(
+    node: &PenNode,
+    allocator: &mut dyn IdAllocator,
+    taken: &mut HashSet<NodeId>,
+) -> Result<PenNode, IdAllocError> {
     let mut clone = node.clone();
-    let new_id = alloc_n_id(next_id, taken)
-        .unwrap_or_else(|| NodeId::new(format!("n{}-{}", u64::MAX, taken.len())));
+    let new_id = allocator.allocate(taken)?;
     clone.base_mut().id = new_id.into();
     if let Some(children) = clone.children_mut() {
-        let fresh: Vec<PenNode> = children
+        let fresh: Result<Vec<PenNode>, IdAllocError> = children
             .iter()
-            .map(|c| deep_clone_with_new_ids(c, next_id, taken))
+            .map(|child| deep_clone_with_allocator(child, allocator, taken))
             .collect();
-        *children = fresh;
+        *children = fresh?;
     }
-    clone
+    Ok(clone)
 }
 
 /// Translate the subtree rooted at `node` by `(dx, dy)` document px.

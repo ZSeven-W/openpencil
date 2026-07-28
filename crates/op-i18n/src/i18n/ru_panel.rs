@@ -21,6 +21,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.modelQueryFailedRunLogin" => "Запрос моделей {{name}} завершился ошибкой. Выполните {{command}} один раз для аутентификации.",
         "providerProbe.modelQueryNeedsAuth" => "Для запроса моделей {{name}} требуется аутентификация. Выполните {{command}} один раз, чтобы войти.",
         "providerProbe.unrecognizedModelCatalog" => "{{name}} вернул нераспознанный каталог моделей",
-        _ => return None,
+        _ => return super::ru_collab::lookup(key),
     })
 }

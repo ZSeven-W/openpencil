@@ -27,6 +27,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "การขอรายการโมเดลของ {{name}} ต้องยืนยันตัวตน เรียกใช้ {{command}} หนึ่งครั้งเพื่อลงชื่อเข้าใช้"
         }
         "providerProbe.unrecognizedModelCatalog" => "{{name}} ส่งคืนรายการโมเดลที่ไม่รู้จัก",
-        _ => return None,
+        _ => return super::th_collab::lookup(key),
     })
 }

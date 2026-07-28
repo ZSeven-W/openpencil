@@ -6,6 +6,7 @@
 //! platform glue (`mark_dirty`, scene caches, layer-panel scrolling,
 //! hover-probe caches, drag-state structs) in their thin wrappers.
 
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::selection_resolve::{resolve_canvas_depth_targets, CanvasDepthTargets};
 use crate::state::EditorState;
 use crate::NodeId;
@@ -144,23 +145,111 @@ pub fn activate_node_drag(
     total_dx: f64,
     total_dy: f64,
 ) -> NodeDragActivation {
-    // Once the gesture becomes a drag it cannot be the first half of a
-    // later double-click drill.
-    state.editor_ui.last_canvas_click = None;
-    let option_source_ids: Vec<NodeId> = state.selection.set.to_vec();
-    if alt_held
-        && !option_source_ids.is_empty()
-        && state.duplicate_selected(next_node_id, 0.0).is_some()
-    {
-        let _ = state.move_selected_in_layout_direction(total_dx, total_dy);
-        NodeDragActivation {
-            option_drag_source_ids: option_source_ids,
-            duplicated: true,
-        }
-    } else {
-        NodeDragActivation {
+    let Ok(mut allocator) = SequentialIdAllocator::for_document(&state.doc, *next_node_id) else {
+        state.editor_ui.last_canvas_click = None;
+        return NodeDragActivation {
             option_drag_source_ids: Vec::new(),
             duplicated: false,
+        };
+    };
+    match activate_node_drag_with_allocator(state, &mut allocator, alt_held, total_dx, total_dy) {
+        Ok(activation) => {
+            if activation.duplicated {
+                *next_node_id = allocator.next_counter();
+            }
+            activation
         }
+        Err(_) => {
+            // Preserve the legacy infallible gesture behavior.
+            state.editor_ui.last_canvas_click = None;
+            NodeDragActivation {
+                option_drag_source_ids: Vec::new(),
+                duplicated: false,
+            }
+        }
+    }
+}
+
+/// Allocator-aware form of [`activate_node_drag`].
+///
+/// An allocation failure leaves the editor document, selection, and
+/// double-click tracker unchanged.
+pub fn activate_node_drag_with_allocator(
+    state: &mut EditorState,
+    allocator: &mut dyn IdAllocator,
+    alt_held: bool,
+    total_dx: f64,
+    total_dy: f64,
+) -> Result<NodeDragActivation, IdAllocError> {
+    // Once the gesture becomes a drag it cannot be the first half of a
+    // later double-click drill.
+    let previous_canvas_click = state.editor_ui.last_canvas_click.take();
+    let option_source_ids: Vec<NodeId> = state.selection.set.to_vec();
+    let duplicated = if alt_held && !option_source_ids.is_empty() {
+        match state.duplicate_selected_with_allocator(allocator, 0.0) {
+            Ok(result) => result.is_some(),
+            Err(error) => {
+                state.editor_ui.last_canvas_click = previous_canvas_click;
+                return Err(error);
+            }
+        }
+    } else {
+        false
+    };
+    if duplicated {
+        let _ = state.move_selected_in_layout_direction(total_dx, total_dy);
+        Ok(NodeDragActivation {
+            option_drag_source_ids: option_source_ids,
+            duplicated: true,
+        })
+    } else {
+        Ok(NodeDragActivation {
+            option_drag_source_ids: Vec::new(),
+            duplicated: false,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::id_allocator::{NamespacedIdAllocator, PeerNamespace};
+    use crate::test_support::{rect, state_with};
+
+    #[test]
+    fn allocator_aware_alt_drag_uses_session_namespace() {
+        let mut state = state_with(vec![rect("n1", "Rectangle", 1.0, 2.0, 10.0, 10.0)]);
+        state.set_single_selection(NodeId::new("n1"));
+        state.editor_ui.last_canvas_click = Some((NodeId::new("n1"), 10));
+        let namespace = PeerNamespace::try_from("drag-peer").unwrap();
+        let mut allocator = NamespacedIdAllocator::new(namespace, 0);
+
+        let activation =
+            activate_node_drag_with_allocator(&mut state, &mut allocator, true, 3.0, 4.0).unwrap();
+
+        assert!(activation.duplicated);
+        assert_eq!(activation.option_drag_source_ids, vec![NodeId::new("n1")]);
+        assert_eq!(state.selection.set.len(), 1);
+        assert!(state.selection.anchor.as_str().starts_with("c_drag-peer_"));
+        assert!(state.editor_ui.last_canvas_click.is_none());
+    }
+
+    #[test]
+    fn allocator_failure_is_editor_state_atomic() {
+        let mut state = state_with(vec![rect("n1", "Rectangle", 1.0, 2.0, 10.0, 10.0)]);
+        state.set_single_selection(NodeId::new("n1"));
+        state.editor_ui.last_canvas_click = Some((NodeId::new("n1"), 10));
+        let before_doc = state.doc.clone();
+        let before_selection = state.selection.clone();
+        let before_click = state.editor_ui.last_canvas_click.clone();
+        let namespace = PeerNamespace::try_from("drag-peer").unwrap();
+        let mut allocator = NamespacedIdAllocator::new(namespace, u64::MAX);
+
+        let result = activate_node_drag_with_allocator(&mut state, &mut allocator, true, 3.0, 4.0);
+
+        assert_eq!(result.err(), Some(IdAllocError::CounterExhausted));
+        assert_eq!(state.doc, before_doc);
+        assert_eq!(state.selection, before_selection);
+        assert_eq!(state.editor_ui.last_canvas_click, before_click);
     }
 }

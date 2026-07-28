@@ -1,0 +1,49 @@
+name: P2P collaboration platform acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# These jobs intentionally require dedicated physical runners. Generic hosted
+# networks often suppress multicast, so a green hosted build is not accepted as
+# mDNS platform evidence. Register one runner per OS with the openpencil-mdns
+# label and multicast access to its local LAN.
+jobs:
+  mdns:
+    name: ${{ matrix.platform }} real multicast
+    runs-on: [self-hosted, '${{ matrix.runner_os }}', openpencil-mdns]
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            runner_os: macOS
+          - platform: Linux
+            runner_os: Linux
+          - platform: Windows
+            runner_os: Windows
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable, pinned 2026-07-28
+        with:
+          toolchain: '1.94'
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          key: collab-mdns-${{ matrix.platform }}
+
+      - name: Build native collaboration transport
+        run: cargo test --locked -p op-collab-transport --features mdns --no-run
+
+      - name: Exercise real multicast publish, discover, and unregister
+        run: >-
+          cargo test --locked -p op-collab-transport --features mdns
+          --test mdns_smoke --
+          --ignored
+          --exact publisher_is_discovered_and_unregisters_cleanly
+          --nocapture

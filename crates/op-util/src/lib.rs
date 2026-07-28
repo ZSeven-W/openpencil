@@ -6,6 +6,7 @@
 //! dependency-free and wasm32-clean — it is in the build graph of the
 //! browser host via op-editor-core / op-editor-ui.
 
+pub mod collab_id;
 pub mod hex_color;
 pub mod json_escape;
 pub mod xml_escape;

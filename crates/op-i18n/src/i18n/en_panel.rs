@@ -29,6 +29,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.unrecognizedModelCatalog" => {
             "{{name}} returned an unrecognized model catalog"
         }
-        _ => return None,
+        "providerProbe.connectedAs" => "Connected as @{{login}}{{method}}",
+        "providerProbe.connectedViaGithub" => "Connected via GitHub",
+        "importProgress.figmaTitle" => "Parsing Figma file…",
+        "importProgress.htmlTitle" => "Parsing HTML and page resources…",
+        "importProgress.htmlSubtitle" => "Loading styles and images. Please wait.",
+        "importProgress.largeFileSubtitle" => "Large files take a few seconds. Please wait.",
+        "account.signedOutHint" => "Sign in to sync your settings and preferences",
+        "code.noUsableCode" => "The AI returned no usable code. Retry or switch AI models.",
+        "code.previousResultKept" => "The previous generated result is still available",
+        _ => return super::en_collab::lookup(key),
     })
 }

@@ -38,6 +38,7 @@ pub use op_editor_core::render_backend;
 
 pub mod accessibility;
 pub mod accessibility_regions;
+pub mod collab_avatar_runtime;
 pub mod font_catalog;
 pub mod image_runtime;
 // The render scene now lives in the `jian-scene` crate and `scene_vars` in

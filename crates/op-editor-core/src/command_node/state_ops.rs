@@ -10,11 +10,12 @@
 
 use super::builders::{build_leaf_node, kind_is_valid};
 use super::tree_ops::{
-    apply_copy_overrides, insert_into_parent_or_root, remap_subtree_ids, remap_subtree_ids_mapping,
-    replace_node_in_children,
+    apply_copy_overrides, insert_into_parent_or_root, remap_subtree_ids_mapping_with_allocator,
+    remap_subtree_ids_with_allocator, replace_node_in_children,
 };
 use crate::command::BatchInsertItem;
 use crate::fills::set_primary_fill_hex;
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
@@ -31,19 +32,11 @@ impl EditorState {
         self.max_node_id().checked_add(1).map(|n| n.max(1))
     }
 
-    /// Allocate one fresh `n{N}` id, skipping any candidate that
-    /// collides with a live id. `None` on counter exhaustion.
-    pub(crate) fn next_node_id(&self) -> Option<NodeId> {
-        let mut seed = self.next_node_id_seed()?;
-        let mut live = self.collect_node_ids();
-        walkers::alloc_n_id(&mut seed, &mut live)
-    }
-
     /// `InsertNode` — build + append a fresh leaf on the active page.
     // Args mirror the `InsertNode` command fields one-for-one; bundling
     // them into a struct would just shadow the DTO with no real gain.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn cmd_insert_node(
+    pub(crate) fn cmd_insert_node_with_allocator(
         &mut self,
         kind: &str,
         name: &str,
@@ -53,28 +46,28 @@ impl EditorState {
         height: i32,
         fill_hex: &Option<String>,
         target_parent: &NodeId,
-    ) -> bool {
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         if !kind_is_valid(kind) || width < 0 || height < 0 {
-            return false;
+            return Ok(false);
         }
         // Pre-validate hex BEFORE minting an id / mutating the tree.
         if let Some(hex) = fill_hex {
             if crate::color_picker::parse_hex_rgb(hex).is_none() {
-                return false;
+                return Ok(false);
             }
         }
         if target_parent.is_real() {
             match walkers::find_node(self.active_children(), target_parent) {
                 Some(parent) if parent.is_container() => {}
-                _ => return false,
+                _ => return Ok(false),
             }
         }
-        let Some(new_id) = self.next_node_id() else {
-            return false;
-        };
+        let mut taken = self.collect_node_ids();
+        let new_id = allocator.allocate(&mut taken)?;
         let Some(mut node) = build_leaf_node(kind, new_id.as_str(), name, x, y, width, height)
         else {
-            return false;
+            return Ok(false);
         };
         if let Some(hex) = fill_hex {
             set_primary_fill_hex(&mut node, hex);
@@ -82,16 +75,16 @@ impl EditorState {
         if target_parent.is_real() {
             let root = self.active_children_mut();
             let Some(parent) = walkers::find_node_mut(root, target_parent) else {
-                return false;
+                return Ok(false);
             };
             let Some(children) = parent.children_mut() else {
-                return false;
+                return Ok(false);
             };
             children.push(node);
         } else {
             self.active_children_mut().push(node);
         }
-        true
+        Ok(true)
     }
 
     /// `UpdateNode` — patch optional fields on an existing node.
@@ -236,46 +229,44 @@ impl EditorState {
 
     /// `CopyNode` — deep-clone a node + subtree under a new parent
     /// (`NONE` = active page root). Fresh ids minted past the id space.
-    pub(crate) fn cmd_copy_node(
+    pub(crate) fn cmd_copy_node_with_allocator(
         &mut self,
         node_id: &NodeId,
         target_parent: &NodeId,
         overrides_json: Option<&str>,
-    ) -> bool {
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         if !node_id.is_real() {
-            return false;
+            return Ok(false);
         }
         // Validate source + target up front.
         {
             let children = self.active_children();
             if walkers::find_node(children, node_id).is_none() {
-                return false;
+                return Ok(false);
             }
             if target_parent.is_real() {
                 let Some(target) = walkers::find_node(children, target_parent) else {
-                    return false;
+                    return Ok(false);
                 };
                 // Same rule as MoveNode: childless container, still a container.
                 if !target.is_container() {
-                    return false;
+                    return Ok(false);
                 }
             }
         }
-        let Some(mut next_id) = self.next_node_id_seed() else {
-            return false;
-        };
         let mut taken = self.collect_node_ids();
         // Clone the owned subtree before re-borrowing the tree mutably.
         let mut clone = {
             let children = self.active_children();
             let src = walkers::find_node(children, node_id).expect("validated");
-            walkers::deep_clone_with_new_ids(src, &mut next_id, &mut taken)
+            walkers::deep_clone_with_allocator(src, allocator, &mut taken)?
         };
         if !apply_copy_overrides(&mut clone, overrides_json) {
-            return false;
+            return Ok(false);
         }
         let children = self.active_children_mut();
-        insert_into_parent_or_root(children, target_parent, clone, None).is_ok()
+        Ok(insert_into_parent_or_root(children, target_parent, clone, None).is_ok())
     }
 
     /// `ReplaceNode` — swap an existing node for a freshly-built leaf at
@@ -283,7 +274,7 @@ impl EditorState {
     /// children requires `drop_children == true`, else the swap is
     /// refused so a container can't silently lose its subtree.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn cmd_replace_node(
+    pub(crate) fn cmd_replace_node_with_allocator(
         &mut self,
         node_id: &NodeId,
         kind: &str,
@@ -294,13 +285,14 @@ impl EditorState {
         height: i32,
         fill_hex: &Option<String>,
         drop_children: bool,
-    ) -> bool {
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         if !node_id.is_real() || !kind_is_valid(kind) || width < 0 || height < 0 {
-            return false;
+            return Ok(false);
         }
         if let Some(hex) = fill_hex {
             if crate::color_picker::parse_hex_rgb(hex).is_none() {
-                return false;
+                return Ok(false);
             }
         }
         // Resolve target + check the destructive-swap guard BEFORE
@@ -308,92 +300,93 @@ impl EditorState {
         {
             let children = self.active_children();
             let Some(target) = walkers::find_node(children, node_id) else {
-                return false;
+                return Ok(false);
             };
             let has_children = target.children().map(|c| !c.is_empty()).unwrap_or(false);
             if has_children && !drop_children {
-                return false;
+                return Ok(false);
             }
         }
-        let Some(new_id) = self.next_node_id() else {
-            return false;
-        };
+        let mut taken = self.collect_node_ids();
+        let new_id = allocator.allocate(&mut taken)?;
         let Some(mut replacement) =
             build_leaf_node(kind, new_id.as_str(), name, x, y, width, height)
         else {
-            return false;
+            return Ok(false);
         };
         if let Some(hex) = fill_hex {
             set_primary_fill_hex(&mut replacement, hex);
         }
         let mut slot = Some(replacement);
-        replace_node_in_children(self.active_children_mut(), node_id, &mut slot)
+        Ok(replace_node_in_children(
+            self.active_children_mut(),
+            node_id,
+            &mut slot,
+        ))
     }
 
     /// `ReplaceSubtree` — swap an existing node for a fully-authored
     /// canonical subtree. The destructive-swap guard matches
     /// `ReplaceNode`: replacing a node WITH children requires explicit
     /// opt-in.
-    pub(crate) fn cmd_replace_subtree(
+    pub(crate) fn cmd_replace_subtree_with_allocator(
         &mut self,
         node_id: &NodeId,
         node: PenNode,
         drop_children: bool,
-    ) -> bool {
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         if !node_id.is_real() {
-            return false;
+            return Ok(false);
         }
         {
             let children = self.active_children();
             let Some(target) = walkers::find_node(children, node_id) else {
-                return false;
+                return Ok(false);
             };
             let has_children = target.children().map(|c| !c.is_empty()).unwrap_or(false);
             if has_children && !drop_children {
-                return false;
+                return Ok(false);
             }
         }
-        let Some(mut next_id) = self.next_node_id_seed() else {
-            return false;
-        };
         let mut taken = self.collect_node_ids();
         let mut nodes = vec![node];
-        if !remap_subtree_ids(&mut nodes, &mut next_id, &mut taken) {
-            return false;
-        }
+        remap_subtree_ids_with_allocator(&mut nodes, allocator, &mut taken)?;
         let mut slot = nodes.pop();
-        replace_node_in_children(self.active_children_mut(), node_id, &mut slot)
+        Ok(replace_node_in_children(
+            self.active_children_mut(),
+            node_id,
+            &mut slot,
+        ))
     }
 
     /// `BatchInsert` — insert N leaf nodes on the active page in one
     /// atomic shot. EVERY descriptor is validated before any mutation;
     /// a single bad entry rejects the whole batch.
-    pub(crate) fn cmd_batch_insert(&mut self, items: &[BatchInsertItem]) -> bool {
+    pub(crate) fn cmd_batch_insert_with_allocator(
+        &mut self,
+        items: &[BatchInsertItem],
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         if items.is_empty() {
-            return false;
+            return Ok(false);
         }
         // Pre-validate kinds + geometry + fill hex up front.
         for item in items {
             if !kind_is_valid(&item.kind) || item.width < 0 || item.height < 0 {
-                return false;
+                return Ok(false);
             }
             if let Some(hex) = &item.fill_hex {
                 if crate::color_picker::parse_hex_rgb(hex).is_none() {
-                    return false;
+                    return Ok(false);
                 }
             }
         }
         // Allocate every fresh id up front; bail on id-space exhaustion.
-        let Some(mut next_id) = self.next_node_id_seed() else {
-            return false;
-        };
         let mut live: HashSet<NodeId> = self.collect_node_ids();
         let mut ids: Vec<NodeId> = Vec::with_capacity(items.len());
         for _ in 0..items.len() {
-            match walkers::alloc_n_id(&mut next_id, &mut live) {
-                Some(id) => ids.push(id),
-                None => return false,
-            }
+            ids.push(allocator.allocate(&mut live)?);
         }
         // All validation + allocation passed — now mutate.
         let children = self.active_children_mut();
@@ -421,7 +414,7 @@ impl EditorState {
             }
             children.push(node);
         }
-        true
+        Ok(true)
     }
 
     /// Insert one or more nested `PenNode` subtrees. `parent_id` of
@@ -429,21 +422,23 @@ impl EditorState {
     /// must exist and be a container variant. Every incoming node id
     /// (recursively) is remapped to a fresh editor id so an
     /// externally-authored subtree can't collide with live doc ids.
-    pub(crate) fn cmd_insert_subtree(&mut self, nodes: Vec<PenNode>, parent_id: &NodeId) -> bool {
+    pub(crate) fn cmd_insert_subtree_with_allocator(
+        &mut self,
+        nodes: Vec<PenNode>,
+        parent_id: &NodeId,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<bool, IdAllocError> {
         if nodes.is_empty() {
-            return false;
+            return Ok(false);
         }
         // Validate the parent up front (when not the page root).
         if parent_id.is_real() {
             match walkers::find_node(self.active_children(), parent_id) {
                 Some(p) if p.is_container() => {}
-                _ => return false, // missing or non-container
+                _ => return Ok(false), // missing or non-container
             }
         }
         // Allocate fresh ids for the whole incoming forest.
-        let Some(mut next_id) = self.next_node_id_seed() else {
-            return false;
-        };
         let mut taken: HashSet<NodeId> = self.collect_node_ids();
         let mut nodes = nodes;
         let replacement = crate::command_root_replace::prepare_root_frame_replacement(
@@ -451,29 +446,27 @@ impl EditorState {
             &mut nodes,
             parent_id,
         );
-        if !remap_subtree_ids(&mut nodes, &mut next_id, &mut taken) {
-            return false;
-        }
+        remap_subtree_ids_with_allocator(&mut nodes, allocator, &mut taken)?;
         // All validation + allocation passed — now mutate.
         if parent_id.is_real() {
             let root = self.active_children_mut();
             let Some(parent) = walkers::find_node_mut(root, parent_id) else {
-                return false;
+                return Ok(false);
             };
             let Some(slot) = parent.children_mut() else {
-                return false;
+                return Ok(false);
             };
             slot.extend(nodes);
         } else {
             let roots = self.active_children_mut();
             if let Some(replacement) = replacement.as_ref() {
                 if !crate::command_root_replace::remove_root_frame_replacement(roots, replacement) {
-                    return false;
+                    return Ok(false);
                 }
             }
             roots.extend(nodes);
         }
-        true
+        Ok(true)
     }
 
     /// Same mutation as [`cmd_insert_subtree`] but returns the
@@ -487,17 +480,29 @@ impl EditorState {
         nodes: Vec<PenNode>,
         parent_id: &NodeId,
     ) -> Option<Vec<String>> {
+        let mut allocator = SequentialIdAllocator::for_document(&self.doc, 1).ok()?;
+        self.insert_subtree_returning_root_ids_with_allocator(nodes, parent_id, &mut allocator)
+            .ok()
+            .flatten()
+    }
+
+    /// Allocator-aware form of [`Self::insert_subtree_returning_root_ids`].
+    pub fn insert_subtree_returning_root_ids_with_allocator(
+        &mut self,
+        nodes: Vec<PenNode>,
+        parent_id: &NodeId,
+        allocator: &mut dyn IdAllocator,
+    ) -> Result<Option<Vec<String>>, IdAllocError> {
         if nodes.is_empty() {
-            return None;
+            return Ok(None);
         }
         // Validate the parent up front (when not the page root).
         if parent_id.is_real() {
             match walkers::find_node(self.active_children(), parent_id) {
                 Some(p) if p.is_container() => {}
-                _ => return None,
+                _ => return Ok(None),
             }
         }
-        let mut next_id = self.next_node_id_seed()?;
         let mut taken: HashSet<NodeId> = self.collect_node_ids();
         let mut nodes = nodes;
         let replacement = crate::command_root_replace::prepare_root_frame_replacement(
@@ -511,23 +516,27 @@ impl EditorState {
         // [root0, child0a, ...] instead of [root0, root1, ...]. Instead, read
         // the root ids directly from the top-level nodes after remap — they
         // are already updated in place and ordering is exact.
-        remap_subtree_ids_mapping(&mut nodes, &mut next_id, &mut taken)?;
+        remap_subtree_ids_mapping_with_allocator(&mut nodes, allocator, &mut taken)?;
         let root_ids: Vec<String> = nodes.iter().map(|n| n.id_str().to_string()).collect();
         // All validation + allocation passed — now mutate.
         if parent_id.is_real() {
             let root = self.active_children_mut();
-            let parent = walkers::find_node_mut(root, parent_id)?;
-            let slot = parent.children_mut()?;
+            let Some(parent) = walkers::find_node_mut(root, parent_id) else {
+                return Ok(None);
+            };
+            let Some(slot) = parent.children_mut() else {
+                return Ok(None);
+            };
             slot.extend(nodes);
         } else {
             let roots = self.active_children_mut();
             if let Some(replacement) = replacement.as_ref() {
                 if !crate::command_root_replace::remove_root_frame_replacement(roots, replacement) {
-                    return None;
+                    return Ok(None);
                 }
             }
             roots.extend(nodes);
         }
-        Some(root_ids)
+        Ok(Some(root_ids))
     }
 }

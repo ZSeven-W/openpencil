@@ -29,6 +29,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.unrecognizedModelCatalog" => {
             "{{name}}이(가) 인식할 수 없는 모델 목록을 반환했습니다"
         }
-        _ => return None,
+        _ => return super::ko_collab::lookup(key),
     })
 }

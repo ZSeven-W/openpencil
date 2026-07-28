@@ -280,6 +280,7 @@ pub fn topbar_button_hover(
         W::ToggleTheme => O::ToggleTheme,
         W::ToggleLocale => O::ToggleLocale,
         W::OpenAgentSettings => O::OpenAgentSettings,
+        W::Collaboration => O::OpenCollaboration,
         W::ToggleGitPanel => O::ToggleGitPanel,
         W::ToggleFullscreen => O::ToggleFullscreen,
         W::TogglePreview => O::TogglePreview,

@@ -116,17 +116,74 @@ impl TopBar {
         }
     }
 
-    /// Left edge the agent chip's divider hangs off — the avatar
-    /// button's left edge when it's available (desktop with an auth
-    /// backend), else directly the Globe button's (web, or stub builds
-    /// where `account_button_visible` is false and the button doesn't
-    /// paint). Shared by paint + hit-test so the chip anchor can't
-    /// drift from whichever layout is active.
-    pub(super) fn chip_right_anchor_x(&self, top_bar_rect: Rect) -> f32 {
+    fn account_or_globe_anchor_x(&self, top_bar_rect: Rect) -> f32 {
         if self.account_button_visible {
             self.account_button_rect(top_bar_rect).origin.x
         } else {
             self.globe_rect(top_bar_rect).origin.x
+        }
+    }
+
+    pub(super) fn collaboration_avatar_span(&self) -> f32 {
+        let count = self.collab.avatars.len();
+        if count == 0 {
+            return 0.0;
+        }
+        COLLAB_AVATAR_CHIP
+            + (count.saturating_sub(1) as f32) * (COLLAB_AVATAR_CHIP - COLLAB_AVATAR_OVERLAP)
+    }
+
+    pub(super) fn collaboration_chip_rect(&self, top_bar_rect: Rect, text_w: f32) -> Rect {
+        if !self.collab.visible {
+            return Rect::xywh(
+                self.account_or_globe_anchor_x(top_bar_rect),
+                top_bar_rect.origin.y,
+                0.0,
+                0.0,
+            );
+        }
+        let avatars = self.collaboration_avatar_span();
+        let leading = if avatars > 0.0 { avatars } else { ICON_SIZE };
+        let avatar_gap = 6.0;
+        let overflow_w = if self.collab.participant_overflow > 0 {
+            // Compact `+N` suffix; exact glyph width is deliberately bounded
+            // because the participant list itself is capped in core state.
+            7.0 * format!("+{}", self.collab.participant_overflow)
+                .chars()
+                .count() as f32
+                + 4.0
+        } else {
+            0.0
+        };
+        // 10 px after the leading cluster accounts for its trailing gap
+        // plus the six-pixel phase dot before the label.
+        let chip_w = 9.0 + leading + overflow_w + avatar_gap + 10.0 + text_w + 10.0;
+        let anchor = self.account_or_globe_anchor_x(top_bar_rect);
+        Rect {
+            origin: Point2D::new(
+                anchor - chip_w - DIVIDER_GAP,
+                top_bar_rect.origin.y + (top_bar_rect.size.y - 26.0) / 2.0,
+            ),
+            size: Point2D::new(chip_w, 26.0),
+        }
+    }
+
+    /// Geometry used by hit-test and popup anchoring before a paint backend
+    /// can measure the localized label.
+    pub fn collaboration_chip_rect_estimated(&self, top_bar_rect: Rect) -> Rect {
+        self.collaboration_chip_rect(top_bar_rect, estimated_text_width(&self.collab.label, 11.0))
+    }
+
+    /// Left edge the agent chip's divider hangs off. When collaboration is
+    /// available, its chip sits between the agent launcher and account;
+    /// otherwise the old account/globe anchor remains unchanged.
+    pub(super) fn chip_right_anchor_x(&self, top_bar_rect: Rect) -> f32 {
+        if self.collab.visible {
+            self.collaboration_chip_rect_estimated(top_bar_rect)
+                .origin
+                .x
+        } else {
+            self.account_or_globe_anchor_x(top_bar_rect)
         }
     }
 

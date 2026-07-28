@@ -56,6 +56,21 @@ pub fn commit_header_focus(state: &mut EditorState) -> bool {
     true
 }
 
+/// Discard an in-flight theme/variant rename without touching the document.
+pub fn discard_header_focus(state: &mut EditorState) -> bool {
+    let had_theme = state.editor_ui.variables_theme_rename_axis.take().is_some();
+    let had_variant = state
+        .editor_ui
+        .variables_variant_rename_value
+        .take()
+        .is_some();
+    let had_focus = had_theme || had_variant;
+    if had_focus {
+        state.ui.property_draft_select_all = false;
+    }
+    had_focus
+}
+
 /// Rename a theme axis, keeping the active-theme selection and the
 /// current-axis pointer attached. Any rejection (blank / unchanged /
 /// duplicate / missing) restores the old text in the header input.
@@ -202,6 +217,15 @@ pub fn commit_row_focus(state: &mut EditorState) -> bool {
         state.history_push_past(snap);
     }
     true
+}
+
+/// Discard an in-flight variable row draft without touching the document.
+pub fn discard_row_focus(state: &mut EditorState) -> bool {
+    let had_focus = state.editor_ui.variable_row_focus.take().is_some();
+    if had_focus {
+        state.ui.property_draft_select_all = false;
+    }
+    had_focus
 }
 
 fn commit_row_draft(state: &mut EditorState, focus: VariableRowFocus, draft: String) -> bool {

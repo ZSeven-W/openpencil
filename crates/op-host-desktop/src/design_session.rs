@@ -43,11 +43,30 @@ pub fn pump_commands(
     if reqs.is_empty() {
         return false;
     }
-    let state = host.editor_state_mut();
     let mut any_applied = false;
+    let mut any_rejected = false;
     for req in reqs {
         let applied = match req.op {
             DesignCmdOp::Apply(cmd) => {
+                if !host.gate_collaboration_action(
+                    op_editor_core::CollabGateAction::Document(
+                        op_editor_core::CollabDocumentMutation::Unsupported(
+                            op_editor_core::CollabUnsupportedFeature::BulkWrite,
+                        ),
+                    ),
+                    op_editor_core::CollabEditSource::Ai,
+                ) {
+                    any_rejected = true;
+                    let snapshot = op_editor_core::request_snapshot::narrowed_snapshot(
+                        host.editor_state_mut(),
+                    );
+                    let _ = req.ack.send(DesignCmdAck {
+                        applied: false,
+                        new_state: snapshot,
+                    });
+                    continue;
+                }
+                let state = host.editor_state_mut();
                 let applied = state.apply(cmd);
                 if applied {
                     fit_design_viewport_to_content(state, viewport_width, viewport_height);
@@ -63,7 +82,7 @@ pub fn pump_commands(
         // Narrowed: drops chat/codegen/theme_presets, which grow with
         // session length and are read by nothing in the worker's mirror
         // (see op_editor_core::request_snapshot's consumer audit).
-        let snapshot = op_editor_core::request_snapshot::narrowed_snapshot(state);
+        let snapshot = op_editor_core::request_snapshot::narrowed_snapshot(host.editor_state_mut());
         let ack = DesignCmdAck {
             applied,
             new_state: snapshot,
@@ -78,7 +97,7 @@ pub fn pump_commands(
     if any_applied {
         host.mark_editor_state_dirty();
     }
-    any_applied
+    any_applied || any_rejected
 }
 
 /// Drain every pending progress delta and fold it into the trailing

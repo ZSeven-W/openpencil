@@ -106,7 +106,9 @@ pub fn launch_if_pending(
             let provider_arc: Arc<dyn ChatProvider> = Arc::from(provider);
             let llm = ChatProviderLlmClient::new(provider_arc.clone())
                 .with_model(selected_cli_model_id(host));
-            if clear_fresh_starter_frame_for_design(host.editor_state_mut()) {
+            if super::allow_ai_bulk_write(host)
+                && clear_fresh_starter_frame_for_design(host.editor_state_mut())
+            {
                 host.mark_editor_state_dirty();
             }
             let append_context = op_host_services::chat_intent::detect_append_intent(
@@ -400,6 +402,7 @@ fn launch_cli_standard_turn(
     // reads design intent. A keyword-design turn the LLM later
     // classifies as chat loses only the untouched starter sample.
     if matches!(classify_intent(user_text), Intent::Design)
+        && super::allow_ai_bulk_write(host)
         && clear_fresh_starter_frame_for_design(host.editor_state_mut())
     {
         host.mark_editor_state_dirty();

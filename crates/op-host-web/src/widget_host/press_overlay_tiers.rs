@@ -104,6 +104,48 @@ impl WidgetHost {
         let (x, y) = (ctx.x, ctx.y);
         let viewport_width = ctx.viewport_width;
         let viewport_height = ctx.viewport_height;
+        if self.editor_state.editor_ui.collab.panel.open {
+            let top_bar_rect = Rect::xywh(
+                0.0,
+                0.0,
+                viewport_width,
+                op_editor_ui::widgets::TOP_BAR_HEIGHT,
+            );
+            let top_bar =
+                op_editor_ui::widgets::TopBar::for_editor_ui(&self.editor_state.editor_ui)
+                    .with_traffic_controls(false);
+            if let Some(panel) =
+                op_editor_ui::widgets::CollabPanel::for_editor_ui(&self.editor_state.editor_ui)
+            {
+                let panel_rect = panel.rect_at(
+                    top_bar.collaboration_chip_rect_estimated(top_bar_rect),
+                    Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+                );
+                if let Some(hit) = panel.hit_test(panel_rect, Point2D::new(x, y)) {
+                    match hit {
+                        op_editor_ui::widgets::CollabPanelHit::CopyShareEndpoint(endpoint) => {
+                            self.host_copy_text(&endpoint);
+                        }
+                        hit => {
+                            let _ = op_editor_ui::widgets::collab_ui::apply_panel_hit(
+                                &mut self.editor_state.editor_ui,
+                                hit,
+                            );
+                        }
+                    }
+                } else {
+                    self.editor_state.editor_ui.collab.panel.open = false;
+                    self.editor_state
+                        .editor_ui
+                        .collab
+                        .panel
+                        .join_address_focused = false;
+                    self.blur_text_inputs_on_blank_press();
+                }
+                self.mark_dirty();
+                return Some(true);
+            }
+        }
         // 0a0. Import dropdown — same overlay tier as the locale picker.
         if self.editor_state.editor_ui.import_menu_open {
             use op_editor_ui::widgets::{ImportMenu, ImportMenuChoice};

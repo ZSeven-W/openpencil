@@ -374,9 +374,13 @@ where
     // Swap in the parsed state. The worker deliberately did not build a
     // LayoutScene because that touches Skia / FontMgr and can block the
     // main-thread progress overlay.
-    host.install_imported_state_with_drop_hook(prepared.state, || {
+    if !host.install_imported_state_with_drop_hook(prepared.state, || {
         crate::heap_pressure::schedule_relief("Figma replaced-document drop");
-    });
+    }) {
+        host.editor_state_mut().editor_ui.figma_import_in_progress = false;
+        host.mark_editor_state_dirty();
+        return PumpOutcome::Cancelled;
+    }
     match persisted {
         Ok(saved) => {
             let output_path = saved.commit();
@@ -537,6 +541,23 @@ pub fn cancel(host: &mut WidgetHostNative, session: &mut Option<FigmaImportSessi
         clear_page_selector(ui);
         host.mark_editor_state_dirty();
     }
+}
+
+/// Collaboration transition barrier for a standalone import.
+///
+/// Cancellation alone is insufficient because conversion may already be
+/// between its final token check and atomic publication. Waiting for the
+/// serialized worker gate keeps that publication entirely on the standalone
+/// side of the transition.
+pub fn cancel_and_wait_before_collaboration(
+    host: &mut WidgetHostNative,
+    session: &mut Option<FigmaImportSession>,
+) {
+    if session.is_none() {
+        return;
+    }
+    cancel(host, session);
+    worker_control::wait_until_idle();
 }
 
 /// Outcome of `pump` — used by the caller to decide whether to mark

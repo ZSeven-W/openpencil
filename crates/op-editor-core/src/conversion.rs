@@ -4,10 +4,13 @@ use jian_ops_schema::conversion::{ConversionEntry, ConversionKind, ConversionSpe
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 
+use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
 use crate::state::EditorState;
 use crate::walkers;
+
+type PreparedConversionRoot = (String, PenNode, BTreeMap<String, String>);
 
 pub fn upsert_conversion_entry(doc: &mut PenDocument, entry: ConversionEntry) {
     let spec = doc.conversion.get_or_insert_with(ConversionSpec::default);
@@ -53,10 +56,35 @@ pub fn upsert_component(
     source_path: Option<String>,
     source_hash: Option<String>,
 ) -> bool {
+    let Ok(mut allocator) = SequentialIdAllocator::for_document(&state.doc, 1) else {
+        return false;
+    };
+    upsert_component_with_allocator(
+        state,
+        key,
+        name,
+        root,
+        source_path,
+        source_hash,
+        &mut allocator,
+    )
+    .unwrap_or(false)
+}
+
+/// Allocator-aware form of [`upsert_component`].
+pub fn upsert_component_with_allocator(
+    state: &mut EditorState,
+    key: String,
+    name: String,
+    root: PenNode,
+    source_path: Option<String>,
+    source_hash: Option<String>,
+    allocator: &mut dyn IdAllocator,
+) -> Result<bool, IdAllocError> {
     let key = key.trim().to_string();
     let name = name.trim().to_string();
     if key.is_empty() || name.is_empty() || !is_component_root(&root) {
-        return false;
+        return Ok(false);
     }
     let existing_entry =
         find_conversion_entry(&state.doc, ConversionKind::Component, &key).cloned();
@@ -72,19 +100,21 @@ pub fn upsert_component(
         &name,
         existing_root.as_ref(),
         existing_entry.as_ref(),
-    ) else {
-        return false;
+        allocator,
+    )?
+    else {
+        return Ok(false);
     };
 
-    if !replace_or_insert_component_master(state, &master_id, root) {
-        return false;
+    if !replace_or_insert_component_master(state, &master_id, root, allocator)? {
+        return Ok(false);
     }
     if !state.components.register_document_component(
         &state.doc,
         NodeId::new(master_id.clone()),
         name,
     ) {
-        return false;
+        return Ok(false);
     }
     upsert_conversion_entry(
         &mut state.doc,
@@ -97,7 +127,7 @@ pub fn upsert_component(
             node_ids: Some(node_ids),
         },
     );
-    true
+    Ok(true)
 }
 
 pub fn upsert_screen(
@@ -107,9 +137,25 @@ pub fn upsert_screen(
     source_path: Option<String>,
     source_hash: Option<String>,
 ) -> bool {
+    let Ok(mut allocator) = SequentialIdAllocator::for_document(&state.doc, 1) else {
+        return false;
+    };
+    upsert_screen_with_allocator(state, key, root, source_path, source_hash, &mut allocator)
+        .unwrap_or(false)
+}
+
+/// Allocator-aware form of [`upsert_screen`].
+pub fn upsert_screen_with_allocator(
+    state: &mut EditorState,
+    key: String,
+    root: PenNode,
+    source_path: Option<String>,
+    source_hash: Option<String>,
+    allocator: &mut dyn IdAllocator,
+) -> Result<bool, IdAllocError> {
     let key = key.trim().to_string();
     if key.is_empty() || !matches!(root, PenNode::Frame(_)) {
-        return false;
+        return Ok(false);
     }
     let existing_entry = find_conversion_entry(&state.doc, ConversionKind::Screen, &key).cloned();
     let existing_root = existing_entry
@@ -118,14 +164,19 @@ pub fn upsert_screen(
         .and_then(|node_id| find_node_in_doc(&state.doc, node_id))
         .cloned();
 
-    let Some((screen_id, root, node_ids)) =
-        prepare_screen_root(state, root, existing_root.as_ref(), existing_entry.as_ref())
+    let Some((screen_id, root, node_ids)) = prepare_screen_root(
+        state,
+        root,
+        existing_root.as_ref(),
+        existing_entry.as_ref(),
+        allocator,
+    )?
     else {
-        return false;
+        return Ok(false);
     };
 
     if !replace_or_insert_screen(state, &screen_id, root) {
-        return false;
+        return Ok(false);
     }
     upsert_conversion_entry(
         &mut state.doc,
@@ -138,7 +189,7 @@ pub fn upsert_screen(
             node_ids: Some(node_ids),
         },
     );
-    true
+    Ok(true)
 }
 
 fn prepare_component_root(
@@ -147,30 +198,34 @@ fn prepare_component_root(
     name: &str,
     existing_root: Option<&PenNode>,
     existing_entry: Option<&ConversionEntry>,
-) -> Option<(String, PenNode, BTreeMap<String, String>)> {
-    let mut next_id = state.next_node_id_seed()?;
+    allocator: &mut dyn IdAllocator,
+) -> Result<Option<PreparedConversionRoot>, IdAllocError> {
     let mut taken = state.collect_node_ids();
     if let Some(existing) = existing_root {
         remove_subtree_ids_from_taken(existing, &mut taken);
     }
     let existing_ids = existing_node_ids_for_rerun(&root, existing_entry);
-    let node_ids =
-        remap_subtree_ids_by_source_id(&mut root, &mut next_id, &mut taken, existing_ids.as_ref())?;
+    let Some(node_ids) =
+        remap_subtree_ids_by_source_id(&mut root, allocator, &mut taken, existing_ids.as_ref())?
+    else {
+        return Ok(None);
+    };
     root.base_mut().name = Some(name.to_string());
     set_reusable(&mut root, true);
-    Some((root.id_str().to_string(), root, node_ids))
+    Ok(Some((root.id_str().to_string(), root, node_ids)))
 }
 
 fn replace_or_insert_component_master(
     state: &mut EditorState,
     master_id: &str,
     root: PenNode,
-) -> bool {
+    allocator: &mut dyn IdAllocator,
+) -> Result<bool, IdAllocError> {
     let id = NodeId::new(master_id);
     if replace_node_in_doc(&mut state.doc, &id, root.clone()) {
-        return true;
+        return Ok(true);
     }
-    state.append_components_page_masters(vec![root]) == 1
+    Ok(state.append_components_page_masters_with_allocator(vec![root], allocator)? == 1)
 }
 
 fn prepare_screen_root(
@@ -178,17 +233,20 @@ fn prepare_screen_root(
     mut root: PenNode,
     existing_root: Option<&PenNode>,
     existing_entry: Option<&ConversionEntry>,
-) -> Option<(String, PenNode, BTreeMap<String, String>)> {
-    let mut next_id = state.next_node_id_seed()?;
+    allocator: &mut dyn IdAllocator,
+) -> Result<Option<PreparedConversionRoot>, IdAllocError> {
     let mut taken = state.collect_node_ids();
     if let Some(existing) = existing_root {
         remove_subtree_ids_from_taken(existing, &mut taken);
     }
     let existing_ids = existing_node_ids_for_rerun(&root, existing_entry);
-    let node_ids =
-        remap_subtree_ids_by_source_id(&mut root, &mut next_id, &mut taken, existing_ids.as_ref())?;
+    let Some(node_ids) =
+        remap_subtree_ids_by_source_id(&mut root, allocator, &mut taken, existing_ids.as_ref())?
+    else {
+        return Ok(None);
+    };
     set_reusable(&mut root, false);
-    Some((root.id_str().to_string(), root, node_ids))
+    Ok(Some((root.id_str().to_string(), root, node_ids)))
 }
 
 fn existing_node_ids_for_rerun(
@@ -206,47 +264,45 @@ fn existing_node_ids_for_rerun(
 
 fn remap_subtree_ids_by_source_id(
     node: &mut PenNode,
-    next_id: &mut u64,
+    allocator: &mut dyn IdAllocator,
     taken: &mut HashSet<NodeId>,
     existing_ids: Option<&BTreeMap<String, String>>,
-) -> Option<BTreeMap<String, String>> {
+) -> Result<Option<BTreeMap<String, String>>, IdAllocError> {
     let mut out = BTreeMap::new();
-    remap_node_by_source_id(node, existing_ids, next_id, taken, &mut out).then_some(out)
+    Ok(remap_node_by_source_id(node, existing_ids, allocator, taken, &mut out)?.then_some(out))
 }
 
 fn remap_node_by_source_id(
     node: &mut PenNode,
     existing_ids: Option<&BTreeMap<String, String>>,
-    next_id: &mut u64,
+    allocator: &mut dyn IdAllocator,
     taken: &mut HashSet<NodeId>,
     out: &mut BTreeMap<String, String>,
-) -> bool {
+) -> Result<bool, IdAllocError> {
     let source_id = node.id_str().to_string();
     if source_id.trim().is_empty() || out.contains_key(&source_id) {
-        return false;
+        return Ok(false);
     }
     let (target_id, already_reserved) = match existing_ids.and_then(|ids| ids.get(&source_id)) {
         Some(existing_id) if !existing_id.trim().is_empty() => (existing_id.clone(), false),
         _ => {
-            let Some(fresh) = walkers::alloc_n_id(next_id, taken) else {
-                return false;
-            };
+            let fresh = allocator.allocate(taken)?;
             (fresh.as_str().to_string(), true)
         }
     };
     if !already_reserved && !taken.insert(NodeId::new(target_id.clone())) {
-        return false;
+        return Ok(false);
     }
     node.base_mut().id = target_id.clone();
     out.insert(source_id, target_id);
     if let Some(children) = node.children_mut() {
         for child in children {
-            if !remap_node_by_source_id(child, existing_ids, next_id, taken, out) {
-                return false;
+            if !remap_node_by_source_id(child, existing_ids, allocator, taken, out)? {
+                return Ok(false);
             }
         }
     }
-    true
+    Ok(true)
 }
 
 fn remove_subtree_ids_from_taken(node: &PenNode, taken: &mut HashSet<NodeId>) {

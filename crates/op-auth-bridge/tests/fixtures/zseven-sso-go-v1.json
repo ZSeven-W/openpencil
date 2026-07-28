@@ -1,0 +1,15 @@
+{
+  "description": "Frozen compact JWS and JWKS emitted by the zseven-sso Go collaboration Service using deterministic test-only data.",
+  "security_notice": "Contains no device token, production issuer, production identity, private signing key, HSM metadata, or platform authorization policy.",
+  "profile_version": 1,
+  "now_unix_seconds": 1800000000,
+  "expected_dh_pub_x25519": "AQMDBwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "ticket_segments": [
+    "eyJhbGciOiJFZDI1NTE5IiwidHlwIjoib3BlbnBlbmNpbC1jb2xsYWIrand0Iiwia2lkIjoia2V5X0EifQ",
+    "eyJpc3MiOiJodHRwczovL3Nzby5leGFtcGxlLmludmFsaWQiLCJhdWQiOiJvcGVucGVuY2lsLWNvbGxhYiIsInZlciI6MSwic3ViIjoiMDEwMTAxMDEtMDEwMS00MTAxLTgxMDEtMDEwMTAxMDEwMTAxIiwiZGV2aWNlX2lkIjoiMDIwMjAyMDItMDIwMi00MjAyLTgyMDItMDIwMjAyMDIwMjAyIiwiZGhfcHViX3gyNTUxOSI6IkFRTURCd0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUEiLCJzY29wZSI6ImNvbGxhYjpjb25uZWN0IiwiaWF0IjoxODAwMDAwMDAwLCJuYmYiOjE4MDAwMDAwMDAsImV4cCI6MTgwMDAwMDkwMCwianRpIjoiQUFFQ0F3UUZCZ2NJQ1FvTERBME9EeEFSRWhNVUZSWVhHQmthR3h3ZEhoOCIsImRpc3BsYXlfbmFtZSI6IkludGVyb3AgVGVzdCBVc2VyIiwiYXZhdGFyX3VybCI6Imh0dHBzOi8vY2RuLmV4YW1wbGUudGVzdC9hdmF0YXIucG5nP3NpemU9MTI4In0",
+    "nawcqvPyoPyMzoWR6SU0PT1w5sOsWoXo03YjNpTnwtyweoGPAE3STYxDmSGCxklv1Ieg0gwW1VDh1ik5To7hBA"
+  ],
+  "jwks_json": "{\"keys\":[{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"alg\":\"Ed25519\",\"use\":\"sig\",\"key_ops\":[\"verify\"],\"kid\":\"key_A\",\"x\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}]}",
+  "vector_sha256": "f8abb194b601b931147f918cf77c92328e5d94887c19a97056d92dff4373f78b",
+  "vector_sha256_input": "SHA-256(join(ticket_segments, '.') || 0x00 || jwks_json)"
+}

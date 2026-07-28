@@ -1,0 +1,8 @@
+The Rust collaboration claim types, provider trait, verifier, JWKS support,
+deterministic test fixture, and stub backend are OpenPencil source code covered
+by the workspace MIT License.
+
+Files under prebuilt/ are separately sourced private security implementation
+artifacts. They are excluded from this crate's Cargo source package. Their
+licensing and provenance are managed by their independent source and are not
+defined by this notice.

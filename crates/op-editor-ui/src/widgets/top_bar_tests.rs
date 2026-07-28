@@ -195,6 +195,32 @@ fn for_editor_ui_picks_up_button_press() {
 }
 
 #[test]
+fn collaboration_chip_is_a_real_hit_target_only_when_available() {
+    let rect = Rect {
+        origin: Point2D::ZERO,
+        size: Point2D::new(1200.0, TOP_BAR_HEIGHT),
+    };
+    let hidden = TopBar::for_editor_ui(&EditorUiState::default());
+    assert!(!hidden.collab.visible);
+
+    let mut ui = EditorUiState::default();
+    ui.collab.availability = op_editor_core::CollabAvailability::Ready;
+    let bar = TopBar::for_editor_ui(&ui);
+    let chip = bar.collaboration_chip_rect_estimated(rect);
+    assert!(chip.size.x > 0.0);
+    assert_eq!(
+        bar.hit_test(
+            rect,
+            Point2D::new(
+                chip.origin.x + chip.size.x / 2.0,
+                chip.origin.y + chip.size.y / 2.0,
+            ),
+        ),
+        Some(TopBarHit::Collaboration)
+    );
+}
+
+#[test]
 fn agent_chip_hit_area_tracks_measured_text_width() {
     // Regression: the chip hit area used a 12 px/char estimate (+16 px
     // slop) that ballooned the target left across the file-name gap.

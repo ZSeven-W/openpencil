@@ -204,13 +204,42 @@ impl WidgetHostNative {
         let total_dx = ((x - drag.press_screen_x) / zoom) as f64;
         let total_dy = ((y - drag.press_screen_y) / zoom) as f64;
         if !drag.moved {
-            let activation = op_editor_core::host_drag_transitions::activate_node_drag(
-                &mut self.editor_state,
-                &mut self.next_node_id,
-                self.alt_held,
-                total_dx,
-                total_dy,
-            );
+            let mutation = if self.alt_held {
+                op_editor_core::CollabDocumentMutation::Unsupported(
+                    op_editor_core::CollabUnsupportedFeature::Duplicate,
+                )
+            } else {
+                op_editor_core::CollabDocumentMutation::NodeMove
+            };
+            if !self.collab_allows_document_mutation(mutation) {
+                self.node_drag = None;
+                return Some(true);
+            }
+            let result = if let Some(allocator) = self.collab_id_allocator.as_mut() {
+                op_editor_core::host_drag_transitions::activate_node_drag_with_allocator(
+                    &mut self.editor_state,
+                    allocator,
+                    self.alt_held,
+                    total_dx,
+                    total_dy,
+                )
+            } else {
+                Ok(op_editor_core::host_drag_transitions::activate_node_drag(
+                    &mut self.editor_state,
+                    &mut self.next_node_id,
+                    self.alt_held,
+                    total_dx,
+                    total_dy,
+                ))
+            };
+            let activation = match result {
+                Ok(activation) => activation,
+                Err(error) => {
+                    self.node_drag = None;
+                    self.show_collab_id_error(error);
+                    return Some(true);
+                }
+            };
             if activation.duplicated {
                 self.option_drag_source_ids = activation.option_drag_source_ids;
                 // The drag snapshot already advanced the revision before the
@@ -236,6 +265,16 @@ impl WidgetHostNative {
         let dx = (x - prev_screen_x) / zoom;
         let dy = (y - prev_screen_y) / zoom;
         if dx != 0.0 || dy != 0.0 {
+            // Re-check at the mutation sink. A role downgrade, disconnect, or
+            // session end can arrive after the drag crossed its threshold.
+            if !self
+                .collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeMove)
+            {
+                self.node_drag = None;
+                self.editor_state.editor_ui.active_guides.clear();
+                self.editor_state.editor_ui.canvas_drop_indicator = None;
+                return Some(true);
+            }
             if let Some(drag) = self.node_drag.as_mut() {
                 drag.last_screen_x = x;
                 drag.last_screen_y = y;

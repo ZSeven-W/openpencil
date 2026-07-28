@@ -31,6 +31,6 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "providerProbe.unrecognizedModelCatalog" => {
             "{{name}} đã trả về danh mục mô hình không nhận dạng được"
         }
-        _ => return None,
+        _ => return super::vi_collab::lookup(key),
     })
 }

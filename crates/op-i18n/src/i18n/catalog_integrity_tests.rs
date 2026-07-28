@@ -9,91 +9,151 @@ fn tables() -> [(&'static str, &'static str, &'static str, Lookup); 15] {
         (
             "en",
             include_str!("en.rs"),
-            concat!(include_str!("en_git.rs"), include_str!("en_panel.rs")),
+            concat!(
+                include_str!("en_git.rs"),
+                include_str!("en_panel.rs"),
+                include_str!("en_collab.rs")
+            ),
             super::en::lookup,
         ),
         (
             "zh_cn",
             include_str!("zh_cn.rs"),
-            concat!(include_str!("zh_cn_git.rs"), include_str!("zh_cn_panel.rs")),
+            concat!(
+                include_str!("zh_cn_git.rs"),
+                include_str!("zh_cn_panel.rs"),
+                include_str!("zh_cn_collab.rs")
+            ),
             super::zh_cn::lookup,
         ),
         (
             "zh_tw",
             include_str!("zh_tw.rs"),
-            concat!(include_str!("zh_tw_git.rs"), include_str!("zh_tw_panel.rs")),
+            concat!(
+                include_str!("zh_tw_git.rs"),
+                include_str!("zh_tw_panel.rs"),
+                include_str!("zh_tw_collab.rs")
+            ),
             super::zh_tw::lookup,
         ),
         (
             "ja",
             include_str!("ja.rs"),
-            concat!(include_str!("ja_git.rs"), include_str!("ja_panel.rs")),
+            concat!(
+                include_str!("ja_git.rs"),
+                include_str!("ja_panel.rs"),
+                include_str!("ja_collab.rs")
+            ),
             super::ja::lookup,
         ),
         (
             "ko",
             include_str!("ko.rs"),
-            concat!(include_str!("ko_git.rs"), include_str!("ko_panel.rs")),
+            concat!(
+                include_str!("ko_git.rs"),
+                include_str!("ko_panel.rs"),
+                include_str!("ko_collab.rs")
+            ),
             super::ko::lookup,
         ),
         (
             "fr",
             include_str!("fr.rs"),
-            concat!(include_str!("fr_git.rs"), include_str!("fr_panel.rs")),
+            concat!(
+                include_str!("fr_git.rs"),
+                include_str!("fr_panel.rs"),
+                include_str!("fr_collab.rs")
+            ),
             super::fr::lookup,
         ),
         (
             "es",
             include_str!("es.rs"),
-            concat!(include_str!("es_git.rs"), include_str!("es_panel.rs")),
+            concat!(
+                include_str!("es_git.rs"),
+                include_str!("es_panel.rs"),
+                include_str!("es_collab.rs")
+            ),
             super::es::lookup,
         ),
         (
             "de",
             include_str!("de.rs"),
-            concat!(include_str!("de_git.rs"), include_str!("de_panel.rs")),
+            concat!(
+                include_str!("de_git.rs"),
+                include_str!("de_panel.rs"),
+                include_str!("de_collab.rs")
+            ),
             super::de::lookup,
         ),
         (
             "pt",
             include_str!("pt.rs"),
-            concat!(include_str!("pt_git.rs"), include_str!("pt_panel.rs")),
+            concat!(
+                include_str!("pt_git.rs"),
+                include_str!("pt_panel.rs"),
+                include_str!("pt_collab.rs")
+            ),
             super::pt::lookup,
         ),
         (
             "ru",
             include_str!("ru.rs"),
-            concat!(include_str!("ru_git.rs"), include_str!("ru_panel.rs")),
+            concat!(
+                include_str!("ru_git.rs"),
+                include_str!("ru_panel.rs"),
+                include_str!("ru_collab.rs")
+            ),
             super::ru::lookup,
         ),
         (
             "hi",
             include_str!("hi.rs"),
-            concat!(include_str!("hi_git.rs"), include_str!("hi_panel.rs")),
+            concat!(
+                include_str!("hi_git.rs"),
+                include_str!("hi_panel.rs"),
+                include_str!("hi_collab.rs")
+            ),
             super::hi::lookup,
         ),
         (
             "tr",
             include_str!("tr.rs"),
-            concat!(include_str!("tr_git.rs"), include_str!("tr_panel.rs")),
+            concat!(
+                include_str!("tr_git.rs"),
+                include_str!("tr_panel.rs"),
+                include_str!("tr_collab.rs")
+            ),
             super::tr::lookup,
         ),
         (
             "th",
             include_str!("th.rs"),
-            concat!(include_str!("th_git.rs"), include_str!("th_panel.rs")),
+            concat!(
+                include_str!("th_git.rs"),
+                include_str!("th_panel.rs"),
+                include_str!("th_collab.rs")
+            ),
             super::th::lookup,
         ),
         (
             "vi",
             include_str!("vi.rs"),
-            concat!(include_str!("vi_git.rs"), include_str!("vi_panel.rs")),
+            concat!(
+                include_str!("vi_git.rs"),
+                include_str!("vi_panel.rs"),
+                include_str!("vi_collab.rs")
+            ),
             super::vi::lookup,
         ),
         (
             "id",
             include_str!("id.rs"),
-            concat!(include_str!("id_git.rs"), include_str!("id_panel.rs")),
+            concat!(
+                include_str!("id_git.rs"),
+                include_str!("id_panel.rs"),
+                include_str!("id_collab.rs")
+            ),
             super::id::lookup,
         ),
     ]
@@ -191,7 +251,7 @@ fn placeholders(value: &str) -> BTreeSet<String> {
 fn every_locale_has_exactly_the_english_key_set() {
     let all_tables = tables();
     let expected = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2);
-    assert_eq!(expected.len(), 1113, "update the intentional catalog size");
+    assert_eq!(expected.len(), 1191, "update the intentional catalog size");
 
     for (name, main, git, lookup) in all_tables {
         let actual = table_keys(name, main, git);
@@ -206,6 +266,28 @@ fn every_locale_has_exactly_the_english_key_set() {
             assert!(
                 lookup(key).is_some_and(|value| english.is_empty() || !value.is_empty()),
                 "locale `{name}` has no direct value for `{key}`"
+            );
+        }
+    }
+}
+
+#[test]
+fn collaboration_catalog_is_complete_in_all_fifteen_locales() {
+    let all_tables = tables();
+    let keys: Vec<_> = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2)
+        .into_iter()
+        .filter(|key| key.starts_with("collab."))
+        .collect();
+    assert_eq!(
+        keys.len(),
+        78,
+        "update the intentional collaboration key set"
+    );
+    for key in keys {
+        for (name, _, _, lookup) in &all_tables {
+            assert!(
+                lookup(&key).is_some(),
+                "locale `{name}` is missing direct collaboration key `{key}`"
             );
         }
     }

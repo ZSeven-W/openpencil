@@ -130,6 +130,11 @@ impl WidgetHostNative {
         if let Some(hit) = self.selection_toolbar_hit(x, y, viewport_width, viewport_height) {
             match hit {
                 op_editor_ui::widgets::AlignToolbarHit::Align(action) => {
+                    if !self.collab_allows_document_mutation(
+                        op_editor_core::CollabDocumentMutation::NodePropertyBatch,
+                    ) {
+                        return Some(true);
+                    }
                     self.editor_state.align_selected(action);
                     self.mark_dirty();
                 }

@@ -19,7 +19,11 @@ impl DesktopApp {
     }
 
     pub(super) fn on_ime_commit(&mut self, text: &str) {
+        let transaction = self.collab_runtime.begin_local_edit(&mut self.host);
         let changed = self.host.apply_ime_commit(text);
+        if transaction {
+            self.collab_runtime.finish_local_edit(&mut self.host);
+        }
         self.sync_native_ime();
         if changed {
             self.request_redraw(true);
@@ -53,7 +57,18 @@ impl DesktopApp {
     }
 
     pub(super) fn on_key_pressed(&mut self, logical_key: &Key, text: Option<&str>) {
+        let collaboration_history_chord = self.zoom_modifier
+            && matches!(
+                logical_key,
+                Key::Character(character)
+                    if matches!(character.to_lowercase().as_str(), "z" | "y")
+            );
+        let transaction =
+            !collaboration_history_chord && self.collab_runtime.begin_local_edit(&mut self.host);
         self.handle_key_pressed(logical_key, text);
+        if transaction {
+            self.collab_runtime.finish_local_edit(&mut self.host);
+        }
         self.sync_native_ime();
     }
 }
