@@ -213,7 +213,9 @@ impl GitPullJob {
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => {
                 self.rx = None;
-                None
+                Some(Err(GitError::Io(
+                    "pull worker terminated without a result".into(),
+                )))
             }
         }
     }
@@ -430,4 +432,20 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
     let month = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
     (if month <= 2 { year + 1 } else { year }, month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disconnected_pull_worker_is_a_terminal_error() {
+        let (tx, rx) = mpsc::channel();
+        drop(tx);
+        let mut job = GitPullJob { rx: Some(rx) };
+
+        let result = job.poll().expect("disconnection must resolve the job");
+        assert!(matches!(result, Err(GitError::Io(_))));
+        assert!(!job.is_pending());
+    }
 }
