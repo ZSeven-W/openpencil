@@ -18,6 +18,16 @@ pub fn root_authored_origin(n: &PenNode) -> (f32, f32) {
     (base.x.unwrap_or(0.0) as f32, base.y.unwrap_or(0.0) as f32)
 }
 
+/// `Some(_)` when the node authored an `x` or `y` — the explicit-absolute
+/// signal `layout_repair`'s flow inference must yield to.
+pub(crate) fn node_base_xy(n: &PenNode) -> Option<(f64, f64)> {
+    let base = pen_base(n);
+    match (base.x, base.y) {
+        (None, None) => None,
+        (x, y) => Some((x.unwrap_or(0.0), y.unwrap_or(0.0))),
+    }
+}
+
 fn pen_base(n: &PenNode) -> &jian_ops_schema::node::base::PenNodeBase {
     match n {
         PenNode::Frame(f) => &f.base,
