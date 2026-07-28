@@ -96,7 +96,7 @@ fn discovery_provider_order() -> [AgentProvider; 6] {
 /// side-effectful.
 pub fn resolve_cli(name: &str) -> Option<PathBuf> {
     let exts: &[&str] = if cfg!(windows) {
-        &["", ".exe", ".cmd", ".bat"]
+        &[".exe", ".cmd", ".bat", ""]
     } else {
         &[""]
     };
