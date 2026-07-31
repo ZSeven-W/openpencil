@@ -9,6 +9,11 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 
 use op_i18n::Locale;
+
+use crate::catalog_toml::{
+    non_empty as toml_non_empty, parse_string_array as toml_string_array, parse_text as toml_text,
+    required as toml_required, set_once as toml_set_once, ValueError,
+};
 use serde::{Deserialize, Serialize};
 
 const PROMPT_CENTER_TOML: &str = include_str!("../assets/prompt_center.toml");
@@ -245,19 +250,18 @@ impl PromptBuilder {
     }
 }
 
+impl From<ValueError> for PromptCatalogError {
+    fn from((line, message): ValueError) -> Self {
+        Self { line, message }
+    }
+}
+
 fn required<T>(value: Option<T>, field: &str, line: usize) -> Result<T, PromptCatalogError> {
-    value.ok_or_else(|| PromptCatalogError::new(line, format!("missing `{field}`")))
+    toml_required(value, field, line).map_err(PromptCatalogError::from)
 }
 
 fn non_empty(value: String, field: &str, line: usize) -> Result<String, PromptCatalogError> {
-    if value.trim().is_empty() {
-        Err(PromptCatalogError::new(
-            line,
-            format!("`{field}` must not be empty"),
-        ))
-    } else {
-        Ok(value)
-    }
+    toml_non_empty(value, field, line).map_err(PromptCatalogError::from)
 }
 
 fn set_once<T>(
@@ -266,14 +270,15 @@ fn set_once<T>(
     field: &str,
     line: usize,
 ) -> Result<(), PromptCatalogError> {
-    if slot.is_some() {
-        return Err(PromptCatalogError::new(
-            line,
-            format!("duplicate `{field}`"),
-        ));
-    }
-    *slot = Some(value);
-    Ok(())
+    toml_set_once(slot, value, field, line).map_err(PromptCatalogError::from)
+}
+
+fn parse_text(value: &str, line: usize) -> Result<String, PromptCatalogError> {
+    toml_text(value, line).map_err(PromptCatalogError::from)
+}
+
+fn parse_string_array(value: &str, line: usize) -> Result<Vec<String>, PromptCatalogError> {
+    toml_string_array(value, line).map_err(PromptCatalogError::from)
 }
 
 /// Parse the strict TOML subset used by the embedded catalogue.
@@ -387,74 +392,4 @@ pub(crate) fn parse_prompt_catalogue(
         ));
     }
     Ok(prompts)
-}
-
-fn parse_text(value: &str, line: usize) -> Result<String, PromptCatalogError> {
-    if let Some(inner) = value
-        .strip_prefix("'''")
-        .and_then(|rest| rest.strip_suffix("'''"))
-    {
-        if inner.contains("'''") {
-            return Err(PromptCatalogError::new(
-                line,
-                "literal string contains an unsupported triple quote",
-            ));
-        }
-        return Ok(inner.to_string());
-    }
-    parse_basic_string(value, line)
-}
-
-fn parse_basic_string(value: &str, line: usize) -> Result<String, PromptCatalogError> {
-    let inner = value
-        .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-        .ok_or_else(|| PromptCatalogError::new(line, "expected a quoted string"))?;
-    let mut output = String::with_capacity(inner.len());
-    let mut chars = inner.chars();
-    while let Some(character) = chars.next() {
-        match character {
-            '"' => {
-                return Err(PromptCatalogError::new(
-                    line,
-                    "unescaped quote in basic string",
-                ))
-            }
-            '\\' => {
-                let escaped = chars
-                    .next()
-                    .ok_or_else(|| PromptCatalogError::new(line, "unterminated string escape"))?;
-                output.push(match escaped {
-                    '"' => '"',
-                    '\\' => '\\',
-                    'n' => '\n',
-                    'r' => '\r',
-                    't' => '\t',
-                    _ => {
-                        return Err(PromptCatalogError::new(
-                            line,
-                            format!("unsupported string escape `\\{escaped}`"),
-                        ))
-                    }
-                });
-            }
-            _ => output.push(character),
-        }
-    }
-    Ok(output)
-}
-
-fn parse_string_array(value: &str, line: usize) -> Result<Vec<String>, PromptCatalogError> {
-    let inner = value
-        .strip_prefix('[')
-        .and_then(|rest| rest.strip_suffix(']'))
-        .ok_or_else(|| PromptCatalogError::new(line, "expected a string array"))?
-        .trim();
-    if inner.is_empty() {
-        return Ok(Vec::new());
-    }
-    inner
-        .split(',')
-        .map(|item| parse_basic_string(item.trim(), line))
-        .collect()
 }

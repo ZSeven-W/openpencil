@@ -1,0 +1,46 @@
+# Scene Template Center catalogue.
+#
+# One entry per shipped template document. `id` must match both the embedded
+# document (assets/scene_templates/<id>.op) and its card preview
+# (op-editor-ui/assets/scene_template_previews/<id>.jpg) — `scene_template_catalog`
+# asserts that at load time, so a half-added template fails loudly instead of
+# rendering as a blank card.
+#
+# Parsed by `scene_template_catalog.rs` with the same small TOML subset the
+# Prompt Center uses: quoted strings, string arrays, plain integers.
+
+[[template]]
+id = "screenshot-tutorial"
+scene = "tutorial"
+title_key = "sceneTemplate.item.screenshotTutorial.title"
+title_fallback = "三步截图教程卡"
+summary_key = "sceneTemplate.item.screenshotTutorial.summary"
+summary_fallback = "封面、三个操作步骤和结尾行动号召，替换截图与说明即可发布。"
+tags = ["教程", "步骤", "小红书", "tutorial", "howto"]
+frames = 5
+frame_width = 1080
+frame_height = 1440
+
+[[template]]
+id = "knowledge-carousel"
+scene = "carousel"
+title_key = "sceneTemplate.item.knowledgeCarousel.title"
+title_fallback = "知识观点轮播"
+summary_key = "sceneTemplate.item.knowledgeCarousel.summary"
+summary_fallback = "封面、三个论点和总结页，适合把一个观点拆成可滑动的连续卡片。"
+tags = ["知识", "观点", "轮播", "小红书", "carousel"]
+frames = 5
+frame_width = 1080
+frame_height = 1440
+
+[[template]]
+id = "before-after"
+scene = "comparison"
+title_key = "sceneTemplate.item.beforeAfter.title"
+title_fallback = "改版前后对比"
+summary_key = "sceneTemplate.item.beforeAfter.summary"
+summary_fallback = "左右并置的前后对比，配改动说明，适合复盘与作品展示。"
+tags = ["对比", "前后", "复盘", "comparison", "before after"]
+frames = 1
+frame_width = 1600
+frame_height = 900
