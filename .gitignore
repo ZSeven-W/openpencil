@@ -58,5 +58,7 @@ Cargo.lock.merge-conflict
 **/locator-signing-key*.json
 
 tools/__pycache__/
+__pycache__/
+*.pyc
 openpencil-docs
 output

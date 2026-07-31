@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 渲染三套模板的预览图：每帧一张（scale 2）+ 整页拼合总览（scale 1）
+# 渲染场景模板的预览图：每帧一张（scale 2）+ 整页拼合总览（scale 1）
+# 卡片缩略图由 scene_preview_cards.py 从这些渲染产物再烤一层。
 set -euo pipefail
 R=/Users/fini/workspace/openpencil
 BIN=$R/target/release/openpencil-desktop
@@ -7,7 +8,7 @@ OUT=$R/templates/step0/previews
 TMP=$(mktemp -d)
 mkdir -p "$OUT"
 
-for t in screenshot-tutorial knowledge-carousel before-after; do
+for t in screenshot-tutorial knowledge-carousel before-after slide-deck; do
   # The documents themselves are shipped assets (embedded by the scene
   # template catalogue); this directory keeps only the generators and the
   # full-resolution renders they produce.

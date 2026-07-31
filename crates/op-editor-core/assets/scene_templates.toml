@@ -34,6 +34,18 @@ frame_width = 1080
 frame_height = 1440
 
 [[template]]
+id = "slide-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.slideDeck.title"
+title_fallback = "演示文稿 · 六页"
+summary_key = "sceneTemplate.item.slideDeck.summary"
+summary_fallback = "封面、目录、要点、数据、图表和结尾，16:9 投影比例，替换文案即可上台。"
+tags = ["PPT", "演示", "汇报", "幻灯片", "slides", "deck", "presentation"]
+frames = 6
+frame_width = 1920
+frame_height = 1080
+
+[[template]]
 id = "before-after"
 scene = "comparison"
 title_key = "sceneTemplate.item.beforeAfter.title"

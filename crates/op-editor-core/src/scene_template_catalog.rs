@@ -26,6 +26,7 @@ const SCREENSHOT_TUTORIAL_OP: &str =
     include_str!("../assets/scene_templates/screenshot-tutorial.op");
 const KNOWLEDGE_CAROUSEL_OP: &str = include_str!("../assets/scene_templates/knowledge-carousel.op");
 const BEFORE_AFTER_OP: &str = include_str!("../assets/scene_templates/before-after.op");
+const SLIDE_DECK_OP: &str = include_str!("../assets/scene_templates/slide-deck.op");
 
 /// Return the embedded document JSON for a template id.
 ///
@@ -38,6 +39,7 @@ pub fn scene_template_document(template_id: &str) -> Option<&'static str> {
         "screenshot-tutorial" => Some(SCREENSHOT_TUTORIAL_OP),
         "knowledge-carousel" => Some(KNOWLEDGE_CAROUSEL_OP),
         "before-after" => Some(BEFORE_AFTER_OP),
+        "slide-deck" => Some(SLIDE_DECK_OP),
         _ => None,
     }
 }

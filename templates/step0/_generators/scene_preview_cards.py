@@ -37,11 +37,19 @@ INSET = 12
 # (card id, source preview). The overview render is preferred wherever a
 # template has several frames: what makes a multi-page template legible at
 # thumbnail size is seeing that it HAS pages, not reading one of them.
+# (card id, source). A string names one render; a list is tiled into a grid
+# whose column count is chosen to land near the card's own aspect — a 16:9
+# deck laid out 1x6 is a 10:1 strip that shrinks each slide to ~100px inside
+# the card, which reads as noise rather than as slides.
 CARDS = [
     ("screenshot-tutorial", "screenshot-tutorial-overview.png"),
     ("knowledge-carousel", "knowledge-carousel-overview.png"),
     ("before-after", "before-after.png"),
+    ("slide-deck", [f"slide-deck-{i:02d}.png" for i in range(1, 7)]),
 ]
+
+# Gap between tiles, in source pixels — scaled down with everything else.
+TILE_GAP = 48
 
 
 def background_colour(image: Image.Image) -> tuple[int, int, int]:
@@ -64,8 +72,45 @@ def background_colour(image: Image.Image) -> tuple[int, int, int]:
     return (245, 245, 245)
 
 
-def bake(source: pathlib.Path) -> Image.Image:
-    image = Image.open(source)
+def grid_columns(tile_aspect: float, count: int) -> int:
+    """Column count whose tiled aspect sits closest to the card's.
+
+    Chosen rather than fixed so a 16:9 deck tiles 3x2 while a 3:4 carousel
+    tiles wide — the goal is filling the card, not a particular shape.
+    """
+    card_aspect = CARD_W / CARD_H
+    best, best_error = count, float("inf")
+    for columns in range(1, count + 1):
+        rows = -(-count // columns)
+        aspect = (columns * tile_aspect) / rows
+        error = abs(aspect - card_aspect)
+        if error < best_error:
+            best, best_error = columns, error
+    return best
+
+
+def tile(sources: list[pathlib.Path]) -> Image.Image:
+    images = [Image.open(path).convert("RGB") for path in sources]
+    width = max(i.width for i in images)
+    height = max(i.height for i in images)
+    columns = grid_columns(width / height, len(images))
+    rows = -(-len(images) // columns)
+    canvas = Image.new(
+        "RGB",
+        (
+            columns * width + (columns - 1) * TILE_GAP,
+            rows * height + (rows - 1) * TILE_GAP,
+        ),
+        background_colour(images[0]),
+    )
+    for index, image in enumerate(images):
+        column, row = index % columns, index // columns
+        canvas.paste(image, (column * (width + TILE_GAP), row * (height + TILE_GAP)))
+    return canvas
+
+
+def bake(source: pathlib.Path | list[pathlib.Path]) -> Image.Image:
+    image = tile(source) if isinstance(source, list) else Image.open(source)
     canvas = Image.new("RGB", (CARD_W, CARD_H), background_colour(image))
     fitted = image.convert("RGB")
     fitted.thumbnail((CARD_W - 2 * INSET, CARD_H - 2 * INSET), Image.LANCZOS)
@@ -86,11 +131,15 @@ def main() -> int:
 
     failed = False
     for card_id, source_name in CARDS:
-        source = SRC / source_name
-        if not source.exists():
-            print(f"missing source: {source}", file=sys.stderr)
+        names = source_name if isinstance(source_name, list) else [source_name]
+        sources = [SRC / name for name in names]
+        missing = [path for path in sources if not path.exists()]
+        if missing:
+            for path in missing:
+                print(f"missing source: {path}", file=sys.stderr)
             failed = True
             continue
+        source = sources if isinstance(source_name, list) else sources[0]
         target = DST / f"{card_id}.jpg"
         if args.check:
             status = "ok" if target.exists() else "MISSING"
