@@ -345,3 +345,69 @@ fn plan_is_sidebar_dashboard_weak_nav_still_needs_data_sections() {
     ];
     assert!(!plan_is_sidebar_dashboard(&p, false));
 }
+
+/// A deck plans one subtask per slide, each with its own `screen`. The
+/// scaffold must emit one root per group — a single command here is what
+/// made a six-slide deck arrive as one board (measured 2026-08-01).
+#[test]
+fn a_screen_group_per_slide_emits_a_root_per_slide() {
+    use crate::screen_groups::ScreenGroup;
+
+    let mut plan = crate::plan::OrchestratorPlan {
+        root_frame: crate::plan::RootFrameSpec {
+            id: "page".into(),
+            name: "Deck".into(),
+            width: 1920.0,
+            height: 1080.0,
+            layout: None,
+            gap: None,
+            padding: None,
+            fill: None,
+        },
+        subtasks: Vec::new(),
+        style_guide_name: None,
+    };
+    let names = [
+        "01 Cover",
+        "02 Agenda",
+        "03 Growth",
+        "04 Numbers",
+        "05 Plan",
+        "06 Close",
+    ];
+    let groups: Vec<ScreenGroup> = names
+        .iter()
+        .enumerate()
+        .map(|(i, screen)| ScreenGroup {
+            screen: (*screen).to_string(),
+            indices: vec![i],
+        })
+        .collect();
+    plan.subtasks = names
+        .iter()
+        .map(|screen| crate::plan::Subtask {
+            id: (*screen).to_string(),
+            label: (*screen).to_string(),
+            region: crate::plan::Region {
+                width: 1920.0,
+                height: 1080.0,
+            },
+            id_prefix: (*screen).to_string(),
+            parent_frame_id: None,
+            elements: None,
+            screen: Some((*screen).to_string()),
+            generated_root_id: None,
+            existing_section_labels: None,
+            retry_feedback: None,
+        })
+        .collect();
+
+    let (cmds, placeholder_ids, _) =
+        build_screen_group_scaffold(&plan, &groups, false, 0.0, 0.0).expect("scaffold builds");
+    assert_eq!(cmds.len(), groups.len(), "one insert per slide");
+
+    // Placeholder ids are the join key back to each group; a collision would
+    // let one slide's root overwrite another's.
+    let unique: std::collections::BTreeSet<&String> = placeholder_ids.iter().collect();
+    assert_eq!(unique.len(), placeholder_ids.len(), "{placeholder_ids:?}");
+}
