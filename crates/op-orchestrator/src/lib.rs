@@ -69,6 +69,7 @@ pub mod role_defaults;
 pub mod role_infer;
 pub(crate) mod role_layout_post_pass;
 pub mod role_post_pass;
+pub(crate) mod root_section_gap;
 pub mod run;
 mod run_salvage_feedback;
 pub mod scaffold;

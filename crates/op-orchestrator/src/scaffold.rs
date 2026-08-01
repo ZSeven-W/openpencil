@@ -249,7 +249,7 @@ pub fn mobile_status_bar_node(
 /// reverse-engineered demo uses `gap: 20` between sections). The LLM frequently
 /// omits the page gap, leaving it `0` so every section touches the next — the
 /// cramped, no-breathing-room look that reads nothing like the TS references.
-const SECTION_STACK_GAP: f64 = 20.0;
+pub(crate) const SECTION_STACK_GAP: f64 = 20.0;
 
 /// Resolve the page-root section gap: honor an explicit positive plan gap,
 /// otherwise fall back to [`SECTION_STACK_GAP`]. Mirrors the dashboard

@@ -42,7 +42,7 @@ pub struct NormInfo {
 }
 
 /// 移动端宽度上限(含)—— ≤ 此值视为移动端单屏。
-const MOBILE_MAX_WIDTH: f64 = 480.0;
+pub(crate) const MOBILE_MAX_WIDTH: f64 = 480.0;
 const MOBILE_DEFAULT_HEIGHT: f64 = 812.0;
 pub(crate) const MOBILE_DEFAULT_ROOT_GAP: f64 = 16.0;
 

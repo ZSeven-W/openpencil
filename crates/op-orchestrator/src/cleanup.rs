@@ -369,6 +369,39 @@ pub fn run_cleanup_passes_with_summary(
     );
 }
 
+/// Write the repaired root gap as a property patch.
+///
+/// Deliberately NOT an `apply_root_transform`: that rebuilds the subtree and
+/// hands the root a fresh id, which is the right shape for passes that
+/// restructure but wrong for setting one number — anything holding the root id
+/// (the caller's `root_ids`, the loop's screen bookkeeping) would be left
+/// pointing at a node that no longer exists.
+fn patch_root_section_gap(sink: &mut dyn DocSink, root_id: &str) {
+    let Some(root) = sink
+        .state()
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == root_id)
+    else {
+        return;
+    };
+    let node_id = NodeId::new(root.id_str());
+    let Ok(mut value) = serde_json::to_value(root) else {
+        return;
+    };
+    if !crate::root_section_gap::fix_root_section_gap(&mut value) {
+        return;
+    }
+    let Some(gap) = value.get("gap") else {
+        return;
+    };
+    sink.apply(EditorCommand::PatchNodeData {
+        node_id,
+        patch_json: format!(r#"{{"gap":{gap}}}"#),
+        page_id: None,
+    });
+}
+
 fn run_cleanup_passes_with_summary_and_policy(
     sink: &mut dyn DocSink,
     plan: &OrchestratorPlan,
@@ -467,6 +500,13 @@ fn run_cleanup_passes_with_summary_and_policy(
         rid = apply_root_transform(sink, &rid, crate::ring_repair::wrap_ring_fragments);
         debug_probe_child_height(sink, &rid, "table_flush");
         counter.checkpoint(summary, CheckCategory::Structure);
+        // Inter-section gap the planner would have set. Runs BEFORE the
+        // wrapper-inset pass below, which keys off whether the parent column
+        // gaps (`>= 12`): repairing the gap first lets that pass see the
+        // column the orchestrator path would have handed it, so both paths
+        // reach it in the same state.
+        patch_root_section_gap(sink, &rid);
+        debug_probe_child_height(sink, &rid, "root_gap");
         // Transparent wrapper padding inside an already-padded/gapped column →
         // double inset: misaligned section edges + starved children (a padded
         // "Key Metrics" strip squeezed its KPI cards until label touched icon).
