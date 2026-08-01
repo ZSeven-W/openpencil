@@ -82,6 +82,12 @@ impl EditorUiState {
     }
 
     /// Close the Prompt Center before Escape reaches chat focus or selection.
+    /// Escape closes the Scene Template Center. It has one flat layer — no
+    /// inline form like the Prompt Center's — so a single press dismisses it.
+    pub fn escape_scene_template_center(&mut self) -> bool {
+        self.close_scene_template_center()
+    }
+
     pub fn escape_prompt_center(&mut self) -> bool {
         if !self.prompt_center.open {
             return false;

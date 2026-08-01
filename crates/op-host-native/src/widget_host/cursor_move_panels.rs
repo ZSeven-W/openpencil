@@ -65,6 +65,23 @@ impl WidgetHostNative {
             }
         }
         if let Some(panel_rect) =
+            self.scene_template_panel_rect(self.last_viewport_w, self.last_viewport_h)
+        {
+            let (owns_point, changed) =
+                op_editor_ui::widgets::press_flow::hover_scene_template_center(
+                    &mut self.editor_state,
+                    panel_rect,
+                    Point2D::new(x, y),
+                );
+            if changed {
+                self.mark_dirty();
+            }
+            if owns_point {
+                self.clear_lower_overlay_hover();
+                return Some(true);
+            }
+        }
+        if let Some(panel_rect) =
             self.prompt_center_panel_rect(self.last_viewport_w, self.last_viewport_h)
         {
             let (owns_point, changed) =

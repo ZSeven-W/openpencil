@@ -21,6 +21,7 @@ use op_editor_core::editor_ui_state::EditorUiState;
 fn t(ui: &EditorUiState, key: &str) -> &'static str {
     let full = match key {
         "new" => "fileMenu.newFile",
+        "newFromTemplate" => "fileMenu.newFromTemplate",
         "open" => "fileMenu.openFile",
         "save" => "fileMenu.save",
         "saveAs" => "fileMenu.saveAs",
@@ -31,7 +32,16 @@ fn t(ui: &EditorUiState, key: &str) -> &'static str {
         "clearHistory" => "fileMenu.clearHistory",
         _ => return "",
     };
-    op_i18n::translate(ui.locale, full).trim_end_matches(['.', '…'])
+    let translated = op_i18n::translate(ui.locale, full);
+    if translated == full {
+        // A key that is not in the catalogue yet must not surface as
+        // "fileMenu.newFromTemplate" in the menu.
+        return match key {
+            "newFromTemplate" => "从模板新建",
+            _ => "",
+        };
+    }
+    translated.trim_end_matches(['.', '…'])
 }
 
 pub const MENU_WIDTH: f32 = 300.0;
@@ -48,6 +58,8 @@ const RECENT_COLUMN_GAP: f32 = 10.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileMenuChoice {
     NewFile,
+    /// Open the Scene Template Center to start from a finished document.
+    NewFromTemplate,
     OpenFile,
     Save,
     SaveAs,
@@ -132,7 +144,7 @@ impl<'a> FileMenu<'a> {
     /// Row index of the first recent-file entry. Everything after the
     /// export section shifts with [`FileMenu::export_rows`].
     fn recent_row_start(&self) -> usize {
-        4 + self.export_rows()
+        5 + self.export_rows()
     }
 
     /// Label for the batch-export row: naming the selected frames when
@@ -152,7 +164,7 @@ impl<'a> FileMenu<'a> {
     /// empty hint) + clear row + section paddings.
     pub fn height(&self) -> f32 {
         let mut h = PAD_Y;
-        h += ROW_HEIGHT * 2.0; // New + Open
+        h += ROW_HEIGHT * 3.0; // New + New from template + Open
         h += DIVIDER_GAP * 2.0 + 1.0; // divider
         h += ROW_HEIGHT * 2.0; // Save + Save As
         h += DIVIDER_GAP * 2.0 + 1.0;
@@ -189,11 +201,12 @@ impl<'a> FileMenu<'a> {
         let recent_start = self.recent_row_start();
         match row {
             0 => Some(FileMenuChoice::NewFile),
-            1 => Some(FileMenuChoice::OpenFile),
-            2 => Some(FileMenuChoice::Save),
-            3 => Some(FileMenuChoice::SaveAs),
-            4 => Some(FileMenuChoice::ExportImage),
-            5 if self.has_export_all_row() => Some(FileMenuChoice::ExportAllFrames),
+            1 => Some(FileMenuChoice::NewFromTemplate),
+            2 => Some(FileMenuChoice::OpenFile),
+            3 => Some(FileMenuChoice::Save),
+            4 => Some(FileMenuChoice::SaveAs),
+            5 => Some(FileMenuChoice::ExportImage),
+            6 if self.has_export_all_row() => Some(FileMenuChoice::ExportAllFrames),
             row if row >= recent_start && row < recent_start + self.recent.len() => {
                 Some(FileMenuChoice::OpenRecent(row - recent_start))
             }
@@ -210,7 +223,7 @@ impl<'a> FileMenu<'a> {
         }
         let mut row = 0usize;
         let mut y = panel.origin.y + PAD_Y;
-        for _ in 0..2 {
+        for _ in 0..3 {
             if row_hit(panel.origin.x, y, point) {
                 return MenuHit::Row(row);
             }
@@ -309,10 +322,21 @@ impl<'a> Widget for FileMenu<'a> {
             &self.theme,
             rect.origin.x,
             y,
+            Icon::LayoutDashboard,
+            t(self.ui, "newFromTemplate"),
+            "",
+            h(1),
+        );
+        y += ROW_HEIGHT;
+        paint_row(
+            cx,
+            &self.theme,
+            rect.origin.x,
+            y,
             Icon::FolderOpen,
             t(self.ui, "open"),
             "⌘O",
-            h(1),
+            h(2),
         );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
@@ -324,7 +348,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Save,
             t(self.ui, "save"),
             "⌘S",
-            h(2),
+            h(3),
         );
         y += ROW_HEIGHT;
         paint_row(
@@ -335,7 +359,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Save,
             t(self.ui, "saveAs"),
             "⌘⇧S",
-            h(3),
+            h(4),
         );
         y += ROW_HEIGHT;
         y = paint_divider(cx, &self.theme, rect, y);
@@ -347,7 +371,7 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Download,
             t(self.ui, "exportImage"),
             "⌘⇧P",
-            h(4),
+            h(5),
         );
         y += ROW_HEIGHT;
         if self.has_export_all_row() {
@@ -359,7 +383,7 @@ impl<'a> Widget for FileMenu<'a> {
                 Icon::LayoutGrid,
                 &self.export_all_label(),
                 "",
-                h(5),
+                h(6),
             );
             y += ROW_HEIGHT;
         }

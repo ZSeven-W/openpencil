@@ -17,6 +17,10 @@ impl WidgetHostNative {
             self.exit_preview();
             return true;
         }
+        if self.editor_state.editor_ui.escape_scene_template_center() {
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.escape_prompt_center() {
             self.mark_dirty();
             return true;

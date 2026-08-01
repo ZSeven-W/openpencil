@@ -35,7 +35,7 @@ fn hit_uses_shared_menu_state_protocol() {
     let divider = DIVIDER_GAP * 2.0 + 1.0;
     let recent_y = panel.origin.y
         + PAD_Y
-        + ROW_HEIGHT * 2.0
+        + ROW_HEIGHT * 3.0
         + divider
         + ROW_HEIGHT * 2.0
         + divider
@@ -45,9 +45,9 @@ fn hit_uses_shared_menu_state_protocol() {
         + ROW_HEIGHT * 0.5;
     assert_eq!(
         menu.hit(panel, Point2D::new(panel.origin.x + 20.0, recent_y)),
-        MenuHit::Row(5)
+        MenuHit::Row(6)
     );
-    assert_eq!(menu.choice_for_row(5), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(6), Some(FileMenuChoice::OpenRecent(0)));
 
     let header_y = recent_y - ROW_HEIGHT * 0.5 - HEADER_HEIGHT * 0.5;
     assert_eq!(
@@ -79,7 +79,8 @@ fn export_all_row_y(panel: Rect) -> f32 {
     let divider = DIVIDER_GAP * 2.0 + 1.0;
     panel.origin.y
         + PAD_Y
-        + ROW_HEIGHT * 2.0
+        // New + New from template + Open
+        + ROW_HEIGHT * 3.0
         + divider
         + ROW_HEIGHT * 2.0
         + divider
@@ -94,9 +95,13 @@ fn hosts_without_batch_export_keep_the_original_row_map() {
     let menu = FileMenu::for_editor_ui(&ui, two_recents());
     let panel = menu_panel(&menu);
 
-    assert_eq!(menu.choice_for_row(4), Some(FileMenuChoice::ExportImage));
-    assert_eq!(menu.choice_for_row(5), Some(FileMenuChoice::OpenRecent(0)));
-    assert_eq!(menu.choice_for_row(7), Some(FileMenuChoice::ClearRecent));
+    assert_eq!(
+        menu.choice_for_row(1),
+        Some(FileMenuChoice::NewFromTemplate)
+    );
+    assert_eq!(menu.choice_for_row(5), Some(FileMenuChoice::ExportImage));
+    assert_eq!(menu.choice_for_row(6), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(8), Some(FileMenuChoice::ClearRecent));
     // The row under Export image is the divider gutter, not a row.
     assert_eq!(
         menu.hit(
@@ -117,11 +122,11 @@ fn batch_export_row_paints_under_export_image_and_shifts_the_recents() {
     let panel = menu_panel(&menu);
 
     assert_eq!(
-        menu.choice_for_row(5),
+        menu.choice_for_row(6),
         Some(FileMenuChoice::ExportAllFrames)
     );
-    assert_eq!(menu.choice_for_row(6), Some(FileMenuChoice::OpenRecent(0)));
-    assert_eq!(menu.choice_for_row(8), Some(FileMenuChoice::ClearRecent));
+    assert_eq!(menu.choice_for_row(7), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(9), Some(FileMenuChoice::ClearRecent));
 
     // Hit-test agrees with the paint walk: the row right below
     // Export image is the batch row.
@@ -130,7 +135,7 @@ fn batch_export_row_paints_under_export_image_and_shifts_the_recents() {
             panel,
             Point2D::new(panel.origin.x + 20.0, export_all_row_y(panel))
         ),
-        MenuHit::Row(5)
+        MenuHit::Row(6)
     );
 
     let plain_ui = EditorUiState::default();

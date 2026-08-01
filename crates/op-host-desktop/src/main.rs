@@ -85,6 +85,7 @@ mod remote_image_host;
 mod render_cli;
 mod render_cli_error;
 mod save_session;
+mod scene_template_open;
 mod settings_io;
 mod single_instance;
 mod sub_agent_session;

@@ -5,6 +5,7 @@
 
 use super::WidgetHostNative;
 use op_editor_ui::util::scroll_by_max;
+use op_editor_ui::widgets::press_flow;
 use op_editor_ui::widgets::scroll_flow;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
@@ -289,6 +290,32 @@ impl WidgetHostNative {
         true
     }
 
+    fn try_scroll_scene_template_center(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let Some(panel_rect) = self.scene_template_panel_rect(viewport_width, viewport_height)
+        else {
+            return false;
+        };
+        let Some(dirty) = press_flow::scroll_scene_template_center(
+            &mut self.editor_state,
+            panel_rect,
+            Point2D::new(x, y),
+            delta_y,
+        ) else {
+            return false;
+        };
+        if dirty {
+            self.mark_dirty();
+        }
+        true
+    }
+
     fn try_scroll_prompt_center(
         &mut self,
         x: f32,
@@ -370,6 +397,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.try_scroll_icon_picker(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_scene_template_center(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
         if self.try_scroll_prompt_center(x, y, delta_y, viewport_width, viewport_height) {

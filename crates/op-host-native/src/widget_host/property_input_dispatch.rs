@@ -200,11 +200,23 @@ impl WidgetHostNative {
                     FileMenuChoice::SaveAs => op_editor_core::CollabGateAction::SaveFork,
                     FileMenuChoice::ExportImage
                     | FileMenuChoice::ExportAllFrames
-                    | FileMenuChoice::ClearRecent => op_editor_core::CollabGateAction::LocalUi,
+                    | FileMenuChoice::ClearRecent
+                    // Opening the centre only shows a panel; the document is
+                    // replaced later, and that step re-runs the gate itself.
+                    | FileMenuChoice::NewFromTemplate => op_editor_core::CollabGateAction::LocalUi,
                 };
                 if !self.collab_allows_user_action(gate_action) {
                     self.editor_state.editor_ui.file_menu_open = false;
                     self.editor_state.editor_ui.file_menu.hover = None;
+                    return;
+                }
+                if choice == FileMenuChoice::NewFromTemplate {
+                    self.editor_state
+                        .editor_ui
+                        .open_scene_template_center(self.now_ms);
+                    self.editor_state.editor_ui.file_menu_open = false;
+                    self.editor_state.editor_ui.file_menu.hover = None;
+                    self.mark_dirty();
                     return;
                 }
                 self.editor_state.editor_ui.pending_file_action = Some(match choice {
@@ -216,6 +228,9 @@ impl WidgetHostNative {
                     FileMenuChoice::ExportAllFrames => FileAction::ExportAllFrames,
                     FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
                     FileMenuChoice::ClearRecent => FileAction::ClearRecent,
+                    // Handled above — it opens a panel rather than queuing a
+                    // file action.
+                    FileMenuChoice::NewFromTemplate => return,
                 });
                 self.editor_state.editor_ui.file_menu_open = false;
                 self.editor_state.editor_ui.file_menu.hover = None;

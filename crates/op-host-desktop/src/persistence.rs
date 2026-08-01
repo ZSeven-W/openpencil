@@ -119,7 +119,10 @@ fn viewport_size_for_window(window: Option<&winit::window::Window>) -> (f32, f32
         .unwrap_or((super::INITIAL_VIEWPORT_W, super::INITIAL_VIEWPORT_H))
 }
 
-fn fit_loaded_document(host: &mut WidgetHostNative, window: Option<&winit::window::Window>) {
+pub(crate) fn fit_loaded_document(
+    host: &mut WidgetHostNative,
+    window: Option<&winit::window::Window>,
+) {
     let (vw, vh) = viewport_size_for_window(window);
     host.fit_content_to_viewport(vw, vh);
     host.mark_editor_state_dirty();
@@ -540,7 +543,10 @@ pub fn run_action(
 // of `figma_import_session::spawn_approved`, which moves the parse to a worker
 // thread and pumps the result back through a channel each frame.
 
-fn refresh_title(current_path: &Option<PathBuf>, window: Option<&winit::window::Window>) {
+pub(crate) fn refresh_title(
+    current_path: &Option<PathBuf>,
+    window: Option<&winit::window::Window>,
+) {
     let Some(window) = window else { return };
     let title = match current_path.as_ref().and_then(|p| p.file_name()) {
         Some(name) => format!(

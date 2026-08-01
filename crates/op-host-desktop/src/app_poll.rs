@@ -200,6 +200,15 @@ impl DesktopApp {
         let mut should_paint = !tracked_request || self.redraw_dirty;
         self.redraw_dirty = false;
         should_paint |= self.drain_pending_cursor_move();
+        // A template chosen in the Scene Template Center replaces the
+        // document here rather than inside the press handler: loading is a
+        // host capability, and the panel deliberately only records the
+        // request.
+        should_paint |= crate::scene_template_open::drain_pending_scene_template(
+            &mut self.host,
+            &mut self.current_path,
+            self.window.as_ref(),
+        );
         should_paint
     }
 }

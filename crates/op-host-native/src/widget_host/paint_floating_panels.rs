@@ -4,6 +4,7 @@ use super::WidgetHostNative;
 use crate::backend::NativeFrameBackend;
 use op_editor_ui::widgets::{
     ComponentBrowserPanel, DesignMdPanel, IconPickerPanel, PaintCx, PromptCenterPanel,
+    SceneTemplatePanel,
 };
 
 impl WidgetHostNative {
@@ -28,6 +29,18 @@ impl WidgetHostNative {
         if let (Some(panel), Some(rect)) = (
             PromptCenterPanel::for_editor_at(&self.editor_state, self.now_ms),
             self.prompt_center_panel_rect(viewport_width, viewport_height),
+        ) {
+            panel.paint(
+                &mut PaintCx {
+                    backend: &mut *frame,
+                },
+                rect,
+            );
+        }
+
+        if let (Some(panel), Some(rect)) = (
+            SceneTemplatePanel::for_editor_at(&self.editor_state, self.now_ms),
+            self.scene_template_panel_rect(viewport_width, viewport_height),
         ) {
             panel.paint(
                 &mut PaintCx {
