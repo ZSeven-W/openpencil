@@ -11,6 +11,8 @@ pub enum DesignType {
     DesktopScreen,
     LandingPage,
     Component,
+    /// Presentation deck — 16:9 slides rather than a scrolling page.
+    Slides,
 }
 
 /// 一个设计类型的尺寸 preset(TS `DesignTypePreset`)。
@@ -46,6 +48,18 @@ const DESKTOP: DesignTypePreset = DesignTypePreset {
     root_height: 800.0,
     default_sections: &["Header", "Main Content", "Actions"],
 };
+/// A deck's artboard is the projector, not a viewport: 1920x1080 fixed, never
+/// content-sized. `skills/domains/slides.md` states the same contract to the
+/// model ("each slide is a 16:9 frame, 1920x1080"), and without this preset the
+/// planner handed it a 1200-wide landing page to build that contract inside —
+/// the guidance and the skeleton disagreed, and the skeleton wins.
+const SLIDES: DesignTypePreset = DesignTypePreset {
+    type_: DesignType::Slides,
+    width: 1920.0,
+    height: 1080.0,
+    root_height: 1080.0,
+    default_sections: &["Title", "Body"],
+};
 const LANDING: DesignTypePreset = DesignTypePreset {
     type_: DesignType::LandingPage,
     width: 1200.0,
@@ -74,6 +88,15 @@ const COMPONENT_TRIGGER_CJK: &[&str] = &[
 ];
 /// 取消单组件资格的词 —— `COMPONENT_DISQUALIFIER_RE`。
 const COMPONENT_DISQUALIFIER: &[&str] = &[
+    "slide",
+    "slides",
+    "deck",
+    "presentation",
+    "keynote",
+    "ppt",
+    "幻灯片",
+    "演示",
+    "路演",
     "screen",
     "page",
     "app",
@@ -100,6 +123,20 @@ const COMPONENT_DISQUALIFIER: &[&str] = &[
     "工作区",
 ];
 /// 移动端触发词 —— 命中 → MobileScreen。
+/// 演示文稿触发词 —— 与 `skills/domains/slides.md` 的 trigger keywords 同源,
+/// 两处必须一起改:语料决定模型拿到什么规则,这里决定它在多大的画布上用。
+const SLIDES_WORDS: &[&str] = &[
+    "slide",
+    "slides",
+    "deck",
+    "presentation",
+    "keynote",
+    "ppt",
+    "幻灯片",
+    "演示文稿",
+    "演示稿",
+    "路演",
+];
 const MOBILE_WORDS: &[&str] = &["mobile", "手机", "phone", "移动端", "ios", "android"];
 /// 数据型工作区 / dashboard 触发词 —— 命中 → DesktopScreen。
 const DASHBOARD_WORDS: &[&str] = &[
@@ -155,21 +192,71 @@ pub fn detect_design_type(prompt: &str) -> DesignTypePreset {
     if trigger && !contains_any(&lower, COMPONENT_DISQUALIFIER) {
         return COMPONENT;
     }
-    // ② 移动端。
+    // ② 演示文稿。放在移动端之前:"手机端演示" 说的是内容形态是 deck,
+    //    而 deck 的画幅是投影比例,不是手机屏。
+    if contains_any(&lower, SLIDES_WORDS) {
+        return SLIDES;
+    }
+    // ③ 移动端。
     if contains_any(&lower, MOBILE_WORDS) {
         return MOBILE;
     }
-    // ③ 数据型工作区 / dashboard。
+    // ④ 数据型工作区 / dashboard。
     if contains_any(&lower, DASHBOARD_WORDS) {
         return DESKTOP;
     }
-    // ④ 默认:多区块落地页。
+    // ⑤ 默认:多区块落地页。
     LANDING
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deck_requests_get_the_projector_artboard() {
+        for prompt in [
+            "做一个季度汇报 PPT",
+            "设计一套融资路演幻灯片",
+            "a pitch deck for our seed round",
+            "design a keynote presentation about onboarding",
+            "5-slide deck",
+        ] {
+            let preset = detect_design_type(prompt);
+            assert_eq!(preset.type_, DesignType::Slides, "{prompt}");
+            assert_eq!((preset.width, preset.height), (1920.0, 1080.0), "{prompt}");
+        }
+    }
+
+    #[test]
+    fn a_deck_beats_the_single_component_reading() {
+        // "the cover card of my deck" is a deck; the component trigger `card`
+        // must not win, which is why the deck words are disqualifiers too.
+        assert_eq!(detect_design_type("PPT 封面卡片").type_, DesignType::Slides);
+        assert_eq!(
+            detect_design_type("the title card for my pitch deck").type_,
+            DesignType::Slides
+        );
+        // A plain component request is untouched.
+        assert_eq!(
+            detect_design_type("a profile card").type_,
+            DesignType::Component
+        );
+    }
+
+    #[test]
+    fn a_deck_beats_the_mobile_reading() {
+        // The content form decides the artboard: a deck shown on a phone is
+        // still 16:9, not 375x812.
+        assert_eq!(
+            detect_design_type("手机上看的演示文稿").type_,
+            DesignType::Slides
+        );
+        assert_eq!(
+            detect_design_type("a mobile login screen").type_,
+            DesignType::MobileScreen
+        );
+    }
 
     #[test]
     fn component_detected_and_not_disqualified() {

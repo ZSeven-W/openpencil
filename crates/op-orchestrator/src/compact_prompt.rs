@@ -90,6 +90,11 @@ pub fn build_compact_planning_prompt(
         DesignType::Component => {
             "Create exactly 1 subtask for this single component (no surrounding screen, no chrome)."
         }
+        DesignType::Slides => {
+            "Create one subtask per slide, in presentation order. Each slide is a self-contained \
+             16:9 board with a single idea — a takeaway title plus its supporting content — not a \
+             section of a scrolling page."
+        }
         DesignType::LandingPage => "Create 4-8 scrollable page sections in top-to-bottom order.",
     };
 
@@ -105,6 +110,10 @@ pub fn build_compact_planning_prompt(
                 "Use width=375 and height=812 on the root frame.".to_string()
             }
             DesignType::Component => "Use width=400 and height=0 on the root frame.".to_string(),
+            // A deck is projector-shaped and fixed. Falling into the 1200x0
+            // default below would contradict the 16:9 contract the slides
+            // guidance states, and the skeleton is what actually gets built.
+            DesignType::Slides => "Use width=1920 and height=1080 on the root frame.".to_string(),
             _ => "Use width=1200 and height=0 on the root frame.".to_string(),
         }
     };
@@ -121,6 +130,21 @@ pub fn build_compact_planning_prompt(
             "Do NOT create a status bar, navigation, or footer section.".to_string(),
             size_rule,
             "Use exactly 1 subtask for the component itself.".to_string(),
+        ],
+        DesignType::Slides => vec![
+            "This is a presentation deck. Every slide is its own 16:9 board.".to_string(),
+            // The `screen` label is what splits subtasks into separate root
+            // frames (`screen_groups::group_subtasks_by_screen`). Without a
+            // distinct label per slide they all collapse onto one root, and a
+            // six-slide deck renders as one 1920x1080 frame with six sections
+            // stacked inside it.
+            "One slide per subtask. Add a `screen` field to EVERY subtask, on top of \
+             the required fields, holding that slide's own name — \
+             {\"id\":\"cover\",\"label\":\"Cover\",\"screen\":\"01 Cover\",\"elements\":\"…\",\"region\":{…}}. \
+             Two subtasks must never share a `screen` value."
+                .to_string(),
+            "Do NOT create a status bar, navigation bar, or footer section.".to_string(),
+            size_rule,
         ],
         _ => vec![size_rule],
     };
@@ -202,6 +226,26 @@ mod tests {
         assert!(cp.system.contains("predictable mobile stack"));
         assert!(cp.system.contains("mobile top rhythm tight"));
         assert_eq!(cp.user_prompt, "a mobile login screen");
+    }
+
+    #[test]
+    fn a_deck_prompt_carries_the_projector_size_and_per_slide_screens() {
+        let cp = build_compact_planning_prompt("做一个季度汇报 PPT", None);
+        let text = format!("{}\n{}", cp.system, cp.user_prompt);
+        assert!(
+            text.contains("width=1920") && text.contains("height=1080"),
+            "a deck must be planned at projector size, got: {text}"
+        );
+        assert!(
+            !text.contains("width=1200"),
+            "the landing-page default must not reach a deck: {text}"
+        );
+        // Without a distinct `screen` per subtask every slide collapses onto
+        // one root frame — see `screen_groups::group_subtasks_by_screen`.
+        assert!(
+            text.contains("`screen`"),
+            "the plan must be told to label each slide: {text}"
+        );
     }
 
     #[test]
