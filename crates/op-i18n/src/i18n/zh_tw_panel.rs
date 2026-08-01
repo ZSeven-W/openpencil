@@ -84,6 +84,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "加入此工作階段",
         "collab.action.rejectOwner" => "不加入",
         "collab.error.ownerNotConfirmed" => "你未確認主持人，因此未載入任何內容。",
+        "sceneTemplate.title" => "場景範本",
+        "sceneTemplate.searchPlaceholder" => "搜尋場景或範本",
+        "sceneTemplate.empty" => "沒有符合的範本",
+        "sceneTemplate.frames" => "{{count}} 頁",
+        "sceneTemplate.filter.all" => "全部",
+        "sceneTemplate.scene.tutorial" => "教學圖",
+        "sceneTemplate.scene.comparison" => "對比圖",
+        "sceneTemplate.scene.carousel" => "知識卡片",
+        "sceneTemplate.scene.slides" => "簡報",
+        "sceneTemplate.item.screenshotTutorial.title" => "三步截圖教學卡",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "封面、三個操作步驟和結尾行動呼籲，替換截圖與說明即可發布。"
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "知識觀點輪播",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "封面、三個論點和總結頁，適合將一個觀點拆成可滑動的連續卡片。"
+        }
+        "sceneTemplate.item.beforeAfter.title" => "改版前後對比",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "左右並置的前後對比，搭配改動說明，適合回顧與作品展示。"
+        }
+        "sceneTemplate.item.slideDeck.title" => "簡報 · 六頁",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "封面、目錄、要點、資料、圖表和結尾，16:9 投影比例，替換文案即可上台。"
+        }
+        "fileMenu.newFromTemplate" => "從範本新增",
         _ => return super::zh_tw_collab::lookup(key),
     })
 }

@@ -72,6 +72,34 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "promptCenter.item.componentFormLab.title" => "Form Lab · Form bileşeni sistemi",
         "promptCenter.item.modifyPolishCurrent.title" => "Mevcut ekranı iyileştir",
         "promptCenter.item.modifyCompleteStates.title" => "Bileşen durumlarını tamamla",
+        "sceneTemplate.title" => "Sahne Şablonları",
+        "sceneTemplate.searchPlaceholder" => "Sahne veya şablon ara…",
+        "sceneTemplate.empty" => "Eşleşen şablon bulunamadı",
+        "sceneTemplate.frames" => "{{count}} sayfa",
+        "sceneTemplate.filter.all" => "Tümü",
+        "sceneTemplate.scene.tutorial" => "Eğitim görseli",
+        "sceneTemplate.scene.comparison" => "Karşılaştırma görseli",
+        "sceneTemplate.scene.carousel" => "Bilgi kartları",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => {
+            "Üç adımlı ekran görüntülü eğitim kartı"
+        }
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Kapak, üç işlem adımı ve son harekete geçirici mesaj; ekran görüntülerini ve metni değiştirip yayımlayın."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Bilgi ve içgörü karuseli",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Kapak, üç ana fikir ve özet sayfası; tek bir fikri kaydırılabilir ardışık kartlara bölmek için ideal."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Yeniden tasarım öncesi ve sonrası",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Değişiklik notlarıyla yan yana önce/sonra karşılaştırması; geriye dönük değerlendirmeler ve portföy sunumları için ideal."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Sunum · Altı slayt",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Kapak, gündem, ana noktalar, veriler, grafik ve kapanış; 16:9 sunum oranında, metni değiştirip sunmaya hazır."
+        }
+        "fileMenu.newFromTemplate" => "Şablondan yeni oluştur",
         "collab.ownerConfirm.title" => "Kime katıldığınızı onaylayın",
         "collab.ownerConfirm.hint" => "Bu oturumdan henüz hiçbir şey yüklenmedi.",
         "collab.ownerConfirm.account" => "Doğrulanmış hesap",

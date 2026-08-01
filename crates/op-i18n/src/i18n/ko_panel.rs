@@ -88,6 +88,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "이 세션에 참여",
         "collab.action.rejectOwner" => "참여 안 함",
         "collab.error.ownerNotConfirmed" => "호스트를 확인하지 않아 아무것도 불러오지 않았습니다.",
+        "sceneTemplate.title" => "장면 템플릿",
+        "sceneTemplate.searchPlaceholder" => "장면 또는 템플릿 검색…",
+        "sceneTemplate.empty" => "일치하는 템플릿이 없습니다",
+        "sceneTemplate.frames" => "{{count}}페이지",
+        "sceneTemplate.filter.all" => "전체",
+        "sceneTemplate.scene.tutorial" => "튜토리얼 이미지",
+        "sceneTemplate.scene.comparison" => "비교 이미지",
+        "sceneTemplate.scene.carousel" => "지식 카드",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => "3단계 스크린샷 튜토리얼 카드",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "표지, 3단계 작업, 마지막 CTA로 구성되어 있어 스크린샷과 설명만 바꾸면 바로 게시할 수 있습니다."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "지식·인사이트 캐러셀",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "표지, 세 가지 논점, 요약 페이지로 구성되어 있어 하나의 관점을 넘겨 보는 연속 카드로 풀어내기에 적합합니다."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "개편 전후 비교",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "전후 화면을 좌우로 나란히 배치하고 변경 설명을 더해, 회고나 작업물 소개에 적합합니다."
+        }
+        "sceneTemplate.item.slideDeck.title" => "프레젠테이션 · 6페이지",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "표지, 목차, 핵심 내용, 데이터, 차트, 마무리로 구성된 16:9 발표 자료로, 문구만 바꾸면 바로 발표할 수 있습니다."
+        }
+        "fileMenu.newFromTemplate" => "템플릿에서 새로 만들기",
         _ => return super::ko_collab::lookup(key),
     })
 }

@@ -78,6 +78,34 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "promptCenter.item.componentFormLab.title" => "Form Lab · ระบบคอมโพเนนต์ฟอร์ม",
         "promptCenter.item.modifyPolishCurrent.title" => "ปรับแต่งหน้าจอปัจจุบัน",
         "promptCenter.item.modifyCompleteStates.title" => "เติมสถานะคอมโพเนนต์ให้ครบ",
+        "sceneTemplate.title" => "เทมเพลตฉาก",
+        "sceneTemplate.searchPlaceholder" => "ค้นหาฉากหรือเทมเพลต…",
+        "sceneTemplate.empty" => "ไม่พบเทมเพลตที่ตรงกัน",
+        "sceneTemplate.frames" => "{{count}} หน้า",
+        "sceneTemplate.filter.all" => "ทั้งหมด",
+        "sceneTemplate.scene.tutorial" => "ภาพสอนใช้งาน",
+        "sceneTemplate.scene.comparison" => "ภาพเปรียบเทียบ",
+        "sceneTemplate.scene.carousel" => "การ์ดความรู้",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => {
+            "การ์ดสอนใช้งานด้วยภาพหน้าจอ 3 ขั้นตอน"
+        }
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "ประกอบด้วยหน้าปก ขั้นตอนการใช้งาน 3 ขั้น และคำกระตุ้นการตัดสินใจตอนท้าย เพียงเปลี่ยนภาพหน้าจอและคำอธิบายก็พร้อมเผยแพร่"
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "คารูเซลความรู้และมุมมอง",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "ประกอบด้วยหน้าปก ประเด็นหลัก 3 ข้อ และหน้าสรุป เหมาะสำหรับแยกหนึ่งแนวคิดเป็นการ์ดต่อเนื่องที่ปัดดูได้"
+        }
+        "sceneTemplate.item.beforeAfter.title" => "เปรียบเทียบก่อนและหลังปรับดีไซน์",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "วางภาพก่อนและหลังเทียบกันซ้ายขวา พร้อมคำอธิบายการเปลี่ยนแปลง เหมาะสำหรับการสรุปบทเรียนและนำเสนอในพอร์ตโฟลิโอ"
+        }
+        "sceneTemplate.item.slideDeck.title" => "งานนำเสนอ · 6 สไลด์",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "ประกอบด้วยหน้าปก สารบัญ ประเด็นสำคัญ ข้อมูล แผนภูมิ และหน้าปิด ในอัตราส่วนฉายภาพ 16:9 เพียงเปลี่ยนข้อความก็พร้อมนำเสนอ"
+        }
+        "fileMenu.newFromTemplate" => "สร้างใหม่จากเทมเพลต",
         "collab.ownerConfirm.title" => "ยืนยันว่าคุณกำลังเข้าร่วมกับใคร",
         "collab.ownerConfirm.hint" => "ยังไม่มีเนื้อหาใดจากเซสชันนี้ถูกโหลด",
         "collab.ownerConfirm.account" => "บัญชีที่ยืนยันแล้ว",

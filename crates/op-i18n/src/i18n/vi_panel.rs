@@ -82,6 +82,34 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "promptCenter.item.componentFormLab.title" => "Form Lab · Hệ thống thành phần biểu mẫu",
         "promptCenter.item.modifyPolishCurrent.title" => "Tinh chỉnh màn hình hiện tại",
         "promptCenter.item.modifyCompleteStates.title" => "Hoàn thiện các trạng thái thành phần",
+        "sceneTemplate.title" => "Mẫu cảnh",
+        "sceneTemplate.searchPlaceholder" => "Tìm cảnh hoặc mẫu…",
+        "sceneTemplate.empty" => "Không tìm thấy mẫu phù hợp",
+        "sceneTemplate.frames" => "{{count}} trang",
+        "sceneTemplate.filter.all" => "Tất cả",
+        "sceneTemplate.scene.tutorial" => "Ảnh hướng dẫn",
+        "sceneTemplate.scene.comparison" => "Ảnh so sánh",
+        "sceneTemplate.scene.carousel" => "Thẻ kiến thức",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => {
+            "Thẻ hướng dẫn 3 bước bằng ảnh chụp màn hình"
+        }
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Gồm trang bìa, ba bước thao tác và lời kêu gọi hành động ở cuối; chỉ cần thay ảnh chụp màn hình và phần mô tả là có thể đăng."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Chuỗi thẻ kiến thức và góc nhìn",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Gồm trang bìa, ba luận điểm và trang tổng kết, phù hợp để tách một góc nhìn thành chuỗi thẻ liên tiếp có thể vuốt xem."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "So sánh trước và sau khi thiết kế lại",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Đặt phiên bản trước và sau cạnh nhau, kèm chú thích các thay đổi; phù hợp để nhìn lại dự án và trình bày trong hồ sơ năng lực."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Bài thuyết trình · 6 trang",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Gồm trang bìa, mục lục, ý chính, dữ liệu, biểu đồ và trang kết, theo tỷ lệ trình chiếu 16:9; chỉ cần thay nội dung là sẵn sàng thuyết trình."
+        }
+        "fileMenu.newFromTemplate" => "Tạo mới từ mẫu",
         "collab.ownerConfirm.title" => "Xác nhận bạn đang tham gia phiên của ai",
         "collab.ownerConfirm.hint" => "Chưa có nội dung nào của phiên này được tải.",
         "collab.ownerConfirm.account" => "Tài khoản đã xác minh",

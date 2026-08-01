@@ -88,6 +88,34 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "このセッションに参加",
         "collab.action.rejectOwner" => "参加しない",
         "collab.error.ownerNotConfirmed" => "ホストを確認しなかったため、何も読み込まれませんでした。",
+        "sceneTemplate.title" => "シーンテンプレート",
+        "sceneTemplate.searchPlaceholder" => "シーンやテンプレートを検索…",
+        "sceneTemplate.empty" => "一致するテンプレートがありません",
+        "sceneTemplate.frames" => "{{count}}ページ",
+        "sceneTemplate.filter.all" => "すべて",
+        "sceneTemplate.scene.tutorial" => "チュートリアル画像",
+        "sceneTemplate.scene.comparison" => "比較画像",
+        "sceneTemplate.scene.carousel" => "ナレッジカード",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => {
+            "3ステップのスクリーンショットチュートリアルカード"
+        }
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "表紙、3つの操作ステップ、最後のCTAで構成。スクリーンショットと説明を差し替えるだけで公開できます。"
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "ナレッジ・インサイトカルーセル",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "表紙、3つの論点、まとめページで構成。1つの主張をスワイプできる連続カードに展開するのに最適です。"
+        }
+        "sceneTemplate.item.beforeAfter.title" => "リニューアル前後の比較",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "左右に並べたビフォー・アフターに変更内容を添え、振り返りや作品紹介に最適です。"
+        }
+        "sceneTemplate.item.slideDeck.title" => "プレゼンテーション · 6ページ",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "表紙、目次、要点、データ、グラフ、締めの6ページ構成。16:9の投影比率で、テキストを差し替えるだけで発表できます。"
+        }
+        "fileMenu.newFromTemplate" => "テンプレートから新規作成",
         _ => return super::ja_collab::lookup(key),
     })
 }

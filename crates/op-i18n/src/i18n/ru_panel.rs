@@ -80,6 +80,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "Присоединиться к сеансу",
         "collab.action.rejectOwner" => "Не присоединяться",
         "collab.error.ownerNotConfirmed" => "Вы не подтвердили ведущего, поэтому ничего не загружено.",
+        "sceneTemplate.title" => "Шаблоны сцен",
+        "sceneTemplate.searchPlaceholder" => "Поиск сцен и шаблонов…",
+        "sceneTemplate.empty" => "Подходящих шаблонов не найдено",
+        "sceneTemplate.frames" => "Страницы: {{count}}",
+        "sceneTemplate.filter.all" => "Все",
+        "sceneTemplate.scene.tutorial" => "Обучающая графика",
+        "sceneTemplate.scene.comparison" => "Сравнительная графика",
+        "sceneTemplate.scene.carousel" => "Карточки знаний",
+        "sceneTemplate.scene.slides" => "Презентация",
+        "sceneTemplate.item.screenshotTutorial.title" => "Скриншот-инструкция · 3 шага",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Обложка, три шага и финальный призыв к действию. Замените скриншоты и текст — и можно публиковать."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Карусель знаний и идей",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Обложка, три тезиса и итоговый слайд — удобно разложить одну идею на последовательные карточки для свайпа."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Сравнение редизайна «до/после»",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Версии до и после рядом с пояснениями изменений — для ретроспектив и портфолио."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Презентация · 6 слайдов",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Обложка, повестка, ключевые тезисы, данные, диаграмма и финал в формате 16:9. Замените текст — и можно выступать."
+        }
+        "fileMenu.newFromTemplate" => "Создать из шаблона",
         _ => return super::ru_collab::lookup(key),
     })
 }

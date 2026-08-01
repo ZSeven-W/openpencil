@@ -80,6 +80,34 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "promptCenter.item.componentFormLab.title" => "Form Lab · Sistem komponen formulir",
         "promptCenter.item.modifyPolishCurrent.title" => "Sempurnakan layar saat ini",
         "promptCenter.item.modifyCompleteStates.title" => "Lengkapi status komponen",
+        "sceneTemplate.title" => "Templat Adegan",
+        "sceneTemplate.searchPlaceholder" => "Cari adegan atau templat…",
+        "sceneTemplate.empty" => "Tidak ada templat yang cocok",
+        "sceneTemplate.frames" => "{{count}} halaman",
+        "sceneTemplate.filter.all" => "Semua",
+        "sceneTemplate.scene.tutorial" => "Gambar tutorial",
+        "sceneTemplate.scene.comparison" => "Gambar perbandingan",
+        "sceneTemplate.scene.carousel" => "Kartu pengetahuan",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => {
+            "Kartu tutorial tangkapan layar 3 langkah"
+        }
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Berisi sampul, tiga langkah panduan, dan ajakan bertindak di bagian akhir. Ganti tangkapan layar serta penjelasannya, lalu siap diterbitkan."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Karusel pengetahuan dan wawasan",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Berisi sampul, tiga poin utama, dan halaman rangkuman, cocok untuk memecah satu gagasan menjadi rangkaian kartu yang dapat digeser."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Perbandingan sebelum dan sesudah desain ulang",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Tampilan sebelum dan sesudah diletakkan berdampingan, dilengkapi catatan perubahan; cocok untuk retrospektif dan portofolio."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Presentasi · 6 slide",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Berisi sampul, agenda, poin utama, data, grafik, dan penutup dalam rasio presentasi 16:9. Cukup ganti teksnya, lalu siap dipresentasikan."
+        }
+        "fileMenu.newFromTemplate" => "Buat dari templat",
         "collab.ownerConfirm.title" => "Konfirmasi siapa yang Anda ikuti",
         "collab.ownerConfirm.hint" => "Belum ada apa pun dari sesi ini yang dimuat.",
         "collab.ownerConfirm.account" => "Akun terverifikasi",

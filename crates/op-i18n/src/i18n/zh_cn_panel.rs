@@ -93,6 +93,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "加入此会话",
         "collab.action.rejectOwner" => "不加入",
         "collab.error.ownerNotConfirmed" => "你未确认主持人，因此未载入任何内容。",
+        "sceneTemplate.title" => "场景模板",
+        "sceneTemplate.searchPlaceholder" => "搜索场景或模板",
+        "sceneTemplate.empty" => "没有匹配的模板",
+        "sceneTemplate.frames" => "{{count}} 页",
+        "sceneTemplate.filter.all" => "全部",
+        "sceneTemplate.scene.tutorial" => "教程图",
+        "sceneTemplate.scene.comparison" => "对比图",
+        "sceneTemplate.scene.carousel" => "知识卡片",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => "三步截图教程卡",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "封面、三个操作步骤和结尾行动号召，替换截图与说明即可发布。"
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "知识观点轮播",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "封面、三个论点和总结页，适合把一个观点拆成可滑动的连续卡片。"
+        }
+        "sceneTemplate.item.beforeAfter.title" => "改版前后对比",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "左右并置的前后对比，配改动说明，适合复盘与作品展示。"
+        }
+        "sceneTemplate.item.slideDeck.title" => "演示文稿 · 六页",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "封面、目录、要点、数据、图表和结尾，16:9 投影比例，替换文案即可上台。"
+        }
+        "fileMenu.newFromTemplate" => "从模板新建",
         _ => return super::zh_cn_collab::lookup(key),
     })
 }

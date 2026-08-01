@@ -84,6 +84,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "Entrar nesta sessão",
         "collab.action.rejectOwner" => "Não entrar",
         "collab.error.ownerNotConfirmed" => "Você não confirmou o anfitrião, então nada foi carregado.",
+        "sceneTemplate.title" => "Modelos de cenas",
+        "sceneTemplate.searchPlaceholder" => "Pesquisar cenas ou modelos…",
+        "sceneTemplate.empty" => "Nenhum modelo correspondente",
+        "sceneTemplate.frames" => "Páginas: {{count}}",
+        "sceneTemplate.filter.all" => "Tudo",
+        "sceneTemplate.scene.tutorial" => "Tutorial",
+        "sceneTemplate.scene.comparison" => "Comparativo",
+        "sceneTemplate.scene.carousel" => "Cards de conhecimento",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => "Tutorial com capturas · 3 passos",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Capa, três passos e uma chamada para ação no final. Substitua as capturas de tela e os textos para publicar."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Carrossel de conhecimento e ideias",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Capa, três pontos e uma página de resumo, ideal para transformar uma ideia em cards deslizáveis."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Comparativo antes e depois",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Comparação lado a lado do antes e depois, com notas das mudanças; ideal para retrospectivas e portfólios."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Apresentação · 6 slides",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Capa, agenda, pontos-chave, dados, gráfico e encerramento, no formato 16:9. Substitua os textos e apresente."
+        }
+        "fileMenu.newFromTemplate" => "Novo a partir de um modelo",
         _ => return super::pt_collab::lookup(key),
     })
 }

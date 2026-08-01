@@ -251,7 +251,7 @@ fn placeholders(value: &str) -> BTreeSet<String> {
 fn every_locale_has_exactly_the_english_key_set() {
     let all_tables = tables();
     let expected = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2);
-    assert_eq!(expected.len(), 1276, "update the intentional catalog size");
+    assert_eq!(expected.len(), 1294, "update the intentional catalog size");
 
     for (name, main, git, lookup) in all_tables {
         let actual = table_keys(name, main, git);
@@ -266,6 +266,37 @@ fn every_locale_has_exactly_the_english_key_set() {
             assert!(
                 lookup(key).is_some_and(|value| english.is_empty() || !value.is_empty()),
                 "locale `{name}` has no direct value for `{key}`"
+            );
+        }
+    }
+}
+
+#[test]
+fn scene_template_catalog_is_complete_in_all_fifteen_locales() {
+    for key in [
+        "sceneTemplate.title",
+        "sceneTemplate.searchPlaceholder",
+        "sceneTemplate.empty",
+        "sceneTemplate.frames",
+        "sceneTemplate.filter.all",
+        "sceneTemplate.scene.tutorial",
+        "sceneTemplate.scene.comparison",
+        "sceneTemplate.scene.carousel",
+        "sceneTemplate.scene.slides",
+        "sceneTemplate.item.screenshotTutorial.title",
+        "sceneTemplate.item.screenshotTutorial.summary",
+        "sceneTemplate.item.knowledgeCarousel.title",
+        "sceneTemplate.item.knowledgeCarousel.summary",
+        "sceneTemplate.item.beforeAfter.title",
+        "sceneTemplate.item.beforeAfter.summary",
+        "sceneTemplate.item.slideDeck.title",
+        "sceneTemplate.item.slideDeck.summary",
+        "fileMenu.newFromTemplate",
+    ] {
+        for (name, _, _, lookup) in tables() {
+            assert!(
+                lookup(key).is_some(),
+                "locale `{name}` is missing direct Scene Template Center key `{key}`"
             );
         }
     }

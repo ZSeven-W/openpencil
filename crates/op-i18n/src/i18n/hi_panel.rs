@@ -76,6 +76,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "promptCenter.item.componentFormLab.title" => "Form Lab · फ़ॉर्म कॉम्पोनेंट प्रणाली",
         "promptCenter.item.modifyPolishCurrent.title" => "वर्तमान स्क्रीन को निखारें",
         "promptCenter.item.modifyCompleteStates.title" => "कॉम्पोनेंट की अवस्थाएँ पूरी करें",
+        "sceneTemplate.title" => "सीन टेम्पलेट",
+        "sceneTemplate.searchPlaceholder" => "सीन या टेम्पलेट खोजें…",
+        "sceneTemplate.empty" => "कोई मेल खाता टेम्पलेट नहीं मिला",
+        "sceneTemplate.frames" => "{{count}} पेज",
+        "sceneTemplate.filter.all" => "सभी",
+        "sceneTemplate.scene.tutorial" => "ट्यूटोरियल चित्र",
+        "sceneTemplate.scene.comparison" => "तुलना चित्र",
+        "sceneTemplate.scene.carousel" => "ज्ञान कार्ड",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => "तीन चरणों वाला स्क्रीनशॉट ट्यूटोरियल कार्ड",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "कवर, तीन चरण और अंत में कार्रवाई का आह्वान; स्क्रीनशॉट और टेक्स्ट बदलकर प्रकाशित करें।"
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "ज्ञान और विचारों की कार्ड-श्रृंखला",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "कवर, तीन मुख्य बिंदु और सारांश पेज; किसी विचार को स्वाइप किए जा सकने वाले क्रमिक कार्डों में बाँटने के लिए उपयुक्त।"
+        }
+        "sceneTemplate.item.beforeAfter.title" => "रीडिज़ाइन से पहले और बाद की तुलना",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "बदलावों के नोट्स के साथ पहले और बाद का साथ-साथ तुलनात्मक दृश्य, समीक्षा और पोर्टफ़ोलियो में दिखाने के लिए उपयुक्त।"
+        }
+        "sceneTemplate.item.slideDeck.title" => "प्रस्तुति · छह स्लाइड",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "कवर, विषय-सूची, मुख्य बिंदु, डेटा, चार्ट और समापन; 16:9 प्रस्तुति अनुपात में, टेक्स्ट बदलते ही प्रस्तुत करने के लिए तैयार।"
+        }
+        "fileMenu.newFromTemplate" => "टेम्पलेट से नया बनाएँ",
         "collab.ownerConfirm.title" => "पुष्टि करें कि आप किससे जुड़ रहे हैं",
         "collab.ownerConfirm.hint" => "इस सत्र से अभी तक कुछ भी लोड नहीं हुआ है।",
         "collab.ownerConfirm.account" => "सत्यापित खाता",

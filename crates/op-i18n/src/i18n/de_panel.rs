@@ -82,6 +82,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "Dieser Sitzung beitreten",
         "collab.action.rejectOwner" => "Nicht beitreten",
         "collab.error.ownerNotConfirmed" => "Du hast den Host nicht bestätigt, daher wurde nichts geladen.",
+        "sceneTemplate.title" => "Szenenvorlagen",
+        "sceneTemplate.searchPlaceholder" => "Szenen oder Vorlagen suchen…",
+        "sceneTemplate.empty" => "Keine passenden Vorlagen gefunden",
+        "sceneTemplate.frames" => "Seiten: {{count}}",
+        "sceneTemplate.filter.all" => "Alle",
+        "sceneTemplate.scene.tutorial" => "Tutorialgrafik",
+        "sceneTemplate.scene.comparison" => "Vergleichsgrafik",
+        "sceneTemplate.scene.carousel" => "Wissenskarten",
+        "sceneTemplate.scene.slides" => "Präsentation",
+        "sceneTemplate.item.screenshotTutorial.title" => "Screenshot-Tutorial · 3 Schritte",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Cover, drei Anleitungsschritte und ein abschließender Call-to-Action. Screenshots und Texte ersetzen – fertig zur Veröffentlichung."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Wissens- und Insights-Karussell",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Cover, drei Kernpunkte und eine Zusammenfassung – ideal, um einen Gedanken in wischbare Karten aufzuteilen."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Redesign-Vergleich: Vorher/Nachher",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Vorher und Nachher nebeneinander mit Hinweisen zu den Änderungen – ideal für Retrospektiven und Portfolios."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Präsentation · 6 Folien",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Cover, Agenda, Kernpunkte, Daten, Diagramm und Abschluss im 16:9-Format. Texte ersetzen und präsentieren."
+        }
+        "fileMenu.newFromTemplate" => "Neu aus Vorlage",
         _ => return super::de_collab::lookup(key),
     })
 }

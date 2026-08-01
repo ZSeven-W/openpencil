@@ -97,6 +97,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "Join this session",
         "collab.action.rejectOwner" => "Do not join",
         "collab.error.ownerNotConfirmed" => "You did not confirm the host, so nothing was loaded.",
+        "sceneTemplate.title" => "Scene Templates",
+        "sceneTemplate.searchPlaceholder" => "Search scenes or templates",
+        "sceneTemplate.empty" => "No matching templates",
+        "sceneTemplate.frames" => "Pages: {{count}}",
+        "sceneTemplate.filter.all" => "All",
+        "sceneTemplate.scene.tutorial" => "Tutorial Graphic",
+        "sceneTemplate.scene.comparison" => "Comparison Graphic",
+        "sceneTemplate.scene.carousel" => "Knowledge Cards",
+        "sceneTemplate.scene.slides" => "Presentation",
+        "sceneTemplate.item.screenshotTutorial.title" => "Three-Step Screenshot Tutorial Cards",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "A cover, three how-to steps, and a closing call to action. Replace the screenshots and instructions to publish."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Knowledge and Insights Carousel",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "A cover, three key points, and a summary page—ideal for breaking one idea into a continuous, swipeable card series."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Before-and-After Redesign Comparison",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "A side-by-side before-and-after comparison with notes on the changes, ideal for retrospectives and portfolio showcases."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Presentation · Six Slides",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "A cover, agenda, key points, data, charts, and a closing slide in 16:9 presentation format. Replace the copy and present."
+        }
+        "fileMenu.newFromTemplate" => "New from Template",
         _ => return super::en_collab::lookup(key),
     })
 }

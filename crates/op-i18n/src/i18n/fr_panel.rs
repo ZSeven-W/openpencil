@@ -84,6 +84,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "Rejoindre cette session",
         "collab.action.rejectOwner" => "Ne pas rejoindre",
         "collab.error.ownerNotConfirmed" => "Vous n’avez pas confirmé l’hôte, rien n’a été chargé.",
+        "sceneTemplate.title" => "Modèles de scènes",
+        "sceneTemplate.searchPlaceholder" => "Rechercher des scènes ou des modèles…",
+        "sceneTemplate.empty" => "Aucun modèle correspondant",
+        "sceneTemplate.frames" => "Pages : {{count}}",
+        "sceneTemplate.filter.all" => "Tous",
+        "sceneTemplate.scene.tutorial" => "Tutoriel illustré",
+        "sceneTemplate.scene.comparison" => "Comparatif",
+        "sceneTemplate.scene.carousel" => "Cartes de connaissances",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => "Tutoriel par captures d’écran · 3 étapes",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Une couverture, trois étapes et un appel à l’action final : remplacez les captures d’écran et les textes pour publier."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Carrousel de connaissances et d’idées",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Une couverture, trois idées clés et une page de synthèse, pour décomposer un point de vue en cartes à faire défiler."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Comparatif avant/après",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Comparaison avant/après côte à côte, accompagnée de notes sur les changements, idéale pour les rétrospectives et les portfolios."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Présentation · 6 diapositives",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Couverture, sommaire, points clés, données, graphique et conclusion au format 16:9. Remplacez les textes et présentez."
+        }
+        "fileMenu.newFromTemplate" => "Nouveau à partir d’un modèle",
         _ => return super::fr_collab::lookup(key),
     })
 }

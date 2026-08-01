@@ -84,6 +84,32 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "collab.action.confirmOwner" => "Unirse a esta sesión",
         "collab.action.rejectOwner" => "No unirse",
         "collab.error.ownerNotConfirmed" => "No confirmaste al anfitrión, así que no se cargó nada.",
+        "sceneTemplate.title" => "Plantillas de escenas",
+        "sceneTemplate.searchPlaceholder" => "Buscar escenas o plantillas…",
+        "sceneTemplate.empty" => "No hay plantillas que coincidan",
+        "sceneTemplate.frames" => "Páginas: {{count}}",
+        "sceneTemplate.filter.all" => "Todo",
+        "sceneTemplate.scene.tutorial" => "Tutorial",
+        "sceneTemplate.scene.comparison" => "Comparativa",
+        "sceneTemplate.scene.carousel" => "Tarjetas de conocimiento",
+        "sceneTemplate.scene.slides" => "PPT",
+        "sceneTemplate.item.screenshotTutorial.title" => "Tutorial con capturas · 3 pasos",
+        "sceneTemplate.item.screenshotTutorial.summary" => {
+            "Portada, tres pasos y una llamada a la acción final. Sustituye las capturas y el texto para publicar."
+        }
+        "sceneTemplate.item.knowledgeCarousel.title" => "Carrusel de conocimiento e ideas",
+        "sceneTemplate.item.knowledgeCarousel.summary" => {
+            "Portada, tres ideas clave y una página de resumen, ideal para convertir un punto de vista en tarjetas para deslizar."
+        }
+        "sceneTemplate.item.beforeAfter.title" => "Comparativa antes/después",
+        "sceneTemplate.item.beforeAfter.summary" => {
+            "Comparativa antes/después en paralelo, con notas sobre los cambios; ideal para retrospectivas y portfolios."
+        }
+        "sceneTemplate.item.slideDeck.title" => "Presentación · 6 diapositivas",
+        "sceneTemplate.item.slideDeck.summary" => {
+            "Portada, agenda, puntos clave, datos, gráfico y cierre, en formato 16:9. Sustituye el texto y estará lista para presentar."
+        }
+        "fileMenu.newFromTemplate" => "Nuevo a partir de una plantilla",
         _ => return super::es_collab::lookup(key),
     })
 }
