@@ -47,6 +47,11 @@ mod layer_panel_walkers;
 pub mod path_anchor_context_menu;
 pub mod prompt_center_panel;
 pub(crate) mod prompt_center_previews;
+pub mod scene_template_panel;
+pub use scene_template_panel::{
+    SceneTemplateHit, SceneTemplatePanel, SCENE_TEMPLATE_CLOSE_HOVER, SCENE_TEMPLATE_PANEL_H,
+    SCENE_TEMPLATE_PANEL_W,
+};
 #[cfg(test)]
 mod prompt_center_shared_flow_tests;
 pub mod property_panel;
@@ -124,6 +129,8 @@ mod property_panel_wash_tests;
 pub mod property_panel_widget;
 #[cfg(test)]
 mod property_panel_widget_tests;
+mod scene_template_panel_paint;
+pub(crate) mod scene_template_previews;
 pub mod text_input;
 pub(crate) mod text_input_backend;
 mod text_selection;
@@ -185,6 +192,7 @@ pub mod image_crop_flow;
 pub mod image_popover_input_flow;
 pub mod press_flow;
 mod prompt_center_press_flow;
+mod scene_template_press_flow;
 pub mod scroll_flow;
 
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).

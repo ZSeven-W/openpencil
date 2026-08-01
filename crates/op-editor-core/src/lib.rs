@@ -315,7 +315,8 @@ pub use editor_ui_state::{
     ImageFillMode, LayerContextMenuState, Locale, MergeConflictRow, MergeResolveFile,
     MergeResolveState, MissingFontSurface, PaddingEditMode, PageRenameState, PencilCursorStyle,
     PreviewDeviceKind, PreviewState, PromptCenterFocus, PromptCenterState, PromptFilter,
-    PropertyTab, RecentFile, SizeToggleState, ThemeMode, UpdateStatus, VariableRowFocus,
+    PropertyTab, RecentFile, SceneFilter, SceneTemplateCenterState, SizeToggleState, ThemeMode,
+    UpdateStatus, VariableRowFocus,
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use figma_import_state::{FigmaImportButton, FigmaImportPage, FigmaImportSelection};

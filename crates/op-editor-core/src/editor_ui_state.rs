@@ -63,7 +63,7 @@ pub use git_panel::{
 };
 pub use groups::{
     CustomPrompt, DesignMdPanelState, PreviewState, PromptCenterFocus, PromptCenterState,
-    PromptFilter, SizeToggleState,
+    PromptFilter, SceneFilter, SceneTemplateCenterState, SizeToggleState,
 };
 pub use pickers::{
     CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect, CompositingPickerTarget,
@@ -646,6 +646,8 @@ pub struct EditorUiState {
     // --- Prompt Center ----------------------------------------------
     /// Floating prompt catalogue, search, save form, and custom entries.
     pub prompt_center: PromptCenterState,
+    /// Floating Scene Template Center panel.
+    pub scene_template_center: SceneTemplateCenterState,
 
     // --- Component browser ------------------------------------------
     /// Whether the floating Component-Browser panel is shown.

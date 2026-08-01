@@ -15,6 +15,7 @@
 use super::{DesignMdRequest, PreviewDeviceKind};
 use crate::design_md_button_state::DesignMdButton;
 use crate::prompt_center_catalog::PromptCategory;
+use crate::scene_template_catalog::TemplateScene;
 use serde::{Deserialize, Serialize};
 
 /// Canvas **Preview** (Play) mode state.
@@ -281,5 +282,81 @@ impl PromptCenterState {
             PromptCenterFocus::Search => &mut self.search,
             PromptCenterFocus::SaveTitle => &mut self.save_title,
         }
+    }
+}
+
+/// The catalogue subset selected by the Scene Template Center chip row.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SceneFilter {
+    /// Every shipped template.
+    #[default]
+    All,
+    /// One scene.
+    Scene(TemplateScene),
+}
+
+/// Grouped state for the non-modal Scene Template Center panel.
+///
+/// Deliberately smaller than [`PromptCenterState`]: a template is opened,
+/// never authored, so there is no save form and no user-owned entries to
+/// persist. Adding those later means adding fields here, not reshaping the
+/// panel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SceneTemplateCenterState {
+    /// Whether the floating panel is visible.
+    pub open: bool,
+    /// Search text, caret, selection, and IME state.
+    pub search: jian_core::text_input::TextInputState,
+    /// Active catalogue filter.
+    pub filter: SceneFilter,
+    /// Vertical card-grid scroll.
+    pub scroll: jian_core::scroll::ScrollState,
+    /// Widget-defined hover token. Card rows use their filtered index;
+    /// chrome controls use reserved high values.
+    pub hover: Option<usize>,
+    /// Raised when a card is chosen; the host drains it to load the
+    /// document. Kept as a request rather than applied inline because
+    /// opening a document is a host capability (file dialogs, unsaved-work
+    /// prompts), not a widget one.
+    pub pending_open: Option<String>,
+}
+
+impl Default for SceneTemplateCenterState {
+    fn default() -> Self {
+        Self {
+            open: false,
+            search: Default::default(),
+            filter: SceneFilter::All,
+            scroll: Default::default(),
+            hover: None,
+            pending_open: None,
+        }
+    }
+}
+
+impl SceneTemplateCenterState {
+    /// Open the panel with search focused and no stale hover/scroll.
+    pub fn open(&mut self, now_ms: u64) {
+        self.open = true;
+        self.hover = None;
+        self.scroll.offset = 0.0;
+        self.search.touch(now_ms);
+    }
+
+    /// Close only this panel layer.
+    pub fn close(&mut self) {
+        self.open = false;
+        self.hover = None;
+    }
+
+    /// Request that the host open `template_id` and close the panel.
+    pub fn request_open(&mut self, template_id: impl Into<String>) {
+        self.pending_open = Some(template_id.into());
+        self.close();
+    }
+
+    /// Drain a pending open request.
+    pub fn take_pending_open(&mut self) -> Option<String> {
+        self.pending_open.take()
     }
 }

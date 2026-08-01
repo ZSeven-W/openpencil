@@ -67,6 +67,7 @@ impl EditorUiState {
 
     /// Open the Prompt Center with its search field focused.
     pub fn open_prompt_center(&mut self, now_ms: u64) {
+        self.close_scene_template_center();
         self.close_icon_picker();
         self.close_chat_model_picker();
         self.close_parallel_agents_picker();
@@ -82,6 +83,36 @@ impl EditorUiState {
         if matches!(
             self.pressed_button,
             Some(crate::button_press_state::ButtonPressTarget::PromptCenter(
+                _
+            ))
+        ) {
+            self.pressed_button = None;
+        }
+        true
+    }
+
+    /// Open the Scene Template Center with its search field focused.
+    ///
+    /// Closes the Prompt Center: both are full-size centred panels, so
+    /// leaving one open behind the other would stack two card grids the user
+    /// cannot see past.
+    pub fn open_scene_template_center(&mut self, now_ms: u64) {
+        self.close_prompt_center();
+        self.close_icon_picker();
+        self.close_chat_model_picker();
+        self.close_parallel_agents_picker();
+        self.scene_template_center.open(now_ms);
+    }
+
+    /// Close the Scene Template Center and clear its transient state.
+    pub fn close_scene_template_center(&mut self) -> bool {
+        if !self.scene_template_center.open {
+            return false;
+        }
+        self.scene_template_center.close();
+        if matches!(
+            self.pressed_button,
+            Some(crate::button_press_state::ButtonPressTarget::SceneTemplate(
                 _
             ))
         ) {

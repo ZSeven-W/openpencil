@@ -24,8 +24,8 @@ use crate::widgets::{
     ImportMenu, LayoutCx, LocalePicker, ShapePicker, Toolbar, TopBar, Widget,
     COMPONENT_BROWSER_PANEL_H, COMPONENT_BROWSER_PANEL_W, DESIGN_MD_PANEL_H, DESIGN_MD_PANEL_W,
     ICON_PICKER_PANEL_H, ICON_PICKER_PANEL_W, IMPORT_MENU_WIDTH, LOCALE_PICKER_WIDTH,
-    PROMPT_CENTER_PANEL_H, PROMPT_CENTER_PANEL_W, SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH,
-    TOP_BAR_HEIGHT,
+    PROMPT_CENTER_PANEL_H, PROMPT_CENTER_PANEL_W, SCENE_TEMPLATE_PANEL_H, SCENE_TEMPLATE_PANEL_W,
+    SHAPE_PICKER_WIDTH, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use crate::{Point2D, Rect};
 
@@ -222,6 +222,32 @@ pub fn prompt_center_panel_rect(
     let viewport_h = viewport_h.max(0.0);
     let panel_w = PROMPT_CENTER_PANEL_W.min(viewport_w);
     let panel_h = PROMPT_CENTER_PANEL_H.min(viewport_h);
+    let x = canvas.origin.x + (canvas.size.x - panel_w) / 2.0;
+    let y = canvas.origin.y + (canvas.size.y - panel_h) / 2.0;
+    Some(Rect {
+        origin: Point2D::new(
+            x.clamp(0.0, (viewport_w - panel_w).max(0.0)),
+            y.clamp(0.0, (viewport_h - panel_h).max(0.0)),
+        ),
+        size: Point2D::new(panel_w, panel_h),
+    })
+}
+
+/// Scene Template Center rect — centred in the canvas region, same as the
+/// Prompt Center so the two panels occupy identical space.
+pub fn scene_template_panel_rect(
+    state: &EditorState,
+    viewport_w: f32,
+    viewport_h: f32,
+) -> Option<Rect> {
+    if !state.editor_ui.scene_template_center.open {
+        return None;
+    }
+    let canvas = canvas_rect(state, viewport_w, viewport_h);
+    let viewport_w = viewport_w.max(0.0);
+    let viewport_h = viewport_h.max(0.0);
+    let panel_w = SCENE_TEMPLATE_PANEL_W.min(viewport_w);
+    let panel_h = SCENE_TEMPLATE_PANEL_H.min(viewport_h);
     let x = canvas.origin.x + (canvas.size.x - panel_w) / 2.0;
     let y = canvas.origin.y + (canvas.size.y - panel_h) / 2.0;
     Some(Rect {

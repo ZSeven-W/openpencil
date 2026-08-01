@@ -20,6 +20,9 @@ use crate::widgets::{
 use crate::{Point2D, Rect};
 
 pub use super::prompt_center_press_flow::press_prompt_center;
+pub use super::scene_template_press_flow::{
+    hover_scene_template_center, press_scene_template_center, scroll_scene_template_center,
+};
 
 /// Screen rect of the right-hand property rail. Both hosts derive it
 /// from the same two inputs, so the walk lives here instead of being

@@ -5,8 +5,8 @@
 
 use super::{
     DesignMdPanelState, EditorUiState, EmbedHost, ExportFormat, FlexLayout, GitPanelState, Locale,
-    PencilCursorStyle, PreviewState, PromptCenterState, PropertyTab, SizeToggleState, ThemeMode,
-    UpdateStatus,
+    PencilCursorStyle, PreviewState, PromptCenterState, PropertyTab, SceneTemplateCenterState,
+    SizeToggleState, ThemeMode, UpdateStatus,
 };
 use crate::tool::Tool;
 use std::collections::HashSet;
@@ -184,6 +184,7 @@ impl Default for EditorUiState {
             git_panel: GitPanelState::default(),
             design_md_panel: DesignMdPanelState::default(),
             prompt_center: PromptCenterState::default(),
+            scene_template_center: SceneTemplateCenterState::default(),
             component_browser_open: false,
             canvas_hover_node: None,
             entered_container: None,
