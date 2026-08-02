@@ -453,7 +453,7 @@ fn canvaskit_browser_text_raster_key_drops_color_and_alpha() {
     // TEXT segments are keyed on (text, size, weight, italic, supersample)
     // only — colour is applied at draw time, so N colours reuse ONE raster.
     assert!(
-        source.contains(": [t, sz, weight, italic ? 1 : 0, ss].join('\\n');"),
+        source.contains(": [t, sz, weight, italic ? 1 : 0, ss, family].join('\\n');"),
         "text raster cache key must contain no colour/alpha component"
     );
     assert!(
@@ -469,11 +469,13 @@ fn canvaskit_browser_text_raster_key_drops_color_and_alpha() {
     // Emoji / colour-glyph segments keep the exact legacy baked-colour path
     // (they ignore fillStyle, so tinting a white mask would flatten them).
     assert!(
-        source.contains("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) =>"),
+        source.contains(
+            "const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') =>"
+        ),
         "browserTextImage must take an `emoji` selector + colour for the legacy emoji path"
     );
     assert!(
-        source.contains("['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\\n')"),
+        source.contains("['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss, family].join('\\n')"),
         "emoji segments must keep a colour-keyed raster (legacy baked-colour path)"
     );
     assert!(
@@ -494,7 +496,7 @@ fn canvaskit_text_rasters_refresh_at_effective_scale() {
         .find("const effectiveTextScale = () =>")
         .expect("effective text scale helper exists");
     let image_fn = source
-        .find("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) =>")
+        .find("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') =>")
         .expect("browserTextImage exists");
     let image_end = source[image_fn..]
         .find("const TINT_FILTER_CACHE_CAP = 64;")
@@ -525,8 +527,8 @@ fn canvaskit_text_rasters_refresh_at_effective_scale() {
     }
 
     for marker in [
-        "['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\\n')",
-        ": [t, sz, weight, italic ? 1 : 0, ss].join('\\n');",
+        "['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss, family].join('\\n')",
+        ": [t, sz, weight, italic ? 1 : 0, ss, family].join('\\n');",
     ] {
         assert!(
             image_body.contains(marker),
@@ -594,7 +596,7 @@ fn canvaskit_browser_text_cache_is_lru() {
     // A cache hit re-inserts the entry (delete + set) so eviction drops the
     // least-recently-used run, not the oldest-inserted (FIFO).
     let image_fn = source
-        .find("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) =>")
+        .find("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') =>")
         .expect("browserTextImage marker exists");
     let hit = source[image_fn..]
         .find("const hit = browserTextCache.get(key);")
@@ -748,4 +750,50 @@ fn canvaskit_source() -> String {
         parts.push(std::fs::read_to_string(&path).expect("canvaskit module is readable"));
     }
     parts.join("\n")
+}
+
+#[test]
+fn canvaskit_bridge_routes_complex_scripts_through_the_browser_shaper() {
+    let source = std::fs::read_to_string(format!(
+        "{}/src/op_ck_bridge.js",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("CanvasKit bridge source is readable");
+
+    // CanvasKit's `canvas.drawText` maps codepoints straight to glyphs — no
+    // bidi, no joining — so Arabic would paint in storage order. The browser's
+    // own 2D text engine does both, and the bridge already wraps it. The whole
+    // run must reach it in ONE call: the script-segmented path draws segment
+    // by segment left to right, which breaks bidi across segment boundaries.
+    for marker in [
+        "drawShapedText(t, family, x, y, sz, weight, italic, r, g, b, a)",
+        "measureShapedText(t, family, sz, weight, italic)",
+        "shapedTextUnavailable",
+    ] {
+        assert!(
+            source.contains(marker),
+            "CanvasKit bridge must preserve `{marker}` so complex scripts reach the browser shaper unsegmented"
+        );
+    }
+}
+
+#[test]
+fn canvaskit_backend_asks_the_shared_predicate_which_text_path_to_use() {
+    // Spans the whole `canvaskit/` module set: the externs live in
+    // `bindings.rs` and the routing in `backend.rs`.
+    let backend = canvaskit_source();
+
+    // The routing decision lives in `op_editor_core::text_script` so native and
+    // web can never disagree about which runs get shaped, and so paint and
+    // measure on THIS host can never disagree either.
+    for marker in [
+        "needs_complex_shaping",
+        "draw_shaped_text",
+        "measure_shaped_text",
+    ] {
+        assert!(
+            backend.contains(marker),
+            "CanvasKit backend must reference `{marker}` to route complex scripts to the shaper"
+        );
+    }
 }

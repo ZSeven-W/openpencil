@@ -144,6 +144,8 @@ pub fn svg_path_data_bounds(d: &str) -> Option<(f32, f32, f32, f32)> {
 }
 pub mod text_edit;
 pub mod text_input_focus;
+pub mod text_script;
+mod text_script_tests;
 pub mod theme_presets;
 pub mod tool;
 pub mod toolbar_state;

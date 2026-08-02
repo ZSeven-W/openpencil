@@ -336,12 +336,32 @@ export async function opCkInit(canvasId) {
   // rather than a second cache since text draws are far less frequent than
   // the primitive-shape hot path this task targets.
   const allocFillPaint = (r, g, b, a) => { const p = new CK.Paint(); p.setColor(col(r, g, b, a)); p.setAntiAlias(true); setPaintStyle(p, CK.PaintStyle.Fill); return p; };
-  const browserTextFont = (sz, weight, italic) => `${italic ? 'italic ' : ''}${Math.max(100, Math.min(900, Math.round(weight || 400)))} ${Math.max(1, sz)}px ${browserTextFontStack}`;
+  // Quote the authored family so names with spaces stay one CSS token, and
+  // strip quote/backslash so a family name can't break out of the shorthand.
+  // Only families the BROWSER knows resolve here; faces registered into
+  // CanvasKit as raw bytes are invisible to CSS and fall through the stack.
+  const cssFamilyToken = (family) => {
+    const name = String(family || '').trim().replace(/["\\]/g, '');
+    return name ? `"${name}", ` : '';
+  };
+  const browserTextFont = (sz, weight, italic, family) => `${italic ? 'italic ' : ''}${Math.max(100, Math.min(900, Math.round(weight || 400)))} ${Math.max(1, sz)}px ${cssFamilyToken(family)}${browserTextFontStack}`;
   const shouldUseBrowserTextFallback = (_t, _emojiRun) => Boolean(browserTextCtx);
+  // Complex scripts (Arabic and friends — see `op_editor_core::text_script`,
+  // which owns the predicate for BOTH hosts). CanvasKit's `canvas.drawText`
+  // is a 1:1 cmap lookup: no bidi reordering, no contextual joining, so it
+  // paints Arabic in storage order with isolated letterforms. The browser's
+  // own 2D text engine does both correctly and `drawBrowserText` already
+  // wraps it, so complex runs are sent there instead.
+  //
+  // They must go WHOLE. `drawScriptRun` splits a run into script segments and
+  // advances left to right, so it would resolve bidi within each segment and
+  // then lay the segments out in storage order — a mixed digit/Arabic run
+  // like "50 ك.م" would still come out wrong.
+  const shapedTextUnavailable = () => !browserTextCtx;
   const allSegmentsUseBrowserTextFallback = (segs) => segs.length > 0 && segs.every((seg) => shouldUseBrowserTextFallback(seg.text, seg.emoji));
-  const browserTextMeasure = (t, sz, weight = 400, italic = false) => {
+  const browserTextMeasure = (t, sz, weight = 400, italic = false, family = '') => {
     if (!browserTextCtx) return 0;
-    browserTextCtx.font = browserTextFont(sz, weight, italic);
+    browserTextCtx.font = browserTextFont(sz, weight, italic, family);
     return browserTextCtx.measureText(t).width;
   };
   const effectiveTextScale = () => {
@@ -354,19 +374,21 @@ export async function opCkInit(canvasId) {
   // a SrcIn tint at draw time so differently coloured runs share a bitmap.
   // Emoji retain their legacy RGBA-keyed, untinted raster path because colour
   // glyphs can ignore fillStyle. Cache-hit reinsertion keeps eviction LRU.
-  const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a) => {
+  const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') => {
     if (!browserTextCtx) return null;
     const ss = effectiveTextScale();
+    // `family` participates in the key: the same string shaped in two
+    // different families is two different bitmaps.
     const key = emoji
-      ? ['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss].join('\n')
-      : [t, sz, weight, italic ? 1 : 0, ss].join('\n');
+      ? ['e', t, sz, weight, italic ? 1 : 0, r, g, b, a, ss, family].join('\n')
+      : [t, sz, weight, italic ? 1 : 0, ss, family].join('\n');
     const hit = browserTextCache.get(key);
     if (hit) {
       browserTextCache.delete(key);
       browserTextCache.set(key, hit);
       return hit;
     }
-    const font = browserTextFont(sz, weight, italic);
+    const font = browserTextFont(sz, weight, italic, family);
     browserTextCtx.font = font;
     const metrics = browserTextCtx.measureText(t);
     // Logical (CSS-px) box the glyphs occupy; positioning stays in CSS units.
@@ -443,8 +465,8 @@ export async function opCkInit(canvasId) {
   // allocFillPaint exists). antiAlias stays at the CK.Paint default (false) so
   // image sampling matches the prior no-paint drawImage exactly.
   const cachedTintPaint = new CK.Paint();
-  const drawBrowserText = (t, x, y, sz, weight, italic, r, g, b, a, emoji) => {
-    const entry = browserTextImage(t, sz, weight, italic, emoji, r, g, b, a);
+  const drawBrowserText = (t, x, y, sz, weight, italic, r, g, b, a, emoji, family = '') => {
+    const entry = browserTextImage(t, sz, weight, italic, emoji, r, g, b, a, family);
     if (!entry) return 0;
     // Emoji rasters bake their own colour and draw UNTINTED (legacy path);
     // text rasters are white masks tinted here. For text: tint to (r,g,b) via a
@@ -1218,6 +1240,26 @@ export async function opCkInit(canvasId) {
           cx += drawScriptRun(seg.text, cx, y, sz, weight, italic, r, g, b, a);
         }
       }
+    },
+    drawShapedText(t, family, x, y, sz, weight, italic, r, g, b, a) {
+      if (!t) return;
+      if (shapedTextUnavailable()) {
+        // No 2D context (headless embed / hostile sandbox). The segmented
+        // path at least paints glyphs rather than nothing, though it cannot
+        // reorder or join them.
+        drawScriptRun(t, x, y, sz, weight, italic, r, g, b, a);
+        return;
+      }
+      drawBrowserText(t, x, y, sz, weight, italic, r, g, b, a, false, family);
+    },
+    measureShapedText(t, family, sz, weight, italic) {
+      if (!t) return 0;
+      // Must mirror `drawShapedText` exactly — measuring on one engine and
+      // painting on another is what desyncs wrapping and caret geometry.
+      if (shapedTextUnavailable()) {
+        return this.measureTextFamilyStyled(t, family, sz, weight, italic);
+      }
+      return browserTextMeasure(t, sz, weight, italic, family);
     },
     measureText(t, sz) {
       return this.measureTextStyled(t, sz, 400, false);

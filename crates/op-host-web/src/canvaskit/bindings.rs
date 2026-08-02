@@ -429,6 +429,38 @@ extern "C" {
         weight: i32,
         italic: bool,
     ) -> f32;
+    /// Paint a complex-script run (Arabic and friends) through the browser's
+    /// own text engine, which resolves bidi and contextual joining that
+    /// CanvasKit's `drawText` cmap lookup cannot. The run is passed whole —
+    /// segmenting it first would reorder within segments but lay the segments
+    /// out in storage order.
+    #[wasm_bindgen(method, js_name = drawShapedText)]
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn draw_shaped_text(
+        this: &OpCk,
+        t: &str,
+        family: &str,
+        x: f32,
+        y: f32,
+        sz: f32,
+        weight: i32,
+        italic: bool,
+        r: f32,
+        g: f32,
+        b: f32,
+        a: f32,
+    );
+    /// Measure a complex-script run on the same engine `draw_shaped_text`
+    /// paints with, so wrap decisions and caret geometry match the glyphs.
+    #[wasm_bindgen(method, js_name = measureShapedText)]
+    pub(super) fn measure_shaped_text(
+        this: &OpCk,
+        t: &str,
+        family: &str,
+        sz: f32,
+        weight: i32,
+        italic: bool,
+    ) -> f32;
     #[wasm_bindgen(method, js_name = registerSystemFont)]
     pub(super) fn register_system_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
     /// Register a user-imported font face; the family becomes selectable by

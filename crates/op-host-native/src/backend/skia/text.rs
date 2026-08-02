@@ -4,8 +4,10 @@
 //! support landed; the typeface caches stay fields on the spine
 //! struct, this sibling only houses the `impl` block.
 
+use op_editor_core::text_script::needs_complex_shaping;
 use op_editor_ui::{Point2D, TextBaselineRequest, TextLayout};
 
+use super::shaped_text::ShapedRun;
 use super::NativeBackend;
 
 pub(super) fn draw_text_runs(layout: &TextLayout) -> &[jian_core::render::TextRun] {
@@ -90,6 +92,24 @@ impl NativeBackend {
         weight: u16,
         italic: bool,
     ) -> f32 {
+        if needs_complex_shaping(text) {
+            // Paint sends this run to the shaper, so measurement has to go
+            // the same way. Measuring joined Arabic as a sum of isolated
+            // advances would wrap lines and place carets against widths the
+            // painter never uses.
+            return self.shaped_text.measure(
+                &self.font_resolver,
+                &ShapedRun {
+                    text,
+                    family,
+                    font_size,
+                    weight,
+                    italic,
+                    line_height: 0.0,
+                    color: skia_safe::Color::BLACK,
+                },
+            );
+        }
         self.font_resolver
             .measure_text(text, font_size, Some(family), weight, italic)
     }
@@ -172,6 +192,30 @@ impl NativeBackend {
         jian_skia::with_font_lock(|| {
             let italic = layout.italic();
             for run in draw_text_runs(layout) {
+                let jc = run.color;
+                if needs_complex_shaping(run.content.as_str()) {
+                    // Arabic and friends need bidi reordering plus contextual
+                    // joining, neither of which `draw_str` performs. Hand the
+                    // whole run to the cached Paragraph shaper; segmentation
+                    // would defeat shaping anyway, since joining is decided
+                    // across the run, not per typeface span.
+                    self.shaped_text.paint(
+                        canvas,
+                        &self.font_resolver,
+                        &ShapedRun {
+                            text: run.content.as_str(),
+                            family: run.font_family.as_str(),
+                            font_size: run.font_size,
+                            weight: run.font_weight,
+                            italic,
+                            line_height: run.line_height,
+                            color: skia_safe::Color::from_argb(jc.a(), jc.r(), jc.g(), jc.b()),
+                        },
+                        origin.x + run.origin.x,
+                        origin.y + run.origin.y,
+                    );
+                    continue;
+                }
                 let segments = self.font_resolver.segment_text(
                     run.content.as_str(),
                     Some(&run.font_family),
@@ -181,7 +225,6 @@ impl NativeBackend {
                 if segments.is_empty() {
                     continue;
                 }
-                let jc = run.color;
                 let mut paint = skia_safe::Paint::new(
                     skia_safe::Color4f::new(
                         f32::from(jc.r()) / 255.0,

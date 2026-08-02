@@ -73,6 +73,7 @@ mod image;
 mod image_diagnostics;
 mod layer;
 mod path;
+mod shaped_text;
 mod text;
 #[cfg(test)]
 use image::{cover_rect, figma_image_local_matrix, image_adjustment_matrix};
@@ -96,6 +97,11 @@ pub struct NativeBackend {
     font_resolver: jian_skia::FontResolver,
     /// Cached Paragraph shaper used only for authored line-box baselines.
     paragraph_baseline: jian_skia::ParagraphBaseline,
+    /// Cached Paragraph shaper for complex scripts (Arabic and friends),
+    /// which the `draw_str` fast path cannot reorder or join. Shares the
+    /// same generation-guarded `FontCollection` discipline so the shaper
+    /// stays affordable on the paint path.
+    shaped_text: shaped_text::ShapedText,
     /// Pre-rasterized image cache keyed by stable source id. Paint only
     /// reads this cache; encoded bytes are decoded on desktop workers.
     image_cache: std::collections::HashMap<u64, ImageCacheEntry>,
@@ -236,11 +242,13 @@ impl NativeBackend {
         let font_resolver =
             jian_skia::FontResolver::with_default_typeface(font_mgr, default_typeface);
         let paragraph_baseline = jian_skia::ParagraphBaseline::new(&font_resolver);
+        let shaped_text = shaped_text::ShapedText::new(&font_resolver);
         let mut this = Self {
             skia,
             dpi,
             font_resolver,
             paragraph_baseline,
+            shaped_text,
             image_cache: std::collections::HashMap::new(),
             image_cache_bytes: 0,
             image_cache_tick: 0,
@@ -721,6 +729,10 @@ mod image_thumb_tests;
 #[cfg(test)]
 #[path = "skia/font_fallback_tests.rs"]
 mod font_fallback_tests;
+
+#[cfg(test)]
+#[path = "skia/complex_script_tests.rs"]
+mod complex_script_tests;
 
 // Gated off Windows: exercises `jian_skia::register_imported_font` (skia
 // `FontMgr::new_from_data`, DirectWrite on Windows) from parallel test-worker

@@ -380,6 +380,30 @@ impl RenderBackend for CanvasKitBackend {
             // `TextRun.color` is `jian_core::scene::Color` (0-255 u8 channels),
             // unlike the f32-channel `Color` the fill ops take.
             let c = run.color;
+            let (cr, cg, cb, ca) = (
+                f32::from(c.r()) / 255.0,
+                f32::from(c.g()) / 255.0,
+                f32::from(c.b()) / 255.0,
+                f32::from(c.a()) / 255.0,
+            );
+            // Same predicate the native host uses, so the two never disagree
+            // about which runs need bidi + contextual joining.
+            if op_editor_core::text_script::needs_complex_shaping(run.content.as_str()) {
+                self.ck.draw_shaped_text(
+                    run.content.as_str(),
+                    run.font_family.as_str(),
+                    x,
+                    y,
+                    run.font_size,
+                    run.font_weight as i32,
+                    italic,
+                    cr,
+                    cg,
+                    cb,
+                    ca,
+                );
+                continue;
+            }
             self.ck.draw_text(
                 run.content.as_str(),
                 run.font_family.as_str(),
@@ -388,10 +412,10 @@ impl RenderBackend for CanvasKitBackend {
                 run.font_size,
                 run.font_weight as i32,
                 italic,
-                f32::from(c.r()) / 255.0,
-                f32::from(c.g()) / 255.0,
-                f32::from(c.b()) / 255.0,
-                f32::from(c.a()) / 255.0,
+                cr,
+                cg,
+                cb,
+                ca,
             );
         }
     }
@@ -615,6 +639,14 @@ impl RenderBackend for CanvasKitBackend {
         weight: u16,
         italic: bool,
     ) -> f32 {
+        if op_editor_core::text_script::needs_complex_shaping(text) {
+            // Paint routes this run to the browser shaper, so measurement has
+            // to as well — otherwise wrapping and carets are computed against
+            // advances the painter never uses.
+            return self
+                .ck
+                .measure_shaped_text(text, family, font_size, i32::from(weight), italic);
+        }
         self.ck
             .measure_text_family_styled(text, family, font_size, i32::from(weight), italic)
     }
