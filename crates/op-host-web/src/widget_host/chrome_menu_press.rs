@@ -29,16 +29,17 @@ impl WidgetHost {
                 let Some(choice) = menu.choice_for_row(row) else {
                     return;
                 };
-                self.editor_state.editor_ui.pending_file_action = Some(match choice {
-                    FileMenuChoice::NewFile => FileAction::New,
-                    FileMenuChoice::OpenFile => FileAction::Open,
-                    FileMenuChoice::Save => FileAction::Save,
-                    FileMenuChoice::SaveAs => FileAction::SaveAs,
-                    FileMenuChoice::ExportImage => FileAction::ExportImage,
-                    FileMenuChoice::ExportAllFrames => FileAction::ExportAllFrames,
-                    FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
-                    FileMenuChoice::ClearRecent => FileAction::ClearRecent,
-                });
+                self.editor_state.editor_ui.pending_file_action = match choice {
+                    FileMenuChoice::NewFile => Some(FileAction::New),
+                    FileMenuChoice::OpenFile => Some(FileAction::Open),
+                    FileMenuChoice::Save => Some(FileAction::Save),
+                    FileMenuChoice::SaveAs => Some(FileAction::SaveAs),
+                    FileMenuChoice::ExportImage => Some(FileAction::ExportImage),
+                    FileMenuChoice::ExportAllFrames => Some(FileAction::ExportAllFrames),
+                    FileMenuChoice::OpenRecent(i) => Some(FileAction::OpenRecent(i)),
+                    FileMenuChoice::ClearRecent => Some(FileAction::ClearRecent),
+                    FileMenuChoice::NewFromTemplate => None, // templates are desktop-only
+                };
                 self.editor_state.editor_ui.file_menu_open = false;
                 self.editor_state.editor_ui.file_menu.hover = None;
                 self.mark_dirty();
