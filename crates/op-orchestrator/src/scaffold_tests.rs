@@ -404,7 +404,25 @@ fn a_screen_group_per_slide_emits_a_root_per_slide() {
 
     let (cmds, placeholder_ids, _) =
         build_screen_group_scaffold(&plan, &groups, false, 0.0, 0.0).expect("scaffold builds");
-    assert_eq!(cmds.len(), groups.len(), "one insert per slide");
+
+    // ONE insert carrying every root. Emitting one insert per root let each
+    // new root replace the previous still-empty one
+    // (`command_root_replace::prepare_root_frame_replacement` matches any
+    // empty root and bails only on `nodes.len() != 1`), so a six-slide deck
+    // landed as a single board.
+    assert_eq!(cmds.len(), 1, "the deck is scaffolded in one insert");
+    let EditorCommand::InsertSubtree {
+        nodes, parent_id, ..
+    } = &cmds[0]
+    else {
+        panic!("expected a top-level InsertSubtree, got {:?}", cmds[0]);
+    };
+    assert!(!parent_id.is_real(), "screen roots are top level");
+    assert_eq!(nodes.len(), groups.len(), "one root per slide");
+    assert!(
+        nodes.len() != 1,
+        "more than one node is what keeps the starter-replacement path off"
+    );
 
     // Placeholder ids are the join key back to each group; a collision would
     // let one slide's root overwrite another's.

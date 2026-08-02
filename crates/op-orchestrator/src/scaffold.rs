@@ -481,7 +481,7 @@ pub(crate) fn build_screen_group_scaffold(
         .first_solid_hex()
         .unwrap_or_else(|| "#FFFFFF".to_string());
 
-    let mut cmds = Vec::with_capacity(groups.len());
+    let mut nodes = Vec::with_capacity(groups.len());
     let mut placeholder_ids = Vec::with_capacity(groups.len());
     let mut baselines = Vec::with_capacity(groups.len());
     let mut next_x = start_x;
@@ -524,11 +524,7 @@ pub(crate) fn build_screen_group_scaffold(
             is_mobile,
         )?;
 
-        cmds.push(EditorCommand::InsertSubtree {
-            nodes: vec![node],
-            parent_id: NodeId::NONE,
-            page_id: None,
-        });
+        nodes.push(node);
         placeholder_ids.push(placeholder_id);
         // Baseline: mobile root has 1 scaffold child (status bar); desktop
         // has 0 — mirrors the deleted concurrent path's identical baseline.
@@ -536,6 +532,21 @@ pub(crate) fn build_screen_group_scaffold(
         next_x += rf.width + SCREEN_GROUP_GAP;
     }
 
+    // ONE insert carrying every root, not one insert per root. A top-level
+    // `InsertSubtree` of a single frame is treated as "replace the empty
+    // fresh-canvas starter" (`command_root_replace::prepare_root_frame_replacement`,
+    // which matches ANY empty root) — so inserting N roots one at a time made
+    // each new root swallow the previous one, which is still empty at scaffold
+    // time. Six slides arrived as one board, the last one (measured
+    // 2026-08-01: six `applied=true` inserts, one surviving root).
+    //
+    // The replacement path bails on `nodes.len() != 1`, and these roots are one
+    // scaffold anyway, so batching them is both the fix and the truer shape.
+    let cmds = vec![EditorCommand::InsertSubtree {
+        nodes,
+        parent_id: NodeId::NONE,
+        page_id: None,
+    }];
     Ok((cmds, placeholder_ids, baselines))
 }
 
