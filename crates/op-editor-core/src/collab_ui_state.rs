@@ -431,6 +431,14 @@ impl CollabUiState {
             session.share_endpoint = None;
         }
         self.set_phase(phase);
+        if phase == CollabConnectionPhase::Active {
+            // A connect notice describes the attempt that just completed. It
+            // must not survive into the authenticated session, while
+            // session-scoped notices (rejects, conflicts, owner departure,
+            // and so on) remain actionable until their own lifecycle retires
+            // them.
+            self.clear_connect_notice();
+        }
         // The join decision has been made; retiring the projection keeps a
         // stale prompt from reappearing over a live session.
         self.clear_owner_confirmation();
@@ -582,6 +590,16 @@ impl CollabUiState {
         });
     }
 
+    pub(crate) fn clear_connect_notice(&mut self) {
+        if self
+            .notice
+            .is_some_and(|notice| matches!(notice.kind, CollabNoticeKind::Connect(_)))
+        {
+            self.panel.hover = None;
+            self.notice = None;
+        }
+    }
+
     fn retain_rostered_presence(&mut self) {
         let participants = &self.participants;
         let mut presence = self.presence.as_ref().clone();
@@ -603,6 +621,9 @@ impl CollabUiState {
 
 #[cfg(test)]
 mod presence_merge_tests;
+
+#[cfg(test)]
+mod notice_lifecycle_tests;
 
 #[cfg(test)]
 mod tests {

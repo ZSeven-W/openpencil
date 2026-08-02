@@ -217,7 +217,13 @@ fn run_inner(
             }
         }
         match accept_owner_stream(&listener, relay.as_ref(), &prelude) {
-            Ok(Some((stream, address, accepted_prelude))) => {
+            Ok(Some(accepted)) => {
+                let AcceptedOwnerStream {
+                    stream,
+                    address,
+                    prelude: accepted_prelude,
+                    source,
+                } = accepted;
                 let Some(raw_connection) = next_connection else {
                     continue;
                 };
@@ -242,7 +248,7 @@ fn run_inner(
                     verifier: Arc::clone(&verifier),
                     prelude: accepted_prelude,
                     shared_budget: shared_budget.clone(),
-                    config,
+                    config: source.transport_config(config),
                     connection_id,
                     session_id: session_id.clone(),
                     epoch,
@@ -283,22 +289,58 @@ fn run_inner(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OwnerStreamSource {
+    Lan,
+    Relay,
+}
+
+impl OwnerStreamSource {
+    fn transport_config(self, mut config: TransportConfig) -> TransportConfig {
+        if self == Self::Relay {
+            // The relay already authenticated and bounded the public socket.
+            // Its local bridge may receive the initiator's first Noise frame
+            // after a public-network round trip, so retain the complete Noise
+            // handshake window instead of applying the direct-LAN DoS guard.
+            config.timeouts.handshake_first_message = config.timeouts.handshake;
+        }
+        config
+    }
+}
+
+struct AcceptedOwnerStream {
+    stream: TcpStream,
+    address: SocketAddr,
+    prelude: Arc<ServerPrelude>,
+    source: OwnerStreamSource,
+}
+
 fn accept_owner_stream(
     lan_listener: &TcpListener,
     relay: Option<&OwnerRelayRuntime>,
     lan_prelude: &Arc<ServerPrelude>,
-) -> std::io::Result<Option<(TcpStream, SocketAddr, Arc<ServerPrelude>)>> {
+) -> std::io::Result<Option<AcceptedOwnerStream>> {
     if let Some(relay) = relay {
         match relay.accept() {
             Ok((stream, address)) => {
-                return Ok(Some((stream, address, relay.prelude())));
+                return Ok(Some(AcceptedOwnerStream {
+                    stream,
+                    address,
+                    prelude: relay.prelude(),
+                    source: OwnerStreamSource::Relay,
+                }));
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
             Err(error) => return Err(error),
         }
     }
     match lan_listener.accept() {
-        Ok((stream, address)) => Ok(Some((stream, address, Arc::clone(lan_prelude)))),
+        Ok((stream, address)) => Ok(Some(AcceptedOwnerStream {
+            stream,
+            address,
+            prelude: Arc::clone(lan_prelude),
+            source: OwnerStreamSource::Lan,
+        })),
         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
         Err(error) => Err(error),
     }
@@ -577,45 +619,9 @@ fn terminal_rotation_failure(error: &DiscoveryError, publisher_stopped: bool) ->
 
 #[cfg(test)]
 mod approval_timeout_tests {
-    use op_collab::{Bye, ByeReason, CollabMessage, Epoch, FrameEnvelope, Presence, SessionId};
-    use op_collab_transport::{encode_frame_transfer, m1_wire_limits, EncodedFrameTransfer};
+    use op_collab::ByeReason;
 
     use super::*;
-    use crate::collab_runtime::types::BudgetedFrame;
-
-    fn frame(message: CollabMessage) -> FrameEnvelope {
-        FrameEnvelope::new(SessionId::from("bridge-routing"), Epoch(1), message)
-    }
-
-    fn budgeted(frame: FrameEnvelope, budget: &SharedQueueBudget) -> Box<BudgetedFrame> {
-        let lossy = crate::collab_runtime::types::is_lossy_presence_frame(&frame);
-        let encoded = EncodedFrameTransfer::encode(&frame, m1_wire_limits()).unwrap();
-        let encoded_len = encoded.encoded_len();
-        Box::new(BudgetedFrame::new(
-            encoded,
-            lossy,
-            budget.reserve(encoded_len).unwrap(),
-        ))
-    }
-
-    fn active_peer_registry(
-        connection: ConnectionKey,
-        commands: std::sync::mpsc::SyncSender<PeerNetworkCommand>,
-    ) -> PeerRegistry {
-        let (shutdown, _shutdown_receiver) = mpsc::sync_channel(1);
-        let mut peers = PeerRegistry::new();
-        peers.insert(
-            connection,
-            PeerControl {
-                commands,
-                shutdown,
-                cancel: None,
-                phase: Arc::new(AtomicU8::new(PeerPhase::Active as u8)),
-                thread: None,
-            },
-        );
-        peers
-    }
 
     #[test]
     fn owner_approval_window_is_human_sized_but_bounded() {
@@ -700,88 +706,12 @@ mod approval_timeout_tests {
         TcpStream::connect(endpoint).expect("IPv4 loopback reaches fallback policy");
         listener.accept().expect("accept IPv4 loopback");
     }
-
-    #[test]
-    fn owner_outer_and_peer_handoffs_retain_one_shared_reservation() {
-        let reliable = frame(CollabMessage::Bye(Bye {
-            reason: ByeReason::Normal,
-        }));
-        let encoded_len = encode_frame_transfer(&reliable, m1_wire_limits())
-            .unwrap()
-            .1
-            .len();
-        let budget = SharedQueueBudget::new(encoded_len).unwrap();
-        let connection = ConnectionKey::new(2).unwrap();
-        let (outer_sender, outer_receiver) = mpsc::sync_channel(1);
-        let (peer_sender, peer_receiver) = mpsc::sync_channel(1);
-        let mut peers = active_peer_registry(connection, peer_sender);
-
-        outer_sender
-            .send(OwnerNetworkCommand::Send {
-                connection,
-                frame: budgeted(reliable, &budget),
-                coalesce_key: None,
-            })
-            .unwrap();
-        assert_eq!(budget.used().unwrap(), encoded_len);
-        assert!(budget.reserve(1).is_err());
-
-        let command = outer_receiver.recv().unwrap();
-        assert!(route_command(command, &mut peers).unwrap());
-        assert_eq!(budget.used().unwrap(), encoded_len);
-        assert!(budget.reserve(1).is_err());
-
-        let peer_command = peer_receiver.recv().unwrap();
-        assert_eq!(budget.used().unwrap(), encoded_len);
-        drop(peer_command);
-        assert_eq!(budget.used().unwrap(), 0);
-    }
-
-    #[test]
-    fn full_peer_lane_fails_reliable_but_drops_presence() {
-        let reliable = frame(CollabMessage::Bye(Bye {
-            reason: ByeReason::Normal,
-        }));
-        let presence = frame(CollabMessage::PresenceUpdate(Presence {
-            cursor: None,
-            selection: Vec::new(),
-            viewport: None,
-            editing_node: None,
-        }));
-        let reliable_len = encode_frame_transfer(&reliable, m1_wire_limits())
-            .unwrap()
-            .1
-            .len();
-        let presence_len = encode_frame_transfer(&presence, m1_wire_limits())
-            .unwrap()
-            .1
-            .len();
-        let budget = SharedQueueBudget::new(reliable_len.max(presence_len)).unwrap();
-        let connection = ConnectionKey::new(3).unwrap();
-        let (peer_sender, _peer_receiver) = mpsc::sync_channel(1);
-        peer_sender.try_send(PeerNetworkCommand::Stop).unwrap();
-        let mut peers = active_peer_registry(connection, peer_sender);
-
-        let reliable_result = route_command(
-            OwnerNetworkCommand::Send {
-                connection,
-                frame: budgeted(reliable, &budget),
-                coalesce_key: None,
-            },
-            &mut peers,
-        );
-        assert_eq!(reliable_result, Err(CollabRuntimeFailure::ResourceLimit));
-        assert_eq!(budget.used().unwrap(), 0);
-
-        assert!(route_command(
-            OwnerNetworkCommand::Send {
-                connection,
-                frame: budgeted(presence, &budget),
-                coalesce_key: Some(1),
-            },
-            &mut peers,
-        )
-        .unwrap());
-        assert_eq!(budget.used().unwrap(), 0);
-    }
 }
+
+#[cfg(test)]
+#[path = "owner_queue_tests.rs"]
+mod queue_tests;
+
+#[cfg(test)]
+#[path = "owner_relay_timeout_tests.rs"]
+mod relay_timeout_tests;

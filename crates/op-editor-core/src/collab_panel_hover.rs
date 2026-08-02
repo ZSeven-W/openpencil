@@ -41,6 +41,12 @@ impl crate::CollabUiState {
     /// Update phase and invalidate feedback whose action may have moved under
     /// a stationary cursor.
     pub fn set_phase(&mut self, phase: crate::CollabConnectionPhase) {
+        if matches!(
+            phase,
+            crate::CollabConnectionPhase::Starting | crate::CollabConnectionPhase::Joining
+        ) {
+            self.clear_connect_notice();
+        }
         if self.phase != phase {
             self.panel.hover = None;
             self.phase = phase;
@@ -51,7 +57,10 @@ impl crate::CollabUiState {
 #[cfg(test)]
 mod tests {
     use super::CollabPanelHover;
-    use crate::{CollabAvailability, CollabNoticeKind, CollabUiState};
+    use crate::{
+        CollabAvailability, CollabConnectErrorUi, CollabConnectionPhase, CollabNoticeKind,
+        CollabRejectUiCode, CollabUiState,
+    };
 
     #[test]
     fn screen_and_notice_changes_clear_stale_panel_hover() {
@@ -63,5 +72,32 @@ mod tests {
         state.panel.hover = Some(CollabPanelHover::OpenSignIn);
         state.set_availability(CollabAvailability::SignInRequired);
         assert_eq!(state.panel.hover, None);
+    }
+
+    #[test]
+    fn a_new_connection_attempt_retires_only_connect_notices() {
+        for phase in [
+            CollabConnectionPhase::Starting,
+            CollabConnectionPhase::Joining,
+        ] {
+            let mut stale_connect = CollabUiState::default();
+            stale_connect.set_notice(
+                CollabNoticeKind::Connect(CollabConnectErrorUi::RelayUnavailable),
+                7,
+            );
+            stale_connect.set_phase(phase);
+            assert_eq!(stale_connect.notice, None);
+
+            let mut session_notice = CollabUiState::default();
+            session_notice.set_notice(CollabNoticeKind::Reject(CollabRejectUiCode::Conflict), 9);
+            session_notice.set_phase(phase);
+            assert!(matches!(
+                session_notice.notice,
+                Some(crate::CollabNotice {
+                    kind: CollabNoticeKind::Reject(CollabRejectUiCode::Conflict),
+                    created_at_ms: 9,
+                })
+            ));
+        }
     }
 }

@@ -104,9 +104,9 @@ impl Default for TimeoutConfig {
             connect: Duration::from_secs(5),
             handshake: Duration::from_secs(5),
             // One round trip after TCP establishment is enough for an honest
-            // initiator, including relay-mediated paths, while keeping a silent
-            // peer's hold on a global pending seat to a fifth of the handshake
-            // window.
+            // directly accepted initiator, while keeping a silent peer's hold
+            // on a global pending seat to a fifth of the handshake window.
+            // Authenticated relay bridges may widen this per accepted stream.
             handshake_first_message: Duration::from_secs(1),
             admission: Duration::from_secs(10),
             ordinary_transfer: Duration::from_secs(10),
