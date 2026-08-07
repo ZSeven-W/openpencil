@@ -55,6 +55,8 @@ mod arc_drag;
 mod blur_inputs;
 #[cfg(test)]
 mod blur_inputs_tests;
+#[cfg(test)]
+mod canvas_drag_transition_tests;
 mod canvas_pan_cache;
 mod canvas_scene_patch;
 mod canvas_select_drag;

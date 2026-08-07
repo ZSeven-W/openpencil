@@ -198,6 +198,12 @@ impl WidgetHostNative {
         let total_dx = ((x - drag.press_screen_x) / zoom) as f64;
         let total_dy = ((y - drag.press_screen_y) / zoom) as f64;
         if !drag.moved {
+            // A transition from the previous drop/reflow paints geometry away
+            // from the resolved scene. Once direct manipulation starts, the
+            // cursor must own the node's position exactly. Later same-gesture
+            // flex reorders may install fresh transitions that exclude the
+            // dragged node and continue animating sibling avoidance.
+            self.layout_transition = None;
             // Once the gesture becomes a drag it cannot be the first
             // half of a later double-click drill.
             self.editor_state.editor_ui.last_canvas_click = None;
