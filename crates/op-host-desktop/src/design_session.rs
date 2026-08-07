@@ -534,16 +534,16 @@ fn element_count(locale: Locale, count: usize) -> String {
 }
 
 fn subtask_failure_detail(locale: Locale, error: &str) -> String {
-    let label = op_i18n::translate(locale, "ai.designProgress.detail.needsAttention");
     let compact = error.split_whitespace().collect::<Vec<_>>().join(" ");
     if compact.is_empty() {
-        return label.into();
+        return op_i18n::translate(locale, "ai.designProgress.detail.noDiagnostic").into();
     }
     let mut visible: String = compact.chars().take(220).collect();
     if compact.chars().count() > 220 {
         visible.push('…');
     }
-    format!("{label}: {visible}")
+    op_i18n::translate(locale, "ai.designProgress.detail.failureReason")
+        .replace("{{reason}}", &visible)
 }
 
 fn planned_narration(locale: Locale, count: usize) -> String {

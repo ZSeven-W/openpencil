@@ -116,7 +116,7 @@ fn failed_subtask_message(retryable: bool) -> ChatMessage {
     m.activities.push(op_editor_core::ChatActivity {
         id: "hero".into(),
         title: "Hero".into(),
-        detail: Some("Needs attention".into()),
+        detail: Some("Reason: provider returned no nodes".into()),
         status: op_editor_core::ChatActivityStatus::Error,
         content_offset: Some(0),
     });

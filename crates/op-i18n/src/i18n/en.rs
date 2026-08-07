@@ -681,7 +681,19 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.activity.polishing" => "Polishing the layout",
         "ai.designProgress.activity.checking" => "Checking the design",
         "ai.designProgress.activity.visualReference" => "Preparing the visual reference",
-        "ai.designProgress.detail.needsAttention" => "Needs attention",
+        "ai.designProgress.detail.failureReason" => "Reason: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => {
+            "The agent failed without returning an error description."
+        }
+        "ai.designProgress.detail.noResult" => {
+            "The agent stopped before returning a result for this section."
+        }
+        "ai.designProgress.detail.connectionClosed" => {
+            "The agent connection closed before this section returned a result."
+        }
+        "ai.designProgress.detail.stoppedByUser" => {
+            "Stopped by the user before this section completed."
+        }
         "ai.designProgress.detail.retrying" => "Retrying · attempt {{attempt}}",
         "ai.designProgress.detail.refining" => "Refining details",
         "ai.designProgress.detail.standardPath" => "Using the standard design path",
@@ -697,7 +709,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "Done — all {{count}} planned sections are in place and the final layout has been checked."
         }
         "ai.designProgress.completion.issues" => {
-            "Finished with issues — {{completed}} completed and {{failed}} need attention."
+            "Finished with issues — {{completed}} completed and {{failed}} failed. The failed sections below show the exact reasons."
         }
         "figma.importNotWired" => ".fig file import not yet wired",
         "dialog.loadErrorInvalidUtf8" => "The file is not valid UTF-8 text: {{detail}}",

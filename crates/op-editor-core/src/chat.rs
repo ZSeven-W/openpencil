@@ -230,7 +230,7 @@ pub struct ChatMessage {
     pub design_block_expanded_overrides: Vec<Option<bool>>,
     /// Per-action-step (subtask card) expanded-state overrides. Missing
     /// / `None` entries fall back to the transcript default (expanded
-    /// only while the step is the active/streaming one).
+    /// while the step is active or failed, so diagnostics stay visible).
     pub action_step_expanded_overrides: Vec<Option<bool>>,
     /// True while this (assistant) message's turn streams in.
     pub streaming: bool,
@@ -869,8 +869,8 @@ impl ChatState {
     /// Begin a manual retry for the failed subtask row at
     /// `activities[source_index]` in message `msg_idx` — the click handler
     /// for the progress panel's per-row "Retry" button. Flips that
-    /// activity's status back to `Running` and clears its stale "Needs
-    /// attention" detail so the row shows a spinner immediately, then
+    /// activity's status back to `Running` and clears its stale failure
+    /// diagnostic so the row shows a spinner immediately, then
     /// raises `pending_subtask_retry` for the desktop host to drain.
     ///
     /// No-ops (leaves everything untouched) when the message/activity index
@@ -1355,7 +1355,7 @@ mod tests {
         msg.activities.push(ChatActivity {
             id: "hero".into(),
             title: "Hero".into(),
-            detail: Some("Needs attention".into()),
+            detail: Some("Reason: provider returned no nodes".into()),
             status: ChatActivityStatus::Error,
             content_offset: Some(0),
         });
@@ -1391,7 +1391,7 @@ mod tests {
         msg.activities.push(ChatActivity {
             id: "hero".into(),
             title: "Hero".into(),
-            detail: Some("Needs attention".into()),
+            detail: Some("Reason: provider returned no nodes".into()),
             status: ChatActivityStatus::Error,
             content_offset: Some(0),
         });

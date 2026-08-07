@@ -257,6 +257,13 @@ fn pump_progress_captures_failed_subtask_specs_for_manual_retry() {
         .messages
         .last()
         .expect("seeded bubble survives");
+    assert_eq!(msg.activities.len(), 1);
+    assert_eq!(msg.activities[0].title, "Hero");
+    assert_eq!(
+        msg.activities[0].detail.as_deref(),
+        Some("Reason: empty content from provider"),
+        "a summary-only failure must still identify its section and exact cause"
+    );
     assert_eq!(msg.failed_subtasks.len(), 1, "{:?}", msg.failed_subtasks);
     assert_eq!(msg.failed_subtasks[0].subtask_id, "hero");
     let restored: op_orchestrator::plan::Subtask =
@@ -685,8 +692,35 @@ fn failed_subtask_keeps_the_actionable_error_in_the_activity() {
         Locale::EnUs,
     ));
     let detail = message.activities[0].detail.as_deref().unwrap();
-    assert!(detail.contains("Needs attention"), "{detail}");
+    assert!(detail.starts_with("Reason:"), "{detail}");
+    assert!(!detail.contains("Needs attention"), "{detail}");
     assert!(detail.contains("parent_id=root status=missing"), "{detail}");
+}
+
+#[test]
+fn failed_subtask_uses_localized_reason_label() {
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    assert!(super::apply_progress(
+        &mut message,
+        &[Progress::SubtaskFailed {
+            id: "customer-table".into(),
+            error: "parent_id=dashboard was not found".into(),
+        }],
+        Locale::ZhCn,
+    ));
+
+    assert_eq!(
+        message.activities[0].detail.as_deref(),
+        Some("失败原因：parent_id=dashboard was not found")
+    );
+}
+
+#[test]
+fn failed_subtask_without_provider_detail_reports_the_missing_diagnostic() {
+    assert_eq!(
+        super::subtask_failure_detail(Locale::ZhCn, " \n\t"),
+        "Agent 执行失败，但没有返回错误说明。"
+    );
 }
 
 #[test]

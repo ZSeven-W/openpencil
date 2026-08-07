@@ -689,7 +689,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.activity.polishing" => "润色布局",
         "ai.designProgress.activity.checking" => "检查设计",
         "ai.designProgress.activity.visualReference" => "准备视觉参考",
-        "ai.designProgress.detail.needsAttention" => "需要处理",
+        "ai.designProgress.detail.failureReason" => "失败原因：{{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "Agent 执行失败，但没有返回错误说明。",
+        "ai.designProgress.detail.noResult" => "Agent 在该区块返回结果前已停止。",
+        "ai.designProgress.detail.connectionClosed" => {
+            "Agent 连接在该区块返回结果前已断开。"
+        }
+        "ai.designProgress.detail.stoppedByUser" => "用户已停止，该区块尚未完成。",
         "ai.designProgress.detail.retrying" => "正在重试 · 第 {{attempt}} 次",
         "ai.designProgress.detail.refining" => "正在润色细节",
         "ai.designProgress.detail.standardPath" => "改用标准设计流程",
@@ -703,7 +709,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "已完成——计划中的 {{count}} 个区块已全部就位，最终布局也已检查。"
         }
         "ai.designProgress.completion.issues" => {
-            "本次已结束，但仍有问题——已完成 {{completed}} 项，{{failed}} 项需要处理。"
+            "本次已结束——已完成 {{completed}} 项，失败 {{failed}} 项。下方失败区块已标明具体原因。"
         }
         "figma.importNotWired" => ".fig 文件导入尚未接入",
         "dialog.loadErrorInvalidUtf8" => "文件不是有效的 UTF-8 文本:{{detail}}",

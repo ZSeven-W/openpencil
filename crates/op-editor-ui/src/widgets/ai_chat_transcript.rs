@@ -317,14 +317,15 @@ pub(crate) fn build_item(
             .iter()
             .flat_map(|line| wrap_units(line, budget.saturating_sub(4)))
             .collect();
-        // Default: expanded only while this step is the active/streaming
-        // one. A user click records a per-step override (collapse/expand).
+        // Active work and failures default open: a terminal error must expose
+        // its concrete diagnostic without making the user discover a hidden
+        // accordion. A user click still records an explicit override.
         let expanded = msg
             .action_step_expanded_overrides
             .get(i)
             .copied()
             .flatten()
-            .unwrap_or(active);
+            .unwrap_or(active || failed);
         let step_h = action_step_height(expanded, details.len());
         // `i` only aligns with `msg.activities`' own index when the
         // structured (non-interleaved) path built `progress_steps` directly
