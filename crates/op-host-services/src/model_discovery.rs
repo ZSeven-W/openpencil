@@ -93,11 +93,7 @@ fn discovery_provider_order() -> [AgentProvider; 6] {
 /// user's interactive shell from the GUI process is slow and
 /// side-effectful.
 pub fn resolve_cli(name: &str) -> Option<PathBuf> {
-    let exts: &[&str] = if cfg!(windows) {
-        &["", ".exe", ".cmd", ".bat"]
-    } else {
-        &[""]
-    };
+    let exts = executable_extensions(cfg!(windows));
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
             for ext in exts {
@@ -117,6 +113,17 @@ pub fn resolve_cli(name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Windows npm installs place an extensionless POSIX shim next to the
+/// launchable `.cmd` entry. Keep the bare name as a last-resort fallback so
+/// native executables and Windows command shims win when both are present.
+fn executable_extensions(windows: bool) -> &'static [&'static str] {
+    if windows {
+        &[".exe", ".cmd", ".bat", ""]
+    } else {
+        &[""]
+    }
 }
 
 /// Standard user-local / package-manager bin directories — the TS
@@ -653,6 +660,12 @@ mod tests {
     #[test]
     fn discovery_order_matches_ts_default_provider_order() {
         assert_eq!(discovery_provider_order(), AgentProvider::ALL);
+    }
+
+    #[test]
+    fn windows_executable_extensions_prefer_launchable_shims() {
+        assert_eq!(executable_extensions(true), &[".exe", ".cmd", ".bat", ""]);
+        assert_eq!(executable_extensions(false), &[""]);
     }
 
     #[test]
