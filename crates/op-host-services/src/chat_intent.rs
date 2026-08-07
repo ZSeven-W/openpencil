@@ -148,78 +148,6 @@ pub fn is_non_request_text(text: &str) -> bool {
     !text.chars().any(char::is_alphanumeric)
 }
 
-/// Exact, standalone rerun commands. Keeping this exact avoids treating
-/// requests such as "restart the server" as design-session control.
-pub fn is_restart_command(text: &str) -> bool {
-    let normalized = text
-        .trim()
-        .trim_matches(|c: char| {
-            c.is_whitespace()
-                || matches!(
-                    c,
-                    '.' | ',' | '!' | '?' | ';' | ':' | '。' | '，' | '！' | '？' | '；' | '：'
-                )
-        })
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
-    matches!(
-        normalized.as_str(),
-        "restart"
-            | "start over"
-            | "try again"
-            | "retry"
-            | "重新开始"
-            | "重新生成"
-            | "再试一次"
-            | "重来"
-            | "重试"
-    )
-}
-
-/// Recover the latest persisted design request from this chat tab.
-pub fn latest_design_request_for_restart(state: &EditorState) -> Option<DesignRequest> {
-    state
-        .chat
-        .messages
-        .iter()
-        .rev()
-        // CLI-standard stages a request before asynchronous classification,
-        // even for turns that later route to plain chat. Require evidence that
-        // the design worker actually owned this message.
-        .filter(|message| {
-            message.completion.is_some()
-                || !message.activities.is_empty()
-                || !message.failed_subtasks.is_empty()
-        })
-        .find_map(|message| {
-            message
-                .design_request_json_for_retry
-                .as_deref()
-                .and_then(|json| serde_json::from_str(json).ok())
-        })
-}
-
-/// Reuse the previous design content while honoring the controls selected for
-/// the new run (model/provider/concurrency/validation).
-pub fn restore_design_request_for_restart(
-    state: &EditorState,
-    text: &str,
-    current: &DesignRequest,
-) -> Option<DesignRequest> {
-    if !is_restart_command(text) {
-        return None;
-    }
-    let mut previous = latest_design_request_for_restart(state)?;
-    previous.model = current.model.clone();
-    previous.provider = current.provider.clone();
-    previous.concurrency = current.concurrency;
-    previous.validation_enabled = current.validation_enabled;
-    previous.visual_ref_enabled = current.visual_ref_enabled;
-    Some(previous)
-}
-
 /// TS `classifyByKeywords` — verbatim rule order.
 pub fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
@@ -250,13 +178,6 @@ pub fn classify_intent_for_standard_route(
     text: &str,
     model: Option<String>,
 ) -> DesignIntent {
-    if is_restart_command(text) {
-        return if latest_design_request_for_restart(state).is_some() {
-            DesignIntent::New
-        } else {
-            DesignIntent::Chat
-        };
-    }
     if is_non_request_text(text) {
         return DesignIntent::Chat;
     }

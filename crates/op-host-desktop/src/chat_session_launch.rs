@@ -78,30 +78,24 @@ pub fn launch_if_pending(
         .selected_model_entry()
         .map(|entry| entry.builtin_provider_id.is_some() || entry.acp_agent_id().is_some())
         .unwrap_or(false);
-    let restart_available = op_host_services::chat_intent::is_restart_command(&user_text)
-        && op_host_services::chat_intent::latest_design_request_for_restart(host.editor_state())
-            .is_some();
     if !is_builtin_or_acp {
         if launch_cli_standard_turn(host, &user_text, current_chat, current_design) {
             return true;
         }
         // CLI transport construction failed — fall through to the
         // honest-error path below.
-    } else if !restart_available && should_launch_direct_modify(host.editor_state(), &user_text) {
+    } else if should_launch_direct_modify(host.editor_state(), &user_text) {
         if launch_direct_modify_turn(host, &user_text, current_chat, current_design) {
             return true;
         }
-    } else if restart_available
-        || (!op_host_services::chat_intent::is_non_request_text(&user_text)
-            && matches!(classify_intent(&user_text), Intent::Design))
+    } else if !op_host_services::chat_intent::is_non_request_text(&user_text)
+        && matches!(classify_intent(&user_text), Intent::Design)
     {
         // Phase 2.3: When the design-agent-loop flag is ON and a built-in
         // provider is configured, run the agentic tool-loop with the 14-tool
         // design toolset instead of the orchestrator pipeline. Flag OFF falls
         // through to the orchestrator path below — byte-for-byte unchanged.
-        if !restart_available
-            && launch_design_loop_turn(host, user_text.clone(), current_chat, current_design)
-        {
+        if launch_design_loop_turn(host, user_text.clone(), current_chat, current_design) {
             return true;
         }
         // Orchestrator path — unchanged when flag is OFF or no built-in
@@ -124,14 +118,7 @@ pub fn launch_if_pending(
                 &user_text,
             );
             let initial_state = host.editor_state().clone();
-            let current_request =
-                build_design_request(user_text.clone(), &initial_state, append_context);
-            let request = op_host_services::chat_intent::restore_design_request_for_restart(
-                &initial_state,
-                &user_text,
-                &current_request,
-            )
-            .unwrap_or(current_request);
+            let request = build_design_request(user_text, &initial_state, append_context);
             // Persist the request onto the turn's assistant bubble (already
             // pushed by `begin_send`) BEFORE it moves into the worker — the
             // manual per-subtask "Retry" button needs it to re-run a failed
@@ -414,14 +401,8 @@ fn launch_cli_standard_turn(
     let modify_plan = op_host_services::chat_intent::build_modify_plan(state, user_text);
     let append_context = op_host_services::chat_intent::detect_append_intent(state, user_text);
     let initial_state = state.clone();
-    let current_request =
+    let design_request =
         build_design_request(user_text.to_string(), &initial_state, append_context);
-    let design_request = op_host_services::chat_intent::restore_design_request_for_restart(
-        &initial_state,
-        user_text,
-        &current_request,
-    )
-    .unwrap_or(current_request);
     // Same stash as the builtin/design-intent path above — this turn may or
     // may not actually classify as `DesignIntent::New` on the worker (the
     // classifier runs async), but setting it unconditionally is harmless:

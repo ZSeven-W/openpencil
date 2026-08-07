@@ -262,75 +262,10 @@ fn llm_classifier_keeps_a_complete_tag_received_before_timeout() {
     );
 }
 
-fn design_request(prompt: &str, model: Option<&str>, concurrency: u32) -> DesignRequest {
-    DesignRequest {
-        prompt: prompt.into(),
-        model: model.map(str::to_string),
-        provider: None,
-        design_md: None,
-        concurrency,
-        append_context: None,
-        validation_enabled: true,
-        visual_ref_enabled: false,
-    }
-}
-
 #[test]
-fn restart_command_recovers_previous_prompt_with_current_run_controls() {
-    let mut state = EditorState::new();
-    let previous = design_request("design a travel app", Some("old/model"), 1);
-    let mut message = op_editor_core::ChatMessage::assistant("done");
-    message.design_request_json_for_retry = Some(serde_json::to_string(&previous).unwrap());
-    message.completion = Some(op_editor_core::ChatCompletion {
-        succeeded: 1,
-        failed: 0,
-        nodes: 10,
-    });
-    state.chat.messages.push(message);
-    let current = design_request("重新开始", Some("new/model"), 4);
-
-    let restored = restore_design_request_for_restart(&state, "重新开始？", &current).unwrap();
-    assert_eq!(restored.prompt, "design a travel app");
-    assert_eq!(restored.model.as_deref(), Some("new/model"));
-    assert_eq!(restored.concurrency, 4);
-
-    let provider = Scripted::text("CHAT");
-    assert_eq!(
-        classify_intent_for_standard_route(&provider, &state, "重新开始", None),
-        DesignIntent::New
-    );
-}
-
-#[test]
-fn restart_skips_requests_staged_on_plain_chat_turns() {
-    let mut state = EditorState::new();
-    let design = design_request("design a travel app", None, 1);
-    let mut design_message = op_editor_core::ChatMessage::assistant("done");
-    design_message.design_request_json_for_retry = Some(serde_json::to_string(&design).unwrap());
-    design_message.completion = Some(op_editor_core::ChatCompletion {
-        succeeded: 1,
-        failed: 0,
-        nodes: 10,
-    });
-    state.chat.messages.push(design_message);
-
-    let staged_chat = design_request("explain auto layout", None, 1);
-    let mut chat_message = op_editor_core::ChatMessage::assistant("Auto layout is...");
-    chat_message.design_request_json_for_retry = Some(serde_json::to_string(&staged_chat).unwrap());
-    state.chat.messages.push(chat_message);
-
-    let restored = latest_design_request_for_restart(&state).unwrap();
-    assert_eq!(restored.prompt, "design a travel app");
-}
-
-#[test]
-fn restart_without_history_and_punctuation_only_stay_in_chat() {
+fn punctuation_only_stays_in_chat() {
     let provider = Scripted::text("DESIGN_NEW");
     let state = EditorState::new();
-    assert_eq!(
-        classify_intent_for_standard_route(&provider, &state, "重新开始", None),
-        DesignIntent::Chat
-    );
     assert_eq!(
         classify_intent_for_standard_route(&provider, &state, "？？？？", None),
         DesignIntent::Chat
