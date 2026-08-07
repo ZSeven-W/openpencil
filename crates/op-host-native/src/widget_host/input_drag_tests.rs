@@ -1,7 +1,7 @@
 //! Drag/release tests split from `input_tests.rs` so each test module
 //! stays under the repository file-size ceiling.
 
-use super::{HandleDragState, NodeDragState, WidgetHostNative};
+use super::{CreateDragState, HandleDragState, NodeDragState, RotateDragState, WidgetHostNative};
 use op_editor_core::{NodeId, PenNodeExt};
 use op_editor_ui::{widgets::SelectionHandle, Point2D, Rect};
 
@@ -69,6 +69,145 @@ fn bottom_right_handle_resizes_only_selected_container() {
         authored_geometry(&host, "child"),
         child_before,
         "normal container resize must not scale or translate fixed descendants"
+    );
+}
+
+#[test]
+fn consecutive_resize_frames_keep_layout_scene_in_sync() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"1.0.0","children":[{
+          "type":"rectangle","id":"shape","name":"shape","x":100,"y":80,
+          "width":120,"height":80
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("shape"));
+    host.mark_paint_dirty_for_test();
+    let _ = host.layout_scene();
+
+    // Real handle presses advance history/revision once. Cursor frames then
+    // mutate geometry in place without another revision bump.
+    host.editor_state_mut().commit_history();
+    host.handle_drag = Some(HandleDragState {
+        handle: SelectionHandle::Right,
+        start_screen_x: 500.0,
+        start_screen_y: 500.0,
+        start_bounds: Rect {
+            origin: Point2D::new(100.0, 80.0),
+            size: Point2D::new(120.0, 80.0),
+        },
+        start_authored_x: Some(100.0),
+        start_authored_y: Some(80.0),
+    });
+
+    for (cursor_x, expected_width) in [(520.0, 140.0), (540.0, 160.0)] {
+        assert!(host.apply_cursor_move(cursor_x, 500.0));
+        let authored = authored_geometry(&host, "shape");
+        assert_eq!(authored.2, Some(expected_width));
+        let scene_width = host
+            .layout_scene()
+            .active_page()
+            .and_then(|page| page.find("shape"))
+            .expect("scene shape")
+            .bounds
+            .size
+            .x;
+        assert_eq!(
+            scene_width, expected_width as f32,
+            "every live resize frame must paint the canonical width"
+        );
+    }
+}
+
+#[test]
+fn consecutive_rotation_frames_keep_layout_scene_in_sync() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"1.0.0","children":[{
+          "type":"rectangle","id":"shape","name":"shape","x":100,"y":80,
+          "width":120,"height":80
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("shape"));
+    let _ = host.layout_scene();
+    host.editor_state_mut().commit_history();
+    host.rotate_drag = Some(RotateDragState {
+        center_screen_x: 500.0,
+        center_screen_y: 500.0,
+        start_cursor_angle: 0.0,
+        start_rotation: 0.0,
+    });
+
+    for (cursor, expected) in [
+        ((500.0, 510.0), std::f32::consts::FRAC_PI_2),
+        ((490.0, 500.0), std::f32::consts::PI),
+    ] {
+        assert!(host.apply_cursor_move(cursor.0, cursor.1));
+        let scene_rotation = host
+            .layout_scene()
+            .active_page()
+            .and_then(|page| page.find("shape"))
+            .expect("scene shape")
+            .rotation;
+        assert!(
+            (scene_rotation - expected).abs() < 0.0001,
+            "every live rotation frame must paint the canonical angle"
+        );
+    }
+}
+
+#[test]
+fn consecutive_create_frames_keep_layout_scene_in_sync() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().tool = op_editor_core::Tool::Rect;
+    let start = Point2D::new(700.0, 400.0);
+    let id = host
+        .create_node_for_active_tool(start)
+        .expect("rectangle tool creates a node");
+    host.editor_state_mut().set_single_selection(id.clone());
+    host.create_drag = Some(CreateDragState {
+        start_doc_x: start.x,
+        start_doc_y: start.y,
+    });
+    let (canvas_x, canvas_y) = host.canvas_origin();
+
+    for (doc_cursor, expected_size) in [
+        (Point2D::new(740.0, 440.0), Point2D::new(40.0, 40.0)),
+        (Point2D::new(760.0, 460.0), Point2D::new(60.0, 60.0)),
+    ] {
+        assert!(host.apply_cursor_move(canvas_x + doc_cursor.x, canvas_y + doc_cursor.y,));
+        let scene_bounds = host
+            .layout_scene()
+            .active_page()
+            .and_then(|page| page.find(id.as_str()))
+            .expect("created scene shape")
+            .bounds;
+        assert_eq!(scene_bounds.size, expected_size);
+    }
+}
+
+#[test]
+fn geometry_drags_enable_canvas_fast_paint_without_enabling_pan_cache() {
+    let mut host = WidgetHostNative::new();
+    assert!(!host.fast_interaction_active());
+    assert!(!host.canvas_fast_interaction_active());
+    host.handle_drag = Some(HandleDragState {
+        handle: SelectionHandle::Right,
+        start_screen_x: 0.0,
+        start_screen_y: 0.0,
+        start_bounds: Rect::xywh(0.0, 0.0, 100.0, 100.0),
+        start_authored_x: Some(0.0),
+        start_authored_y: Some(0.0),
+    });
+
+    assert!(host.canvas_fast_interaction_active());
+    assert!(
+        !host.fast_interaction_active(),
+        "geometry edits must not make the pan bitmap cache eligible"
     );
 }
 

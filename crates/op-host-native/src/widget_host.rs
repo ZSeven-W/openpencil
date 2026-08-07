@@ -56,6 +56,7 @@ mod blur_inputs;
 #[cfg(test)]
 mod blur_inputs_tests;
 mod canvas_pan_cache;
+mod canvas_scene_patch;
 mod canvas_select_drag;
 #[cfg(test)]
 mod canvas_select_drag_tests;
@@ -319,6 +320,10 @@ pub struct WidgetHostNative {
     /// cursor anchor so each `apply_cursor_move` translates the
     /// selected node by the delta.
     pub(in crate::widget_host) node_drag: Option<NodeDragState>,
+    /// Per-gesture container geometry/index used by canvas drop hit-testing.
+    /// Built lazily and discarded whenever a live tree mutation reflows the
+    /// scene, avoiding repeated whole-document DFS work on cursor frames.
+    pub(in crate::widget_host) canvas_drop_index: Option<canvas_select_drag::CanvasDropIndex>,
     /// Original selected ids for an active Option-drag clone move.
     /// Drop hit-testing skips these so a fresh clone does not
     /// immediately reparent back into the source it overlaps.
@@ -750,6 +755,7 @@ impl WidgetHostNative {
             panel_resize: None,
             variables_resize: None,
             node_drag: None,
+            canvas_drop_index: None,
             option_drag_source_ids: Vec::new(),
             path_anchor_drag: None,
             arc_handle_drag: None,
@@ -1570,6 +1576,17 @@ impl WidgetHostNative {
     /// mode (a pan/zoom gesture ticked within the hot window).
     pub(in crate::widget_host) fn fast_interaction_active(&self) -> bool {
         self.now_ms < self.interaction_hot_until_ms
+    }
+
+    /// Canvas-only low-cost paint mode for direct manipulation. Unlike
+    /// `fast_interaction_active`, this does not make the pan bitmap cache
+    /// eligible: edited geometry changes on every frame.
+    pub(in crate::widget_host) fn canvas_fast_interaction_active(&self) -> bool {
+        self.fast_interaction_active()
+            || self.node_drag.as_ref().is_some_and(|drag| drag.moved)
+            || self.handle_drag.is_some()
+            || self.rotate_drag.is_some()
+            || self.create_drag.is_some()
     }
 
     /// Next millisecond at which the host should wake to repaint

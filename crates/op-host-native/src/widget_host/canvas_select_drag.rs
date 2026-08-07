@@ -9,13 +9,27 @@
 
 use super::{NodeDragState, WidgetHostNative};
 use jian_ops_schema::node::PenNode;
-use op_editor_core::drag_mutators::{
-    auto_layout_direction, parent_of, DragDropTarget, FlexDirection,
-};
+use op_editor_core::drag_mutators::{auto_layout_direction, DragDropTarget, FlexDirection};
 use op_editor_core::editor_ui_state::{CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect};
 use op_editor_core::{NodeId, PenNodeExt};
 use op_editor_ui::widgets::CanvasNodeDragOverlay;
 use op_editor_ui::{Point2D, Rect};
+use std::collections::{HashMap, HashSet};
+
+#[cfg(test)]
+thread_local! {
+    static DROP_INDEX_BUILD_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(in crate::widget_host) fn reset_drop_index_build_count() {
+    DROP_INDEX_BUILD_COUNT.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(in crate::widget_host) fn drop_index_build_count() -> usize {
+    DROP_INDEX_BUILD_COUNT.with(std::cell::Cell::get)
+}
 
 /// Read-phase summary of one dragged node — collected before any
 /// mutation so no document / scene borrow survives into the mutators.
@@ -33,6 +47,40 @@ struct ContainerDropCandidate {
     insertion: Option<CanvasOverlayLine>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CanvasDropIndexKey {
+    document_generation: u64,
+    document_revision: u64,
+    active_page_index: usize,
+    dragged_id: String,
+    excluded_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SceneBounds {
+    bounds: Rect,
+    aggregate_bounds: Rect,
+}
+
+#[derive(Debug)]
+struct IndexedContainer {
+    id: NodeId,
+    bounds: Rect,
+    flex: Option<FlexDirection>,
+    flex_children: Vec<Rect>,
+    children: Vec<IndexedContainer>,
+}
+
+#[derive(Debug)]
+pub(in crate::widget_host) struct CanvasDropIndex {
+    key: CanvasDropIndexKey,
+    current_parent: Option<NodeId>,
+    current_index: usize,
+    current_parent_flex: Option<FlexDirection>,
+    dragged_scene_path: Vec<usize>,
+    containers: Vec<IndexedContainer>,
+}
+
 impl WidgetHostNative {
     /// Select-tool press over a resolved root-to-deepest hit path.
     /// A plain click selects the current level's primary node; a
@@ -48,6 +96,7 @@ impl WidgetHostNative {
         text_edit_was_active: bool,
         viewport_height: f32,
     ) -> bool {
+        self.canvas_drop_index = None;
         let Some(deepest) = hit_path.last().cloned() else {
             return false;
         };
@@ -197,24 +246,33 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.canvas_drop_indicator = None;
             return;
         };
-        let before_scene = self.layout_scene.clone();
-        let current_parent = parent_of(self.editor_state.active_children(), &id);
+        let (current_parent, current_index) = self
+            .canvas_drop_index
+            .as_ref()
+            .map(|index| (index.current_parent.clone(), index.current_index))
+            .unwrap_or((None, 0));
         let bounds = plan.dropped_bounds;
         let mut indicator = None;
         let mut mutated = false;
         let mut overlay_bounds = None;
+        let mut before_scene = None;
         if let Some(target) = plan.target.clone() {
             match &target {
-                DragDropTarget::Container { parent_id, .. }
-                    if current_parent.as_ref() == Some(parent_id) =>
-                {
+                DragDropTarget::Container {
+                    parent_id, index, ..
+                } if current_parent.as_ref() == Some(parent_id) => {
                     overlay_bounds = Some(bounds);
-                    mutated |= self.apply_drag_commit(&id, plan);
+                    if current_index != *index {
+                        before_scene = Some(self.layout_scene.clone());
+                        mutated |= self.apply_drag_commit(&id, plan);
+                    }
                 }
                 DragDropTarget::PageRoot { .. } if current_parent.is_some() => {
+                    before_scene = Some(self.layout_scene.clone());
                     mutated |= self.apply_drag_commit(&id, plan);
                 }
                 DragDropTarget::Container { .. } if current_parent.is_some() => {
+                    before_scene = Some(self.layout_scene.clone());
                     mutated |= self.editor_state.move_node_to_drop_target(
                         &id,
                         DragDropTarget::PageRoot { index: 0 },
@@ -231,13 +289,16 @@ impl WidgetHostNative {
             }
         }
         if mutated {
+            self.canvas_drop_index = None;
             // Drag history advances the document revision when the gesture
             // starts, before this live reorder mutates the tree. Invalidate the
             // revision-keyed scene cache so sibling reflow observes the new
             // order instead of reusing the pre-mutation scene.
             self.scene_cache.invalidate();
             self.mark_dirty();
-            self.start_layout_transition_from_scene_excluding(before_scene, &id);
+            if let Some(before_scene) = before_scene {
+                self.start_layout_transition_from_scene_excluding(before_scene, &id);
+            }
         }
         if self.editor_state.editor_ui.canvas_drop_indicator != indicator {
             self.editor_state.editor_ui.canvas_drop_indicator = indicator;
@@ -280,6 +341,7 @@ impl WidgetHostNative {
             mutated |= self.apply_drag_commit(id, plan);
         }
         if mutated {
+            self.canvas_drop_index = None;
             // The drag snapshot already consumed this gesture's document
             // revision, so the final tree mutation must invalidate the scene
             // cache explicitly.
@@ -290,15 +352,13 @@ impl WidgetHostNative {
     }
 
     /// Read phase — gather everything the commit needs as owned data.
-    fn plan_drag_commit(&self, id: &NodeId, drag: &NodeDragState) -> Option<DragCommitPlan> {
-        let children = self.editor_state.active_children();
-        let current_parent = parent_of(children, id);
-        let current_parent_flex = current_parent
-            .as_ref()
-            .and_then(|parent_id| op_editor_core::walkers::find_node(children, parent_id))
-            .and_then(auto_layout_direction);
+    fn plan_drag_commit(&mut self, id: &NodeId, drag: &NodeDragState) -> Option<DragCommitPlan> {
+        self.ensure_canvas_drop_index(id)?;
+        let index = self.canvas_drop_index.as_ref()?;
+        let current_parent = index.current_parent.clone();
+        let current_parent_flex = index.current_parent_flex;
         let page = self.layout_scene.active_page()?;
-        let node_scene = page.find(id.as_str())?;
+        let node_scene = scene_node_at_path(&page.children, &index.dragged_scene_path)?;
         let mut nb = node_scene.aggregate_bounds();
         if current_parent_flex.is_some() {
             // Flex children never doc-translate during the drag — the
@@ -307,7 +367,7 @@ impl WidgetHostNative {
             nb.origin.y += drag.total_dy as f32;
         }
         let center = Point2D::new(nb.origin.x + nb.size.x / 2.0, nb.origin.y + nb.size.y / 2.0);
-        let candidate = self.container_drop_candidate(id, center, nb);
+        let candidate = self.container_drop_candidate(center, nb);
         let mut indicator = None;
         let target = if let Some(candidate) = candidate {
             let same_parent = current_parent.as_ref() == Some(&candidate.parent_id);
@@ -361,141 +421,246 @@ impl WidgetHostNative {
 
     fn container_drop_candidate(
         &self,
-        dragged_id: &NodeId,
         point: Point2D,
         dragged_bounds: Rect,
     ) -> Option<ContainerDropCandidate> {
-        let children = self.editor_state.active_children();
-        let source = op_editor_core::walkers::find_node(children, dragged_id)?;
-        let page = self.layout_scene.active_page()?;
-        deepest_container_at(children, source, point, page, &self.option_drag_source_ids).map(
-            |(parent_id, bounds, flex)| {
-                let (index, insertion) = if let Some(dir) = flex {
-                    flex_insert_preview(children, page, &parent_id, dragged_id, dragged_bounds, dir)
-                } else {
-                    (0, None)
-                };
-                ContainerDropCandidate {
-                    parent_id,
-                    bounds,
-                    flex,
-                    index,
-                    insertion,
-                }
-            },
-        )
+        let container =
+            deepest_indexed_container_at(&self.canvas_drop_index.as_ref()?.containers, point)?;
+        let (index, insertion) = if let Some(dir) = container.flex {
+            flex_insert_preview(container, dragged_bounds, dir)
+        } else {
+            (0, None)
+        };
+        Some(ContainerDropCandidate {
+            parent_id: container.id.clone(),
+            bounds: container.bounds,
+            flex: container.flex,
+            index,
+            insertion,
+        })
+    }
+
+    fn ensure_canvas_drop_index(&mut self, dragged_id: &NodeId) -> Option<()> {
+        let key = CanvasDropIndexKey {
+            document_generation: self.editor_state.document_generation(),
+            document_revision: self.editor_state.document_revision(),
+            active_page_index: self.layout_scene.active_page_index,
+            dragged_id: dragged_id.as_str().to_string(),
+            excluded_ids: self
+                .option_drag_source_ids
+                .iter()
+                .map(|id| id.as_str().to_string())
+                .collect(),
+        };
+        if self
+            .canvas_drop_index
+            .as_ref()
+            .is_some_and(|index| index.key == key)
+        {
+            return Some(());
+        }
+        self.canvas_drop_index = build_canvas_drop_index(
+            key,
+            &self.editor_state,
+            &self.layout_scene,
+            dragged_id,
+            &self.option_drag_source_ids,
+        );
+        self.canvas_drop_index.as_ref().map(|_| ())
     }
 }
 
-fn deepest_container_at(
-    nodes: &[PenNode],
-    source: &PenNode,
-    point: Point2D,
-    page: &op_editor_ui::layout_scene::ScenePage,
+fn build_canvas_drop_index(
+    key: CanvasDropIndexKey,
+    state: &op_editor_core::EditorState,
+    scene: &op_editor_ui::layout_scene::LayoutScene,
+    dragged_id: &NodeId,
     excluded_ids: &[NodeId],
-) -> Option<(NodeId, Rect, Option<FlexDirection>)> {
-    let mut hit = None;
+) -> Option<CanvasDropIndex> {
+    #[cfg(test)]
+    DROP_INDEX_BUILD_COUNT.with(|count| count.set(count.get() + 1));
+    let nodes = state.active_children();
+    let source = op_editor_core::walkers::find_node(nodes, dragged_id)?;
+    let (current_parent, current_index) =
+        op_editor_core::walkers::find_parent_and_index(nodes, dragged_id)?;
+    let current_parent_flex = current_parent
+        .as_ref()
+        .and_then(|parent_id| op_editor_core::walkers::find_node(nodes, parent_id))
+        .and_then(auto_layout_direction);
+    let mut scene_bounds = HashMap::new();
+    collect_scene_bounds(&scene.active_page()?.children, &mut scene_bounds);
+    let mut dragged_scene_path = Vec::new();
+    if !find_scene_path(
+        &scene.active_page()?.children,
+        dragged_id.as_str(),
+        &mut dragged_scene_path,
+    ) {
+        return None;
+    }
+    let mut excluded = HashSet::new();
+    collect_subtree_ids(source, &mut excluded);
+    for id in excluded_ids {
+        if let Some(node) = op_editor_core::walkers::find_node(nodes, id) {
+            collect_subtree_ids(node, &mut excluded);
+        }
+    }
+    let containers = index_containers(nodes, &scene_bounds, &excluded, dragged_id);
+    Some(CanvasDropIndex {
+        key,
+        current_parent,
+        current_index,
+        current_parent_flex,
+        dragged_scene_path,
+        containers,
+    })
+}
+
+fn find_scene_path(
+    nodes: &[op_editor_ui::layout_scene::SceneNode],
+    id: &str,
+    path: &mut Vec<usize>,
+) -> bool {
+    for (index, node) in nodes.iter().enumerate() {
+        path.push(index);
+        if node.id == id || find_scene_path(&node.children, id, path) {
+            return true;
+        }
+        path.pop();
+    }
+    false
+}
+
+fn scene_node_at_path<'a>(
+    nodes: &'a [op_editor_ui::layout_scene::SceneNode],
+    path: &[usize],
+) -> Option<&'a op_editor_ui::layout_scene::SceneNode> {
+    let (&index, rest) = path.split_first()?;
+    let node = nodes.get(index)?;
+    if rest.is_empty() {
+        Some(node)
+    } else {
+        scene_node_at_path(&node.children, rest)
+    }
+}
+
+fn collect_scene_bounds(
+    nodes: &[op_editor_ui::layout_scene::SceneNode],
+    out: &mut HashMap<String, SceneBounds>,
+) {
     for node in nodes {
-        if node.children().is_none() {
-            continue;
+        out.insert(
+            node.id.clone(),
+            SceneBounds {
+                bounds: node.bounds,
+                aggregate_bounds: node.aggregate_bounds(),
+            },
+        );
+        collect_scene_bounds(&node.children, out);
+    }
+}
+
+fn collect_subtree_ids(node: &PenNode, out: &mut HashSet<String>) {
+    out.insert(node.id_str().to_string());
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_subtree_ids(child, out);
         }
-        let node_id = NodeId::new(node.id_str());
-        if excluded_ids.contains(&node_id) {
-            continue;
-        }
-        if op_editor_core::walkers::descendant_contains(source, &node_id) {
-            continue;
-        }
-        let Some(scene) = page.find(node.id_str()) else {
+    }
+}
+
+fn index_containers(
+    nodes: &[PenNode],
+    scene_bounds: &HashMap<String, SceneBounds>,
+    excluded: &HashSet<String>,
+    dragged_id: &NodeId,
+) -> Vec<IndexedContainer> {
+    let mut indexed = Vec::new();
+    for node in nodes {
+        let Some(children) = node.children() else {
             continue;
         };
-        let bounds = scene.bounds;
-        if !rect_contains(bounds, point) {
+        if excluded.contains(node.id_str()) {
             continue;
         }
-        hit = Some((node_id, bounds, auto_layout_direction(node)));
-        if let Some(children) = node.children() {
-            if let Some(deeper) = deepest_container_at(children, source, point, page, excluded_ids)
-            {
-                hit = Some(deeper);
-            }
+        let Some(scene) = scene_bounds.get(node.id_str()) else {
+            continue;
+        };
+        let flex = auto_layout_direction(node);
+        let flex_children = if flex.is_some() {
+            children
+                .iter()
+                .filter(|child| child.id_str() != dragged_id.as_str())
+                .filter_map(|child| {
+                    scene_bounds
+                        .get(child.id_str())
+                        .map(|scene| scene.aggregate_bounds)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        indexed.push(IndexedContainer {
+            id: NodeId::new(node.id_str()),
+            bounds: scene.bounds,
+            flex,
+            flex_children,
+            children: index_containers(children, scene_bounds, excluded, dragged_id),
+        });
+    }
+    indexed
+}
+
+fn deepest_indexed_container_at(
+    containers: &[IndexedContainer],
+    point: Point2D,
+) -> Option<&IndexedContainer> {
+    let mut hit = None;
+    for container in containers {
+        if !rect_contains(container.bounds, point) {
+            continue;
+        }
+        hit = Some(container);
+        if let Some(deeper) = deepest_indexed_container_at(&container.children, point) {
+            hit = Some(deeper);
         }
     }
     hit
 }
 
 fn flex_insert_preview(
-    nodes: &[PenNode],
-    page: &op_editor_ui::layout_scene::ScenePage,
-    parent_id: &NodeId,
-    dragged_id: &NodeId,
+    parent: &IndexedContainer,
     dragged_bounds: Rect,
     dir: FlexDirection,
 ) -> (usize, Option<CanvasOverlayLine>) {
-    let Some(parent) = op_editor_core::walkers::find_node(nodes, parent_id) else {
-        return (0, None);
-    };
-    let Some(parent_scene) = page.find(parent_id.as_str()) else {
-        return (0, None);
-    };
-    let parent_bounds = parent_scene.bounds;
+    let parent_bounds = parent.bounds;
     let vertical = matches!(dir, FlexDirection::Vertical);
     let drag_mid = if vertical {
         dragged_bounds.origin.y + dragged_bounds.size.y / 2.0
     } else {
         dragged_bounds.origin.x + dragged_bounds.size.x / 2.0
     };
-    let mut index = parent
-        .children()
-        .map(|children| {
-            children
-                .iter()
-                .filter(|node| node.id_str() != dragged_id.as_str())
-                .count()
-        })
-        .unwrap_or(0);
-    if let Some(children) = parent.children() {
-        for (i, child) in children
-            .iter()
-            .filter(|node| node.id_str() != dragged_id.as_str())
-            .enumerate()
-        {
-            let Some(scene) = page.find(child.id_str()) else {
-                continue;
-            };
-            let bounds = scene.aggregate_bounds();
-            let mid = if vertical {
-                bounds.origin.y + bounds.size.y / 2.0
-            } else {
-                bounds.origin.x + bounds.size.x / 2.0
-            };
-            if drag_mid < mid {
-                index = i;
-                break;
-            }
+    let mut index = parent.flex_children.len();
+    for (i, bounds) in parent.flex_children.iter().copied().enumerate() {
+        let mid = if vertical {
+            bounds.origin.y + bounds.size.y / 2.0
+        } else {
+            bounds.origin.x + bounds.size.x / 2.0
+        };
+        if drag_mid < mid {
+            index = i;
+            break;
         }
     }
-    let insertion = flex_insertion_line(parent, page, parent_bounds, dragged_id, index, vertical);
+    let insertion = flex_insertion_line(parent_bounds, &parent.flex_children, index, vertical);
     (index, insertion)
 }
 
 fn flex_insertion_line(
-    parent: &PenNode,
-    page: &op_editor_ui::layout_scene::ScenePage,
     parent_bounds: Rect,
-    dragged_id: &NodeId,
+    siblings: &[Rect],
     index: usize,
     vertical: bool,
 ) -> Option<CanvasOverlayLine> {
-    let siblings: Vec<Rect> = parent
-        .children()?
-        .iter()
-        .filter(|node| node.id_str() != dragged_id.as_str())
-        .filter_map(|node| {
-            page.find(node.id_str())
-                .map(|scene| scene.aggregate_bounds())
-        })
-        .collect();
     let inset = 8.0_f32.min(parent_bounds.size.x.max(parent_bounds.size.y) / 4.0);
     if vertical {
         let y = if siblings.is_empty() {

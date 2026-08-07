@@ -1377,13 +1377,15 @@ impl WidgetHostNative {
             upper_hover_changed = true;
         }
         if let Some(drag) = self.rotate_drag {
+            self.refresh_layout_scene();
             let cursor_angle = (y - drag.center_screen_y).atan2(x - drag.center_screen_x);
             let new_rotation = drag.start_rotation + (cursor_angle - drag.start_cursor_angle);
             self.editor_state.set_selected_rotation(new_rotation);
-            self.mark_dirty();
+            self.finish_live_rotation_update(new_rotation);
             return true;
         }
         if let Some(drag) = self.handle_drag {
+            let patch_scene = self.prepare_live_bounds_update();
             let zoom = self.editor_state.viewport.zoom.max(0.0001);
             let dx = (x - drag.start_screen_x) / zoom;
             let dy = (y - drag.start_screen_y) / zoom;
@@ -1402,10 +1404,11 @@ impl WidgetHostNative {
                 new_x,
                 new_y,
             );
-            self.mark_dirty();
+            self.finish_live_bounds_update(new_bounds, patch_scene);
             return true;
         }
         if let Some(drag) = self.create_drag {
+            let patch_scene = self.prepare_live_bounds_update();
             let (cx0, cy0) = self.canvas_origin();
             let canvas_local = Point2D::new(x - cx0, y - cy0);
             let cur = self.editor_state.viewport.to_document(canvas_local);
@@ -1424,7 +1427,7 @@ impl WidgetHostNative {
             let new_bounds = Rect::xywh(min_x, min_y, w, h);
             self.editor_state
                 .set_selected_bounds(rect_to_doc_rect(new_bounds));
-            self.mark_dirty();
+            self.finish_live_bounds_update(new_bounds, patch_scene);
             return true;
         }
         // Path-anchor / handle drag — TS `movePathControl` semantics
@@ -1788,21 +1791,24 @@ impl WidgetHostNative {
             return true;
         }
         if self.rotate_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.handle_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.create_drag.take().is_some() {
             // Switch back to Select for immediate shape refinement.
             self.editor_state.tool = op_editor_core::Tool::Select;
-            self.mark_dirty();
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.finish_image_crop_drag() {
             return true;
         }
         if let Some(drag) = self.node_drag.take() {
+            self.canvas_drop_index = None;
             // Drag ended — drop the transient smart-guide lines, then
             // run the drop policy (auto-layout reorder / reparent).
             self.refresh_layout_scene();
@@ -1937,20 +1943,23 @@ impl WidgetHostNative {
             return true;
         }
         if self.rotate_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.handle_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.create_drag.take().is_some() {
             self.editor_state.tool = op_editor_core::Tool::Select;
-            self.mark_dirty();
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.finish_image_crop_drag() {
             return true;
         }
         if let Some(drag) = self.node_drag.take() {
+            self.canvas_drop_index = None;
             // Drag ended — drop the transient smart-guide lines, then
             // run the drop policy (auto-layout reorder / reparent).
             self.refresh_layout_scene();
