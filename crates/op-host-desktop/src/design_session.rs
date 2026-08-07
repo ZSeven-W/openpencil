@@ -46,10 +46,37 @@ pub fn pump_commands(
     let state = host.editor_state_mut();
     let mut any_applied = false;
     for req in reqs {
+        let target_page_index =
+            req.target_page_id
+                .as_deref()
+                .and_then(|page_id| match state.doc.pages.as_ref() {
+                    Some(pages) if !pages.is_empty() => pages
+                        .iter()
+                        .position(|page| page.id == page_id)
+                        .or_else(|| {
+                            page_id
+                                .parse::<usize>()
+                                .ok()
+                                .filter(|idx| *idx < pages.len())
+                        }),
+                    _ if page_id == "0" => Some(0),
+                    _ => None,
+                });
+        let original_page_index = state.ui.active_page_index;
+        let original_selection = state.selection.clone();
+        if let Some(target) = target_page_index {
+            state.ui.active_page_index = target;
+            if target != original_page_index {
+                state.clear_selection();
+            }
+        }
+        let target_available = req.target_page_id.is_none() || target_page_index.is_some();
+        let target_is_visible =
+            req.target_page_id.is_none() || target_page_index == Some(original_page_index);
         let applied = match req.op {
             DesignCmdOp::Apply(cmd) => {
-                let applied = state.apply(cmd);
-                if applied {
+                let applied = target_available && state.apply(cmd);
+                if applied && target_is_visible {
                     fit_design_viewport_to_content(state, viewport_width, viewport_height);
                 }
                 applied
@@ -60,7 +87,13 @@ pub fn pump_commands(
             // functionally correct, just finer-grained than ideal.
             DesignCmdOp::BeginUndoBatch | DesignCmdOp::EndUndoBatch => true,
         };
+        // The worker mirror stays on the design target, while the visible
+        // editor returns to the page and selection the user is viewing.
         let snapshot = state.clone();
+        if target_page_index.is_some_and(|target| target != original_page_index) {
+            state.ui.active_page_index = original_page_index;
+            state.selection = original_selection;
+        }
         let ack = DesignCmdAck {
             applied,
             new_state: snapshot,
@@ -293,11 +326,11 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 ChatActivityStatus::Done,
                 Some(element_count(locale, *node_count)),
             ),
-            Progress::SubtaskFailed { id, .. } => update_activity(
+            Progress::SubtaskFailed { id, error } => update_activity(
                 msg,
                 id,
                 ChatActivityStatus::Error,
-                Some(op_i18n::translate(locale, "ai.designProgress.detail.needsAttention").into()),
+                Some(subtask_failure_detail(locale, error)),
             ),
             Progress::SubtaskRetry { id, attempt, .. } => update_activity(
                 msg,
@@ -498,6 +531,19 @@ fn element_count(locale: Locale, count: usize) -> String {
         "ai.designProgress.detail.elementMany"
     };
     op_i18n::translate(locale, key).replace("{{count}}", &count.to_string())
+}
+
+fn subtask_failure_detail(locale: Locale, error: &str) -> String {
+    let label = op_i18n::translate(locale, "ai.designProgress.detail.needsAttention");
+    let compact = error.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.is_empty() {
+        return label.into();
+    }
+    let mut visible: String = compact.chars().take(220).collect();
+    if compact.chars().count() > 220 {
+        visible.push('…');
+    }
+    format!("{label}: {visible}")
 }
 
 fn planned_narration(locale: Locale, count: usize) -> String {

@@ -5,7 +5,7 @@
 //! providers (builtin / ACP turns return early in both stacks):
 //!
 //! - `apps/web/src/components/panels/ai-chat-intent-classifier.ts`
-//!   — `classifyIntent` (LLM call, 8s abort, fallback `new`) and
+//!   — `classifyIntent` (LLM call, 8s abort) and
 //!   `classifyByKeywords`, both verbatim.
 //! - `apps/web/src/components/panels/ai-chat-handlers.ts:693-776`
 //!   — modify-vs-new degrade rules, `generateDesignModification`
@@ -142,6 +142,84 @@ fn matches_any_word_phrase(text_lower: &str, phrases: &[&str]) -> bool {
     phrases.iter().any(|p| matches_word_phrase(text_lower, p))
 }
 
+/// True when the message has no word/number content to route. Punctuation-only
+/// reactions must stay in chat instead of opening an unrelated design turn.
+pub fn is_non_request_text(text: &str) -> bool {
+    !text.chars().any(char::is_alphanumeric)
+}
+
+/// Exact, standalone rerun commands. Keeping this exact avoids treating
+/// requests such as "restart the server" as design-session control.
+pub fn is_restart_command(text: &str) -> bool {
+    let normalized = text
+        .trim()
+        .trim_matches(|c: char| {
+            c.is_whitespace()
+                || matches!(
+                    c,
+                    '.' | ',' | '!' | '?' | ';' | ':' | '。' | '，' | '！' | '？' | '；' | '：'
+                )
+        })
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    matches!(
+        normalized.as_str(),
+        "restart"
+            | "start over"
+            | "try again"
+            | "retry"
+            | "重新开始"
+            | "重新生成"
+            | "再试一次"
+            | "重来"
+            | "重试"
+    )
+}
+
+/// Recover the latest persisted design request from this chat tab.
+pub fn latest_design_request_for_restart(state: &EditorState) -> Option<DesignRequest> {
+    state
+        .chat
+        .messages
+        .iter()
+        .rev()
+        // CLI-standard stages a request before asynchronous classification,
+        // even for turns that later route to plain chat. Require evidence that
+        // the design worker actually owned this message.
+        .filter(|message| {
+            message.completion.is_some()
+                || !message.activities.is_empty()
+                || !message.failed_subtasks.is_empty()
+        })
+        .find_map(|message| {
+            message
+                .design_request_json_for_retry
+                .as_deref()
+                .and_then(|json| serde_json::from_str(json).ok())
+        })
+}
+
+/// Reuse the previous design content while honoring the controls selected for
+/// the new run (model/provider/concurrency/validation).
+pub fn restore_design_request_for_restart(
+    state: &EditorState,
+    text: &str,
+    current: &DesignRequest,
+) -> Option<DesignRequest> {
+    if !is_restart_command(text) {
+        return None;
+    }
+    let mut previous = latest_design_request_for_restart(state)?;
+    previous.model = current.model.clone();
+    previous.provider = current.provider.clone();
+    previous.concurrency = current.concurrency;
+    previous.validation_enabled = current.validation_enabled;
+    previous.visual_ref_enabled = current.visual_ref_enabled;
+    Some(previous)
+}
+
 /// TS `classifyByKeywords` — verbatim rule order.
 pub fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
@@ -172,6 +250,16 @@ pub fn classify_intent_for_standard_route(
     text: &str,
     model: Option<String>,
 ) -> DesignIntent {
+    if is_restart_command(text) {
+        return if latest_design_request_for_restart(state).is_some() {
+            DesignIntent::New
+        } else {
+            DesignIntent::Chat
+        };
+    }
+    if is_non_request_text(text) {
+        return DesignIntent::Chat;
+    }
     // A whole-screen *draw* (creation verb + page noun, e.g. "重新画一个
     // search 页面") is unambiguously a new screen — it must win over the
     // modify classifier so it routes to the new-frame path, not edit-in-place.
@@ -212,12 +300,12 @@ pub fn parse_classified(text: &str) -> DesignIntent {
     if upper.contains("CHAT") {
         return DesignIntent::Chat;
     }
-    DesignIntent::New
+    DesignIntent::Chat
 }
 
 /// TS `classifyIntent` — one lightweight LLM call through the (chat-
 /// session-untracked) provider, with the TS 8s abort and the TS
-/// fallback to `new` on any failure / timeout.
+/// conservative fallback to chat on any failure / timeout.
 pub fn classify_intent_llm(
     provider: &dyn ChatProvider,
     text: &str,
@@ -261,17 +349,15 @@ fn classify_intent_llm_with_timeout(
     loop {
         let now = Instant::now();
         if now >= deadline {
-            // TS: AbortController fires → catch → { intent: 'new' }.
-            return DesignIntent::New;
+            return parse_classified(&out);
         }
         match rx.recv_timeout(deadline - now) {
             Ok(ChatDelta::TextDelta(s)) => out.push_str(&s),
             // TS consumeSSEAsText only accumulates text chunks.
             Ok(ChatDelta::Thinking(_)) | Ok(ChatDelta::ToolUse { .. }) => {}
-            // TS: `if (!response.ok) throw` → catch → 'new'.
-            Ok(ChatDelta::Error(_)) => return DesignIntent::New,
+            Ok(ChatDelta::Error(_)) => return parse_classified(&out),
             Ok(ChatDelta::Done { .. }) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => return DesignIntent::New,
+            Err(mpsc::RecvTimeoutError::Timeout) => return parse_classified(&out),
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }

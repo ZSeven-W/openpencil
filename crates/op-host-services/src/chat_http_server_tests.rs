@@ -96,6 +96,7 @@ fn handle_connection(mut stream: TcpStream, scenario: Scenario, log: RequestLog)
         ("POST", "/session") => write_json(&mut stream, 200, r#"{"id":"ses_mock"}"#),
         ("POST", "/session/ses_mock/message") => write_json(&mut stream, 200, r#"{"info":{}}"#),
         ("POST", "/session/ses_mock/prompt_async") => write_json(&mut stream, 200, "{}"),
+        ("POST", "/session/ses_mock/abort") => write_json(&mut stream, 200, "true"),
         ("GET", "/session/ses_mock/message") => {
             write_json(&mut stream, 200, &scenario.messages_fallback)
         }
@@ -197,6 +198,8 @@ fn opencode_turn_streams_text_thinking_and_done() {
     assert!(prompt.2.contains(r#""providerID":"anthropic""#));
     assert!(prompt.2.contains(r#""modelID":"claude-test""#));
     assert!(prompt.2.contains(r#""text":"hi""#));
+    let prompt_json: serde_json::Value = serde_json::from_str(&prompt.2).unwrap();
+    assert_eq!(prompt_json["tools"]["*"], false);
 }
 
 #[test]
@@ -257,6 +260,73 @@ fn opencode_empty_stream_falls_back_to_session_messages() {
         !deltas.iter().any(|d| matches!(d, ChatDelta::Error(_))),
         "fallback success must suppress the empty-response error: {deltas:?}"
     );
+}
+
+#[test]
+fn opencode_reconciles_a_missing_final_sse_suffix() {
+    let scenario = Scenario {
+        sse_events: vec![
+            r#"{"type":"message.part.delta","properties":{"sessionID":"ses_mock","field":"text","delta":"partial"}}"#.into(),
+            r#"{"type":"session.idle","properties":{"sessionID":"ses_mock"}}"#.into(),
+        ],
+        messages_fallback: r#"[
+            {"info":{"role":"assistant"},"parts":[{"type":"text","text":"partial-final"}]}
+        ]"#
+        .into(),
+    };
+    let server = start_mock(scenario);
+    let deltas = collect_deltas(
+        &server,
+        ChatRequest {
+            user_message: "hi".into(),
+            ..Default::default()
+        },
+    );
+    let text: String = deltas
+        .iter()
+        .filter_map(|delta| match delta {
+            ChatDelta::TextDelta(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(text, "partial-final", "{deltas:?}");
+}
+
+#[test]
+fn opencode_aborts_if_a_tool_escapes_the_text_only_contract() {
+    let scenario = Scenario {
+        sse_events: vec![
+            r#"{"type":"message.part.updated","properties":{"part":{"id":"prt_1","sessionID":"ses_mock","messageID":"msg_1","type":"tool","callID":"call_1","tool":"write","state":{"status":"running","input":{},"time":{"start":1}}}}}"#.into(),
+        ],
+        messages_fallback: "[]".into(),
+    };
+    let server = start_mock(scenario);
+    let deltas = collect_deltas(
+        &server,
+        ChatRequest {
+            user_message: "hi".into(),
+            ..Default::default()
+        },
+    );
+    assert!(
+        deltas.iter().any(|delta| matches!(
+            delta,
+            ChatDelta::Error(message) if message.contains("forbidden `write` tool")
+        )),
+        "{deltas:?}"
+    );
+    assert!(matches!(
+        deltas.last(),
+        Some(ChatDelta::Done {
+            stop_reason: StopReason::Aborted
+        })
+    ));
+    assert!(server
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(method, path, _)| method == "POST" && path == "/session/ses_mock/abort"));
 }
 
 #[test]
