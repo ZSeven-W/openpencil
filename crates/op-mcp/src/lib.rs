@@ -290,6 +290,17 @@ pub struct ToolCall {
     pub arguments: BTreeMap<String, String>,
 }
 
+/// MCP `ImageContent` block payload — carried by `ToolResponse::Ok`
+/// so the serializer can emit a proper `{"type":"image",…}` content
+/// block instead of wrapping base64 bytes in a text block.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageContent {
+    /// Base64-encoded image bytes (no data-URI prefix).
+    pub data: String,
+    /// MIME type, e.g. `"image/png"`.
+    pub mime_type: String,
+}
+
 /// Tool response — either a structured result object or an error.
 /// Errors are typed enough for the LLM client to recover (e.g.
 /// `MissingArgument` vs `InvalidArgument` vs `ToolFailed`).
@@ -310,6 +321,13 @@ pub enum ToolResponse {
         /// (the flat map) — so read tools match TS's arbitrary-JSON
         /// shapes byte-for-byte. `None` ⇒ use the flat-map encoding.
         json: Option<String>,
+        /// When `Some`, the serializer emits an MCP `ImageContent` block
+        /// (`{"type":"image","data":"<base64>","mimeType":"..."}`) in the
+        /// `content[]` array BEFORE any text block (from `json` or
+        /// `result`). Tools like `get_screenshot` use this so MCP clients
+        /// (Copilot, Claude Code, …) receive the image as multimodal
+        /// content instead of a base64 string buried in JSON text.
+        image: Option<ImageContent>,
     },
     Err {
         id: RequestId,
@@ -358,6 +376,18 @@ pub enum ToolOutcome {
     /// results (`fixes[]`, `layoutSnapshot`, `results[]`, …) while still
     /// mutating the document. The host applies `command`; the client sees `json`.
     OkJsonWithCommand(String, EditorCommand),
+    /// A tool returning a base64-encoded image as an MCP `ImageContent` block.
+    /// `image_base64` is the raw base64 (no data-URI prefix);
+    /// `mime_type` is e.g. `"image/png"`. An optional `metadata_json`
+    /// string is emitted as a separate `text` content block (like
+    /// `debug_screenshot`'s pretty-printed metadata block). MCP clients
+    /// that support vision (Copilot, Claude Code, …) receive the image as
+    /// multimodal content instead of a base64 string in JSON text.
+    OkImageContent {
+        image_base64: String,
+        mime_type: String,
+        metadata_json: Option<String>,
+    },
     Err(ToolErrorCode, String),
 }
 
@@ -399,24 +429,42 @@ impl ToolRegistry {
                 result,
                 command: None,
                 json: None,
+                image: None,
             },
             ToolOutcome::OkWithCommand(result, command) => ToolResponse::Ok {
                 id: call.id,
                 result,
                 command: Some(command),
                 json: None,
+                image: None,
             },
             ToolOutcome::OkJson(json) => ToolResponse::Ok {
                 id: call.id,
                 result: BTreeMap::new(),
                 command: None,
                 json: Some(json),
+                image: None,
             },
             ToolOutcome::OkJsonWithCommand(json, command) => ToolResponse::Ok {
                 id: call.id,
                 result: BTreeMap::new(),
                 command: Some(command),
                 json: Some(json),
+                image: None,
+            },
+            ToolOutcome::OkImageContent {
+                image_base64,
+                mime_type,
+                metadata_json,
+            } => ToolResponse::Ok {
+                id: call.id,
+                result: BTreeMap::new(),
+                command: None,
+                json: metadata_json,
+                image: Some(ImageContent {
+                    data: image_base64,
+                    mime_type,
+                }),
             },
             ToolOutcome::Err(code, message) => ToolResponse::Err {
                 id: call.id,

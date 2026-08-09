@@ -41,20 +41,37 @@ pub fn response_to_json(r: &ToolResponse) -> String {
 /// result — NOT a JSON-RPC `error` (those are reserved for transport/parse
 /// failures, still emitted via [`response_to_json`]). External MCP clients
 /// (Claude Code / Codex) require this envelope.
+///
+/// When `image` is `Some`, an MCP `ImageContent` block is emitted BEFORE
+/// any text block so vision-capable MCP clients receive the image as
+/// multimodal content instead of a base64 string buried in JSON text.
 pub fn tool_response_to_json(r: &ToolResponse) -> String {
     let (id_repr, body) = match r {
         ToolResponse::Ok {
-            id, result, json, ..
+            id,
+            result,
+            json,
+            image,
+            ..
         } => {
-            // Nested-JSON read result rides verbatim in the text block;
-            // otherwise the flat string-map is encoded as the text.
+            let mut content_blocks: Vec<String> = Vec::new();
+            // Image block first (when present) so vision models see it.
+            if let Some(img) = image {
+                content_blocks.push(format!(
+                    r#"{{"type":"image","data":{},"mimeType":{}}}"#,
+                    json_escape(&img.data),
+                    json_escape(&img.mime_type),
+                ));
+            }
+            // Text block: nested JSON or flat string-map.
             let text = match json {
                 Some(raw) => json_escape(raw),
                 None => json_escape(&btree_to_json(result)),
             };
+            content_blocks.push(format!(r#"{{"type":"text","text":{text}}}"#));
             (
                 id_to_json(id),
-                format!(r#""result":{{"content":[{{"type":"text","text":{text}}}]}}"#),
+                format!(r#""result":{{"content":[{}]}}"#, content_blocks.join(",")),
             )
         }
         ToolResponse::Err { id, message, .. } => (

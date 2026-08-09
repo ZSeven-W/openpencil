@@ -97,6 +97,7 @@ fn response_to_json_ok_payload() {
         result,
         command: None,
         json: None,
+        image: None,
     };
     let j = response_to_json(&r);
     assert!(j.contains(r#""jsonrpc":"2.0""#));
@@ -129,6 +130,7 @@ fn tool_response_to_json_wraps_ok_in_mcp_content_envelope() {
         result,
         command: None,
         json: None,
+        image: None,
     };
     let j = tool_response_to_json(&r);
     assert!(j.contains(r#""id":7"#), "{j}");
@@ -148,6 +150,7 @@ fn ok_json_rides_verbatim_in_both_serializers() {
         result: BTreeMap::new(),
         command: None,
         json: Some(nested.to_string()),
+        image: None,
     };
     // tools/call envelope: text block holds the nested JSON verbatim.
     assert_eq!(tool_text(&tool_response_to_json(&r)), nested);
@@ -157,6 +160,62 @@ fn ok_json_rides_verbatim_in_both_serializers() {
         direct.contains(r#""result":{"layout":[{"id":"a","x":0,"y":0}]}"#),
         "{direct}"
     );
+}
+
+#[test]
+fn tool_response_to_json_emits_image_content_block_when_image_is_some() {
+    // When `image` is `Some`, the serializer emits an ImageContent block
+    // BEFORE the text block so vision-capable MCP clients receive the
+    // image as multimodal content.
+    let r = ToolResponse::Ok {
+        id: RequestId::Num(3),
+        result: BTreeMap::new(),
+        command: None,
+        json: Some(r#"{"nodeId":"n1","format":"png"}"#.into()),
+        image: Some(ImageContent {
+            data: "iVBORw0KGgo=".into(),
+            mime_type: "image/png".into(),
+        }),
+    };
+    let j = tool_response_to_json(&r);
+    // Parse the JSON-RPC envelope to verify structure.
+    let v: serde_json::Value = serde_json::from_str(&j).expect("valid JSON-RPC");
+    let content = v["result"]["content"].as_array().expect("content array");
+    assert_eq!(content.len(), 2, "expected image + text blocks");
+    // First block must be the image.
+    assert_eq!(content[0]["type"], "image");
+    assert_eq!(content[0]["data"], "iVBORw0KGgo=");
+    assert_eq!(content[0]["mimeType"], "image/png");
+    // Second block must be text with the metadata.
+    assert_eq!(content[1]["type"], "text");
+    let text_val = content[1]["text"].as_str().expect("text string");
+    let meta: serde_json::Value =
+        serde_json::from_str(text_val).expect("metadata parses as JSON");
+    assert_eq!(meta["nodeId"], "n1");
+    assert_eq!(meta["format"], "png");
+    // No isError for successful results.
+    assert!(v["result"].get("isError").is_none(), "{j}");
+}
+
+#[test]
+fn tool_response_to_json_image_without_text_metadata_still_emits_blocks() {
+    // When image is set but json/result are empty, the text block is still
+    // present (with empty object) — MCP clients expect at least one text
+    // block for tool result reporting.
+    let r = ToolResponse::Ok {
+        id: RequestId::Num(4),
+        result: BTreeMap::new(),
+        command: None,
+        json: None,
+        image: Some(ImageContent {
+            data: "AAAA".into(),
+            mime_type: "image/png".into(),
+        }),
+    };
+    let j = tool_response_to_json(&r);
+    assert!(j.contains(r#""type":"image""#), "{j}");
+    assert!(j.contains(r#""type":"text""#), "{j}");
+    assert!(j.contains(r#""data":"AAAA""#), "{j}");
 }
 
 #[test]

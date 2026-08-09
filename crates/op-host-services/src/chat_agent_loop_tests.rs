@@ -260,7 +260,7 @@ fn delete_node_tool_def() -> ChatToolDef {
 fn get_screenshot_tool_def() -> ChatToolDef {
     ChatToolDef {
         name: "get_screenshot".into(),
-        description: "Render a node to a base64 PNG".into(),
+        description: "Render a node to a PNG image for visual verification".into(),
         level: "read".into(),
         input_schema_json: r#"{"type":"object","properties":{"nodeId":{"type":"string"}}}"#.into(),
     }

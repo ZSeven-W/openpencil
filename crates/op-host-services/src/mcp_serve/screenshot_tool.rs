@@ -74,11 +74,18 @@ impl McpTool for GetScreenshot {
         // (see `export/screenshot.rs` and `export/tests.rs`).
         let image_base64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
-        let out = serde_json::json!({
-            "image_base64": image_base64,
+        let metadata = serde_json::json!({
+            "nodeId": node_id,
             "format": "png",
+            // include image_base64 in metadata for the in-app chat agent path —
+            // the MCP path uses the `image` field on ToolResponse::Ok separately
+            "image_base64": image_base64,
         });
-        ToolOutcome::OkJson(out.to_string())
+        ToolOutcome::OkImageContent {
+            image_base64,
+            mime_type: "image/png".into(),
+            metadata_json: Some(metadata.to_string()),
+        }
     }
 }
 
@@ -148,15 +155,23 @@ mod tests {
         )]);
         let tool = tool_from_scene(scene);
         match call(&tool, "root") {
-            ToolOutcome::OkJson(json) => {
-                let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
-                let b64 = v["image_base64"].as_str().expect("image_base64 field");
-                assert!(!b64.is_empty(), "image_base64 must not be empty");
-                let bytes = decode_base64(b64);
+            ToolOutcome::OkImageContent {
+                image_base64,
+                mime_type,
+                metadata_json,
+            } => {
+                assert_eq!(mime_type, "image/png");
+                assert!(!image_base64.is_empty(), "image_base64 must not be empty");
+                let bytes = decode_base64(&image_base64);
                 assert_eq!(&bytes[..8], PNG_MAGIC, "must be a PNG payload");
-                assert_eq!(v["format"], "png");
+                // Metadata carries nodeId + format + image_base64 (for chat agent path).
+                let meta: serde_json::Value =
+                    serde_json::from_str(&metadata_json.expect("metadata")).expect("valid JSON");
+                assert_eq!(meta["format"], "png");
+                assert_eq!(meta["nodeId"], "n1");
+                assert!(!meta["image_base64"].as_str().unwrap_or("").is_empty());
             }
-            other => panic!("expected OkJson, got {other:?}"),
+            other => panic!("expected OkImageContent, got {other:?}"),
         }
     }
 
@@ -181,12 +196,16 @@ mod tests {
         ]);
         let tool = tool_from_scene(scene);
         match call(&tool, "r2") {
-            ToolOutcome::OkJson(json) => {
-                let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
-                let bytes = decode_base64(v["image_base64"].as_str().expect("field"));
+            ToolOutcome::OkImageContent {
+                image_base64,
+                mime_type,
+                ..
+            } => {
+                assert_eq!(mime_type, "image/png");
+                let bytes = decode_base64(&image_base64);
                 assert_eq!(&bytes[..8], PNG_MAGIC, "must be a PNG payload");
             }
-            other => panic!("expected OkJson, got {other:?}"),
+            other => panic!("expected OkImageContent, got {other:?}"),
         }
     }
 
