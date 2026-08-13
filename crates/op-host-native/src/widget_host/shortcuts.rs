@@ -534,6 +534,10 @@ impl WidgetHostNative {
         self.editor_state.editor_ui.blur_collab_join_input();
         let opening = !self.editor_state.editor_ui.agent_settings_open;
         if opening {
+            // Settings covers the Property surface. Commit and release every
+            // Property-owned input before the modal becomes visible so a
+            // hidden field cannot keep receiving text / IME events.
+            self.release_property_keyboard_owner();
             self.editor_state.editor_ui.agent_settings_open = true;
             // The settings modal is now topmost. Do not leave a property-panel
             // image input alive underneath it or text/IME would keep routing
@@ -542,10 +546,20 @@ impl WidgetHostNative {
             self.editor_state.chat.blur_input(self.now_ms);
         } else {
             // Cmd+, closes through the same commit/defocus path as the modal's
-            // close button. Leaving `focus` set after hiding the modal makes
-            // the desktop shortcut router treat an invisible field as owner.
+            // close button. Leaving either the form focus or the Fonts tab's
+            // searchable picker alive after hiding the modal makes the input /
+            // IME router treat an invisible field as owner.
             self.commit_settings_focus_if_any();
             let ui = &mut self.editor_state.editor_ui;
+            if matches!(
+                ui.font_picker_purpose,
+                Some(op_editor_core::FontPickerPurpose::MissingFont {
+                    surface: op_editor_core::MissingFontSurface::Settings,
+                    ..
+                })
+            ) {
+                ui.close_font_picker();
+            }
             ui.agent_settings_open = false;
             ui.agent_settings_drag = None;
             ui.ime_preedit = None;
@@ -562,6 +576,7 @@ impl WidgetHostNative {
         self.cancel_agent_settings_touch_gesture();
         self.commit_variable_row_focus_if_any();
         self.editor_state.editor_ui.blur_collab_join_input();
+        self.release_property_keyboard_owner();
         self.commit_settings_focus_if_any();
         shared::commit_editing_for_modal(&mut self.editor_state);
         self.design_md_drag = None;

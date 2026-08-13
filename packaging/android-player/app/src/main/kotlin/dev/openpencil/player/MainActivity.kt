@@ -1,17 +1,16 @@
 package dev.openpencil.player
 
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
-import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.ViewCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -36,6 +35,7 @@ private data class DocumentMetadata(
 class MainActivity : ComponentActivity() {
 
     private lateinit var surfaceView: OpSurfaceView
+    private lateinit var rootView: FrameLayout
     private var documentOpenInProgress = false
 
     private val openDocumentLauncher = registerForActivityResult(
@@ -51,13 +51,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Edge-to-edge: the surface spans the full window; the system-bar
-        // insets are applied as padding below so the editor chrome's top
-        // bar is never covered by the status bar.
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Keep the drawable edge-to-edge, then deliver four-sided safe-area
+        // insets to the engine so only interactive chrome avoids system UI.
+        configureEdgeToEdge(window)
 
-        val density = resources.displayMetrics.density
-        val docName = intent.getStringExtra("doc") ?: "sample"
+        val docName = intent.getStringExtra("doc") ?: "ppt-demo"
         val doc = readAsset("$docName.op") ?: ByteArray(0)
         val editorMode = intent.getBooleanExtra("editor", true)
         val fonts = readFontAssets()
@@ -65,43 +63,35 @@ class MainActivity : ComponentActivity() {
         surfaceView = OpSurfaceView(this).apply {
             configure(doc, editorMode, fonts)
             setOpenDocumentHandler(::launchDocumentPicker)
+            setSystemChromeAppearanceHandler { prefersLightIcons ->
+                updateSystemChromeAppearance(window, prefersLightIcons)
+            }
         }
-        // The surface is laid out inside a padded container so its top
-        // edge sits below the system bars (SurfaceView ignores its own
-        // padding).
-        val container = FrameLayout(this)
-        container.addView(
+        // Do not pad or resize the SurfaceView: its background should remain
+        // visually continuous below transparent system bars. The Rust host
+        // offsets only its interactive chrome using the insets below.
+        rootView = FrameLayout(this)
+        rootView.addView(
             surfaceView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-        setContentView(container)
+        setContentView(rootView)
 
-        // Real inset path: system bars + cutout → safe area, IME inset
-        // height → keyboard, both in logical px.
-        surfaceView.setOnApplyWindowInsetsListener { _, insets ->
-            val compat = WindowInsetsCompat.toWindowInsetsCompat(insets, surfaceView)
-            val bars = compat.getInsets(
-                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
-            )
-            // Edge-to-edge: the surface spans the full window; the engine
-            // consumes the insets (op_set_safe_area) and lays the chrome
-            // out against the usable rectangle.
-            surfaceView.updateSafeArea(
-                bars.top / density,
-                bars.right / density,
-                bars.bottom / density,
-                bars.left / density,
-            )
-            val ime = compat.getInsets(WindowInsetsCompat.Type.ime())
-            surfaceView.updateKeyboard(ime.bottom / density)
-            insets
-        }
-        surfaceView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        installEditorInsets(rootView, surfaceView)
+    }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!::surfaceView.isInitialized) return
+        // Density is a handled config change, so neither the Activity nor the
+        // SurfaceView is recreated. Refresh the logical-pixel conversion used
+        // by resize and touch, then request fresh cutout/bar/IME insets.
+        surfaceView.refreshDisplayMetrics()
+        surfaceView.replaySystemChromeAppearance()
+        if (::rootView.isInitialized) ViewCompat.requestApplyInsets(rootView)
     }
 
     override fun onDestroy() {

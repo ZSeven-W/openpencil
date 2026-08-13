@@ -4,7 +4,7 @@
 use super::WidgetHostNative;
 use op_editor_core::{
     agent_settings::SettingsFocus, figma_import_state::ImportSource, ui_draft::ColorTarget,
-    AgentSettingsTab, NodeId, PropertyFocus,
+    AgentSettingsTab, MissingFontSurface, NodeId, PropertyFocus,
 };
 
 fn seed(host: &mut WidgetHostNative, json: &str) {
@@ -99,6 +99,57 @@ fn closing_settings_clears_focus_before_an_import_shortcut() {
 
     assert!(host.apply_open_figma_import());
     assert!(host.editor_state().editor_ui.figma_import_open);
+}
+
+#[test]
+fn closing_settings_closes_its_font_picker_and_releases_input_ownership() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().editor_ui;
+        ui.agent_settings_open = true;
+        ui.agent_settings.tab = AgentSettingsTab::Fonts;
+        ui.open_missing_font_picker(0, MissingFontSurface::Settings);
+        ui.font_picker_search = "inter".into();
+        ui.ime_preedit = Some(Default::default());
+    }
+    assert!(host.input_active(), "the visible picker owns text input");
+
+    assert!(host.apply_toggle_agent_settings());
+
+    let ui = &host.editor_state().editor_ui;
+    assert!(!ui.agent_settings_open);
+    assert!(!ui.font_picker.open);
+    assert!(ui.font_picker_purpose.is_none());
+    assert!(ui.ime_preedit.is_none());
+    assert!(!host.input_active(), "no hidden Settings input owns IME");
+    assert!(!host.apply_text('x'));
+    assert!(host.editor_state().editor_ui.font_picker_search.is_empty());
+}
+
+#[test]
+fn opening_settings_releases_hidden_property_input_ownership() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, ONE_RECT);
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("n1"));
+    {
+        let state = host.editor_state_mut();
+        state.ui.property_focus = Some(PropertyFocus::SizeW);
+        state.ui.property_input.set_text("120");
+    }
+    assert!(host.input_active(), "the Property field owns text input");
+
+    assert!(host.apply_toggle_agent_settings());
+
+    assert!(host.editor_state().editor_ui.agent_settings_open);
+    assert!(host.editor_state().ui.property_focus.is_none());
+    assert!(
+        !host.input_active(),
+        "the covered Property field released IME"
+    );
+    let hidden_draft = host.editor_state().ui.property_input.text().to_owned();
+    assert!(!host.apply_text('x'));
+    assert_eq!(host.editor_state().ui.property_input.text(), hidden_draft);
 }
 
 #[test]

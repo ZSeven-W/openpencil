@@ -31,8 +31,19 @@ object OpNative {
     external fun nativeSuspend(engine: Long): Int // blocking barrier
     external fun nativeResume(engine: Long, surface: Surface?): Int
     external fun nativeResize(engine: Long, w: Float, h: Float, dpr: Float): Int
+    external fun nativeResizeWithSafeArea(
+        engine: Long,
+        w: Float,
+        h: Float,
+        dpr: Float,
+        t: Float,
+        r: Float,
+        b: Float,
+        l: Float,
+    ): Int
     external fun nativeSetSafeArea(engine: Long, t: Float, r: Float, b: Float, l: Float): Int
     external fun nativeSetKeyboard(engine: Long, h: Float): Int
+    external fun nativePrefersLightSystemIcons(engine: Long): Boolean
     external fun nativeFrame(engine: Long, tMs: Long): Int // blocking barrier; the TRUE frame status
     external fun nativePointer(engine: Long, id: Int, phase: Int, x: Float, y: Float, tMs: Long): Int
     external fun nativeDestroy(engine: Long)
@@ -65,6 +76,7 @@ object OpNative {
     external fun nativeEditorMove(engine: Long, x: Float, y: Float): Int
     external fun nativeEditorRelease(engine: Long, x: Float, y: Float): Int
     external fun nativeEditorCancelGesture(engine: Long): Int
+    external fun nativeEditorBeginTransform(engine: Long, x: Float, y: Float): Int
     external fun nativeEditorRightPress(engine: Long, x: Float, y: Float): Int
     external fun nativeEditorPan(engine: Long, x: Float, y: Float, dx: Float, dy: Float): Int
     external fun nativeEditorPinch(engine: Long, x: Float, y: Float, deltaY: Float): Int

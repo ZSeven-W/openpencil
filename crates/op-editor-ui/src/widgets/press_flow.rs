@@ -59,6 +59,14 @@ pub fn press_fill_type_picker(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_fill_type_picker_in_rect(state, property_rect, point)
+}
+
+pub fn press_fill_type_picker_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         match panel.fill_type_picker_hit(property_rect, point) {
             property_panel_fill::SelectHit::Row(idx) => {
@@ -89,6 +97,14 @@ pub fn press_compositing_picker(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_compositing_picker_in_rect(state, property_rect, point)
+}
+
+pub fn press_compositing_picker_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         if let Some(action) = panel.compositing_picker_action_at(property_rect, point) {
             return PropertyOverlayPress::Action(action);
@@ -109,6 +125,14 @@ pub fn press_effect_add_menu(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_effect_add_menu_in_rect(state, property_rect, point)
+}
+
+pub fn press_effect_add_menu_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         match panel.effect_add_menu_hit(property_rect, point) {
             crate::widgets::EffectAddMenuHit::Row(action) => {
@@ -130,6 +154,14 @@ pub fn press_color_variable_picker(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_color_variable_picker_in_rect(state, property_rect, point)
+}
+
+pub fn press_color_variable_picker_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         // The popup's own rows first: they are painted over the rail and
         // carry the list scroll, which the panel's ordinary control walk

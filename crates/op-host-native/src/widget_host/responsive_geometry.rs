@@ -39,13 +39,7 @@ impl WidgetHostNative {
                     viewport_h,
                 )
             }
-            MobileSheetKind::Properties => {
-                op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-                    &self.editor_state,
-                    viewport_w,
-                    viewport_h,
-                )
-            }
+            MobileSheetKind::Properties => self.property_rect(viewport_w, viewport_h),
             MobileSheetKind::Ai => self
                 .ai_chat_rect(viewport_w, viewport_h)
                 .unwrap_or_else(|| {

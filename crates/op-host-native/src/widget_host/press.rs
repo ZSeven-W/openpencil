@@ -255,13 +255,7 @@ impl WidgetHostNative {
         self.commit_variable_row_focus_if_any();
         if self.editor_state.ui.property_focus.is_some() {
             let property_left = if self.editor_state.property_panel_visible() {
-                op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-                    &self.editor_state,
-                    viewport_width,
-                    viewport_height,
-                )
-                .origin
-                .x
+                self.property_rect(viewport_width, viewport_height).origin.x
             } else {
                 viewport_width
             };

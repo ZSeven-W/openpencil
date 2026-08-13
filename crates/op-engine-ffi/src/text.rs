@@ -375,6 +375,7 @@ pub(crate) fn paint_edit_caret(session: &Session) -> Option<EditCaret> {
 pub(crate) fn caret_rect(session: &mut Session) -> Option<(f32, f32, f32, f32)> {
     // Split borrows: `state`/`scene`/viewport read-only, `backend` mutable
     // (the measure facade).
+    let (safe_left, safe_top) = (session.insets.left, session.insets.top);
     let Session {
         state,
         scene,
@@ -401,8 +402,10 @@ pub(crate) fn caret_rect(session: &mut Session) -> Option<(f32, f32, f32, f32)> 
     let layout = text_edit_layout(&mut measure, node);
     let (doc_x, doc_y) = layout.caret_position(&mut measure, caret_byte);
     let zoom = *zoom;
-    let x = viewport_origin.x + doc_x * zoom;
-    let y = viewport_origin.y + doc_y * zoom;
+    // The document camera is safe-area-local, while the public ABI returns
+    // surface-logical geometry for platform candidate-window placement.
+    let x = safe_left + viewport_origin.x + doc_x * zoom;
+    let y = safe_top + viewport_origin.y + doc_y * zoom;
     let h = layout.line_h * zoom;
     let w = (1.0 / zoom).max(1.0);
     Some((x, y, w, h))

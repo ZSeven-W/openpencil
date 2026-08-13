@@ -6,9 +6,11 @@ struct OpenPencilPlayerApp: App {
         WindowGroup {
             // Edge-to-edge: the Metal view spans the full screen; the
             // engine consumes the safe-area insets and lays the chrome
-            // out against the usable rectangle.
+            // out against the usable rectangle. Include the keyboard region
+            // explicitly so SwiftUI never resizes or lifts the whole editor;
+            // docked keyboard occlusion is delivered through its own channel.
             OpPlayerContainer()
-                .ignoresSafeArea()
+                .ignoresSafeArea(.all, edges: .all)
         }
     }
 }

@@ -172,7 +172,6 @@ pub unsafe extern "C" fn op_editor_open_document(
 
 /// Pointer press (single finger). The host decides what it means —
 /// canvas node select/drag, marquee, panel press, text-edit caret…
-///
 /// # Safety
 ///
 /// `engine` must be live and called on its owner thread.
@@ -180,6 +179,9 @@ pub unsafe extern "C" fn op_editor_open_document(
 pub unsafe extern "C" fn op_editor_press(engine: *mut crate::OpEngine, x: f32, y: f32) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            if !session.begin_editor_pointer_capture(x, y) {
+                return Ok(());
+            }
             let (w, h) = session.editor_viewport();
             let (x, y) = session.editor_point(x, y);
             let changed = session.editor_mut()?.apply_press(x, y, w, h);
@@ -193,7 +195,6 @@ pub unsafe extern "C" fn op_editor_press(engine: *mut crate::OpEngine, x: f32, y
 }
 
 /// Pointer move (single finger).
-///
 /// # Safety
 ///
 /// `engine` must be live and called on its owner thread.
@@ -201,9 +202,20 @@ pub unsafe extern "C" fn op_editor_press(engine: *mut crate::OpEngine, x: f32, y
 pub unsafe extern "C" fn op_editor_move(engine: *mut crate::OpEngine, x: f32, y: f32) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            if !session.editor_pointer_captured() {
+                return Ok(());
+            }
             let (x, y) = session.editor_point(x, y);
-            let host = session.editor_mut()?;
-            if host.apply_cursor_move(x, y) {
+            let (changed, camera_changed) = {
+                let host = session.editor_mut()?;
+                let before = host.editor_state().viewport;
+                let changed = host.apply_cursor_move(x, y);
+                (changed, host.editor_state().viewport != before)
+            };
+            if camera_changed {
+                session.user_interacted = true;
+            }
+            if changed {
                 session.request_redraw();
             }
             Ok(())
@@ -212,7 +224,6 @@ pub unsafe extern "C" fn op_editor_move(engine: *mut crate::OpEngine, x: f32, y:
 }
 
 /// Pointer release (single finger).
-///
 /// # Safety
 ///
 /// `engine` must be live and called on its owner thread.
@@ -224,6 +235,9 @@ pub unsafe extern "C" fn op_editor_release(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            if !session.end_editor_pointer_capture() {
+                return Ok(());
+            }
             let (w, h) = session.editor_viewport();
             let changed = session.editor_mut()?.apply_release_with_viewport(w, h);
             if changed {
@@ -237,7 +251,6 @@ pub unsafe extern "C" fn op_editor_release(
 
 /// Cancel the active editor pointer gesture without dispatching a release or
 /// committing any release-delayed action.
-///
 /// # Safety
 ///
 /// `engine` must be live and called on its owner thread.
@@ -245,6 +258,7 @@ pub unsafe extern "C" fn op_editor_release(
 pub unsafe extern "C" fn op_editor_cancel_gesture(engine: *mut crate::OpEngine) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            session.reset_editor_pointer_capture();
             if session.editor_mut()?.cancel_native_touch_gestures() {
                 session.request_redraw();
             }
@@ -254,7 +268,6 @@ pub unsafe extern "C" fn op_editor_cancel_gesture(engine: *mut crate::OpEngine) 
 }
 
 /// Long-press → right-click (context menus, layer rows, canvas).
-///
 /// # Safety
 ///
 /// `engine` must be live and called on its owner thread.
@@ -266,6 +279,9 @@ pub unsafe extern "C" fn op_editor_right_press(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            if !session.safe_area_contains_surface_point(x, y) {
+                return Ok(());
+            }
             let (w, h) = session.editor_viewport();
             let (x, y) = session.editor_point(x, y);
             let host = session.editor_mut()?;
@@ -277,7 +293,7 @@ pub unsafe extern "C" fn op_editor_right_press(
     }
 }
 
-/// Two-finger pan: `dx`/`dy` are the finger-midpoint deltas (logical px).
+/// Two-finger pan after `op_editor_begin_transform`; `dx`/`dy` are midpoint deltas.
 ///
 /// # Safety
 ///
@@ -292,6 +308,9 @@ pub unsafe extern "C" fn op_editor_pan(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            if !session.editor_transform_captured() {
+                return Ok(());
+            }
             let (w, h) = session.editor_viewport();
             let (x, y) = session.editor_point(x, y);
             let (changed, camera_changed) = {
@@ -311,8 +330,7 @@ pub unsafe extern "C" fn op_editor_pan(
     }
 }
 
-/// Pinch zoom: `delta_y` follows the trackpad-pinch convention (positive
-/// = zoom in).
+/// Pinch after `op_editor_begin_transform` (positive `delta_y` = zoom in).
 ///
 /// # Safety
 ///
@@ -326,6 +344,9 @@ pub unsafe extern "C" fn op_editor_pinch(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            if !session.editor_transform_captured() {
+                return Ok(());
+            }
             let (w, h) = session.editor_viewport();
             let (x, y) = session.editor_point(x, y);
             let (changed, camera_changed) = {

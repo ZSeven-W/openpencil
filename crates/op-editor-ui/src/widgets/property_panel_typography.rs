@@ -170,16 +170,17 @@ pub fn display_font_family(value: &str) -> &str {
 
 pub const FONT_PICKER_ROW_H: f32 = 24.0;
 pub const FONT_PICKER_SEARCH_H: f32 = 28.0;
-const TOUCH_FONT_PICKER_ROW_H: f32 = 30.0;
-const TOUCH_FONT_PICKER_SEARCH_H: f32 = 30.0;
+const TOUCH_FONT_PICKER_ROW_H: f32 = 44.0;
+const TOUCH_FONT_PICKER_SEARCH_H: f32 = 44.0;
 const GROUP_HEADER_H: f32 = 16.0;
+const TOUCH_GROUP_HEADER_H: f32 = 28.0;
 const NO_RESULTS_H: f32 = 40.0;
 const LIST_PAD_Y: f32 = 4.0;
 /// The bottom "Import font…" action row height.
 const IMPORT_ACTION_H: f32 = 28.0;
 /// Side of the inline remove-x hit square on an imported entry row.
 const REMOVE_X_SIZE: f32 = 16.0;
-const TOUCH_REMOVE_X_SIZE: f32 = 30.0;
+const TOUCH_REMOVE_X_SIZE: f32 = 44.0;
 /// Desktop list viewport cap. Touch keeps the same 288-point popup cap while
 /// accounting for its taller search field.
 #[cfg(test)]
@@ -211,6 +212,7 @@ pub struct FontPickerLayout {
     pub viewport: Rect,
     pub max_scroll: f32,
     pub rows: Vec<(FontPickerRow, Rect)>,
+    pub touch_controls: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -268,7 +270,7 @@ pub fn font_picker_layout_at(
     allow_remove: bool,
     scroll: f32,
 ) -> FontPickerLayout {
-    font_picker_layout_at_with_density(
+    font_picker_layout_at_for_ui(
         trigger,
         popup_width,
         bounds,
@@ -277,6 +279,31 @@ pub fn font_picker_layout_at(
         allow_remove,
         scroll,
         false,
+    )
+}
+
+/// Density-aware arbitrary-anchor picker geometry. Settings surfaces use this
+/// entry point so touch paint, hit-testing, and scrolling share 44-point rows.
+#[allow(clippy::too_many_arguments)]
+pub fn font_picker_layout_at_for_ui(
+    trigger: Rect,
+    popup_width: f32,
+    bounds: Rect,
+    entries: &[FontPickerEntry],
+    allow_import: bool,
+    allow_remove: bool,
+    scroll: f32,
+    touch_controls: bool,
+) -> FontPickerLayout {
+    font_picker_layout_at_with_density(
+        trigger,
+        popup_width,
+        bounds,
+        entries,
+        allow_import,
+        allow_remove,
+        scroll,
+        touch_controls,
     )
 }
 
@@ -311,6 +338,11 @@ fn font_picker_layout_at_with_density(
     } else {
         REMOVE_X_SIZE
     };
+    let group_header_h = if touch_controls {
+        TOUCH_GROUP_HEADER_H
+    } else {
+        GROUP_HEADER_H
+    };
     // Walk the list content (unscrolled, y from 0). Groups render in
     // Imported → Bundled → System order, matching `font_picker_entries`.
     let imported_count = entries.iter().filter(|e| e.imported).count();
@@ -319,8 +351,8 @@ fn font_picker_layout_at_with_density(
     let mut content: Vec<(FontPickerRow, f32, f32)> = Vec::new();
     let mut cy = 0.0_f32;
     if imported_count > 0 {
-        content.push((FontPickerRow::GroupImported, cy, GROUP_HEADER_H));
-        cy += GROUP_HEADER_H;
+        content.push((FontPickerRow::GroupImported, cy, group_header_h));
+        cy += group_header_h;
         for (i, e) in entries.iter().enumerate() {
             if e.imported {
                 content.push((FontPickerRow::Entry(i), cy, row_h));
@@ -338,8 +370,8 @@ fn font_picker_layout_at_with_density(
         }
     }
     if bundled_count > 0 {
-        content.push((FontPickerRow::GroupBundled, cy, GROUP_HEADER_H));
-        cy += GROUP_HEADER_H;
+        content.push((FontPickerRow::GroupBundled, cy, group_header_h));
+        cy += group_header_h;
         for (i, e) in entries.iter().enumerate() {
             if e.bundled {
                 content.push((FontPickerRow::Entry(i), cy, row_h));
@@ -348,8 +380,8 @@ fn font_picker_layout_at_with_density(
         }
     }
     if system_count > 0 {
-        content.push((FontPickerRow::GroupSystem, cy, GROUP_HEADER_H));
-        cy += GROUP_HEADER_H;
+        content.push((FontPickerRow::GroupSystem, cy, group_header_h));
+        cy += group_header_h;
         for (i, e) in entries.iter().enumerate() {
             if !e.bundled && !e.imported {
                 content.push((FontPickerRow::Entry(i), cy, row_h));
@@ -370,7 +402,7 @@ fn font_picker_layout_at_with_density(
         cy += import_h;
     }
     let content_h = cy + LIST_PAD_Y * 2.0;
-    let max_list_viewport_h = 288.0 - search_h;
+    let max_list_viewport_h = (288.0 - search_h).min((bounds.size.y - search_h).max(0.0));
     let viewport_h = content_h.min(max_list_viewport_h);
     let max_scroll = (content_h - viewport_h).max(0.0);
     let scroll = scroll.clamp(0.0, max_scroll);
@@ -429,6 +461,7 @@ fn font_picker_layout_at_with_density(
         viewport,
         max_scroll,
         rows,
+        touch_controls,
     }
 }
 
@@ -666,7 +699,7 @@ pub fn font_picker_max_scroll(
 // unchanged for the panel + hosts.
 #[path = "property_panel_typography_paint.rs"]
 mod paint;
-pub use paint::{paint_font_picker, paint_font_picker_at};
+pub use paint::{paint_font_picker, paint_font_picker_at, paint_font_picker_at_for_ui};
 
 #[cfg(test)]
 #[path = "property_panel_typography_tests.rs"]

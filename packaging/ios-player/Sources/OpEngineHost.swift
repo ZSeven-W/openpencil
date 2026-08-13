@@ -18,6 +18,8 @@ final class OpEngineHost: NSObject {
     private weak var surfaceLayer: CAMetalLayer?
     private var logicalSize = CGSize.zero
     private var scale: CGFloat = 1
+    private var viewportInsets = ViewportInsets(top: 0, right: 0, bottom: 0, left: 0)
+    private var viewportSynchronized = false
     private var isSuspended = false
     private var isAlive = true
     private var displayLink: CADisplayLink?
@@ -27,6 +29,8 @@ final class OpEngineHost: NSObject {
     let editorMode: Bool
 
     private var imeFocused = false
+    private var prefersLightSystemIcons: Bool?
+    private var didReportSystemChromeFailure = false
 
     init(editorMode: Bool) {
         self.editorMode = editorMode
@@ -63,18 +67,42 @@ final class OpEngineHost: NSObject {
         observers.forEach(NotificationCenter.default.removeObserver)
     }
 
-    func configure(surface: CAMetalLayer, logicalSize size: CGSize, scale newScale: CGFloat) {
+    func configure(
+        surface: CAMetalLayer,
+        logicalSize size: CGSize,
+        scale newScale: CGFloat,
+        safeArea insets: UIEdgeInsets
+    ) -> Bool {
         precondition(Thread.isMainThread)
-        guard isAlive, size.width > 0, size.height > 0, newScale > 0 else { return }
+        guard isAlive, size.width > 0, size.height > 0, newScale > 0 else { return false }
+        let nextInsets = ViewportInsets.clamped(
+            top: insets.top,
+            right: insets.right,
+            bottom: insets.bottom,
+            left: insets.left,
+            to: size
+        )
+        let viewportChanged = ViewportChange.requiresResize(
+            currentSize: logicalSize,
+            currentScale: scale,
+            nextSize: size,
+            nextScale: newScale
+        ) || viewportInsets != nextInsets
         surfaceLayer = surface
         logicalSize = size
         scale = newScale
+        viewportInsets = nextInsets
 
         if engine == nil {
             createAndAttach(surface: surface)
-        } else {
-            resize(to: size, scale: newScale)
+            return updateEngineViewport()
+        } else if viewportChanged || !viewportSynchronized {
+            // Keyboard-layout-guide convergence can schedule a UIKit layout
+            // without changing this Metal view's viewport. Do not turn that
+            // layout pass into an engine resize (and an automatic camera fit).
+            return updateEngineViewport()
         }
+        return true
     }
 
     func teardown() {
@@ -102,13 +130,13 @@ final class OpEngineHost: NSObject {
     }
 
     private func createAndAttach(surface: CAMetalLayer) {
-        // `-doc <name>` picks a bundled document (default `sample`).
+        // `-doc <name>` picks a bundled document (default `ppt-demo`).
         let docName = {
             let args = ProcessInfo.processInfo.arguments
             if let index = args.firstIndex(of: "-doc"), index + 1 < args.count {
                 return args[index + 1]
             }
-            return "sample"
+            return "ppt-demo"
         }()
         guard
             let documentURL = Bundle.main.url(forResource: docName, withExtension: "op"),
@@ -158,6 +186,7 @@ final class OpEngineHost: NSObject {
             return
         }
         isSuspended = false
+        syncSystemChromeStyle()
     }
 
     /// Registers every bundled `fonts/*.ttf` into the engine's font
@@ -215,6 +244,15 @@ final class OpEngineHost: NSObject {
             reportFailure(status, operation: "op_editor_cancel_gesture", engine: engine)
         } else if status == OpStatus_Ok {
             requestImmediateFrame()
+        }
+    }
+
+    func editorBeginTransform(x: CGFloat, y: CGFloat) {
+        precondition(Thread.isMainThread)
+        guard let engine, editorMode else { return }
+        let status = op_editor_begin_transform(engine, Float(x), Float(y))
+        if status != OpStatus_Ok && status != OpStatus_Suspended {
+            reportFailure(status, operation: "op_editor_begin_transform", engine: engine)
         }
     }
 
@@ -397,27 +435,26 @@ final class OpEngineHost: NSObject {
         return callbacks
     }
 
-    private func resize(to size: CGSize, scale newScale: CGFloat) {
-        guard let engine else { return }
-        let status = op_resize(engine, Float(size.width), Float(size.height), Float(newScale))
-        if status != OpStatus_Ok {
-            reportFailure(status, operation: "op_resize", engine: engine)
+    private func updateEngineViewport() -> Bool {
+        guard let engine else {
+            viewportSynchronized = false
+            return false
         }
-    }
-
-    func updateSafeArea(_ insets: UIEdgeInsets) {
-        precondition(Thread.isMainThread)
-        guard let engine else { return }
-        var top = max(0, min(insets.top, logicalSize.height))
-        var bottom = max(0, min(insets.bottom, logicalSize.height))
-        var left = max(0, min(insets.left, logicalSize.width))
-        var right = max(0, min(insets.right, logicalSize.width))
-        scalePair(&top, &bottom, extent: logicalSize.height)
-        scalePair(&left, &right, extent: logicalSize.width)
-        let status = op_set_safe_area(engine, Float(top), Float(right), Float(bottom), Float(left))
+        let status = op_resize_with_safe_area(
+            engine,
+            Float(logicalSize.width),
+            Float(logicalSize.height),
+            Float(scale),
+            Float(viewportInsets.top),
+            Float(viewportInsets.right),
+            Float(viewportInsets.bottom),
+            Float(viewportInsets.left)
+        )
         if status != OpStatus_Ok {
-            reportFailure(status, operation: "op_set_safe_area", engine: engine)
+            reportFailure(status, operation: "op_resize_with_safe_area", engine: engine)
         }
+        viewportSynchronized = status == OpStatus_Ok
+        return viewportSynchronized
     }
 
     func updateKeyboardHeight(_ height: CGFloat) {
@@ -453,6 +490,27 @@ final class OpEngineHost: NSObject {
             syncImeFocus()
             drainShellActions()
         }
+        syncSystemChromeStyle()
+    }
+
+    /// Keeps native status-bar and Home Indicator glyphs legible over the
+    /// engine-painted edge-to-edge backdrop. The Rust editor owns its theme;
+    /// UIKit only needs the resulting light-vs-dark glyph preference.
+    private func syncSystemChromeStyle() {
+        guard let engine else { return }
+        var prefersLight = false
+        let status = op_prefers_light_system_icons(engine, &prefersLight)
+        guard status == OpStatus_Ok else {
+            if status != OpStatus_Suspended, !didReportSystemChromeFailure {
+                didReportSystemChromeFailure = true
+                reportFailure(status, operation: "op_prefers_light_system_icons", engine: engine)
+            }
+            return
+        }
+        didReportSystemChromeFailure = false
+        guard prefersLight != prefersLightSystemIcons else { return }
+        prefersLightSystemIcons = prefersLight
+        view?.updateSystemChrome(prefersLightIcons: prefersLight)
     }
 
     private func suspendForBackground() {
@@ -559,14 +617,6 @@ private final class OpDisplayLinkTarget: NSObject {
     @objc func tick(_ link: CADisplayLink) {
         host?.displayLinkDidFire(link)
     }
-}
-
-private func scalePair(_ first: inout CGFloat, _ second: inout CGFloat, extent: CGFloat) {
-    let sum = first + second
-    guard sum > extent, sum > 0 else { return }
-    let factor = extent / sum
-    first *= factor
-    second *= factor
 }
 
 private func host(from userData: UnsafeMutableRawPointer?) -> OpEngineHost? {

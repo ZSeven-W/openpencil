@@ -7,11 +7,23 @@ use super::paint::agents_content_height;
 use super::*;
 use crate::widgets::agent_settings_panel_geometry::SECONDARY_HEADING_HAS_DESC;
 
-fn secondary_hero_height() -> f32 {
-    crate::widgets::agent_settings_rows::tab_intro_height(SECONDARY_HEADING_HAS_DESC)
+fn secondary_hero_height(touch: bool) -> f32 {
+    crate::widgets::agent_settings_rows::tab_intro_height_for_ui(SECONDARY_HEADING_HAS_DESC, touch)
 }
 
 impl AgentSettingsPanel<'_> {
+    /// Unscrolled document-space rect for the active editable field.
+    /// Hosts subtract [`Self::effective_scroll`] before comparing it with the
+    /// visible content viewport (for example when avoiding a soft keyboard).
+    pub fn focused_input_rect(&self, panel: Rect) -> Option<Rect> {
+        crate::widgets::agent_settings_focus_geometry::focused_input_rect(
+            self.resolved_content_viewport(panel),
+            &self.settings,
+            self.active_tab(),
+            self.ui.touch_chrome(),
+        )
+    }
+
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> AgentSettingsHit {
         if !panel.contains(point) {
             return AgentSettingsHit::Outside;
@@ -34,7 +46,7 @@ impl AgentSettingsPanel<'_> {
         if active_tab == AgentSettingsTab::Fonts && self.font_picker_layout(panel).is_some() {
             let hit = agent_settings_fonts::hit_test(
                 panel,
-                hero_body_rect(layout.content),
+                hero_body_rect_for_ui(layout.content, self.ui.touch_chrome()),
                 self.ui,
                 point,
                 scroll,
@@ -140,10 +152,11 @@ impl AgentSettingsPanel<'_> {
                 }
             }
             AgentSettingsTab::Images => {
-                match agent_settings_images::hit_test(
-                    hero_body_rect(content),
+                match agent_settings_images::hit_test_for_ui(
+                    hero_body_rect_for_ui(content, self.ui.touch_chrome()),
                     &self.settings,
                     scrolled,
+                    self.ui.touch_chrome(),
                 ) {
                     ImagesHit::ToggleAdvanced => return AgentSettingsHit::ToggleImagesAdvanced,
                     ImagesHit::FocusSearchField(field) => {
@@ -181,7 +194,7 @@ impl AgentSettingsPanel<'_> {
             AgentSettingsTab::Fonts => {
                 let hit = agent_settings_fonts::hit_test(
                     panel,
-                    hero_body_rect(content),
+                    hero_body_rect_for_ui(content, self.ui.touch_chrome()),
                     self.ui,
                     point,
                     scroll,
@@ -200,7 +213,11 @@ impl AgentSettingsPanel<'_> {
                 SystemHit::None => {}
             },
             AgentSettingsTab::Account => {
-                match agent_settings_account::hit_test(hero_body_rect(content), self.ui, scrolled) {
+                match agent_settings_account::hit_test(
+                    hero_body_rect_for_ui(content, self.ui.touch_chrome()),
+                    self.ui,
+                    scrolled,
+                ) {
                     AccountTabHit::SignIn => return AgentSettingsHit::OpenLoginModal,
                     AccountTabHit::SignOut => return AgentSettingsHit::SignOutAccount,
                     AccountTabHit::None => {}
@@ -240,7 +257,12 @@ impl AgentSettingsPanel<'_> {
             return None;
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-        agent_settings_builtin::card_at(content, &self.settings, scrolled)
+        agent_settings_builtin::card_at_for_ui(
+            content,
+            &self.settings,
+            scrolled,
+            self.ui.touch_chrome(),
+        )
     }
 
     pub fn acp_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
@@ -281,7 +303,12 @@ impl AgentSettingsPanel<'_> {
             return None;
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-        agent_settings_builtin::preset_hover_at(content, &self.settings, scrolled)
+        agent_settings_builtin::preset_hover_at_for_ui(
+            content,
+            &self.settings,
+            scrolled,
+            self.ui.touch_chrome(),
+        )
     }
 
     pub fn builtin_preset_scroll_max_at(&self, panel: Rect, point: Point2D) -> Option<f32> {
@@ -290,7 +317,12 @@ impl AgentSettingsPanel<'_> {
             return None;
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-        agent_settings_builtin::preset_scroll_max_at(content, &self.settings, scrolled)
+        agent_settings_builtin::preset_scroll_max_at_for_ui(
+            content,
+            &self.settings,
+            scrolled,
+            self.ui.touch_chrome(),
+        )
     }
 
     pub fn image_search_test_button_hover_at(&self, panel: Rect, point: Point2D) -> bool {
@@ -299,10 +331,11 @@ impl AgentSettingsPanel<'_> {
             return false;
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-        agent_settings_images::search_test_button_hover_at(
-            hero_body_rect(content),
+        agent_settings_images::search_test_button_hover_at_for_ui(
+            hero_body_rect_for_ui(content, self.ui.touch_chrome()),
             &self.settings,
             scrolled,
+            self.ui.touch_chrome(),
         )
     }
 
@@ -312,10 +345,11 @@ impl AgentSettingsPanel<'_> {
             return false;
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-        agent_settings_images::add_gen_button_hover_at(
-            hero_body_rect(content),
+        agent_settings_images::add_gen_button_hover_at_for_ui(
+            hero_body_rect_for_ui(content, self.ui.touch_chrome()),
             &self.settings,
             scrolled,
+            self.ui.touch_chrome(),
         )
     }
 
@@ -329,10 +363,11 @@ impl AgentSettingsPanel<'_> {
             return None;
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-        agent_settings_images::profile_test_button_hover_at(
-            hero_body_rect(content),
+        agent_settings_images::profile_test_button_hover_at_for_ui(
+            hero_body_rect_for_ui(content, self.ui.touch_chrome()),
             &self.settings,
             scrolled,
+            self.ui.touch_chrome(),
         )
     }
 
@@ -341,14 +376,28 @@ impl AgentSettingsPanel<'_> {
             AgentSettingsTab::Agents => agents_content_height(&self.settings, self.mode, self.ui),
             AgentSettingsTab::Mcp => agent_settings_mcp::content_height(&self.settings),
             AgentSettingsTab::Images => {
-                secondary_hero_height() + agent_settings_images::content_height(&self.settings)
+                let content_width = if self.ui.compact_layout() {
+                    390.0
+                } else if self.ui.touch_chrome() {
+                    680.0
+                } else {
+                    896.0
+                };
+                secondary_hero_height(self.ui.touch_chrome())
+                    + agent_settings_images::responsive_content_height(
+                        &self.settings,
+                        content_width,
+                        self.ui.touch_chrome(),
+                    )
             }
             AgentSettingsTab::Fonts => {
-                secondary_hero_height() + agent_settings_fonts::content_height(self.ui)
+                secondary_hero_height(self.ui.touch_chrome())
+                    + agent_settings_fonts::content_height(self.ui)
             }
             AgentSettingsTab::System => agent_settings_system::content_height(),
             AgentSettingsTab::Account => {
-                secondary_hero_height() + agent_settings_account::content_height()
+                secondary_hero_height(self.ui.touch_chrome())
+                    + agent_settings_account::content_height()
             }
         }
     }
@@ -359,7 +408,10 @@ impl AgentSettingsPanel<'_> {
     ) -> Option<crate::widgets::property_panel_typography::FontPickerLayout> {
         agent_settings_fonts::picker_layout(
             panel,
-            hero_body_rect(self.resolved_content_viewport(panel)),
+            hero_body_rect_for_ui(
+                self.resolved_content_viewport(panel),
+                self.ui.touch_chrome(),
+            ),
             self.ui,
             self.effective_scroll(panel),
         )

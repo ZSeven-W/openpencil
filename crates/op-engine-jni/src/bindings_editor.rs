@@ -135,6 +135,19 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorRightPres
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorBeginTransform<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+    x: jfloat,
+    y: jfloat,
+) -> jint {
+    call_status(engine, move |e| unsafe {
+        op_engine_ffi::op_editor_begin_transform(e, x, y)
+    })
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorPan<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,

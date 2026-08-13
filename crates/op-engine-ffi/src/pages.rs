@@ -85,7 +85,7 @@ impl Session {
         // A page switch always re-fits (the user expects the new page on
         // screen), regardless of prior pan/zoom.
         self.user_interacted = false;
-        crate::render::fit_viewport(self);
+        self.fit_content_to_viewports();
         self.request_redraw();
         Ok(())
     }

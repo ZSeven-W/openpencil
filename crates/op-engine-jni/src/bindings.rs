@@ -15,12 +15,13 @@ use std::ptr;
 use std::sync::{Arc, OnceLock};
 
 use jni::objects::{GlobalRef, JByteArray, JClass, JObject, JString};
-use jni::sys::{jfloat, jint, jlong};
+use jni::sys::{jboolean, jfloat, jint, jlong};
 use jni::{JNIEnv, JavaVM};
 
 use op_engine_ffi::{
-    op_attach_surface, op_create, op_destroy, op_frame, op_pointer, op_resize, op_resume,
-    op_set_keyboard, op_set_safe_area, op_suspend, OpCreateDesc, OpEngine, OpStatus, OpSurfaceDesc,
+    op_attach_surface, op_create, op_destroy, op_frame, op_pointer, op_prefers_light_system_icons,
+    op_resize, op_resize_with_safe_area, op_resume, op_set_keyboard, op_set_safe_area, op_suspend,
+    OpCreateDesc, OpEngine, OpStatus, OpSurfaceDesc,
 };
 
 use crate::callbacks::{build_callbacks, drop_ctx, EngineCtx};
@@ -449,6 +450,24 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeResize<'local>(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeResizeWithSafeArea<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+    w: jfloat,
+    h: jfloat,
+    dpr: jfloat,
+    t: jfloat,
+    r: jfloat,
+    b: jfloat,
+    l: jfloat,
+) -> jint {
+    call_status(engine, move |e| unsafe {
+        op_resize_with_safe_area(e, w, h, dpr, t, r, b, l)
+    })
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSetSafeArea<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
@@ -469,6 +488,23 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSetKeyboard<'lo
     h: jfloat,
 ) -> jint {
     call_status(engine, move |e| unsafe { op_set_keyboard(e, h) })
+}
+
+/// `OpNative.nativePrefersLightSystemIcons` — whether platform bars should
+/// use light-colored icons. Any invalid/closing/failed engine returns false.
+#[no_mangle]
+pub extern "system" fn Java_dev_openpencil_player_OpNative_nativePrefersLightSystemIcons<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+) -> jboolean {
+    let prefers_light = with_engine(engine, move |e| {
+        let mut prefers_light = false;
+        let status = unsafe { op_prefers_light_system_icons(e, &mut prefers_light) };
+        crate::system_icon_preference_or_false(status, prefers_light)
+    })
+    .unwrap_or(false);
+    prefers_light as jboolean
 }
 
 #[no_mangle]

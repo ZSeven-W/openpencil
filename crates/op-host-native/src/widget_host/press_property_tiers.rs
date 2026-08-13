@@ -27,10 +27,10 @@ impl WidgetHostNative {
         // 0c0. Fill-type picker — outside-click dismiss.
         if self.editor_state.editor_ui.fill_type_picker.open && !in_git_panel {
             self.refresh_layout_scene();
-            let press = press_flow::press_fill_type_picker(
+            let property_rect = self.property_rect(viewport_width, viewport_height);
+            let press = press_flow::press_fill_type_picker_in_rect(
                 &mut self.editor_state,
-                viewport_width,
-                viewport_height,
+                property_rect,
                 Point2D::new(x, y),
             );
             return Some(self.finish_property_overlay_press(press));
@@ -41,10 +41,10 @@ impl WidgetHostNative {
         // padded chrome; the first outside press dismisses and is swallowed.
         if self.editor_state.editor_ui.compositing_picker.open && !in_git_panel {
             self.refresh_layout_scene();
-            let press = press_flow::press_compositing_picker(
+            let property_rect = self.property_rect(viewport_width, viewport_height);
+            let press = press_flow::press_compositing_picker_in_rect(
                 &mut self.editor_state,
-                viewport_width,
-                viewport_height,
+                property_rect,
                 Point2D::new(x, y),
             );
             return Some(self.finish_property_overlay_press(press));
@@ -53,10 +53,10 @@ impl WidgetHostNative {
         // 0c1. Effects "+" add-menu — outside-click dismiss.
         if self.editor_state.editor_ui.effect_add_picker_open && !in_git_panel {
             self.refresh_layout_scene();
-            let press = press_flow::press_effect_add_menu(
+            let property_rect = self.property_rect(viewport_width, viewport_height);
+            let press = press_flow::press_effect_add_menu_in_rect(
                 &mut self.editor_state,
-                viewport_width,
-                viewport_height,
+                property_rect,
                 Point2D::new(x, y),
             );
             return Some(self.finish_property_overlay_press(press));
@@ -67,12 +67,7 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.interaction_menu_open && !in_git_panel {
             self.refresh_layout_scene();
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-                let property_rect =
-                    op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-                        &self.editor_state,
-                        viewport_width,
-                        viewport_height,
-                    );
+                let property_rect = self.property_rect(viewport_width, viewport_height);
                 match panel.interaction_menu_hit(property_rect, Point2D::new(x, y)) {
                     op_editor_ui::widgets::InteractionMenuHit::Row(action) => {
                         self.apply_property_action(action);
@@ -96,10 +91,10 @@ impl WidgetHostNative {
             && !in_git_panel
         {
             self.refresh_layout_scene();
-            let press = press_flow::press_color_variable_picker(
+            let property_rect = self.property_rect(viewport_width, viewport_height);
+            let press = press_flow::press_color_variable_picker_in_rect(
                 &mut self.editor_state,
-                viewport_width,
-                viewport_height,
+                property_rect,
                 Point2D::new(x, y),
             );
             return Some(self.finish_property_overlay_press(press));
@@ -214,15 +209,11 @@ impl WidgetHostNative {
             if let Some(panel) =
                 PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene)
             {
-                let sheet = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-                    &self.editor_state,
-                    ctx.viewport_width,
-                    ctx.viewport_height,
-                );
+                let sheet = self.property_rect(ctx.viewport_width, ctx.viewport_height);
                 let close = op_editor_ui::widgets::mobile_chrome::sheet_close_rect(sheet);
                 if close.contains(Point2D::new(x, y)) {
                     self.cancel_native_touch_gestures();
-                    self.editor_state.editor_ui.mobile_sheet = None;
+                    self.dismiss_mobile_surface();
                     self.mark_dirty();
                     return Some(true);
                 }
@@ -238,11 +229,7 @@ impl WidgetHostNative {
             PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene)
                 .filter(|_| !in_git_panel)
         {
-            let property_rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-                &self.editor_state,
-                viewport_width,
-                viewport_height,
-            );
+            let property_rect = self.property_rect(viewport_width, viewport_height);
             if let Some(anchor) = self.code_text_offset_at_screen(x, y) {
                 self.commit_property_focus_if_any();
                 self.editor_state.codegen.code_selection = Some(CodeSelection {
@@ -335,6 +322,7 @@ impl WidgetHostNative {
                 self.editor_state.ui.property_caret_anchor_ms = self.now_ms;
                 self.editor_state.ui.property_draft_select_all = false;
                 self.editor_state.chat.focused = false;
+                self.reveal_property_keyboard_owner();
                 self.mark_dirty();
                 return Some(true);
             }

@@ -120,6 +120,11 @@ impl WidgetHostNative {
         let mut top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         top_bar.chip_text_w = Some(self.topbar_chip_text_w(&top_bar));
         if let Some(hit) = self.topbar_hit_test(&top_bar, top_bar_rect, Point2D::new(x, y)) {
+            if hit == TopBarHit::OpenAgentSettings {
+                // The modal paints above the inspector. Release its complete
+                // input family before the shared flow makes Settings visible.
+                self.release_property_keyboard_owner();
+            }
             self.close_image_popovers_for_higher_overlay();
             // A TopBar destination replaces the collaboration Join caret.
             // Clear even stale focus so reopening Join cannot resurrect it.
@@ -274,7 +279,6 @@ impl WidgetHostNative {
                 if self.editor_state.editor_ui.expanded_touch_layout() {
                     self.cancel_native_touch_gestures();
                     let ui = &mut self.editor_state.editor_ui;
-                    ui.mobile_sheet = None;
                     ui.sidebar_open = !ui.sidebar_open;
                 } else {
                     self.toggle_mobile_sheet(op_editor_core::size_class::MobileSheetKind::Layers);
@@ -374,12 +378,21 @@ impl WidgetHostNative {
         kind: op_editor_core::size_class::MobileSheetKind,
     ) {
         self.cancel_native_touch_gestures();
-        let ui = &mut self.editor_state.editor_ui;
-        ui.mobile_sheet = if ui.mobile_sheet == Some(kind) {
+        let current = self.editor_state.editor_ui.mobile_sheet;
+        let next = if current == Some(kind) {
             None
         } else {
             Some(kind)
         };
+        let replacing_surface = current.is_some() && current != next;
+        let hiding_expanded_property = current.is_none()
+            && self.editor_state.editor_ui.expanded_touch_layout()
+            && next.is_some();
+        if replacing_surface || hiding_expanded_property {
+            self.dismiss_mobile_surface();
+        }
+        let ui = &mut self.editor_state.editor_ui;
+        ui.mobile_sheet = next;
         if kind == op_editor_core::size_class::MobileSheetKind::Ai {
             // Toggling AI also flips the desktop chat visibility so the
             // two stay consistent.
@@ -432,17 +445,13 @@ impl WidgetHostNative {
             && op_editor_ui::widgets::mobile_chrome::sheet_close_rect(panel).contains(point)
         {
             self.cancel_native_touch_gestures();
-            self.editor_state.editor_ui.mobile_sheet = None;
+            self.dismiss_mobile_surface();
             self.mark_dirty();
             return Some(true);
         }
         if !panel.contains(point) {
             self.cancel_native_touch_gestures();
-            self.editor_state.editor_ui.mobile_sheet = None;
-            if kind == op_editor_core::size_class::MobileSheetKind::Ai {
-                self.editor_state.chat.collapsed = true;
-                self.editor_state.chat.focused = false;
-            }
+            self.dismiss_mobile_surface();
             self.mark_dirty();
             return Some(true);
         }
@@ -473,7 +482,7 @@ impl WidgetHostNative {
         let close = op_editor_ui::widgets::mobile_chrome::sheet_close_rect(sheet);
         if close.contains(point) {
             self.cancel_native_touch_gestures();
-            self.editor_state.editor_ui.mobile_sheet = None;
+            self.dismiss_mobile_surface();
             self.mark_dirty();
             return Some(true);
         }
@@ -486,7 +495,7 @@ impl WidgetHostNative {
                 return Some(true);
             }
             self.cancel_native_touch_gestures();
-            self.editor_state.editor_ui.mobile_sheet = None;
+            self.dismiss_mobile_surface();
             match entry {
                 op_editor_ui::widgets::MobileMoreEntry::Ai => unreachable!("handled above"),
                 op_editor_ui::widgets::MobileMoreEntry::OpenFile => {

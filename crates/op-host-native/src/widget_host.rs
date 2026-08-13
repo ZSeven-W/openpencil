@@ -14,7 +14,6 @@
 //! - [`scroll`] — wheel + trackpad-pan (zoom / canvas + diff scroll)
 //! - [`press`] — `apply_press` + new-node spawn (largest method)
 //! - [`git_press`] — Git-panel press dispatch
-//! - [`paint`] — full editor-UI composition paint pass
 
 use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
@@ -32,6 +31,7 @@ mod agent_settings_acp_tests;
 mod agent_settings_compact_press_tests;
 #[cfg(test)]
 mod agent_settings_form_press_tests;
+mod agent_settings_geometry;
 #[cfg(test)]
 mod agent_settings_image_gen_tests;
 #[cfg(test)]
@@ -198,6 +198,8 @@ mod prompt_center_press;
 #[cfg(test)]
 mod property_compositing_tests;
 mod property_dispatch;
+#[cfg(test)]
+mod property_keyboard_occlusion_tests;
 mod property_layout_dispatch;
 #[cfg(test)]
 mod property_panel_interactions_tests;
@@ -507,6 +509,7 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) toast_rect: Option<op_editor_ui::Rect>,
     pub(in crate::widget_host) last_viewport_w: f32,
     pub(in crate::widget_host) last_viewport_h: f32,
+    pub(in crate::widget_host) keyboard_occlusion: f32,
     /// Live canvas Preview (Play) session — `Some` while
     /// `editor_state.editor_ui.preview.mode` is set. Owns the jian
     /// `Runtime` (host-local; `!Send`). Built on enter from the

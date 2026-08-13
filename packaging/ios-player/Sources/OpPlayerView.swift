@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 /// and tracks safe-area + keyboard occlusion changes.
 final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     override class var layerClass: AnyClass { CAMetalLayer.self }
+    /// Matches the Rust touch-pan slop, in logical UIKit points.
+    private static let editorLongPressSlop: CGFloat = 8
 
     let host: OpEngineHost
     private var touchIDs: [ObjectIdentifier: UInt32] = [:]
@@ -17,6 +19,11 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     private var didTearDown = false
     private var documentPickerPresented = false
     private var documentOpenErrorPending = false
+    private var systemChromeStyle: UIUserInterfaceStyle?
+    private let viewportConvergence = ViewportConvergence()
+    private var viewportDisplayLink: CADisplayLink?
+    private var geometryGate = ViewportGeometryGate()
+    private var suppressedTouches = SuppressedTouchSet<ObjectIdentifier>()
 
     // ---- Editor-mode gesture state (mirrors the Android shell) --------
     private var primaryTouchKey: ObjectIdentifier?
@@ -64,6 +71,10 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         contentMode = .redraw
         host.view = self
         setupImeTextView()
+        // The editor stays laid out against the stable window viewport.
+        // Floating and split keyboards are local occluders, not a full-width
+        // bottom inset; UIKit's guide treats them as dismissed by default.
+        keyboardLayoutGuide.followsUndockedKeyboard = false
 
         let center = NotificationCenter.default
         keyboardObservers.append(center.addObserver(
@@ -85,6 +96,7 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     deinit {
         keyboardObservers.forEach(NotificationCenter.default.removeObserver)
         longPressWork?.cancel()
+        viewportDisplayLink?.invalidate()
     }
 
     // MARK: - IME bridge
@@ -186,27 +198,128 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard !didTearDown, bounds.width > 0, bounds.height > 0 else { return }
-        let surface = metalLayer
-        let displayScale = window?.screen.scale ?? UIScreen.main.scale
-        contentScaleFactor = displayScale
-        surface.contentsScale = displayScale
-        surface.device = surface.device ?? MTLCreateSystemDefaultDevice()
-        surface.pixelFormat = .bgra8Unorm
-        surface.framebufferOnly = false
-        surface.presentsWithTransaction = false
-        surface.drawableSize = CGSize(
-            width: (bounds.width * displayScale).rounded(),
-            height: (bounds.height * displayScale).rounded()
-        )
-
-        host.configure(surface: surface, logicalSize: bounds.size, scale: displayScale)
-        host.updateSafeArea(safeAreaInsets)
+        if convergeInitialViewportIfNeeded() {
+            updateKeyboardOcclusionFromLayoutGuide()
+            return
+        }
+        signalViewportConvergence(.layout)
+        updateKeyboardOcclusionFromLayoutGuide()
     }
 
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
         guard !didTearDown else { return }
-        host.updateSafeArea(safeAreaInsets)
+        if convergeInitialViewportIfNeeded() {
+            scheduleKeyboardOcclusionUpdate()
+            return
+        }
+        signalViewportConvergence(.safeArea)
+        scheduleKeyboardOcclusionUpdate()
+    }
+
+    private func signalViewportConvergence(_ signal: ViewportConvergence.Signal) {
+        let sample = currentViewportSample()
+        if geometryGate.observe(sample) {
+            cancelTouchesForViewportTransition()
+        }
+        viewportConvergence.signal(signal, sample: sample)
+        guard viewportDisplayLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(viewportDisplayFrame(_:)))
+        link.add(to: .main, forMode: .common)
+        viewportDisplayLink = link
+    }
+
+    /// The first surface attachment does not have an old responsive layout to
+    /// protect, so use UIKit's current tuple immediately. Later transitions go
+    /// through the epoch barrier below.
+    private func convergeInitialViewportIfNeeded() -> Bool {
+        guard host.engine == nil, bounds.width > 0, bounds.height > 0 else { return false }
+        viewportDisplayLink?.invalidate()
+        viewportDisplayLink = nil
+        viewportConvergence.reset()
+        let sample = currentViewportSample()
+        let succeeded = convergeViewport(sample)
+        geometryGate.commit(sample, succeeded: succeeded)
+        return succeeded
+    }
+
+    @objc private func viewportDisplayFrame(_ link: CADisplayLink) {
+        guard !didTearDown else {
+            link.invalidate()
+            viewportDisplayLink = nil
+            return
+        }
+        let current = currentViewportSample()
+        if geometryGate.observe(current) {
+            cancelTouchesForViewportTransition()
+        }
+        guard let sample = viewportConvergence.displayFrame(sample: current) else { return }
+        let succeeded = convergeViewport(sample)
+        geometryGate.commit(sample, succeeded: succeeded)
+        if succeeded {
+            link.invalidate()
+            viewportDisplayLink = nil
+        } else {
+            viewportConvergence.signal(.layout, sample: current)
+        }
+    }
+
+    private func currentViewportSample() -> ViewportSample {
+        let displayScale = window?.screen.scale ?? UIScreen.main.scale
+        return ViewportSample(
+            size: bounds.size,
+            scale: displayScale,
+            insets: ViewportInsets.clamped(
+                top: safeAreaInsets.top,
+                right: safeAreaInsets.right,
+                bottom: safeAreaInsets.bottom,
+                left: safeAreaInsets.left,
+                to: bounds.size
+            )
+        )
+    }
+
+    private func convergeViewport(_ sample: ViewportSample) -> Bool {
+        guard !didTearDown, sample.size.width > 0, sample.size.height > 0 else { return false }
+        let surface = metalLayer
+        contentScaleFactor = sample.scale
+        surface.contentsScale = sample.scale
+        surface.device = surface.device ?? MTLCreateSystemDefaultDevice()
+        surface.pixelFormat = .bgra8Unorm
+        surface.framebufferOnly = false
+        surface.presentsWithTransaction = false
+        surface.drawableSize = CGSize(
+            width: (sample.size.width * sample.scale).rounded(),
+            height: (sample.size.height * sample.scale).rounded()
+        )
+
+        return host.configure(
+            surface: surface,
+            logicalSize: sample.size,
+            scale: sample.scale,
+            safeArea: UIEdgeInsets(
+                top: sample.insets.top,
+                left: sample.insets.left,
+                bottom: sample.insets.bottom,
+                right: sample.insets.right
+            )
+        )
+    }
+
+    private func cancelTouchesForViewportTransition() {
+        longPressWork?.cancel()
+        suppressedTouches.suppress(touchIDs.keys)
+        if host.editorMode {
+            host.editorCancelGesture()
+            resetEditorTouchTracking()
+        } else {
+            for (key, id) in touchIDs {
+                guard let touch = activeTouch(for: key) else { continue }
+                dispatch(touch, id: id, phase: Int32(OpPointerPhase_Cancel.rawValue))
+            }
+            touchIDs.removeAll()
+            storedTouches.removeAll()
+        }
     }
 
     override func didMoveToWindow() {
@@ -214,13 +327,33 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         if window == nil, superview == nil {
             teardownEngine()
         } else {
+            applySystemChromeStyle()
             setNeedsLayout()
         }
+    }
+
+    /// UIKit names the appearance that produces light system glyphs `.dark`
+    /// and the appearance that produces dark glyphs `.light`.
+    func updateSystemChrome(prefersLightIcons: Bool) {
+        precondition(Thread.isMainThread)
+        let next: UIUserInterfaceStyle = prefersLightIcons ? .dark : .light
+        guard next != systemChromeStyle else { return }
+        systemChromeStyle = next
+        applySystemChromeStyle()
+    }
+
+    private func applySystemChromeStyle() {
+        guard let window, let systemChromeStyle else { return }
+        guard window.overrideUserInterfaceStyle != systemChromeStyle else { return }
+        window.overrideUserInterfaceStyle = systemChromeStyle
+        window.rootViewController?.setNeedsStatusBarAppearanceUpdate()
     }
 
     func teardownEngine() {
         guard !didTearDown else { return }
         didTearDown = true
+        viewportDisplayLink?.invalidate()
+        viewportDisplayLink = nil
         host.teardown()
         keyboardObservers.forEach(NotificationCenter.default.removeObserver)
         keyboardObservers.removeAll()
@@ -336,8 +469,13 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesBegan(touches, with: event)
+        if geometryGate.isPending || !suppressedTouches.isEmpty {
+            suppressedTouches.suppress(touches.map(ObjectIdentifier.init))
+            return
+        }
         for touch in touches {
             let key = ObjectIdentifier(touch)
+            guard !suppressedTouches.contains(key) else { continue }
             let id = allocateTouchID()
             storeTouch(touch, key: key)
             touchIDs[key] = id
@@ -351,8 +489,13 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesMoved(touches, with: event)
+        if geometryGate.isPending {
+            suppressedTouches.suppress(touches.map(ObjectIdentifier.init))
+            return
+        }
         for touch in touches {
-            guard let id = touchIDs[ObjectIdentifier(touch)] else { continue }
+            let key = ObjectIdentifier(touch)
+            guard !suppressedTouches.contains(key), let id = touchIDs[key] else { continue }
             if host.editorMode {
                 editorTouchMoved(touch, key: ObjectIdentifier(touch))
             } else {
@@ -363,9 +506,21 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesEnded(touches, with: event)
+        let keys = touches.map(ObjectIdentifier.init)
+        if geometryGate.isPending || keys.contains(where: suppressedTouches.contains) {
+            suppressedTouches.suppress(keys)
+            suppressedTouches.finish(keys)
+            return
+        }
         if host.editorMode {
             for touch in touches {
-                editorTouchEnded(touch, key: ObjectIdentifier(touch))
+                let key = ObjectIdentifier(touch)
+                editorTouchEnded(touch, key: key)
+                // editorTouchEnded may suppress a surviving finger while
+                // ending a two-finger transform. If UIKit delivers both Ends
+                // in this same batch, clear the key after its own terminal
+                // event so no completed touch can poison the next clean Down.
+                suppressedTouches.finish([key])
             }
         } else {
             finish(touches, phase: Int32(OpPointerPhase_Up.rawValue))
@@ -374,11 +529,18 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesCancelled(touches, with: event)
+        let keys = touches.map(ObjectIdentifier.init)
+        if geometryGate.isPending || keys.contains(where: suppressedTouches.contains) {
+            suppressedTouches.finish(keys)
+            return
+        }
         longPressWork?.cancel()
         if host.editorMode {
-            for touch in touches {
-                editorTouchEnded(touch, key: ObjectIdentifier(touch))
-            }
+            // UIKit cancellation is not a release: committing the host's
+            // release ladder here can apply a drag/drop or a deferred tap
+            // that the system explicitly interrupted.
+            host.editorCancelGesture()
+            resetEditorTouchTracking()
         } else {
             finish(touches, phase: Int32(OpPointerPhase_Cancel.rawValue))
         }
@@ -421,6 +583,10 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
             // Second finger: pan + pinch take over. Track BOTH touches
             // (the primary was registered earlier, the new one now).
             longPressWork?.cancel()
+            // The first finger has already entered the ordinary editor press
+            // ladder. Cancel that capture before multi-touch starts so a
+            // marquee/node drag cannot survive a two-finger gesture.
+            host.editorCancelGesture()
             twoFingerActive = true
             pinchTouches.removeAll()
             for (candidateKey, _) in touchIDs {
@@ -429,6 +595,9 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
                 }
             }
             updatePinchState()
+            // Ownership is captured at second-finger Down, before any Move,
+            // and remains stable if the midpoint later crosses a safe band.
+            host.editorBeginTransform(x: lastMidpoint.x, y: lastMidpoint.y)
         }
     }
 
@@ -457,8 +626,10 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         host.editorMove(x: point.x, y: point.y)
         // Movement beyond the slop cancels the long-press candidate.
         if let work = longPressWork, !longPressFired {
-            let slop: CGFloat = 12
-            if abs(point.x - downPoint.x) > slop || abs(point.y - downPoint.y) > slop {
+            let slop = Self.editorLongPressSlop
+            let deltaX = point.x - downPoint.x
+            let deltaY = point.y - downPoint.y
+            if deltaX * deltaX + deltaY * deltaY > slop * slop {
                 work.cancel()
                 longPressWork = nil
             }
@@ -472,17 +643,14 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         storedTouches.removeValue(forKey: key)
         pinchTouches.removeValue(forKey: key)
         if twoFingerActive {
-            // One finger lifted: re-arm single-finger tracking on the
-            // remaining touch (if any).
-            if let remainingKey = touchIDs.keys.first {
-                primaryTouchKey = remainingKey
-                twoFingerActive = false
-                longPressWork?.cancel()
-                lastKnownPoint = touch.location(in: self)
-            } else {
-                twoFingerActive = false
-                primaryTouchKey = nil
-            }
+            // Ends the explicit direct-transform ownership captured above.
+            host.editorCancelGesture()
+            // The surviving finger belongs to the same physical two-finger
+            // sequence. Suppress it through its terminal event so its final Up
+            // cannot re-enter the single-finger release ladder. A later clean
+            // Down starts the next editor gesture.
+            suppressedTouches.suppress(touchIDs.keys)
+            resetEditorTouchTracking()
             return
         }
         guard key == primaryTouchKey else { return }
@@ -494,6 +662,21 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         primaryTouchKey = nil
         longPressFired = false
         host.requestImmediateFrame()
+    }
+
+    private func resetEditorTouchTracking() {
+        longPressWork?.cancel()
+        longPressWork = nil
+        primaryTouchKey = nil
+        longPressFired = false
+        twoFingerActive = false
+        touchIDs.removeAll()
+        storedTouches.removeAll()
+        pinchTouches.removeAll()
+        downPoint = .zero
+        lastKnownPoint = .zero
+        lastMidpoint = .zero
+        lastPinchDistance = 0
     }
 
     private func armLongPress(at point: CGPoint) {
@@ -539,21 +722,33 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     }
 
     private func keyboardFrameDidChange(_ notification: Notification) {
-        guard
-            let screenFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-            let window
-        else {
-            host.updateKeyboardHeight(0)
-            return
+        // The notification only schedules convergence. Its frame is in screen
+        // coordinates and is easy to mis-convert for Stage Manager windows;
+        // UIKeyboardLayoutGuide publishes the same transition directly in this
+        // view's coordinate space. Defer one run-loop turn so UIKit can install
+        // the guide's target geometry for the keyboard animation.
+        _ = notification
+        scheduleKeyboardOcclusionUpdate()
+    }
+
+    private func scheduleKeyboardOcclusionUpdate() {
+        guard !didTearDown else { return }
+        setNeedsLayout()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.didTearDown else { return }
+            self.layoutIfNeeded()
+            self.updateKeyboardOcclusionFromLayoutGuide()
         }
-        let frameInView = convert(window.convert(screenFrame, from: nil), from: window)
-        let intersection = bounds.intersection(frameInView)
-        let reachesBottom = !intersection.isNull && intersection.maxY >= bounds.maxY - 1
-        let spansViewport = !intersection.isNull && intersection.width >= bounds.width * 0.9
-        // The engine ABI currently models keyboard occlusion as a full-width
-        // bottom inset. Floating/split iPad keyboards and the compact input
-        // assistant cover only part of the canvas, so treating their height as
-        // global would shift the entire Rust UI and chat composer upward.
-        host.updateKeyboardHeight(reachesBottom && spansViewport ? intersection.height : 0)
+    }
+
+    private func updateKeyboardOcclusionFromLayoutGuide() {
+        guard !didTearDown else { return }
+        let height = KeyboardOcclusion.bottomHeight(
+            bounds: bounds,
+            guideFrame: keyboardLayoutGuide.layoutFrame,
+            safeAreaBottom: safeAreaInsets.bottom,
+            firstResponder: imeTextView.isFirstResponder
+        )
+        host.updateKeyboardHeight(height)
     }
 }

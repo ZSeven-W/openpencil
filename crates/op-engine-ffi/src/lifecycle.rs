@@ -5,6 +5,7 @@
 use crate::desc::{Callbacks, CreateOptions};
 use crate::error::{FfiError, FfiResult};
 use crate::input::GestureTracker;
+use crate::pointer_gate::SafeAreaPointerGate;
 use crate::render::{fit_viewport, paint_frame};
 use crate::viewport::OpInsets;
 use crate::OpStatus;
@@ -45,6 +46,7 @@ pub(crate) struct Session {
     pub zoom: f32,
     pub selected: Option<String>,
     pub gesture: GestureTracker,
+    pub(crate) pointer_gate: SafeAreaPointerGate,
     pub callbacks: Callbacks,
     pub suspended: bool,
     /// False until the user pans/zooms — resize then re-fits the page.
@@ -123,6 +125,7 @@ impl Session {
             zoom: 1.0,
             selected: None,
             gesture: GestureTracker::default(),
+            pointer_gate: SafeAreaPointerGate::default(),
             callbacks: options.callbacks,
             suspended: false,
             user_interacted: false,
@@ -284,6 +287,7 @@ impl Session {
         self.surface = SurfaceSlot::None;
         self.suspended = true;
         self.gesture.reset();
+        self.pointer_gate.reset();
     }
 
     /// Resume with an optional fresh surface handle.
@@ -298,6 +302,20 @@ impl Session {
     }
 
     pub(crate) fn resize(&mut self, width: f32, height: f32, dpr: f32) -> FfiResult<()> {
+        self.resize_with_safe_area(width, height, dpr, self.insets)
+    }
+
+    /// Atomically update drawable geometry and safe-area insets before any
+    /// responsive transition runs. Platform rotations can deliver both values
+    /// in one layout callback; observing their intermediate tuple may cross a
+    /// size-class boundary and destructively dismiss an otherwise-valid sheet.
+    pub(crate) fn resize_with_safe_area(
+        &mut self,
+        width: f32,
+        height: f32,
+        dpr: f32,
+        insets: OpInsets,
+    ) -> FfiResult<()> {
         if !(width.is_finite() && width > 0.0 && height.is_finite() && height > 0.0) {
             return Err(FfiError::invalid(
                 "viewport size must be finite and positive",
@@ -306,34 +324,82 @@ impl Session {
         if !(dpr.is_finite() && dpr > 0.0) {
             return Err(FfiError::invalid("dpr must be finite and positive"));
         }
+        if !insets.is_valid() {
+            return Err(FfiError::invalid(
+                "safe-area insets must be finite and non-negative",
+            ));
+        }
+        if self.logical == (width, height) && self.dpr == dpr && self.insets == insets {
+            return Ok(());
+        }
         self.logical = (width, height);
         self.dpr = dpr;
+        self.insets = insets;
         self.backend.set_dpi(dpr);
         // The host derives its canvas region from the responsive layout,
         // so update the size class before fitting the editor viewport.
         self.recompute_responsive_layout();
+        self.sync_editor_keyboard_occlusion();
         if !self.user_interacted {
             self.fit_content_to_viewports();
         }
         Ok(())
     }
 
-    /// The usable editor viewport (logical points): the logical size
-    /// minus safe-area insets and keyboard occlusion. Paint and hit-test
-    /// both derive from this so sheets and the dock never sit under the
-    /// status bar / IME.
-    #[cfg(feature = "editor")]
-    pub(crate) fn editor_viewport(&self) -> (f32, f32) {
+    /// The stable safe-area-local viewport (logical points). Both the bare
+    /// viewer and the full editor lay out and fit content against this rect;
+    /// the platform-owned bands remain part of the drawable backdrop only.
+    pub(crate) fn safe_area_viewport(&self) -> (f32, f32) {
         let w = (self.logical.0 - self.insets.left - self.insets.right).max(1.0);
-        let h = (self.logical.1 - self.insets.top - self.insets.bottom.max(self.keyboard)).max(1.0);
+        let h = (self.logical.1 - self.insets.top - self.insets.bottom).max(1.0);
         (w, h)
     }
 
-    /// Map a shell touch point (full-viewport logical, top-left origin)
-    /// into the usable editor rect.
+    /// The editor name remains as a narrow semantic alias at host call sites.
+    #[cfg(feature = "editor")]
+    pub(crate) fn editor_viewport(&self) -> (f32, f32) {
+        self.safe_area_viewport()
+    }
+
+    /// Keyboard height inside the safe-area-local editor viewport. Platform
+    /// keyboard insets already include the bottom safe area, so remove that
+    /// overlap exactly once before exposing the occlusion to local surfaces.
+    #[cfg(feature = "editor")]
+    pub(crate) fn editor_keyboard_occlusion(&self) -> f32 {
+        let (_, viewport_h) = self.editor_viewport();
+        let safe_bottom = if self.insets.bottom.is_finite() {
+            self.insets.bottom.max(0.0)
+        } else {
+            0.0
+        };
+        let keyboard = if self.keyboard.is_finite() {
+            self.keyboard.max(0.0)
+        } else {
+            0.0
+        };
+        (keyboard - safe_bottom).clamp(0.0, viewport_h)
+    }
+
+    #[cfg(feature = "editor")]
+    pub(crate) fn sync_editor_keyboard_occlusion(&mut self) {
+        let occlusion = self.editor_keyboard_occlusion();
+        if let Some(host) = self.editor.as_mut() {
+            host.set_keyboard_occlusion(occlusion);
+        }
+    }
+
+    #[cfg(not(feature = "editor"))]
+    pub(crate) fn sync_editor_keyboard_occlusion(&mut self) {}
+
+    /// Map a shell point (full-drawable logical, top-left origin) into the
+    /// safe-area-local viewport shared by viewer and editor input.
+    pub(crate) fn safe_area_point(&self, x: f32, y: f32) -> (f32, f32) {
+        (x - self.insets.left, y - self.insets.top)
+    }
+
     #[cfg(feature = "editor")]
     pub(crate) fn editor_point(&self, x: f32, y: f32) -> (f32, f32) {
-        (x - self.insets.left, y - self.insets.top)
+        self.safe_area_point(x, y)
     }
 
     /// Fit both rendering modes after document load or an automatic
@@ -363,14 +429,14 @@ impl Session {
         if let Some(host) = self.editor.as_mut() {
             let usable_w = (self.logical.0 - self.insets.left - self.insets.right).max(1.0);
             let usable_h = (self.logical.1 - self.insets.top - self.insets.bottom).max(1.0);
-            let ui = &mut host.editor_state_mut().editor_ui;
             let next = op_editor_core::size_class::size_class(usable_w, usable_h);
-            let previous = ui.size_class;
+            let previous = host.editor_state().editor_ui.size_class;
             if previous == next {
                 return;
             }
+            host.reset_mobile_surfaces_for_size_class_change(next);
+            let ui = &mut host.editor_state_mut().editor_ui;
             ui.size_class = next;
-            ui.mobile_sheet = None;
             if next.is_expanded() {
                 ui.sidebar_open = true;
             } else if previous.is_expanded() {
@@ -635,79 +701,13 @@ pub(crate) unsafe fn destroy_engine(pointer: *mut OpEngine) -> OpStatus {
 }
 
 #[cfg(all(test, feature = "editor"))]
-mod editor_fit_tests {
-    use super::*;
-    use crate::desc::{Callbacks, CreateOptions};
+#[path = "lifecycle_editor_fit_tests.rs"]
+mod editor_fit_tests;
 
-    const SAMPLE_DOC: &str =
-        include_str!("../../op-editor-core/assets/scene_templates/daily-sign-card.op");
+#[cfg(all(test, feature = "editor"))]
+#[path = "lifecycle_mobile_focus_tests.rs"]
+mod lifecycle_mobile_focus_tests;
 
-    fn editor_session(width: f32, height: f32) -> Session {
-        Session::new(CreateOptions {
-            document: SAMPLE_DOC.to_owned(),
-            width,
-            height,
-            dpr: 1.0,
-            callbacks: Callbacks::default(),
-            asset_base: None,
-            editor_mode: true,
-        })
-        .expect("editor session")
-    }
-
-    fn assert_host_is_fitted(session: &Session) {
-        let (viewport_w, viewport_h) = session.editor_viewport();
-        let host = session.editor().expect("editor host");
-        let (_, _, canvas_w, canvas_h) = op_editor_ui::widgets::host_canvas_geometry::canvas_region(
-            host.editor_state(),
-            viewport_w,
-            viewport_h,
-        );
-        let view = host.editor_state().viewport;
-        let expected_zoom = ((canvas_w - 128.0).max(1.0) / 1080.0)
-            .min((canvas_h - 128.0).max(1.0) / 1440.0)
-            .clamp(0.1, 1.0);
-        assert!((view.zoom - expected_zoom).abs() < 0.001);
-        assert!((view.pan_x + 540.0 * view.zoom - canvas_w / 2.0).abs() < 0.01);
-        assert!((view.pan_y + 720.0 * view.zoom - canvas_h / 2.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn editor_host_fits_on_create_and_uninteracted_resize() {
-        let mut session = editor_session(800.0, 600.0);
-        assert_host_is_fitted(&session);
-        let initial_zoom = session.editor().unwrap().editor_state().viewport.zoom;
-
-        session.resize(1_200.0, 900.0, 1.0).unwrap();
-        assert_host_is_fitted(&session);
-        assert!(session.editor().unwrap().editor_state().viewport.zoom > initial_zoom);
-    }
-
-    #[test]
-    fn safe_area_refits_but_user_camera_survives_resize() {
-        let mut engine = OpEngine::new(editor_session(800.0, 600.0));
-        let engine_ptr = &mut engine as *mut OpEngine;
-
-        assert_eq!(
-            unsafe { crate::op_set_safe_area(engine_ptr, 24.0, 10.0, 220.0, 10.0) },
-            OpStatus::Ok
-        );
-        let session = unsafe { &*engine.session.get() };
-        assert_host_is_fitted(session);
-
-        assert_eq!(
-            unsafe { crate::op_editor_pan(engine_ptr, 400.0, 180.0, 32.0, 12.0) },
-            OpStatus::Ok
-        );
-        let session = unsafe { &*engine.session.get() };
-        assert!(session.user_interacted);
-        let panned = session.editor().unwrap().editor_state().viewport;
-
-        assert_eq!(
-            unsafe { crate::op_resize(engine_ptr, 1_200.0, 900.0, 1.0) },
-            OpStatus::Ok
-        );
-        let session = unsafe { &*engine.session.get() };
-        assert_eq!(session.editor().unwrap().editor_state().viewport, panned);
-    }
-}
+#[cfg(all(test, feature = "editor"))]
+#[path = "lifecycle_canvas_touch_tests.rs"]
+mod lifecycle_canvas_touch_tests;

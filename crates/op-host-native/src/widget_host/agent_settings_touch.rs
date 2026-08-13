@@ -6,7 +6,6 @@
 //! exactly once. Header controls keep their ordinary immediate press path.
 
 use super::WidgetHostNative;
-use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 use op_editor_ui::Point2D;
 
 const TOUCH_SCROLL_SLOP: f32 = 8.0;
@@ -46,8 +45,7 @@ impl WidgetHostNative {
         }
 
         let point = Point2D::new(x, y);
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-        let panel_rect = panel.rect(viewport_w, viewport_h);
+        let (panel, panel_rect) = self.agent_settings_geometry(viewport_w, viewport_h);
         let target = if panel
             .font_picker_layout(panel_rect)
             .is_some_and(|layout| layout.popup.contains(point))

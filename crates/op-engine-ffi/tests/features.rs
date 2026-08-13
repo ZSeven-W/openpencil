@@ -5,9 +5,9 @@
 use op_engine_ffi::{
     op_create, op_destroy, op_frame_cpu, op_get_page_count, op_get_pixel_size,
     op_ime_cancel_composition, op_ime_commit_composition, op_ime_set_composing_text, op_last_error,
-    op_pointer, op_register_font, op_remote_image_result, op_set_active_page, op_text_backspace,
-    op_text_begin, op_text_caret_rect, op_text_end, op_text_get_state, op_text_insert, OpCallbacks,
-    OpCreateDesc, OpEngine, OpStatus, OpTextState,
+    op_pointer, op_register_font, op_remote_image_result, op_set_active_page, op_set_safe_area,
+    op_text_backspace, op_text_begin, op_text_caret_rect, op_text_end, op_text_get_state,
+    op_text_insert, OpCallbacks, OpCreateDesc, OpEngine, OpStatus, OpTextState,
 };
 use std::ffi::c_void;
 use std::ptr;
@@ -330,6 +330,210 @@ fn tapping_a_text_node_enters_edit_mode_and_fires_focus() {
     h.frame();
     unsafe { op_text_end(h.engine) };
     assert!(!h.last_focused());
+}
+
+#[test]
+fn viewer_single_pointer_cancel_never_becomes_a_tap() {
+    let h = Harness::create(TEXT_DOC);
+    let before = h.frame();
+
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 1, 0, TEXT_TAP.0, TEXT_TAP.1, 1_000) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 1, 3, TEXT_TAP.0, TEXT_TAP.1, 1_001) },
+        OpStatus::Ok
+    );
+    assert!(!h.last_focused(), "Cancel must not enter text edit mode");
+    assert_eq!(
+        h.frame(),
+        before,
+        "Cancel must not mutate the camera or selection"
+    );
+
+    // UIKit/Android should not send Up after Cancel, but a stale delivery must
+    // remain harmless rather than replaying the canceled touch as a tap.
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 1, 2, TEXT_TAP.0, TEXT_TAP.1, 1_002) },
+        OpStatus::Ok
+    );
+    assert!(!h.last_focused(), "stale Up after Cancel must not tap");
+
+    tap(&h, 2, TEXT_TAP.0, TEXT_TAP.1);
+    assert!(h.last_focused(), "a fresh pointer stream must still work");
+}
+
+#[test]
+fn viewer_multi_pointer_cancel_resets_every_tracked_touch() {
+    let h = Harness::create(TEXT_DOC);
+    let insets = (47.0, 11.0, 31.0, 23.0);
+    assert_eq!(
+        unsafe { op_set_safe_area(h.engine, insets.0, insets.1, insets.2, insets.3) },
+        OpStatus::Ok
+    );
+    let before = h.frame();
+    let local_zoom = (366.0_f32 / 400.0).min(522.0 / 300.0) * 0.92;
+    let text_x = insets.3 + (366.0 - 400.0 * local_zoom) * 0.5 + 30.0 * local_zoom;
+    let text_y = insets.0 + (522.0 - 300.0 * local_zoom) * 0.5 + 32.0 * local_zoom;
+
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 1, 0, text_x, text_y, 1_000) },
+        OpStatus::Ok
+    );
+    // Pointer 2 starts in the left safe band and is suppressed, but Android
+    // may report it as ACTION_CANCEL's action index. Cancel must still reset
+    // accepted pointer 1 inside the viewer gesture tracker.
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 2, 0, 10.0, 300.0, 1_001) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 2, 3, 10.0, 300.0, 1_002) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        h.frame(),
+        before,
+        "multi-touch Cancel must not move the camera"
+    );
+
+    // Cancel clears both ids, so neither stale Up may complete a tap.
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 1, 2, text_x, text_y, 1_003) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 2, 2, 300.0, 400.0, 1_004) },
+        OpStatus::Ok
+    );
+    assert!(!h.last_focused(), "stale multi-touch Up must not tap");
+
+    tap(&h, 3, text_x, text_y);
+    assert!(
+        h.last_focused(),
+        "Cancel must fully re-arm the next gesture"
+    );
+}
+
+#[test]
+fn viewer_safe_area_refits_paint_and_pointer_to_one_local_viewport() {
+    let h = Harness::create(TEXT_DOC);
+    let insets = (47.0, 11.0, 31.0, 23.0);
+    assert_eq!(
+        unsafe { op_set_safe_area(h.engine, insets.0, insets.1, insets.2, insets.3) },
+        OpStatus::Ok
+    );
+
+    // TEXT_DOC is 400×300. Fitting the 366×522 safe-local viewport yields
+    // 0.8418 zoom and centers it at local (14.6, 134.7). Tap inside t1 after
+    // adding the full-surface safe-area origin.
+    let local_zoom = (366.0_f32 / 400.0).min(522.0 / 300.0) * 0.92;
+    let local_origin_x = (366.0 - 400.0 * local_zoom) * 0.5;
+    let local_origin_y = (522.0 - 300.0 * local_zoom) * 0.5;
+    let surface_x = insets.3 + local_origin_x + 30.0 * local_zoom;
+    let surface_y = insets.0 + local_origin_y + 32.0 * local_zoom;
+    tap(&h, 1, surface_x, surface_y);
+    assert!(
+        h.last_focused(),
+        "viewer input must subtract left/top insets before hit-testing the refitted scene"
+    );
+
+    let mut caret = [0.0_f32; 4];
+    assert_eq!(
+        unsafe { op_text_caret_rect(h.engine, caret.as_mut_ptr()) },
+        OpStatus::Ok
+    );
+    assert!(
+        caret[0] >= insets.3 && caret[1] >= insets.0,
+        "public caret geometry must add the safe-area origin back: {caret:?}"
+    );
+
+    assert_eq!(unsafe { op_text_end(h.engine) }, OpStatus::Ok);
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 2, 0, 200.0, 350.0, 2_000) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 2, 1, 200.0, 100.0, 2_001) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 2, 2, 200.0, 100.0, 2_002) },
+        OpStatus::Ok
+    );
+    let frame = h.frame();
+    assert_eq!(
+        pixel_at(&frame, 200, 20, 400),
+        [245, 245, 247, 255],
+        "panned viewer content must stay clipped out of the top safe band"
+    );
+}
+
+#[test]
+fn viewer_ignores_streams_starting_in_all_safe_area_bands() {
+    let h = Harness::create(TEXT_DOC);
+    assert_eq!(
+        unsafe { op_set_safe_area(h.engine, 47.0, 11.0, 31.0, 23.0) },
+        OpStatus::Ok
+    );
+    let before = h.frame();
+    let focus_events = h.focus_events();
+    let band_starts = [(11.0, 300.0), (200.0, 23.0), (395.0, 300.0), (200.0, 584.0)];
+
+    for (index, (band_x, band_y)) in band_starts.into_iter().enumerate() {
+        let id = index as u32 + 10;
+        assert_eq!(
+            unsafe { op_pointer(h.engine, id, 0, band_x, band_y, id as u64 * 10) },
+            OpStatus::Ok
+        );
+        assert_eq!(
+            unsafe { op_pointer(h.engine, id, 1, 200.0, 300.0, id as u64 * 10 + 1) },
+            OpStatus::Ok
+        );
+        assert_eq!(
+            unsafe { op_pointer(h.engine, id, 2, 200.0, 300.0, id as u64 * 10 + 2) },
+            OpStatus::Ok
+        );
+        assert_eq!(
+            h.frame(),
+            before,
+            "a pointer starting in safe-area band {index} must not pan or select"
+        );
+        assert_eq!(
+            h.focus_events(),
+            focus_events,
+            "a pointer starting in safe-area band {index} must not change focus"
+        );
+    }
+}
+
+#[test]
+fn viewer_keeps_capture_after_moving_into_safe_area_band() {
+    let h = Harness::create(TEXT_DOC);
+    assert_eq!(
+        unsafe { op_set_safe_area(h.engine, 47.0, 11.0, 31.0, 23.0) },
+        OpStatus::Ok
+    );
+    let before = h.frame();
+
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 50, 0, 200.0, 300.0, 1_000) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 50, 1, 0.0, 300.0, 1_001) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_pointer(h.engine, 50, 2, 0.0, 300.0, 1_002) },
+        OpStatus::Ok
+    );
+    assert_ne!(
+        h.frame(),
+        before,
+        "a content-owned drag must keep pointer capture outside the safe-local viewport"
+    );
 }
 
 #[test]

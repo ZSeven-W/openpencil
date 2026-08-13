@@ -107,10 +107,8 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
         self.refresh_layout_scene();
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-        let panel_rect = panel.rect(viewport_width, viewport_height);
+        let (panel, panel_rect) = self.agent_settings_geometry(viewport_width, viewport_height);
         let point = Point2D::new(x, y);
         let Some(max) = panel.builtin_preset_scroll_max_at(panel_rect, point) else {
             return false;
@@ -134,22 +132,21 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
         if !self.editor_state.editor_ui.agent_settings_open {
             return false;
         }
         self.refresh_layout_scene();
         let point = Point2D::new(x, y);
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-        let panel_rect = panel.rect(viewport_width, viewport_height);
+        let (panel, panel_rect) = self.agent_settings_geometry(viewport_width, viewport_height);
         if !panel_rect.contains(point) {
             return false;
         }
+        drop(panel);
         if self.try_scroll_agent_preset_menu(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
 
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+        let (panel, panel_rect) = self.agent_settings_geometry(viewport_width, viewport_height);
         if !panel.resolved_content_viewport(panel_rect).contains(point) {
             return true;
         }

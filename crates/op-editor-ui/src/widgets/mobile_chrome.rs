@@ -246,6 +246,7 @@ pub enum MobileDockHit {
 pub struct MobileDock {
     pub active: Tool,
     pub shape_tool: Tool,
+    pub shape_picker_open: bool,
     pub theme: Theme,
     pub compact: bool,
 }
@@ -255,6 +256,7 @@ impl MobileDock {
         Self {
             active: state.tool,
             shape_tool: state.editor_ui.shape_tool,
+            shape_picker_open: state.editor_ui.shape_picker.open,
             theme: super::editor_state_ext::theme_for(&state.editor_ui),
             compact: state.editor_ui.compact_layout(),
         }
@@ -321,18 +323,48 @@ impl MobileDock {
         for index in 0..slot_count {
             let slot = Self::slot_rect(rect, index, slot_count);
             let active = self.slot_active(index);
+            let open = index == 1 && self.shape_picker_open;
+            let emphasized = active || open;
             let icon = self.slot_icon(index);
             let active_rect = centered_icon_rect(slot, 40.0);
-            if active {
+            if emphasized {
                 cx.backend
                     .fill_round_rect(active_rect, 12.0, self.theme.row_selected_primary);
             }
-            let color = if active {
+            let color = if emphasized {
                 self.theme.primary
             } else {
                 self.theme.foreground.with_alpha(0.82)
             };
-            paint_touch_icon(cx, slot, icon, 22.0, color);
+            if index == 1 {
+                // Keep the shape glyph and its dropdown cue together inside
+                // the 40pt feedback wash. The whole slot remains one touch
+                // target; the chevron is a visual affordance, not a second
+                // control.
+                let (icon_rect, chevron_rect) = shape_slot_glyph_rects(slot);
+                draw_icon(
+                    cx.backend,
+                    icon,
+                    icon_rect.origin,
+                    icon_rect.size.x,
+                    color,
+                    1.75,
+                );
+                draw_icon(
+                    cx.backend,
+                    if open {
+                        Icon::ChevronUp
+                    } else {
+                        Icon::ChevronDown
+                    },
+                    chevron_rect.origin,
+                    chevron_rect.size.x,
+                    color,
+                    1.6,
+                );
+            } else {
+                paint_touch_icon(cx, slot, icon, 22.0, color);
+            }
         }
     }
 
@@ -352,6 +384,27 @@ impl MobileDock {
             _ => Some(MobileDockHit::More),
         }
     }
+}
+
+/// Lay out the shape glyph and its dropdown cue as one centered compound
+/// mark. Both remain inside the dock's 40pt active/pressed feedback wash.
+fn shape_slot_glyph_rects(slot: Rect) -> (Rect, Rect) {
+    const ICON_SIZE: f32 = 20.0;
+    const CHEVRON_SIZE: f32 = 9.0;
+    const GAP: f32 = 3.0;
+    let group_width = ICON_SIZE + GAP + CHEVRON_SIZE;
+    let group_x = slot.origin.x + (slot.size.x - group_width) / 2.0;
+    let center_y = slot.origin.y + slot.size.y / 2.0;
+    (
+        Rect {
+            origin: Point2D::new(group_x, center_y - ICON_SIZE / 2.0),
+            size: Point2D::new(ICON_SIZE, ICON_SIZE),
+        },
+        Rect {
+            origin: Point2D::new(group_x + ICON_SIZE + GAP, center_y - CHEVRON_SIZE / 2.0),
+            size: Point2D::new(CHEVRON_SIZE, CHEVRON_SIZE),
+        },
+    )
 }
 
 // ---------------------------------------------------------------------

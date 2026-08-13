@@ -171,6 +171,10 @@ OpStatus op_frame_cpu(OpEngine *engine, uint64_t now_ms, uint8_t *buffer, size_t
 /* Change the logical viewport and device-pixel ratio. */
 OpStatus op_resize(OpEngine *engine, float width, float height, float dpr);
 
+/* Atomically update logical viewport, DPR, and safe-area insets. Mobile
+ * rotation/configuration paths should prefer this over separate calls. */
+OpStatus op_resize_with_safe_area(OpEngine *engine, float width, float height, float dpr, float top, float right, float bottom, float left);
+
 /* Return the current physical pixel dimensions. */
 OpStatus op_get_pixel_size(OpEngine *engine, uint32_t *width, uint32_t *height);
 
@@ -184,6 +188,9 @@ OpStatus op_set_safe_area(OpEngine *engine, float top, float right, float bottom
 
 /* Update the logical keyboard occlusion height. */
 OpStatus op_set_keyboard(OpEngine *engine, float height);
+
+/* Whether status/navigation bars should use light-colored icons. */
+OpStatus op_prefers_light_system_icons(OpEngine *engine, bool *out);
 
 /* Enter inline text-edit mode on the node with id `node_id` (the shell
  * then shows the system keyboard via input_focus_changed). */
@@ -251,10 +258,13 @@ OpStatus op_editor_cancel_gesture(OpEngine *engine);
 /* Long-press -> right-click (context menus). */
 OpStatus op_editor_right_press(OpEngine *engine, float x, float y);
 
-/* Two-finger pan (midpoint deltas, logical px). */
+/* Begin a two-finger transform at the second-finger Down midpoint. */
+OpStatus op_editor_begin_transform(OpEngine *engine, float x, float y);
+
+/* Two-finger pan after op_editor_begin_transform (midpoint deltas). */
 OpStatus op_editor_pan(OpEngine *engine, float x, float y, float dx, float dy);
 
-/* Pinch zoom (trackpad convention: positive delta_y = zoom in). */
+/* Pinch after op_editor_begin_transform (positive delta_y = zoom in). */
 OpStatus op_editor_pinch(OpEngine *engine, float x, float y, float delta_y);
 
 /* Printable text from the system keyboard. */

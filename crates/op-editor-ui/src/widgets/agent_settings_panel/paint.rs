@@ -83,7 +83,7 @@ impl<'a> Widget for AgentSettingsPanel<'a> {
                 cx,
                 &self.theme,
                 rect,
-                hero_body_rect(layout.content),
+                hero_body_rect_for_ui(layout.content, self.ui.touch_chrome()),
                 self.ui,
                 scroll,
                 self.now_ms,
@@ -150,20 +150,30 @@ fn paint_panel(cx: &mut PaintCx<'_>, panel: Rect, args: PanelPaintArgs<'_>) {
                 theme,
                 settings,
                 ui,
-                hero_body_rect(content_rect),
+                hero_body_rect_for_ui(content_rect, ui.touch_chrome()),
                 now_ms,
             )
         }
         AgentSettingsTab::Fonts => {
             paint_secondary_hero(cx, theme, ui, content_rect, "settings.fonts");
-            agent_settings_fonts::paint_fonts_tab(cx, theme, ui, hero_body_rect(content_rect))
+            agent_settings_fonts::paint_fonts_tab(
+                cx,
+                theme,
+                ui,
+                hero_body_rect_for_ui(content_rect, ui.touch_chrome()),
+            )
         }
         AgentSettingsTab::System => {
             agent_settings_system::paint_system_tab(cx, theme, settings, ui, content_rect)
         }
         AgentSettingsTab::Account => {
             paint_secondary_hero(cx, theme, ui, content_rect, "settings.account");
-            agent_settings_account::paint_account_tab(cx, theme, ui, hero_body_rect(content_rect))
+            agent_settings_account::paint_account_tab(
+                cx,
+                theme,
+                ui,
+                hero_body_rect_for_ui(content_rect, ui.touch_chrome()),
+            )
         }
     }
     cx.backend.restore();
@@ -208,12 +218,13 @@ fn paint_secondary_hero(
             "settings.account.heroSubtitle",
         ),
     };
-    crate::widgets::agent_settings_rows::paint_tab_intro(
+    crate::widgets::agent_settings_rows::paint_tab_intro_for_ui(
         cx,
         theme,
         content,
         t_settings(ui, title),
         Some(t_settings(ui, subtitle)),
+        ui.touch_chrome(),
     );
 }
 

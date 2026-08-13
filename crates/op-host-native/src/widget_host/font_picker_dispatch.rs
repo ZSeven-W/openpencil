@@ -4,11 +4,152 @@
 //! (`op_editor_ui::widgets::property_panel_typography`).
 
 use super::WidgetHostNative;
-use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 use op_editor_ui::widgets::PropertyPanel;
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHostNative {
+    fn property_keyboard_owner_active(&self) -> bool {
+        let ui = &self.editor_state.editor_ui;
+        let property_surface_visible = self.editor_state.property_panel_visible()
+            && (ui.mobile_sheet == Some(op_editor_core::size_class::MobileSheetKind::Properties)
+                || (ui.expanded_touch_layout() && ui.mobile_sheet.is_none()));
+        if !property_surface_visible {
+            return false;
+        }
+        let image_input_active = if ui.image_panel.search_open || ui.image_panel.generate_open {
+            ui.image_panel
+                .active_input(ui.agent_settings.image_generation_configured())
+                .is_some()
+        } else {
+            false
+        };
+        self.editor_state.ui.property_focus.is_some()
+            || ui.effect_param_focus.is_some()
+            || (ui.font_picker.open
+                && ui.font_picker_purpose == Some(op_editor_core::FontPickerPurpose::PropertyText))
+            || image_input_active
+    }
+
+    /// Commit and release every input owned by the Property surface before
+    /// touch chrome hides or replaces that surface. Without this explicit
+    /// blur, the invisible property draft wins the keyboard router ahead of
+    /// the newly visible AI input.
+    pub(in crate::widget_host) fn release_property_keyboard_owner(&mut self) -> bool {
+        let had_focus = self.editor_state.ui.property_focus.is_some()
+            || self.editor_state.editor_ui.effect_param_focus.is_some();
+        self.commit_property_focus_if_any();
+
+        let property_font_open = self.editor_state.editor_ui.font_picker.open
+            && self.editor_state.editor_ui.font_picker_purpose
+                == Some(op_editor_core::FontPickerPurpose::PropertyText);
+        if property_font_open {
+            self.editor_state.editor_ui.close_font_picker();
+        }
+
+        let image_popover_open = self.editor_state.editor_ui.image_panel.search_open
+            || self.editor_state.editor_ui.image_panel.generate_open;
+        if image_popover_open {
+            self.clear_image_input_selection_drag();
+            self.editor_state.editor_ui.image_panel.close_popovers();
+        }
+
+        let changed = had_focus || property_font_open || image_popover_open;
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    /// Dismiss the currently open touch-editor surface and release any text
+    /// input that would otherwise remain hidden after a sheet switch or a
+    /// responsive size-class transition.
+    pub fn dismiss_mobile_surface(&mut self) -> bool {
+        let sheet = self.editor_state.editor_ui.mobile_sheet;
+        let property_will_hide = sheet
+            == Some(op_editor_core::size_class::MobileSheetKind::Properties)
+            || (self.editor_state.editor_ui.expanded_touch_layout() && sheet.is_none());
+        let mut changed = if property_will_hide {
+            self.release_property_keyboard_owner()
+        } else {
+            false
+        };
+        if sheet == Some(op_editor_core::size_class::MobileSheetKind::Ai) {
+            changed |= self.editor_state.editor_ui.close_chat_model_picker();
+            if self.editor_state.chat.focused || !self.editor_state.chat.collapsed {
+                self.editor_state.chat.blur_input(self.now_ms);
+                self.editor_state.chat.collapsed = true;
+                changed = true;
+            }
+        }
+        if sheet.is_some() {
+            self.editor_state.editor_ui.mobile_sheet = None;
+            changed = true;
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    /// A size-class boundary can hide every touch surface at once, even when
+    /// the current sheet flag names a different overlay. Release all touch
+    /// text owners before the caller installs the new responsive class.
+    pub fn reset_mobile_surfaces_for_size_class_change(
+        &mut self,
+        next: op_editor_core::size_class::EditorSizeClass,
+    ) -> bool {
+        let sheet = self.editor_state.editor_ui.mobile_sheet;
+        let property_remains_visible = next.is_expanded()
+            && matches!(
+                sheet,
+                None | Some(op_editor_core::size_class::MobileSheetKind::Properties)
+            );
+        let mut changed = if property_remains_visible {
+            false
+        } else {
+            self.release_property_keyboard_owner()
+        };
+        changed |= self.editor_state.editor_ui.close_chat_model_picker();
+        if sheet == Some(op_editor_core::size_class::MobileSheetKind::Ai)
+            && (self.editor_state.chat.focused || !self.editor_state.chat.collapsed)
+        {
+            self.editor_state.chat.blur_input(self.now_ms);
+            self.editor_state.chat.collapsed = true;
+            changed = true;
+        }
+        if self.editor_state.editor_ui.mobile_sheet.take().is_some() {
+            changed = true;
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    pub(in crate::widget_host) fn reveal_property_keyboard_owner(&mut self) -> bool {
+        if !self.editor_state.editor_ui.touch_chrome()
+            || !self.property_keyboard_owner_active()
+            || self.keyboard_occlusion <= 0.0
+            || self.last_viewport_w <= 0.0
+            || self.last_viewport_h <= 0.0
+        {
+            return false;
+        }
+        let property_rect = self.property_rect(self.last_viewport_w, self.last_viewport_h);
+        let Some(next) = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms)
+            .and_then(|panel| panel.keyboard_owner_scroll_offset(property_rect))
+        else {
+            return false;
+        };
+        let scroll = &mut self.editor_state.editor_ui.property_panel_scroll;
+        if (scroll.offset - next).abs() <= f32::EPSILON {
+            return false;
+        }
+        scroll.offset = next;
+        self.mark_dirty();
+        true
+    }
+
     pub(in crate::widget_host) fn try_scroll_settings_font_picker(
         &mut self,
         x: f32,
@@ -20,8 +161,7 @@ impl WidgetHostNative {
         if !self.editor_state.editor_ui.agent_settings_open {
             return false;
         }
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-        let panel_rect = panel.rect(viewport_width, viewport_height);
+        let (panel, panel_rect) = self.agent_settings_geometry(viewport_width, viewport_height);
         let Some(layout) = panel.font_picker_layout(panel_rect) else {
             return false;
         };
@@ -272,11 +412,35 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> Rect {
-        op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
+        let mut rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
             &self.editor_state,
             viewport_width,
             viewport_height,
-        )
+        );
+        let property_input_owns_keyboard =
+            self.editor_state.editor_ui.touch_chrome() && self.property_keyboard_owner_active();
+        if property_input_owns_keyboard && self.keyboard_occlusion > 0.0 {
+            let visible_bottom = self.keyboard_visible_bottom(viewport_height);
+            if self.editor_state.editor_ui.compact_layout() {
+                // A phone bottom sheet is itself a movable overlay. In
+                // landscape, retaining its old bottom-anchored top can leave
+                // only a few pixels (or none) above the IME. Re-anchor this
+                // focused surface to the keyboard while keeping the stable
+                // app bar and canvas geometry untouched.
+                let top = op_editor_ui::widgets::host_canvas_geometry::touch_app_bar_height(
+                    &self.editor_state,
+                );
+                let max_height = (visible_bottom - top).max(0.0);
+                let min_height = 280.0_f32.min(max_height);
+                let sheet_height = (viewport_height * 0.58).clamp(min_height, max_height);
+                rect.origin.y = visible_bottom - sheet_height;
+                rect.size.y = sheet_height;
+            } else {
+                let current_bottom = rect.origin.y + rect.size.y;
+                rect.size.y = (current_bottom.min(visible_bottom) - rect.origin.y).max(0.0);
+            }
+        }
+        rect
     }
 }
 

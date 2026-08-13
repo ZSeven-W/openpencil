@@ -27,14 +27,15 @@ fn editor_engine() -> OpEngine {
 }
 
 fn queue_template(engine: &mut OpEngine, id: &str) {
-    engine
-        .session_mut_for_test()
+    let session = engine.session_mut_for_test();
+    session
         .editor_mut()
         .expect("host")
         .editor_state_mut()
         .editor_ui
         .scene_template_center
         .request_open(id);
+    assert!(session.begin_editor_pointer_capture(400.0, 300.0));
 }
 
 #[test]

@@ -105,11 +105,11 @@ pub(crate) fn paint_into_canvas(session: &mut Session, canvas: &skia_safe::Canva
     // viewer mode paints the bare scene below.
     #[cfg(feature = "editor")]
     {
-        // The chrome lays out against the USABLE viewport: the safe-area
-        // insets translate the origin so the app bar sits below the
-        // status bar / notch, and the keyboard occlusion shrinks the
-        // height so sheets stop above the IME. Computed before the split
-        // borrow so the host/backend mutable borrows stay disjoint.
+        // The chrome lays out against the stable safe-area-local viewport.
+        // Keyboard occlusion is separate host state consumed only by focused
+        // input surfaces, so showing the IME never resizes the canvas or app
+        // chrome. Computed before the split borrow so the host/backend mutable
+        // borrows stay disjoint.
         let (usable_w, usable_h) = session.editor_viewport();
         let (insets_left, insets_top) = (session.insets.left, session.insets.top);
         // Split borrows: the editor host and the backend are disjoint
@@ -118,13 +118,20 @@ pub(crate) fn paint_into_canvas(session: &mut Session, canvas: &skia_safe::Canva
             editor, backend, ..
         } = session;
         if let Some(host) = editor.as_mut() {
+            let root_background =
+                op_editor_ui::widgets::editor_state_ext::theme_for(&host.editor_state().editor_ui)
+                    .background;
             // Clear the complete drawable before translating into the usable
-            // viewport. Keyboard and safe-area changes can shrink that
-            // viewport without resizing the GPU surface; leaving the excluded
-            // pixels untouched would retain chrome from the previous frame
-            // (most visibly a duplicate chat composer below the IME).
+            // viewport. Extending the root theme surface into the platform-
+            // owned bands keeps the status/cutout/gesture area visually
+            // continuous without moving controls into unsafe space.
             canvas.reset_matrix();
-            canvas.clear(skia_safe::Color::BLACK);
+            canvas.clear(skia_safe::Color4f::new(
+                root_background.r,
+                root_background.g,
+                root_background.b,
+                root_background.a,
+            ));
             // The desktop runner scales the canvas by the DPI factor
             // before painting the chrome; the player must do the same so
             // the logical-point layout maps onto the physical surface.
@@ -146,21 +153,36 @@ pub(crate) fn paint_into_canvas(session: &mut Session, canvas: &skia_safe::Canva
         }
     }
 
-    canvas.clear(skia_safe::Color::WHITE);
+    // Viewer mode keeps its neutral backdrop edge-to-edge, then translates
+    // only the interactive document viewport below.
+    canvas.clear(skia_safe::Color4f::new(
+        BACKDROP.r, BACKDROP.g, BACKDROP.b, BACKDROP.a,
+    ));
     canvas.reset_matrix();
     canvas.scale((session.dpr, session.dpr));
 
     let origin = session.viewport_origin;
     let zoom = session.zoom;
     let selected = session.selected.clone();
-    let logical = session.logical;
+    let logical = session.safe_area_viewport();
+    let (insets_left, insets_top) = (session.insets.left, session.insets.top);
     let cull = viewport_cull(origin, zoom, logical);
     // Computed before the field-wise borrow so the paint pass can hand the
     // painter the draft + caret while `scene`/`backend` are live.
     let edit_caret = crate::text::paint_edit_caret(session);
 
     let Session { scene, backend, .. } = session;
+    if insets_left > 0.0 || insets_top > 0.0 {
+        canvas.translate((insets_left, insets_top));
+    }
     let mut frame = NativeFrameBackend::new(backend, canvas);
+    // A panned/zoomed document must not paint back into the platform-owned
+    // bands. The full-surface clear above owns those pixels.
+    frame.save();
+    frame.clip_rect(Rect {
+        origin: Point2D::ZERO,
+        size: Point2D::new(logical.0, logical.1),
+    });
     // Backdrop first (painted before the page), then the page, then the
     // selection stroke on top.
     frame.fill_rect(
@@ -171,6 +193,7 @@ pub(crate) fn paint_into_canvas(session: &mut Session, canvas: &skia_safe::Canva
         BACKDROP,
     );
     let Some(page) = scene.active_page() else {
+        frame.restore();
         return;
     };
     {
@@ -188,6 +211,7 @@ pub(crate) fn paint_into_canvas(session: &mut Session, canvas: &skia_safe::Canva
             paint_selection_overlay(&mut frame, node, origin, zoom);
         }
     }
+    frame.restore();
 }
 
 /// Stroke the selected node's world-space rect.
@@ -260,7 +284,7 @@ fn union_rects(a: &Rect, b: &Rect) -> Rect {
 }
 
 #[cfg(all(test, feature = "editor"))]
-mod editor_clear_tests {
+mod editor_viewport_tests {
     use super::*;
     use crate::desc::{Callbacks, CreateOptions};
 
@@ -268,7 +292,7 @@ mod editor_clear_tests {
         include_str!("../../op-editor-core/assets/scene_templates/daily-sign-card.op");
 
     #[test]
-    fn keyboard_shrink_clears_a_dirty_drawable_outside_the_usable_viewport() {
+    fn keyboard_occlusion_does_not_resize_the_editor_frame() {
         let mut session = Session::new(CreateOptions {
             document: SAMPLE_DOC.to_owned(),
             width: 320.0,
@@ -279,19 +303,62 @@ mod editor_clear_tests {
             editor_mode: true,
         })
         .expect("editor session");
-        session.keyboard = 120.0;
 
         let mut surface = SkiaSurface::new_raster(320, 480);
-        surface.canvas().clear(skia_safe::Color::MAGENTA);
+        // Warm caches so the comparison isolates keyboard state rather than
+        // first-paint bookkeeping.
         paint_into_canvas(&mut session, surface.canvas());
+        paint_into_canvas(&mut session, surface.canvas());
+        let mut before = vec![0_u8; 320 * 480 * 4];
+        assert!(surface.read_rgba8(&mut before));
 
-        let mut rgba = vec![0_u8; 320 * 480 * 4];
-        assert!(surface.read_rgba8(&mut rgba));
-        let offset = (450 * 320 + 160) * 4;
+        session.keyboard = 120.0;
+        session.sync_editor_keyboard_occlusion();
+        paint_into_canvas(&mut session, surface.canvas());
+        let mut after = vec![0_u8; 320 * 480 * 4];
+        assert!(surface.read_rgba8(&mut after));
+
         assert_eq!(
-            &rgba[offset..offset + 4],
-            &[0, 0, 0, 255],
-            "the keyboard-excluded strip retained pixels from the previous frame"
+            after, before,
+            "an unfocused keyboard update must not translate or resize editor chrome"
+        );
+    }
+
+    #[test]
+    fn safe_area_bands_follow_the_active_light_theme() {
+        let mut session = Session::new(CreateOptions {
+            document: SAMPLE_DOC.to_owned(),
+            width: 320.0,
+            height: 480.0,
+            dpr: 1.0,
+            callbacks: Callbacks::default(),
+            asset_base: None,
+            editor_mode: true,
+        })
+        .expect("editor session");
+        session.insets = crate::viewport::OpInsets {
+            top: 24.0,
+            right: 10.0,
+            bottom: 20.0,
+            left: 8.0,
+        };
+        session
+            .editor
+            .as_mut()
+            .expect("editor host")
+            .editor_state_mut()
+            .editor_ui
+            .theme_mode = op_editor_core::editor_ui_state::ThemeMode::Light;
+
+        let mut surface = SkiaSurface::new_raster(320, 480);
+        paint_into_canvas(&mut session, surface.canvas());
+        let mut pixels = vec![0_u8; 320 * 480 * 4];
+        assert!(surface.read_rgba8(&mut pixels));
+        let top_band = (12 * 320 + 160) * 4;
+        assert_eq!(
+            &pixels[top_band..top_band + 4],
+            &[0xef, 0xef, 0xef, 0xff],
+            "light chrome must extend its root surface through the safe band"
         );
     }
 }
@@ -302,7 +369,7 @@ pub(crate) fn fit_viewport(session: &mut Session) {
         return;
     };
     let bounds = page_doc_bounds(page);
-    let (w, h) = session.logical;
+    let (w, h) = session.safe_area_viewport();
     if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 || w <= 0.0 || h <= 0.0 {
         session.viewport_origin = Point2D::ZERO;
         session.zoom = 1.0;

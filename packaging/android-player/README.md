@@ -32,8 +32,16 @@ adb shell am start -n dev.openpencil.player/.MainActivity
 adb logcat -s OpenPencilPlayer:V OpJni:V AndroidRuntime:E libEGL:W
 ```
 
-The app loads the bundled `assets/sample.op` (a byte-for-byte copy of
-`crates/op-editor-core/assets/scene_templates/daily-sign-card.op`).
+The app loads the bundled PowerPoint demo at `assets/ppt-demo.op` by default: a
+six-slide, 16:9 OpenPencil presentation deck derived from
+`crates/op-editor-core/assets/scene_templates/slide-deck.op` and pinned to the
+`corporate-blue-light` style guide. Pass the asset name without the `.op`
+suffix in the existing `doc` intent extra to load another bundled document, for
+example:
+
+```bash
+adb shell am start -n dev.openpencil.player/.MainActivity --es doc sample
+```
 
 ## What the shell does / does not own
 
@@ -42,8 +50,11 @@ The app loads the bundled `assets/sample.op` (a byte-for-byte copy of
   `onNeedsRedraw` upcall, one suspend→resume GPU-error recovery per
   surface generation, touch forwarding in logical px (top-left origin),
   inset replay after create/attach/resize.
-- `MainActivity` — edge-to-edge, real inset path (system bars + cutout →
-  safe area, IME inset → keyboard, both logical px), `nativeDestroy` on
+- `MainActivity` — transparent edge-to-edge window with a continuous dark
+  backdrop; four-sided system-bar/cutout insets move only interactive editor
+  chrome while IME occlusion remains a separate logical-pixel channel. This
+  covers portrait/landscape cutouts plus gesture and three-button navigation
+  without padding or resizing the `SurfaceView`; `nativeDestroy` runs on
   destroy.
 - `OpNative` / `OpCallbacks` — the JNI surface contract with
   `crates/op-engine-jni` (engine-thread upcalls, blocking barriers for

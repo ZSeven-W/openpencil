@@ -246,6 +246,7 @@ mod agent_settings_acp_helpers;
 mod agent_settings_acp_presets;
 pub mod agent_settings_builtin;
 mod agent_settings_builtin_empty;
+mod agent_settings_builtin_form;
 mod agent_settings_builtin_layout;
 mod agent_settings_builtin_parts;
 #[cfg(test)]
@@ -259,6 +260,7 @@ mod agent_settings_connect_tests;
 mod agent_settings_density_tests;
 #[cfg(test)]
 mod agent_settings_embed_tests;
+mod agent_settings_focus_geometry;
 pub mod agent_settings_fonts;
 #[cfg(test)]
 mod agent_settings_form_action_tests;

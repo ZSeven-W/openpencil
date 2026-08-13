@@ -4,11 +4,12 @@
 //! chrome through op-host-native's widget host.
 
 use op_engine_ffi::{
-    op_create, op_destroy, op_editor_cancel_gesture, op_editor_ime_focused, op_editor_key,
-    op_editor_move, op_editor_open_document, op_editor_pan, op_editor_pinch, op_editor_press,
-    op_editor_release, op_editor_right_press, op_editor_text, op_frame_cpu, op_get_page_count,
-    op_get_pixel_size, op_last_error, op_set_keyboard, OpCreateDesc, OpEngine, OpStatus,
-    KEY_ARROW_DOWN, KEY_BACKSPACE, KEY_DELETE, KEY_DUPLICATE, KEY_ENTER, KEY_ESCAPE, KEY_UNDO,
+    op_create, op_destroy, op_editor_begin_transform, op_editor_cancel_gesture,
+    op_editor_ime_focused, op_editor_key, op_editor_move, op_editor_open_document, op_editor_pan,
+    op_editor_pinch, op_editor_press, op_editor_release, op_editor_right_press, op_editor_text,
+    op_frame_cpu, op_get_page_count, op_get_pixel_size, op_last_error, op_set_keyboard,
+    OpCreateDesc, OpEngine, OpStatus, KEY_ARROW_DOWN, KEY_BACKSPACE, KEY_DELETE, KEY_DUPLICATE,
+    KEY_ENTER, KEY_ESCAPE, KEY_UNDO,
 };
 use std::ffi::c_void;
 use std::ptr;
@@ -173,16 +174,16 @@ fn editor_mode_renders_the_desktop_chrome() {
 }
 
 #[test]
-fn editor_frame_clears_keyboard_occluded_pixels() {
+fn editor_keyboard_occlusion_keeps_the_unfocused_frame_stable() {
     let h = EditorHarness::create(SAMPLE_DOC);
+    let _ = h.frame();
+    let before = h.frame();
     assert_eq!(unsafe { op_set_keyboard(h.engine, 120.0) }, OpStatus::Ok);
 
-    let buffer = h.frame();
-    let occluded = pixel_at(&buffer, 400, 550, 800);
+    let after = h.frame();
     assert_eq!(
-        occluded,
-        [0, 0, 0, 255],
-        "pixels outside the keyboard-reduced viewport must not retain old chrome"
+        after, before,
+        "an unfocused keyboard update must not resize or translate the editor frame"
     );
 }
 
@@ -297,6 +298,10 @@ fn editor_press_release_and_keys_are_safe_and_drive_redraws() {
     assert_eq!(status, OpStatus::Ok);
 
     // Two-finger pan + pinch are safe.
+    assert_eq!(
+        unsafe { op_editor_begin_transform(h.engine, 400.0, 300.0) },
+        OpStatus::Ok
+    );
     assert_eq!(
         unsafe { op_editor_pan(h.engine, 400.0, 300.0, 5.0, 8.0) },
         OpStatus::Ok

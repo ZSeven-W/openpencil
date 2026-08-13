@@ -269,7 +269,7 @@ impl PropertyPanel {
     /// could otherwise leave the panel scrolled past its end —
     /// every paint / hit-test reads through this so the view
     /// self-corrects on the very next frame.
-    fn effective_scroll(&self, panel_rect: Rect) -> f32 {
+    pub(crate) fn effective_scroll(&self, panel_rect: Rect) -> f32 {
         let max = (self.logical_content_height(panel_rect) - panel_rect.size.y).max(0.0);
         self.logical_length(self.scroll).clamp(0.0, max)
     }

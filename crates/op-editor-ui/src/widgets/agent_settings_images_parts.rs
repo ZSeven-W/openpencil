@@ -13,13 +13,18 @@ use op_editor_core::agent_settings::{
 };
 use op_editor_core::editor_ui_state::EditorUiState;
 
-const ROW_H: f32 = 36.0;
-const LABEL_W: f32 = 110.0;
 const INPUT_TEXT_INSET_X: f32 = 12.0;
 const FOCUSED_PLACEHOLDER_GAP: f32 = 8.0;
-const PROVIDER_OPTION_H: f32 = 24.0;
 const PROVIDER_OPTION_PAD_X: f32 = 4.0;
 const PROVIDER_OPTION_PAD_Y: f32 = 1.0;
+
+fn touch_or_desktop_baseline(rect: Rect, font: f32, touch: bool, desktop_y: f32) -> f32 {
+    if touch {
+        jian_widgets::centered_text_baseline_y(rect, font)
+    } else {
+        desktop_y
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_search_input_row(
@@ -30,30 +35,39 @@ pub(super) fn paint_search_input_row(
     field_kind: ImageSearchField,
     label: &str,
     placeholder: &str,
-    x: f32,
-    y: f32,
-    w: f32,
+    label_rect: Rect,
+    field: Rect,
+    touch: bool,
     now_ms: u64,
 ) {
+    let font_size = if touch { 15.0 } else { 13.0 };
+    let label_size = if touch { 14.0 } else { 13.0 };
     let label_lay = TextLayout::single_run(
         label,
         "system-ui",
-        13.0,
+        label_size,
         (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&label_lay, Point2D::new(x, y + ROW_H / 2.0 + 5.0));
-    let field = Rect {
-        origin: Point2D::new(x + LABEL_W, y),
-        size: Point2D::new(w - LABEL_W, ROW_H),
-    };
-    cx.backend.fill_round_rect(field, 6.0, theme.background);
+    cx.backend.draw_text(
+        &label_lay,
+        Point2D::new(
+            label_rect.origin.x,
+            touch_or_desktop_baseline(
+                label_rect,
+                label_size,
+                touch,
+                label_rect.origin.y + label_rect.size.y / 2.0 + 5.0,
+            ),
+        ),
+    );
+    let radius = if touch { 10.0 } else { 6.0 };
+    cx.backend.fill_round_rect(field, radius, theme.background);
     let focus = SettingsFocus::ImageSearch(field_kind);
     let focused = settings.focus == Some(focus);
     cx.backend.stroke_round_rect(
         field,
-        6.0,
+        radius,
         if focused { theme.primary } else { theme.border },
         1.0,
     );
@@ -86,9 +100,14 @@ pub(super) fn paint_search_input_row(
             theme,
             ui,
             field,
-            13.0,
+            font_size,
             text_x - field.origin.x,
-            field.origin.y + ROW_H / 2.0 + 5.0,
+            touch_or_desktop_baseline(
+                field,
+                font_size,
+                touch,
+                field.origin.y + field.size.y / 2.0 + 5.0,
+            ),
             now_ms,
             input_placeholder,
         );
@@ -96,7 +115,7 @@ pub(super) fn paint_search_input_row(
             let lay = TextLayout::single_run(
                 placeholder,
                 "system-ui",
-                13.0,
+                font_size,
                 theme.muted_foreground.to_jian(),
                 Point2D::new(0.0, 0.0),
             );
@@ -104,7 +123,12 @@ pub(super) fn paint_search_input_row(
                 &lay,
                 Point2D::new(
                     text_x + placeholder_offset,
-                    field.origin.y + ROW_H / 2.0 + 5.0,
+                    touch_or_desktop_baseline(
+                        field,
+                        font_size,
+                        touch,
+                        field.origin.y + field.size.y / 2.0 + 5.0,
+                    ),
                 ),
             );
         }
@@ -113,12 +137,12 @@ pub(super) fn paint_search_input_row(
             cx,
             value,
             field.size.x - INPUT_TEXT_INSET_X * 2.0 - placeholder_offset,
-            13.0,
+            font_size,
         );
         let lay = TextLayout::single_run(
             &value,
             "system-ui",
-            13.0,
+            font_size,
             (if showing_placeholder {
                 theme.muted_foreground
             } else {
@@ -131,7 +155,12 @@ pub(super) fn paint_search_input_row(
             &lay,
             Point2D::new(
                 text_x + placeholder_offset,
-                field.origin.y + ROW_H / 2.0 + 5.0,
+                touch_or_desktop_baseline(
+                    field,
+                    font_size,
+                    touch,
+                    field.origin.y + field.size.y / 2.0 + 5.0,
+                ),
             ),
         );
     }
@@ -147,9 +176,12 @@ pub(super) fn paint_profile_field(
     index: usize,
     field: ImageGenField,
     input: Rect,
-    label_x: f32,
+    label_rect: Rect,
+    touch: bool,
     now_ms: u64,
 ) {
+    let font_size = if touch { 15.0 } else { 11.0 };
+    let label_size = if touch { 14.0 } else { 11.0 };
     let focus = SettingsFocus::ImageGenProfile { index, field };
     let focused = settings.focus == Some(focus);
     let fallback = match field {
@@ -161,23 +193,29 @@ pub(super) fn paint_profile_field(
     };
     let value = settings_input_text(settings, ui, focus, fallback);
     let label = match field {
-        ImageGenField::Name => "Name",
-        ImageGenField::ApiKey => "API Key",
-        ImageGenField::Model => "Model",
-        ImageGenField::BaseUrl => "Base URL",
+        ImageGenField::Name => crate::widgets::agent_settings_i18n::t(ui, "builtin.displayName"),
+        ImageGenField::ApiKey => crate::widgets::agent_settings_i18n::t(ui, "builtin.apiKey"),
+        ImageGenField::Model => crate::widgets::agent_settings_i18n::t(ui, "builtin.model"),
+        ImageGenField::BaseUrl => crate::widgets::agent_settings_i18n::t(ui, "builtin.baseUrl"),
     };
     let label_lay = TextLayout::single_run(
         label,
         "system-ui",
-        11.0,
+        label_size,
         (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&label_lay, Point2D::new(label_x, input.origin.y + 16.0));
+    cx.backend.draw_text(
+        &label_lay,
+        Point2D::new(
+            label_rect.origin.x,
+            touch_or_desktop_baseline(label_rect, label_size, touch, input.origin.y + 16.0),
+        ),
+    );
+    let radius = if touch { 10.0 } else { 6.0 };
     cx.backend.fill_round_rect(
         input,
-        6.0,
+        radius,
         if focused {
             theme.background
         } else {
@@ -186,58 +224,72 @@ pub(super) fn paint_profile_field(
     );
     cx.backend.stroke_round_rect(
         input,
-        6.0,
+        radius,
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    let text_x = input.origin.x + 6.0;
+    let text_x = input.origin.x + if touch { 12.0 } else { 6.0 };
     if focused {
         paint_settings_input_view(
             cx,
             theme,
             ui,
             input,
-            11.0,
+            font_size,
             text_x - input.origin.x,
-            input.origin.y + 16.0,
+            touch_or_desktop_baseline(input, font_size, touch, input.origin.y + 16.0),
             now_ms,
             "",
         );
     } else {
-        let clipped = ellipsize(cx, value, input.size.x - 12.0, 11.0);
+        let clipped = ellipsize(
+            cx,
+            value,
+            input.size.x - if touch { 24.0 } else { 12.0 },
+            font_size,
+        );
         let value_lay = TextLayout::single_run(
             &clipped,
             "system-ui",
-            11.0,
+            font_size,
             (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend
-            .draw_text(&value_lay, Point2D::new(text_x, input.origin.y + 16.0));
+        cx.backend.draw_text(
+            &value_lay,
+            Point2D::new(
+                text_x,
+                touch_or_desktop_baseline(input, font_size, touch, input.origin.y + 16.0),
+            ),
+        );
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn paint_profile_test_button(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     ui: &EditorUiState,
     profile: &ImageGenProfile,
     btn: Rect,
+    touch: bool,
     hovered: bool,
     pressed: bool,
 ) {
     let enabled =
         !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing;
-    paint_profile_test_status(cx, theme, profile, btn);
-    cx.backend.fill_round_rect(btn, 6.0, theme.muted);
+    paint_profile_test_status(cx, theme, profile, btn, touch);
+    let radius = if touch { 10.0 } else { 6.0 };
+    let font_size = if touch { 15.0 } else { 11.0 };
+    cx.backend.fill_round_rect(btn, radius, theme.muted);
     crate::widgets::button::paint_ghost_button_feedback(cx.backend, theme, btn, hovered, pressed);
-    cx.backend.stroke_round_rect(btn, 6.0, theme.border, 1.0);
+    cx.backend.stroke_round_rect(btn, radius, theme.border, 1.0);
     let label = crate::widgets::agent_settings_i18n::t(ui, "settings.images.test");
-    let label_w = text_metrics::measure_chrome(cx.backend, label, 11.0);
+    let label_w = text_metrics::measure_chrome(cx.backend, label, font_size);
     let layout = TextLayout::single_run(
         label,
         "system-ui",
-        11.0,
+        font_size,
         (if enabled {
             theme.foreground
         } else {
@@ -250,7 +302,7 @@ pub(super) fn paint_profile_test_button(
         &layout,
         Point2D::new(
             btn.origin.x + (btn.size.x - label_w) / 2.0,
-            btn.origin.y + btn.size.y / 2.0 + 4.0,
+            touch_or_desktop_baseline(btn, font_size, touch, btn.origin.y + btn.size.y / 2.0 + 4.0),
         ),
     );
 }
@@ -260,23 +312,43 @@ fn paint_profile_test_status(
     theme: &Theme,
     profile: &ImageGenProfile,
     btn: Rect,
+    touch: bool,
 ) {
+    let icon_size = if touch { 16.0 } else { 11.0 };
+    let icon_y = if touch {
+        btn.origin.y + (btn.size.y - icon_size) / 2.0
+    } else {
+        btn.origin.y + 7.0
+    };
+    let icon_x = if touch {
+        btn.origin.x + 14.0
+    } else {
+        btn.origin.x - 20.0
+    };
     match profile.test_status {
         ImageTestStatus::Idle => {}
         ImageTestStatus::Testing => draw_icon(
             cx.backend,
             Icon::Loader,
-            Point2D::new(btn.origin.x - 20.0, btn.origin.y + 7.0),
-            11.0,
+            Point2D::new(icon_x, icon_y),
+            icon_size,
             theme.muted_foreground,
             1.5,
         ),
         ImageTestStatus::Valid => draw_icon(
             cx.backend,
             Icon::Check,
-            Point2D::new(btn.origin.x - 20.0, btn.origin.y + 7.0),
-            11.0,
+            Point2D::new(icon_x, icon_y),
+            icon_size,
             theme.primary,
+            1.8,
+        ),
+        ImageTestStatus::Invalid if touch => draw_icon(
+            cx.backend,
+            Icon::Close,
+            Point2D::new(icon_x, icon_y),
+            icon_size,
+            theme.destructive,
             1.8,
         ),
         ImageTestStatus::Invalid => {
@@ -284,36 +356,47 @@ fn paint_profile_test_status(
             let layout = TextLayout::single_run(
                 label,
                 "system-ui",
-                10.0,
+                if touch { 14.0 } else { 10.0 },
                 (theme.destructive).to_jian(),
                 Point2D::new(0.0, 0.0),
             );
             cx.backend.draw_text(
                 &layout,
-                Point2D::new(btn.origin.x - 44.0, btn.origin.y + 17.0),
+                Point2D::new(
+                    btn.origin.x - if touch { 64.0 } else { 44.0 },
+                    touch_or_desktop_baseline(btn, 14.0, touch, btn.origin.y + 17.0),
+                ),
             );
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn paint_provider_field(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     profile: &ImageGenProfile,
     input: Rect,
-    label_x: f32,
+    label_rect: Rect,
+    label: &str,
+    touch: bool,
     hovered: bool,
     pressed: bool,
 ) {
     let label_lay = TextLayout::single_run(
-        "Provider",
+        label,
         "system-ui",
-        11.0,
+        if touch { 14.0 } else { 11.0 },
         (theme.muted_foreground).to_jian(),
         Point2D::new(0.0, 0.0),
     );
-    cx.backend
-        .draw_text(&label_lay, Point2D::new(label_x, input.origin.y + 16.0));
+    cx.backend.draw_text(
+        &label_lay,
+        Point2D::new(
+            label_rect.origin.x,
+            touch_or_desktop_baseline(label_rect, 14.0, touch, input.origin.y + 16.0),
+        ),
+    );
     jian_widgets::components::select_trigger::SelectTrigger {
         icon_paths: None,
         label: profile.provider.label(),
@@ -321,7 +404,7 @@ pub(super) fn paint_provider_field(
         hovered,
         pressed,
         enabled: true,
-        font_size: 11.0,
+        font_size: if touch { 15.0 } else { 11.0 },
         bordered: true,
     }
     .paint(
@@ -338,18 +421,17 @@ pub(super) fn paint_provider_menu(
     selected: ImageGenProvider,
     hovered: Option<ImageGenProvider>,
     pressed: Option<ImageGenProvider>,
+    touch: bool,
 ) {
+    let option_h = if touch { 44.0 } else { 24.0 };
     let menu = Rect {
         origin: Point2D::new(input.origin.x, input.origin.y + input.size.y),
-        size: Point2D::new(
-            input.size.x,
-            PROVIDER_OPTION_H * ImageGenProvider::ALL.len() as f32,
-        ),
+        size: Point2D::new(input.size.x, option_h * ImageGenProvider::ALL.len() as f32),
     };
     cx.backend.fill_round_rect(menu, 6.0, theme.card);
     cx.backend.stroke_round_rect(menu, 6.0, theme.border, 1.0);
     for (index, provider) in ImageGenProvider::ALL.iter().enumerate() {
-        let option_y = menu.origin.y + index as f32 * PROVIDER_OPTION_H;
+        let option_y = menu.origin.y + index as f32 * option_h;
         let option_rect = Rect {
             origin: Point2D::new(
                 menu.origin.x + PROVIDER_OPTION_PAD_X,
@@ -357,7 +439,7 @@ pub(super) fn paint_provider_menu(
             ),
             size: Point2D::new(
                 menu.size.x - PROVIDER_OPTION_PAD_X * 2.0,
-                PROVIDER_OPTION_H - PROVIDER_OPTION_PAD_Y * 2.0,
+                option_h - PROVIDER_OPTION_PAD_Y * 2.0,
             ),
         };
         if *provider == selected {
@@ -371,7 +453,7 @@ pub(super) fn paint_provider_menu(
         let label = TextLayout::single_run(
             provider.label(),
             "system-ui",
-            11.0,
+            if touch { 15.0 } else { 11.0 },
             (theme.foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
@@ -379,7 +461,12 @@ pub(super) fn paint_provider_menu(
             &label,
             Point2D::new(
                 menu.origin.x + 8.0,
-                option_y + PROVIDER_OPTION_H / 2.0 + 4.0,
+                touch_or_desktop_baseline(
+                    Rect::xywh(menu.origin.x, option_y, menu.size.x, option_h),
+                    15.0,
+                    touch,
+                    option_y + option_h / 2.0 + 4.0,
+                ),
             ),
         );
     }

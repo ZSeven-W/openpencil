@@ -35,13 +35,17 @@ mod desc;
 mod editor;
 #[cfg(feature = "editor")]
 mod editor_template;
+#[cfg(feature = "editor")]
+mod editor_transform;
 mod error;
 mod input;
 mod lifecycle;
 mod measure;
 mod media;
 mod pages;
+mod pointer_gate;
 mod render;
+mod system_chrome;
 mod text;
 mod viewport;
 
@@ -57,9 +61,12 @@ pub use editor::{
     KEY_DELETE, KEY_DUPLICATE, KEY_ENTER, KEY_ESCAPE, KEY_REDO, KEY_UNDO, SHELL_ACTION_NONE,
     SHELL_ACTION_OPEN_DOCUMENT,
 };
+#[cfg(feature = "editor")]
+pub use editor_transform::op_editor_begin_transform;
 pub use lifecycle::OpEngine;
 pub use media::{op_register_font, op_remote_image_result};
 pub use pages::{op_get_page_count, op_set_active_page};
+pub use system_chrome::op_prefers_light_system_icons;
 pub use text::{
     op_ime_cancel_composition, op_ime_commit_composition, op_ime_set_composing_text,
     op_text_backspace, op_text_begin, op_text_caret_rect, op_text_delete_forward, op_text_end,
@@ -274,6 +281,44 @@ pub unsafe extern "C" fn op_resize(
     }
 }
 
+/// Atomically update logical viewport, DPR, and four safe-area insets.
+///
+/// Mobile shells should use this during rotation/configuration changes so an
+/// intermediate size/inset pair cannot trigger a transient responsive class.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_resize_with_safe_area(
+    engine: *mut OpEngine,
+    width: f32,
+    height: f32,
+    dpr: f32,
+    top: f32,
+    right: f32,
+    bottom: f32,
+    left: f32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            session.resize_with_safe_area(
+                width,
+                height,
+                dpr,
+                viewport::OpInsets {
+                    top,
+                    right,
+                    bottom,
+                    left,
+                },
+            )?;
+            session.request_redraw();
+            Ok(())
+        })
+    }
+}
+
 /// Deliver one pointer event (surface-logical coordinates).
 ///
 /// # Safety
@@ -293,24 +338,6 @@ pub unsafe extern "C" fn op_pointer(
             if session.suspended {
                 return Err(FfiError::new(OpStatus::Suspended, "engine is suspended"));
             }
-            session.now_ms = time_ms;
-            // Editor mode: the host owns all interaction — press/move/
-            // release map 1:1 to pointer phases.
-            #[cfg(feature = "editor")]
-            if session.editor.is_some() {
-                let (w, h) = session.logical;
-                let changed = match phase {
-                    0 => session.editor_mut()?.apply_press(x, y, w, h),
-                    1 => session.editor_mut()?.apply_cursor_move(x, y),
-                    _ => session.editor_mut()?.apply_release_with_viewport(w, h),
-                };
-                let template_changed =
-                    crate::editor_template::drain_pending_scene_template(session)?;
-                if changed || template_changed {
-                    session.request_redraw();
-                }
-                return Ok(());
-            }
             let phase = match phase {
                 0 => OpPointerPhase::Down,
                 1 => OpPointerPhase::Move,
@@ -318,6 +345,42 @@ pub unsafe extern "C" fn op_pointer(
                 3 => OpPointerPhase::Cancel,
                 _ => return Err(FfiError::invalid("unknown pointer phase")),
             };
+            session.now_ms = time_ms;
+            let (x, y) = session.safe_area_point(x, y);
+            if !session.route_safe_area_pointer(id, phase, x, y) {
+                return Ok(());
+            }
+            // Editor mode: the host owns all interaction — press/move/
+            // release map 1:1 to pointer phases.
+            #[cfg(feature = "editor")]
+            if session.editor.is_some() {
+                let (w, h) = session.editor_viewport();
+                let (changed, camera_changed) = match phase {
+                    OpPointerPhase::Down => (session.editor_mut()?.apply_press(x, y, w, h), false),
+                    OpPointerPhase::Move => {
+                        let host = session.editor_mut()?;
+                        let before = host.editor_state().viewport;
+                        let changed = host.apply_cursor_move(x, y);
+                        (changed, host.editor_state().viewport != before)
+                    }
+                    OpPointerPhase::Up => (
+                        session.editor_mut()?.apply_release_with_viewport(w, h),
+                        false,
+                    ),
+                    OpPointerPhase::Cancel => {
+                        (session.editor_mut()?.cancel_native_touch_gestures(), false)
+                    }
+                };
+                if camera_changed {
+                    session.user_interacted = true;
+                }
+                let template_changed =
+                    crate::editor_template::drain_pending_scene_template(session)?;
+                if changed || template_changed {
+                    session.request_redraw();
+                }
+                return Ok(());
+            }
             let changed = crate::input::handle_pointer(session, id, phase, x, y)?;
             if changed {
                 session.request_redraw();

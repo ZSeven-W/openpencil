@@ -78,6 +78,7 @@ impl WidgetHostNative {
             toast_rect: None,
             last_viewport_w: 0.0,
             last_viewport_h: 0.0,
+            keyboard_occlusion: 0.0,
             preview: None,
             preview_device_frame: None,
             preview_scroll_y: 0.0,
@@ -181,6 +182,50 @@ impl WidgetHostNative {
         self.alt_held = held;
     }
 
+    /// Publish the geometry used by this frame before any focused surface
+    /// resolves its keyboard-safe scroll position.
+    pub(in crate::widget_host) fn publish_viewport_geometry(
+        &mut self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        let changed = self.last_viewport_w != viewport_w || self.last_viewport_h != viewport_h;
+        self.last_viewport_w = viewport_w;
+        self.last_viewport_h = viewport_h;
+        if changed {
+            self.reveal_property_keyboard_owner();
+        }
+        self.ensure_focused_agent_settings_visible(viewport_w, viewport_h);
+    }
+
+    /// Set the bottom keyboard occlusion inside the safe-area-local editor
+    /// viewport. The shell owns safe-area de-duplication before calling this.
+    pub fn set_keyboard_occlusion(&mut self, height: f32) -> bool {
+        let next = if height.is_finite() && height > 0.0 {
+            height
+        } else {
+            0.0
+        };
+        if (self.keyboard_occlusion - next).abs() <= f32::EPSILON {
+            return self
+                .ensure_focused_agent_settings_visible(self.last_viewport_w, self.last_viewport_h);
+        }
+        self.keyboard_occlusion = next;
+        self.reveal_property_keyboard_owner();
+        self.ensure_focused_agent_settings_visible(self.last_viewport_w, self.last_viewport_h);
+        true
+    }
+
+    /// Return the local y-coordinate immediately above the keyboard.
+    pub fn keyboard_visible_bottom(&self, viewport_height: f32) -> f32 {
+        let height = if viewport_height.is_finite() {
+            viewport_height.max(0.0)
+        } else {
+            0.0
+        };
+        (height - self.keyboard_occlusion).max(0.0)
+    }
+
     /// Push the host's monotonic millisecond timestamp into the
     /// host. Drives caret blink + any future time-based
     /// animations via `jian_core::anim`. Also forwarded to the live
@@ -190,5 +235,26 @@ impl WidgetHostNative {
         if let Some(preview) = self.preview.as_mut() {
             preview.set_now_ms(now_ms);
         }
+    }
+}
+
+#[cfg(test)]
+mod keyboard_occlusion_tests {
+    use super::*;
+
+    #[test]
+    fn keyboard_visible_bottom_is_sanitized_and_clamped() {
+        let mut host = WidgetHostNative::new();
+        assert_eq!(host.keyboard_visible_bottom(600.0), 600.0);
+
+        assert!(host.set_keyboard_occlusion(240.0));
+        assert!(!host.set_keyboard_occlusion(240.0));
+        assert_eq!(host.keyboard_visible_bottom(600.0), 360.0);
+        assert_eq!(host.keyboard_visible_bottom(120.0), 0.0);
+
+        assert!(host.set_keyboard_occlusion(f32::NAN));
+        assert_eq!(host.keyboard_visible_bottom(600.0), 600.0);
+        assert!(!host.set_keyboard_occlusion(-20.0));
+        assert_eq!(host.keyboard_visible_bottom(f32::NAN), 0.0);
     }
 }

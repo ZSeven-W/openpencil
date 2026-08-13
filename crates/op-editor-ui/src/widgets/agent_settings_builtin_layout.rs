@@ -29,13 +29,19 @@ pub(super) const EMPTY_HEIGHT: f32 = EMPTY_BLOCK_H;
 /// configured agents fill half the tab.
 const COMPACT_CARD_HEIGHT: f32 = ROW_H_TWO_LINE;
 const EXPANDED_CARD_HEIGHT: f32 = 196.0;
+const TOUCH_EXPANDED_CARD_HEIGHT: f32 = 376.0;
 const DRAFT_ACTION_HEIGHT: f32 = 36.0;
+const TOUCH_DRAFT_ACTION_HEIGHT: f32 = 60.0;
 /// Rows sit flush — the hairline IS the gap. Only the expanded edit form,
 /// which is still a card, wants air around it, and it gets that from the
 /// row it replaces being taller.
 pub(super) const CARD_GAP: f32 = 0.0;
 const FIELD_LABEL_W: f32 = 68.0;
 const FIELD_H: f32 = 24.0;
+const TOUCH_FIELD_LABEL_W: f32 = 84.0;
+const TOUCH_FIELD_H: f32 = 44.0;
+const TOUCH_FIELD_START_Y: f32 = 160.0;
+const TOUCH_FIELD_ROW_H: f32 = 52.0;
 const ACTION_W: f32 = 24.0;
 const TOUCH_TARGET: f32 = 44.0;
 pub(super) const TOUCH_EMPTY_CARD_H: f32 = 72.0;
@@ -48,20 +54,34 @@ pub(super) fn is_editing(settings: &AgentSettings, index: usize) -> bool {
     )
 }
 
-pub(super) fn card_height(settings: &AgentSettings, index: usize) -> f32 {
+pub(super) fn card_height_for_ui(settings: &AgentSettings, index: usize, touch: bool) -> f32 {
     if is_editing(settings, index) {
-        expanded_card_height(settings, Some(index))
+        expanded_card_height_for_ui(settings, Some(index), touch)
     } else {
         COMPACT_CARD_HEIGHT
     }
 }
 
-pub(super) fn expanded_card_height(settings: &AgentSettings, index: Option<usize>) -> f32 {
-    EXPANDED_CARD_HEIGHT + agent_settings_builtin_parts::preset_menu_height(settings, index)
+pub(super) fn expanded_card_height_for_ui(
+    settings: &AgentSettings,
+    index: Option<usize>,
+    touch: bool,
+) -> f32 {
+    let base = if touch {
+        TOUCH_EXPANDED_CARD_HEIGHT
+    } else {
+        EXPANDED_CARD_HEIGHT
+    };
+    base + agent_settings_builtin_parts::preset_menu_height(settings, index, touch)
 }
 
-pub(super) fn draft_card_height(settings: &AgentSettings) -> f32 {
-    expanded_card_height(settings, None) + DRAFT_ACTION_HEIGHT
+pub(super) fn draft_card_height_for_ui(settings: &AgentSettings, touch: bool) -> f32 {
+    expanded_card_height_for_ui(settings, None, touch)
+        + if touch {
+            TOUCH_DRAFT_ACTION_HEIGHT
+        } else {
+            DRAFT_ACTION_HEIGHT
+        }
 }
 
 pub(super) fn add_provider_rect(content: Rect, y: f32) -> Rect {
@@ -187,18 +207,30 @@ fn centered_action_rect(target: Rect) -> Rect {
     }
 }
 
-pub(super) fn field_input_rect(
+pub(super) fn field_input_rect_for_ui(
     settings: &AgentSettings,
     card: Rect,
     index: Option<usize>,
     row: usize,
+    touch: bool,
 ) -> Rect {
-    let menu_h = agent_settings_builtin_parts::preset_menu_height(settings, index);
+    let menu_h = agent_settings_builtin_parts::preset_menu_height(settings, index, touch);
+    let (pad_x, label_w, start_y, row_h, field_h) = if touch {
+        (
+            16.0,
+            TOUCH_FIELD_LABEL_W,
+            TOUCH_FIELD_START_Y,
+            TOUCH_FIELD_ROW_H,
+            TOUCH_FIELD_H,
+        )
+    } else {
+        (12.0, FIELD_LABEL_W, 76.0, 28.0, FIELD_H)
+    };
     Rect {
         origin: Point2D::new(
-            card.origin.x + 12.0 + FIELD_LABEL_W,
-            card.origin.y + 76.0 + menu_h + row as f32 * 28.0,
+            card.origin.x + pad_x + label_w,
+            card.origin.y + start_y + menu_h + row as f32 * row_h,
         ),
-        size: Point2D::new(card.size.x - 24.0 - FIELD_LABEL_W, FIELD_H),
+        size: Point2D::new(card.size.x - pad_x * 2.0 - label_w, field_h),
     }
 }

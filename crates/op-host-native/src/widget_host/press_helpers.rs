@@ -13,7 +13,6 @@ use op_editor_core::agent_settings::ImageGenField;
 use op_editor_core::host_settings_commit::SettingsCommitScope;
 use op_editor_ui::widgets::agent_settings_fonts::FontsHit;
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit;
-use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 use op_editor_ui::widgets::agent_settings_press_flow::{
     self as settings_flow, SettingsPress, SettingsPressOutcome,
 };
@@ -98,9 +97,9 @@ impl WidgetHostNative {
         vh: f32,
     ) -> bool {
         self.refresh_layout_scene();
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-        let panel_rect = panel.rect(vw, vh);
+        let (panel, panel_rect) = self.agent_settings_geometry(vw, vh);
         let hit = panel.hit_test(panel_rect, Point2D::new(x, y));
+        drop(panel);
         if matches!(hit, AgentSettingsHit::Fonts(FontsHit::SelectFont(_)))
             && !self.collab_allows_document_mutation(
                 op_editor_core::CollabDocumentMutation::Unsupported(
@@ -120,6 +119,7 @@ impl WidgetHostNative {
             self.now_ms,
         );
         self.finish_agent_settings_press(outcome);
+        self.ensure_focused_agent_settings_visible(vw, vh);
         if !self.editor_state.editor_ui.agent_settings_open {
             self.cancel_agent_settings_touch_gesture();
         }

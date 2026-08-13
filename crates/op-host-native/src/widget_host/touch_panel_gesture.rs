@@ -1,13 +1,15 @@
-//! One-finger touch arbitration for Asset Center, Property, Layers, Slides,
-//! and the Property font picker.
+//! One-finger touch arbitration for the canvas, Asset Center, Property,
+//! Layers, Slides, and the Property font picker.
 //!
 //! Native touch shells deliver mouse-shaped down/move/up events. A body down
 //! therefore remains pending until release: crossing touch slop captures the
-//! gesture for scrolling, while a stationary release replays the down point
-//! through the ordinary press ladder exactly once.
+//! gesture for scrolling / canvas panning, while a stationary release replays
+//! the down point through the ordinary press ladder exactly once (or clears
+//! the selection for an empty-canvas tap).
 
 use super::press_ctx::PressCtx;
 use super::WidgetHostNative;
+use op_editor_core::host_press_transitions as core_press;
 use op_editor_core::size_class::MobileSheetKind;
 use op_editor_ui::Point2D;
 
@@ -15,6 +17,7 @@ const TOUCH_SCROLL_SLOP: f32 = 8.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::widget_host) enum TouchPanelTarget {
+    Canvas,
     AssetCenter,
     Property,
     FontPicker,
@@ -40,6 +43,24 @@ pub(in crate::widget_host) struct TouchPanelGesture {
 }
 
 impl WidgetHostNative {
+    /// Hold an empty-canvas touch until it resolves as a tap or a pan. This
+    /// keeps sub-slop finger jitter from moving the viewport while giving
+    /// touch users the direct-manipulation equivalent of desktop space-pan.
+    pub(in crate::widget_host) fn begin_canvas_touch_gesture(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        self.arm_touch_panel_gesture_at(
+            Point2D::new(x, y),
+            viewport_w,
+            viewport_h,
+            TouchPanelTarget::Canvas,
+        );
+    }
+
     /// Defer Asset Center body controls and cards until release so the same
     /// finger can promote to gallery scrolling without selecting an asset.
     /// Close, tabs, and the outside scrim keep their immediate press path.
@@ -108,11 +129,7 @@ impl WidgetHostNative {
         else {
             return false;
         };
-        let rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-            &self.editor_state,
-            ctx.viewport_width,
-            ctx.viewport_height,
-        );
+        let rect = self.property_rect(ctx.viewport_width, ctx.viewport_height);
         if !panel.font_picker_contains(rect, Point2D::new(ctx.x, ctx.y)) {
             return false;
         }
@@ -135,11 +152,7 @@ impl WidgetHostNative {
         else {
             return false;
         };
-        let rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-            &self.editor_state,
-            ctx.viewport_width,
-            ctx.viewport_height,
-        );
+        let rect = self.property_rect(ctx.viewport_width, ctx.viewport_height);
         let point = Point2D::new(ctx.x, ctx.y);
         if !rect.contains(point) || panel.tab_hover_at(rect, point).is_some() {
             return false;
@@ -261,6 +274,11 @@ impl WidgetHostNative {
         let scroll_dx = dx;
         let scroll_dy = dy;
         let consumed = match gesture.target {
+            TouchPanelTarget::Canvas => {
+                self.editor_state.viewport.pan(scroll_dx, scroll_dy);
+                self.note_viewport_gesture();
+                true
+            }
             TouchPanelTarget::AssetCenter => self.try_scroll_scene_template_center(
                 gesture.start.x,
                 gesture.start.y,
@@ -330,6 +348,17 @@ impl WidgetHostNative {
         self.layer_drag = None;
         if gesture.scrolling || !self.touch_panel_target_is_visible(gesture.target) {
             return Some(true);
+        }
+        if gesture.target == TouchPanelTarget::Canvas {
+            self.editor_state.editor_ui.last_canvas_click = None;
+            let cleared = core_press::clear_selection_on_empty_canvas_press(
+                &mut self.editor_state,
+                self.shift_held,
+            );
+            if cleared {
+                self.mark_dirty();
+            }
+            return Some(cleared);
         }
         let consumed = self.replay_touch_panel_press(
             gesture.start.x,
@@ -517,6 +546,7 @@ impl WidgetHostNative {
             return false;
         }
         match target {
+            TouchPanelTarget::Canvas => ui.mobile_sheet.is_none(),
             TouchPanelTarget::AssetCenter => ui.scene_template_center.open,
             TouchPanelTarget::Property => {
                 (ui.mobile_sheet == Some(MobileSheetKind::Properties)
@@ -565,11 +595,7 @@ impl WidgetHostNative {
         else {
             return TouchScrollAxis::Vertical;
         };
-        let rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-            &self.editor_state,
-            gesture.viewport_w,
-            gesture.viewport_h,
-        );
+        let rect = self.property_rect(gesture.viewport_w, gesture.viewport_h);
         if panel.code_framework_strip_contains(rect, gesture.start) {
             TouchScrollAxis::Horizontal
         } else {

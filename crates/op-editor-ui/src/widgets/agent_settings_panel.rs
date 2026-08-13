@@ -10,7 +10,8 @@ use crate::widgets::agent_settings_panel_card::paint_agent_card;
 use crate::widgets::agent_settings_panel_geometry::{
     acp_section_y, agent_card_rect_at, agent_card_rect_in, agents_body_top, close_rect,
     connect_btn_rect_at, content_rect, disconnect_btn_rect_at, full_settings_tabs, hero_body_rect,
-    provider_rows_top, tab_i18n_label, CLAUDE_HINT_H, PROVIDER_SECTION_HEADER_H,
+    hero_body_rect_for_ui, provider_rows_top, tab_i18n_label, CLAUDE_HINT_H,
+    PROVIDER_SECTION_HEADER_H,
 };
 use crate::widgets::agent_settings_system::{self, SystemHit};
 use crate::widgets::editor_state_ext::theme_for;

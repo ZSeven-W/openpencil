@@ -23,6 +23,7 @@ impl WidgetHostNative {
         viewport_height: f32,
     ) {
         self.image_input_geometry = None;
+        self.publish_viewport_geometry(viewport_width, viewport_height);
         // Rotate the transcript-cache owner if the active chat session changed
         // since the last frame, BEFORE any resolve stores under it — the new
         // tab's build is then stamped with the fresh owner.
@@ -295,11 +296,7 @@ impl WidgetHostNative {
             .as_ref()
             .filter(|_| !presenting && properties_open)
         {
-            let property_rect = canvas_geometry::property_panel_rect(
-                &self.editor_state,
-                viewport_width,
-                viewport_height,
-            );
+            let property_rect = self.property_rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -442,11 +439,7 @@ impl WidgetHostNative {
             .as_ref()
             .filter(|_| !presenting && properties_open)
         {
-            let property_rect = canvas_geometry::property_panel_rect(
-                &self.editor_state,
-                viewport_width,
-                viewport_height,
-            );
+            let property_rect = self.property_rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -650,7 +643,6 @@ impl WidgetHostNative {
 
         // 10a. Agent-settings modal — top-most overlay when open.
         if ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
             // Dim scrim across the full viewport.
             let scrim_color = op_editor_ui::Color {
                 r: 0.0,
@@ -665,8 +657,7 @@ impl WidgetHostNative {
                 },
                 scrim_color,
             );
-            let panel = AgentSettingsPanel::for_editor_at(&self.editor_state, self.now_ms);
-            let panel_rect = panel.rect(viewport_width, viewport_height);
+            let (panel, panel_rect) = self.agent_settings_geometry(viewport_width, viewport_height);
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };

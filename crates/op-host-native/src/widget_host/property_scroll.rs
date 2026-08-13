@@ -1,7 +1,7 @@
 //! Property-panel wheel and pan routing, including the Code framework strip.
 
 use super::WidgetHostNative;
-use op_editor_ui::widgets::{host_canvas_geometry, scroll_flow, PropertyPanel};
+use op_editor_ui::widgets::{scroll_flow, PropertyPanel};
 use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
@@ -42,11 +42,7 @@ impl WidgetHostNative {
         {
             return false;
         }
-        let property_rect = host_canvas_geometry::property_panel_rect(
-            &self.editor_state,
-            viewport_width,
-            viewport_height,
-        );
+        let property_rect = self.property_rect(viewport_width, viewport_height);
         let point = Point2D::new(x, y);
         // This compact popup has no internal scroll but still owns events over
         // its chrome so the inspector cannot move underneath it.

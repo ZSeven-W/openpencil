@@ -69,6 +69,9 @@ struct PinchAnchor {
 pub(crate) struct GestureOutcome {
     /// The viewport changed (pan / pinch).
     pub viewport_changed: bool,
+    /// A real tracked single-finger tap completed. Kept separate from
+    /// `tap_hit` because dead-space taps legitimately carry no node id.
+    pub tap_completed: bool,
     /// A tap completed; the topmost node id under the finger (or `None`
     /// for dead space — clear the selection).
     pub tap_hit: Option<String>,
@@ -89,7 +92,7 @@ pub(crate) fn handle_pointer(
         origin: session.viewport_origin,
         zoom: session.zoom,
     };
-    let logical = session.logical;
+    let logical = session.safe_area_viewport();
     let outcome = {
         // Split borrows: the tracker mutates the viewport while the scene
         // is only read (hit-testing); the borrows end before the tap is
@@ -106,7 +109,7 @@ pub(crate) fn handle_pointer(
     // apply it with full session access (text edits may rebuild the scene).
     // Dead space still commits an active text edit (the desktop commits on
     // any outside click).
-    if outcome.tap_hit.is_some() || session.state.ui.text_editing.is_some() {
+    if outcome.tap_completed {
         return apply_tap(session, outcome.tap_hit.as_deref(), x, y);
     }
     Ok(outcome.viewport_changed)
@@ -265,7 +268,12 @@ impl GestureTracker {
                     _ => {}
                 }
             }
-            OpPointerPhase::Up | OpPointerPhase::Cancel => {
+            OpPointerPhase::Up => {
+                // A stale Up after platform cancellation must be a no-op. In
+                // particular it cannot synthesize a tap or commit text.
+                if !self.touches.iter().any(|touch| touch.id == id) {
+                    return Ok(outcome);
+                }
                 let was_pinch = self.pinch.is_some();
                 self.touches.retain(|t| t.id != id);
                 if was_pinch {
@@ -277,6 +285,7 @@ impl GestureTracker {
                             // A tap: select the topmost node under the
                             // point (dead space reports `None` so the
                             // caller clears the selection).
+                            outcome.tap_completed = true;
                             let doc = view.view_to_doc(point);
                             outcome.tap_hit = scene.node_at_doc_point(doc, view.zoom);
                         }
@@ -290,6 +299,13 @@ impl GestureTracker {
                     }
                     _ => {}
                 }
+            }
+            OpPointerPhase::Cancel => {
+                // Platform cancellation terminates the whole gesture stream,
+                // not just the reported pointer. Never turn it into Up: that
+                // could synthesize a tap, commit text, or leave a second
+                // pointer armed after rotation/system interruption.
+                self.reset();
             }
         }
         Ok(outcome)

@@ -6,7 +6,7 @@ use crate::widgets::test_capture_backend::CaptureBackend;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Theme};
 use op_editor_core::size_class::EditorSizeClass;
-use op_editor_core::{EditorState, PropertyTab};
+use op_editor_core::{EditorState, PropertyTab, Tool};
 
 fn touch_state(class: EditorSizeClass) -> EditorState {
     let mut state = EditorState::starter();
@@ -153,4 +153,97 @@ fn compact_page_and_selection_actions_use_separate_rows() {
         ),
         Some(mobile_chrome::SelectionActionHit::Delete)
     );
+}
+
+#[test]
+fn shape_slot_dropdown_cue_stays_inside_dock_at_touch_breakpoints() {
+    for (class, width, height) in [
+        (EditorSizeClass::Compact, 320.0, 568.0),
+        (EditorSizeClass::Compact, 390.0, 844.0),
+        (EditorSizeClass::Medium, 834.0, 1_112.0),
+        (EditorSizeClass::Expanded, 1_194.0, 834.0),
+    ] {
+        let state = touch_state(class);
+        let dock_rect = geometry::touch_dock_rect(&state, width, height);
+        let dock = mobile_chrome::MobileDock::for_editor(&state);
+        let shape_slot = mobile_chrome::MobileDock::slot_rect(dock_rect, 1, dock.slot_count());
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        dock.paint(&mut cx, dock_rect);
+
+        let shape_path = Icon::Square.paths()[0];
+        let chevron_path = Icon::ChevronDown.paths()[0];
+        let (_, shape_origin, shape_size, _, _) = backend
+            .svg_strokes
+            .iter()
+            .find(|(path, ..)| path == shape_path)
+            .expect("shape glyph should paint");
+        let (_, chevron_origin, chevron_size, _, _) = backend
+            .svg_strokes
+            .iter()
+            .find(|(path, ..)| path == chevron_path)
+            .expect("closed shape slot should paint a down chevron");
+        let shape_glyph =
+            crate::Rect::xywh(shape_origin.x, shape_origin.y, *shape_size, *shape_size);
+        let chevron = crate::Rect::xywh(
+            chevron_origin.x,
+            chevron_origin.y,
+            *chevron_size,
+            *chevron_size,
+        );
+
+        assert!(shape_slot.contains(shape_glyph.origin));
+        assert!(shape_slot.contains(Point2D::new(
+            shape_glyph.origin.x + shape_glyph.size.x,
+            shape_glyph.origin.y + shape_glyph.size.y,
+        )));
+        assert!(shape_slot.contains(chevron.origin));
+        assert!(shape_slot.contains(Point2D::new(
+            chevron.origin.x + chevron.size.x,
+            chevron.origin.y + chevron.size.y,
+        )));
+        assert!(shape_glyph.origin.x + shape_glyph.size.x < chevron.origin.x);
+        assert_eq!(
+            dock.hit_test(
+                dock_rect,
+                Point2D::new(
+                    chevron.origin.x + chevron.size.x / 2.0,
+                    chevron.origin.y + chevron.size.y / 2.0,
+                ),
+            ),
+            Some(mobile_chrome::MobileDockHit::ShapeSlot),
+        );
+    }
+}
+
+#[test]
+fn open_shape_slot_uses_open_affordance_without_changing_active_tool() {
+    let mut state = touch_state(EditorSizeClass::Medium);
+    state.tool = Tool::Select;
+    state.editor_ui.shape_picker.open = true;
+    let dock_rect = geometry::touch_dock_rect(&state, 834.0, 1_112.0);
+    let dock = mobile_chrome::MobileDock::for_editor(&state);
+    let shape_slot = mobile_chrome::MobileDock::slot_rect(dock_rect, 1, dock.slot_count());
+    let emphasized_rect = mobile_chrome::centered_icon_rect(shape_slot, 40.0);
+    let emphasized_color = dock.theme.row_selected_primary;
+    let mut backend = CaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    dock.paint(&mut cx, dock_rect);
+
+    assert_eq!(dock.active, Tool::Select);
+    assert!(backend
+        .svg_strokes
+        .iter()
+        .any(|(path, ..)| path == Icon::ChevronUp.paths()[0]));
+    assert!(!backend
+        .svg_strokes
+        .iter()
+        .any(|(path, ..)| path == Icon::ChevronDown.paths()[0]));
+    assert!(backend.round_fills.iter().any(|(rect, radius, color)| {
+        *rect == emphasized_rect && *radius == 12.0 && *color == emphasized_color
+    }));
 }

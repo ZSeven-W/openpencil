@@ -436,6 +436,84 @@ impl PropertyPanel {
         .map(|rect| self.physical_rect(logical, rect))
     }
 
+    /// Current physical bounds of the active Property-surface keyboard owner.
+    /// Overlay inputs win over stale body focus, matching input routing.
+    pub fn keyboard_owner_rect(&self, panel_rect: Rect) -> Option<Rect> {
+        if self.is_multi || panel_rect.size.y <= 0.0 {
+            return None;
+        }
+        let logical = self.logical_rect(panel_rect);
+        let scrolled = self.scrolled_rect(logical);
+        let owner = if self.image_panel.search_open || self.image_panel.generate_open {
+            property_panel_image_assets::image_popover_input_caret_rect(
+                scrolled,
+                self.visible_sections(),
+                &self.image_panel,
+                self.image_gen_profile.as_ref(),
+            )
+        } else if self.font_picker.open {
+            let entries = self.font_picker_entries();
+            property_panel_typography::font_picker_layout(
+                scrolled,
+                self.visible_sections(),
+                &entries,
+                self.font_import_supported,
+                self.font_picker.scroll.offset,
+            )
+            .map(|layout| layout.search)
+        } else if self.page_only
+            && self.focus == Some(op_editor_core::PropertyFocus::PageBackgroundHex)
+        {
+            Some(crate::widgets::property_panel_page::background_input_rect(
+                logical,
+                self.page_background.is_some(),
+            ))
+        } else if self.image_fill_popover_open
+            && self.focus == Some(op_editor_core::PropertyFocus::ImageTileScale)
+        {
+            crate::widgets::property_panel_image_fill::image_fill_popover_input_rect(
+                scrolled,
+                self.visible_sections(),
+                &self.snapshot,
+            )
+        } else {
+            let focus = self.focus.or_else(|| {
+                self.effect_param_focus
+                    .map(|focus| op_editor_core::PropertyFocus::EffectRadius(focus.effect))
+            })?;
+            crate::widgets::property_panel_sections::editable_input_rects(
+                scrolled,
+                self.visible_sections(),
+                &self.snapshot.fills,
+                &self.snapshot.effects,
+            )
+            .into_iter()
+            .find_map(|(candidate, rect)| (candidate == focus).then_some(rect))
+        }?;
+        Some(self.physical_rect(logical, owner))
+    }
+
+    /// Scroll offset that keeps the active Property-surface keyboard owner
+    /// inside the clipped body after a mobile keyboard shortens the panel.
+    pub fn keyboard_owner_scroll_offset(&self, panel_rect: Rect) -> Option<f32> {
+        let logical = self.logical_rect(panel_rect);
+        let owner = self.keyboard_owner_rect(panel_rect)?;
+        let current = self.physical_length(self.effective_scroll(logical));
+        let margin = self.physical_length(8.0);
+        let visible_top = panel_rect.origin.y
+            + self.physical_length(crate::widgets::property_panel_inputs::TAB_HEIGHT)
+            + margin;
+        let visible_bottom = panel_rect.origin.y + panel_rect.size.y - margin;
+        let mut next = current;
+        if owner.origin.y < visible_top {
+            next -= visible_top - owner.origin.y;
+        } else if owner.origin.y + owner.size.y > visible_bottom {
+            next += owner.origin.y + owner.size.y - visible_bottom;
+        }
+        let max = (self.content_height(panel_rect) - panel_rect.size.y).max(0.0);
+        Some(next.clamp(0.0, max))
+    }
+
     pub fn image_popover_input_geometry(
         &self,
         panel_rect: Rect,

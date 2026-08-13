@@ -354,11 +354,7 @@ impl WidgetHostNative {
         {
             return None;
         }
-        let panel_rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
-            &self.editor_state,
-            self.last_viewport_w,
-            self.last_viewport_h,
-        );
+        let panel_rect = self.property_rect(self.last_viewport_w, self.last_viewport_h);
         if !panel_rect.contains(Point2D::new(x, y)) {
             return None;
         }

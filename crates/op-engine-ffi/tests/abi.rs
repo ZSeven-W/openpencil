@@ -4,7 +4,8 @@
 
 use op_engine_ffi::{
     op_create, op_destroy, op_frame, op_frame_cpu, op_get_pixel_size, op_last_error, op_pointer,
-    op_resize, op_resume, op_suspend, OpCreateDesc, OpEngine, OpStatus,
+    op_prefers_light_system_icons, op_resize, op_resize_with_safe_area, op_resume, op_suspend,
+    OpCreateDesc, OpEngine, OpStatus,
 };
 use std::ptr;
 
@@ -119,6 +120,23 @@ fn invalid_desc_is_rejected() {
 }
 
 #[test]
+fn viewer_system_icon_preference_is_dark_and_validates_output() {
+    let engine = create_engine(200.0, 200.0, 1.0).expect("engine creation");
+    assert_eq!(
+        unsafe { op_prefers_light_system_icons(engine, ptr::null_mut()) },
+        OpStatus::InvalidArg
+    );
+
+    let mut prefers_light = true;
+    assert_eq!(
+        unsafe { op_prefers_light_system_icons(engine, &mut prefers_light) },
+        OpStatus::Ok
+    );
+    assert!(!prefers_light);
+    assert_eq!(unsafe { op_destroy(engine) }, OpStatus::Ok);
+}
+
+#[test]
 fn engine_is_bound_to_its_creator_thread() {
     let engine = create_engine(200.0, 200.0, 1.0).expect("engine creation");
     // The raw pointer is deliberately !Send; a usize copy rides into the
@@ -156,6 +174,35 @@ fn resize_updates_pixel_size() {
 
     let status = unsafe { op_destroy(engine) };
     assert_eq!(status, OpStatus::Ok);
+}
+
+#[test]
+fn atomic_resize_with_safe_area_updates_one_valid_tuple() {
+    let engine = create_engine(300.0, 400.0, 1.0).expect("engine creation");
+    let mut width = 0u32;
+    let mut height = 0u32;
+
+    assert_eq!(
+        unsafe { op_resize_with_safe_area(engine, 120.0, 240.0, 2.0, 24.0, 10.0, 20.0, 12.0) },
+        OpStatus::Ok
+    );
+    assert_eq!(
+        unsafe { op_get_pixel_size(engine, &mut width, &mut height) },
+        OpStatus::Ok
+    );
+    assert_eq!((width, height), (240, 480));
+
+    assert_eq!(
+        unsafe { op_resize_with_safe_area(engine, 150.0, 250.0, 3.0, 24.0, 10.0, 20.0, -1.0) },
+        OpStatus::InvalidArg
+    );
+    assert_eq!(
+        unsafe { op_get_pixel_size(engine, &mut width, &mut height) },
+        OpStatus::Ok
+    );
+    assert_eq!((width, height), (240, 480));
+
+    assert_eq!(unsafe { op_destroy(engine) }, OpStatus::Ok);
 }
 
 #[test]

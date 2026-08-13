@@ -1,5 +1,7 @@
 use super::WidgetHostNative;
-use op_editor_core::{AccountMenuRow, AccountState, ButtonPressTarget, LoginModalButton};
+use op_editor_core::{
+    AccountMenuRow, AccountState, ButtonPressTarget, LoginModalButton, PropertyFocus,
+};
 use op_editor_ui::widgets::account_menu::AccountMenu;
 use op_editor_ui::widgets::login_modal::LoginModal;
 use op_editor_ui::widgets::top_bar::TopBar;
@@ -258,6 +260,38 @@ fn account_menu_settings_row_opens_settings_on_account_tab() {
         host.editor_state().editor_ui.agent_settings.tab,
         op_editor_core::agent_settings::AgentSettingsTab::Account
     );
+}
+
+#[test]
+fn account_menu_settings_row_releases_hidden_property_input_owner() {
+    let mut host = WidgetHostNative::new();
+    {
+        let state = host.editor_state_mut();
+        state.editor_ui.account = AccountState::SignedIn {
+            display_name: "Fini".into(),
+            username: "fini".into(),
+        };
+        state.editor_ui.account_menu_open = true;
+        state.ui.property_focus = Some(PropertyFocus::PositionX);
+        state.ui.property_input.set_text("123");
+    }
+
+    let top_bar = TopBar::for_editor_ui(&host.editor_state().editor_ui);
+    let anchor = top_bar.account_button_rect(top_bar_rect());
+    let menu = AccountMenu::for_editor_ui(&host.editor_state().editor_ui).expect("signed in");
+    let menu_rect = menu.rect_at(anchor);
+    let settings_point = Point2D::new(
+        menu_rect.origin.x + 20.0,
+        menu_rect.origin.y + menu_rect.size.y - 40.0,
+    );
+
+    host.dispatch_account_menu_press(settings_point.x, settings_point.y, VW, VH);
+
+    assert!(host.editor_state().editor_ui.agent_settings_open);
+    assert!(host.editor_state().ui.property_focus.is_none());
+    let property_draft = host.editor_state().ui.property_input.text().to_owned();
+    assert!(!host.apply_text('9'));
+    assert_eq!(host.editor_state().ui.property_input.text(), property_draft);
 }
 
 #[test]

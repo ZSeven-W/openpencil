@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">OpenPencil Player</string>
+    <string name="app_name" translatable="false">openpencil</string>
     <string name="document_open_failed">Couldn\'t open this file.</string>
     <string name="document_type_unsupported">Choose an .op or .pen file.</string>
 </resources>
