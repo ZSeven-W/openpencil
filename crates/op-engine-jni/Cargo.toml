@@ -15,6 +15,9 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # EGL/GLES rendering on Android (jian-skia surface/egl_android).
 gl = ["op-engine-ffi/gl"]
+# Metal rendering on iOS — forwards to the engine so the cross-target
+# compile guard can pass the same platform feature on every mobile target.
+metal = ["op-engine-ffi/metal"]
 # Full-editor mode (forwards to the engine's editor feature).
 editor = ["op-engine-ffi/editor"]
 # Local-only authentication for Android editor builds. The underlying bridge
