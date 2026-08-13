@@ -10,14 +10,15 @@ use super::press_ctx::PressCtx;
 use super::{CodeSelectionDragState, WidgetHostNative};
 use op_editor_core::codegen::CodeSelection;
 use op_editor_ui::widgets::press_flow;
-use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
-use op_editor_ui::{Point2D, Rect};
+use op_editor_ui::widgets::PropertyPanel;
+use op_editor_ui::Point2D;
 
 impl WidgetHostNative {
     /// `None` — no property popover claimed the press.
     pub(in crate::widget_host) fn press_property_overlay_tiers(
         &mut self,
         ctx: &PressCtx,
+        allow_touch_panel_defer: bool,
     ) -> Option<bool> {
         let (x, y) = (ctx.x, ctx.y);
         let viewport_width = ctx.viewport_width;
@@ -66,16 +67,12 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.interaction_menu_open && !in_git_panel {
             self.refresh_layout_scene();
             if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-                let property_rect = Rect {
-                    origin: Point2D::new(
-                        viewport_width - self.editor_state.editor_ui.property_panel_width,
-                        TOP_BAR_HEIGHT,
-                    ),
-                    size: Point2D::new(
-                        self.editor_state.editor_ui.property_panel_width,
-                        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                    ),
-                };
+                let property_rect =
+                    op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
+                        &self.editor_state,
+                        viewport_width,
+                        viewport_height,
+                    );
                 match panel.interaction_menu_hit(property_rect, Point2D::new(x, y)) {
                     op_editor_ui::widgets::InteractionMenuHit::Row(action) => {
                         self.apply_property_action(action);
@@ -116,7 +113,14 @@ impl WidgetHostNative {
             return Some(true);
         }
 
-        // 0c0a1. Text font-family picker — outside-click dismiss.
+        // 0c0a1. Text font-family picker — a touch inside the popup is
+        // release-delayed so a row press can promote to one-finger scrolling.
+        // Mouse presses and touch presses outside the popup keep the existing
+        // immediate select / outside-dismiss behaviour.
+        if allow_touch_panel_defer && !in_git_panel && self.begin_font_picker_touch_gesture(ctx) {
+            return Some(true);
+        }
+        // Text font-family picker — outside-click dismiss.
         if !in_git_panel && self.dismiss_font_picker_on_press(x, y, viewport_width, viewport_height)
         {
             return Some(true);
@@ -189,27 +193,56 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn press_property_panel_tier(
         &mut self,
         ctx: &PressCtx,
+        allow_touch_panel_defer: bool,
     ) -> Option<bool> {
         let (x, y) = (ctx.x, ctx.y);
         let viewport_width = ctx.viewport_width;
         let viewport_height = ctx.viewport_height;
         let in_git_panel = ctx.in_git_panel;
+        let inspector_visible = !self.editor_state.editor_ui.touch_chrome()
+            || self.editor_state.editor_ui.expanded_touch_layout()
+            || self.editor_state.editor_ui.mobile_sheet
+                == Some(op_editor_core::size_class::MobileSheetKind::Properties);
+        if !inspector_visible {
+            return None;
+        }
+        // Touch inspector close hides the surface without destroying the
+        // selection. Selection and inspector visibility are separate state.
+        if self.editor_state.editor_ui.touch_chrome()
+            && !self.editor_state.editor_ui.expanded_touch_layout()
+        {
+            if let Some(panel) =
+                PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene)
+            {
+                let sheet = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
+                    &self.editor_state,
+                    ctx.viewport_width,
+                    ctx.viewport_height,
+                );
+                let close = op_editor_ui::widgets::mobile_chrome::sheet_close_rect(sheet);
+                if close.contains(Point2D::new(x, y)) {
+                    self.cancel_native_touch_gestures();
+                    self.editor_state.editor_ui.mobile_sheet = None;
+                    self.mark_dirty();
+                    return Some(true);
+                }
+                let _ = panel;
+            }
+        }
+        if allow_touch_panel_defer && self.begin_property_touch_gesture(ctx) {
+            return Some(true);
+        }
         // 0c. PropertyPanel input row.
         self.refresh_layout_scene();
         if let Some(panel) =
             PropertyPanel::for_selection_with_scene(&self.editor_state, &self.layout_scene)
                 .filter(|_| !in_git_panel)
         {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
+            let property_rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
+                &self.editor_state,
+                viewport_width,
+                viewport_height,
+            );
             if let Some(anchor) = self.code_text_offset_at_screen(x, y) {
                 self.commit_property_focus_if_any();
                 self.editor_state.codegen.code_selection = Some(CodeSelection {

@@ -20,6 +20,7 @@ impl WidgetHostNative {
             || editor_ui.preset_name_input_active()
             || editor_ui.icon_picker.open
             || editor_ui.prompt_center.open
+            || editor_ui.scene_template_center.input_active()
             || editor_ui.component_browser_open
             // `active_text_input()` resolves chat before Git. Visible Git /
             // clone inputs must therefore claim ownership before the pointer
@@ -528,6 +529,7 @@ impl WidgetHostNative {
 
     /// Cmd+, — open / close the floating agent-settings modal.
     pub fn apply_toggle_agent_settings(&mut self) -> bool {
+        self.cancel_agent_settings_touch_gesture();
         self.commit_variable_row_focus_if_any();
         self.editor_state.editor_ui.blur_collab_join_input();
         let opening = !self.editor_state.editor_ui.agent_settings_open;
@@ -557,6 +559,7 @@ impl WidgetHostNative {
     /// Native menu commands use this instead of toggling so a command can
     /// reveal its live status even when Settings is already open elsewhere.
     pub fn apply_open_agent_settings_tab(&mut self, tab: AgentSettingsTab) -> bool {
+        self.cancel_agent_settings_touch_gesture();
         self.commit_variable_row_focus_if_any();
         self.editor_state.editor_ui.blur_collab_join_input();
         self.commit_settings_focus_if_any();

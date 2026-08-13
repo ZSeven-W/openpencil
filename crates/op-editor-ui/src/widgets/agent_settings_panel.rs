@@ -9,9 +9,8 @@ use crate::widgets::agent_settings_mcp::{self, McpHit};
 use crate::widgets::agent_settings_panel_card::paint_agent_card;
 use crate::widgets::agent_settings_panel_geometry::{
     acp_section_y, agent_card_rect_at, agent_card_rect_in, agents_body_top, close_rect,
-    connect_btn_rect_at, content_paint_clip_rect, content_rect, disconnect_btn_rect_at,
-    full_settings_tabs, hero_body_rect, nav_item_rect, provider_rows_top, tab_i18n_label,
-    CLAUDE_HINT_H, PROVIDER_SECTION_HEADER_H,
+    connect_btn_rect_at, content_rect, disconnect_btn_rect_at, full_settings_tabs, hero_body_rect,
+    provider_rows_top, tab_i18n_label, CLAUDE_HINT_H, PROVIDER_SECTION_HEADER_H,
 };
 use crate::widgets::agent_settings_system::{self, SystemHit};
 use crate::widgets::editor_state_ext::theme_for;
@@ -165,7 +164,18 @@ pub enum AgentSettingsPanelMode {
 }
 
 impl AgentSettingsPanelMode {
-    fn visible_tabs(self) -> &'static [AgentSettingsTab] {
+    fn visible_tabs(self, ui: &EditorUiState) -> &'static [AgentSettingsTab] {
+        if ui.touch_chrome() && self != AgentSettingsPanelMode::McpOnly {
+            return if matches!(
+                self,
+                AgentSettingsPanelMode::FullWithAccount
+                    | AgentSettingsPanelMode::WebBuiltinOnlyWithAccount
+            ) {
+                &TOUCH_TABS_WITH_ACCOUNT
+            } else {
+                &TOUCH_TABS
+            };
+        }
         match self {
             AgentSettingsPanelMode::Full => full_settings_tabs(false),
             AgentSettingsPanelMode::FullWithAccount => full_settings_tabs(true),
@@ -186,21 +196,37 @@ impl AgentSettingsPanelMode {
         }
     }
 
-    fn active_tab(self, settings: &AgentSettings) -> AgentSettingsTab {
-        if self.visible_tabs().contains(&settings.tab) {
+    fn active_tab(self, settings: &AgentSettings, ui: &EditorUiState) -> AgentSettingsTab {
+        if self.visible_tabs(ui).contains(&settings.tab) {
             settings.tab
         } else {
-            self.visible_tabs()[0]
+            self.visible_tabs(ui)[0]
         }
     }
 
-    fn shows_external_agents(self) -> bool {
-        matches!(
-            self,
-            AgentSettingsPanelMode::Full | AgentSettingsPanelMode::FullWithAccount
-        )
+    fn shows_external_agents(self, ui: &EditorUiState) -> bool {
+        !ui.touch_chrome()
+            && matches!(
+                self,
+                AgentSettingsPanelMode::Full | AgentSettingsPanelMode::FullWithAccount
+            )
     }
 }
+
+const TOUCH_TABS: [AgentSettingsTab; 4] = [
+    AgentSettingsTab::Agents,
+    AgentSettingsTab::Images,
+    AgentSettingsTab::Fonts,
+    AgentSettingsTab::System,
+];
+
+const TOUCH_TABS_WITH_ACCOUNT: [AgentSettingsTab; 5] = [
+    AgentSettingsTab::Agents,
+    AgentSettingsTab::Images,
+    AgentSettingsTab::Fonts,
+    AgentSettingsTab::System,
+    AgentSettingsTab::Account,
+];
 
 fn mode_for_ui(ui: &EditorUiState, base: AgentSettingsPanelMode) -> AgentSettingsPanelMode {
     if ui.embed == op_editor_core::EmbedHost::VsCode {
@@ -326,8 +352,35 @@ impl<'a> AgentSettingsPanel<'a> {
 
     /// Centred modal rect, clamped to the viewport. Width and height both
     /// shrink below their ceiling when the window is small, so the dialog
-    /// never runs off screen or under the top bar.
+    /// never runs off screen or under the top bar. In mobile layout the
+    /// settings become a responsive touch surface: full-screen on phone,
+    /// inset on tablet portrait, and a bounded rail workspace on tablet
+    /// landscape.
     pub fn rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
+        if self.ui.compact_layout() {
+            return Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(viewport_w.max(0.0), viewport_h.max(0.0)),
+            };
+        }
+        if self.ui.medium_layout() {
+            let inset = 12.0;
+            return Rect {
+                origin: Point2D::new(inset, inset),
+                size: Point2D::new(
+                    (viewport_w - inset * 2.0).max(0.0),
+                    (viewport_h - inset * 2.0).max(0.0),
+                ),
+            };
+        }
+        if self.ui.expanded_touch_layout() {
+            let w = PANEL_WIDTH.min((viewport_w - 32.0).max(0.0));
+            let h = 800.0_f32.min((viewport_h - 32.0).max(0.0));
+            return Rect {
+                origin: Point2D::new((viewport_w - w) / 2.0, (viewport_h - h) / 2.0),
+                size: Point2D::new(w, h),
+            };
+        }
         let top_limit = crate::widgets::TOP_BAR_HEIGHT + 8.0;
         let w = PANEL_WIDTH
             .min(viewport_w - VIEWPORT_MARGIN_X * 2.0)
@@ -342,11 +395,42 @@ impl<'a> AgentSettingsPanel<'a> {
             size: Point2D::new(w, h),
         }
     }
+
+    /// Resolved responsive geometry shared by paint, hit-testing, scrolling,
+    /// and host gesture code.
+    pub fn resolved_layout(&self, panel: Rect) -> AgentSettingsLayout {
+        AgentSettingsLayout::resolve(panel, self.ui, self.navigation_tabs().len())
+    }
+
+    pub fn resolved_content_viewport(&self, panel: Rect) -> Rect {
+        self.resolved_layout(panel).content
+    }
+
+    pub fn max_scroll(&self, panel: Rect) -> f32 {
+        (self.content_total_height() - self.resolved_content_viewport(panel).size.y).max(0.0)
+    }
+
+    pub fn effective_scroll(&self, panel: Rect) -> f32 {
+        self.settings
+            .scroll_y
+            .offset
+            .clamp(0.0, self.max_scroll(panel))
+    }
+
+    pub fn navigation_tabs(&self) -> &'static [AgentSettingsTab] {
+        self.mode.visible_tabs(self.ui)
+    }
+
+    pub fn active_tab(&self) -> AgentSettingsTab {
+        self.mode.active_tab(&self.settings, self.ui)
+    }
 }
 
 mod hero;
 mod hit_test;
+mod layout;
 mod paint;
 mod tabs;
 
+pub use layout::{AgentSettingsLayout, AgentSettingsSurfaceKind};
 pub use paint::drag_for_hit;

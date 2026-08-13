@@ -1,0 +1,8 @@
+build/
+.gradle/
+local.properties
+app/src/main/jniLibs/
+.idea/
+*.iml
+.cxx/
+.kotlin/

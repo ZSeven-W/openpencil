@@ -10,9 +10,7 @@
 //! conversion at the walk boundary is lossless).
 
 use crate::widgets::icons::Icon;
-use crate::widgets::layer_panel::{
-    LAYER_ROW_HEIGHT, PAGE_ROW_HEIGHT, SECTION_GAP, SECTION_HEADER_HEIGHT,
-};
+use crate::widgets::layer_panel_metrics::LayerPanelMetrics;
 use crate::widgets::layer_panel_paint::{approx_text_width, ROW_FONT};
 use crate::Rect;
 use jian_core::scroll::{self, ScrollState};
@@ -202,23 +200,51 @@ pub(super) fn walk_excluding(
     }
 }
 
-fn layer_item_content_w(item: &LayerItem) -> f32 {
-    let indent = super::layer_panel::ROW_PAD_X + item.depth as f32 * 12.0;
-    let label_w = approx_text_width(&item.label, ROW_FONT);
-    6.0 + indent + 18.0 + 20.0 + label_w + 24.0
+fn layer_item_content_w(item: &LayerItem, metrics: LayerPanelMetrics) -> f32 {
+    let indent = metrics.row_pad_x + item.depth as f32 * 12.0;
+    let label_w = approx_text_width(&item.label, metrics.row_font);
+    if metrics.touch {
+        6.0 + indent
+            + metrics.action_target
+            + 4.0
+            + metrics.glyph_size
+            + 8.0
+            + label_w
+            + metrics.action_target * 2.0
+            + 8.0
+    } else {
+        6.0 + indent + 18.0 + 20.0 + label_w + 24.0
+    }
 }
 
-pub(super) fn layers_content_width(items: &[LayerItem], viewport_w: f32) -> f32 {
+pub(super) fn layers_content_width(
+    items: &[LayerItem],
+    viewport_w: f32,
+    metrics: LayerPanelMetrics,
+) -> f32 {
     items
         .iter()
-        .map(layer_item_content_w)
+        .map(|item| layer_item_content_w(item, metrics))
         .fold(viewport_w, f32::max)
 }
 
-pub(super) fn pages_content_width(pages: &[PageItem], viewport_w: f32) -> f32 {
+pub(super) fn pages_content_width(
+    pages: &[PageItem],
+    viewport_w: f32,
+    metrics: LayerPanelMetrics,
+) -> f32 {
     pages
         .iter()
-        .map(|page| super::layer_panel::ROW_PAD_X + approx_text_width(&page.label, ROW_FONT) + 48.0)
+        .map(|page| {
+            if metrics.touch {
+                metrics.row_pad_x
+                    + approx_text_width(&page.label, metrics.row_font)
+                    + metrics.action_target
+                    + 16.0
+            } else {
+                super::layer_panel::ROW_PAD_X + approx_text_width(&page.label, ROW_FONT) + 48.0
+            }
+        })
         .fold(viewport_w, f32::max)
 }
 
@@ -275,10 +301,6 @@ pub(super) fn icon_for_node(node: &PenNode) -> Icon {
         PenNode::IconFont(_) => Icon::Square,
     }
 }
-
-/// Max height (px) of the LayerPanel's Pages-section row viewport —
-/// roughly six rows; a longer page list scrolls within it.
-pub const LAYER_PAGES_VIEW_MAX: f32 = PAGE_ROW_HEIGHT * 6.0;
 
 /// Stored scroll state for one bounded LayerPanel region.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -338,6 +360,7 @@ pub struct LayerRegionInput {
     pub items_len: usize,
     pub pages: LayerScrollSnapshot,
     pub layers: LayerScrollSnapshot,
+    pub metrics: LayerPanelMetrics,
 }
 
 /// Compute the bounded Pages / Layers scroll-region geometry for a
@@ -351,18 +374,29 @@ pub fn layer_regions(input: LayerRegionInput) -> LayerRegions {
         items_len,
         pages,
         layers,
+        metrics,
     } = input;
 
     let pages_header_y = rect.origin.y + 8.0;
-    let pages_rows_top = pages_header_y + SECTION_HEADER_HEIGHT;
-    let pages_content = pages_len as f32 * PAGE_ROW_HEIGHT;
-    let pages_view_h = pages_content.min(LAYER_PAGES_VIEW_MAX);
+    let pages_rows_top = pages_header_y + metrics.section_header_height;
+    let pages_content = pages_len as f32 * metrics.page_row_height;
+    let pages_view_max = metrics.page_row_height * metrics.pages_max_rows as f32;
+    let mut pages_view_h = pages_content.min(pages_view_max);
+    if metrics.touch {
+        let fixed_height = 8.0
+            + metrics.section_header_height
+            + metrics.section_gap
+            + metrics.section_header_height
+            + metrics.layer_row_height * 3.0
+            + 8.0;
+        pages_view_h = pages_view_h.min((rect.size.y - fixed_height).max(0.0));
+    }
     let pages = resolve_layer_scroll(pages, pages_content, pages_view_h, rect.size.x);
 
-    let layers_header_y = pages_rows_top + pages_view_h + SECTION_GAP;
-    let layers_rows_top = layers_header_y + SECTION_HEADER_HEIGHT;
+    let layers_header_y = pages_rows_top + pages_view_h + metrics.section_gap;
+    let layers_rows_top = layers_header_y + metrics.section_header_height;
     let layers_view_h = (rect.origin.y + rect.size.y - 8.0 - layers_rows_top).max(0.0);
-    let layers_content = items_len.max(1) as f32 * LAYER_ROW_HEIGHT;
+    let layers_content = items_len.max(1) as f32 * metrics.layer_row_height;
     let layers = resolve_layer_scroll(layers, layers_content, layers_view_h, rect.size.x);
 
     LayerRegions {

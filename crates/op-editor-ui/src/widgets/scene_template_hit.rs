@@ -43,7 +43,7 @@ impl SceneTemplatePanel<'_> {
             }
             return None;
         }
-        if Self::close_rect(panel).contains(point) {
+        if self.close_rect_for(panel).contains(point) {
             return Some(SCENE_TEMPLATE_CLOSE_HOVER);
         }
         if self
@@ -106,7 +106,7 @@ impl SceneTemplatePanel<'_> {
         if let Some(hit) = self.style_import_hit(panel, point) {
             return Some(hit);
         }
-        if Self::close_rect(panel).contains(point) {
+        if self.close_rect_for(panel).contains(point) {
             return Some(SceneTemplateHit::Close);
         }
         if self
@@ -118,7 +118,7 @@ impl SceneTemplatePanel<'_> {
         if let Some((_, tab)) = self.tab_at(panel, point) {
             return Some(SceneTemplateHit::SelectTab(tab));
         }
-        let search = Self::search_rect(panel);
+        let search = self.search_rect_for(panel);
         if search.contains(point) {
             let caret = self.caret_at(
                 &self.state.editor_ui.scene_template_center.search,
@@ -206,7 +206,7 @@ impl SceneTemplatePanel<'_> {
                         // import would pin it instead.
                         if card.is_user
                             && self.style_delete_visible(index)
-                            && Self::style_delete_rect(rect).contains(point)
+                            && self.style_delete_rect_for(rect).contains(point)
                         {
                             return Some(SceneTemplateHit::DeleteStyleGuide(card.id.clone()));
                         }

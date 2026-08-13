@@ -13,24 +13,50 @@ fn secondary_hero_height() -> f32 {
 
 impl AgentSettingsPanel<'_> {
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> AgentSettingsHit {
-        if !(panel).contains(point) {
+        if !panel.contains(point) {
             return AgentSettingsHit::Outside;
         }
-        if (close_rect(panel)).contains(point) {
+        let layout = self.resolved_layout(panel);
+        if layout.close_target.contains(point) {
             return AgentSettingsHit::Close;
         }
-        let tabs = self.mode.visible_tabs();
+        let tabs = self.mode.visible_tabs(self.ui);
         for (i, tab) in tabs.iter().enumerate() {
-            if (nav_item_rect(panel, i, tabs.len())).contains(point) {
+            if layout.nav_item_rect(i, tabs.len()).contains(point) {
                 return AgentSettingsHit::SelectTab(*tab);
             }
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
-        match self.mode.active_tab(&self.settings) {
+        let active_tab = self.mode.active_tab(&self.settings, self.ui);
+        let scroll = self.effective_scroll(panel);
+        // The Fonts popup deliberately escapes the body clip and is painted
+        // as a modal child. Route it before the body gate; close and tab
+        // controls above already retained priority.
+        if active_tab == AgentSettingsTab::Fonts && self.font_picker_layout(panel).is_some() {
+            let hit = agent_settings_fonts::hit_test(
+                panel,
+                hero_body_rect(layout.content),
+                self.ui,
+                point,
+                scroll,
+            );
+            if hit != FontsHit::None {
+                return AgentSettingsHit::Fonts(hit);
+            }
+        }
+        // Painted tab bodies are clipped to this viewport. Gate dispatch by
+        // the same rect so a scrolled-off control cannot fire through the
+        // touch header or navigation strip.
+        if !layout.content.contains(point) {
+            return AgentSettingsHit::Inside;
+        }
+        let scrolled = Point2D::new(point.x, point.y + scroll);
+        let content = layout.content;
+        match active_tab {
             AgentSettingsTab::Agents => {
-                match agent_settings_builtin::hit_test(
-                    content_rect(panel),
+                match agent_settings_builtin::hit_test_for_ui(
+                    content,
                     &self.settings,
+                    self.ui,
                     scrolled,
                 ) {
                     BuiltinHit::AddProvider => return AgentSettingsHit::AddProvider,
@@ -65,10 +91,9 @@ impl AgentSettingsPanel<'_> {
                     }
                     BuiltinHit::None => {}
                 }
-                if !self.mode.shows_external_agents() {
+                if !self.mode.shows_external_agents(self.ui) {
                     return AgentSettingsHit::Inside;
                 }
-                let content = content_rect(panel);
                 let acp_y = acp_section_y(content, &self.settings);
                 match agent_settings_acp::hit_test(content, &self.settings, scrolled, acp_y) {
                     AcpHit::AddAgent => return AgentSettingsHit::AddAcpAgent,
@@ -106,7 +131,7 @@ impl AgentSettingsPanel<'_> {
                 }
             }
             AgentSettingsTab::Mcp => {
-                match agent_settings_mcp::hit_test(content_rect(panel), &self.settings, scrolled) {
+                match agent_settings_mcp::hit_test(content, &self.settings, scrolled) {
                     McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
                     McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
                     McpHit::CopyClientConfig => return AgentSettingsHit::CopyMcpClientConfig,
@@ -116,7 +141,7 @@ impl AgentSettingsPanel<'_> {
             }
             AgentSettingsTab::Images => {
                 match agent_settings_images::hit_test(
-                    hero_body_rect(content_rect(panel)),
+                    hero_body_rect(content),
                     &self.settings,
                     scrolled,
                 ) {
@@ -156,34 +181,26 @@ impl AgentSettingsPanel<'_> {
             AgentSettingsTab::Fonts => {
                 let hit = agent_settings_fonts::hit_test(
                     panel,
-                    hero_body_rect(content_rect(panel)),
+                    hero_body_rect(content),
                     self.ui,
                     point,
-                    self.settings.scroll_y.offset,
+                    scroll,
                 );
                 if hit != FontsHit::None {
                     return AgentSettingsHit::Fonts(hit);
                 }
             }
-            AgentSettingsTab::System => {
-                match agent_settings_system::hit_test(content_rect(panel), scrolled) {
-                    SystemHit::SelectThemeMode(mode) => {
-                        return AgentSettingsHit::SelectThemeMode(mode)
-                    }
-                    SystemHit::ToggleAutoUpdate => return AgentSettingsHit::ToggleAutoUpdate,
-                    SystemHit::ToggleExperimental => return AgentSettingsHit::ToggleExperimental,
-                    SystemHit::SelectPencilCursor(style) => {
-                        return AgentSettingsHit::SelectPencilCursor(style)
-                    }
-                    SystemHit::None => {}
+            AgentSettingsTab::System => match agent_settings_system::hit_test(content, scrolled) {
+                SystemHit::SelectThemeMode(mode) => return AgentSettingsHit::SelectThemeMode(mode),
+                SystemHit::ToggleAutoUpdate => return AgentSettingsHit::ToggleAutoUpdate,
+                SystemHit::ToggleExperimental => return AgentSettingsHit::ToggleExperimental,
+                SystemHit::SelectPencilCursor(style) => {
+                    return AgentSettingsHit::SelectPencilCursor(style)
                 }
-            }
+                SystemHit::None => {}
+            },
             AgentSettingsTab::Account => {
-                match agent_settings_account::hit_test(
-                    hero_body_rect(content_rect(panel)),
-                    self.ui,
-                    scrolled,
-                ) {
+                match agent_settings_account::hit_test(hero_body_rect(content), self.ui, scrolled) {
                     AccountTabHit::SignIn => return AgentSettingsHit::OpenLoginModal,
                     AccountTabHit::SignOut => return AgentSettingsHit::SignOutAccount,
                     AccountTabHit::None => {}
@@ -194,9 +211,10 @@ impl AgentSettingsPanel<'_> {
     }
 
     pub fn nav_at(&self, panel: Rect, point: Point2D) -> Option<AgentSettingsTab> {
-        let tabs = self.mode.visible_tabs();
+        let layout = self.resolved_layout(panel);
+        let tabs = self.mode.visible_tabs(self.ui);
         for (i, tab) in tabs.iter().enumerate() {
-            if (nav_item_rect(panel, i, tabs.len())).contains(point) {
+            if layout.nav_item_rect(i, tabs.len()).contains(point) {
                 return Some(*tab);
             }
         }
@@ -204,34 +222,36 @@ impl AgentSettingsPanel<'_> {
     }
 
     pub fn card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
-        if !(panel).contains(point) {
+        let layout = self.resolved_layout(panel);
+        if !layout.content.contains(point) {
             return None;
         }
-        if !self.mode.shows_external_agents() {
+        if !self.mode.shows_external_agents(self.ui) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
         (0..AgentProvider::ALL.len())
             .find(|&i| (agent_card_rect_in(panel, i, &self.settings)).contains(scrolled))
     }
 
     pub fn builtin_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
-        agent_settings_builtin::card_at(content_rect(panel), &self.settings, scrolled)
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
+        agent_settings_builtin::card_at(content, &self.settings, scrolled)
     }
 
     pub fn acp_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return None;
         }
-        if !self.mode.shows_external_agents() {
+        if !self.mode.shows_external_agents(self.ui) {
             return None;
         }
-        let content = content_rect(panel);
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
         let section_y = acp_section_y(content, &self.settings);
         agent_settings_acp::card_at(content, &self.settings, scrolled, section_y)
     }
@@ -239,14 +259,14 @@ impl AgentSettingsPanel<'_> {
     /// Visible quick-add preset row under `point`, for the hosts' hover
     /// ladder. Same geometry contract as [`Self::acp_card_at`].
     pub fn acp_preset_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return None;
         }
-        if !self.mode.shows_external_agents() {
+        if !self.mode.shows_external_agents(self.ui) {
             return None;
         }
-        let content = content_rect(panel);
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
         let section_y = acp_section_y(content, &self.settings);
         agent_settings_acp::preset_row_at(content, &self.settings, scrolled, section_y)
     }
@@ -256,40 +276,44 @@ impl AgentSettingsPanel<'_> {
         panel: Rect,
         point: Point2D,
     ) -> Option<BuiltinAgentPresetKey> {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
-        agent_settings_builtin::preset_hover_at(content_rect(panel), &self.settings, scrolled)
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
+        agent_settings_builtin::preset_hover_at(content, &self.settings, scrolled)
     }
 
     pub fn builtin_preset_scroll_max_at(&self, panel: Rect, point: Point2D) -> Option<f32> {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
-        agent_settings_builtin::preset_scroll_max_at(content_rect(panel), &self.settings, scrolled)
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
+        agent_settings_builtin::preset_scroll_max_at(content, &self.settings, scrolled)
     }
 
     pub fn image_search_test_button_hover_at(&self, panel: Rect, point: Point2D) -> bool {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return false;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
         agent_settings_images::search_test_button_hover_at(
-            hero_body_rect(content_rect(panel)),
+            hero_body_rect(content),
             &self.settings,
             scrolled,
         )
     }
 
     pub fn image_gen_add_button_hover_at(&self, panel: Rect, point: Point2D) -> bool {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return false;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
         agent_settings_images::add_gen_button_hover_at(
-            hero_body_rect(content_rect(panel)),
+            hero_body_rect(content),
             &self.settings,
             scrolled,
         )
@@ -300,20 +324,21 @@ impl AgentSettingsPanel<'_> {
         panel: Rect,
         point: Point2D,
     ) -> Option<usize> {
-        if !(panel).contains(point) {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
             return None;
         }
-        let scrolled = Point2D::new(point.x, point.y + self.settings.scroll_y.offset);
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
         agent_settings_images::profile_test_button_hover_at(
-            hero_body_rect(content_rect(panel)),
+            hero_body_rect(content),
             &self.settings,
             scrolled,
         )
     }
 
     pub fn content_total_height(&self) -> f32 {
-        match self.mode.active_tab(&self.settings) {
-            AgentSettingsTab::Agents => agents_content_height(&self.settings, self.mode),
+        match self.mode.active_tab(&self.settings, self.ui) {
+            AgentSettingsTab::Agents => agents_content_height(&self.settings, self.mode, self.ui),
             AgentSettingsTab::Mcp => agent_settings_mcp::content_height(&self.settings),
             AgentSettingsTab::Images => {
                 secondary_hero_height() + agent_settings_images::content_height(&self.settings)
@@ -334,9 +359,9 @@ impl AgentSettingsPanel<'_> {
     ) -> Option<crate::widgets::property_panel_typography::FontPickerLayout> {
         agent_settings_fonts::picker_layout(
             panel,
-            hero_body_rect(content_rect(panel)),
+            hero_body_rect(self.resolved_content_viewport(panel)),
             self.ui,
-            self.settings.scroll_y.offset,
+            self.effective_scroll(panel),
         )
     }
 }

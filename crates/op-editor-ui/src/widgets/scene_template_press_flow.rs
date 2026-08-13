@@ -42,17 +42,21 @@ pub fn press_scene_template_center(
         SceneTemplateHit::Close => state.editor_ui.close_scene_template_center(),
         SceneTemplateHit::FocusSearch(offset) => {
             let center = &mut state.editor_ui.scene_template_center;
-            let changed =
-                center.search.caret() != offset || center.focus != SceneTemplateFocus::Search;
+            let changed = center.search.caret() != offset
+                || center.focus != SceneTemplateFocus::Search
+                || !center.input_focus_active;
             center.focus = SceneTemplateFocus::Search;
+            center.input_focus_active = true;
             center.search.set_caret(offset, now_ms);
             changed
         }
         SceneTemplateHit::FocusGenerate(offset) => {
             let center = &mut state.editor_ui.scene_template_center;
-            let changed =
-                center.generate.caret() != offset || center.focus != SceneTemplateFocus::Generate;
+            let changed = center.generate.caret() != offset
+                || center.focus != SceneTemplateFocus::Generate
+                || !center.input_focus_active;
             center.focus = SceneTemplateFocus::Generate;
+            center.input_focus_active = true;
             center.generate.set_caret(offset, now_ms);
             changed
         }
@@ -137,16 +141,16 @@ pub fn press_scene_template_center(
         SceneTemplateHit::DeleteTemplate(id) => delete_user_scene_template(state, &id),
         SceneTemplateHit::FocusStyleImport(offset) => {
             let center = &mut state.editor_ui.scene_template_center;
-            let changed =
-                center.import.text.caret() != offset || center.focus != SceneTemplateFocus::Import;
+            let changed = center.import.text.caret() != offset
+                || center.focus != SceneTemplateFocus::Import
+                || !center.input_focus_active;
             center.focus = SceneTemplateFocus::Import;
+            center.input_focus_active = true;
             center.import.text.set_caret(offset, now_ms);
             changed
         }
         SceneTemplateHit::ConfirmStyleImport => confirm_style_import(state),
-        SceneTemplateHit::CancelStyleImport => {
-            state.editor_ui.scene_template_center.close_style_import()
-        }
+        SceneTemplateHit::CancelStyleImport => state.editor_ui.close_scene_template_style_import(),
         SceneTemplateHit::InsideStyleImport => false,
         SceneTemplateHit::Inside => false,
     };
@@ -191,7 +195,7 @@ pub fn import_style_guide_text(state: &mut EditorState, raw: &str, fallback_name
             let id = imported.id.clone();
             let center = &mut state.editor_ui.scene_template_center;
             center.queue_style_persist(id.clone());
-            center.close_style_import();
+            state.editor_ui.close_scene_template_style_import();
             // Pin what was just imported. The user went and found a style
             // guide; leaving it unpinned would make the next generation
             // ignore the thing they just went to the trouble of adding.

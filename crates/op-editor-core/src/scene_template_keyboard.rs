@@ -16,7 +16,7 @@ use crate::EditorState;
 /// `None` means the panel is closed. `Some(changed)` means the panel owns the
 /// key, with `changed` indicating whether a repaint is needed.
 pub fn text(state: &mut EditorState, c: char, now_ms: u64) -> Option<bool> {
-    if !state.editor_ui.scene_template_center.open {
+    if !state.editor_ui.scene_template_center.input_active() {
         return None;
     }
     if c.is_control() {
@@ -39,7 +39,7 @@ pub fn text(state: &mut EditorState, c: char, now_ms: u64) -> Option<bool> {
 /// list structure the parser and the model both read. That is the whole reason
 /// this exists rather than the host's char-by-char `apply_input_paste`.
 pub fn paste(state: &mut EditorState, text: &str, now_ms: u64) -> Option<bool> {
-    if !state.editor_ui.scene_template_center.open {
+    if !state.editor_ui.scene_template_center.input_active() {
         return None;
     }
     let center = &mut state.editor_ui.scene_template_center;
@@ -71,7 +71,7 @@ pub fn delete_forward(state: &mut EditorState, now_ms: u64) -> Option<bool> {
 
 /// Move the focused caret left or right.
 pub fn move_caret(state: &mut EditorState, forward: bool, extend: bool, now_ms: u64) -> bool {
-    if !state.editor_ui.scene_template_center.open {
+    if !state.editor_ui.scene_template_center.input_active() {
         return false;
     }
     let input = state.editor_ui.scene_template_center.focused_input_mut();
@@ -85,7 +85,7 @@ pub fn move_caret(state: &mut EditorState, forward: bool, extend: bool, now_ms: 
 
 /// Select all text in the focused field.
 pub fn select_all(state: &mut EditorState, now_ms: u64) -> bool {
-    if !state.editor_ui.scene_template_center.open {
+    if !state.editor_ui.scene_template_center.input_active() {
         return false;
     }
     let input = state.editor_ui.scene_template_center.focused_input_mut();
@@ -96,7 +96,7 @@ pub fn select_all(state: &mut EditorState, now_ms: u64) -> bool {
 
 /// Return selected text from the focused field.
 pub fn selected_text(state: &EditorState) -> Option<&str> {
-    if !state.editor_ui.scene_template_center.open {
+    if !state.editor_ui.scene_template_center.input_active() {
         return None;
     }
     let center = &state.editor_ui.scene_template_center;
@@ -113,7 +113,7 @@ fn edit_if_open(
     state: &mut EditorState,
     edit: impl FnOnce(&mut jian_core::text_input::TextInputState),
 ) -> Option<bool> {
-    if !state.editor_ui.scene_template_center.open {
+    if !state.editor_ui.scene_template_center.input_active() {
         return None;
     }
     let center = &mut state.editor_ui.scene_template_center;

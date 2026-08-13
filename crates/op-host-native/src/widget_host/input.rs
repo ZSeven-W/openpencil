@@ -55,15 +55,16 @@ impl WidgetHostNative {
                 && self.editor_state.editor_ui.agent_settings.focus.is_some())
             || self.editor_state.editor_ui.icon_picker.open
             || self.editor_state.editor_ui.prompt_center.open
-            // The Asset Center owns the keyboard the whole time it is open —
-            // it always has one of its two fields focused, and
-            // `scene_template_keyboard` swallows every key regardless. Its
+            // The Asset Center owns the keyboard while a visible field has
+            // explicit focus. Desktop opens search-focused; touch waits for a
+            // field tap so opening the gallery cannot raise the software
+            // keyboard over its cards. Its
             // absence here is what left the gallery unable to take IME input:
             // `text_input_focus_active` reads this list, and a `false` there
             // makes the desktop shell call `set_ime_allowed(false)`, so the
             // platform never opens a composition session and pinyin produced
             // nothing at all while ASCII still went through `apply_text`.
-            || self.editor_state.editor_ui.scene_template_center.open
+            || self.editor_state.editor_ui.scene_template_center.input_active()
             || self.editor_state.editor_ui.chat_model_picker.open
             || self.editor_state.editor_ui.component_browser_open
             || self.editor_state.chat.focused
@@ -346,23 +347,23 @@ impl WidgetHostNative {
         {
             return None;
         }
-        let pw = self.editor_state.editor_ui.property_panel_width;
-        let panel_x = self.last_viewport_w - pw;
-        if x < panel_x || x > self.last_viewport_w {
+        if self.editor_state.editor_ui.touch_chrome()
+            && !self.editor_state.editor_ui.expanded_touch_layout()
+            && self.editor_state.editor_ui.mobile_sheet
+                != Some(op_editor_core::size_class::MobileSheetKind::Properties)
+        {
             return None;
         }
-        let panel_rect = Rect {
-            origin: Point2D::new(panel_x, op_editor_ui::widgets::TOP_BAR_HEIGHT),
-            size: Point2D::new(
-                pw,
-                (self.last_viewport_h - op_editor_ui::widgets::TOP_BAR_HEIGHT).max(0.0),
-            ),
-        };
-        op_editor_ui::widgets::property_panel_code::code_text_offset_at(
-            panel_rect,
-            &self.editor_state.codegen,
-            Point2D::new(x, y),
-        )
+        let panel_rect = op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
+            &self.editor_state,
+            self.last_viewport_w,
+            self.last_viewport_h,
+        );
+        if !panel_rect.contains(Point2D::new(x, y)) {
+            return None;
+        }
+        op_editor_ui::widgets::PropertyPanel::for_selection(&self.editor_state)?
+            .code_text_offset_at(panel_rect, Point2D::new(x, y))
     }
 
     pub(in crate::widget_host) fn apply_code_selection_drag_cursor_move(
@@ -555,6 +556,12 @@ impl WidgetHostNative {
     /// cursor move. See `crates/CLAUDE.md` for the canonical hit-test
     /// order before touching anything here.
     pub fn apply_cursor_move(&mut self, x: f32, y: f32) -> bool {
+        if let Some(changed) = self.update_agent_settings_touch_gesture(x, y) {
+            return changed;
+        }
+        if let Some(changed) = self.update_touch_panel_gesture(x, y) {
+            return changed;
+        }
         // Session-switch owner rotation before the cursor_probe resolve below
         // stores the canonical build (mirrors the paint entry).
         self.rotate_chat_owner_if_session_changed();

@@ -69,7 +69,11 @@ pub mod boolean_ops;
 #[cfg(feature = "gl-host")]
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub mod canvas_view_stub;
-#[cfg(feature = "gl-host")]
+// The editor-UI composition host — desktop + mobile (the mobile player
+// engine drives it through the same NativeFrameBackend). Its only
+// desktop-specific glue (collab session runtime, preview auto-wire) is
+// gl-host-gated inside.
+#[cfg(feature = "widget-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -80,7 +84,7 @@ pub mod canvas_view_stub;
 pub mod widget_host;
 // Canvas Preview (Play) mode runtime owner — depends on the OP
 // `RenderBackend` trait (same gate as `widget_host`).
-#[cfg(feature = "gl-host")]
+#[cfg(feature = "widget-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -102,7 +106,7 @@ pub use backend::{
     end_image_paint_diagnostics, image_paint_diagnostics_snapshot, to_jian_rect,
     ImagePaintDiagnostics, NativeBackend, NativeFrameBackend,
 };
-#[cfg(feature = "gl-host")]
+#[cfg(feature = "widget-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -111,7 +115,7 @@ pub use backend::{
     target_os = "android"
 ))]
 pub use preview::{PreviewEnterError, PreviewLayoutError, PreviewSession};
-#[cfg(feature = "gl-host")]
+#[cfg(feature = "widget-host")]
 #[cfg(any(
     target_os = "macos",
     target_os = "linux",
@@ -166,7 +170,7 @@ pub(crate) mod font_registry_test_support {
 // gl-host) sees it as dead code.
 #[cfg(all(
     test,
-    feature = "gl-host",
+    feature = "widget-host",
     any(
         target_os = "macos",
         target_os = "linux",

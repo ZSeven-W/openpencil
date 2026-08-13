@@ -1,16 +1,16 @@
 //! `LayerPanel` — left-rail document tree (Pages + Layers sections).
 //!
-//! Phase 6 migration: the panel's display model (page rows + the
-//! depth-flattened layer rows) is built directly from
-//! `op_editor_core::EditorState` — it walks the canonical `PenNode`
-//! tree on `EditorState.doc`. The widget keeps a shell-core
-//! `document::NodeId` in its hit-test surface; the hosts' input
-//! path wraps it into an `op-editor-core` id at the call boundary.
+//! Its page rows and depth-flattened layer rows are built from the canonical
+//! `PenNode` tree on `op_editor_core::EditorState`.
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::layer_panel_cache::{self, CachedLayerRows};
+use crate::widgets::layer_panel_metrics::{
+    add_page_target, collapse_target, delete_page_target, glyph_rect_in, layer_action_targets,
+    layer_node_icon_x, LayerPanelMetrics,
+};
 use crate::widgets::layer_panel_walkers::{
     apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
     pages_content_width, pages_from_state, visible_row_range, walk, walk_excluding,
@@ -35,15 +35,11 @@ fn t(ui: &EditorUiState, key: &'static str) -> &'static str {
     crate::widgets::editor_state_ext::translate(ui, key)
 }
 
-pub(crate) const SECTION_HEADER_HEIGHT: f32 = 28.0;
-pub(crate) const PAGE_ROW_HEIGHT: f32 = 32.0;
-pub(crate) const LAYER_ROW_HEIGHT: f32 = 28.0;
 pub(crate) const ROW_PAD_X: f32 = 12.0;
-pub(crate) const SECTION_GAP: f32 = 8.0;
 use crate::widgets::layer_panel_paint::{
-    layer_action_gutter_left, layer_content_clip_rect, layer_label_available_width,
-    layer_trailing_icon_xs, paint_drag_ghost, paint_rename_input, paint_section_header,
-    truncate_to_fit, truncate_to_fit_measured, ROW_FONT,
+    layer_action_gutter_left_with_metrics, layer_content_clip_rect_with_metrics,
+    layer_label_available_width_with_metrics, paint_drag_ghost, paint_rename_input_with_metrics,
+    paint_section_header_with_metrics, truncate_to_fit, truncate_to_fit_measured,
 };
 
 /// One row in the layers tree — flat depth-walked view.
@@ -85,6 +81,7 @@ pub struct LayerPanel {
     pub pages: Rc<Vec<PageItem>>,
     pub items: Rc<Vec<LayerItem>>,
     pub theme: Theme,
+    pub(crate) metrics: LayerPanelMetrics,
     pub pages_label: &'static str,
     pub layers_label: &'static str,
     pub drop_target: Option<DropTarget>,
@@ -129,9 +126,12 @@ impl LayerPanel {
     /// a live overlay (see `layer_panel_cache`), so a selection-/hover-only
     /// change reuses the cached rows.
     pub fn from_editor_owned(state: &EditorState, owner: u64) -> Self {
-        let rows = layer_panel_cache::resolve_owned(owner, state, || build_layer_rows(state));
+        let metrics = LayerPanelMetrics::for_ui(&state.editor_ui);
+        let rows =
+            layer_panel_cache::resolve_owned(owner, state, || build_layer_rows(state, metrics));
         Self::assemble(
             state,
+            metrics,
             rows.pages.clone(),
             rows.items.clone(),
             rows.pages_content_width,
@@ -160,6 +160,7 @@ impl LayerPanel {
     /// stamping the live styling overlay + scroll snapshots + chrome.
     fn assemble(
         state: &EditorState,
+        metrics: LayerPanelMetrics,
         pages: Rc<Vec<PageItem>>,
         items: Rc<Vec<LayerItem>>,
         pages_content_width: f32,
@@ -170,6 +171,7 @@ impl LayerPanel {
             pages,
             items,
             theme: theme_for(&state.editor_ui),
+            metrics,
             pages_label: t(&state.editor_ui, "pages.title"),
             layers_label: t(&state.editor_ui, "layers.title"),
             drop_target: None,
@@ -230,10 +232,8 @@ impl LayerPanel {
     /// so `drop_target_at` returns y values that match where the
     /// source lands after reorder.
     pub fn from_editor_with_drag_source(state: &EditorState, drag_source: &NodeId) -> Self {
-        // The drag-in-progress row set excludes the dragged subtree and is
-        // resolved fresh every frame (an active gesture, not the idle
-        // repaint the cache targets), so it deliberately bypasses the
-        // shared slot. Selection / hover still overlay via `assemble`.
+        // Active drag rows bypass the idle cache because their source subtree
+        // is excluded; selection and hover still overlay via `assemble`.
         let rename = RenameView::from_state(state);
         let pages = pages_from_state(state, &rename);
         let cx = WalkCx::from_state(state);
@@ -242,10 +242,12 @@ impl LayerPanel {
             walk_excluding(child, &cx, drag_source, 0, &mut items);
         }
         apply_layer_rename(&mut items, &rename);
-        let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH);
-        let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH);
+        let metrics = LayerPanelMetrics::for_ui(&state.editor_ui);
+        let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH, metrics);
+        let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH, metrics);
         Self::assemble(
             state,
+            metrics,
             Rc::new(pages),
             Rc::new(items),
             pages_content_width,
@@ -259,6 +261,7 @@ impl LayerPanel {
             pages: Rc::new(Vec::new()),
             items: Rc::new(Vec::new()),
             theme: Theme::dark(),
+            metrics: LayerPanelMetrics::DESKTOP,
             // No editor state (and therefore no locale) is reachable in
             // the empty skeleton — route through the canonical English
             // table instead of hardcoding literals.
@@ -277,9 +280,11 @@ impl LayerPanel {
     }
 
     pub(crate) fn intrinsic_height(&self) -> f32 {
-        let pages_h = SECTION_HEADER_HEIGHT + self.pages.len() as f32 * PAGE_ROW_HEIGHT;
-        let layers_h = SECTION_HEADER_HEIGHT + self.items.len().max(1) as f32 * LAYER_ROW_HEIGHT;
-        pages_h + SECTION_GAP + layers_h + 16.0
+        let pages_h = self.metrics.section_header_height
+            + self.pages.len() as f32 * self.metrics.page_row_height;
+        let layers_h = self.metrics.section_header_height
+            + self.items.len().max(1) as f32 * self.metrics.layer_row_height;
+        pages_h + self.metrics.section_gap + layers_h + 16.0
     }
 
     /// Bounded Pages / Layers scroll-region geometry for `rect` —
@@ -293,6 +298,7 @@ impl LayerPanel {
             items_len: self.items.len(),
             pages: self.pages_scroll,
             layers: self.layers_scroll,
+            metrics: self.metrics,
         })
     }
 
@@ -307,8 +313,8 @@ impl LayerPanel {
         if r.layers_view_h <= 0.0 {
             return None;
         }
-        let row_top = index as f32 * LAYER_ROW_HEIGHT;
-        let row_bottom = row_top + LAYER_ROW_HEIGHT;
+        let row_top = index as f32 * self.metrics.layer_row_height;
+        let row_bottom = row_top + self.metrics.layer_row_height;
         let view_top = r.layers.offset;
         let view_bottom = view_top + r.layers_view_h;
         let next = if row_top < view_top {
@@ -326,7 +332,7 @@ impl LayerPanel {
 /// stores: page rows + depth-flattened layer rows + both content widths.
 /// This is the expensive per-frame work (tree walk + per-node `String`
 /// allocation + label measurement) the cache exists to skip.
-fn build_layer_rows(state: &EditorState) -> CachedLayerRows {
+fn build_layer_rows(state: &EditorState, metrics: LayerPanelMetrics) -> CachedLayerRows {
     let rename = RenameView::from_state(state);
     let pages = pages_from_state(state, &rename);
     let cx = WalkCx::from_state(state);
@@ -335,8 +341,8 @@ fn build_layer_rows(state: &EditorState) -> CachedLayerRows {
         walk(child, &cx, 0, &mut items);
     }
     apply_layer_rename(&mut items, &rename);
-    let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH);
-    let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH);
+    let pages_content_width = pages_content_width(&pages, LAYER_PANEL_WIDTH, metrics);
+    let layers_content_width = layers_content_width(&items, LAYER_PANEL_WIDTH, metrics);
     CachedLayerRows {
         pages: Rc::new(pages),
         items: Rc::new(items),
@@ -402,22 +408,25 @@ impl Widget for LayerPanel {
         let mut y = r.pages_header_y;
 
         // Pages section header.
-        paint_section_header(
+        paint_section_header_with_metrics(
             cx,
             &self.theme,
             rect.origin.x,
             y,
             rect.size.x,
             self.pages_label,
+            self.metrics,
         );
         // "+" add-page affordance, top-right of header row.
-        let plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0;
-        let plus_y = y + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
+        let plus = glyph_rect_in(
+            add_page_target(rect, y, self.metrics),
+            self.metrics.glyph_size,
+        );
         draw_icon(
             cx.backend,
             Icon::Plus,
-            Point2D::new(plus_x, plus_y),
-            14.0,
+            plus.origin,
+            self.metrics.glyph_size,
             self.theme.muted_foreground,
             1.4,
         );
@@ -431,13 +440,13 @@ impl Widget for LayerPanel {
             self.pages.len(),
             r.pages.offset,
             r.pages_view_h,
-            PAGE_ROW_HEIGHT,
+            self.metrics.page_row_height,
         ) {
             let page = &self.pages[index];
-            y = r.pages_rows_top - r.pages.offset + index as f32 * PAGE_ROW_HEIGHT;
+            y = r.pages_rows_top - r.pages.offset + index as f32 * self.metrics.page_row_height;
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
-                size: Point2D::new(rect.size.x - 12.0, PAGE_ROW_HEIGHT - 4.0),
+                size: Point2D::new(rect.size.x - 12.0, self.metrics.page_row_height - 4.0),
             };
             let page_hovered = self.is_page_hovered(index);
             if page.active {
@@ -448,10 +457,15 @@ impl Widget for LayerPanel {
                     .fill_round_rect(row, 6.0, self.theme.button_hover);
             }
             let label_x = row.origin.x + 12.0;
-            let label_max_x = rect.origin.x + rect.size.x - ROW_PAD_X - 18.0;
+            let delete_target = delete_page_target(rect, y, self.metrics);
+            let label_max_x = if self.metrics.touch {
+                delete_target.origin.x - 4.0
+            } else {
+                rect.origin.x + rect.size.x - self.metrics.row_pad_x - 18.0
+            };
             let available_w = (label_max_x - label_x).max(0.0);
             if page.renaming {
-                paint_rename_input(
+                paint_rename_input_with_metrics(
                     cx,
                     &self.theme,
                     self.rename_input.as_ref().expect("renaming row has input"),
@@ -459,13 +473,14 @@ impl Widget for LayerPanel {
                     y + 2.0,
                     available_w.max(40.0),
                     self.now_ms,
+                    self.metrics,
                 );
             } else {
-                let display = truncate_to_fit(&page.label, ROW_FONT, available_w);
+                let display = truncate_to_fit(&page.label, self.metrics.row_font, available_w);
                 let label = TextLayout::single_run(
                     &display,
                     "system-ui",
-                    ROW_FONT,
+                    self.metrics.row_font,
                     (if page.active {
                         self.theme.foreground
                     } else {
@@ -474,20 +489,24 @@ impl Widget for LayerPanel {
                     .to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
+                let baseline = if self.metrics.touch {
+                    jian_widgets::centered_text_baseline_y(row, self.metrics.row_font)
+                } else {
+                    row.origin.y + 19.0
+                };
                 cx.backend
-                    .draw_text(&label, Point2D::new(label_x, row.origin.y + 19.0));
+                    .draw_text(&label, Point2D::new(label_x, baseline));
             }
             // Hover-reveal × delete button on the trailing edge —
             // matches TS page-row hover affordance. Hit-test geometry
             // mirrors the paint exactly.
-            if page_hovered {
-                let close_x = rect.origin.x + rect.size.x - ROW_PAD_X - 14.0;
-                let close_y = y + (PAGE_ROW_HEIGHT - 14.0) / 2.0;
+            if page_hovered || self.metrics.touch {
+                let close = glyph_rect_in(delete_target, self.metrics.glyph_size);
                 draw_icon(
                     cx.backend,
                     Icon::Close,
-                    Point2D::new(close_x, close_y),
-                    14.0,
+                    close.origin,
+                    self.metrics.glyph_size,
                     self.theme.muted_foreground,
                     1.4,
                 );
@@ -500,20 +519,24 @@ impl Widget for LayerPanel {
         // the TS LayerPanel's `border-t border-border`.
         cx.backend.fill_rect(
             Rect {
-                origin: Point2D::new(rect.origin.x + ROW_PAD_X, y - SECTION_GAP / 2.0),
-                size: Point2D::new(rect.size.x - ROW_PAD_X * 2.0, 1.0),
+                origin: Point2D::new(
+                    rect.origin.x + self.metrics.row_pad_x,
+                    y - self.metrics.section_gap / 2.0,
+                ),
+                size: Point2D::new(rect.size.x - self.metrics.row_pad_x * 2.0, 1.0),
             },
             self.theme.border,
         );
 
         // Layers section header.
-        paint_section_header(
+        paint_section_header_with_metrics(
             cx,
             &self.theme,
             rect.origin.x,
             y,
             rect.size.x,
             self.layers_label,
+            self.metrics,
         );
         // Layer rows — clipped + scrolled inside the bounded viewport.
         cx.backend.save();
@@ -525,16 +548,16 @@ impl Widget for LayerPanel {
             self.items.len(),
             r.layers.offset,
             r.layers_view_h,
-            LAYER_ROW_HEIGHT,
+            self.metrics.layer_row_height,
         ) {
             let item = &self.items[index];
             // Live styling overlay — never baked into the cached item.
             let selected = self.is_row_selected(&item.node_id);
             let hovered = self.is_row_hovered(&item.node_id);
-            y = r.layers_rows_top - r.layers.offset + index as f32 * LAYER_ROW_HEIGHT;
+            y = r.layers_rows_top - r.layers.offset + index as f32 * self.metrics.layer_row_height;
             let row = Rect {
                 origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
-                size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
+                size: Point2D::new(rect.size.x - 12.0, self.metrics.layer_row_height - 4.0),
             };
             if selected {
                 // TS uses bg-blue-500/15 + primary text + primary
@@ -546,7 +569,7 @@ impl Widget for LayerPanel {
                     .fill_round_rect(row, 6.0, self.theme.button_hover);
             }
 
-            let indent = ROW_PAD_X + item.depth as f32 * 12.0;
+            let indent = self.metrics.row_pad_x + item.depth as f32 * 12.0;
             let dim = |c: Color, factor: f32| -> Color {
                 Color {
                     r: c.r,
@@ -573,7 +596,8 @@ impl Widget for LayerPanel {
             } else {
                 dim(self.theme.muted_foreground, dim_factor)
             };
-            let content_clip = layer_content_clip_rect(row, item.renaming);
+            let content_clip =
+                layer_content_clip_rect_with_metrics(row, item.renaming, self.metrics);
             cx.backend.save();
             cx.backend.clip_rect(content_clip);
             cx.backend
@@ -584,21 +608,30 @@ impl Widget for LayerPanel {
                 } else {
                     Icon::ChevronDown
                 };
+                let chevron = glyph_rect_in(
+                    collapse_target(row, indent, 0.0, self.metrics),
+                    self.metrics.glyph_size,
+                );
                 draw_icon(
                     cx.backend,
                     chev_icon,
-                    Point2D::new(row.origin.x + indent, row.origin.y + 6.0),
-                    14.0,
+                    chevron.origin,
+                    self.metrics.glyph_size,
                     icon_color,
                     1.4,
                 );
             }
-            let icon_x = row.origin.x + indent + 18.0;
+            let icon_x = layer_node_icon_x(row, indent, self.metrics);
+            let icon_y = if self.metrics.touch {
+                row.origin.y + (row.size.y - self.metrics.glyph_size) / 2.0
+            } else {
+                row.origin.y + 6.0
+            };
             draw_icon(
                 cx.backend,
                 item.icon,
-                Point2D::new(icon_x, row.origin.y + 6.0),
-                14.0,
+                Point2D::new(icon_x, icon_y),
+                self.metrics.glyph_size,
                 icon_color,
                 1.4,
             );
@@ -609,15 +642,17 @@ impl Widget for LayerPanel {
             } else {
                 dim(self.theme.card_foreground, dim_factor)
             };
-            let label_x = icon_x + 20.0;
-            let available_w = layer_label_available_width(
+            let label_x =
+                icon_x + self.metrics.glyph_size + if self.metrics.touch { 8.0 } else { 6.0 };
+            let available_w = layer_label_available_width_with_metrics(
                 row,
                 label_x,
                 r.layers.horizontal_offset,
                 item.renaming,
+                self.metrics,
             );
             if item.renaming {
-                paint_rename_input(
+                paint_rename_input_with_metrics(
                     cx,
                     &self.theme,
                     self.rename_input.as_ref().expect("renaming row has input"),
@@ -625,22 +660,32 @@ impl Widget for LayerPanel {
                     row.origin.y,
                     available_w,
                     self.now_ms,
+                    self.metrics,
                 );
             } else {
-                let display =
-                    truncate_to_fit_measured(cx.backend, &item.label, ROW_FONT, available_w);
+                let display = truncate_to_fit_measured(
+                    cx.backend,
+                    &item.label,
+                    self.metrics.row_font,
+                    available_w,
+                );
                 let label = TextLayout::single_run(
                     &display,
                     "system-ui",
-                    ROW_FONT,
+                    self.metrics.row_font,
                     (label_color).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
+                let baseline = if self.metrics.touch {
+                    jian_widgets::centered_text_baseline_y(row, self.metrics.row_font)
+                } else {
+                    row.origin.y + 17.0
+                };
                 cx.backend
-                    .draw_text(&label, Point2D::new(label_x, row.origin.y + 17.0));
+                    .draw_text(&label, Point2D::new(label_x, baseline));
             }
             cx.backend.restore();
-            let (eye_x, lock_x) = layer_trailing_icon_xs(row);
+            let (eye_target, lock_target) = layer_action_targets(row, self.metrics);
             let eye_icon = if item.hidden { Icon::EyeOff } else { Icon::Eye };
             let lock_icon = if item.locked {
                 Icon::Lock
@@ -665,17 +710,18 @@ impl Widget for LayerPanel {
             } else {
                 trailing_default
             };
-            let trailing_size = 12.0;
+            let trailing_size = self.metrics.trailing_glyph_size;
             let trailing_stroke = 1.2;
-            let trailing_y = row.origin.y + 7.0;
-            let show_eye = hovered && !item.renaming;
-            let show_lock = hovered && !item.renaming;
+            let eye_glyph = glyph_rect_in(eye_target, trailing_size);
+            let lock_glyph = glyph_rect_in(lock_target, trailing_size);
+            let show_eye = (hovered || self.metrics.touch) && !item.renaming;
+            let show_lock = (hovered || self.metrics.touch) && !item.renaming;
             // Opaque backing starts at the canonical action-gutter edge,
             // matching the content clip so labels and trailing actions
             // never overlap. Rebuild the row surface locally (panel bg +
             // the row's own wash) so the icons sit on clean ground.
             if show_eye || show_lock {
-                let gutter_left = layer_action_gutter_left(row);
+                let gutter_left = layer_action_gutter_left_with_metrics(row, self.metrics);
                 let backing = Rect {
                     origin: Point2D::new(gutter_left, row.origin.y),
                     size: Point2D::new(row.origin.x + row.size.x - gutter_left, row.size.y),
@@ -692,7 +738,7 @@ impl Widget for LayerPanel {
                 draw_icon(
                     cx.backend,
                     eye_icon,
-                    Point2D::new(eye_x, trailing_y),
+                    eye_glyph.origin,
                     trailing_size,
                     eye_color,
                     trailing_stroke,
@@ -702,7 +748,7 @@ impl Widget for LayerPanel {
                 draw_icon(
                     cx.backend,
                     lock_icon,
-                    Point2D::new(lock_x, trailing_y),
+                    lock_glyph.origin,
                     trailing_size,
                     lock_color,
                     trailing_stroke,
@@ -718,8 +764,11 @@ impl Widget for LayerPanel {
             match drop.position {
                 DropPosition::Before | DropPosition::After => {
                     let indicator_rect = Rect {
-                        origin: Point2D::new(rect.origin.x + ROW_PAD_X, drop.indicator_y - 1.0),
-                        size: Point2D::new(rect.size.x - ROW_PAD_X * 2.0, 2.0),
+                        origin: Point2D::new(
+                            rect.origin.x + self.metrics.row_pad_x,
+                            drop.indicator_y - 1.0,
+                        ),
+                        size: Point2D::new(rect.size.x - self.metrics.row_pad_x * 2.0, 2.0),
                     };
                     cx.backend.fill_rect(indicator_rect, self.theme.primary);
                 }
@@ -727,7 +776,7 @@ impl Widget for LayerPanel {
                     // 1.5 px outline rect spanning the full row.
                     let outline = Rect {
                         origin: Point2D::new(rect.origin.x + 6.0, drop.indicator_y + 2.0),
-                        size: Point2D::new(rect.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
+                        size: Point2D::new(rect.size.x - 12.0, self.metrics.layer_row_height - 4.0),
                     };
                     cx.backend
                         .stroke_round_rect(outline, 6.0, self.theme.primary, 1.5);
@@ -738,7 +787,7 @@ impl Widget for LayerPanel {
         cx.backend.restore();
 
         if let Some((ghost, cursor_y)) = &self.drag_ghost {
-            paint_drag_ghost(cx, &self.theme, ghost, *cursor_y, rect);
+            paint_drag_ghost(cx, &self.theme, ghost, *cursor_y, rect, self.metrics);
         }
     }
 

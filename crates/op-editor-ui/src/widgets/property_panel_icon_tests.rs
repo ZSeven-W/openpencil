@@ -29,6 +29,7 @@ fn visible_for(panel: &PropertyPanel) -> sections::VisibleSections {
         layout_justify: panel.snapshot.layout_justify,
         layout_align: panel.snapshot.layout_align,
         size_options: caps.size_options,
+        touch_controls: panel.density_scale > 1.0,
         size_fill_width: panel.snapshot.size_fill_width,
         size_fill_height: panel.snapshot.size_fill_height,
         size_hug_width: panel.snapshot.size_hug_width,

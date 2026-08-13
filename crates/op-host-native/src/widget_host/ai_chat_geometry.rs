@@ -29,6 +29,38 @@ impl WidgetHostNative {
         viewport_h: f32,
     ) -> Option<Rect> {
         let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        // Native touch chrome owns a modal AI surface. Phones use a bottom
+        // sheet; tablets use a bounded trailing panel so the canvas remains
+        // legible and the IME cannot turn the whole screen into a black slab.
+        if self.editor_state.editor_ui.touch_chrome() {
+            if self.editor_state.editor_ui.mobile_sheet
+                != Some(op_editor_core::size_class::MobileSheetKind::Ai)
+            {
+                return None;
+            }
+            if self.editor_state.editor_ui.compact_layout() {
+                let max_h = (viewport_h
+                    - op_editor_ui::widgets::host_canvas_geometry::touch_app_bar_height(
+                        &self.editor_state,
+                    ))
+                .max(0.0);
+                let min_h = 280.0_f32.min(max_h);
+                let sheet_h = (viewport_h * 0.58).clamp(min_h, max_h);
+                return Some(Rect {
+                    origin: Point2D::new(0.0, viewport_h - sheet_h),
+                    size: Point2D::new(viewport_w, sheet_h),
+                });
+            }
+            let inset = 12.0;
+            let top = op_editor_ui::widgets::host_canvas_geometry::touch_app_bar_height(
+                &self.editor_state,
+            ) + 8.0;
+            let panel_w = 380.0_f32.min((viewport_w - inset * 2.0).max(0.0));
+            return Some(Rect {
+                origin: Point2D::new(viewport_w - panel_w - inset, top),
+                size: Point2D::new(panel_w, (viewport_h - top - inset).max(0.0)),
+            });
+        }
         if self.editor_state.chat.is_minimized() {
             return op_editor_ui::widgets::host_canvas_geometry::minimized_chat_bar_rect(
                 self.editor_state.chat.anchor,

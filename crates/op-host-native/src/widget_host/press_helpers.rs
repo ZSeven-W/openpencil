@@ -120,6 +120,9 @@ impl WidgetHostNative {
             self.now_ms,
         );
         self.finish_agent_settings_press(outcome);
+        if !self.editor_state.editor_ui.agent_settings_open {
+            self.cancel_agent_settings_touch_gesture();
+        }
         self.mark_dirty();
         true
     }

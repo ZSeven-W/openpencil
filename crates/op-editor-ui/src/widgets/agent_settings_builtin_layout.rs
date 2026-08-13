@@ -37,6 +37,9 @@ pub(super) const CARD_GAP: f32 = 0.0;
 const FIELD_LABEL_W: f32 = 68.0;
 const FIELD_H: f32 = 24.0;
 const ACTION_W: f32 = 24.0;
+const TOUCH_TARGET: f32 = 44.0;
+pub(super) const TOUCH_EMPTY_CARD_H: f32 = 72.0;
+pub(super) const TOUCH_EMPTY_CTA_W: f32 = 132.0;
 
 pub(super) fn is_editing(settings: &AgentSettings, index: usize) -> bool {
     matches!(
@@ -63,6 +66,32 @@ pub(super) fn draft_card_height(settings: &AgentSettings) -> f32 {
 
 pub(super) fn add_provider_rect(content: Rect, y: f32) -> Rect {
     header_action_rect(content, y)
+}
+
+pub(super) fn add_provider_touch_target(content: Rect, y: f32) -> Rect {
+    let visual = add_provider_rect(content, y);
+    Rect {
+        origin: visual.origin,
+        size: Point2D::new(visual.size.x, TOUCH_TARGET),
+    }
+}
+
+pub(super) fn touch_empty_card_rect(content: Rect, y: f32) -> Rect {
+    Rect {
+        origin: Point2D::new(content.origin.x, y),
+        size: Point2D::new(content.size.x, TOUCH_EMPTY_CARD_H),
+    }
+}
+
+pub(super) fn touch_empty_cta_rect(content: Rect, y: f32) -> Rect {
+    let card = touch_empty_card_rect(content, y);
+    Rect {
+        origin: Point2D::new(
+            card.origin.x + card.size.x - TOUCH_EMPTY_CTA_W - 12.0,
+            card.origin.y + (card.size.y - TOUCH_TARGET) / 2.0,
+        ),
+        size: Point2D::new(TOUCH_EMPTY_CTA_W, TOUCH_TARGET),
+    }
 }
 
 pub(super) fn card_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
@@ -102,6 +131,57 @@ pub(super) fn compact_remove_rect(card: Rect) -> Rect {
         origin: Point2D::new(
             compact_edit_rect(card).origin.x + ACTION_W + 4.0,
             card.origin.y + (card.size.y - ACTION_W) / 2.0,
+        ),
+        size: Point2D::new(ACTION_W, ACTION_W),
+    }
+}
+
+fn trailing_touch_target(card: Rect, slot_from_right: usize) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            card.origin.x + card.size.x - (slot_from_right + 1) as f32 * TOUCH_TARGET,
+            card.origin.y + (card.size.y - TOUCH_TARGET) / 2.0,
+        ),
+        size: Point2D::new(TOUCH_TARGET, TOUCH_TARGET),
+    }
+}
+
+pub(super) fn compact_touch_switch_target(card: Rect) -> Rect {
+    trailing_touch_target(card, 2)
+}
+
+pub(super) fn compact_touch_edit_target(card: Rect) -> Rect {
+    trailing_touch_target(card, 1)
+}
+
+pub(super) fn compact_touch_remove_target(card: Rect) -> Rect {
+    trailing_touch_target(card, 0)
+}
+
+pub(super) fn compact_touch_switch_rect(card: Rect) -> Rect {
+    let target = compact_touch_switch_target(card);
+    Rect {
+        origin: Point2D::new(
+            target.origin.x + (target.size.x - SETTINGS_SWITCH_W) / 2.0,
+            target.origin.y + (target.size.y - SETTINGS_SWITCH_H) / 2.0,
+        ),
+        size: Point2D::new(SETTINGS_SWITCH_W, SETTINGS_SWITCH_H),
+    }
+}
+
+pub(super) fn compact_touch_edit_rect(card: Rect) -> Rect {
+    centered_action_rect(compact_touch_edit_target(card))
+}
+
+pub(super) fn compact_touch_remove_rect(card: Rect) -> Rect {
+    centered_action_rect(compact_touch_remove_target(card))
+}
+
+fn centered_action_rect(target: Rect) -> Rect {
+    Rect {
+        origin: Point2D::new(
+            target.origin.x + (target.size.x - ACTION_W) / 2.0,
+            target.origin.y + (target.size.y - ACTION_W) / 2.0,
         ),
         size: Point2D::new(ACTION_W, ACTION_W),
     }

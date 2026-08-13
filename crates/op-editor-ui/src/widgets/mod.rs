@@ -40,9 +40,12 @@ pub(crate) mod layer_panel_cache;
 mod layer_panel_hit;
 #[cfg(test)]
 mod layer_panel_label_tests;
+mod layer_panel_metrics;
 mod layer_panel_paint;
 #[cfg(test)]
 mod layer_panel_tests;
+#[cfg(test)]
+mod layer_panel_touch_tests;
 mod layer_panel_walkers;
 pub mod path_anchor_context_menu;
 pub mod prompt_center_panel;
@@ -147,6 +150,9 @@ pub(crate) mod scene_template_previews;
 mod scene_template_style_geometry;
 mod scene_template_style_import;
 mod scene_template_style_paint;
+mod scene_template_touch_density;
+#[cfg(test)]
+mod scene_template_touch_tests;
 mod scene_template_user_layout;
 pub mod text_input;
 pub(crate) mod text_input_backend;
@@ -239,6 +245,7 @@ pub mod agent_settings_acp;
 mod agent_settings_acp_helpers;
 mod agent_settings_acp_presets;
 pub mod agent_settings_builtin;
+mod agent_settings_builtin_empty;
 mod agent_settings_builtin_layout;
 mod agent_settings_builtin_parts;
 #[cfg(test)]
@@ -365,6 +372,10 @@ pub mod marquee_flow;
 pub(crate) mod menu_paint;
 pub mod missing_fonts_flow;
 pub mod missing_fonts_panel;
+pub mod mobile_chrome;
+#[cfg(test)]
+mod mobile_layout_tests;
+pub mod mobile_more_panel;
 pub mod property_panel_color_variables;
 #[cfg(test)]
 mod property_panel_color_variables_tests;
@@ -448,6 +459,8 @@ pub use icon_picker_panel::{
 pub use import_menu::{ImportMenu, ImportMenuChoice, IMPORT_MENU_WIDTH};
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use missing_fonts_panel::{MissingFontsHit, MissingFontsPanel};
+pub use mobile_chrome::{MobileAppBar, MobileAppBarHit, MobileDock, MobileDockHit};
+pub use mobile_more_panel::MobileMoreEntry;
 pub use prompt_center_panel::{
     PromptCenterCard, PromptCenterHit, PromptCenterPanel, PROMPT_CENTER_MIN_H, PROMPT_CENTER_MIN_W,
     PROMPT_CENTER_VIEWPORT_H_RATIO, PROMPT_CENTER_VIEWPORT_W_RATIO,

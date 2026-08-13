@@ -281,6 +281,30 @@ fn confirming_a_paste_registers_pins_and_queues_the_guide() {
     assert!(cards[0].is_pinned(panel.pinned_style_guide()));
 }
 
+#[test]
+fn touch_confirming_a_paste_returns_to_browsing_without_reopening_ime() {
+    let (_guard, mut state) = styles_state();
+    state.editor_ui.touch = true;
+    state.editor_ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+    press_import_button(&mut state);
+    assert!(state.editor_ui.scene_template_center.input_active());
+    state
+        .editor_ui
+        .scene_template_center
+        .import
+        .text
+        .set_text(SAMPLE_DESIGN_MD);
+    let confirm = centre(
+        SceneTemplatePanel::for_editor(&state)
+            .expect("open")
+            .style_import_confirm_rect(PANEL),
+    );
+    press(&mut state, confirm);
+
+    assert!(!state.editor_ui.scene_template_center.import.open);
+    assert!(!state.editor_ui.scene_template_center.input_active());
+}
+
 /// A malformed file reports and keeps the box open with the text intact —
 /// half-swallowing it would look like the import worked.
 #[test]
@@ -341,6 +365,24 @@ fn cancelling_discards_the_draft_and_hands_the_keyboard_back() {
         op_editor_core::SceneTemplateFocus::Search
     );
     assert!(op_ai_skills::style_guide::user_style_guides().is_empty());
+}
+
+#[test]
+fn touch_cancelling_an_import_returns_to_browsing_without_ime() {
+    let (_guard, mut state) = styles_state();
+    state.editor_ui.touch = true;
+    state.editor_ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+    press_import_button(&mut state);
+    assert!(state.editor_ui.scene_template_center.input_active());
+    let cancel = centre(
+        SceneTemplatePanel::for_editor(&state)
+            .expect("open")
+            .style_import_cancel_rect(PANEL),
+    );
+    press(&mut state, cancel);
+
+    assert!(!state.editor_ui.scene_template_center.import.open);
+    assert!(!state.editor_ui.scene_template_center.input_active());
 }
 
 /// Escape takes the paste box back before it takes the gallery: it is the

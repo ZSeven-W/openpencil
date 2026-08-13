@@ -231,6 +231,7 @@ pub fn code_panel_hover(
     point: Point2D,
     eligible: bool,
 ) -> bool {
+    let panel = crate::widgets::PropertyPanel::for_selection(state);
     let on_code_tab = eligible
         && state.property_panel_visible()
         && matches!(
@@ -240,12 +241,10 @@ pub fn code_panel_hover(
     let right_edge = property_rect.origin.x + property_rect.size.x;
     let (new_fw_hover, new_action_hover) =
         if on_code_tab && point.x >= property_rect.origin.x && point.x <= right_edge {
-            crate::widgets::property_panel_code::code_hover_at_with_locale(
-                property_rect,
-                &state.codegen,
-                point,
-                state.editor_ui.effective_locale(),
-            )
+            panel
+                .as_ref()
+                .map(|panel| panel.code_hover_at(property_rect, point))
+                .unwrap_or((None, None))
         } else {
             (None, None)
         };

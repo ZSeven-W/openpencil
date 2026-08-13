@@ -31,6 +31,9 @@ impl WidgetHostNative {
     /// True when the cursor is over either resize gutter — used by
     /// the runner to set `CursorIcon::EwResize`. None = no gutter.
     pub fn panel_resize_hover(&self, x: f32, y: f32, viewport_w: f32) -> Option<PanelResizeKind> {
+        if self.editor_state.editor_ui.touch_chrome() {
+            return None;
+        }
         if y < TOP_BAR_HEIGHT {
             return None;
         }
@@ -527,7 +530,7 @@ impl WidgetHostNative {
             && x >= 0.0
             && x <= panel_w
         {
-            let layer_rect = self.layers_content_rect(viewport_h);
+            let layer_rect = self.layers_content_rect(viewport_w, viewport_h);
             let panel = self.layer_panel();
             match panel.hit_test(layer_rect, point) {
                 Some(LayerPanelHit::Layer(id))
@@ -617,6 +620,9 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<Rect> {
+        if self.editor_state.editor_ui.touch_chrome() {
+            return None;
+        }
         canvas_geometry::status_bar_rect(&self.editor_state, viewport_w, viewport_h)
     }
 
@@ -722,12 +728,12 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<op_editor_ui::widgets::AlignToolbarHit> {
+        if self.editor_state.editor_ui.touch_chrome() {
+            return None;
+        }
         use op_editor_ui::widgets::AlignToolbar;
-        let (cx, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let canvas_region = Rect {
-            origin: Point2D::new(cx, TOP_BAR_HEIGHT),
-            size: Point2D::new(cw, ch),
-        };
+        let canvas_region =
+            canvas_geometry::canvas_rect(&self.editor_state, viewport_w, viewport_h);
         AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)?
             .hit_test_action(Point2D::new(x, y))
     }

@@ -1,0 +1,777 @@
+//! Full-editor mode: drives op-host-native's `WidgetHostNative` — the
+//! COMPLETE desktop chrome (top bar, layer panel, toolbar, property panel,
+//! status bar, chat, settings, context menus, canvas editing, 15-locale
+//! i18n) — through the same `NativeFrameBackend` the desktop uses.
+//!
+//! The shells stay thin: single-finger presses become host press/move/
+//! release (the host owns selection, marquee, node drags, panel presses,
+//! and text-edit entry), a long-press is a right-click, two-finger drags
+//! pan (`apply_pan_gesture`), pinches zoom (`apply_pinch_gesture`), and
+//! system-keyboard events flow through [`op_editor_key`] /
+//! [`op_editor_text`] / [`op_editor_ime_preedit`] /
+//! [`op_editor_ime_commit`].
+
+use crate::error::{FfiError, DOCUMENT_CAP, STRING_CAP};
+use crate::lifecycle::call_session;
+use crate::OpStatus;
+
+/// No shell-owned work is pending.
+pub const SHELL_ACTION_NONE: i32 = 0;
+/// Present the platform document picker and return the chosen bytes through
+/// [`op_editor_open_document`].
+pub const SHELL_ACTION_OPEN_DOCUMENT: i32 = 1;
+
+/// Key codes the shells map their platform keys to.
+pub const KEY_BACKSPACE: i32 = 1;
+pub const KEY_DELETE: i32 = 2;
+pub const KEY_ENTER: i32 = 3;
+pub const KEY_ESCAPE: i32 = 4;
+pub const KEY_DUPLICATE: i32 = 5;
+pub const KEY_UNDO: i32 = 6;
+pub const KEY_REDO: i32 = 7;
+pub const KEY_ARROW_UP: i32 = 9;
+pub const KEY_ARROW_DOWN: i32 = 10;
+pub const KEY_ARROW_LEFT: i32 = 11;
+pub const KEY_ARROW_RIGHT: i32 = 12;
+
+/// Drain the next shell-owned editor action. Only `FileAction::Open` belongs
+/// to the mobile document-picker bridge; every other host action remains in
+/// place for its owning integration to consume.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread; `out` must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_take_shell_action(
+    engine: *mut crate::OpEngine,
+    out: *mut i32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            if out.is_null() {
+                return Err(FfiError::invalid("shell-action output pointer is null"));
+            }
+            let host = session.editor_mut()?;
+            let action = if matches!(
+                host.editor_state().editor_ui.pending_file_action,
+                Some(op_editor_core::FileAction::Open)
+            ) {
+                host.editor_state_mut().editor_ui.pending_file_action = None;
+                host.mark_editor_state_dirty();
+                SHELL_ACTION_OPEN_DOCUMENT
+            } else {
+                SHELL_ACTION_NONE
+            };
+            out.write(action);
+            Ok(())
+        })
+    }
+}
+
+/// Parse and atomically install a document selected by the platform shell.
+/// Parsing, compatibility migration, editor metadata extraction, and scene
+/// validation all finish before the live host is touched, so a rejected file
+/// leaves the current document intact.
+///
+/// `file_name` is optional UTF-8 display text (normally the picker URL's last
+/// path component); pass a null pointer with length zero when unavailable.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread. Non-empty byte ranges
+/// must cover readable memory for their declared lengths.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_open_document(
+    engine: *mut crate::OpEngine,
+    doc_ptr: *const u8,
+    doc_len: usize,
+    file_name_ptr: *const u8,
+    file_name_len: usize,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let source =
+                crate::error::read_utf8(doc_ptr, doc_len, DOCUMENT_CAP, "editor document")?;
+            if source.is_empty() {
+                return Err(FfiError::invalid("editor document is empty"));
+            }
+            let file_name = if file_name_len == 0 {
+                None
+            } else {
+                Some(crate::error::read_utf8(
+                    file_name_ptr,
+                    file_name_len,
+                    STRING_CAP,
+                    "editor file name",
+                )?)
+            };
+
+            let editor_meta =
+                op_pen_loader::extract_editor_meta_with_report(&source).map(|value| value.meta);
+            let loaded = op_pen_loader::payload::load_canonical_with_compatibility(&source)
+                .map_err(|error| {
+                    FfiError::new(
+                        OpStatus::BadDocument,
+                        format!("document rejected by the canonical schema: {error}"),
+                    )
+                })?;
+            let document = loaded.loaded.value;
+            // A canonical load associates its pending `imageThumbs` table with
+            // the parsed document. Validate against a seed-free clone so
+            // `EditorState::from_document` cannot publish unaccepted bytes.
+            // The original seed remains pending until the live host accepts
+            // the replacement and `replace_document` activates it.
+            let validation_document = document.clone();
+            jian_ops_schema::image_thumbs::discard_for_document(&validation_document);
+            let mut next_state = op_editor_core::EditorState::from_document(validation_document);
+            op_pen_loader::apply_editor_meta_or_legacy_fallback(
+                &mut next_state,
+                editor_meta.clone(),
+            );
+            next_state.editor_ui.file_name_display = file_name.clone();
+            next_state.mark_saved_revision();
+            let next_scene = op_pen_loader::editor_state_to_active_page_layout_scene(&next_state);
+            if next_scene.active_page().is_none() {
+                jian_ops_schema::image_thumbs::discard_for_document(&document);
+                return Err(FfiError::new(
+                    OpStatus::LayoutError,
+                    "document has no renderable page",
+                ));
+            }
+
+            let host = match session.editor_mut() {
+                Ok(host) => host,
+                Err(error) => {
+                    jian_ops_schema::image_thumbs::discard_for_document(&document);
+                    return Err(error);
+                }
+            };
+            if let Err(rejected_document) =
+                host.install_open_document(document, editor_meta, file_name)
+            {
+                jian_ops_schema::image_thumbs::discard_for_document(&rejected_document);
+                return Err(FfiError::new(
+                    OpStatus::Busy,
+                    "document replacement is blocked by the collaboration session",
+                ));
+            }
+
+            // Keep the lightweight player state in exact lockstep with the
+            // full widget host: page APIs and the viewer scene still read it.
+            session.state = next_state;
+            session.scene = next_scene;
+            session.selected = None;
+            session.gesture.reset();
+            session.user_interacted = false;
+            session.fit_content_to_viewports();
+            session.request_redraw();
+            Ok(())
+        })
+    }
+}
+
+/// Pointer press (single finger). The host decides what it means —
+/// canvas node select/drag, marquee, panel press, text-edit caret…
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_press(engine: *mut crate::OpEngine, x: f32, y: f32) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let (w, h) = session.editor_viewport();
+            let (x, y) = session.editor_point(x, y);
+            let changed = session.editor_mut()?.apply_press(x, y, w, h);
+            if changed {
+                session.request_redraw();
+            }
+            crate::editor_template::drain_pending_scene_template(session)?;
+            Ok(())
+        })
+    }
+}
+
+/// Pointer move (single finger).
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_move(engine: *mut crate::OpEngine, x: f32, y: f32) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let (x, y) = session.editor_point(x, y);
+            let host = session.editor_mut()?;
+            if host.apply_cursor_move(x, y) {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Pointer release (single finger).
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_release(
+    engine: *mut crate::OpEngine,
+    _x: f32,
+    _y: f32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let (w, h) = session.editor_viewport();
+            let changed = session.editor_mut()?.apply_release_with_viewport(w, h);
+            if changed {
+                session.request_redraw();
+            }
+            crate::editor_template::drain_pending_scene_template(session)?;
+            Ok(())
+        })
+    }
+}
+
+/// Cancel the active editor pointer gesture without dispatching a release or
+/// committing any release-delayed action.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_cancel_gesture(engine: *mut crate::OpEngine) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            if session.editor_mut()?.cancel_native_touch_gestures() {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Long-press → right-click (context menus, layer rows, canvas).
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_right_press(
+    engine: *mut crate::OpEngine,
+    x: f32,
+    y: f32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let (w, h) = session.editor_viewport();
+            let (x, y) = session.editor_point(x, y);
+            let host = session.editor_mut()?;
+            if host.apply_right_press(x, y, w, h) {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Two-finger pan: `dx`/`dy` are the finger-midpoint deltas (logical px).
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_pan(
+    engine: *mut crate::OpEngine,
+    x: f32,
+    y: f32,
+    dx: f32,
+    dy: f32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let (w, h) = session.editor_viewport();
+            let (x, y) = session.editor_point(x, y);
+            let (changed, camera_changed) = {
+                let host = session.editor_mut()?;
+                let before = host.editor_state().viewport;
+                let changed = host.apply_pan_gesture(x, y, dx, dy, w, h);
+                (changed, host.editor_state().viewport != before)
+            };
+            if camera_changed {
+                session.user_interacted = true;
+            }
+            if changed {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Pinch zoom: `delta_y` follows the trackpad-pinch convention (positive
+/// = zoom in).
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_pinch(
+    engine: *mut crate::OpEngine,
+    x: f32,
+    y: f32,
+    delta_y: f32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let (w, h) = session.editor_viewport();
+            let (x, y) = session.editor_point(x, y);
+            let (changed, camera_changed) = {
+                let host = session.editor_mut()?;
+                let before = host.editor_state().viewport;
+                let changed = host.apply_pinch_gesture(x, y, delta_y, w, h);
+                (changed, host.editor_state().viewport != before)
+            };
+            if camera_changed {
+                session.user_interacted = true;
+            }
+            if changed {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Text input from the system keyboard (printable characters; the engine
+/// routes each char through the host's focused-input path).
+///
+/// # Safety
+///
+/// `engine` must be live and `text` must cover `text_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_text(
+    engine: *mut crate::OpEngine,
+    text_ptr: *const u8,
+    text_len: usize,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let host = session.editor_mut()?;
+            let text = crate::error::read_utf8(text_ptr, text_len, STRING_CAP, "editor text")?;
+            let mut changed = false;
+            for c in text.chars() {
+                if host.apply_text(c) {
+                    changed = true;
+                }
+            }
+            if changed {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Non-printable key from the system keyboard (see `KEY_*` constants).
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_key(engine: *mut crate::OpEngine, key: i32) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let host = session.editor_mut()?;
+            let changed = match key {
+                KEY_BACKSPACE => host.apply_backspace(),
+                KEY_DELETE => host.apply_delete(),
+                KEY_ENTER => host.apply_send(),
+                KEY_ESCAPE => host.apply_escape(),
+                KEY_DUPLICATE => host.apply_duplicate(),
+                KEY_UNDO => host.apply_undo(),
+                KEY_REDO => host.apply_redo(),
+                KEY_ARROW_UP => host.apply_nudge(0.0, -1.0),
+                KEY_ARROW_DOWN => host.apply_nudge(0.0, 1.0),
+                KEY_ARROW_LEFT => host.apply_nudge(-1.0, 0.0),
+                KEY_ARROW_RIGHT => host.apply_nudge(1.0, 0.0),
+                other => {
+                    return Err(FfiError::invalid(format!("unknown editor key {other}")));
+                }
+            };
+            if changed {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// IME preedit (composition) into the host's focused input. `sel_start` /
+/// `sel_end` are byte offsets within the preedit text.
+///
+/// # Safety
+///
+/// `engine` must be live and `text` must cover `text_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_ime_preedit(
+    engine: *mut crate::OpEngine,
+    text_ptr: *const u8,
+    text_len: usize,
+    sel_start: usize,
+    sel_end: usize,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let host = session.editor_mut()?;
+            let text = crate::error::read_utf8(text_ptr, text_len, STRING_CAP, "preedit text")?;
+            if host.apply_ime_preedit(&text, Some((sel_start, sel_end))) {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// IME commit — the composition text lands in the focused input.
+///
+/// # Safety
+///
+/// `engine` must be live and `text` must cover `text_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_ime_commit(
+    engine: *mut crate::OpEngine,
+    text_ptr: *const u8,
+    text_len: usize,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let host = session.editor_mut()?;
+            let text = crate::error::read_utf8(text_ptr, text_len, STRING_CAP, "ime text")?;
+            if host.apply_ime_commit(&text) {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Whether a canvas text edit (or panel input) currently holds the IME —
+/// the shells show/hide the system keyboard accordingly.
+///
+/// # Safety
+///
+/// `engine` must be live and `out` must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_ime_focused(
+    engine: *mut crate::OpEngine,
+    out: *mut bool,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            if out.is_null() {
+                return Err(FfiError::invalid("focus output pointer is null"));
+            }
+            let focused = session
+                .editor()
+                .map(|host| host.text_input_focus_active())
+                .unwrap_or(false);
+            out.write(focused);
+            Ok(())
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::desc::{Callbacks, CreateOptions};
+    use crate::lifecycle::{OpEngine, Session};
+    use op_editor_core::{
+        size_class::{EditorSizeClass, MobileSheetKind},
+        AuthenticatedCollabSession, CollabConnectionPhase, CollabUiRole,
+    };
+
+    const SAMPLE_DOC: &str =
+        include_str!("../../op-editor-core/assets/scene_templates/daily-sign-card.op");
+    const TWO_PAGE_DOC: &str =
+        include_str!("../../../packaging/android-player/app/src/main/assets/two-page.op");
+
+    fn editor_engine(doc: &str) -> OpEngine {
+        OpEngine::new(
+            Session::new(CreateOptions {
+                document: doc.to_owned(),
+                width: 800.0,
+                height: 600.0,
+                dpr: 1.0,
+                callbacks: Callbacks::default(),
+                asset_base: None,
+                editor_mode: true,
+            })
+            .expect("editor session"),
+        )
+    }
+
+    fn with_editor_meta(source: &str) -> String {
+        let end = source.rfind('}').expect("top-level object close");
+        format!(
+            "{},\"editorMeta\":{{\"activePageIndex\":1,\"preserveAuthoredGeometry\":true}}{}",
+            &source[..end],
+            &source[end..]
+        )
+    }
+
+    fn with_image_thumb(source: &str, paint_id: u64) -> String {
+        let end = source.rfind('}').expect("top-level object close");
+        format!(
+            "{},\"imageThumbs\":{{\"{paint_id}\":\"/9j/2Q==\"}}{}",
+            &source[..end],
+            &source[end..]
+        )
+    }
+
+    #[test]
+    fn shell_action_drains_only_open() {
+        let mut engine = editor_engine(SAMPLE_DOC);
+        let pointer = &mut engine as *mut OpEngine;
+        engine
+            .session_mut_for_test()
+            .editor_mut()
+            .unwrap()
+            .editor_state_mut()
+            .editor_ui
+            .pending_file_action = Some(op_editor_core::FileAction::Open);
+
+        assert_eq!(
+            unsafe { op_editor_take_shell_action(pointer, std::ptr::null_mut()) },
+            OpStatus::InvalidArg
+        );
+        let mut action = -1;
+        assert_eq!(
+            unsafe { op_editor_take_shell_action(pointer, &mut action) },
+            OpStatus::Ok
+        );
+        assert_eq!(action, SHELL_ACTION_OPEN_DOCUMENT);
+        assert_eq!(
+            unsafe { op_editor_take_shell_action(pointer, &mut action) },
+            OpStatus::Ok
+        );
+        assert_eq!(action, SHELL_ACTION_NONE);
+
+        let host = engine.session_mut_for_test().editor_mut().unwrap();
+        host.editor_state_mut().editor_ui.pending_file_action =
+            Some(op_editor_core::FileAction::Save);
+        assert_eq!(
+            unsafe { op_editor_take_shell_action(pointer, &mut action) },
+            OpStatus::Ok
+        );
+        assert_eq!(action, SHELL_ACTION_NONE);
+        assert_eq!(
+            engine
+                .session_mut_for_test()
+                .editor_mut()
+                .unwrap()
+                .editor_state()
+                .editor_ui
+                .pending_file_action,
+            Some(op_editor_core::FileAction::Save)
+        );
+    }
+
+    #[test]
+    fn open_document_syncs_state_metadata_and_preserves_touch_chrome() {
+        let mut engine = editor_engine(SAMPLE_DOC);
+        let pointer = &mut engine as *mut OpEngine;
+        let initial_epoch = {
+            let host = engine.session_mut_for_test().editor_mut().unwrap();
+            let ui = &mut host.editor_state_mut().editor_ui;
+            ui.touch = true;
+            ui.size_class = EditorSizeClass::Medium;
+            ui.sidebar_open = false;
+            ui.theme_mode = op_editor_core::ThemeMode::Light;
+            ui.mobile_sheet = Some(MobileSheetKind::More);
+            host.document_epoch()
+        };
+        let document = with_editor_meta(TWO_PAGE_DOC);
+        let file_name = "旅行计划.op";
+
+        assert_eq!(
+            unsafe {
+                op_editor_open_document(
+                    pointer,
+                    document.as_ptr(),
+                    document.len(),
+                    file_name.as_ptr(),
+                    file_name.len(),
+                )
+            },
+            OpStatus::Ok
+        );
+
+        let session = engine.session_mut_for_test();
+        assert_eq!(session.state.page_count(), 2);
+        assert_eq!(session.state.ui.active_page_index, 1);
+        assert!(session.state.editor_ui.preserve_authored_geometry);
+        assert_eq!(
+            session.state.editor_ui.file_name_display.as_deref(),
+            Some(file_name)
+        );
+        assert_eq!(session.scene.active_page_index, 1);
+        assert!(!session.user_interacted);
+
+        let host = session.editor_mut().unwrap();
+        let state = host.editor_state();
+        assert_eq!(state.page_count(), 2);
+        assert_eq!(state.ui.active_page_index, 1);
+        assert!(state.editor_ui.preserve_authored_geometry);
+        assert_eq!(
+            state.editor_ui.file_name_display.as_deref(),
+            Some(file_name)
+        );
+        assert!(state.editor_ui.touch);
+        assert_eq!(state.editor_ui.size_class, EditorSizeClass::Medium);
+        assert!(!state.editor_ui.sidebar_open);
+        assert_eq!(state.editor_ui.theme_mode, op_editor_core::ThemeMode::Light);
+        assert_eq!(state.editor_ui.mobile_sheet, None);
+        assert!(!state.is_dirty());
+        assert_eq!(host.document_epoch(), initial_epoch.wrapping_add(1));
+    }
+
+    #[test]
+    fn rejected_document_leaves_live_document_and_chrome_unchanged() {
+        let mut engine = editor_engine(TWO_PAGE_DOC);
+        let pointer = &mut engine as *mut OpEngine;
+        let before = {
+            let session = engine.session_mut_for_test();
+            let host = session.editor_mut().unwrap();
+            host.editor_state_mut().editor_ui.mobile_sheet = Some(MobileSheetKind::More);
+            (
+                host.editor_state().doc.clone(),
+                host.document_epoch(),
+                host.editor_state().editor_ui.size_class,
+            )
+        };
+        let bad = br#"{"version":"1.0.0","children":[{"type":"nonsense"}]}"#;
+
+        assert_eq!(
+            unsafe {
+                op_editor_open_document(pointer, bad.as_ptr(), bad.len(), std::ptr::null(), 0)
+            },
+            OpStatus::BadDocument
+        );
+
+        let session = engine.session_mut_for_test();
+        assert_eq!(session.state.page_count(), 2);
+        let host = session.editor_mut().unwrap();
+        assert_eq!(host.editor_state().doc, before.0);
+        assert_eq!(host.document_epoch(), before.1);
+        assert_eq!(host.editor_state().editor_ui.size_class, before.2);
+        assert_eq!(
+            host.editor_state().editor_ui.mobile_sheet,
+            Some(MobileSheetKind::More)
+        );
+    }
+
+    #[test]
+    fn open_document_activates_thumbnails_only_after_final_acceptance() {
+        const OLD_ID: u64 = 8_100_001;
+        const LAYOUT_REJECT_ID: u64 = 8_100_002;
+        const COLLAB_REJECT_ID: u64 = 8_100_003;
+        const ACCEPTED_ID: u64 = 8_100_004;
+
+        struct ClearThumbnailRegistry;
+        impl Drop for ClearThumbnailRegistry {
+            fn drop(&mut self) {
+                jian_ops_schema::image_thumbs::clear_registry();
+            }
+        }
+
+        jian_ops_schema::image_thumbs::clear_registry();
+        let _clear = ClearThumbnailRegistry;
+        jian_ops_schema::image_thumbs::store_thumb(OLD_ID, vec![1, 2, 3]);
+
+        let mut layout_engine = editor_engine(SAMPLE_DOC);
+        let layout_pointer = &mut layout_engine as *mut OpEngine;
+        let layout_reject = format!(
+            r#"{{"version":"1.0.0","children":[],"pages":[],"imageThumbs":{{"{LAYOUT_REJECT_ID}":"/9j/2Q=="}}}}"#
+        );
+        assert_eq!(
+            unsafe {
+                op_editor_open_document(
+                    layout_pointer,
+                    layout_reject.as_ptr(),
+                    layout_reject.len(),
+                    std::ptr::null(),
+                    0,
+                )
+            },
+            OpStatus::LayoutError
+        );
+        assert_eq!(
+            &*jian_ops_schema::image_thumbs::thumb_for(OLD_ID).expect("old thumbnail survives"),
+            &[1, 2, 3]
+        );
+        assert!(jian_ops_schema::image_thumbs::thumb_for(LAYOUT_REJECT_ID).is_none());
+
+        let mut collab_engine = editor_engine(SAMPLE_DOC);
+        assert!(collab_engine
+            .session_mut_for_test()
+            .editor_mut()
+            .unwrap()
+            .editor_state_mut()
+            .editor_ui
+            .collab
+            .set_authenticated_session(
+                CollabConnectionPhase::Active,
+                AuthenticatedCollabSession {
+                    session_name: "Test session".to_string(),
+                    role: CollabUiRole::Viewer,
+                    share_endpoint: None,
+                },
+                Vec::new(),
+            ));
+        let collab_pointer = &mut collab_engine as *mut OpEngine;
+        let collab_reject = with_image_thumb(TWO_PAGE_DOC, COLLAB_REJECT_ID);
+        assert_eq!(
+            unsafe {
+                op_editor_open_document(
+                    collab_pointer,
+                    collab_reject.as_ptr(),
+                    collab_reject.len(),
+                    std::ptr::null(),
+                    0,
+                )
+            },
+            OpStatus::Busy
+        );
+        assert_eq!(
+            &*jian_ops_schema::image_thumbs::thumb_for(OLD_ID).expect("old thumbnail survives"),
+            &[1, 2, 3]
+        );
+        assert!(jian_ops_schema::image_thumbs::thumb_for(COLLAB_REJECT_ID).is_none());
+
+        let mut accepted_engine = editor_engine(SAMPLE_DOC);
+        let accepted_pointer = &mut accepted_engine as *mut OpEngine;
+        let accepted = with_image_thumb(TWO_PAGE_DOC, ACCEPTED_ID);
+        assert_eq!(
+            unsafe {
+                op_editor_open_document(
+                    accepted_pointer,
+                    accepted.as_ptr(),
+                    accepted.len(),
+                    std::ptr::null(),
+                    0,
+                )
+            },
+            OpStatus::Ok
+        );
+        assert!(jian_ops_schema::image_thumbs::thumb_for(OLD_ID).is_none());
+        assert_eq!(
+            &*jian_ops_schema::image_thumbs::thumb_for(ACCEPTED_ID)
+                .expect("accepted thumbnail activates"),
+            &[0xff, 0xd8, 0xff, 0xd9]
+        );
+    }
+}

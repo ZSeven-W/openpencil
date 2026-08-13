@@ -11,7 +11,7 @@ use super::asset_center_style_layout::STYLE_SECTION_HEADER_H;
 use super::icons::{draw_icon, Icon};
 use super::panel_control_metrics::{control_fill, CHIP_RADIUS};
 use super::scene_template_panel::{SceneTemplatePanel, STYLE_SWATCH_H};
-use super::scene_template_style_geometry::{SCENE_TEMPLATE_IMPORT_HOVER, STYLE_DELETE_BTN};
+use super::scene_template_style_geometry::SCENE_TEMPLATE_IMPORT_HOVER;
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::prompt_center_panel::estimated_text_width;
 use crate::widgets::scene_template_panel_paint::truncate_to_width;
@@ -165,7 +165,7 @@ impl SceneTemplatePanel<'_> {
         // the name has to clear whichever of them is showing.
         let delete_visible = card.is_user && self.style_delete_visible(index);
         let corner_w = if delete_visible {
-            pin_w.max(STYLE_DELETE_BTN + 8.0)
+            pin_w.max(self.style_delete_rect_for(rect).size.x + 8.0)
         } else {
             pin_w
         };
@@ -177,7 +177,7 @@ impl SceneTemplatePanel<'_> {
             self.theme.foreground,
         );
         if delete_visible {
-            self.paint_style_delete_button(cx, Self::style_delete_rect(rect), index);
+            self.paint_style_delete_button(cx, self.style_delete_rect_for(rect), index);
         } else if is_pinned {
             self.paint_text(
                 cx,

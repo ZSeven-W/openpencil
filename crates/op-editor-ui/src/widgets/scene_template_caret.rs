@@ -45,7 +45,7 @@ impl SceneTemplatePanel<'_> {
         }
         single_line_caret_rect(
             &center.search,
-            Self::search_rect(panel),
+            self.search_rect_for(panel),
             SEARCH_TEXT_SIZE,
             SEARCH_PAD_X,
         )

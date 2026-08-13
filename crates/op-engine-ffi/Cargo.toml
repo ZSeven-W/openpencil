@@ -1,0 +1,63 @@
+[package]
+name         = "op-engine-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description  = "Stable C ABI for embedding the OpenPencil engine in iOS / Android player shells"
+
+[lib]
+# cdylib for the Android player, staticlib for the iOS player, rlib so
+# host-side tests and the JNI layer link the same code.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = []
+# Metal rendering on iOS / macOS — enables jian-skia's `surface/metal`
+# (skia-safe Metal backend over a shell-owned CAMetalLayer).
+metal = ["jian-skia/metal"]
+# GL rendering on Android — enables jian-skia's `surface/egl_android`
+# (EGL/GLES backend over a shell-owned ANativeWindow).
+gl = ["jian-skia/gl"]
+# Full editor mode: drives op-host-native's widget host (the complete
+# desktop chrome — top bar, layers, toolbar, property panel, chat,
+# settings, canvas editing) on iOS / Android.
+editor = ["op-host-native/widget-host"]
+# Debug fault seams; only meaningful with debug_assertions (never ship).
+debug-hooks = []
+
+[dependencies]
+# The canonical editor model (`EditorState`) the player loads a `.op`
+# document into.
+op-editor-core = { path = "../op-editor-core" }
+# The shared canvas painter (`canvas_viewport_paint`) + widget facade —
+# the player renders documents with the exact painter the desktop
+# editor canvas uses, so a phone shows the same pixels as the desktop.
+op-editor-ui = { path = "../op-editor-ui" }
+# `.op` → `EditorState` canonical load + `LayoutScene` builder.
+op-pen-loader = { path = "../op-pen-loader" }
+# `NativeBackend` / `NativeFrameBackend` — the OP `RenderBackend`
+# adapter that paints OP widget calls onto a skia canvas. Raster-only
+# by default (no `gl-host`), so the crate stays mobile-safe.
+op-host-native = { path = "../op-host-native" }
+# Canonical `.op` schema — `PenDocument` parse targets.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# `TextInputState` (IME composition/selection model) + UTF-16 ↔ UTF-8
+# offset conversion helpers used by the text-edit ABI.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+# The GPU/raster surfaces the player paints onto (metal / egl_android /
+# raster), same crate the desktop host renders through.
+jian-skia = { path = "../../vendor/jian/crates/jian-skia" }
+# The frame adapters expose skia canvases; pinned to the same 0.97 the
+# native host links (no `gl` feature — the viewer never owns a GL
+# context, the platform surfaces do).
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "textlayout",
+] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+# Host-side tests render through the raster CPU path only.
+serde_json = { workspace = true }

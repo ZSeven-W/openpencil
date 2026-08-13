@@ -45,6 +45,10 @@ use crate::{Color, Point2D, Rect, TextLayout, Theme};
 
 /// Height of the tab row that heads the rail.
 pub const SLIDES_TAB_ROW_HEIGHT: f32 = 36.0;
+/// Touch rail tab row. Its 4pt vertical insets leave 44pt tab targets.
+pub const TOUCH_SLIDES_TAB_ROW_HEIGHT: f32 = 52.0;
+/// Minimum width and height of every touch rail tab target.
+pub const TOUCH_SLIDES_TAB_TARGET: f32 = 44.0;
 /// Short alias used inside this module's geometry.
 const TAB_ROW_HEIGHT: f32 = SLIDES_TAB_ROW_HEIGHT;
 /// Height of the bar pinned to the rail's bottom edge.
@@ -192,8 +196,9 @@ impl SlidesPanelLayout {
         let thumb_box = Point2D::new(box_w, THUMB_BOX_H);
         let thumbs = aspects.iter().map(|a| fit_into(thumb_box, *a)).collect();
         let count = aspects.len();
-        let list_top = panel.origin.y + TAB_ROW_HEIGHT;
-        let list_h = (panel.size.y - TAB_ROW_HEIGHT - FOOTER_HEIGHT).max(0.0);
+        let tabs_height = tabs.row.size.y;
+        let list_top = panel.origin.y + tabs_height;
+        let list_h = (panel.size.y - tabs_height - FOOTER_HEIGHT).max(0.0);
         if list_h <= 0.0 {
             return None;
         }

@@ -33,6 +33,8 @@
 //! - [`groups`] — grouped panel and preview sub-states
 //! - `defaults` — `impl Default for EditorUiState`
 //! - `methods` — `impl EditorUiState`
+//! - [`slides_panel_state`] — slide-panel navigation and drag state
+//! - `tests` — state-level regression tests
 
 pub mod chrome;
 mod defaults;
@@ -99,6 +101,12 @@ pub struct EditorUiState {
     pub sidebar_open: bool,
     pub layer_panel_width: f32,
     pub property_panel_width: f32,
+    /// Live responsive layout class (see [`crate::size_class`]).
+    pub size_class: crate::size_class::EditorSizeClass,
+    /// Touch input density (≥44pt targets, bottom dock, sheets).
+    pub touch: bool,
+    /// The single open mobile sheet; opening one closes the others.
+    pub mobile_sheet: Option<crate::size_class::MobileSheetKind>,
 
     // --- Theme + locale --------------------------------------------
     /// User's OpenPencil theme preference — TopBar Sun icon flips it and

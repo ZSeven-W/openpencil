@@ -288,6 +288,17 @@ impl PropertyPanel {
         if ui.font_picker_purpose != Some(op_editor_core::FontPickerPurpose::PropertyText) {
             font_picker.open = false;
         }
+        let density_scale = if ui.touch_chrome() {
+            super::density::TOUCH_DENSITY_SCALE
+        } else {
+            1.0
+        };
+        // Host scroll state remains in physical surface points. Section and
+        // Code-tab layout below paint in the panel's density-independent
+        // logical coordinate space, so normalize the immutable paint snapshot.
+        codegen.framework_scroll.offset /= density_scale;
+        codegen.code_scroll.offset /= density_scale;
+        font_picker.scroll.offset /= density_scale;
         // Effects / Interactions menus are floating, owning surfaces.  Do not
         // carry a stale body-action hover into the immutable paint snapshot
         // while either menu is open: their downward-opening geometry can
@@ -296,6 +307,7 @@ impl PropertyPanel {
             ui.effect_add_picker_open || ui.interaction_menu_open || ui.compositing_picker.open;
         Self {
             id: WidgetId::new(2000),
+            density_scale,
             color_variable_picker_scroll: ui.property_color_variable_picker_scroll.offset.max(0.0),
             color_variable_picker_hover: ui.property_color_variable_picker_hover,
             snapshot,

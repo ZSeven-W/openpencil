@@ -170,6 +170,8 @@ pub fn display_font_family(value: &str) -> &str {
 
 pub const FONT_PICKER_ROW_H: f32 = 24.0;
 pub const FONT_PICKER_SEARCH_H: f32 = 28.0;
+const TOUCH_FONT_PICKER_ROW_H: f32 = 30.0;
+const TOUCH_FONT_PICKER_SEARCH_H: f32 = 30.0;
 const GROUP_HEADER_H: f32 = 16.0;
 const NO_RESULTS_H: f32 = 40.0;
 const LIST_PAD_Y: f32 = 4.0;
@@ -177,9 +179,11 @@ const LIST_PAD_Y: f32 = 4.0;
 const IMPORT_ACTION_H: f32 = 28.0;
 /// Side of the inline remove-x hit square on an imported entry row.
 const REMOVE_X_SIZE: f32 = 16.0;
-/// TS dropdown is `max-h-72` (288 px) including the search row.
+const TOUCH_REMOVE_X_SIZE: f32 = 30.0;
+/// Desktop list viewport cap. Touch keeps the same 288-point popup cap while
+/// accounting for its taller search field.
+#[cfg(test)]
 const MAX_LIST_VIEWPORT_H: f32 = 288.0 - FONT_PICKER_SEARCH_H;
-
 /// A row in the dropdown's scrolling list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontPickerRow {
@@ -221,7 +225,7 @@ pub enum FontPickerAction {
 fn family_trigger_rect(panel_rect: Rect, visible: VisibleSections) -> Option<Rect> {
     let text_y = crate::widgets::property_panel_text::text_section_top(panel_rect, visible)?;
     let y = text_y
-        + crate::widgets::property_panel_text::TEXT_LAYOUT_BLOCK_H
+        + crate::widgets::property_panel_text::text_layout_block_height(visible.touch_controls)
         + crate::widgets::property_panel_inputs::SECTION_HEADER_HEIGHT;
     Some(Rect {
         origin: Point2D::new(panel_rect.origin.x + PAD_X, y),
@@ -239,7 +243,7 @@ pub fn font_picker_layout(
     scroll: f32,
 ) -> Option<FontPickerLayout> {
     let trigger = family_trigger_rect(panel_rect, visible)?;
-    Some(font_picker_layout_at(
+    Some(font_picker_layout_at_with_density(
         trigger,
         trigger.size.x,
         panel_rect,
@@ -247,6 +251,7 @@ pub fn font_picker_layout(
         allow_import,
         true,
         scroll,
+        visible.touch_controls,
     ))
 }
 
@@ -263,6 +268,49 @@ pub fn font_picker_layout_at(
     allow_remove: bool,
     scroll: f32,
 ) -> FontPickerLayout {
+    font_picker_layout_at_with_density(
+        trigger,
+        popup_width,
+        bounds,
+        entries,
+        allow_import,
+        allow_remove,
+        scroll,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn font_picker_layout_at_with_density(
+    trigger: Rect,
+    popup_width: f32,
+    bounds: Rect,
+    entries: &[FontPickerEntry],
+    allow_import: bool,
+    allow_remove: bool,
+    scroll: f32,
+    touch_controls: bool,
+) -> FontPickerLayout {
+    let row_h = if touch_controls {
+        TOUCH_FONT_PICKER_ROW_H
+    } else {
+        FONT_PICKER_ROW_H
+    };
+    let search_h = if touch_controls {
+        TOUCH_FONT_PICKER_SEARCH_H
+    } else {
+        FONT_PICKER_SEARCH_H
+    };
+    let import_h = if touch_controls {
+        TOUCH_FONT_PICKER_ROW_H
+    } else {
+        IMPORT_ACTION_H
+    };
+    let remove_size = if touch_controls {
+        TOUCH_REMOVE_X_SIZE
+    } else {
+        REMOVE_X_SIZE
+    };
     // Walk the list content (unscrolled, y from 0). Groups render in
     // Imported → Bundled → System order, matching `font_picker_entries`.
     let imported_count = entries.iter().filter(|e| e.imported).count();
@@ -275,17 +323,17 @@ pub fn font_picker_layout_at(
         cy += GROUP_HEADER_H;
         for (i, e) in entries.iter().enumerate() {
             if e.imported {
-                content.push((FontPickerRow::Entry(i), cy, FONT_PICKER_ROW_H));
+                content.push((FontPickerRow::Entry(i), cy, row_h));
                 // Inline remove-x, vertically centred in the row. Its
                 // horizontal extent is derived in the mapper below (a
                 // REMOVE_X_SIZE square inset by PAD_X from the right
                 // edge). Registered AFTER the entry so hit-tests that
                 // check RemoveEntry first win the overlap.
                 if allow_remove {
-                    let x_top = cy + (FONT_PICKER_ROW_H - REMOVE_X_SIZE) / 2.0;
-                    content.push((FontPickerRow::RemoveEntry(i), x_top, REMOVE_X_SIZE));
+                    let x_top = cy + (row_h - remove_size) / 2.0;
+                    content.push((FontPickerRow::RemoveEntry(i), x_top, remove_size));
                 }
-                cy += FONT_PICKER_ROW_H;
+                cy += row_h;
             }
         }
     }
@@ -294,8 +342,8 @@ pub fn font_picker_layout_at(
         cy += GROUP_HEADER_H;
         for (i, e) in entries.iter().enumerate() {
             if e.bundled {
-                content.push((FontPickerRow::Entry(i), cy, FONT_PICKER_ROW_H));
-                cy += FONT_PICKER_ROW_H;
+                content.push((FontPickerRow::Entry(i), cy, row_h));
+                cy += row_h;
             }
         }
     }
@@ -304,8 +352,8 @@ pub fn font_picker_layout_at(
         cy += GROUP_HEADER_H;
         for (i, e) in entries.iter().enumerate() {
             if !e.bundled && !e.imported {
-                content.push((FontPickerRow::Entry(i), cy, FONT_PICKER_ROW_H));
-                cy += FONT_PICKER_ROW_H;
+                content.push((FontPickerRow::Entry(i), cy, row_h));
+                cy += row_h;
             }
         }
     }
@@ -318,16 +366,17 @@ pub fn font_picker_layout_at(
     // import (desktop rfd dialog + web file-input both set the capability). A
     // host that can't import omits it so there is no dead row.
     if allow_import {
-        content.push((FontPickerRow::ImportAction, cy, IMPORT_ACTION_H));
-        cy += IMPORT_ACTION_H;
+        content.push((FontPickerRow::ImportAction, cy, import_h));
+        cy += import_h;
     }
     let content_h = cy + LIST_PAD_Y * 2.0;
-    let viewport_h = content_h.min(MAX_LIST_VIEWPORT_H);
+    let max_list_viewport_h = 288.0 - search_h;
+    let viewport_h = content_h.min(max_list_viewport_h);
     let max_scroll = (content_h - viewport_h).max(0.0);
     let scroll = scroll.clamp(0.0, max_scroll);
 
     let popup_w = popup_width.min(bounds.size.x).max(1.0);
-    let popup_h = FONT_PICKER_SEARCH_H + viewport_h;
+    let popup_h = search_h + viewport_h;
     let min_x = bounds.origin.x;
     let max_x = (bounds.origin.x + bounds.size.x - popup_w).max(min_x);
     let popup_x = (trigger.origin.x + trigger.size.x - popup_w).clamp(min_x, max_x);
@@ -348,10 +397,10 @@ pub fn font_picker_layout_at(
     };
     let search = Rect {
         origin: popup.origin,
-        size: Point2D::new(popup_w, FONT_PICKER_SEARCH_H),
+        size: Point2D::new(popup_w, search_h),
     };
     let viewport = Rect {
-        origin: Point2D::new(popup_x, popup_y + FONT_PICKER_SEARCH_H),
+        origin: Point2D::new(popup_x, popup_y + search_h),
         size: Point2D::new(popup_w, viewport_h),
     };
     let list_top = viewport.origin.y + LIST_PAD_Y - scroll;
@@ -361,7 +410,7 @@ pub fn font_picker_layout_at(
             // The remove-x is a small square inset from the right edge;
             // every other row spans the popup width.
             let (x, w) = if matches!(row, FontPickerRow::RemoveEntry(_)) {
-                (popup_x + popup_w - PAD_X - REMOVE_X_SIZE, REMOVE_X_SIZE)
+                (popup_x + popup_w - PAD_X - remove_size, remove_size)
             } else {
                 (popup_x, popup_w)
             };

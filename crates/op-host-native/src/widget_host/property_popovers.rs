@@ -13,23 +13,14 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::widgets::PropertyPanel;
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.image_fill_popover_open {
             return false;
         }
         self.refresh_layout_scene();
         if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
+            let property_rect = self.property_rect(viewport_width, viewport_height);
             let point = Point2D::new(x, y);
             if panel.image_fill_popover_contains(property_rect, point) {
                 // Tile scale is a real text input inside the floating popup.
@@ -82,8 +73,8 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A};
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.export_scale_picker_open
             && !self.editor_state.editor_ui.export_format_picker_open
         {
@@ -91,16 +82,7 @@ impl WidgetHostNative {
         }
         self.refresh_layout_scene();
         if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
+            let property_rect = self.property_rect(viewport_width, viewport_height);
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 if matches!(
                     action,
@@ -134,23 +116,14 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A};
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.font_weight_picker_open {
             return false;
         }
         self.refresh_layout_scene();
         if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
+            let property_rect = self.property_rect(viewport_width, viewport_height);
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 if matches!(action, A::SetFontWeight(_) | A::ToggleFontWeightPicker) {
                     if let A::SetFontWeight(choice) = action {
@@ -180,8 +153,8 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::widgets::{PropertyPanel, PropertyPanelAction as A};
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.padding_mode_popover_open
             && !self.editor_state.editor_ui.stroke_mode_popover_open
         {
@@ -189,16 +162,7 @@ impl WidgetHostNative {
         }
         self.refresh_layout_scene();
         if let Some(panel) = PropertyPanel::for_selection(&self.editor_state) {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    viewport_width - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
+            let property_rect = self.property_rect(viewport_width, viewport_height);
             if let Some(action) = panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 if matches!(
                     action,
@@ -229,24 +193,15 @@ impl WidgetHostNative {
         y: f32,
         panel: Option<&op_editor_ui::widgets::PropertyPanel>,
     ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::widgets::PropertyPanelAction as A;
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.padding_mode_popover_open
             && !self.editor_state.editor_ui.stroke_mode_popover_open
         {
             return false;
         }
         let new_hover = panel.and_then(|panel| {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
+            let property_rect = self.property_rect(self.last_viewport_w, self.last_viewport_h);
             match panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 Some(A::SetPaddingMode(mode)) => op_editor_core::PaddingEditMode::ALL
                     .iter()
@@ -290,22 +245,13 @@ impl WidgetHostNative {
         y: f32,
         panel: Option<&op_editor_ui::widgets::PropertyPanel>,
     ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanelAction as A, TOP_BAR_HEIGHT};
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::widgets::PropertyPanelAction as A;
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.font_weight_picker_open {
             return false;
         }
         let new_hover = panel.and_then(|panel| {
-            let property_rect = Rect {
-                origin: Point2D::new(
-                    self.last_viewport_w - self.editor_state.editor_ui.property_panel_width,
-                    TOP_BAR_HEIGHT,
-                ),
-                size: Point2D::new(
-                    self.editor_state.editor_ui.property_panel_width,
-                    (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0),
-                ),
-            };
+            let property_rect = self.property_rect(self.last_viewport_w, self.last_viewport_h);
             match panel.hit_test_action(property_rect, Point2D::new(x, y)) {
                 Some(A::SetFontWeight(choice)) => op_editor_ui::widgets::FontWeightChoice::ALL
                     .iter()

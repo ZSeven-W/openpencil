@@ -225,10 +225,11 @@ fn connect_button_hit_still_resolves_for_idle_card() {
     let offset = card.origin.y - content_viewport(rect).origin.y;
     state.editor_ui.agent_settings.scroll_y.offset = offset;
     let panel = AgentSettingsPanel::for_editor(&state);
+    let effective_scroll = panel.effective_scroll(rect);
     let btn = connect_btn_rect_at(card);
     let point = Point2D::new(
         btn.origin.x + btn.size.x / 2.0,
-        btn.origin.y + btn.size.y / 2.0 - offset,
+        btn.origin.y + btn.size.y / 2.0 - effective_scroll,
     );
     assert_eq!(
         panel.hit_test(rect, point),

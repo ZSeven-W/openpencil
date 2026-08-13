@@ -256,6 +256,7 @@ fn nested_crop_uses_editing_id_and_inverts_ancestor_rotation() {
         0.0,
         0.0,
         false,
+        VIEWPORT_W,
         VIEWPORT_H,
     ));
     assert!(host.image_crop_drag.is_some());
@@ -284,7 +285,7 @@ fn layer_selected_deep_crop_leaf_enters_edit_after_two_canvas_presses() {
     ];
 
     host.set_now_ms(1_000);
-    assert!(host.apply_canvas_node_press(path.clone(), 0.0, 0.0, false, VIEWPORT_H));
+    assert!(host.apply_canvas_node_press(path.clone(), 0.0, 0.0, false, VIEWPORT_W, VIEWPORT_H));
     assert_eq!(
         host.editor_state().selection.anchor,
         NodeId::new("deep-photo"),
@@ -293,7 +294,7 @@ fn layer_selected_deep_crop_leaf_enters_edit_after_two_canvas_presses() {
     release(&mut host);
 
     host.set_now_ms(1_200);
-    assert!(host.apply_canvas_node_press(path, 0.0, 0.0, false, VIEWPORT_H));
+    assert!(host.apply_canvas_node_press(path, 0.0, 0.0, false, VIEWPORT_W, VIEWPORT_H));
     assert_eq!(
         host.editor_state().editor_ui.image_crop_editing,
         Some(NodeId::new("deep-photo"))
@@ -316,10 +317,10 @@ fn selected_crop_with_deeper_child_keeps_one_level_drill_behavior() {
     ];
 
     host.set_now_ms(1_000);
-    assert!(host.apply_canvas_node_press(path.clone(), 0.0, 0.0, false, VIEWPORT_H));
+    assert!(host.apply_canvas_node_press(path.clone(), 0.0, 0.0, false, VIEWPORT_W, VIEWPORT_H));
     release(&mut host);
     host.set_now_ms(1_200);
-    assert!(host.apply_canvas_node_press(path, 0.0, 0.0, false, VIEWPORT_H));
+    assert!(host.apply_canvas_node_press(path, 0.0, 0.0, false, VIEWPORT_W, VIEWPORT_H));
 
     assert_eq!(host.editor_state().editor_ui.image_crop_editing, None);
     assert_eq!(

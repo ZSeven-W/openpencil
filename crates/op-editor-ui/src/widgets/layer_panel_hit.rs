@@ -4,7 +4,9 @@
 //! clicks and drop indicators land on the rows the user sees.
 
 use super::layer_panel::*;
-use super::layer_panel_paint::layer_trailing_icon_xs;
+use super::layer_panel_metrics::{
+    add_page_target, collapse_target, delete_page_target, layer_action_targets,
+};
 use super::layer_panel_walkers::row_index_at;
 use crate::{Point2D, Rect};
 
@@ -32,23 +34,23 @@ impl LayerPanel {
             r.layers_rows_top,
             r.layers.offset,
             r.layers_view_h,
-            LAYER_ROW_HEIGHT,
+            self.metrics.layer_row_height,
             point.y,
         ) {
             let item = &self.items[index];
-            let row_bottom = row_top + LAYER_ROW_HEIGHT;
+            let row_bottom = row_top + self.metrics.layer_row_height;
             // Container rows use Before / Into / After bands; leaves
             // fall back to a two-way Before / After split.
             let local = point.y - row_top;
             let position = if item.is_container {
-                if local < LAYER_ROW_HEIGHT * 0.25 {
+                if local < self.metrics.layer_row_height * 0.25 {
                     DropPosition::Before
-                } else if local > LAYER_ROW_HEIGHT * 0.75 {
+                } else if local > self.metrics.layer_row_height * 0.75 {
                     DropPosition::After
                 } else {
                     DropPosition::Into
                 }
-            } else if local < LAYER_ROW_HEIGHT / 2.0 {
+            } else if local < self.metrics.layer_row_height / 2.0 {
                 DropPosition::Before
             } else {
                 DropPosition::After
@@ -70,7 +72,7 @@ impl LayerPanel {
         // exactly where the indicator paints.
         if point.y > layers_top {
             if let Some(last) = self.items.last() {
-                let y = layers_top + self.items.len() as f32 * LAYER_ROW_HEIGHT;
+                let y = layers_top + self.items.len() as f32 * self.metrics.layer_row_height;
                 return Some(DropTarget {
                     anchor: last.node_id.clone(),
                     position: DropPosition::After,
@@ -90,46 +92,32 @@ impl LayerPanel {
             return None;
         }
         // Pages section header — `+` add-page affordance at top-right.
-        let plus_x = rect.origin.x + rect.size.x - ROW_PAD_X - 12.0;
-        let plus_y = rect.origin.y + 8.0 + (SECTION_HEADER_HEIGHT - 14.0) / 2.0;
-        let slop = 4.0;
-        if point.x >= plus_x - slop
-            && point.x <= plus_x + 14.0 + slop
-            && point.y >= plus_y - slop
-            && point.y <= plus_y + 14.0 + slop
-        {
+        let r = self.regions(rect);
+        if add_page_target(rect, r.pages_header_y, self.metrics).contains(point) {
             return Some(LayerPanelHit::AddPage);
         }
         // Bounded Pages / Layers viewports — a row only counts as a
         // hit when the cursor is inside its (clipped) viewport, so a
         // row scrolled out of view can't be clicked through.
-        let r = self.regions(rect);
         if let Some((index, y)) = row_index_at(
             self.pages.len(),
             r.pages_rows_top,
             r.pages.offset,
             r.pages_view_h,
-            PAGE_ROW_HEIGHT,
+            self.metrics.page_row_height,
             point.y,
         ) {
             let page = &self.pages[index];
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
-                size: Point2D::new(rect.size.x, PAGE_ROW_HEIGHT),
+                size: Point2D::new(rect.size.x, self.metrics.page_row_height),
             };
-            if (row).contains(point) && self.is_page_hovered(page.page_index) {
-                // × delete button — only hit-tested when the row is
-                // hovered (paint shows it under the same gate).
-                let close_x = rect.origin.x + rect.size.x - ROW_PAD_X - 14.0;
-                let close_y = y + (PAGE_ROW_HEIGHT - 14.0) / 2.0;
-                let slop = 4.0;
-                if point.x >= close_x - slop
-                    && point.x <= close_x + 14.0 + slop
-                    && point.y >= close_y - slop
-                    && point.y <= close_y + 14.0 + slop
-                {
-                    return Some(LayerPanelHit::DeletePage(page.page_index));
-                }
+            let actions_visible = self.metrics.touch || self.is_page_hovered(page.page_index);
+            if row.contains(point)
+                && actions_visible
+                && delete_page_target(rect, y, self.metrics).contains(point)
+            {
+                return Some(LayerPanelHit::DeletePage(page.page_index));
             }
             if (row).contains(point) {
                 return Some(LayerPanelHit::Page(page.page_index));
@@ -140,13 +128,13 @@ impl LayerPanel {
             r.layers_rows_top,
             r.layers.offset,
             r.layers_view_h,
-            LAYER_ROW_HEIGHT,
+            self.metrics.layer_row_height,
             point.y,
         ) {
             let item = &self.items[index];
             let row = Rect {
                 origin: Point2D::new(rect.origin.x, y),
-                size: Point2D::new(rect.size.x, LAYER_ROW_HEIGHT),
+                size: Point2D::new(rect.size.x, self.metrics.layer_row_height),
             };
             if !(row).contains(point) {
                 return None;
@@ -155,37 +143,21 @@ impl LayerPanel {
             // 4 px slop so small mouse offsets still register.
             let inner = Rect {
                 origin: Point2D::new(row.origin.x + 6.0, y + 2.0),
-                size: Point2D::new(row.size.x - 12.0, LAYER_ROW_HEIGHT - 4.0),
+                size: Point2D::new(row.size.x - 12.0, self.metrics.layer_row_height - 4.0),
             };
-            let (eye_x, lock_x) = layer_trailing_icon_xs(inner);
-            let icon_y = inner.origin.y + 6.0;
-            let slop = 4.0;
+            let (eye_target, lock_target) = layer_action_targets(inner, self.metrics);
             let row_hovered = self.is_row_hovered(&item.node_id);
-            if row_hovered
-                && !item.renaming
-                && point.x >= lock_x - slop
-                && point.x <= lock_x + 14.0 + slop
-                && point.y >= icon_y - slop
-                && point.y <= icon_y + 14.0 + slop
-            {
+            let actions_visible = self.metrics.touch || row_hovered;
+            if actions_visible && !item.renaming && lock_target.contains(point) {
                 return Some(LayerPanelHit::ToggleLocked(item.node_id.clone()));
             }
-            if row_hovered
-                && !item.renaming
-                && point.x >= eye_x - slop
-                && point.x <= eye_x + 14.0 + slop
-                && point.y >= icon_y - slop
-                && point.y <= icon_y + 14.0 + slop
-            {
+            if actions_visible && !item.renaming && eye_target.contains(point) {
                 return Some(LayerPanelHit::ToggleHidden(item.node_id.clone()));
             }
             if item.has_children {
-                let indent = ROW_PAD_X + item.depth as f32 * 12.0;
-                let chev_x = inner.origin.x + indent - r.layers.horizontal_offset;
-                if point.x >= chev_x - slop
-                    && point.x <= chev_x + 14.0 + slop
-                    && point.y >= icon_y - slop
-                    && point.y <= icon_y + 14.0 + slop
+                let indent = self.metrics.row_pad_x + item.depth as f32 * 12.0;
+                if collapse_target(inner, indent, r.layers.horizontal_offset, self.metrics)
+                    .contains(point)
                 {
                     return Some(LayerPanelHit::ToggleCollapsed(item.node_id.clone()));
                 }

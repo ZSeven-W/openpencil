@@ -1,7 +1,4 @@
-//! Wheel + trackpad-pan input — extracted from `input.rs` to keep it
-//! under the repo's 800-line cap. Both handlers route a scroll over
-//! the floating Git panel's open diff into the diff view, and
-//! otherwise zoom / pan the canvas.
+//! Wheel and trackpad-pan routing for panels, previews, and the canvas.
 
 use super::WidgetHostNative;
 use op_editor_ui::util::scroll_by_max;
@@ -9,7 +6,6 @@ use op_editor_ui::widgets::press_flow;
 use op_editor_ui::widgets::scroll_flow;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
-
 impl WidgetHostNative {
     /// Scroll the chat transcript message list when a wheel / trackpad
     /// pan lands over the panel body. The body swallows the event so a
@@ -126,6 +122,53 @@ impl WidgetHostNative {
         true
     }
 
+    /// Route a vertical delta to the responsive Agent Settings surface.
+    /// The surface swallows deltas over its chrome, but only the resolved body
+    /// scrolls. This keeps touch, wheel, and trackpad paths on one geometry and
+    /// prevents a modal gesture from reaching the canvas below.
+    pub(in crate::widget_host) fn scroll_agent_settings_at(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+        if !self.editor_state.editor_ui.agent_settings_open {
+            return false;
+        }
+        self.refresh_layout_scene();
+        let point = Point2D::new(x, y);
+        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+        let panel_rect = panel.rect(viewport_width, viewport_height);
+        if !panel_rect.contains(point) {
+            return false;
+        }
+        if self.try_scroll_agent_preset_menu(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
+
+        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
+        if !panel.resolved_content_viewport(panel_rect).contains(point) {
+            return true;
+        }
+        let max_scroll = panel.max_scroll(panel_rect);
+        let before = self.editor_state.editor_ui.agent_settings.scroll_y.offset;
+        self.editor_state
+            .editor_ui
+            .agent_settings
+            .scroll_y
+            .scroll_by(-delta_y, max_scroll, 0.0);
+        let changed = (self.editor_state.editor_ui.agent_settings.scroll_y.offset - before).abs()
+            > f32::EPSILON;
+        if changed {
+            self.update_agent_settings_hover(x, y);
+            self.mark_dirty();
+        }
+        true
+    }
+
     /// Scroll the floating VariablesPanel row list when the wheel /
     /// trackpad fires over the open panel.
     fn try_scroll_variables_panel(
@@ -196,68 +239,22 @@ impl WidgetHostNative {
         true
     }
 
-    /// Scroll the right-rail PropertyPanel when a wheel / trackpad
-    /// pan lands over it. `delta` is the vertical scroll delta
-    /// (wheel `delta_y` or pan `dy`). Returns `true` when the cursor
-    /// was over the inspector, so the caller stops before zooming.
-    fn try_scroll_property_panel(
-        &mut self,
-        x: f32,
-        y: f32,
-        delta: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-    ) -> bool {
-        use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
-        use op_editor_ui::Rect;
-        // A wheel over the open font-family picker scrolls ITS list,
-        // not the panel behind it (font_picker_dispatch.rs).
-        if self.try_scroll_font_picker(x, y, delta, viewport_width, viewport_height) {
-            return true;
-        }
-        let Some(panel) = PropertyPanel::for_selection_at(&self.editor_state, self.now_ms) else {
-            return false;
-        };
-        let pw = self.editor_state.editor_ui.property_panel_width;
-        let property_rect = Rect {
-            origin: Point2D::new(viewport_width - pw, TOP_BAR_HEIGHT),
-            size: Point2D::new(pw, (viewport_height - TOP_BAR_HEIGHT).max(0.0)),
-        };
-        // The compact compositing popup has no internal scroll. It still
-        // owns wheel events over its painted chrome so the inspector behind
-        // it cannot move and detach the popup from its trigger.
-        if self.editor_state.editor_ui.compositing_picker.open
-            && panel.compositing_picker_contains(property_rect, Point2D::new(x, y))
-        {
-            return true;
-        }
-        let Some(dirty) = scroll_flow::scroll_property_panel_body(
-            &mut self.editor_state,
-            &panel,
-            property_rect,
-            Point2D::new(x, y),
-            delta,
-        ) else {
-            return false;
-        };
-        if dirty {
-            self.mark_dirty();
-        }
-        true
-    }
-
     /// Scroll the left-rail LayerPanel when a wheel / trackpad pan
     /// lands over it — the Pages section if the cursor is above the
     /// Layers row viewport, otherwise the Layers section. Returns
     /// `true` when the cursor was over the panel.
-    fn try_scroll_layer_panel(
+    pub(in crate::widget_host) fn try_scroll_layer_panel(
         &mut self,
         x: f32,
         y: f32,
         delta_x: f32,
         delta_y: f32,
+        viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        if !self.layers_panel_visible() {
+            return false;
+        }
         // The slides tab owns the rail's wheel while it is on show; the
         // layer tree only sees the event when the tree is what the rail
         // is showing.
@@ -272,7 +269,7 @@ impl WidgetHostNative {
             }
             return true;
         }
-        let rect = self.layers_content_rect(viewport_height);
+        let rect = self.layers_content_rect(viewport_width, viewport_height);
         let panel = self.layer_panel();
         let Some(dirty) = scroll_flow::scroll_layer_panel(
             &mut self.editor_state,
@@ -292,9 +289,10 @@ impl WidgetHostNative {
 
     pub(in crate::widget_host) fn scroll_layer_panel_selection_into_view(
         &mut self,
+        viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        let rect = self.layers_content_rect(viewport_height);
+        let rect = self.layers_content_rect(viewport_width, viewport_height);
         let panel = self.layer_panel();
         if !scroll_flow::reveal_layer_panel_selection(&mut self.editor_state, &panel, rect) {
             return false;
@@ -332,7 +330,7 @@ impl WidgetHostNative {
         true
     }
 
-    fn try_scroll_scene_template_center(
+    pub(in crate::widget_host) fn try_scroll_scene_template_center(
         &mut self,
         x: f32,
         y: f32,
@@ -389,11 +387,12 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        self.apply_wheel_inner(x, y, delta_y, viewport_width, viewport_height, false)
+        let cancelled = self.cancel_native_touch_gestures();
+        let handled = self.apply_wheel_inner(x, y, delta_y, viewport_width, viewport_height, false);
+        handled || cancelled
     }
 
-    /// Pinch or modifier-promoted zoom intent. Device preview consumes
-    /// this without zooming or scrolling its fixed frame.
+    /// Pinch or modifier-promoted zoom intent.
     pub fn apply_pinch_gesture(
         &mut self,
         x: f32,
@@ -402,7 +401,9 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
-        self.apply_wheel_inner(x, y, delta_y, viewport_width, viewport_height, true)
+        let cancelled = self.cancel_native_touch_gestures();
+        let handled = self.apply_wheel_inner(x, y, delta_y, viewport_width, viewport_height, true);
+        handled || cancelled
     }
 
     fn apply_wheel_inner(
@@ -492,36 +493,8 @@ impl WidgetHostNative {
             return true;
         }
         // Agent-settings modal owns wheel.
-        if self.editor_state.editor_ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            self.refresh_layout_scene();
-            let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
-                .rect(viewport_width, viewport_height);
-            if panel_rect.origin.x <= x
-                && x <= panel_rect.origin.x + panel_rect.size.x
-                && panel_rect.origin.y <= y
-                && y <= panel_rect.origin.y + panel_rect.size.y
-            {
-                if self.try_scroll_agent_preset_menu(x, y, delta_y, viewport_width, viewport_height)
-                {
-                    return true;
-                }
-                let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-                let total = panel.content_total_height();
-                let viewport_h_inner = panel_rect.size.y
-                    - op_editor_ui::widgets::agent_settings_panel::CONTENT_VERTICAL_INSET;
-                let max_scroll = (total - viewport_h_inner).max(0.0);
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .scroll_y
-                    .scroll_by(-delta_y, max_scroll, 0.0);
-                // Content moved under a stationary cursor — re-derive
-                // the hover state so buttons don't keep a stale wash.
-                self.update_agent_settings_hover(x, y);
-                self.mark_dirty();
-                return true;
-            }
+        if self.scroll_agent_settings_at(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
         }
         // Floating Git panel — a wheel over its open diff view
         // scrolls the diff (vertically; horizontally with Shift held)
@@ -558,19 +531,22 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        // Right-rail inspector — a wheel over it scrolls the
-        // PropertyPanel content instead of zooming the canvas.
+        // Route inspector scroll before the canvas.
         if self.try_scroll_property_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
-        // Left-rail LayerPanel — a wheel over it scrolls its Pages /
-        // Layers section instead of zooming.
+        // Route Layers scroll before the canvas.
         let (layer_dx, layer_dy) = if self.shift_held {
             (delta_y, 0.0)
         } else {
             (0.0, delta_y)
         };
-        if self.try_scroll_layer_panel(x, y, layer_dx, layer_dy, viewport_height) {
+        if self.try_scroll_layer_panel(x, y, layer_dx, layer_dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.editor_state.editor_ui.touch_chrome()
+            && self.editor_state.editor_ui.mobile_sheet.is_some()
+        {
             return true;
         }
         // A device frame owns every wheel over the canvas. Branch on
@@ -594,17 +570,11 @@ impl WidgetHostNative {
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
-        // Canvas-local coords keep the zoom anchor under the cursor.
         let (cx0, cy0, _cw, _ch) = self.canvas_region(viewport_width, viewport_height);
         let cursor = Point2D::new(x - cx0, y - cy0);
         self.editor_state.viewport.zoom_at(cursor, delta_y);
         self.note_viewport_zoom_gesture();
-        // No `mark_dirty()`: a zoom only changes the viewport
-        // transform, not the document tree, so the cached
-        // `layout_scene` stays valid — re-running the taffy layout
-        // solve + skia text measurement every wheel tick was the
-        // canvas-zoom jank. The `true` return still drives the
-        // repaint, which re-applies the new viewport transform.
+        // Viewport-only changes do not invalidate the layout scene.
         true
     }
 
@@ -618,6 +588,7 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        let cancelled = self.cancel_native_touch_gestures();
         if self.try_scroll_missing_fonts_picker(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
@@ -687,35 +658,8 @@ impl WidgetHostNative {
             return true;
         }
         // Agent-settings modal owns trackpad scroll same as wheel.
-        if self.editor_state.editor_ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            self.refresh_layout_scene();
-            let panel_rect = AgentSettingsPanel::for_editor(&self.editor_state)
-                .rect(viewport_width, viewport_height);
-            if panel_rect.origin.x <= x
-                && x <= panel_rect.origin.x + panel_rect.size.x
-                && panel_rect.origin.y <= y
-                && y <= panel_rect.origin.y + panel_rect.size.y
-            {
-                if self.try_scroll_agent_preset_menu(x, y, dy, viewport_width, viewport_height) {
-                    return true;
-                }
-                let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-                let total = panel.content_total_height();
-                let viewport_h_inner = panel_rect.size.y
-                    - op_editor_ui::widgets::agent_settings_panel::CONTENT_VERTICAL_INSET;
-                let max_scroll = (total - viewport_h_inner).max(0.0);
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .scroll_y
-                    .scroll_by(-dy, max_scroll, 0.0);
-                // Content moved under a stationary cursor — re-derive
-                // the hover state so buttons don't keep a stale wash.
-                self.update_agent_settings_hover(x, y);
-                self.mark_dirty();
-                return true;
-            }
+        if self.scroll_agent_settings_at(x, y, dy, viewport_width, viewport_height) {
+            return true;
         }
         // Floating Git panel — a trackpad scroll over its open diff
         // pans the diff (dy vertically, dx sideways) like the wheel.
@@ -754,14 +698,17 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        // Right-rail inspector — a trackpad pan over it scrolls the
-        // PropertyPanel content instead of panning the canvas.
-        if self.try_scroll_property_panel(x, y, dy, viewport_width, viewport_height) {
+        // Route inspector pan before the canvas.
+        if self.try_scroll_property_panel_2d(x, y, dx, dy, viewport_width, viewport_height) {
             return true;
         }
-        // Left-rail LayerPanel — a trackpad pan over it scrolls its
-        // Pages / Layers section instead of panning the canvas.
-        if self.try_scroll_layer_panel(x, y, dx, dy, viewport_height) {
+        // Route Layers pan before the canvas.
+        if self.try_scroll_layer_panel(x, y, dx, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.editor_state.editor_ui.touch_chrome()
+            && self.editor_state.editor_ui.mobile_sheet.is_some()
+        {
             return true;
         }
         if self.device_mode_active() && self.over_canvas(x, y, viewport_width, viewport_height) {
@@ -778,10 +725,10 @@ impl WidgetHostNative {
             return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
-            return false;
+            return cancelled;
         }
         if dx == 0.0 && dy == 0.0 {
-            return false;
+            return cancelled;
         }
         self.editor_state.viewport.pan(dx, dy);
         self.note_viewport_gesture();

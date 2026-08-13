@@ -38,6 +38,7 @@ use op_editor_core::PropertyFocus;
 // ceiling. They contribute inherent methods, so every existing call
 // site resolves unchanged.
 mod build;
+mod density;
 mod hit;
 mod menus;
 mod paint;
@@ -80,6 +81,8 @@ pub struct PropertyPanel {
     pub id: WidgetId,
     pub snapshot: NodeSnapshot,
     pub theme: Theme,
+    /// Paint / hit-test scale for touch chrome. Desktop stays exactly 1:1.
+    pub(crate) density_scale: f32,
     /// Design-tab page inspector target. It is built only when no
     /// node is selected and uses a dedicated paint / hit-test branch;
     /// node sections never consult the neutral snapshot in this mode.
@@ -267,8 +270,8 @@ impl PropertyPanel {
     /// every paint / hit-test reads through this so the view
     /// self-corrects on the very next frame.
     fn effective_scroll(&self, panel_rect: Rect) -> f32 {
-        let max = (self.content_height(panel_rect) - panel_rect.size.y).max(0.0);
-        self.scroll.clamp(0.0, max)
+        let max = (self.logical_content_height(panel_rect) - panel_rect.size.y).max(0.0);
+        self.logical_length(self.scroll).clamp(0.0, max)
     }
 
     /// `panel_rect` shifted up by the (clamped) scroll offset. Both
@@ -290,12 +293,17 @@ impl PropertyPanel {
     /// band must not fall through to a section row scrolled up
     /// under it (paint clips there; hit-test must agree).
     fn point_in_section_viewport(&self, panel_rect: Rect, point: Point2D) -> bool {
-        point.y >= panel_rect.origin.y + crate::widgets::property_panel_inputs::TAB_HEIGHT
+        panel_rect.contains(point)
+            && point.y >= panel_rect.origin.y + crate::widgets::property_panel_inputs::TAB_HEIGHT
     }
 
     /// Total height (px) of the panel's section content — drives the
     /// scroll clamp so the inspector can't scroll past its end.
     pub fn content_height(&self, panel_rect: Rect) -> f32 {
+        self.physical_length(self.logical_content_height(self.logical_rect(panel_rect)))
+    }
+
+    fn logical_content_height(&self, panel_rect: Rect) -> f32 {
         if self.page_only {
             return crate::widgets::property_panel_page::content_height();
         }
@@ -332,6 +340,7 @@ impl PropertyPanel {
             layout_justify: self.snapshot.layout_justify,
             layout_align: self.snapshot.layout_align,
             size_options: caps.size_options,
+            touch_controls: self.density_scale > 1.0,
             size_fill_width: self.snapshot.size_fill_width,
             size_fill_height: self.snapshot.size_fill_height,
             size_hug_width: self.snapshot.size_hug_width,
@@ -423,14 +432,19 @@ pub(super) fn action_wash_rect(
         _ => None,
     };
     if let Some(label) = size_label {
-        // `paint_check_row` paints a 16px box at `r.origin.x` then the label
-        // 22px further right at font-size 12 — so the content runs from the
+        // `paint_check_row` paints a compact box at `r.origin.x` then the label
+        // after its shared gutter — so the content runs from the
         // box's left edge to the label's right edge. The left padding spills
         // into the gutter / inter-column gap (both empty), but the right edge
         // is clamped to the cell so a long localized label can't wash over the
         // adjacent column.
+        let touch_controls =
+            r.size.y > crate::widgets::property_panel_inputs::SIZE_CHECK_ROW_HEIGHT;
+        let label_x =
+            crate::widgets::property_panel_inputs::size_check_label_offset(touch_controls);
         let cell_right = r.origin.x + r.size.x;
-        let content_right = r.origin.x + 22.0 + text_metrics::measure_chrome(backend, label, 12.0);
+        let content_right =
+            r.origin.x + label_x + text_metrics::measure_chrome(backend, label, 12.0);
         let left = r.origin.x - ACTION_WASH_PAD_X;
         let right = (content_right + ACTION_WASH_PAD_X).min(cell_right);
         return Rect {

@@ -5,7 +5,7 @@
 
 use super::{
     display_font_family, font_picker_layout, font_picker_layout_at, FontPickerEntry,
-    FontPickerLayout, FontPickerRow, PAD_X, REMOVE_X_SIZE,
+    FontPickerLayout, FontPickerRow, PAD_X,
 };
 use crate::theme::Theme;
 use crate::widgets::button::paint_button_feedback_wash;
@@ -266,7 +266,7 @@ fn paint_font_picker_layout(
                 cx.backend.draw_text(
                     &label,
                     Point2D::new(
-                        rect.origin.x + PAD_X + REMOVE_X_SIZE + 6.0,
+                        rect.origin.x + PAD_X + 18.0,
                         rect.origin.y + rect.size.y / 2.0 + 4.0,
                     ),
                 );

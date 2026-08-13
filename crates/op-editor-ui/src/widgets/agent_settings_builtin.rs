@@ -2,9 +2,12 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_builtin_layout::{
-    add_provider_rect, card_height, card_rect, compact_edit_rect, compact_remove_rect,
-    compact_switch_rect, draft_card_height, expanded_card_height, field_input_rect, is_editing,
-    sync_error_height, CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT, SUBTITLE_HEIGHT,
+    add_provider_rect, add_provider_touch_target, card_height, card_rect, compact_edit_rect,
+    compact_remove_rect, compact_switch_rect, compact_touch_edit_rect, compact_touch_edit_target,
+    compact_touch_remove_rect, compact_touch_remove_target, compact_touch_switch_rect,
+    compact_touch_switch_target, draft_card_height, expanded_card_height, field_input_rect,
+    is_editing, sync_error_height, touch_empty_cta_rect, CARD_GAP, EMPTY_HEIGHT, HEADER_HEIGHT,
+    SUBTITLE_HEIGHT, TOUCH_EMPTY_CARD_H,
 };
 use crate::widgets::agent_settings_builtin_parts;
 use crate::widgets::agent_settings_caret::settings_input_text;
@@ -61,9 +64,17 @@ pub enum BuiltinHit {
 }
 
 pub fn content_height(settings: &AgentSettings) -> f32 {
+    content_height_for_ui(settings, false)
+}
+
+pub fn content_height_for_ui(settings: &AgentSettings, touch: bool) -> f32 {
     let has_draft = settings.builtin_agent_draft.is_some();
     let list_h = if settings.builtin_agents.is_empty() && !has_draft {
-        EMPTY_HEIGHT
+        if touch {
+            TOUCH_EMPTY_CARD_H
+        } else {
+            EMPTY_HEIGHT
+        }
     } else {
         let saved_h: f32 = settings
             .builtin_agents
@@ -82,8 +93,37 @@ pub fn content_height(settings: &AgentSettings) -> f32 {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> BuiltinHit {
+    hit_test_with_touch(content, settings, point, false)
+}
+
+pub fn hit_test_for_ui(
+    content: Rect,
+    settings: &AgentSettings,
+    ui: &EditorUiState,
+    point: Point2D,
+) -> BuiltinHit {
+    hit_test_with_touch(content, settings, point, ui.touch_chrome())
+}
+
+fn hit_test_with_touch(
+    content: Rect,
+    settings: &AgentSettings,
+    point: Point2D,
+    touch: bool,
+) -> BuiltinHit {
     let y = agents_body_top(content);
-    if (add_provider_rect(content, y)).contains(point) {
+    let empty = settings.builtin_agents.is_empty() && settings.builtin_agent_draft.is_none();
+    let add_target = if touch && empty {
+        touch_empty_cta_rect(
+            content,
+            y + HEADER_HEIGHT + SUBTITLE_HEIGHT + sync_error_height(settings),
+        )
+    } else if touch {
+        add_provider_touch_target(content, y)
+    } else {
+        add_provider_rect(content, y)
+    };
+    if add_target.contains(point) {
         return BuiltinHit::AddProvider;
     }
     let mut card_y = y + HEADER_HEIGHT + SUBTITLE_HEIGHT + sync_error_height(settings);
@@ -130,7 +170,13 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> Buil
                     return BuiltinHit::Focus { index, field };
                 }
             }
-        } else if (compact_switch_rect(card)).contains(point) {
+        } else if touch && compact_touch_switch_target(card).contains(point) {
+            return BuiltinHit::ToggleEnabled(index);
+        } else if touch && compact_touch_edit_target(card).contains(point) {
+            return BuiltinHit::Edit(index);
+        } else if touch && compact_touch_remove_target(card).contains(point) {
+            return BuiltinHit::Remove(index);
+        } else if compact_switch_rect(card).contains(point) {
             return BuiltinHit::ToggleEnabled(index);
         } else if settings.hover_builtin_agent == index && (compact_edit_rect(card)).contains(point)
         {
@@ -269,17 +315,23 @@ pub fn paint_builtin_section(
     y: f32,
     now_ms: u64,
 ) -> f32 {
+    let empty = settings.builtin_agents.is_empty() && settings.builtin_agent_draft.is_none();
+    let header_action = if ui.touch_chrome() && empty {
+        ""
+    } else {
+        t_settings(ui, "settings.agents.addProvider")
+    };
     let mut y = paint_header(
         cx,
         theme,
         t_settings(ui, "settings.agents.builtin"),
-        t_settings(ui, "settings.agents.addProvider"),
+        header_action,
         HeaderFrame {
             x: content.origin.x,
             y,
             w: content.size.x,
         },
-        settings.hover_add_provider,
+        settings.hover_add_provider && !(ui.touch_chrome() && empty),
         ui.button_pressed(ButtonPressTarget::AgentSettings(
             AgentSettingsButton::AddProvider,
         )),
@@ -305,7 +357,10 @@ pub fn paint_builtin_section(
             .draw_text(&layout, Point2D::new(content.origin.x, y + 14.0));
         y += sync_error_height(settings);
     }
-    if settings.builtin_agents.is_empty() && settings.builtin_agent_draft.is_none() {
+    if empty && ui.touch_chrome() {
+        return crate::widgets::agent_settings_builtin_empty::paint(cx, theme, ui, content, y);
+    }
+    if empty {
         return settings_form::paint_empty(
             cx,
             theme,
@@ -551,7 +606,12 @@ fn paint_compact_builtin_agent_card(
     let text_x = card.origin.x + ROW_TEXT_X;
     // Everything to the right of the text column: switch, then the two
     // hover actions, plus their gaps and the row's own inset.
-    let reserved = card.origin.x + card.size.x - compact_switch_rect(card).origin.x;
+    let switch_rect = if ui.touch_chrome() {
+        compact_touch_switch_rect(card)
+    } else {
+        compact_switch_rect(card)
+    };
+    let reserved = card.origin.x + card.size.x - switch_rect.origin.x;
     paint_row_label_above_status_at(cx, theme, card, text_x, &agent.display_name, reserved);
 
     let ready = agent.ready();
@@ -573,12 +633,22 @@ fn paint_compact_builtin_agent_card(
         reserved,
     );
 
-    paint_settings_switch(cx, theme, compact_switch_rect(card), agent.enabled);
-    if hovered {
+    paint_settings_switch(cx, theme, switch_rect, agent.enabled);
+    if hovered || ui.touch_chrome() {
+        let edit_rect = if ui.touch_chrome() {
+            compact_touch_edit_rect(card)
+        } else {
+            compact_edit_rect(card)
+        };
+        let remove_rect = if ui.touch_chrome() {
+            compact_touch_remove_rect(card)
+        } else {
+            compact_remove_rect(card)
+        };
         paint_action(
             cx,
             theme,
-            compact_edit_rect(card),
+            edit_rect,
             Icon::Pencil,
             theme.muted_foreground,
             ui.button_pressed(ButtonPressTarget::AgentSettings(
@@ -588,7 +658,7 @@ fn paint_compact_builtin_agent_card(
         paint_action(
             cx,
             theme,
-            compact_remove_rect(card),
+            remove_rect,
             Icon::Trash,
             theme.muted_foreground,
             ui.button_pressed(ButtonPressTarget::AgentSettings(

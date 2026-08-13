@@ -16,6 +16,8 @@ pub(crate) struct CaptureBackend {
     /// `(text, origin)` of every `draw_text`, in paint order.
     pub(crate) texts: Vec<(String, Point2D)>,
     pub(crate) rect_fills: Vec<(Rect, Color)>,
+    /// `(path, top-left, size, color, stroke)` for canonical 24×24 icons.
+    pub(crate) svg_strokes: Vec<(String, Point2D, f32, Color, f32)>,
 }
 
 impl RenderBackend for CaptureBackend {
@@ -45,14 +47,9 @@ impl RenderBackend for CaptureBackend {
 
     fn stroke_round_rect(&mut self, _rect: Rect, _radius: f32, _color: Color, _width: f32) {}
 
-    fn stroke_svg_path(
-        &mut self,
-        _d: &str,
-        _top_left: Point2D,
-        _size: f32,
-        _color: Color,
-        _width: f32,
-    ) {
+    fn stroke_svg_path(&mut self, d: &str, top_left: Point2D, size: f32, color: Color, width: f32) {
+        self.svg_strokes
+            .push((d.to_owned(), top_left, size, color, width));
     }
 
     fn save(&mut self) {}

@@ -547,6 +547,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "PDF 내보내기",
         "slidesPanel.exportAllSlides" => "모든 슬라이드 내보내기",
         "slidesPanel.exportSelectedSlides" => "선택한 슬라이드 내보내기({{count}})",
+        "settings.tab.ai" => "AI",
         "settings.agents.heroTitle" => "AI 제공자 연결",
         "settings.agents.heroSubtitle" => "OpenPencil은 로컬 CLI 에이전트와 API 제공자를 직접 구동합니다. 하나를 연결하면 디자인 생성을 시작할 수 있습니다.",
         "settings.agents.statusConnected" => "연결됨",

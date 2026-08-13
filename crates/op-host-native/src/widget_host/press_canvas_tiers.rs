@@ -124,6 +124,7 @@ impl WidgetHostNative {
                     x,
                     y,
                     text_edit_was_active,
+                    viewport_width,
                     viewport_height,
                 );
             }
@@ -245,6 +246,7 @@ impl WidgetHostNative {
                 x,
                 y,
                 text_edit_was_active,
+                viewport_width,
                 viewport_height,
             );
         }
@@ -263,6 +265,7 @@ impl WidgetHostNative {
                 x,
                 y,
                 text_edit_was_active,
+                viewport_width,
                 viewport_height,
             );
         }

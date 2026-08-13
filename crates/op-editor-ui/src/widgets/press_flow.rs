@@ -16,7 +16,7 @@ use crate::widgets::layer_context_menu::LayerContextAction;
 use crate::widgets::property_panel_fill;
 use crate::widgets::{
     LayerPanelHit, LocalePicker, PropertyPanel, PropertyPanelAction, ShapeChoice, ShapePicker,
-    TopBarHit, TOP_BAR_HEIGHT,
+    TopBarHit,
 };
 use crate::{Point2D, Rect};
 
@@ -33,16 +33,7 @@ pub use super::scene_template_press_flow::{
 /// from the same two inputs, so the walk lives here instead of being
 /// re-spelled at every popover hit-test site.
 pub fn property_panel_rect(state: &EditorState, viewport_width: f32, viewport_height: f32) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            viewport_width - state.editor_ui.property_panel_width,
-            TOP_BAR_HEIGHT,
-        ),
-        size: Point2D::new(
-            state.editor_ui.property_panel_width,
-            (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-        ),
-    }
+    super::host_canvas_geometry::property_panel_rect(state, viewport_width, viewport_height)
 }
 
 // ─── Property-panel popovers ───────────────────────────────────────────

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="document_open_failed">打开文件失败。</string>
+    <string name="document_type_unsupported">请选择 .op 或 .pen 文件。</string>
+</resources>

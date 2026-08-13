@@ -1,0 +1,26 @@
+[package]
+name       = "op-engine-jni"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish    = false
+description = "Android JNI marshalling layer for the OpenPencil engine player (op-engine-ffi)"
+
+[lib]
+# cdylib for the Android Player; rlib so the host-triple queue tests link.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# EGL/GLES rendering on Android (jian-skia surface/egl_android).
+gl = ["op-engine-ffi/gl"]
+# Full-editor mode (forwards to the engine's editor feature).
+editor = ["op-engine-ffi/editor"]
+
+[dependencies]
+op-engine-ffi = { path = "../op-engine-ffi" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni     = "0.21"
+ndk-sys = "0.6"

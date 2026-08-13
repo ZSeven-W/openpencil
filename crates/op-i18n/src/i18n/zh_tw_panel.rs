@@ -619,6 +619,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "匯出 PDF",
         "slidesPanel.exportAllSlides" => "匯出全部投影片",
         "slidesPanel.exportSelectedSlides" => "匯出所選投影片（{{count}}）",
+        "settings.tab.ai" => "AI",
         "settings.agents.heroTitle" => "連接你的 AI 服務商",
         "settings.agents.heroSubtitle" => {
             "OpenPencil 直接驅動本機 CLI Agent 與 API 服務商，連接任一個即可開始產生設計。"

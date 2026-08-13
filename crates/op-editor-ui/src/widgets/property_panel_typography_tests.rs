@@ -58,6 +58,13 @@ fn visible_text() -> VisibleSections {
     }
 }
 
+fn visible_touch_text() -> VisibleSections {
+    VisibleSections {
+        touch_controls: true,
+        ..visible_text()
+    }
+}
+
 fn panel_rect() -> Rect {
     Rect {
         origin: Point2D::new(0.0, 0.0),
@@ -180,6 +187,28 @@ fn entry_hit_maps_back_to_the_clicked_family() {
         ),
         Some(PropertyPanelAction::SetFontFamilyIndex(i)) if i == *expect
     ));
+}
+
+#[test]
+fn touch_picker_entries_search_and_import_are_full_44pt_targets() {
+    let entries = font_picker_entries(&[], &bundled(), &[], "");
+    let layout = font_picker_layout(
+        panel_rect(),
+        visible_touch_text(),
+        &entries,
+        ALLOW_IMPORT,
+        0.0,
+    )
+    .unwrap();
+    assert!(layout.search.size.y * 1.47 >= 44.0);
+    for (row, rect) in &layout.rows {
+        if matches!(
+            row,
+            FontPickerRow::Entry(_) | FontPickerRow::ImportAction | FontPickerRow::RemoveEntry(_)
+        ) {
+            assert!(rect.size.y * 1.47 >= 44.0, "{row:?} was {}", rect.size.y);
+        }
+    }
 }
 
 #[test]

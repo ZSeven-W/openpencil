@@ -28,13 +28,24 @@ path = "src/lib.rs"
 # flip gl on for mobile. Making `gl-host` non-default + opt-in is the only
 # cargo-valid, mobile-safe way to keep skia's `gl` out of the raster build.
 default = []
+# Mobile-safe editor chrome: the FULL widget host (top bar, layer panel,
+# toolbar, property panel, chat, settings, canvas editing, preview runtime)
+# + accesskit tree building — no winit / glutin / desktop GL. Shells drive
+# input (press/move/release/zoom/keys/IME); the engine paints the chrome
+# through the same `NativeFrameBackend` the desktop uses. Enabled on iOS /
+# Android by the player engine (`op-engine-ffi`).
+widget-host = ["dep:accesskit"]
+# Desktop GUI host stack (winit + glutin + skia-safe GL + jian-host-desktop
+# glue) on top of the widget host. The orchestrator (AI preview wiring) and
+# the collab session runtime stay desktop-only: they pull tokio/QuickJS
+# stacks the mobile builds do not need.
 gl-host = [
+  "widget-host",
   "skia-safe/gl",
   "dep:glutin",
   "dep:winit",
   "dep:scopeguard",
   "dep:jian-host-desktop",
-  "dep:accesskit",
   "dep:op-orchestrator",
   "dep:op-collab-host",
 ]

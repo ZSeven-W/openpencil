@@ -33,6 +33,8 @@ impl WidgetHostNative {
             layout_scene_font_generation,
             theme: Theme::dark(),
             drag: None,
+            agent_settings_touch_gesture: None,
+            touch_panel_gesture: None,
             space_pan: false,
             last_hover_probe: None,
             chat_drag: None,

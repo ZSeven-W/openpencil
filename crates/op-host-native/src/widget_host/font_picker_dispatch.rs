@@ -5,7 +5,7 @@
 
 use super::WidgetHostNative;
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-use op_editor_ui::widgets::{PropertyPanel, TOP_BAR_HEIGHT};
+use op_editor_ui::widgets::PropertyPanel;
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHostNative {
@@ -272,16 +272,11 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> Rect {
-        Rect {
-            origin: Point2D::new(
-                viewport_width - self.editor_state.editor_ui.property_panel_width,
-                TOP_BAR_HEIGHT,
-            ),
-            size: Point2D::new(
-                self.editor_state.editor_ui.property_panel_width,
-                (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-            ),
-        }
+        op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
+            &self.editor_state,
+            viewport_width,
+            viewport_height,
+        )
     }
 }
 

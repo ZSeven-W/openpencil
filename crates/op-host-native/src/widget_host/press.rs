@@ -67,7 +67,10 @@ impl WidgetHostNative {
                 let _ = self.apply_group();
             }
             LayerContextStep::Boolean(op) => {
+                #[cfg(feature = "gl-host")]
                 let _ = self.apply_boolean_op(op);
+                #[cfg(not(feature = "gl-host"))]
+                let _ = op;
             }
             LayerContextStep::Refit => {
                 self.fit_active_page_after_switch(self.last_viewport_w, self.last_viewport_h);
@@ -94,6 +97,10 @@ impl WidgetHostNative {
     /// Right-click handler — opens the LayerPanel context menu on
     /// a layer row OR page row.
     pub fn apply_right_press(&mut self, x: f32, y: f32, viewport_w: f32, viewport_h: f32) -> bool {
+        let cancelled = self.cancel_native_touch_gestures();
+        if self.editor_state.editor_ui.agent_settings_open {
+            return true;
+        }
         // Codex stop-gate: right-click outside the variables panel
         // must commit any pending row focus first.
         self.commit_variable_row_focus_if_any();
@@ -117,22 +124,21 @@ impl WidgetHostNative {
         if self.try_open_path_anchor_menu(x, y, viewport_w, viewport_h) {
             return true;
         }
-        if !self.editor_state.editor_ui.sidebar_open {
+        if !self.layers_panel_visible() {
             // No layer panel to hit — the right press is blank chrome;
             // blur inputs like the sidebar-open fall-through below.
-            return self.blur_text_inputs_on_blank_press();
+            return self.blur_text_inputs_on_blank_press() || cancelled;
         }
-        let layer_rect = self.layers_content_rect(viewport_h);
+        let layer_rect = self.layers_content_rect(viewport_w, viewport_h);
         let panel = self.layer_panel();
         let hit = panel.hit_test(layer_rect, Point2D::new(x, y));
         match press_flow::open_layer_context_menu(&mut self.editor_state, hit, x, y) {
             LayerContextMenuPress::Opened | LayerContextMenuPress::Dismissed => true,
             // Right-press on blank chrome — blur inputs like a left press.
-            LayerContextMenuPress::Missed => self.blur_text_inputs_on_blank_press(),
+            LayerContextMenuPress::Missed => self.blur_text_inputs_on_blank_press() || cancelled,
         }
     }
 
-    /// Mouse-press handler. Returns whether anything visible changed.
     /// Mouse-press handler. Returns whether anything visible changed.
     ///
     /// A strictly ordered hit-test ladder: overlays before panels before
@@ -151,8 +157,40 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        self.apply_press_inner(x, y, viewport_width, viewport_height, true)
+    }
+
+    /// Re-enter the ordinary press ladder after a touch-panel tap has been
+    /// confirmed on release. `allow_touch_panel_defer = false` prevents the
+    /// replayed point from arming itself again.
+    pub(in crate::widget_host) fn replay_touch_panel_press(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        self.apply_press_inner(x, y, viewport_width, viewport_height, false)
+    }
+
+    fn apply_press_inner(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+        allow_touch_panel_defer: bool,
+    ) -> bool {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
+        if self.begin_agent_settings_touch_gesture(x, y, viewport_width, viewport_height) {
+            return true;
+        }
+        if allow_touch_panel_defer
+            && self.begin_asset_center_touch_gesture(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
         // Blur-commit rename + text-edit; track to repaint on click.
         let rename_mutation =
             self.editor_state
@@ -217,7 +255,13 @@ impl WidgetHostNative {
         self.commit_variable_row_focus_if_any();
         if self.editor_state.ui.property_focus.is_some() {
             let property_left = if self.editor_state.property_panel_visible() {
-                viewport_width - self.editor_state.editor_ui.property_panel_width
+                op_editor_ui::widgets::host_canvas_geometry::property_panel_rect(
+                    &self.editor_state,
+                    viewport_width,
+                    viewport_height,
+                )
+                .origin
+                .x
             } else {
                 viewport_width
             };
@@ -250,8 +294,18 @@ impl WidgetHostNative {
         if let Some(consumed) = self.press_rail_overlay_tiers(&ctx) {
             return consumed;
         }
-        // Tier 4 — TopBar chrome (and its blank-press gaps).
-        if let Some(consumed) = self.press_top_bar_tier(&ctx) {
+        // Tier 3b — an open touch surface owns its outside scrim and close
+        // affordance before app-bar/page/dock controls can claim the tap.
+        if let Some(consumed) = self.press_mobile_modal_surface_tier(&ctx) {
+            return consumed;
+        }
+        // Tier 4 — TopBar chrome (and its blank-press gaps); mobile
+        // layout replaces it with the floating action cluster.
+        if self.editor_state.editor_ui.touch_chrome() {
+            if let Some(consumed) = self.press_mobile_app_bar_tier(&ctx) {
+                return consumed;
+            }
+        } else if let Some(consumed) = self.press_top_bar_tier(&ctx) {
             return consumed;
         }
         // Tier 5 — Preview (Play) mode swallows everything else.
@@ -259,7 +313,7 @@ impl WidgetHostNative {
             return consumed;
         }
         // Tier 6 — property-panel popovers.
-        if let Some(consumed) = self.press_property_overlay_tiers(&ctx) {
+        if let Some(consumed) = self.press_property_overlay_tiers(&ctx, allow_touch_panel_defer) {
             return consumed;
         }
         // Tier 7 — model picker, theme presets, VariablesPanel.
@@ -267,22 +321,88 @@ impl WidgetHostNative {
             return consumed;
         }
         // Tier 8 — PropertyPanel input row.
-        if let Some(consumed) = self.press_property_panel_tier(&ctx) {
+        if let Some(consumed) = self.press_property_panel_tier(&ctx, allow_touch_panel_defer) {
             return consumed;
         }
         // Tier 9 — floating Git panel, then the AI chat panel.
         if let Some(consumed) = self.press_git_and_chat_tiers(&ctx) {
             return consumed;
         }
-        // Tier 10 — toolbar + floating align toolbar.
-        if let Some(consumed) = self.press_toolbar_tiers(&ctx) {
+        // Tier 9a — selected-node actions paint above the canvas and own
+        // their hit area before page navigation, the dock, layers or canvas.
+        if let Some(consumed) = self.press_selection_actions_tier(&ctx) {
             return consumed;
         }
-        // Tier 11 — LayerPanel drag peek, then `apply_click`.
-        if let Some(consumed) = self.press_layer_and_click_tiers(&ctx) {
+        // Tier 9b — shared page switcher (touch layouts).
+        if self.editor_state.editor_ui.touch_chrome()
+            && self.editor_state.editor_ui.mobile_sheet.is_none()
+            && !self.editor_state.editor_ui.variables_panel_open
+        {
+            let page_count = self
+                .editor_state
+                .doc
+                .pages
+                .as_ref()
+                .map(|pages| pages.len())
+                .unwrap_or(1);
+            if page_count > 1 {
+                let pill = op_editor_ui::widgets::mobile_chrome::page_pill_rect_for(
+                    &self.editor_state,
+                    ctx.viewport_width,
+                    ctx.viewport_height,
+                );
+                let point = Point2D::new(ctx.x, ctx.y);
+                if let Some(hit) = op_editor_ui::widgets::mobile_chrome::page_pill_hit(pill, point)
+                {
+                    let current = self.editor_state.ui.active_page_index;
+                    let target = match hit {
+                        op_editor_ui::widgets::mobile_chrome::PagePillHit::Prev => {
+                            current.saturating_sub(1)
+                        }
+                        op_editor_ui::widgets::mobile_chrome::PagePillHit::Next => {
+                            (current + 1).min(page_count - 1)
+                        }
+                    };
+                    if target != current && self.editor_state.set_active_page(target) {
+                        self.fit_active_page_after_switch(ctx.viewport_width, ctx.viewport_height);
+                    }
+                    self.mark_dirty();
+                    return true;
+                }
+                if pill.contains(point) {
+                    return true;
+                }
+            }
+        }
+        // Tier 10 — toolbar + floating align toolbar (desktop); on touch
+        // layouts the bottom tool dock replaces the desktop toolbar.
+        if self.editor_state.editor_ui.touch_chrome() {
+            if self.editor_state.editor_ui.mobile_sheet.is_none()
+                && !self.editor_state.editor_ui.variables_panel_open
+            {
+                if let Some(consumed) = self.press_mobile_dock_tier(&ctx) {
+                    return consumed;
+                }
+            }
+        } else if let Some(consumed) = self.press_toolbar_tiers(&ctx) {
             return consumed;
         }
-        // Tier 12 — the canvas, branching on the active tool.
+        // Tier 12 — LayerPanel drag peek, then `apply_click`.
+        if let Some(consumed) = self.press_layer_and_click_tiers(&ctx, allow_touch_panel_defer) {
+            return consumed;
+        }
+        // Blank padding inside an open touch surface still belongs to that
+        // surface; never let it select or create something on the canvas
+        // underneath.
+        if self.editor_state.editor_ui.touch_chrome() {
+            if let Some(kind) = self.editor_state.editor_ui.mobile_sheet {
+                let panel = self.mobile_sheet_rect(ctx.viewport_width, ctx.viewport_height, kind);
+                if panel.contains(Point2D::new(ctx.x, ctx.y)) {
+                    return true;
+                }
+            }
+        }
+        // Tier 14 — the canvas, branching on the active tool.
         if let Some(consumed) = self.press_canvas_tier(&ctx) {
             return consumed;
         }

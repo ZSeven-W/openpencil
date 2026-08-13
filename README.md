@@ -520,6 +520,8 @@ openpencil/
 │   ├── op-collab-transport/  Native Noise/TCP transport, bounded admission, and optional LAN discovery
 │   ├── op-collab-smoke/      Two-process authenticated collaboration recovery matrix
 │   ├── op-host-native/       Native host lib — winit + skia-safe GL (desktop + mobile)
+│   ├── op-engine-ffi/        Player C ABI — embed the canvas in iOS / Android shells
+│   ├── op-engine-jni/        Android JNI marshalling layer for op-engine-ffi
 │   ├── op-host-web/          Browser bundle — wasm32 cdylib, CanvasKit renderer
 │   ├── op-host-desktop/      Desktop binary `openpencil-desktop`; also the `--serve-web` daemon
 │   ├── op-host-services/     Headless serve-web / MCP daemon lib
@@ -609,10 +611,12 @@ cargo deny check && cargo deny --target wasm32-unknown-unknown check bans       
 | --------------- | -------------------------------------------------------------------------------- | ---------------- |
 | op-host-web     | Browser bundle entry — wasm32 cdylib, renders via CanvasKit                       | ✅               |
 | op-host-native  | Native host lib — WidgetHostNative + skia-safe GL backend (desktop + mobile)      | ❌ (native only) |
+| op-engine-ffi   | Player C ABI — one engine, three shells (iOS Metal / Android EGL / host raster)     | ❌ (native only) |
+| op-engine-jni   | Android JNI marshalling layer for op-engine-ffi (engine thread, registry, callbacks) | ❌ (native only) |
 | op-host-desktop | Desktop binary `openpencil-desktop` (winit + skia-safe GL) — also the `--serve-web` daemon that hosts the web bundle | ❌ (native only) |
 | op-cli          | `op` command-line tool                                                           | ❌ (native only) |
 
-**Shared library crates:** `op-editor-core` (canonical `.op` state), `op-editor-ui` (platform-free widgets + `RenderBackend`), `op-editor-host-core` (transport-free host state machines), `op-collab` (open, transport-free collaboration protocol/hash/exact apply), `op-collab-transport` (native Noise/TCP, bounded admission, and optional LAN discovery), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — plus `op-collab-smoke` (authenticated two-process collaboration/recovery matrix) and `op-smoke` (headless design-turn test runner). The browser bundle renders through the official CanvasKit skia WASM (loaded separately), so the retired `skia-safe-op` wasm fork + `wasm-libc-shim` no longer exist.
+**Shared library crates:** `op-editor-core` (canonical `.op` state), `op-editor-ui` (platform-free widgets + `RenderBackend`), `op-editor-host-core` (transport-free host state machines), `op-collab` (open, transport-free collaboration protocol/hash/exact apply), `op-collab-transport` (native Noise/TCP, bounded admission, and optional LAN discovery), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — plus `op-collab-smoke` (authenticated two-process collaboration/recovery matrix) and `op-smoke` (headless design-turn test runner). The mobile players live in `packaging/` (`ios-player` + `android-player` shells over `op-engine-ffi` / `op-engine-jni`). The browser bundle renders through the official CanvasKit skia WASM (loaded separately), so the retired `skia-safe-op` wasm fork + `wasm-libc-shim` no longer exist.
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
 
