@@ -5,6 +5,7 @@
 
 use super::panel_control_metrics::mix;
 use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::text_metrics;
 use crate::widgets::toolbar::icon_for_shape;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, Theme};
@@ -179,7 +180,7 @@ impl MobileAppBar {
             self.theme.foreground.to_jian(),
             Point2D::new(0.0, 0.0),
         );
-        let label_w = cx.backend.measure_text(&self.title, 17.0);
+        let label_w = text_metrics::measure_chrome(cx.backend, &self.title, 17.0);
         let text_y = centered_text_baseline_y(title_area, 17.0);
         if label_w <= title_area.size.x {
             cx.backend
@@ -698,13 +699,10 @@ pub fn paint_page_pill(
         theme.foreground.to_jian(),
         Point2D::new(0.0, 0.0),
     );
-    let label_w = cx.backend.measure_text(&label_text, 13.0);
+    let label_x = text_metrics::centered_text_x(cx.backend, &label_text, 13.0, rect);
     cx.backend.draw_text(
         &label,
-        Point2D::new(
-            rect.origin.x + (rect.size.x - label_w) / 2.0,
-            centered_text_baseline_y(rect, 13.0),
-        ),
+        Point2D::new(label_x, centered_text_baseline_y(rect, 13.0)),
     );
 }
 
