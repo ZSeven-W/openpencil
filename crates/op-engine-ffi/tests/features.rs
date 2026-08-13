@@ -12,6 +12,7 @@ use op_engine_ffi::{
 use std::ffi::c_void;
 use std::ptr;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 /// A canonical v1.0.0 document with ONE text node at a known absolute
 /// position (layout-none frame at the origin, text at 20,20).
@@ -146,6 +147,14 @@ impl Default for CbCtx {
     }
 }
 
+/// The paint-time remote-image registry in `op-editor-ui` is
+/// process-global (single-flight across sessions) and drained once per
+/// frame. Serializing harness frames keeps each harness's enqueue→drain
+/// pair atomic while the binary runs several harnesses on parallel
+/// threads — otherwise a sibling harness's drain can steal the request
+/// recorded by this harness's paint and its upcall count reads 0.
+static FRAME_LOCK: Mutex<()> = Mutex::new(());
+
 /// Engine + callback harness.
 struct Harness {
     engine: *mut OpEngine,
@@ -189,6 +198,12 @@ impl Harness {
     }
 
     fn frame(&self) -> Vec<u8> {
+        // See `FRAME_LOCK`: the remote-image registry is process-global,
+        // so a frame must enqueue and drain atomically with respect to
+        // sibling harnesses.
+        let _guard = FRAME_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut width = 0u32;
         let mut height = 0u32;
         assert_eq!(
