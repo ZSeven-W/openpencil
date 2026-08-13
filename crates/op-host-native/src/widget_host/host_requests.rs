@@ -195,6 +195,17 @@ impl WidgetHostNative {
         self.now_ms < self.interaction_hot_until_ms
     }
 
+    /// Low-cost canvas paint mode for direct manipulation. Unlike
+    /// [`Self::fast_interaction_active`], this does not make the pan bitmap
+    /// cache eligible because edited geometry changes on every frame.
+    pub(in crate::widget_host) fn canvas_fast_interaction_active(&self) -> bool {
+        self.fast_interaction_active()
+            || self.node_drag.as_ref().is_some_and(|drag| drag.moved)
+            || self.handle_drag.is_some()
+            || self.rotate_drag.is_some()
+            || self.create_drag.is_some()
+    }
+
     /// Whether a top-bar hover tooltip is currently due to be on screen.
     ///
     /// The runner needs this SEPARATELY from

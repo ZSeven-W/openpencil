@@ -290,7 +290,6 @@ impl WidgetHost {
             return;
         }
         self.refresh_layout_scene();
-        let before_scene = self.layout_scene.clone();
         let id = self.editor_state.selection.anchor.clone();
         let Some(preview) = drag_flow::apply_live_drag_preview(
             &mut self.editor_state,
@@ -309,7 +308,9 @@ impl WidgetHost {
             // order instead of reusing the pre-mutation scene.
             self.scene_cache.invalidate();
             self.mark_dirty();
-            self.start_layout_transition_from_scene_excluding(before_scene, &id);
+            if let Some(before_scene) = preview.before_scene {
+                self.start_layout_transition_from_scene_excluding(before_scene, &id);
+            }
         }
         if let Some(active_drag) = self.node_drag.as_mut() {
             active_drag.overlay_bounds = preview.overlay_bounds;

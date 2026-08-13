@@ -60,10 +60,11 @@ impl WidgetHostNative {
             return Some(true);
         }
         if let Some(drag) = self.rotate_drag {
+            self.refresh_layout_scene();
             let cursor_angle = (y - drag.center_screen_y).atan2(x - drag.center_screen_x);
             let new_rotation = drag.start_rotation + (cursor_angle - drag.start_cursor_angle);
             self.editor_state.set_selected_rotation(new_rotation);
-            self.mark_dirty();
+            self.finish_live_rotation_update(new_rotation);
             return Some(true);
         }
         if self.handle_drag.is_some()
@@ -75,6 +76,7 @@ impl WidgetHostNative {
             return Some(true);
         }
         if let Some(drag) = self.handle_drag {
+            let patch_scene = self.prepare_live_bounds_update();
             let zoom = self.editor_state.viewport.zoom.max(0.0001);
             let dx = (x - drag.start_screen_x) / zoom;
             let dy = (y - drag.start_screen_y) / zoom;
@@ -93,7 +95,7 @@ impl WidgetHostNative {
                 new_x,
                 new_y,
             );
-            self.mark_dirty();
+            self.finish_live_bounds_update(new_bounds, patch_scene);
             return Some(true);
         }
         if self.create_drag.is_some()
@@ -105,6 +107,7 @@ impl WidgetHostNative {
             return Some(true);
         }
         if let Some(drag) = self.create_drag {
+            let patch_scene = self.prepare_live_bounds_update();
             let cur = canvas_geometry::canvas_doc_point_unclamped(&self.editor_state, x, y);
             let min_x = drag.start_doc_x.min(cur.x);
             let min_y = drag.start_doc_y.min(cur.y);
@@ -121,7 +124,7 @@ impl WidgetHostNative {
             let new_bounds = Rect::xywh(min_x, min_y, w, h);
             self.editor_state
                 .set_selected_bounds(rect_to_doc_rect(new_bounds));
-            self.mark_dirty();
+            self.finish_live_bounds_update(new_bounds, patch_scene);
             return Some(true);
         }
         // Path-anchor / handle drag — TS `movePathControl` semantics

@@ -53,6 +53,7 @@ impl WidgetHostNative {
             panel_resize: None,
             variables_resize: None,
             node_drag: None,
+            canvas_drop_index: None,
             option_drag_source_ids: Vec::new(),
             path_anchor_drag: None,
             arc_handle_drag: None,

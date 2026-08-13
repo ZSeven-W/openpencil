@@ -59,7 +59,10 @@ mod auth_flow;
 mod blur_inputs;
 #[cfg(test)]
 mod blur_inputs_tests;
+#[cfg(test)]
+mod canvas_drag_transition_tests;
 mod canvas_pan_cache;
+mod canvas_scene_patch;
 mod canvas_select_drag;
 #[cfg(test)]
 mod canvas_select_drag_tests;
@@ -391,6 +394,9 @@ pub struct WidgetHostNative {
     /// cursor anchor so each `apply_cursor_move` translates the
     /// selected node by the delta.
     pub(in crate::widget_host) node_drag: Option<NodeDragState>,
+    /// Gesture-scoped drop-target index reused across pointer frames.
+    pub(in crate::widget_host) canvas_drop_index:
+        Option<op_editor_ui::widgets::drag_flow::CanvasDropIndex>,
     /// Original selected ids for an active Option-drag clone move.
     /// Drop hit-testing skips these so a fresh clone does not
     /// immediately reparent back into the source it overlaps.
