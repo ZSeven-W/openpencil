@@ -287,6 +287,30 @@ fn fake_cli(name: &str, body: &str) -> (std::path::PathBuf, std::path::PathBuf) 
     (dir, exe)
 }
 
+/// [`cli_version`] with a bounded retry for the /tmp write→exec race
+/// that surfaces as ETXTBSY ("Text file busy") on CI runners' overlay
+/// filesystems. A fake CLI written and executed back-to-back can still be
+/// mid-copy-up when the exec lands, so a single immediate retry keeps the
+/// test's intent (a real subprocess round-trip) without papering over
+/// genuine spawn failures.
+#[cfg(unix)]
+fn cli_version_retry(
+    exe: &std::path::Path,
+    timeout: std::time::Duration,
+) -> Result<String, CliVersionFailure> {
+    for attempt in 0..3 {
+        match cli_version(exe, timeout) {
+            Err(CliVersionFailure::Spawn(message))
+                if attempt < 2 && message.contains("Text file busy") =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            result => return result,
+        }
+    }
+    unreachable!("the loop returns on its final attempt")
+}
+
 #[cfg(unix)]
 #[test]
 fn cli_version_reports_stderr_from_a_nonzero_exit() {
@@ -297,7 +321,7 @@ fn cli_version_reports_stderr_from_a_nonzero_exit() {
         "printf 'env: node: No such file or directory\\n' >&2\nexit 127\n",
     );
 
-    let failure = cli_version(&exe, std::time::Duration::from_secs(5))
+    let failure = cli_version_retry(&exe, std::time::Duration::from_secs(5))
         .expect_err("a 127 exit is not a usable version");
     let CliVersionFailure::Exited { status, tail } = &failure else {
         panic!("expected a non-zero exit, got {failure:?}");
@@ -317,7 +341,7 @@ fn cli_version_reports_stderr_from_a_nonzero_exit() {
 fn cli_version_accepts_a_healthy_cli_and_bounds_a_hung_one() {
     let (healthy_dir, healthy) = fake_cli("healthy-cli", "printf 'codex-cli 0.9.1\\n'\n");
     assert_eq!(
-        cli_version(&healthy, std::time::Duration::from_secs(5)),
+        cli_version_retry(&healthy, std::time::Duration::from_secs(5)),
         Ok("codex-cli 0.9.1".to_string())
     );
     let _ = std::fs::remove_dir_all(&healthy_dir);
