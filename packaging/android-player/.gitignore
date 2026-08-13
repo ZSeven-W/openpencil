@@ -2,6 +2,8 @@ build/
 .gradle/
 local.properties
 app/src/main/jniLibs/
+app/src/debug/jniLibs/
+app/src/release/jniLibs/
 .idea/
 *.iml
 .cxx/

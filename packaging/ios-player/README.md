@@ -22,6 +22,25 @@ The resulting archives are:
 - Simulator: `/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios-sim/release/libop_engine_ffi.a`
 - Device: `/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios/release/libop_engine_ffi.a`
 
+Authentication is an optional, explicit final-link input. A normal source
+checkout leaves `OP_AUTH_ARCHIVE` empty and uses the public stub. For local
+login work, build a **Debug** engine against a private ABI-v2 or ABI-v3 archive:
+
+```bash
+scripts/build-mobile-auth-dev.sh \
+  --platform ios-simulator \
+  --archive /absolute/path/to/libop_auth.a \
+  --abi 3
+```
+
+Then pass that exact archive to Xcode as `OP_AUTH_ARCHIVE` and repeat the ABI
+with `OPENPENCIL_DEV_OP_AUTH_ABI_VERSION`. The project pre-build gate accepts
+an unsigned archive only for `CONFIGURATION=Debug`. Release linking accepts
+only a version-matched, SHA-pinned and Ed25519-signed archive under
+`crates/op-auth-bridge/prebuilt/<target>/`; because no signed iOS archive is
+currently committed, Release authentication fails closed. Never copy a local
+private archive into this source tree or into an Xcode resource phase.
+
 Generate the project (do this again after changing `project.yml`):
 
 ```bash
@@ -43,7 +62,7 @@ xcodebuild \
   -destination 'platform=iOS Simulator,id=<sim-id>' \
   -derivedDataPath "$PWD/.derived-data" \
   HEADER_SEARCH_PATHS=/Users/kayshen/Workspace/ZSeven-W/openpencil/crates/op-engine-ffi/include \
-  OTHER_LDFLAGS='/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios-sim/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore' \
+  OTHER_LDFLAGS='/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios-sim/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore -framework Security' \
   build
 
 xcrun simctl install <sim-id> "$PWD/.derived-data/Build/Products/Release-iphonesimulator/OpenPencilPlayer.app"
@@ -64,9 +83,20 @@ xcodebuild \
   -destination 'platform=iOS,id=<device-id>' \
   -derivedDataPath "$PWD/.derived-data-device" \
   HEADER_SEARCH_PATHS=/Users/kayshen/Workspace/ZSeven-W/openpencil/crates/op-engine-ffi/include \
-  OTHER_LDFLAGS='/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore' \
+  OTHER_LDFLAGS='/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore -framework Security' \
   build
 ```
+
+For an authenticated local simulator build, use the Debug engine path and add:
+
+```text
+-configuration Debug
+OP_AUTH_ARCHIVE=/absolute/path/to/libop_auth.a
+OPENPENCIL_DEV_OP_AUTH_ABI_VERSION=3
+```
+
+Do not add those development settings to a Release build; the gate rejects
+them before the final link.
 
 ## Coordinate and lifecycle contract
 

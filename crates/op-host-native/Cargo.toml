@@ -35,6 +35,9 @@ default = []
 # through the same `NativeFrameBackend` the desktop uses. Enabled on iOS /
 # Android by the player engine (`op-engine-ffi`).
 widget-host = ["dep:accesskit"]
+# Local mobile-shell authentication against an unsigned external ABI-v2/v3
+# archive. The bridge accepts it only in Cargo's debug profile.
+mobile-auth-dev = ["op-auth-bridge/dev-prebuilt"]
 # Desktop GUI host stack (winit + glutin + skia-safe GL + jian-host-desktop
 # glue) on top of the widget host. The orchestrator (AI preview wiring) and
 # the collab session runtime stay desktop-only: they pull tokio/QuickJS

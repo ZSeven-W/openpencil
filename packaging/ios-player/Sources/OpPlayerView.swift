@@ -19,6 +19,7 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     private var didTearDown = false
     private var documentPickerPresented = false
     private var documentOpenErrorPending = false
+    private weak var embeddedLoginController: EmbeddedLoginWebViewController?
     private var systemChromeStyle: UIUserInterfaceStyle?
     private let viewportConvergence = ViewportConvergence()
     private var viewportDisplayLink: CADisplayLink?
@@ -354,9 +355,50 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         didTearDown = true
         viewportDisplayLink?.invalidate()
         viewportDisplayLink = nil
+        embeddedLoginController?.finishForTeardown(animated: false)
+        embeddedLoginController = nil
         host.teardown()
         keyboardObservers.forEach(NotificationCenter.default.removeObserver)
         keyboardObservers.removeAll()
+    }
+
+    // MARK: - Embedded login
+
+    /// Presents the exact login URL copied from the engine's active auth flow.
+    /// With the v1 URL-only ABI, top-level navigation stays on that exact HTTPS
+    /// origin; additional identity-provider origins require an explicit future
+    /// allowlist getter rather than an unsafe blanket HTTPS exception.
+    func showEmbeddedLogin(url: URL) {
+        precondition(Thread.isMainThread)
+        // Duplicate actions must not cancel the already-visible browser.
+        guard embeddedLoginController == nil else { return }
+        guard
+            !didTearDown,
+            let presenter = nearestViewController(),
+            presenter.presentedViewController == nil,
+            let request = EmbeddedLoginRequest(initialURL: url)
+        else {
+            host.cancelEmbeddedLogin()
+            return
+        }
+
+        if imeTextView.isFirstResponder {
+            imeTextView.resignFirstResponder()
+        }
+        let (navigation, browser) = makeEmbeddedLoginPresentation(
+            request: request,
+            onCancel: { [weak self] _ in self?.host.cancelEmbeddedLogin() }
+        )
+        embeddedLoginController = browser
+        presenter.present(navigation, animated: true)
+    }
+
+    /// Rust is authoritative for success/error/cancellation and emits the
+    /// close shell action only after its auth state reaches a terminal phase.
+    func closeEmbeddedLoginFromHost() {
+        precondition(Thread.isMainThread)
+        embeddedLoginController?.finishFromHost(animated: true)
+        embeddedLoginController = nil
     }
 
     // MARK: - Document picker
@@ -610,12 +652,15 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
                 updatePinchState()
                 let dx = lastMidpoint.x - previousMid.x
                 let dy = lastMidpoint.y - previousMid.y
-                let distanceDelta = lastPinchDistance - previousDistance
+                let pinchDelta = PinchZoomDelta.wheelDelta(
+                    previousDistance: previousDistance,
+                    currentDistance: lastPinchDistance
+                )
                 if dx != 0 || dy != 0 {
                     host.editorPan(x: lastMidpoint.x, y: lastMidpoint.y, dx: dx, dy: dy)
                 }
-                if distanceDelta != 0 {
-                    host.editorPinch(x: lastMidpoint.x, y: lastMidpoint.y, delta: distanceDelta)
+                if pinchDelta != 0 {
+                    host.editorPinch(x: lastMidpoint.x, y: lastMidpoint.y, delta: pinchDelta)
                 }
                 host.requestImmediateFrame()
             }

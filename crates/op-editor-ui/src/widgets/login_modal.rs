@@ -3,10 +3,8 @@
 //! authentication focused: OpenPencil identity, one browser action,
 //! and a concise security/status note.
 //!
-//! The planned auth flow (OIDC Auth Code + PKCE via the system browser)
-//! is not wired yet, so the primary button is an honest stub:
-//! it stays clickable, but production builds reveal a "coming soon"
-//! note instead of pretending to sign in. `AccountState::
+//! Touch builds without an auth runtime show a disabled "coming soon"
+//! action instead of pretending to sign in. `AccountState::
 //! dev_fake_signed_in` is the dev/demo fast path (gated host-side by
 //! `OPENPENCIL_DEV_FAKE_LOGIN=1`), never reachable from this widget on
 //! its own.
@@ -22,6 +20,9 @@ use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::editor_ui_state::Locale;
 use op_editor_core::{EditorState, LoginModalButton};
+
+#[path = "login_modal_disabled_action.rs"]
+mod disabled_action;
 
 pub const MODAL_WIDTH: f32 = 408.0;
 pub const MODAL_HEIGHT: f32 = 306.0;
@@ -55,6 +56,8 @@ pub struct LoginModal {
     /// In-flight device-login progress — takes precedence over the
     /// security note and the stub hint.
     flow_status: Option<op_editor_core::LoginFlowStatus>,
+    touch: bool,
+    sign_in_enabled: bool,
     hover: Option<LoginModalButton>,
     pressed: Option<LoginModalButton>,
 }
@@ -67,6 +70,9 @@ impl LoginModal {
             locale: state.editor_ui.effective_locale(),
             stub_hint_shown: state.editor_ui.login_modal_stub_hint_shown,
             flow_status: state.editor_ui.login_modal_status,
+            touch: state.editor_ui.touch_chrome(),
+            sign_in_enabled: !state.editor_ui.touch_chrome()
+                || state.editor_ui.account_ui_available,
             hover: state.editor_ui.login_modal_hover,
             pressed: match state.editor_ui.pressed_button {
                 Some(op_editor_core::ButtonPressTarget::LoginModal(button)) => Some(button),
@@ -76,49 +82,65 @@ impl LoginModal {
     }
 
     pub fn rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
-        let x = ((viewport_w - MODAL_WIDTH) / 2.0).max(16.0);
-        let y = ((viewport_h - MODAL_HEIGHT) / 2.0).max(crate::widgets::TOP_BAR_HEIGHT + 16.0);
-        Rect::xywh(x, y, MODAL_WIDTH, MODAL_HEIGHT)
+        if !self.touch {
+            let x = ((viewport_w - MODAL_WIDTH) / 2.0).max(16.0);
+            let y = ((viewport_h - MODAL_HEIGHT) / 2.0).max(crate::widgets::TOP_BAR_HEIGHT + 16.0);
+            return Rect::xywh(x, y, MODAL_WIDTH, MODAL_HEIGHT);
+        }
+        // The same modal is used by 320/390pt phones. Keep a 16pt horizontal
+        // gutter and centre vertically inside the safe-area-local viewport;
+        // requiring a desktop TopBar gutter here pushed the 306pt card out of
+        // a 320pt landscape phone.
+        let width = MODAL_WIDTH.min((viewport_w - 32.0).max(0.0));
+        let height = MODAL_HEIGHT.min((viewport_h - 16.0).max(0.0));
+        let x = ((viewport_w - width) / 2.0).max(0.0);
+        let y = ((viewport_h - height) / 2.0).max(0.0);
+        Rect::xywh(x, y, width, height)
     }
 
     pub fn hit_test(&self, panel: Rect, point: Point2D) -> LoginModalHit {
         if !panel.contains(point) {
             return LoginModalHit::Outside;
         }
-        if close_rect(panel).contains(point) {
+        if close_rect(panel, self.touch).contains(point) {
             return LoginModalHit::Close;
         }
-        if sign_in_rect(panel).contains(point) {
+        if self.sign_in_enabled && sign_in_rect(panel).contains(point) {
             return LoginModalHit::SignIn;
         }
         LoginModalHit::Inside
     }
 }
 
-fn close_rect(panel: Rect) -> Rect {
+fn close_rect(panel: Rect, touch: bool) -> Rect {
+    let size = if touch { 44.0 } else { CLOSE_SIZE };
+    let inset = if touch { 8.0 } else { 16.0 };
     Rect::xywh(
-        panel.origin.x + panel.size.x - 16.0 - CLOSE_SIZE,
-        panel.origin.y + 16.0,
-        CLOSE_SIZE,
-        CLOSE_SIZE,
+        panel.origin.x + panel.size.x - inset - size,
+        panel.origin.y + inset,
+        size,
+        size,
     )
 }
 
 fn sign_in_rect(panel: Rect) -> Rect {
+    let width = SIGN_IN_BTN_W.min((panel.size.x - 32.0).max(0.0));
     Rect::xywh(
-        panel.origin.x + (panel.size.x - SIGN_IN_BTN_W) / 2.0,
-        panel.origin.y + SIGN_IN_BTN_Y,
-        SIGN_IN_BTN_W,
-        SIGN_IN_BTN_H,
+        panel.origin.x + (panel.size.x - width) / 2.0,
+        panel.origin.y + panel.size.y - (MODAL_HEIGHT - SIGN_IN_BTN_Y),
+        width,
+        SIGN_IN_BTN_H.min(panel.size.y),
     )
 }
 
 fn status_rect(panel: Rect) -> Rect {
+    let top = panel.origin.y + 166.0;
+    let available_height = (sign_in_rect(panel).origin.y - 8.0 - top).max(0.0);
     Rect::xywh(
         panel.origin.x + 36.0,
-        panel.origin.y + 166.0,
+        top,
         panel.size.x - 72.0,
-        STATUS_HEIGHT,
+        STATUS_HEIGHT.min(available_height),
     )
 }
 
@@ -212,10 +234,15 @@ fn paint_primary_action(
     theme: &Theme,
     locale: Locale,
     panel: Rect,
+    enabled: bool,
     hovered: bool,
     pressed: bool,
 ) {
     let button = sign_in_rect(panel);
+    if !enabled {
+        disabled_action::paint(backend, theme, button, t(locale, "settings.account.signIn"));
+        return;
+    }
     let state_mix = if pressed {
         0.13
     } else if hovered {
@@ -381,7 +408,13 @@ fn paint_status_note(
     let font_size = 10.5;
     let icon_size = 13.0;
     let gap = 7.0;
-    let text_width = text_metrics::measure_chrome(backend, text, font_size);
+    let text = text_metrics::fit_chrome(
+        backend,
+        text,
+        (status.size.x - 18.0 - icon_size - gap).max(0.0),
+        font_size,
+    );
+    let text_width = text_metrics::measure_chrome(backend, &text, font_size);
     let group_width = icon_size + gap + text_width;
     let group_x = status.origin.x + (status.size.x - group_width) / 2.0;
     draw_icon(
@@ -396,8 +429,13 @@ fn paint_status_note(
         },
         1.5,
     );
-    let layout =
-        TextLayout::single_run(text, "system-ui", font_size, color.to_jian(), Point2D::ZERO);
+    let layout = TextLayout::single_run(
+        &text,
+        "system-ui",
+        font_size,
+        color.to_jian(),
+        Point2D::ZERO,
+    );
     backend.draw_text(
         &layout,
         Point2D::new(
@@ -457,7 +495,7 @@ impl Widget for LoginModal {
             1.0,
         );
 
-        let close = close_rect(rect);
+        let close = close_rect(rect, self.touch);
         jian_widgets::components::icon_button::IconButton {
             icon_paths: Icon::Close.paths(),
             hovered: self.hover == Some(LoginModalButton::Close),
@@ -500,6 +538,7 @@ impl Widget for LoginModal {
             &self.theme,
             self.locale,
             rect,
+            self.sign_in_enabled,
             self.hover == Some(LoginModalButton::SignIn),
             self.pressed == Some(LoginModalButton::SignIn),
         );
@@ -520,6 +559,10 @@ impl Widget for LoginModal {
         node
     }
 }
+
+#[cfg(test)]
+#[path = "login_modal_touch_tests.rs"]
+mod touch_tests;
 
 #[cfg(test)]
 mod tests {
@@ -618,7 +661,7 @@ mod tests {
     fn interactive_rects_are_inside_panel_and_do_not_overlap() {
         let modal = LoginModal::for_editor(&EditorState::new());
         let panel = modal.rect(800.0, 600.0);
-        let close = close_rect(panel);
+        let close = close_rect(panel, modal.touch);
         let sign_in = sign_in_rect(panel);
         let status = status_rect(panel);
 
@@ -638,7 +681,7 @@ mod tests {
         let modal = LoginModal::for_editor(&EditorState::new());
         let panel = modal.rect(800.0, 600.0);
         let sign_in = sign_in_rect(panel);
-        let close = close_rect(panel);
+        let close = close_rect(panel, modal.touch);
 
         assert_eq!(
             modal.hit_test(

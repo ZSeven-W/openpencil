@@ -41,8 +41,12 @@ android {
         buildConfig = true
     }
 
-    // jniLibs are populated out-of-band by `cargo ndk -o .../jniLibs build`.
-    sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
+    // Native libraries are populated out-of-band by cargo-ndk. Keep Debug and
+    // Release in distinct source sets so an unsigned local auth build can
+    // never be consumed by a shipping variant.
+    sourceSets["main"].jniLibs.setSrcDirs(emptyList<String>())
+    sourceSets["debug"].jniLibs.srcDirs("src/debug/jniLibs")
+    sourceSets["release"].jniLibs.srcDirs("src/release/jniLibs")
 
     lint {
         abortOnError = false

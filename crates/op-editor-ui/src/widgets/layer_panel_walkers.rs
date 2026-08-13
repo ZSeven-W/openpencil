@@ -210,7 +210,7 @@ fn layer_item_content_w(item: &LayerItem, metrics: LayerPanelMetrics) -> f32 {
             + metrics.glyph_size
             + 8.0
             + label_w
-            + metrics.action_target * 2.0
+            + metrics.action_target * 3.0
             + 8.0
     } else {
         6.0 + indent + 18.0 + 20.0 + label_w + 24.0

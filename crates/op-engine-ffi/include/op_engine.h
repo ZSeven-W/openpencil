@@ -124,6 +124,8 @@ typedef enum OpPointerPhase {
 typedef enum OpShellAction {
     OpShellAction_None = 0,
     OpShellAction_OpenDocument = 1,
+    OpShellAction_OpenLoginWebView = 2,
+    OpShellAction_CloseLoginWebView = 3,
 } OpShellAction;
 
 /* Surrounding-text snapshot for the shell's input connection. The text
@@ -285,6 +287,19 @@ OpStatus op_editor_ime_focused(OpEngine *engine, bool *out);
 /* Drain the next platform-shell action. Non-Open file actions stay queued for
  * their owning host integration. */
 OpStatus op_editor_take_shell_action(OpEngine *engine, int32_t *out);
+
+/* Configure the real mobile auth backend. `storage_dir` must be a private
+ * app-owned directory; device name and app version are display metadata. The
+ * production SSO origin is pinned by the engine and is not shell-provided. */
+OpStatus op_editor_configure_auth(OpEngine *engine, const uint8_t *storage_dir_ptr, size_t storage_dir_len, const uint8_t *device_name_ptr, size_t device_name_len, const uint8_t *app_version_ptr, size_t app_version_len);
+
+/* Peek/copy the pending UTF-8 login URL. NULL/0 reports the required length
+ * without consuming it. A complete copy consumes it; a short copy fails and
+ * remains retryable. The payload is not NUL-terminated. */
+OpStatus op_editor_copy_login_url(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Cancel an in-flight login after the user dismisses the embedded WebView. */
+OpStatus op_editor_cancel_login(OpEngine *engine);
 
 /* Parse and atomically install a platform-picked `.op` document. The optional
  * file name is UTF-8 display text; pass NULL/0 when unavailable. */

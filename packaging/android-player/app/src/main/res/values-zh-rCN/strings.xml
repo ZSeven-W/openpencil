@@ -2,4 +2,8 @@
 <resources>
     <string name="document_open_failed">打开文件失败。</string>
     <string name="document_type_unsupported">请选择 .op 或 .pen 文件。</string>
+    <string name="login_webview_title">登录 OpenPencil</string>
+    <string name="login_webview_close">关闭登录</string>
+    <string name="login_webview_navigation_blocked">已阻止不受信任的登录链接。</string>
+    <string name="login_webview_load_failed">无法加载登录页面。</string>
 </resources>

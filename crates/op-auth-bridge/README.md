@@ -14,12 +14,13 @@ crate's Cargo source package and this crate is not published to a registry.
 Their licensing and provenance are managed by their independent source rather
 than by this crate's notice.
 
-The committed ABI-v1 archives are compatibility artifacts. Their exact bytes
-are SHA-256 pinned and their `op_auth_*` C ABI is allowlisted, but the current
-archives still contain source/build paths and debug metadata. They have **not**
-been retroactively stripped, encrypted, or described as obfuscated because an
-in-place binary rewrite could break final linkage. Run
-`tools/check-op-auth-prebuilt.sh` for the current measured audit.
+The committed desktop ABI-v3 archives are exact-byte SHA-256 pinned, signed,
+version-bound, and checked against the documented `op_auth_*` C ABI. Mach-O and
+ELF declare the hardened profile; Windows explicitly declares its signed but
+unobfuscated compatibility profile. Run `tools/check-op-auth-prebuilt.sh` for
+the current measured audit. No production iOS or Android archive is committed,
+so mobile authentication remains unavailable in Release rather than silently
+falling back to an unsigned binary.
 
 The Linux and MSVC artifacts were built as C-facing Rust `staticlib` archives,
 so they also contain the producing toolchain's Rust runtime. Before a Rust host
@@ -33,7 +34,8 @@ as the trust anchor, and avoids a broad linker multiple-definition exception.
 Malformed archives, changed bytes, and archives containing both names fail
 closed.
 
-Production ABI-v2 artifacts fail closed unless their byte hash, target, ABI,
+Production ABI-v2 and ABI-v3 artifacts fail closed unless their byte hash,
+target, ABI,
 source revision, build id, and `op-auth-hardened-v1` declaration are covered by
 an Ed25519 signature rooted in `prebuilt/PROVENANCE_PUBKEY`. The private release
 pipeline must rebuild with path remapping, debug stripping, a narrow C wrapper,
@@ -47,14 +49,14 @@ decryptor and key with the application adds obscurity, not a security boundary.
 Production trust never depends on client artifact secrecy: signing keys and
 ticket issuance remain server-side.
 
-## Local ABI-v2 development
+## Local ABI-v2 / ABI-v3 development
 
-Developers can exercise the collaboration UI against a private ABI-v2 archive
-without replacing the committed ABI-v1 compatibility artifact:
+Developers can exercise login and collaboration against a private ABI-v2 or
+ABI-v3 archive without replacing a committed production artifact:
 
 ```sh
 OPENPENCIL_DEV_OP_AUTH_ARCHIVE=/absolute/path/to/libop_auth.a \
-OPENPENCIL_DEV_OP_AUTH_ABI_VERSION=2 \
+OPENPENCIL_DEV_OP_AUTH_ABI_VERSION=3 \
 cargo build -p op-host-desktop --features dev-op-auth-abi-v2
 ```
 
@@ -62,13 +64,16 @@ Using the override requires the feature and both variables together; enabling
 the feature without either variable is a no-op so workspace `--all-features`
 checks keep using the committed artifact. The archive path must be absolute,
 must select a regular non-symlink file using the artifact name expected by the
-current target, and is watched for changes by Cargo. The build script copies it
+current target, declares canonical ABI version `2` or `3`, and is watched for
+changes by Cargo. The build script copies it
 into Cargo's private build-output directory before linking. This override is
 accepted only in Cargo's debug profile when target debug assertions are
 enabled; release, release-derived, and hardened profiles reject it. It
 deliberately skips release provenance only for a local, non-shipping binary.
-The runtime ABI handshake and required collaboration symbols still fail
-closed.
+The runtime ABI handshake and ABI-specific collaboration symbols still fail
+closed. Mobile shells use the narrower `mobile-auth-dev` forwarding feature
+and [`scripts/build-mobile-auth-dev.sh`](../../scripts/build-mobile-auth-dev.sh),
+which has no release mode and isolates Android output in the Debug source set.
 
 ## Regional login and collaboration trust
 

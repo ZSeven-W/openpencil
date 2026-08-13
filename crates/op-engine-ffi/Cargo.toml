@@ -25,6 +25,9 @@ gl = ["jian-skia/gl"]
 # desktop chrome — top bar, layers, toolbar, property panel, chat,
 # settings, canvas editing) on iOS / Android.
 editor = ["op-host-native/widget-host"]
+# Local-only authentication for the iOS / Android editor shells. This forwards
+# the explicit debug-only archive lane without enabling it in shipping builds.
+mobile-auth-dev = ["op-host-native/mobile-auth-dev"]
 # Debug fault seams; only meaningful with debug_assertions (never ship).
 debug-hooks = []
 

@@ -270,11 +270,14 @@ impl WidgetHostNative {
             }
         }
 
-        self.paint_mobile_sheet_scrim(frame, viewport_width, viewport_height);
+        if !presenting {
+            self.paint_mobile_sheet_scrim(frame, viewport_width, viewport_height);
+        }
 
         // Touch overlay: Layers paints after the canvas. Expanded's
         // persistent rail already painted before it and pushed the canvas.
         if self.editor_state.editor_ui.touch_chrome()
+            && !presenting
             && self.editor_state.editor_ui.mobile_sheet
                 == Some(op_editor_core::size_class::MobileSheetKind::Layers)
         {
@@ -316,7 +319,10 @@ impl WidgetHostNative {
 
         // 5b. VariablesPanel — mirrors TS' `{}` toolbar toggle as a
         //     floating canvas overlay next to the toolbar.
-        if let Some(vars_rect) = self.variables_panel_rect(viewport_width, viewport_height) {
+        if let Some(vars_rect) = self
+            .variables_panel_rect(viewport_width, viewport_height)
+            .filter(|_| !presenting)
+        {
             let vars = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms);
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -327,8 +333,9 @@ impl WidgetHostNative {
         // 5b-1. Theme-preset dropdown (#20) — painted after the panel
         //       so the functional menu covers the panel's static stub
         //       rows (variables_preset_press.rs owns the geometry).
-        if let Some((preset_menu, preset_menu_rect)) =
-            self.variables_preset_menu_with_rect(viewport_width, viewport_height)
+        if let Some((preset_menu, preset_menu_rect)) = self
+            .variables_preset_menu_with_rect(viewport_width, viewport_height)
+            .filter(|_| !presenting)
         {
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -530,15 +537,23 @@ impl WidgetHostNative {
         // Collaboration popover — a real shared widget anchored to the
         // collaboration status chip. It consumes only sanitized UI state;
         // the native session actor drains queued actions separately.
-        if let Some(panel) = op_editor_ui::widgets::CollabPanel::for_editor_ui_at(
-            &self.editor_state.editor_ui,
-            self.now_ms,
-        ) {
-            let anchor = top_bar.collaboration_chip_rect_estimated(top_bar_rect);
-            let panel_rect = panel.rect_at(
-                anchor,
-                Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
-            );
+        let touch_presenting = presenting && ui.touch_chrome();
+        if let Some(panel) = (!touch_presenting)
+            .then(|| {
+                op_editor_ui::widgets::CollabPanel::for_editor_ui_at(
+                    &self.editor_state.editor_ui,
+                    self.now_ms,
+                )
+            })
+            .flatten()
+        {
+            let panel_rect =
+                op_editor_ui::widgets::touch_overlay_geometry::collaboration_panel_rect(
+                    &self.editor_state,
+                    &panel,
+                    viewport_width,
+                    viewport_height,
+                );
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -599,7 +614,10 @@ impl WidgetHostNative {
         }
 
         // 10e. Sign-in modal — full-viewport scrim + centred card.
-        if ui.account_ui_available && ui.login_modal_open {
+        if !touch_presenting
+            && (ui.account_ui_available || ui.touch_chrome())
+            && ui.login_modal_open
+        {
             use op_editor_ui::widgets::login_modal::LoginModal;
             frame.fill_rect(
                 Rect {
@@ -624,16 +642,14 @@ impl WidgetHostNative {
         // 10f. Signed-in account dropdown — anchored under the TopBar
         //      avatar button, no scrim (same tier as the file menu /
         //      locale picker).
-        if ui.account_ui_available && ui.account_menu_open {
+        if !touch_presenting && ui.account_ui_available && ui.account_menu_open {
             use op_editor_ui::widgets::account_menu::AccountMenu;
-            let top_bar_rect = Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
-            };
-            let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
-            let anchor = top_bar.account_button_rect(top_bar_rect);
             if let Some(menu) = AccountMenu::for_editor_ui(&self.editor_state.editor_ui) {
-                let menu_rect = menu.rect_at(anchor);
+                let menu_rect = op_editor_ui::widgets::touch_overlay_geometry::account_menu_rect(
+                    &self.editor_state,
+                    &menu,
+                    viewport_width,
+                );
                 let mut cx = PaintCx {
                     backend: &mut *frame,
                 };
@@ -642,7 +658,7 @@ impl WidgetHostNative {
         }
 
         // 10a. Agent-settings modal — top-most overlay when open.
-        if ui.agent_settings_open {
+        if !touch_presenting && ui.agent_settings_open {
             // Dim scrim across the full viewport.
             let scrim_color = op_editor_ui::Color {
                 r: 0.0,

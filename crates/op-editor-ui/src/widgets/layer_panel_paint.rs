@@ -10,7 +10,7 @@ use jian_core::text_input::TextInputState;
 
 use super::layer_panel::LayerItem;
 use super::layer_panel_metrics::{
-    glyph_rect_in, layer_action_targets, layer_node_icon_x, LayerPanelMetrics,
+    glyph_rect_in, layer_action_targets, layer_drag_target, layer_node_icon_x, LayerPanelMetrics,
 };
 
 pub(super) const ROW_FONT: f32 = 13.0;
@@ -87,9 +87,60 @@ pub(super) fn layer_action_gutter_left(row: Rect) -> f32 {
 
 pub(super) fn layer_action_gutter_left_with_metrics(row: Rect, metrics: LayerPanelMetrics) -> f32 {
     if metrics.touch {
-        layer_action_targets(row, metrics).0.origin.x
+        layer_drag_target(row, metrics)
+            .expect("touch rows have a reorder target")
+            .origin
+            .x
     } else {
         layer_action_gutter_left(row)
+    }
+}
+
+/// Six-dot grip centered in the dedicated touch reorder target.
+pub(super) fn paint_layer_drag_handle(cx: &mut PaintCx<'_>, target: Option<Rect>, color: Color) {
+    let Some(target) = target else { return };
+    const DOT: f32 = 3.0;
+    const STEP_X: f32 = 8.0;
+    const STEP_Y: f32 = 7.0;
+    let left = target.origin.x + (target.size.x - DOT - STEP_X) / 2.0;
+    let top = target.origin.y + (target.size.y - DOT - STEP_Y * 2.0) / 2.0;
+    for row in 0..3 {
+        for column in 0..2 {
+            cx.backend.fill_round_rect(
+                Rect {
+                    origin: Point2D::new(left + column as f32 * STEP_X, top + row as f32 * STEP_Y),
+                    size: Point2D::new(DOT, DOT),
+                },
+                DOT / 2.0,
+                color,
+            );
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn paint_layer_action_backing(
+    cx: &mut PaintCx<'_>,
+    row: Rect,
+    metrics: LayerPanelMetrics,
+    theme: &Theme,
+    selected: bool,
+    hovered: bool,
+    visible: bool,
+) {
+    if !visible {
+        return;
+    }
+    let gutter_left = layer_action_gutter_left_with_metrics(row, metrics);
+    let backing = Rect {
+        origin: Point2D::new(gutter_left, row.origin.y),
+        size: Point2D::new(row.origin.x + row.size.x - gutter_left, row.size.y),
+    };
+    cx.backend.fill_rect(backing, theme.card);
+    if selected {
+        cx.backend.fill_rect(backing, theme.row_selected_primary);
+    } else if hovered {
+        cx.backend.fill_rect(backing, theme.button_hover);
     }
 }
 

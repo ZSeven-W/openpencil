@@ -159,6 +159,7 @@ pub(crate) mod text_input_backend;
 pub mod text_metrics;
 mod text_selection;
 pub mod toolbar;
+pub mod touch_overlay_geometry;
 
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).

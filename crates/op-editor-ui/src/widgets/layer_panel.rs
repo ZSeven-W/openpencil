@@ -9,7 +9,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::layer_panel_cache::{self, CachedLayerRows};
 use crate::widgets::layer_panel_metrics::{
     add_page_target, collapse_target, delete_page_target, glyph_rect_in, layer_action_targets,
-    layer_node_icon_x, LayerPanelMetrics,
+    layer_drag_target, layer_node_icon_x, LayerPanelMetrics,
 };
 use crate::widgets::layer_panel_walkers::{
     apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
@@ -37,9 +37,10 @@ fn t(ui: &EditorUiState, key: &'static str) -> &'static str {
 
 pub(crate) const ROW_PAD_X: f32 = 12.0;
 use crate::widgets::layer_panel_paint::{
-    layer_action_gutter_left_with_metrics, layer_content_clip_rect_with_metrics,
-    layer_label_available_width_with_metrics, paint_drag_ghost, paint_rename_input_with_metrics,
-    paint_section_header_with_metrics, truncate_to_fit, truncate_to_fit_measured,
+    layer_content_clip_rect_with_metrics, layer_label_available_width_with_metrics,
+    paint_drag_ghost, paint_layer_action_backing, paint_layer_drag_handle,
+    paint_rename_input_with_metrics, paint_section_header_with_metrics, truncate_to_fit,
+    truncate_to_fit_measured,
 };
 
 /// One row in the layers tree — flat depth-walked view.
@@ -686,6 +687,7 @@ impl Widget for LayerPanel {
             }
             cx.backend.restore();
             let (eye_target, lock_target) = layer_action_targets(row, self.metrics);
+            let drag_target = layer_drag_target(row, self.metrics).filter(|_| !item.renaming);
             let eye_icon = if item.hidden { Icon::EyeOff } else { Icon::Eye };
             let lock_icon = if item.locked {
                 Icon::Lock
@@ -716,24 +718,16 @@ impl Widget for LayerPanel {
             let lock_glyph = glyph_rect_in(lock_target, trailing_size);
             let show_eye = (hovered || self.metrics.touch) && !item.renaming;
             let show_lock = (hovered || self.metrics.touch) && !item.renaming;
-            // Opaque backing starts at the canonical action-gutter edge,
-            // matching the content clip so labels and trailing actions
-            // never overlap. Rebuild the row surface locally (panel bg +
-            // the row's own wash) so the icons sit on clean ground.
-            if show_eye || show_lock {
-                let gutter_left = layer_action_gutter_left_with_metrics(row, self.metrics);
-                let backing = Rect {
-                    origin: Point2D::new(gutter_left, row.origin.y),
-                    size: Point2D::new(row.origin.x + row.size.x - gutter_left, row.size.y),
-                };
-                cx.backend.fill_rect(backing, self.theme.card);
-                if selected {
-                    cx.backend
-                        .fill_rect(backing, self.theme.row_selected_primary);
-                } else if hovered {
-                    cx.backend.fill_rect(backing, self.theme.button_hover);
-                }
-            }
+            paint_layer_action_backing(
+                cx,
+                row,
+                self.metrics,
+                &self.theme,
+                selected,
+                hovered,
+                drag_target.is_some() || show_eye || show_lock,
+            );
+            paint_layer_drag_handle(cx, drag_target, trailing_default);
             if show_eye {
                 draw_icon(
                     cx.backend,

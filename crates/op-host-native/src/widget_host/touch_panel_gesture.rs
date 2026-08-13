@@ -14,6 +14,8 @@ use op_editor_core::size_class::MobileSheetKind;
 use op_editor_ui::Point2D;
 
 const TOUCH_SCROLL_SLOP: f32 = 8.0;
+const LAYER_DRAG_EDGE_ZONE: f32 = 48.0;
+const LAYER_DRAG_EDGE_STEP: f32 = 14.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::widget_host) enum TouchPanelTarget {
@@ -43,6 +45,77 @@ pub(in crate::widget_host) struct TouchPanelGesture {
 }
 
 impl WidgetHostNative {
+    /// Capture a touch row's explicit reorder grip without arming the list
+    /// scroll gesture. The full row remains a scroll surface; eye, lock, and
+    /// collapse targets are disjoint from this dedicated 44-point affordance.
+    pub(in crate::widget_host) fn begin_touch_layer_reorder(&mut self, ctx: &PressCtx) -> bool {
+        let ui = &self.editor_state.editor_ui;
+        if !ui.touch_chrome()
+            || !(ui.mobile_sheet == Some(MobileSheetKind::Layers)
+                || (ui.expanded_touch_layout() && ui.sidebar_open && ui.mobile_sheet.is_none()))
+        {
+            return false;
+        }
+        let point = Point2D::new(ctx.x, ctx.y);
+        let rect = self.layers_content_rect(ctx.viewport_width, ctx.viewport_height);
+        let Some(source) = self.layer_panel().drag_source_at(rect, point) else {
+            return false;
+        };
+        self.touch_panel_gesture = None;
+        self.editor_state.set_single_selection(source.clone());
+        self.editor_state.editor_ui.last_layer_click = None;
+        self.layer_drag = Some(super::LayerDragState {
+            source,
+            start_y: ctx.y,
+            current_x: ctx.x,
+            current_y: ctx.y,
+            active: false,
+        });
+        self.mark_dirty();
+        true
+    }
+
+    /// Keep a captured touch reorder useful at the clipped list edges. Each
+    /// pointer-move inside the 48-point edge zone advances the same canonical
+    /// Layers scroll offset used by paint and drop hit-testing.
+    pub(in crate::widget_host) fn auto_scroll_touch_layer_drag(&mut self, pointer_y: f32) -> bool {
+        if !self.editor_state.editor_ui.touch_chrome() {
+            return false;
+        }
+        let Some(source) = self
+            .layer_drag
+            .as_ref()
+            .filter(|drag| drag.active)
+            .map(|drag| drag.source.clone())
+        else {
+            return false;
+        };
+        let rect = self.layers_content_rect(self.last_viewport_w, self.last_viewport_h);
+        let panel = op_editor_ui::widgets::LayerPanel::from_editor_with_drag_source(
+            &self.editor_state,
+            &source,
+        );
+        let regions = panel.regions(rect);
+        let top = regions.layers_rows_top;
+        let bottom = top + regions.layers_view_h;
+        let delta = if pointer_y < top + LAYER_DRAG_EDGE_ZONE {
+            -LAYER_DRAG_EDGE_STEP
+        } else if pointer_y > bottom - LAYER_DRAG_EDGE_ZONE {
+            LAYER_DRAG_EDGE_STEP
+        } else {
+            return false;
+        };
+        let changed = op_editor_ui::util::scroll_by_max(
+            &mut self.editor_state.editor_ui.layer_layers_scroll,
+            delta,
+            regions.layers.max_offset,
+        );
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
     /// Hold an empty-canvas touch until it resolves as a tap or a pan. This
     /// keeps sub-slop finger jitter from moving the viewport while giving
     /// touch users the direct-manipulation equivalent of desktop space-pan.
@@ -374,9 +447,6 @@ impl WidgetHostNative {
         } else {
             consumed
         };
-        // A replayed Layer row follows the normal click path, which seeds a
-        // desktop reorder candidate. Touch has already ended, so discard it.
-        self.layer_drag = None;
         Some(consumed)
     }
 

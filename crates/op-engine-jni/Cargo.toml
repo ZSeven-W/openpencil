@@ -17,6 +17,9 @@ default = []
 gl = ["op-engine-ffi/gl"]
 # Full-editor mode (forwards to the engine's editor feature).
 editor = ["op-engine-ffi/editor"]
+# Local-only authentication for Android editor builds. The underlying bridge
+# rejects unsigned archives outside Cargo's debug profile.
+mobile-auth-dev = ["op-engine-ffi/mobile-auth-dev"]
 
 [dependencies]
 op-engine-ffi = { path = "../op-engine-ffi" }

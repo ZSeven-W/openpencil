@@ -34,6 +34,10 @@ mod desc;
 #[cfg(feature = "editor")]
 mod editor;
 #[cfg(feature = "editor")]
+mod editor_auth;
+#[cfg(feature = "editor")]
+mod editor_pointer_release;
+#[cfg(feature = "editor")]
 mod editor_template;
 #[cfg(feature = "editor")]
 mod editor_transform;
@@ -58,8 +62,13 @@ pub use editor::{
     op_editor_key, op_editor_move, op_editor_open_document, op_editor_pan, op_editor_pinch,
     op_editor_press, op_editor_release, op_editor_right_press, op_editor_take_shell_action,
     op_editor_text, KEY_ARROW_DOWN, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_ARROW_UP, KEY_BACKSPACE,
-    KEY_DELETE, KEY_DUPLICATE, KEY_ENTER, KEY_ESCAPE, KEY_REDO, KEY_UNDO, SHELL_ACTION_NONE,
-    SHELL_ACTION_OPEN_DOCUMENT,
+    KEY_DELETE, KEY_DUPLICATE, KEY_ENTER, KEY_ESCAPE, KEY_REDO, KEY_UNDO,
+};
+#[cfg(feature = "editor")]
+pub use editor_auth::{
+    op_editor_cancel_login, op_editor_configure_auth, op_editor_copy_login_url,
+    SHELL_ACTION_CLOSE_LOGIN_WEBVIEW, SHELL_ACTION_NONE, SHELL_ACTION_OPEN_DOCUMENT,
+    SHELL_ACTION_OPEN_LOGIN_WEBVIEW,
 };
 #[cfg(feature = "editor")]
 pub use editor_transform::op_editor_begin_transform;
@@ -364,7 +373,7 @@ pub unsafe extern "C" fn op_pointer(
                         (changed, host.editor_state().viewport != before)
                     }
                     OpPointerPhase::Up => (
-                        session.editor_mut()?.apply_release_with_viewport(w, h),
+                        crate::editor_pointer_release::release(session, x, y)?,
                         false,
                     ),
                     OpPointerPhase::Cancel => {

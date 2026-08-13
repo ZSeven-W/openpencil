@@ -18,7 +18,10 @@ const PANEL_PADDING: f32 = 12.0;
 const GRID_GAP: f32 = 8.0;
 const TILE_HEIGHT: f32 = 76.0;
 const PORTRAIT_COLUMN_COUNT: usize = 3;
-const LANDSCAPE_COLUMN_COUNT: usize = 4;
+// Ten visible actions fit in two rows on a landscape phone. Keeping four
+// columns would grow the sheet to the full 320pt viewport and leave no useful
+// canvas context behind the modal surface.
+const LANDSCAPE_COLUMN_COUNT: usize = 5;
 const PHONE_BOTTOM_PADDING: f32 = 16.0;
 const TABLET_PANEL_WIDTH: f32 = 320.0;
 const TABLET_BOTTOM_PADDING: f32 = 20.0;
@@ -31,6 +34,9 @@ pub enum MobileMoreEntry {
     Templates,
     Assets,
     Ai,
+    SignIn,
+    Account,
+    Collaboration,
     Settings,
     Variables,
     Preview,
@@ -38,16 +44,43 @@ pub enum MobileMoreEntry {
 }
 
 impl MobileMoreEntry {
-    pub const ALL: [MobileMoreEntry; 8] = [
+    /// Exhaustive semantic entries. Paint and hit-test use [`Self::visible`]
+    /// because Sign in and Account are mutually exclusive states of one tile.
+    pub const ALL: [MobileMoreEntry; 11] = [
         MobileMoreEntry::OpenFile,
         MobileMoreEntry::Templates,
         MobileMoreEntry::Assets,
         MobileMoreEntry::Ai,
+        MobileMoreEntry::SignIn,
+        MobileMoreEntry::Account,
+        MobileMoreEntry::Collaboration,
         MobileMoreEntry::Settings,
         MobileMoreEntry::Variables,
         MobileMoreEntry::Preview,
         MobileMoreEntry::Export,
     ];
+
+    /// Entries visible for the current account state. This is the canonical
+    /// list for layout, paint and hit-testing so a signed-in account cannot
+    /// leave an invisible Sign-in target behind (or vice versa).
+    pub fn visible(state: &EditorState) -> Vec<MobileMoreEntry> {
+        vec![
+            MobileMoreEntry::OpenFile,
+            MobileMoreEntry::Templates,
+            MobileMoreEntry::Assets,
+            MobileMoreEntry::Ai,
+            MobileMoreEntry::Collaboration,
+            if state.editor_ui.account.is_signed_in() {
+                MobileMoreEntry::Account
+            } else {
+                MobileMoreEntry::SignIn
+            },
+            MobileMoreEntry::Settings,
+            MobileMoreEntry::Variables,
+            MobileMoreEntry::Preview,
+            MobileMoreEntry::Export,
+        ]
+    }
 
     fn label(self, ui: &EditorUiState) -> &'static str {
         let key = match self {
@@ -55,6 +88,9 @@ impl MobileMoreEntry {
             MobileMoreEntry::Templates => "sceneTemplate.title",
             MobileMoreEntry::Assets => "assetCenter.title",
             MobileMoreEntry::Ai => "a11y.aiChat",
+            MobileMoreEntry::SignIn => "settings.account.signIn",
+            MobileMoreEntry::Account => "settings.account.title",
+            MobileMoreEntry::Collaboration => "collab.topbar.collaborate",
             MobileMoreEntry::Settings => "settings.title",
             MobileMoreEntry::Variables => "toolbar.variables",
             MobileMoreEntry::Preview => "tooltip.topbar.preview",
@@ -74,6 +110,8 @@ impl MobileMoreEntry {
             MobileMoreEntry::Templates => Icon::LayoutDashboard,
             MobileMoreEntry::Assets => Icon::Palette,
             MobileMoreEntry::Ai => Icon::from_name("sparkles").unwrap_or(Icon::Sparkles),
+            MobileMoreEntry::SignIn | MobileMoreEntry::Account => Icon::User,
+            MobileMoreEntry::Collaboration => Icon::Users,
             MobileMoreEntry::Settings => Icon::from_name("settings").unwrap_or(Icon::Settings),
             MobileMoreEntry::Variables => Icon::from_name("braces").unwrap_or(Icon::Braces),
             MobileMoreEntry::Preview => Icon::from_name("play").unwrap_or(Icon::Play),
@@ -82,20 +120,20 @@ impl MobileMoreEntry {
     }
 }
 
-fn row_count(columns: usize) -> usize {
-    MobileMoreEntry::ALL.len().div_ceil(columns)
+fn row_count(item_count: usize, columns: usize) -> usize {
+    item_count.div_ceil(columns)
 }
 
-fn panel_height(columns: usize, bottom_padding: f32) -> f32 {
-    let rows = row_count(columns);
+fn panel_height(item_count: usize, columns: usize, bottom_padding: f32) -> f32 {
+    let rows = row_count(item_count, columns);
     HEADER_HEIGHT
         + rows as f32 * TILE_HEIGHT
         + rows.saturating_sub(1) as f32 * GRID_GAP
         + bottom_padding
 }
 
-fn compact_column_count(viewport_w: f32, viewport_h: f32) -> usize {
-    let portrait_height = panel_height(PORTRAIT_COLUMN_COUNT, PHONE_BOTTOM_PADDING);
+fn compact_column_count(item_count: usize, viewport_w: f32, viewport_h: f32) -> usize {
+    let portrait_height = panel_height(item_count, PORTRAIT_COLUMN_COUNT, PHONE_BOTTOM_PADDING);
     if viewport_w >= viewport_h || portrait_height > (viewport_h - 8.0).max(0.0) {
         LANDSCAPE_COLUMN_COUNT
     } else {
@@ -108,13 +146,19 @@ fn column_count(state: &EditorState, panel: Rect) -> usize {
         return PORTRAIT_COLUMN_COUNT;
     }
     let viewport_h = panel.origin.y + panel.size.y;
-    compact_column_count(panel.size.x, viewport_h)
+    compact_column_count(
+        MobileMoreEntry::visible(state).len(),
+        panel.size.x,
+        viewport_h,
+    )
 }
 
 pub fn more_panel_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Rect {
     if state.editor_ui.compact_layout() {
-        let columns = compact_column_count(viewport_w, viewport_h);
-        let height = panel_height(columns, PHONE_BOTTOM_PADDING).min((viewport_h - 8.0).max(0.0));
+        let item_count = MobileMoreEntry::visible(state).len();
+        let columns = compact_column_count(item_count, viewport_w, viewport_h);
+        let height = panel_height(item_count, columns, PHONE_BOTTOM_PADDING)
+            .min((viewport_h - 8.0).max(0.0));
         return Rect {
             origin: Point2D::new(0.0, viewport_h - height),
             size: Point2D::new(viewport_w, height),
@@ -122,8 +166,12 @@ pub fn more_panel_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) ->
     }
     let width = TABLET_PANEL_WIDTH.min((viewport_w - 24.0).max(0.0));
     let top = host_canvas_geometry::touch_app_bar_height(state) + 8.0;
-    let height = panel_height(PORTRAIT_COLUMN_COUNT, TABLET_BOTTOM_PADDING)
-        .min((viewport_h - top - 12.0).max(0.0));
+    let height = panel_height(
+        MobileMoreEntry::visible(state).len(),
+        PORTRAIT_COLUMN_COUNT,
+        TABLET_BOTTOM_PADDING,
+    )
+    .min((viewport_h - top - 12.0).max(0.0));
     Rect {
         origin: Point2D::new(viewport_w - width - 12.0, top),
         size: Point2D::new(width, height),
@@ -131,15 +179,17 @@ pub fn more_panel_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) ->
 }
 
 pub fn more_entry_rect(state: &EditorState, panel: Rect, index: usize) -> Rect {
+    let item_count = MobileMoreEntry::visible(state).len();
     let columns = column_count(state, panel);
     let content_w = (panel.size.x - PANEL_PADDING * 2.0).max(0.0);
     let tile_w = ((content_w - GRID_GAP * (columns as f32 - 1.0)) / columns as f32).max(0.0);
     let row = index / columns;
     let col = index % columns;
-    let last_row = (MobileMoreEntry::ALL.len() - 1) / columns;
+    let last_row = item_count.saturating_sub(1) / columns;
     let row_offset = if row == last_row {
-        let item_count = MobileMoreEntry::ALL.len() - last_row * columns;
-        let row_width = tile_w * item_count as f32 + GRID_GAP * item_count.saturating_sub(1) as f32;
+        let last_row_items = item_count - last_row * columns;
+        let row_width =
+            tile_w * last_row_items as f32 + GRID_GAP * last_row_items.saturating_sub(1) as f32;
         (content_w - row_width) / 2.0
     } else {
         0.0
@@ -191,7 +241,7 @@ pub fn paint_more_panel(cx: &mut PaintCx<'_>, state: &EditorState, theme: &Theme
 
     cx.backend.save();
     cx.backend.clip_rect(panel);
-    for (index, entry) in MobileMoreEntry::ALL.iter().copied().enumerate() {
+    for (index, entry) in MobileMoreEntry::visible(state).into_iter().enumerate() {
         let tile = more_entry_rect(state, panel, index);
         cx.backend
             .fill_round_rect(tile, 14.0, if compact { theme.muted } else { theme.card });
@@ -240,9 +290,8 @@ pub fn more_hit_test(state: &EditorState, panel: Rect, point: Point2D) -> Option
     if !panel.contains(point) {
         return None;
     }
-    MobileMoreEntry::ALL
-        .iter()
-        .copied()
+    MobileMoreEntry::visible(state)
+        .into_iter()
         .enumerate()
         .find_map(|(index, entry)| {
             more_entry_rect(state, panel, index)
@@ -288,14 +337,15 @@ mod tests {
         expected_bottom_padding: f32,
     ) {
         let panel = more_panel_rect(state, viewport_w, viewport_h);
+        let entries = MobileMoreEntry::visible(state);
         assert_eq!(column_count(state, panel), expected_columns);
         assert_approx(
             panel.size.y,
-            panel_height(expected_columns, expected_bottom_padding),
+            panel_height(entries.len(), expected_columns, expected_bottom_padding),
         );
 
-        let rows = row_count(expected_columns);
-        for (index, entry) in MobileMoreEntry::ALL.iter().copied().enumerate() {
+        let rows = row_count(entries.len(), expected_columns);
+        for (index, entry) in entries.iter().copied().enumerate() {
             let tile = more_entry_rect(state, panel, index);
             assert!(tile.size.x >= 44.0, "tile {index} is too narrow: {tile:?}");
             assert!(tile.size.y >= 44.0, "tile {index} is too short: {tile:?}");
@@ -313,14 +363,14 @@ mod tests {
 
         let last_row_start = (rows - 1) * expected_columns;
         let first = more_entry_rect(state, panel, last_row_start);
-        let last = more_entry_rect(state, panel, MobileMoreEntry::ALL.len() - 1);
+        let last = more_entry_rect(state, panel, entries.len() - 1);
         let left_gap = first.origin.x - panel.origin.x - PANEL_PADDING;
         let right_gap = panel.origin.x + panel.size.x - PANEL_PADDING - last.origin.x - last.size.x;
         assert_approx(left_gap, right_gap);
     }
 
     #[test]
-    fn compact_portrait_is_a_centered_three_by_three_sheet() {
+    fn compact_portrait_is_a_centered_three_column_sheet() {
         let state = touch_state(EditorSizeClass::Compact);
         assert_grid(&state, 320.0, 568.0, 3, PHONE_BOTTOM_PADDING);
         let panel = more_panel_rect(&state, 320.0, 568.0);
@@ -330,9 +380,9 @@ mod tests {
     }
 
     #[test]
-    fn compact_landscape_uses_a_four_by_two_sheet() {
+    fn compact_landscape_uses_a_five_by_two_sheet() {
         let state = touch_state(EditorSizeClass::Compact);
-        assert_grid(&state, 568.0, 320.0, 4, PHONE_BOTTOM_PADDING);
+        assert_grid(&state, 568.0, 320.0, 5, PHONE_BOTTOM_PADDING);
     }
 
     #[test]
@@ -353,7 +403,8 @@ mod tests {
     #[test]
     fn restored_entries_reuse_localized_labels_and_desktop_icons() {
         let mut state = EditorState::starter();
-        assert_eq!(MobileMoreEntry::ALL.len(), 8);
+        assert_eq!(MobileMoreEntry::ALL.len(), 11);
+        assert_eq!(MobileMoreEntry::visible(&state).len(), 10);
         assert_eq!(MobileMoreEntry::ALL[0], MobileMoreEntry::OpenFile);
         assert_eq!(MobileMoreEntry::OpenFile.icon(), Icon::FolderOpen);
         assert_eq!(MobileMoreEntry::Templates.icon(), Icon::LayoutDashboard);
@@ -377,6 +428,44 @@ mod tests {
     }
 
     #[test]
+    fn account_state_swaps_one_tile_without_moving_collaboration_or_changing_count() {
+        let mut state = touch_state(EditorSizeClass::Compact);
+        let anonymous = MobileMoreEntry::visible(&state);
+        assert_eq!(anonymous.len(), 10);
+        assert!(anonymous.contains(&MobileMoreEntry::SignIn));
+        assert!(!anonymous.contains(&MobileMoreEntry::Account));
+        assert_eq!(anonymous[4], MobileMoreEntry::Collaboration);
+        assert_eq!(MobileMoreEntry::SignIn.icon(), Icon::User);
+        assert_eq!(MobileMoreEntry::Collaboration.icon(), Icon::Users);
+        assert_ne!(
+            MobileMoreEntry::SignIn.label(&state.editor_ui),
+            "settings.account.signIn"
+        );
+        assert_ne!(
+            MobileMoreEntry::Collaboration.label(&state.editor_ui),
+            "collab.topbar.collaborate"
+        );
+
+        state.editor_ui.account = op_editor_core::AccountState::SignedIn {
+            display_name: "Fini".into(),
+            username: "fini".into(),
+        };
+        let signed_in = MobileMoreEntry::visible(&state);
+        assert_eq!(signed_in.len(), anonymous.len());
+        assert!(!signed_in.contains(&MobileMoreEntry::SignIn));
+        assert!(signed_in.contains(&MobileMoreEntry::Account));
+        assert_eq!(signed_in[4], MobileMoreEntry::Collaboration);
+        assert_eq!(
+            signed_in
+                .iter()
+                .position(|entry| *entry == MobileMoreEntry::Account),
+            anonymous
+                .iter()
+                .position(|entry| *entry == MobileMoreEntry::SignIn)
+        );
+    }
+
+    #[test]
     fn every_locale_fits_labels_using_the_painted_font_family() {
         let mut state = touch_state(EditorSizeClass::Medium);
         let panel = more_panel_rect(&state, 600.0, 900.0);
@@ -389,8 +478,9 @@ mod tests {
             };
             paint_more_panel(&mut cx, &state, &Theme::dark(), panel);
 
-            assert_eq!(backend.runs.len(), MobileMoreEntry::ALL.len() + 1);
-            for index in 0..MobileMoreEntry::ALL.len() {
+            let visible_count = MobileMoreEntry::visible(&state).len();
+            assert_eq!(backend.runs.len(), visible_count + 1);
+            for index in 0..visible_count {
                 let tile = more_entry_rect(&state, panel, index);
                 let run = &backend.runs[index + 1];
                 assert!(

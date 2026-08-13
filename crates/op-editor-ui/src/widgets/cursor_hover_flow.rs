@@ -106,15 +106,9 @@ pub fn login_modal_hover(
 /// account button.
 pub fn account_menu_hover(state: &mut EditorState, viewport_w: f32, point: Point2D) -> bool {
     use crate::widgets::account_menu::AccountMenu;
-    use crate::widgets::top_bar::TopBar;
-    use crate::widgets::TOP_BAR_HEIGHT;
-    let top_bar_rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(viewport_w, TOP_BAR_HEIGHT),
-    };
-    let anchor = TopBar::for_editor_ui(&state.editor_ui).account_button_rect(top_bar_rect);
     let new_hover = AccountMenu::for_editor_ui(&state.editor_ui).and_then(|menu| {
-        let panel = menu.rect_at(anchor);
+        let panel =
+            crate::widgets::touch_overlay_geometry::account_menu_rect(state, &menu, viewport_w);
         menu.row_at(panel, point)
     });
     let changed = new_hover != state.editor_ui.account_menu_hover;

@@ -64,6 +64,8 @@ pub fn paint_touch_icon(
 pub enum MobileAppBarHit {
     /// Layers sheet.
     Layers,
+    /// Frame all active-page content in the canvas viewport.
+    Fit,
     /// Undo.
     Undo,
     /// Redo.
@@ -72,7 +74,7 @@ pub enum MobileAppBarHit {
     Overflow,
 }
 
-/// The compact app bar: layers + title on the left, undo / redo /
+/// The compact app bar: layers + title on the left, fit / undo / redo /
 /// overflow on the right.
 pub struct MobileAppBar {
     pub title: String,
@@ -112,6 +114,10 @@ impl MobileAppBar {
 
     pub fn undo_rect(rect: Rect) -> Rect {
         Self::button_rect(rect, 2)
+    }
+
+    pub fn fit_rect(rect: Rect) -> Rect {
+        Self::button_rect(rect, 3)
     }
 
     pub fn redo_rect(rect: Rect) -> Rect {
@@ -161,7 +167,7 @@ impl MobileAppBar {
         // Center: truncated document title (17pt).
         let layers = Self::layers_rect(rect);
         let title_x = layers.origin.x + TOUCH_TARGET + 4.0;
-        let title_right = Self::undo_rect(rect).origin.x - 4.0;
+        let title_right = Self::fit_rect(rect).origin.x - 4.0;
         let title_area = Rect {
             origin: Point2D::new(title_x, rect.origin.y),
             size: Point2D::new((title_right - title_x).max(0.0), rect.size.y),
@@ -189,7 +195,8 @@ impl MobileAppBar {
             cx.backend.restore();
         }
 
-        // Right: undo / redo / overflow.
+        // Right: fit / undo / redo / overflow.
+        self.paint_icon(cx, Self::fit_rect(rect), Icon::Focus, false);
         self.paint_icon(
             cx,
             Self::undo_rect(rect),
@@ -213,6 +220,9 @@ impl MobileAppBar {
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<MobileAppBarHit> {
         if Self::layers_rect(rect).contains(point) {
             return Some(MobileAppBarHit::Layers);
+        }
+        if Self::fit_rect(rect).contains(point) {
+            return Some(MobileAppBarHit::Fit);
         }
         if Self::undo_rect(rect).contains(point) {
             return Some(MobileAppBarHit::Undo);

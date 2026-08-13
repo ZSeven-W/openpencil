@@ -1,11 +1,18 @@
 use super::WidgetHostNative;
+#[path = "mobile_auth_collab_tests.rs"]
+mod mobile_auth_collab_tests;
+#[path = "mobile_layer_drag_tests.rs"]
+mod mobile_layer_drag_tests;
 use op_editor_core::size_class::{EditorSizeClass, MobileSheetKind};
 use op_editor_core::{
+    agent_settings::AgentSettingsTab,
     editor_ui_state::{EffectParamFocus, FileAction},
-    AssetCenterTab, AuthenticatedCollabSession, CollabConnectionPhase, CollabUiRole, EffectField,
-    FontPickerPurpose, NodeId, PropertyFocus,
+    AccountState, AssetCenterTab, AuthenticatedCollabSession, CollabAvailability,
+    CollabConnectionPhase, CollabUiRole, EffectField, FontPickerPurpose, NodeId, PropertyFocus,
+    Tool,
 };
-use op_editor_ui::widgets::{host_canvas_geometry, MobileAppBar, MobileMoreEntry};
+use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+use op_editor_ui::widgets::{host_canvas_geometry, CollabPanel, MobileAppBar, MobileMoreEntry};
 use op_editor_ui::{Point2D, Rect};
 
 fn center(rect: Rect) -> Point2D {
@@ -32,9 +39,9 @@ fn press_more_entry(
 ) -> bool {
     host.editor_state_mut().editor_ui.mobile_sheet = Some(MobileSheetKind::More);
     let panel = host.mobile_sheet_rect(width, height, MobileSheetKind::More);
-    let index = MobileMoreEntry::ALL
-        .iter()
-        .position(|candidate| *candidate == entry)
+    let index = MobileMoreEntry::visible(host.editor_state())
+        .into_iter()
+        .position(|candidate| candidate == entry)
         .expect("entry belongs to the mobile More grid");
     let point = center(op_editor_ui::widgets::mobile_chrome::more_entry_rect(
         host.editor_state(),
@@ -75,6 +82,65 @@ fn expanded_layers_button_toggles_persistent_rail() {
 }
 
 #[test]
+fn app_bar_fit_matches_canonical_fit_without_editing_state_at_touch_breakpoints() {
+    for (class, width, height) in [
+        (EditorSizeClass::Compact, 320.0, 568.0),
+        (EditorSizeClass::Medium, 834.0, 1_112.0),
+        (EditorSizeClass::Expanded, 1_194.0, 834.0),
+    ] {
+        let mut host = touch_host(class);
+        host.editor_state_mut().viewport.zoom = 2.75;
+        host.editor_state_mut().viewport.pan_x = -731.0;
+        host.editor_state_mut().viewport.pan_y = 419.0;
+        host.editor_state_mut().tool = Tool::Pen;
+        host.editor_state_mut()
+            .set_single_selection(NodeId::new("n10"));
+        let snapshot = host.editor_state().snapshot_for_history();
+        host.editor_state_mut().history_push_past(snapshot);
+
+        let mut canonical = WidgetHostNative::new();
+        *canonical.editor_state_mut() = host.editor_state().clone();
+        canonical.fit_content_to_viewport(width, height);
+        let expected_viewport = canonical.editor_state().viewport;
+
+        let document_before = host.editor_state().doc.clone();
+        let active_page_before = host.editor_state().ui.active_page_index;
+        let selection_before = host.editor_state().selection.clone();
+        let history_past_before = host.editor_state().history.past.clone();
+        let history_future_before = host.editor_state().history.future.clone();
+        let tool_before = host.editor_state().tool;
+        let bar = host_canvas_geometry::touch_app_bar_rect(host.editor_state(), width);
+        let point = center(MobileAppBar::fit_rect(bar));
+
+        assert!(host.apply_press(point.x, point.y, width, height));
+        assert_eq!(host.editor_state().viewport, expected_viewport);
+        assert_eq!(host.editor_state().doc, document_before);
+        assert_eq!(host.editor_state().ui.active_page_index, active_page_before);
+        assert_eq!(host.editor_state().selection, selection_before);
+        assert_eq!(host.editor_state().history.past, history_past_before);
+        assert_eq!(host.editor_state().history.future, history_future_before);
+        assert_eq!(host.editor_state().tool, tool_before);
+    }
+}
+
+#[test]
+fn open_touch_surface_blocks_the_app_bar_fit_target() {
+    let mut host = touch_host(EditorSizeClass::Medium);
+    let (width, height) = (834.0, 1_112.0);
+    host.editor_state_mut().viewport.zoom = 2.75;
+    host.editor_state_mut().viewport.pan_x = -731.0;
+    host.editor_state_mut().viewport.pan_y = 419.0;
+    host.editor_state_mut().editor_ui.mobile_sheet = Some(MobileSheetKind::More);
+    let before = host.editor_state().viewport;
+    let bar = host_canvas_geometry::touch_app_bar_rect(host.editor_state(), width);
+    let point = center(MobileAppBar::fit_rect(bar));
+
+    assert!(host.apply_press(point.x, point.y, width, height));
+    assert_eq!(host.editor_state().viewport, before);
+    assert_eq!(host.editor_state().editor_ui.mobile_sheet, None);
+}
+
+#[test]
 fn outside_more_tap_closes_surface_without_reaching_canvas() {
     let mut host = touch_host(EditorSizeClass::Medium);
     let (width, height) = (834.0, 1112.0);
@@ -93,10 +159,40 @@ fn open_touch_surface_blocks_canvas_zoom_and_pan() {
     host.editor_state_mut().editor_ui.mobile_sheet = Some(MobileSheetKind::More);
     let before = host.editor_state().viewport;
 
+    let panel = host.mobile_sheet_rect(width, height, MobileSheetKind::More);
+    let panel_point = center(panel);
+    let scrim_point = Point2D::new(200.0, 400.0);
+    assert!(!panel.contains(scrim_point));
+
     assert!(host.apply_wheel(200.0, 400.0, -80.0, width, height));
     assert_eq!(host.editor_state().viewport, before);
     assert!(host.apply_pan_gesture(200.0, 400.0, 25.0, -30.0, width, height));
     assert_eq!(host.editor_state().viewport, before);
+    for point in [panel_point, scrim_point] {
+        assert!(host.apply_pinch_gesture(point.x, point.y, 120.0, width, height));
+        assert_eq!(
+            host.editor_state().viewport,
+            before,
+            "the open sheet and its scrim both own pinch input"
+        );
+    }
+}
+
+#[test]
+fn closed_touch_surface_allows_canvas_pinch_zoom() {
+    let mut host = touch_host(EditorSizeClass::Compact);
+    let (width, height) = (390.0, 844.0);
+    assert_eq!(host.editor_state().editor_ui.mobile_sheet, None);
+    let (canvas_x, canvas_y, canvas_w, canvas_h) = host.canvas_region(width, height);
+    let point = Point2D::new(canvas_x + canvas_w * 0.6, canvas_y + canvas_h * 0.4);
+    let before = host.editor_state().viewport;
+
+    assert!(host.apply_pinch_gesture(point.x, point.y, 120.0, width, height));
+
+    let after = host.editor_state().viewport;
+    assert!(after.zoom > before.zoom, "pinch must change canvas zoom");
+    assert_ne!(after.pan_x, before.pan_x, "zoom anchor must update pan x");
+    assert_ne!(after.pan_y, before.pan_y, "zoom anchor must update pan y");
 }
 
 #[test]

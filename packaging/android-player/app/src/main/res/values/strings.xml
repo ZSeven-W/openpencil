@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">openpencil</string>
+    <string name="app_name" translatable="false">OpenPencil</string>
     <string name="document_open_failed">Couldn\'t open this file.</string>
     <string name="document_type_unsupported">Choose an .op or .pen file.</string>
+    <string name="login_webview_title">Sign in to OpenPencil</string>
+    <string name="login_webview_close">Close sign in</string>
+    <string name="login_webview_navigation_blocked">This sign-in link isn\'t allowed.</string>
+    <string name="login_webview_load_failed">Couldn\'t load the sign-in page.</string>
 </resources>

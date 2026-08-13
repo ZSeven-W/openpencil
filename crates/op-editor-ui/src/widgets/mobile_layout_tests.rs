@@ -118,6 +118,103 @@ fn app_bar_edge_targets_are_symmetric_and_centered() {
 }
 
 #[test]
+fn app_bar_fit_target_is_44pt_and_leaves_a_valid_title_at_touch_breakpoints() {
+    for (class, width, height, expected_dock_slots) in [
+        (EditorSizeClass::Compact, 320.0, 568.0, 5),
+        (EditorSizeClass::Compact, 390.0, 844.0, 5),
+        (EditorSizeClass::Medium, 834.0, 1_112.0, 4),
+        (EditorSizeClass::Expanded, 1_194.0, 834.0, 4),
+    ] {
+        let state = touch_state(class);
+        let bar = geometry::touch_app_bar_rect(&state, width);
+        let app_bar = mobile_chrome::MobileAppBar::for_editor(&state);
+        let layers = mobile_chrome::MobileAppBar::layers_rect(bar);
+        let fit = mobile_chrome::MobileAppBar::fit_rect(bar);
+        let undo = mobile_chrome::MobileAppBar::undo_rect(bar);
+        let redo = mobile_chrome::MobileAppBar::redo_rect(bar);
+        let overflow = mobile_chrome::MobileAppBar::overflow_rect(bar);
+
+        let targets = [
+            (layers, mobile_chrome::MobileAppBarHit::Layers),
+            (fit, mobile_chrome::MobileAppBarHit::Fit),
+            (undo, mobile_chrome::MobileAppBarHit::Undo),
+            (redo, mobile_chrome::MobileAppBarHit::Redo),
+            (overflow, mobile_chrome::MobileAppBarHit::Overflow),
+        ];
+        for (target, expected_hit) in targets {
+            assert_eq!(target.size, Point2D::new(44.0, 44.0));
+            assert!(target.origin.x >= bar.origin.x);
+            assert!(target.origin.y >= bar.origin.y);
+            assert!(target.origin.x + target.size.x <= bar.origin.x + bar.size.x);
+            assert!(target.origin.y + target.size.y <= bar.origin.y + bar.size.y);
+            assert_eq!(
+                app_bar.hit_test(
+                    bar,
+                    Point2D::new(
+                        target.origin.x + target.size.x / 2.0,
+                        target.origin.y + target.size.y / 2.0,
+                    ),
+                ),
+                Some(expected_hit)
+            );
+        }
+
+        // The new target sits before the existing edit actions; the narrow
+        // 320pt phone still keeps a non-negative, padded title region.
+        assert!(layers.origin.x + layers.size.x + 4.0 <= fit.origin.x - 4.0);
+        assert!(fit.origin.x + fit.size.x <= undo.origin.x);
+        assert!(undo.origin.x + undo.size.x <= redo.origin.x);
+        assert!(redo.origin.x + redo.size.x <= overflow.origin.x);
+
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        app_bar.paint(&mut cx, bar);
+        assert!(backend.svg_strokes.iter().any(|(path, origin, size, ..)| {
+            path == Icon::Focus.paths()[0]
+                && *origin == mobile_chrome::centered_icon_rect(fit, 20.0).origin
+                && *size == 20.0
+        }));
+
+        // Quick Fit is app-bar chrome only. The dock keeps its established
+        // compact/tablet semantic slots and therefore needs no new tool slot.
+        let dock_rect = geometry::touch_dock_rect(&state, width, height);
+        let dock = mobile_chrome::MobileDock::for_editor(&state);
+        assert_eq!(dock.slot_count(), expected_dock_slots);
+        for index in 0..dock.slot_count() {
+            let slot = mobile_chrome::MobileDock::slot_rect(dock_rect, index, dock.slot_count());
+            let expected_hit = match index {
+                0 => mobile_chrome::MobileDockHit::Tool(Tool::Select),
+                1 => mobile_chrome::MobileDockHit::ShapeSlot,
+                2 => mobile_chrome::MobileDockHit::Tool(Tool::Pen),
+                3 => mobile_chrome::MobileDockHit::Tool(Tool::Text),
+                _ => mobile_chrome::MobileDockHit::More,
+            };
+            assert_eq!(
+                dock.hit_test(
+                    dock_rect,
+                    Point2D::new(
+                        slot.origin.x + slot.size.x / 2.0,
+                        slot.origin.y + slot.size.y / 2.0,
+                    ),
+                ),
+                Some(expected_hit)
+            );
+        }
+        let last_slot = mobile_chrome::MobileDock::slot_rect(
+            dock_rect,
+            expected_dock_slots - 1,
+            dock.slot_count(),
+        );
+        assert_eq!(
+            last_slot.origin.x + last_slot.size.x,
+            dock_rect.origin.x + dock_rect.size.x
+        );
+    }
+}
+
+#[test]
 fn tablet_bottom_controls_share_one_centerline_without_overlap() {
     let state = touch_state(EditorSizeClass::Medium);
     let dock = geometry::touch_dock_rect(&state, 834.0, 1_112.0);

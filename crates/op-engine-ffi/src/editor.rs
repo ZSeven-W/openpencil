@@ -11,15 +11,10 @@
 //! [`op_editor_text`] / [`op_editor_ime_preedit`] /
 //! [`op_editor_ime_commit`].
 
+use crate::editor_auth;
 use crate::error::{FfiError, DOCUMENT_CAP, STRING_CAP};
 use crate::lifecycle::call_session;
 use crate::OpStatus;
-
-/// No shell-owned work is pending.
-pub const SHELL_ACTION_NONE: i32 = 0;
-/// Present the platform document picker and return the chosen bytes through
-/// [`op_editor_open_document`].
-pub const SHELL_ACTION_OPEN_DOCUMENT: i32 = 1;
 
 /// Key codes the shells map their platform keys to.
 pub const KEY_BACKSPACE: i32 = 1;
@@ -34,9 +29,7 @@ pub const KEY_ARROW_DOWN: i32 = 10;
 pub const KEY_ARROW_LEFT: i32 = 11;
 pub const KEY_ARROW_RIGHT: i32 = 12;
 
-/// Drain the next shell-owned editor action. Only `FileAction::Open` belongs
-/// to the mobile document-picker bridge; every other host action remains in
-/// place for its owning integration to consume.
+/// Drain the next shell-owned editor action.
 ///
 /// # Safety
 ///
@@ -51,18 +44,7 @@ pub unsafe extern "C" fn op_editor_take_shell_action(
             if out.is_null() {
                 return Err(FfiError::invalid("shell-action output pointer is null"));
             }
-            let host = session.editor_mut()?;
-            let action = if matches!(
-                host.editor_state().editor_ui.pending_file_action,
-                Some(op_editor_core::FileAction::Open)
-            ) {
-                host.editor_state_mut().editor_ui.pending_file_action = None;
-                host.mark_editor_state_dirty();
-                SHELL_ACTION_OPEN_DOCUMENT
-            } else {
-                SHELL_ACTION_NONE
-            };
-            out.write(action);
+            out.write(editor_auth::take_shell_action(session)?);
             Ok(())
         })
     }
@@ -230,16 +212,16 @@ pub unsafe extern "C" fn op_editor_move(engine: *mut crate::OpEngine, x: f32, y:
 #[no_mangle]
 pub unsafe extern "C" fn op_editor_release(
     engine: *mut crate::OpEngine,
-    _x: f32,
-    _y: f32,
+    x: f32,
+    y: f32,
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
             if !session.end_editor_pointer_capture() {
                 return Ok(());
             }
-            let (w, h) = session.editor_viewport();
-            let changed = session.editor_mut()?.apply_release_with_viewport(w, h);
+            let (x, y) = session.editor_point(x, y);
+            let changed = crate::editor_pointer_release::release(session, x, y)?;
             if changed {
                 session.request_redraw();
             }
@@ -509,6 +491,7 @@ pub unsafe extern "C" fn op_editor_ime_focused(
 mod tests {
     use super::*;
     use crate::desc::{Callbacks, CreateOptions};
+    use crate::editor_auth::{SHELL_ACTION_NONE, SHELL_ACTION_OPEN_DOCUMENT};
     use crate::lifecycle::{OpEngine, Session};
     use op_editor_core::{
         size_class::{EditorSizeClass, MobileSheetKind},

@@ -183,10 +183,14 @@ impl WidgetHostNative {
     ) -> bool {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
-        if self.begin_agent_settings_touch_gesture(x, y, viewport_width, viewport_height) {
+        let presenting = self.preview_slideshow_active();
+        if !presenting
+            && self.begin_agent_settings_touch_gesture(x, y, viewport_width, viewport_height)
+        {
             return true;
         }
-        if allow_touch_panel_defer
+        if !presenting
+            && allow_touch_panel_defer
             && self.begin_asset_center_touch_gesture(x, y, viewport_width, viewport_height)
         {
             return true;
@@ -290,17 +294,22 @@ impl WidgetHostNative {
         }
         // Tier 3b — an open touch surface owns its outside scrim and close
         // affordance before app-bar/page/dock controls can claim the tap.
-        if let Some(consumed) = self.press_mobile_modal_surface_tier(&ctx) {
-            return consumed;
+        if !self.preview_slideshow_active() {
+            if let Some(consumed) = self.press_mobile_modal_surface_tier(&ctx) {
+                return consumed;
+            }
         }
         // Tier 4 — TopBar chrome (and its blank-press gaps); mobile
         // layout replaces it with the floating action cluster.
-        if self.editor_state.editor_ui.touch_chrome() {
+        let presenting = self.preview_slideshow_active();
+        if self.editor_state.editor_ui.touch_chrome() && !presenting {
             if let Some(consumed) = self.press_mobile_app_bar_tier(&ctx) {
                 return consumed;
             }
-        } else if let Some(consumed) = self.press_top_bar_tier(&ctx) {
-            return consumed;
+        } else if !self.editor_state.editor_ui.touch_chrome() {
+            if let Some(consumed) = self.press_top_bar_tier(&ctx) {
+                return consumed;
+            }
         }
         // Tier 5 — Preview (Play) mode swallows everything else.
         if let Some(consumed) = self.press_preview_tier(&ctx) {
@@ -370,7 +379,7 @@ impl WidgetHostNative {
         }
         // Tier 10 — toolbar + floating align toolbar (desktop); on touch
         // layouts the bottom tool dock replaces the desktop toolbar.
-        if self.editor_state.editor_ui.touch_chrome() {
+        if self.editor_state.editor_ui.touch_chrome() && !self.preview_slideshow_active() {
             if self.editor_state.editor_ui.mobile_sheet.is_none()
                 && !self.editor_state.editor_ui.variables_panel_open
             {

@@ -146,6 +146,19 @@ pub(crate) fn layer_action_targets(row: Rect, m: LayerPanelMetrics) -> (Rect, Re
     )
 }
 
+/// Dedicated touch reorder affordance immediately before visibility and lock.
+/// Normal row drags remain available for list scrolling.
+pub(crate) fn layer_drag_target(row: Rect, m: LayerPanelMetrics) -> Option<Rect> {
+    if !m.touch {
+        return None;
+    }
+    let (eye, _) = layer_action_targets(row, m);
+    Some(Rect {
+        origin: Point2D::new(eye.origin.x - m.action_target, row.origin.y),
+        size: Point2D::new(m.action_target, row.size.y),
+    })
+}
+
 pub(crate) fn collapse_target(
     row: Rect,
     indent: f32,

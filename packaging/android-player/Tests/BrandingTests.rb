@@ -23,7 +23,7 @@ raise "canonical OpenPencil icon changed without regenerating mobile assets" unl
 strings_path = File.join(res_dir, "values/strings.xml")
 strings = REXML::Document.new(File.read(strings_path))
 app_name = REXML::XPath.first(strings, "/resources/string[@name='app_name']")
-raise "app_name must be exactly openpencil" unless app_name&.text == "openpencil"
+raise "app_name must be exactly OpenPencil" unless app_name&.text == "OpenPencil"
 raise "app_name must remain locale-independent" unless app_name.attributes["translatable"] == "false"
 
 manifest_path = File.join(player_dir, "app/src/main/AndroidManifest.xml")
@@ -50,7 +50,7 @@ exit 0 unless apk_path
 raise "expected path to aapt when validating an APK" unless aapt_path
 badging, error, status = Open3.capture3(aapt_path, "dump", "badging", apk_path)
 raise "aapt dump badging failed: #{error}" unless status.success?
-raise "packaged application label must be openpencil" unless badging.include?("application: label='openpencil'")
+raise "packaged application label must be OpenPencil" unless badging.include?("application: label='OpenPencil'")
 raise "packaged application icon must be ic_launcher" unless badging.include?("icon='res/mipmap-mdpi-v4/ic_launcher.png'")
 
 xmltree, tree_error, tree_status = Open3.capture3(aapt_path, "dump", "xmltree", apk_path, "AndroidManifest.xml")

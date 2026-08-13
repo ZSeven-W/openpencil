@@ -50,6 +50,7 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     private var docBytes: ByteArray = ByteArray(0)
     private var editorMode = false
     private var fontBytes: List<ByteArray> = emptyList()
+    private val authRuntime = AndroidAuthRuntime(context)
 
     // ---- editor-mode touch tracking --------------------------------------
     private var primaryPointerId = -1
@@ -116,6 +117,8 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     private var safeAreaPx = intArrayOf(0, 0, 0, 0) // t, r, b, l
     private var keyboardHeight = 0f
     private var openDocumentHandler: (() -> Unit)? = null
+    private var openLoginWebViewHandler: ((String) -> Unit)? = null
+    private var closeLoginWebViewHandler: (() -> Unit)? = null
     private var systemChromeAppearanceHandler: ((Boolean) -> Unit)? = null
     private var prefersLightSystemIcons: Boolean? = null
 
@@ -138,6 +141,23 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     /** Registers the main-thread shell action handler owned by the Activity. */
     fun setOpenDocumentHandler(handler: () -> Unit) {
         openDocumentHandler = handler
+    }
+
+    /** Registers lifecycle callbacks for the Activity-owned login WebView. */
+    fun setLoginWebViewHandlers(open: (String) -> Unit, close: () -> Unit) {
+        openLoginWebViewHandler = open
+        closeLoginWebViewHandler = close
+    }
+
+    /** User close/back: cancel the single auth flow owned by this engine. */
+    fun cancelLogin() {
+        val current = engine
+        if (!editorMode || current == 0L) return
+        val status = OpNative.nativeEditorCancelLogin(current)
+        if (status != 0 && status != OpNative.STATUS_CLOSING) {
+            Log.i(TAG, "login cancel returned status=$status")
+        }
+        requestFrame()
     }
 
     /** Registers a main-thread window-chrome updater owned by the Activity. */
@@ -225,6 +245,7 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
                 Log.e(TAG, "nativeCreate failed: ${OpNative.nativeLastError(0)}")
                 return
             }
+            authRuntime.configure(engine, editorMode)
             Log.i(TAG, "engine created (${wLogical}x$hLogical dpr=$viewportDensity)")
             for (bytes in fontBytes) {
                 OpNative.nativeRegisterFont(engine, bytes)
@@ -541,7 +562,10 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
                     val dx = (midX - lastMidX) / inputDensity
                     val dy = (midY - lastMidY) / inputDensity
                     val dist = distance(event)
-                    val pinchDelta = (dist - lastPinchDist) / inputDensity
+                    val pinchDelta = PinchZoomDelta.wheelDelta(
+                        previousDistance = lastPinchDist,
+                        currentDistance = dist,
+                    )
                     lastMidX = midX
                     lastMidY = midY
                     lastPinchDist = dist
@@ -674,6 +698,20 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
             action == OpNative.SHELL_ACTION_OPEN_DOCUMENT -> post {
                 if (engine != 0L) openDocumentHandler?.invoke()
             }
+            action == OpNative.SHELL_ACTION_OPEN_LOGIN_WEBVIEW -> {
+                val url = OpNative.nativeEditorTakeLoginUrl(engine)
+                if (url.isNullOrBlank()) {
+                    Log.w(TAG, "login WebView action had no URL; canceling the flow")
+                    OpNative.nativeEditorCancelLogin(engine)
+                } else {
+                    post {
+                        if (engine != 0L) openLoginWebViewHandler?.invoke(url)
+                    }
+                }
+            }
+            action == OpNative.SHELL_ACTION_CLOSE_LOGIN_WEBVIEW -> post {
+                closeLoginWebViewHandler?.invoke()
+            }
             else -> Log.w(TAG, "unknown editor shell action=$action")
         }
     }
@@ -738,6 +776,8 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
 
     fun destroy() {
         openDocumentHandler = null
+        openLoginWebViewHandler = null
+        closeLoginWebViewHandler = null
         systemChromeAppearanceHandler = null
         if (engine != 0L) {
             OpNative.nativeDestroy(engine)

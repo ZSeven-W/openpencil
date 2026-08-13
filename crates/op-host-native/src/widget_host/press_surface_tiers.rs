@@ -173,12 +173,15 @@ impl WidgetHostNative {
         if self.slides_panel_press(x, y, viewport_width, viewport_height) {
             return Some(true);
         }
+        if allow_touch_panel_defer && !ctx.rename_committed && self.begin_touch_layer_reorder(ctx) {
+            return Some(true);
+        }
         if allow_touch_panel_defer && self.begin_layers_touch_gesture(ctx) {
             return Some(true);
         }
         // 3. apply_click — LayerPanel + chat-defocus. Peek the
         //    LayerPanel hit-test for a drag-to-reorder candidate.
-        if self.layers_panel_visible() {
+        if self.layers_panel_visible() && !self.editor_state.editor_ui.touch_chrome() {
             use op_editor_ui::widgets::LayerPanelHit;
             let layer_rect = self.layers_content_rect(viewport_width, viewport_height);
             let panel = self.layer_panel();

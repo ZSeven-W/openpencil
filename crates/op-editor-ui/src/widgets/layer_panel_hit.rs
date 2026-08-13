@@ -5,12 +5,39 @@
 
 use super::layer_panel::*;
 use super::layer_panel_metrics::{
-    add_page_target, collapse_target, delete_page_target, layer_action_targets,
+    add_page_target, collapse_target, delete_page_target, layer_action_targets, layer_drag_target,
 };
 use super::layer_panel_walkers::row_index_at;
 use crate::{Point2D, Rect};
 
 impl LayerPanel {
+    /// Node owned by the explicit touch reorder grip under `point`.
+    pub fn drag_source_at(&self, rect: Rect, point: Point2D) -> Option<op_editor_core::NodeId> {
+        if !rect.contains(point) || !self.metrics.touch {
+            return None;
+        }
+        let r = self.regions(rect);
+        let (index, y) = row_index_at(
+            self.items.len(),
+            r.layers_rows_top,
+            r.layers.offset,
+            r.layers_view_h,
+            self.metrics.layer_row_height,
+            point.y,
+        )?;
+        let item = &self.items[index];
+        if item.renaming {
+            return None;
+        }
+        let row = Rect {
+            origin: Point2D::new(rect.origin.x + 6.0, y + 2.0),
+            size: Point2D::new(rect.size.x - 12.0, self.metrics.layer_row_height - 4.0),
+        };
+        layer_drag_target(row, self.metrics)
+            .filter(|target| target.contains(point))
+            .map(|_| item.node_id.clone())
+    }
+
     /// Drop target for a drag-in-progress. Over a row: top-25 %
     /// Before, middle 50 % Into (container rows only), bottom 25 %
     /// After. Below-rows area: After-last. Outside / above rows:

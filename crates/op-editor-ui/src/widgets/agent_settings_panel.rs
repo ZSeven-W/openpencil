@@ -230,11 +230,15 @@ const TOUCH_TABS_WITH_ACCOUNT: [AgentSettingsTab; 5] = [
 ];
 
 fn mode_for_ui(ui: &EditorUiState, base: AgentSettingsPanelMode) -> AgentSettingsPanelMode {
+    // Capability controls whether this build can begin a new login; a restored
+    // signed-in profile still needs its Account settings even if that runtime
+    // gate has not been advertised yet.
+    let account_visible = ui.account_ui_available || ui.account.is_signed_in();
     if ui.embed == op_editor_core::EmbedHost::VsCode {
         AgentSettingsPanelMode::McpOnly
-    } else if base == AgentSettingsPanelMode::Full && ui.account_ui_available {
+    } else if base == AgentSettingsPanelMode::Full && account_visible {
         AgentSettingsPanelMode::FullWithAccount
-    } else if base == AgentSettingsPanelMode::WebBuiltinOnly && ui.account_ui_available {
+    } else if base == AgentSettingsPanelMode::WebBuiltinOnly && account_visible {
         AgentSettingsPanelMode::WebBuiltinOnlyWithAccount
     } else {
         base

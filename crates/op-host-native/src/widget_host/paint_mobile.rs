@@ -15,6 +15,13 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) {
+        // A deck presentation has its own always-visible navigation pill.
+        // Editor app-bar and dock actions are unrelated (and the dock would
+        // cover the presenter controls), so none of the editing chrome is
+        // painted until the user exits.
+        if self.preview_slideshow_active() {
+            return;
+        }
         // Native touch chrome replaces the desktop top bar at every tablet
         // size class. Geometry branches inside the shared widgets.
         if self.editor_state.editor_ui.touch_chrome() {

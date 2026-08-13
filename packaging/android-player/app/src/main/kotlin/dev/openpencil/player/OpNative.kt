@@ -12,6 +12,8 @@ object OpNative {
     const val STATUS_CLOSING = -1
     const val SHELL_ACTION_NONE = 0
     const val SHELL_ACTION_OPEN_DOCUMENT = 1
+    const val SHELL_ACTION_OPEN_LOGIN_WEBVIEW = 2
+    const val SHELL_ACTION_CLOSE_LOGIN_WEBVIEW = 3
 
     init {
         System.loadLibrary("op_engine_jni")
@@ -85,6 +87,14 @@ object OpNative {
     external fun nativeEditorImePreedit(engine: Long, text: String, selStart: Int, selEnd: Int): Int
     external fun nativeEditorImeCommit(engine: Long, text: String): Int
     external fun nativeEditorImeFocused(engine: Long): Boolean
+    external fun nativeEditorConfigureAuth(
+        engine: Long,
+        storageDir: String,
+        deviceName: String,
+        appVersion: String,
+    ): Int
+    external fun nativeEditorTakeLoginUrl(engine: Long): String?
+    external fun nativeEditorCancelLogin(engine: Long): Int
     external fun nativeEditorTakeShellAction(engine: Long): Int
     external fun nativeEditorOpenDocument(engine: Long, bytes: ByteArray, name: String): Int
 }

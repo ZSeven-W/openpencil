@@ -52,6 +52,9 @@ pub(crate) struct GestureTracker {
     touches: Vec<TouchPoint>,
     /// A single-finger drag has passed the slop and is panning.
     panning: bool,
+    /// Once a second finger joins, neither finger may complete the stream as
+    /// a single-finger tap after the other one lifts.
+    tap_suppressed: bool,
     /// Anchor for an active two-finger pinch.
     pinch: Option<PinchAnchor>,
 }
@@ -221,6 +224,14 @@ impl GestureTracker {
                 if self.touches.len() == 1 {
                     // Fresh single touch: re-arm the tap candidate.
                     self.panning = false;
+                    self.tap_suppressed = false;
+                } else {
+                    // Capture the baseline as soon as the second finger lands.
+                    // Waiting for Move makes the first reported distance become
+                    // both the numerator and denominator, producing ratio 1.
+                    self.panning = false;
+                    self.tap_suppressed = true;
+                    self.reanchor_pinch(view);
                 }
             }
             OpPointerPhase::Move => {
@@ -250,12 +261,11 @@ impl GestureTracker {
                         let (a, b) = self.pinch_pair();
                         let mid = Point2D::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
                         let dist = ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt().max(1.0);
-                        let anchor = self.pinch.get_or_insert_with(|| PinchAnchor {
+                        let anchor = *self.pinch.get_or_insert_with(|| PinchAnchor {
                             dist_start: dist,
                             zoom_start: view.zoom,
                             doc_anchor: view.view_to_doc(mid),
                         });
-                        anchor.dist_start = dist;
                         let zoom = (anchor.zoom_start * dist / anchor.dist_start)
                             .clamp(MIN_ZOOM, MAX_ZOOM);
                         view.origin = Point2D::new(
@@ -274,14 +284,13 @@ impl GestureTracker {
                 if !self.touches.iter().any(|touch| touch.id == id) {
                     return Ok(outcome);
                 }
-                let was_pinch = self.pinch.is_some();
                 self.touches.retain(|t| t.id != id);
-                if was_pinch {
-                    self.pinch = None;
-                }
+                // Returning from 3+ touches to two establishes a new active
+                // pair. Never reuse the anchor owned by an earlier pair.
+                self.reanchor_pinch(view);
                 match self.touches.len() {
                     0 => {
-                        if !self.panning && !was_pinch {
+                        if !self.panning && !self.tap_suppressed {
                             // A tap: select the topmost node under the
                             // point (dead space reports `None` so the
                             // caller clears the selection).
@@ -290,6 +299,7 @@ impl GestureTracker {
                             outcome.tap_hit = scene.node_at_doc_point(doc, view.zoom);
                         }
                         self.panning = false;
+                        self.tap_suppressed = false;
                     }
                     1 => {
                         // Pinch lifted to a single finger; re-arm pan
@@ -319,13 +329,33 @@ impl GestureTracker {
         )
     }
 
+    fn reanchor_pinch(&mut self, view: &Viewport) {
+        self.pinch = if self.touches.len() == 2 {
+            let (a, b) = self.pinch_pair();
+            let mid = Point2D::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+            let dist = ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt().max(1.0);
+            Some(PinchAnchor {
+                dist_start: dist,
+                zoom_start: view.zoom,
+                doc_anchor: view.view_to_doc(mid),
+            })
+        } else {
+            None
+        };
+    }
+
     /// Reset all tracking (used by suspend).
     pub(crate) fn reset(&mut self) {
         self.touches.clear();
         self.panning = false;
+        self.tap_suppressed = false;
         self.pinch = None;
     }
 }
+
+#[cfg(test)]
+#[path = "input_tests.rs"]
+mod tests;
 
 /// Cull rect covering the current viewport in doc space (with a small
 /// stroke margin so a node half-offscreen still paints).

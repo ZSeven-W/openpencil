@@ -109,6 +109,64 @@ fn generic_pointer_move_also_marks_canvas_camera_interaction() {
 }
 
 #[test]
+fn direct_editor_pinch_updates_zoom_pan_and_interaction_state() {
+    let mut engine = editor_engine();
+    let engine_ptr = &mut engine as *mut OpEngine;
+    let insets = crate::viewport::OpInsets {
+        top: 47.0,
+        right: 13.0,
+        bottom: 31.0,
+        left: 29.0,
+    };
+    assert_eq!(
+        unsafe {
+            crate::op_set_safe_area(
+                engine_ptr,
+                insets.top,
+                insets.right,
+                insets.bottom,
+                insets.left,
+            )
+        },
+        OpStatus::Ok
+    );
+    let (surface_x, surface_y, before) = {
+        let session = engine.session_mut_for_test();
+        let (viewport_w, viewport_h) = session.editor_viewport();
+        let host = session.editor().expect("editor host");
+        let (canvas_x, canvas_y, canvas_w, canvas_h) =
+            op_editor_ui::widgets::host_canvas_geometry::canvas_region(
+                host.editor_state(),
+                viewport_w,
+                viewport_h,
+            );
+        (
+            insets.left + canvas_x + canvas_w * 0.6,
+            insets.top + canvas_y + canvas_h * 0.4,
+            host.editor_state().viewport,
+        )
+    };
+
+    assert_eq!(
+        unsafe { crate::op_editor_begin_transform(engine_ptr, surface_x, surface_y) },
+        OpStatus::Ok
+    );
+    assert!(engine.session_mut_for_test().editor_transform_captured());
+    assert_eq!(
+        unsafe { crate::op_editor_pinch(engine_ptr, surface_x, surface_y, 160.0) },
+        OpStatus::Ok
+    );
+
+    let session = engine.session_mut_for_test();
+    let after = session.editor().unwrap().editor_state().viewport;
+    assert!(after.zoom > before.zoom, "pinch must increase zoom");
+    assert_ne!(after.pan_x, before.pan_x, "zoom anchor must update pan x");
+    assert_ne!(after.pan_y, before.pan_y, "zoom anchor must update pan y");
+    assert!(session.user_interacted);
+    assert_eq!(session.insets, insets, "pinch must not alter safe bands");
+}
+
+#[test]
 fn generic_pointer_uses_safe_area_local_editor_geometry() {
     let mut engine = editor_engine();
     let engine_ptr = &mut engine as *mut OpEngine;

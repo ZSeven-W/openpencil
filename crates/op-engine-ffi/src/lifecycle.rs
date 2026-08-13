@@ -58,6 +58,9 @@ pub(crate) struct Session {
     /// editor mode (`OpCreateDesc.mode == 1`).
     #[cfg(feature = "editor")]
     pub editor: Option<op_host_native::WidgetHostNative>,
+    /// Mobile auth/WebView payload and exactly-once shell action state.
+    #[cfg(feature = "editor")]
+    pub(crate) auth_shell: crate::editor_auth::EditorAuthShellState,
     /// Shell-provided media root (APK-extracted assets / bundle
     /// resources). Reserved for future local-media resolution.
     #[allow(dead_code)]
@@ -133,6 +136,8 @@ impl Session {
             asset_base: options.asset_base,
             #[cfg(feature = "editor")]
             editor,
+            #[cfg(feature = "editor")]
+            auth_shell: Default::default(),
         };
         session.fit_content_to_viewports();
         Ok(session)
@@ -455,6 +460,8 @@ impl Session {
         }
         #[cfg(feature = "editor")]
         crate::editor_template::drain_pending_scene_template(self)?;
+        #[cfg(feature = "editor")]
+        let auth_wake = crate::editor_auth::pump(self);
         let slot = std::mem::replace(&mut self.surface, SurfaceSlot::None);
         let (restored, outcome) = match slot {
             SurfaceSlot::None => (
@@ -492,6 +499,10 @@ impl Session {
                 crate::media::drain_remote_image_requests(self);
                 #[cfg(feature = "editor")]
                 self.schedule_editor_animation();
+                #[cfg(feature = "editor")]
+                if let Some(deadline) = auth_wake {
+                    self.request_wake(Some(deadline));
+                }
                 #[cfg(not(feature = "editor"))]
                 self.schedule_caret_blink();
                 Ok(())
@@ -527,6 +538,8 @@ impl Session {
         }
         #[cfg(feature = "editor")]
         crate::editor_template::drain_pending_scene_template(self)?;
+        #[cfg(feature = "editor")]
+        let auth_wake = crate::editor_auth::pump(self);
         let width = ((self.logical.0 * self.dpr).round() as i32).max(1);
         let height = ((self.logical.1 * self.dpr).round() as i32).max(1);
         let row_bytes = width as usize * 4;
@@ -551,6 +564,15 @@ impl Session {
                 "CPU frame readback failed",
             ));
         }
+        #[cfg(feature = "editor")]
+        {
+            self.schedule_editor_animation();
+            if let Some(deadline) = auth_wake {
+                self.request_wake(Some(deadline));
+            }
+        }
+        #[cfg(not(feature = "editor"))]
+        self.schedule_caret_blink();
         // SAFETY: the caller's buffer covers `height * stride` bytes; each
         // row copy is exactly `row_bytes`.
         unsafe {
@@ -692,6 +714,8 @@ pub(crate) unsafe fn destroy_engine(pointer: *mut OpEngine) -> OpStatus {
     }
     engine.in_call.set(true);
     let outcome = catch_unwind(AssertUnwindSafe(|| unsafe {
+        #[cfg(feature = "editor")]
+        crate::editor_auth::shutdown(&mut *engine.session.get());
         drop(Box::from_raw(pointer));
     }));
     match outcome {

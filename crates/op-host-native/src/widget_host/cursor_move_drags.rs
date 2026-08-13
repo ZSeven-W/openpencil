@@ -200,6 +200,10 @@ impl WidgetHostNative {
             if !d.active && (y - d.start_y).abs() > activation_threshold {
                 d.active = true;
             }
+            let active = d.active;
+            if active {
+                self.auto_scroll_touch_layer_drag(y);
+            }
             return Some(true);
         }
         if let Some(resize) = self.chat_resize {

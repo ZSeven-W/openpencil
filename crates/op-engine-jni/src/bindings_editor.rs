@@ -3,15 +3,90 @@
 //! Editor-mode natives — split out of `bindings.rs`.
 
 use jni::objects::{JByteArray, JClass, JString};
-use jni::sys::{jfloat, jint, jlong};
+use jni::sys::{jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 
 use op_engine_ffi::{
+    op_editor_cancel_login, op_editor_configure_auth, op_editor_copy_login_url,
     op_editor_open_document, op_editor_take_shell_action, OpStatus, SHELL_ACTION_NONE,
 };
 
 use crate::bindings::{call_status, jstring_bytes, with_engine};
 use crate::engine_thread::STATUS_CLOSING;
+
+/// `OpNative.nativeEditorConfigureAuth` — initialize the real mobile auth
+/// backend with a private shell-owned storage directory.
+#[no_mangle]
+pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorConfigureAuth<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+    storage_dir: JString<'local>,
+    device_name: JString<'local>,
+    app_version: JString<'local>,
+) -> jint {
+    let Some(storage_dir) = jstring_bytes(&mut env, &storage_dir) else {
+        return OpStatus::InvalidArg as jint;
+    };
+    let Some(device_name) = jstring_bytes(&mut env, &device_name) else {
+        return OpStatus::InvalidArg as jint;
+    };
+    let Some(app_version) = jstring_bytes(&mut env, &app_version) else {
+        return OpStatus::InvalidArg as jint;
+    };
+    call_status(engine, move |e| unsafe {
+        op_editor_configure_auth(
+            e,
+            storage_dir.as_ptr(),
+            storage_dir.len(),
+            device_name.as_ptr(),
+            device_name.len(),
+            app_version.as_ptr(),
+            app_version.len(),
+        )
+    })
+}
+
+/// `OpNative.nativeEditorTakeLoginUrl` — atomically copies and consumes the
+/// pending UTF-8 verification URL, or returns null when none is ready.
+#[no_mangle]
+pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorTakeLoginUrl<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+) -> jstring {
+    let bytes = with_engine(engine, move |e| {
+        let mut required = 0usize;
+        let status = unsafe { op_editor_copy_login_url(e, std::ptr::null_mut(), 0, &mut required) };
+        if status != OpStatus::Ok || required == 0 {
+            return None;
+        }
+        let mut bytes = vec![0_u8; required];
+        let status =
+            unsafe { op_editor_copy_login_url(e, bytes.as_mut_ptr(), bytes.len(), &mut required) };
+        (status == OpStatus::Ok).then_some(bytes)
+    })
+    .flatten();
+    let Some(bytes) = bytes else {
+        return std::ptr::null_mut();
+    };
+    let Ok(text) = String::from_utf8(bytes) else {
+        return std::ptr::null_mut();
+    };
+    env.new_string(text)
+        .map(|value| value.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// `OpNative.nativeEditorCancelLogin` — user-dismissed WebView cancellation.
+#[no_mangle]
+pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorCancelLogin<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+) -> jint {
+    call_status(engine, move |e| unsafe { op_editor_cancel_login(e) })
+}
 
 /// `OpNative.nativeEditorTakeShellAction` — returns an `OpShellAction` value.
 /// Engine failures are negative so they cannot alias a valid action; an

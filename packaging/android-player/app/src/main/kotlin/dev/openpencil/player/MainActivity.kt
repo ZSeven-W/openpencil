@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import java.io.File
@@ -36,6 +37,8 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var surfaceView: OpSurfaceView
     private lateinit var rootView: FrameLayout
+    private lateinit var loginWebView: LoginWebViewOverlay
+    private lateinit var loginBackCallback: OnBackPressedCallback
     private var documentOpenInProgress = false
 
     private val openDocumentLauncher = registerForActivityResult(
@@ -64,7 +67,14 @@ class MainActivity : ComponentActivity() {
             configure(doc, editorMode, fonts)
             setOpenDocumentHandler(::launchDocumentPicker)
             setSystemChromeAppearanceHandler { prefersLightIcons ->
-                updateSystemChromeAppearance(window, prefersLightIcons)
+                updateSystemChromeAppearance(
+                    window,
+                    if (::loginWebView.isInitialized && loginWebView.isVisible) {
+                        false
+                    } else {
+                        prefersLightIcons
+                    },
+                )
             }
         }
         // Do not pad or resize the SurfaceView: its background should remain
@@ -78,6 +88,36 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
+        loginBackCallback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                loginWebView.handleBack()
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, loginBackCallback)
+        loginWebView = LoginWebViewOverlay(
+            activity = this,
+            root = rootView,
+            onCanceled = { surfaceView.cancelLogin() },
+            onRequestRejected = { error ->
+                Log.w(TAG, "rejected login WebView request: $error")
+                surfaceView.cancelLogin()
+                Toast.makeText(this, R.string.login_webview_load_failed, Toast.LENGTH_SHORT).show()
+            },
+            onVisibilityChanged = { visible ->
+                loginBackCallback.isEnabled = visible
+                if (visible) {
+                    // The WebView safe-area band is light even when the
+                    // document behind it uses a dark editor theme.
+                    updateSystemChromeAppearance(window, prefersLightIcons = false)
+                } else {
+                    surfaceView.replaySystemChromeAppearance()
+                }
+            },
+        )
+        surfaceView.setLoginWebViewHandlers(
+            open = { url -> loginWebView.show(LoginWebViewRequest(initialUrl = url)) },
+            close = { loginWebView.dismissFromNative() },
+        )
         setContentView(rootView)
 
         installEditorInsets(rootView, surfaceView)
@@ -90,15 +130,35 @@ class MainActivity : ComponentActivity() {
         // SurfaceView is recreated. Refresh the logical-pixel conversion used
         // by resize and touch, then request fresh cutout/bar/IME insets.
         surfaceView.refreshDisplayMetrics()
-        surfaceView.replaySystemChromeAppearance()
+        if (::loginWebView.isInitialized && loginWebView.isVisible) {
+            updateSystemChromeAppearance(window, prefersLightIcons = false)
+        } else {
+            surfaceView.replaySystemChromeAppearance()
+        }
         if (::rootView.isInitialized) ViewCompat.requestApplyInsets(rootView)
     }
 
+    override fun onPause() {
+        if (::loginWebView.isInitialized) loginWebView.onPause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::loginWebView.isInitialized) {
+            loginWebView.onResume()
+            if (loginWebView.isVisible) {
+                updateSystemChromeAppearance(window, prefersLightIcons = false)
+            }
+        }
+    }
+
     override fun onDestroy() {
-        super.onDestroy()
+        if (::loginWebView.isInitialized) loginWebView.destroy()
         // Teardown unconditionally (rotation never reaches here thanks to
         // configChanges).
-        surfaceView.destroy()
+        if (::surfaceView.isInitialized) surfaceView.destroy()
+        super.onDestroy()
     }
 
     private fun launchDocumentPicker() {

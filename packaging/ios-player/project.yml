@@ -29,7 +29,7 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "15.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: openpencil
+        INFOPLIST_KEY_CFBundleDisplayName: OpenPencil
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
@@ -38,13 +38,33 @@ targets:
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../../crates/op-engine-ffi/include"
         "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios/release"
         "LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios-sim/release"
-        OTHER_LDFLAGS: "$(inherited) -lop_engine_ffi -lc++"
+        OP_AUTH_ARCHIVE: ""
+        OTHER_LDFLAGS: "$(inherited) $(OP_ENGINE_ARCHIVE) $(OP_AUTH_ARCHIVE) -lc++"
       configs:
+        Debug:
+          "OP_ENGINE_ARCHIVE[sdk=iphoneos*]": "$(SRCROOT)/../../target/aarch64-apple-ios/debug/libop_engine_ffi.a"
+          "OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]": "$(SRCROOT)/../../target/aarch64-apple-ios-sim/debug/libop_engine_ffi.a"
         Release:
           GCC_OPTIMIZATION_LEVEL: s
+          "OP_ENGINE_ARCHIVE[sdk=iphoneos*]": "$(SRCROOT)/../../target/aarch64-apple-ios/release/libop_engine_ffi.a"
+          "OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]": "$(SRCROOT)/../../target/aarch64-apple-ios-sim/release/libop_engine_ffi.a"
+    preBuildScripts:
+      - name: Validate optional op-auth archive
+        script: |
+          if [ -n "${OP_AUTH_ARCHIVE:-}" ]; then
+            case "${PLATFORM_NAME:-}" in
+              iphoneos) export OP_AUTH_TARGET=aarch64-apple-ios ;;
+              iphonesimulator) export OP_AUTH_TARGET=aarch64-apple-ios-sim ;;
+              *) echo "error: unsupported auth link platform: ${PLATFORM_NAME:-unset}" >&2; exit 1 ;;
+            esac
+            bash "$SRCROOT/../../tools/check-mobile-auth-link-input.sh"
+          fi
+        basedOnDependencyAnalysis: false
     dependencies:
       - sdk: Metal.framework
       - sdk: QuartzCore.framework
+      - sdk: WebKit.framework
+      - sdk: Security.framework
       - sdk: UIKit.framework
       - sdk: Foundation.framework
       - sdk: CoreFoundation.framework

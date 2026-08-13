@@ -17,6 +17,9 @@ required=(
   "$player_dir/Sources/OpPlayerApp.swift"
   "$player_dir/Sources/OpPlayerView.swift"
   "$player_dir/Sources/OpEngineHost.swift"
+  "$player_dir/Sources/EmbeddedLoginRequest.swift"
+  "$player_dir/Sources/EmbeddedLoginWebViewController.swift"
+  "$player_dir/Sources/PinchZoomDelta.swift"
 )
 
 for path in "${required[@]}"; do
@@ -43,7 +46,7 @@ target = project.fetch("targets").fetch("OpenPencilPlayer")
 raise "OpenPencilPlayer must be an iOS application" unless target["platform"] == "iOS" && target["type"] == "application"
 settings = target.fetch("settings").fetch("base")
 raise "deployment target must be iOS 15+" unless settings.fetch("IPHONEOS_DEPLOYMENT_TARGET").to_f >= 15.0
-raise "display name must be openpencil" unless settings.fetch("INFOPLIST_KEY_CFBundleDisplayName") == "openpencil"
+raise "display name must be OpenPencil" unless settings.fetch("INFOPLIST_KEY_CFBundleDisplayName") == "OpenPencil"
 raise "system appearance must remain runtime-controlled" if settings.key?("INFOPLIST_KEY_UIUserInterfaceStyle")
 raise "AppIcon catalog setting missing" unless settings.fetch("ASSETCATALOG_COMPILER_APPICON_NAME") == "AppIcon"
 raise "bridging header setting missing" unless settings.key?("SWIFT_OBJC_BRIDGING_HEADER")
@@ -51,9 +54,23 @@ raise "op_engine.h search path missing" unless settings.fetch("HEADER_SEARCH_PAT
 raise "device staticlib search path missing" unless settings.fetch("LIBRARY_SEARCH_PATHS[sdk=iphoneos*]").include?("aarch64-apple-ios/release")
 raise "simulator staticlib search path missing" unless settings.fetch("LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]").include?("aarch64-apple-ios-sim/release")
 frameworks = target.fetch("dependencies").map { |entry| entry["sdk"] }.compact
-%w[Metal.framework QuartzCore.framework UIKit.framework].each do |framework|
+%w[Metal.framework QuartzCore.framework WebKit.framework Security.framework UIKit.framework].each do |framework|
   raise "#{framework} dependency missing" unless frameworks.include?(framework)
 end
+raise "optional auth archive must be empty by default" unless settings.fetch("OP_AUTH_ARCHIVE") == ""
+raise "final link must consume the explicit auth archive setting" unless settings.fetch("OTHER_LDFLAGS").include?("$(OP_AUTH_ARCHIVE)")
+raise "final link must consume the exact engine archive setting" unless settings.fetch("OTHER_LDFLAGS").include?("$(OP_ENGINE_ARCHIVE)")
+configs = target.fetch("settings").fetch("configs")
+debug = configs.fetch("Debug")
+release = configs.fetch("Release")
+raise "Debug simulator must link the static debug engine" unless debug.fetch("OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]").end_with?("aarch64-apple-ios-sim/debug/libop_engine_ffi.a")
+raise "Debug device must link the static debug engine" unless debug.fetch("OP_ENGINE_ARCHIVE[sdk=iphoneos*]").end_with?("aarch64-apple-ios/debug/libop_engine_ffi.a")
+raise "Release simulator must link the static release engine" unless release.fetch("OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]").end_with?("aarch64-apple-ios-sim/release/libop_engine_ffi.a")
+raise "Release device must link the static release engine" unless release.fetch("OP_ENGINE_ARCHIVE[sdk=iphoneos*]").end_with?("aarch64-apple-ios/release/libop_engine_ffi.a")
+scripts = target.fetch("preBuildScripts")
+auth_gate = scripts.find { |script| script["name"] == "Validate optional op-auth archive" }
+raise "mobile auth link gate missing" unless auth_gate
+raise "mobile auth link gate must call the repository verifier" unless auth_gate.fetch("script").include?("check-mobile-auth-link-input.sh")
 RUBY
 
 pbxproj="$player_dir/OpenPencilPlayer.xcodeproj/project.pbxproj"
@@ -61,7 +78,7 @@ if [[ -f "$pbxproj" ]]; then
   ruby - "$pbxproj" <<'RUBY'
 project = File.read(ARGV.fetch(0))
 display_names = project.scan(/^\s*INFOPLIST_KEY_CFBundleDisplayName = (?:"([^"]+)"|([^;]+));$/).map { |quoted, plain| quoted || plain }
-raise "generated project has stale display-name settings" unless display_names == ["openpencil", "openpencil"]
+raise "generated project has stale display-name settings" unless display_names == ["OpenPencil", "OpenPencil"]
 RUBY
 fi
 
@@ -88,6 +105,7 @@ grep -Fq -- "-destination 'platform=iOS Simulator,id=<sim-id>'" "$player_dir/REA
 grep -Fq -- "aarch64-apple-ios-sim/release/libop_engine_ffi.a -lc++" "$player_dir/README.md"
 grep -Fq -- "aarch64-apple-ios/release/libop_engine_ffi.a -lc++" "$player_dir/README.md"
 grep -Fq -- "-framework Metal" "$player_dir/README.md"
+grep -Fq -- "-framework Security" "$player_dir/README.md"
 grep -Fq -- "UIDocumentPickerViewController" "$player_dir/Sources/OpPlayerView.swift"
 grep -Fq -- "BoundedDocumentReader.read" "$player_dir/Sources/OpPlayerView.swift"
 grep -Fq -- "maximumBytes = 32 * 1024 * 1024" "$player_dir/Sources/BoundedDocumentReader.swift"
@@ -129,6 +147,9 @@ raise "same-batch terminal touch must clear suppression" unless route && finish 
 RUBY
 
 ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/TouchCancelRoutingTests.rb" \
+  "$player_dir/Sources/OpPlayerView.swift" \
+  "$repo_dir/packaging/android-player/app/src/main/kotlin/dev/openpencil/player/OpSurfaceView.kt"
+ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/PinchZoomRoutingTests.rb" \
   "$player_dir/Sources/OpPlayerView.swift" \
   "$repo_dir/packaging/android-player/app/src/main/kotlin/dev/openpencil/player/OpSurfaceView.kt"
 ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/BundledPptDemoTests.rb"
@@ -197,5 +218,30 @@ xcrun swiftc \
   "$player_dir/Tests/ViewportInsetsTests.swift" \
   -o "$insets_test"
 "$insets_test"
+
+pinch_test="$reader_test_dir/pinch-zoom-delta-runner"
+xcrun swiftc \
+  -warnings-as-errors \
+  -parse-as-library \
+  "$player_dir/Sources/PinchZoomDelta.swift" \
+  "$player_dir/Tests/PinchZoomDeltaTests.swift" \
+  -o "$pinch_test"
+"$pinch_test"
+
+embedded_login_test="$reader_test_dir/embedded-login-request-runner"
+xcrun swiftc \
+  -warnings-as-errors \
+  -parse-as-library \
+  "$player_dir/Sources/EmbeddedLoginRequest.swift" \
+  "$player_dir/Tests/EmbeddedLoginRequestTests.swift" \
+  -o "$embedded_login_test"
+"$embedded_login_test"
+
+if [[ -f "$player_dir/Tests/EmbeddedLoginLifecycleTests.rb" ]]; then
+  ruby "$player_dir/Tests/EmbeddedLoginLifecycleTests.rb" \
+    "$player_dir/Sources/OpPlayerView.swift" \
+    "$player_dir/Sources/EmbeddedLoginWebViewController.swift" \
+    "$player_dir/Sources/AuthStorage.swift"
+fi
 
 echo "iOS Player sources and ABI imports validate"

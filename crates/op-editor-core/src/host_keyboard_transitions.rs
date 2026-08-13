@@ -745,7 +745,7 @@ pub fn import_modal_blocked_by_overlay(ui: &EditorUiState) -> bool {
     ui.figma_import_in_progress
         || !ui.figma_import_pages.is_empty()
         || ui.export_dialog_open
-        || (ui.account_ui_available && ui.login_modal_open)
+        || ((ui.account_ui_available || ui.touch_chrome()) && ui.login_modal_open)
         || ui.agent_settings_open
         // A stale settings focus still routes keys to the port / API-key
         // field; the chord must not steal them.

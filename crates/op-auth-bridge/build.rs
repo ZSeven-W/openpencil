@@ -7,6 +7,8 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[path = "dev_prebuilt_policy.rs"]
+mod dev_prebuilt_policy;
 #[path = "prebuilt_link_compat.rs"]
 mod prebuilt_link_compat;
 #[path = "prebuilt_provenance.rs"]
@@ -14,7 +16,7 @@ mod prebuilt_provenance;
 
 const DEV_ARCHIVE_ENV: &str = "OPENPENCIL_DEV_OP_AUTH_ARCHIVE";
 const DEV_ABI_VERSION_ENV: &str = "OPENPENCIL_DEV_OP_AUTH_ABI_VERSION";
-const DEV_FEATURE_ENV: &str = "CARGO_FEATURE_DEV_ABI_V2";
+const DEV_FEATURE_ENV: &str = "CARGO_FEATURE_DEV_PREBUILT";
 
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(op_auth_prebuilt)");
@@ -77,7 +79,7 @@ fn main() {
     if abi_version >= 2 {
         assert!(
             development_override || signed_provenance,
-            "production ABI-v2 archives require signed provenance"
+            "production ABI-v2+ archives require signed provenance"
         );
         println!("cargo:rustc-cfg=op_auth_collab_ticket_prebuilt");
     }
@@ -94,7 +96,7 @@ fn main() {
     println!("cargo:rustc-link-lib=static:-bundle=op_auth");
 
     // System libraries the static library's TLS/network stack expects.
-    if target.contains("apple-darwin") {
+    if target.contains("-apple-") {
         println!("cargo:rustc-link-lib=framework=Security");
         println!("cargo:rustc-link-lib=framework=CoreFoundation");
     } else if target.contains("windows-msvc") {
@@ -143,20 +145,18 @@ fn development_prebuilt(artifact: &str) -> Option<(PathBuf, u32)> {
         (_, None, None) => return None,
         (true, Some(archive), Some(abi_version)) => (archive, abi_version),
         (false, _, _) => {
-            panic!("{DEV_ARCHIVE_ENV} requires the op-auth-bridge/dev-abi-v2 feature");
+            panic!("{DEV_ARCHIVE_ENV} requires the op-auth-bridge/dev-prebuilt feature");
         }
         _ => {
             panic!(
-                "op-auth-bridge/dev-abi-v2 requires {DEV_ARCHIVE_ENV} and {DEV_ABI_VERSION_ENV}"
+                "op-auth-bridge/dev-prebuilt requires {DEV_ARCHIVE_ENV} and {DEV_ABI_VERSION_ENV}"
             );
         }
     };
 
-    let debug_build = env::var("PROFILE").is_ok_and(|profile| profile == "debug");
-    assert!(
-        debug_build,
-        "{DEV_ARCHIVE_ENV} is accepted only in Cargo's debug profile"
-    );
+    let profile = env::var("PROFILE").unwrap_or_default();
+    dev_prebuilt_policy::require_debug_profile(&profile)
+        .unwrap_or_else(|error| panic!("{DEV_ARCHIVE_ENV}: {error}"));
 
     let requested_archive = PathBuf::from(archive);
     assert!(
@@ -184,9 +184,14 @@ fn development_prebuilt(artifact: &str) -> Option<(PathBuf, u32)> {
     let abi_version = abi_version
         .into_string()
         .ok()
-        .filter(|value| value == "2")
-        .map(|_| 2)
-        .unwrap_or_else(|| panic!("{DEV_ABI_VERSION_ENV} must be exactly 2"));
+        .and_then(|value| dev_prebuilt_policy::parse_development_abi_version(&value).ok())
+        .unwrap_or_else(|| {
+            panic!(
+                "{DEV_ABI_VERSION_ENV} must be an integer between {} and {}",
+                dev_prebuilt_policy::MIN_DEVELOPMENT_ABI_VERSION,
+                dev_prebuilt_policy::MAX_DEVELOPMENT_ABI_VERSION
+            )
+        });
     let directory = PathBuf::from(
         env::var("OUT_DIR").expect("Cargo provides OUT_DIR to the op-auth build script"),
     );

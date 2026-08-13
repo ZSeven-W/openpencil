@@ -259,13 +259,16 @@ impl WidgetHostNative {
 }
 
 impl WidgetHostNative {
-    /// Mobile layout: the compact app bar — layers / undo / redo /
+    /// Mobile layout: the compact app bar — layers / fit / undo / redo /
     /// overflow. Every action routes through the same shared transitions
     /// the desktop chrome uses.
     pub(in crate::widget_host) fn press_mobile_app_bar_tier(
         &mut self,
         ctx: &PressCtx,
     ) -> Option<bool> {
+        if self.preview_slideshow_active() {
+            return None;
+        }
         let point = Point2D::new(ctx.x, ctx.y);
         let bar = op_editor_ui::widgets::MobileAppBar::for_editor(&self.editor_state);
         let bar_rect = op_editor_ui::widgets::host_canvas_geometry::touch_app_bar_rect(
@@ -283,6 +286,9 @@ impl WidgetHostNative {
                 } else {
                     self.toggle_mobile_sheet(op_editor_core::size_class::MobileSheetKind::Layers);
                 }
+            }
+            op_editor_ui::widgets::MobileAppBarHit::Fit => {
+                self.zoom_to_fit(ctx.viewport_width, ctx.viewport_height);
             }
             op_editor_ui::widgets::MobileAppBarHit::Undo => {
                 self.apply_undo();
@@ -305,6 +311,9 @@ impl WidgetHostNative {
         &mut self,
         ctx: &PressCtx,
     ) -> Option<bool> {
+        if self.preview_slideshow_active() {
+            return None;
+        }
         let point = Point2D::new(ctx.x, ctx.y);
         let dock = op_editor_ui::widgets::MobileDock::for_editor(&self.editor_state);
         let dock_rect = op_editor_ui::widgets::host_canvas_geometry::touch_dock_rect(
@@ -415,7 +424,7 @@ impl WidgetHostNative {
         &mut self,
         ctx: &PressCtx,
     ) -> Option<bool> {
-        if !self.editor_state.editor_ui.touch_chrome() {
+        if !self.editor_state.editor_ui.touch_chrome() || self.preview_slideshow_active() {
             return None;
         }
         if self.editor_state.editor_ui.variables_panel_open {
@@ -495,9 +504,54 @@ impl WidgetHostNative {
                 return Some(true);
             }
             self.cancel_native_touch_gestures();
+            // Every destination below hides the More surface. Commit and
+            // release all text owners first so an expanded Property field or
+            // stale collaboration caret cannot keep receiving the IME behind
+            // the newly visible overlay.
+            self.blur_text_inputs_on_blank_press();
+            self.release_property_keyboard_owner();
             self.dismiss_mobile_surface();
             match entry {
                 op_editor_ui::widgets::MobileMoreEntry::Ai => unreachable!("handled above"),
+                op_editor_ui::widgets::MobileMoreEntry::SignIn => {
+                    let backend_available = {
+                        let ui = &mut self.editor_state.editor_ui;
+                        ui.account_menu_open = false;
+                        ui.collab.panel.open = false;
+                        ui.collab.panel.join_address_focused = false;
+                        ui.login_modal_open = true;
+                        ui.login_modal_hover = None;
+                        // Mobile targets without the proprietary auth bridge
+                        // keep this entry visible, but the modal must say so
+                        // honestly.
+                        ui.login_modal_stub_hint_shown = !ui.account_ui_available;
+                        ui.account_ui_available
+                    };
+                    // A configured mobile backend starts immediately. The
+                    // modal remains behind the platform WebView so terminal
+                    // denial/expiry can still surface an actionable error.
+                    if backend_available {
+                        self.begin_browser_login();
+                    }
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Account => {
+                    // Touch chrome uses a full, reachable Account settings
+                    // surface rather than a dropdown anchored to an unpainted
+                    // desktop avatar button.
+                    let ui = &mut self.editor_state.editor_ui;
+                    ui.account_menu_open = false;
+                    ui.agent_settings_open = true;
+                    ui.agent_settings.tab =
+                        op_editor_core::agent_settings::AgentSettingsTab::Account;
+                    self.editor_state.chat.blur_input(self.now_ms);
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Collaboration => {
+                    let _ = op_editor_ui::widgets::press_flow::apply_shared_top_bar_hit(
+                        &mut self.editor_state,
+                        op_editor_ui::widgets::TopBarHit::Collaboration,
+                        self.now_ms,
+                    );
+                }
                 op_editor_ui::widgets::MobileMoreEntry::OpenFile => {
                     if self.collab_allows_user_action(
                         op_editor_core::CollabGateAction::ReplaceDocument,

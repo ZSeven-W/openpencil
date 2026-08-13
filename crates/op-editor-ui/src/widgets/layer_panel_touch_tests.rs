@@ -2,7 +2,8 @@
 
 use super::layer_panel::{DropPosition, LayerPanel, LayerPanelHit};
 use super::layer_panel_metrics::{
-    delete_page_target, glyph_rect_in, layer_action_targets, LayerPanelMetrics,
+    collapse_target, delete_page_target, glyph_rect_in, layer_action_targets, layer_drag_target,
+    LayerPanelMetrics,
 };
 use super::scroll_flow::{reveal_layer_panel_selection, scroll_layer_panel};
 use super::test_capture_backend::CaptureBackend;
@@ -121,6 +122,101 @@ fn touch_page_delete_and_layer_actions_are_visible_and_hit_without_hover() {
                 && (*size - 18.0).abs() < 0.01
         }));
     }
+}
+
+#[test]
+fn touch_reorder_grip_is_44_points_and_disjoint_from_row_controls() {
+    let state = touch_state();
+    let panel = LayerPanel::from_editor(&state);
+    let rect = panel_rect();
+    let regions = panel.regions(rect);
+    let row = Rect {
+        origin: Point2D::new(rect.origin.x + 6.0, regions.layers_rows_top + 2.0),
+        size: Point2D::new(rect.size.x - 12.0, panel.metrics.layer_row_height - 4.0),
+    };
+    let grip = layer_drag_target(row, panel.metrics).expect("touch grip");
+    let (eye, lock) = layer_action_targets(row, panel.metrics);
+    assert_eq!(grip.size, Point2D::new(44.0, 44.0));
+    assert_eq!(grip.origin.x + grip.size.x, eye.origin.x);
+    assert_eq!(eye.origin.x + eye.size.x, lock.origin.x);
+    assert_eq!(
+        panel.drag_source_at(rect, center(grip)),
+        Some(NodeId::new("node-0-0"))
+    );
+    assert_eq!(panel.drag_source_at(rect, center(eye)), None);
+    assert_eq!(panel.drag_source_at(rect, center(lock)), None);
+
+    let item = &panel.items[0];
+    let indent = panel.metrics.row_pad_x + item.depth as f32 * 12.0;
+    let chevron = collapse_target(row, indent, 0.0, panel.metrics);
+    assert_eq!(panel.drag_source_at(rect, center(chevron)), None);
+}
+
+#[test]
+fn touch_reorder_grip_paints_six_dots_but_desktop_has_no_grip() {
+    let state = touch_state();
+    let panel = LayerPanel::from_editor(&state);
+    let rect = panel_rect();
+    let regions = panel.regions(rect);
+    let row = Rect {
+        origin: Point2D::new(rect.origin.x + 6.0, regions.layers_rows_top + 2.0),
+        size: Point2D::new(rect.size.x - 12.0, panel.metrics.layer_row_height - 4.0),
+    };
+    let grip = layer_drag_target(row, panel.metrics).expect("touch grip");
+    let mut backend = CaptureBackend::default();
+    panel.paint(
+        &mut PaintCx {
+            backend: &mut backend,
+        },
+        rect,
+    );
+    let dots = backend
+        .round_fills
+        .iter()
+        .filter(|(dot, radius, _)| {
+            grip.contains(center(*dot)) && dot.size == Point2D::new(3.0, 3.0) && *radius == 1.5
+        })
+        .count();
+    assert_eq!(dots, 6);
+
+    let mut desktop = touch_state();
+    desktop.editor_ui.touch = false;
+    desktop.editor_ui.sidebar_open = true;
+    let desktop_panel = LayerPanel::from_editor(&desktop);
+    assert_eq!(desktop_panel.drag_source_at(rect, center(grip)), None);
+}
+
+#[test]
+fn touch_rename_row_has_neither_reorder_grip_nor_trailing_backing() {
+    let mut state = touch_state();
+    assert!(state.start_rename_layer(NodeId::new("node-0-0")));
+    let panel = LayerPanel::from_editor(&state);
+    let rect = panel_rect();
+    let regions = panel.regions(rect);
+    let row = Rect {
+        origin: Point2D::new(rect.origin.x + 6.0, regions.layers_rows_top + 2.0),
+        size: Point2D::new(rect.size.x - 12.0, panel.metrics.layer_row_height - 4.0),
+    };
+    let grip = layer_drag_target(row, panel.metrics).expect("touch grip geometry");
+    assert_eq!(panel.drag_source_at(rect, center(grip)), None);
+
+    let mut backend = CaptureBackend::default();
+    panel.paint(
+        &mut PaintCx {
+            backend: &mut backend,
+        },
+        rect,
+    );
+    assert_eq!(
+        backend
+            .round_fills
+            .iter()
+            .filter(|(dot, radius, _)| {
+                grip.contains(center(*dot)) && dot.size == Point2D::new(3.0, 3.0) && *radius == 1.5
+            })
+            .count(),
+        0
+    );
 }
 
 #[test]
