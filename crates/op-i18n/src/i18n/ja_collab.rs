@@ -151,6 +151,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "テンプレートを保存できませんでした",
         "assetCenter.template.mine" => "マイテンプレート",
         "assetCenter.template.builtIn" => "内蔵テンプレート",
+        "ai.designProgress.detail.failureReason" => "失敗理由：{{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "エージェントがエラーの説明を返さずに失敗しました。",
+        "ai.designProgress.detail.noResult" => "このセクションの結果を返す前にエージェントが停止しました。",
+        "ai.designProgress.detail.connectionClosed" => "このセクションの結果が返る前にエージェント接続が切れました。",
+        "ai.designProgress.detail.stoppedByUser" => "ユーザーが停止したため、このセクションは完了していません。",
         _ => return None,
     })
 }

@@ -24,6 +24,7 @@ fn remote_doc_sink_updates_mirror_on_ack() {
 
     let ui_thread = thread::spawn(move || {
         let req = rx.recv().expect("request");
+        assert_eq!(req.target_page_id.as_deref(), Some("0"));
         let mut new_state = initial.clone();
         new_state.viewport.zoom = 2.0;
         req.ack
@@ -96,6 +97,7 @@ fn design_session_drains_progress_and_command_requests() {
     cmd_tx
         .send(DesignCmdReq {
             op: DesignCmdOp::Apply(EditorCommand::ClearSelection),
+            target_page_id: None,
             ack: ack_tx,
         })
         .expect("cmd");

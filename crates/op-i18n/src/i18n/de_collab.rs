@@ -135,6 +135,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Vorlage konnte nicht gespeichert werden",
         "assetCenter.template.mine" => "Meine Vorlagen",
         "assetCenter.template.builtIn" => "Eingebaute Vorlagen",
+        "ai.designProgress.detail.failureReason" => "Grund: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "Der Agent ist fehlgeschlagen, ohne eine Fehlerbeschreibung zurückzugeben.",
+        "ai.designProgress.detail.noResult" => "Der Agent wurde beendet, bevor für diesen Abschnitt ein Ergebnis vorlag.",
+        "ai.designProgress.detail.connectionClosed" => "Die Agent-Verbindung wurde geschlossen, bevor dieser Abschnitt ein Ergebnis lieferte.",
+        "ai.designProgress.detail.stoppedByUser" => "Vom Benutzer beendet, bevor dieser Abschnitt abgeschlossen war.",
         _ => return None,
     })
 }

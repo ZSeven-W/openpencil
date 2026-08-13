@@ -135,6 +135,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Template tidak dapat disimpan",
         "assetCenter.template.mine" => "Template Saya",
         "assetCenter.template.builtIn" => "Template Bawaan",
+        "ai.designProgress.detail.failureReason" => "Alasan: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "Agen gagal tanpa mengembalikan keterangan kesalahan.",
+        "ai.designProgress.detail.noResult" => "Agen berhenti sebelum mengembalikan hasil untuk bagian ini.",
+        "ai.designProgress.detail.connectionClosed" => "Koneksi agen ditutup sebelum bagian ini mengembalikan hasil.",
+        "ai.designProgress.detail.stoppedByUser" => "Dihentikan oleh pengguna sebelum bagian ini selesai.",
         _ => return None,
     })
 }

@@ -151,6 +151,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "템플릿을 저장할 수 없음",
         "assetCenter.template.mine" => "내 템플릿",
         "assetCenter.template.builtIn" => "기본 템플릿",
+        "ai.designProgress.detail.failureReason" => "실패 원인: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "에이전트가 오류 설명을 반환하지 않고 실패했습니다.",
+        "ai.designProgress.detail.noResult" => "이 섹션의 결과를 반환하기 전에 에이전트가 중지되었습니다.",
+        "ai.designProgress.detail.connectionClosed" => "이 섹션의 결과가 반환되기 전에 에이전트 연결이 끊겼습니다.",
+        "ai.designProgress.detail.stoppedByUser" => "사용자가 중지하여 이 섹션이 완료되지 않았습니다.",
         _ => return None,
     })
 }

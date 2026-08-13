@@ -83,9 +83,9 @@ fn classification_tag_parsing_matches_ts() {
     // Bare DESIGN counts as new (TS `upper.includes('DESIGN')`).
     assert_eq!(parse_classified("This is a DESIGN task"), DesignIntent::New);
     assert_eq!(parse_classified("CHAT"), DesignIntent::Chat);
-    // Unknown / empty → new.
-    assert_eq!(parse_classified("gibberish"), DesignIntent::New);
-    assert_eq!(parse_classified(""), DesignIntent::New);
+    // Unknown / empty → chat: classifier failures must not mutate the canvas.
+    assert_eq!(parse_classified("gibberish"), DesignIntent::Chat);
+    assert_eq!(parse_classified(""), DesignIntent::Chat);
 }
 
 #[test]
@@ -289,21 +289,29 @@ fn llm_classifier_parses_provider_reply() {
 }
 
 #[test]
-fn llm_classifier_falls_back_to_new_on_error() {
-    // TS: classify failure → { intent: 'new' }.
+fn llm_classifier_falls_back_to_chat_on_error() {
     let provider = Scripted::error("boom");
     assert_eq!(
         classify_intent_llm(&provider, "anything", None),
-        DesignIntent::New
+        DesignIntent::Chat
     );
 }
 
 #[test]
-fn llm_classifier_falls_back_to_new_on_timeout() {
+fn llm_classifier_falls_back_to_chat_on_timeout() {
     let provider = Scripted::slow("CHAT", Duration::from_millis(300));
     let got =
         classify_intent_llm_with_timeout(&provider, "anything", None, Duration::from_millis(30));
-    assert_eq!(got, DesignIntent::New, "timeout mirrors the TS abort → new");
+    assert_eq!(got, DesignIntent::Chat);
+}
+
+#[test]
+fn punctuation_only_stays_in_chat() {
+    let provider = Scripted::text("DESIGN_NEW");
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, &EditorState::new(), "？？？？", None,),
+        DesignIntent::Chat
+    );
 }
 
 // ---------------------------------------------------------------------------

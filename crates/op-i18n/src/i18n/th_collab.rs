@@ -137,6 +137,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "ไม่สามารถบันทึกเทมเพลตได้",
         "assetCenter.template.mine" => "เทมเพลตของฉัน",
         "assetCenter.template.builtIn" => "เทมเพลตในตัว",
+        "ai.designProgress.detail.failureReason" => "สาเหตุ: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "เอเจนต์ล้มเหลวโดยไม่ส่งคำอธิบายข้อผิดพลาดกลับมา",
+        "ai.designProgress.detail.noResult" => "เอเจนต์หยุดก่อนส่งผลลัพธ์ของส่วนนี้กลับมา",
+        "ai.designProgress.detail.connectionClosed" => "การเชื่อมต่อเอเจนต์ปิดก่อนส่วนนี้ส่งผลลัพธ์กลับมา",
+        "ai.designProgress.detail.stoppedByUser" => "ผู้ใช้หยุดก่อนที่ส่วนนี้จะเสร็จสมบูรณ์",
         _ => return None,
     })
 }

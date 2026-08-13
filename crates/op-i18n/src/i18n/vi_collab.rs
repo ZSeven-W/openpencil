@@ -147,6 +147,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Không thể lưu mẫu",
         "assetCenter.template.mine" => "Mẫu của tôi",
         "assetCenter.template.builtIn" => "Mẫu tích hợp",
+        "ai.designProgress.detail.failureReason" => "Lý do: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "Agent thất bại mà không trả về mô tả lỗi.",
+        "ai.designProgress.detail.noResult" => "Agent đã dừng trước khi trả về kết quả cho phần này.",
+        "ai.designProgress.detail.connectionClosed" => "Kết nối agent đã đóng trước khi phần này trả về kết quả.",
+        "ai.designProgress.detail.stoppedByUser" => "Người dùng đã dừng trước khi phần này hoàn tất.",
         _ => return None,
     })
 }

@@ -135,6 +135,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "No se pudo guardar la plantilla",
         "assetCenter.template.mine" => "Mis plantillas",
         "assetCenter.template.builtIn" => "Plantillas integradas",
+        "ai.designProgress.detail.failureReason" => "Motivo: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "El agente falló sin devolver una descripción del error.",
+        "ai.designProgress.detail.noResult" => "El agente se detuvo antes de devolver un resultado para esta sección.",
+        "ai.designProgress.detail.connectionClosed" => "La conexión del agente se cerró antes de obtener un resultado para esta sección.",
+        "ai.designProgress.detail.stoppedByUser" => "El usuario detuvo la ejecución antes de completar esta sección.",
         _ => return None,
     })
 }
