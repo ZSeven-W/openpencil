@@ -272,7 +272,11 @@ fn handle_init<C: RepaintContext + 'static>(
     token: String,
     mcp_url: Option<String>,
 ) {
+    let token_changed = live_sync::bridge_token().as_deref() != Some(token.as_str());
     live_sync::set_bridge_token(token);
+    if token_changed {
+        crate::web_auth_sync::refresh_status(inner);
+    }
     if let Some(url) = mcp_url {
         // Surface the host's real MCP endpoint on the settings card (the
         // daemon-internal port would point clients at a dead endpoint).

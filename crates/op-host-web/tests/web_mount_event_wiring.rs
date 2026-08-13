@@ -204,6 +204,11 @@ fn bridge_handle_init_recovers_ready_without_emitting_it_directly() {
         handle_init.contains("LATE_INIT_HOOK") && handle_init.contains(".take()"),
         "handle_init must take() the one-shot late-init hook so a post-timeout init still reaches ready"
     );
+    assert!(
+        handle_init.contains("token_changed")
+            && handle_init.contains("web_auth_sync::refresh_status(inner)"),
+        "a newly installed managed token must immediately refresh auth status so the account button does not wait for the 30 s health tick"
+    );
 }
 
 #[test]
