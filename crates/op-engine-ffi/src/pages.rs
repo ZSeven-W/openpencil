@@ -77,9 +77,12 @@ impl Session {
                     "page index {index} out of range (0..{count})"
                 )));
             }
-        } else {
-            self.state.ui.active_page_index = index as usize;
         }
+        // The session state always advances too: `rebuild_scene` below
+        // reads `state.ui.active_page_index`, and in builds without the
+        // editor feature the cfg-gated branch above is compiled out — which
+        // previously left viewer-mode page switches a silent no-op.
+        self.state.ui.active_page_index = index as usize;
         self.selected = None;
         self.rebuild_scene();
         // A page switch always re-fits (the user expects the new page on
