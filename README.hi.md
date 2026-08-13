@@ -391,6 +391,7 @@ OpenPencil, **[ZSeven-W](https://github.com/ZSeven-W)** के शुद्ध-R
 
 | प्रोजेक्ट | यह क्या है |
 | --------- | ---------- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil के लिए DeepSeek Harness प्लगइन — बातचीत के भीतर ही सटीक मल्टी-फ़्रेम `.op` प्रीव्यू, एक इंटरैक्टिव कैनवास और एजेंट-नेटिव डिज़ाइन टूल के साथ प्रबंधित एडिटर। |
 | **[Zode](https://github.com/ZSeven-W/zode)** | आपके टर्मिनल के लिए ओपन-सोर्स, AI-नेटिव कोडिंग असिस्टेंट — एक तेज़ Rust TUI (`ratatui`) जो आपका कोड पढ़ता है, कमांड चलाता है, फ़ाइलें खोजता है और git प्रबंधित करता है। MCP के ज़रिए OpenPencil को चलाता है। |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM एजेंट शिप करने के लिए एक शुद्ध-Rust async रनटाइम — मल्टी-प्रोवाइडर, एंड-टू-एंड टूल-सक्षम, संरचित अनुमतियाँ, वास्तविक MCP, शून्य `unsafe`। OpenPencil के बिल्ट-इन एजेंट रनटाइम (`vendor/agent`) और Zode को शक्ति देता है। |
 | **[jian](https://github.com/ZSeven-W/jian)** | शुद्ध-Rust, GPU-Skia UI फ़्रेमवर्क — एक ही स्टैक में विजेट्स, लेआउट, इवेंट और हॉट रीलोड। एक घोषणात्मक `.op` दस्तावेज़ को बिना JS रनटाइम, बिना DOM, बिना Electron के एक नेटिव, AI-नियंत्रणीय ऐप में बदल देता है। OpenPencil का UI फ़्रेमवर्क (`vendor/jian`)। |

@@ -391,6 +391,7 @@ O OpenPencil faz parte de uma família de ferramentas puro-Rust, nativas com IA 
 
 | Projeto | O que é |
 | ------- | ------- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | Plugin DeepSeek Harness para OpenPencil — pré-visualizações `.op` de múltiplos quadros exatas, uma tela interativa e um editor gerenciado com ferramentas de design nativas para agentes, dentro de uma conversa. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | Assistente de código open-source e nativo com IA para o seu terminal — uma TUI Rust rápida (`ratatui`) que lê seu código, executa comandos, busca arquivos e gerencia o git. Controla o OpenPencil via MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Um runtime assíncrono puro-Rust para entregar agentes LLM — multi-provedor, com suporte a ferramentas de ponta a ponta, permissões estruturadas, MCP real, zero `unsafe`. Alimenta o runtime de agente integrado do OpenPencil (`vendor/agent`) e o Zode. |
 | **[jian](https://github.com/ZSeven-W/jian)** | Framework de UI puro-Rust, GPU-Skia — widgets, layout, eventos e hot reload em uma única stack. Transforma um documento `.op` declarativo em um app nativo e controlável por IA, sem runtime JS, sem DOM, sem Electron. O framework de UI do OpenPencil (`vendor/jian`). |

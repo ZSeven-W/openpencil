@@ -391,6 +391,7 @@ OpenPencil, **[ZSeven-W](https://github.com/ZSeven-W)** tarafından geliştirile
 
 | Proje | Nedir |
 | ----- | ----- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil için DeepSeek Harness eklentisi — bir sohbetin içinde tam çoklu çerçeve `.op` önizlemeleri, etkileşimli bir tuval ve ajan-yerel tasarım araçlarına sahip yönetilen bir düzenleyici. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | Terminaliniz için açık kaynaklı, AI-yerel kodlama asistanı — kodunuzu okuyan, komutları çalıştıran, dosyaları arayan ve git'i yöneten hızlı bir Rust TUI'si (`ratatui`). OpenPencil'ı MCP üzerinden sürer. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM ajanlarını sevk etmek için saf Rust asenkron çalışma ortamı — çoklu sağlayıcı, uçtan uca araç yetenekli, yapılandırılmış izinler, gerçek MCP ve sıfır `unsafe`. OpenPencil'ın yerleşik ajan çalışma ortamını (`vendor/agent`) ve Zode'u güçlendirir. |
 | **[jian](https://github.com/ZSeven-W/jian)** | Saf Rust, GPU-Skia UI çatısı — tek bir yığında widget'lar, düzen, olaylar ve hot reload. Bildirimsel bir `.op` belgesini JS çalışma ortamı, DOM ve Electron olmadan yerel, AI ile kontrol edilebilir bir uygulamaya dönüştürür. OpenPencil'ın UI çatısı (`vendor/jian`). |

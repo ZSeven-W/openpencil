@@ -391,6 +391,7 @@ OpenPencil adalah bagian dari keluarga alat murni-Rust, berbasis AI dari **[ZSev
 
 | Proyek | Apa itu |
 | ------ | ------- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | Plugin DeepSeek Harness untuk OpenPencil — pratinjau `.op` multi-bingkai yang presisi, kanvas interaktif, dan editor terkelola dengan alat desain asli untuk agen, langsung di dalam percakapan. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | Asisten koding open-source berbasis AI untuk terminal Anda — TUI Rust yang cepat (`ratatui`) yang membaca kode Anda, menjalankan perintah, mencari file, dan mengelola git. Menggerakkan OpenPencil melalui MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Runtime async murni-Rust untuk merilis agen LLM — multi-penyedia, mampu memakai alat secara ujung-ke-ujung, izin terstruktur, MCP asli, tanpa `unsafe`. Menggerakkan runtime agen bawaan OpenPencil (`vendor/agent`) dan Zode. |
 | **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia murni-Rust — widget, layout, event, dan hot reload dalam satu stack. Mengubah dokumen `.op` deklaratif menjadi aplikasi native yang dapat dikendalikan AI tanpa runtime JS, tanpa DOM, tanpa Electron. Framework UI OpenPencil (`vendor/jian`). |
