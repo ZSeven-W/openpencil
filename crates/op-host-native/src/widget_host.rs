@@ -327,13 +327,11 @@ pub struct WidgetHostNative {
     /// Active canvas pan-drag state — left-button press → motion
     /// → release.
     pub(in crate::widget_host) drag: Option<DragState>,
-    /// Pending one-finger gesture inside the touch Agent Settings body.
-    /// Body actions commit on release; motion past the touch slop promotes
-    /// the press to scrolling without leaking through to the canvas.
+    /// Pending one-finger gestures: touch Agent Settings body (release
+    /// commits, slop promotes to scroll) and touch Property / Layers / Slides
+    /// surfaces (stationary release replays the press, slop scrolls).
     pub(in crate::widget_host) agent_settings_touch_gesture:
         Option<agent_settings_touch::AgentSettingsTouchGesture>,
-    /// Pending one-finger gesture inside a touch Property / Layers / Slides surface.
-    /// A stationary release replays the press; crossing touch slop scrolls.
     pub(in crate::widget_host) touch_panel_gesture: Option<touch_panel_gesture::TouchPanelGesture>,
     /// True while Space is held — transient pan mode (TS parity):
     /// canvas presses pan regardless of the active tool.

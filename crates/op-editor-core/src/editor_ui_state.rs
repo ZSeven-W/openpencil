@@ -33,8 +33,7 @@
 //! - [`groups`] — grouped panel and preview sub-states
 //! - `defaults` — `impl Default for EditorUiState`
 //! - `methods` — `impl EditorUiState`
-//! - [`slides_panel_state`] — slide-panel navigation and drag state
-//! - `tests` — state-level regression tests
+//! - [`slides_panel_state`] / `tests` — slide-panel navigation + regression tests
 
 pub mod chrome;
 mod defaults;
@@ -101,44 +100,37 @@ pub struct EditorUiState {
     pub sidebar_open: bool,
     pub layer_panel_width: f32,
     pub property_panel_width: f32,
-    /// Live responsive layout class (see [`crate::size_class`]).
+    /// Responsive layout: live size class, touch density (≥44pt targets,
+    /// bottom dock, sheets), and the single open mobile sheet.
     pub size_class: crate::size_class::EditorSizeClass,
-    /// Touch input density (≥44pt targets, bottom dock, sheets).
     pub touch: bool,
-    /// The single open mobile sheet; opening one closes the others.
     pub mobile_sheet: Option<crate::size_class::MobileSheetKind>,
 
     // --- Theme + locale --------------------------------------------
-    /// User's OpenPencil theme preference — TopBar Sun icon flips it and
-    /// hosts may persist it.
+    /// User's OpenPencil theme preference — TopBar Sun icon flips it.
     pub theme_mode: ThemeMode,
-    /// Page-lifetime color scheme imposed by an embedding host. This affects
-    /// paint only: it is deliberately separate from `theme_mode`, so VS Code
-    /// or DSH theme changes never become the user's OpenPencil preference.
+    /// Page-lifetime color scheme imposed by an embedding host. Paint-only;
+    /// separate from `theme_mode`, so host theme changes never persist.
     pub host_theme_override: Option<ThemeMode>,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
-    /// Page-lifetime locale imposed by an embedding host. Like the host theme,
-    /// this affects presentation only and is never persisted as the user's
-    /// OpenPencil locale preference.
+    /// Page-lifetime locale imposed by an embedding host. Presentation-only
+    /// like the host theme; never persisted as the user's locale.
     pub host_locale_override: Option<Locale>,
     /// TopBar Globe dropdown state.
     pub locale_picker: jian_widgets::components::select::SelectState,
     /// User's last-set ⚡Nx parallel-agents team size — an app-level
     /// preference (persisted via `settings_io`), NOT the per-tab
-    /// `ChatState::agent_team_size` it seeds. `ChatSessions::new_tab`
-    /// carries the ACTIVE tab's current value forward for continuity
-    /// within a session; this field is what re-seeds tab 0's value across
-    /// a full app restart, where no "active tab" from a prior session
-    /// exists to carry forward from. Old `settings.json` files predating
-    /// this field default to `1` (serde default), matching
-    /// `ChatState::default().agent_team_size`.
+    /// `ChatState::agent_team_size` it seeds; `ChatSessions::new_tab` carries
+    /// the ACTIVE tab's value forward within a session. This field re-seeds
+    /// tab 0 across a full app restart; old `settings.json` files default
+    /// to `1` (serde default), matching `ChatState::default().agent_team_size`.
     pub preferred_agent_team_size: u32,
 
     // --- Collaboration ---------------------------------------------
     /// Sanitized collaboration display state shared by native and web
-    /// widgets. Transport handles, tickets, stable subjects, and device ids
-    /// deliberately never enter this paint-state projection.
+    /// widgets. Transport handles, tickets, subjects, and device ids never
+    /// enter this paint-state projection.
     pub collab: crate::collab_ui_state::CollabUiState,
 
     // --- File menu --------------------------------------------------
