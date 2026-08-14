@@ -217,6 +217,10 @@ impl WidgetHostNative {
         let total_dx = ((x - drag.press_screen_x) / zoom) as f64;
         let total_dy = ((y - drag.press_screen_y) / zoom) as f64;
         if !drag.moved {
+            // A previous drop/reflow transition paints interpolated geometry.
+            // Once direct manipulation starts, the cursor owns the dragged
+            // node's position exactly.
+            self.layout_transition = None;
             let mutation = if self.alt_held {
                 op_editor_core::CollabDocumentMutation::Unsupported(
                     op_editor_core::CollabUnsupportedFeature::Duplicate,
@@ -284,6 +288,7 @@ impl WidgetHostNative {
                 .collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeMove)
             {
                 self.node_drag = None;
+                self.canvas_drop_index = None;
                 self.editor_state.editor_ui.active_guides.clear();
                 self.editor_state.editor_ui.canvas_drop_indicator = None;
                 return Some(true);

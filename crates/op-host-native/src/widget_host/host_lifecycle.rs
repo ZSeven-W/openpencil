@@ -55,6 +55,7 @@ impl WidgetHostNative {
             panel_resize: None,
             variables_resize: None,
             node_drag: None,
+            canvas_drop_index: None,
             option_drag_source_ids: Vec::new(),
             path_anchor_drag: None,
             arc_handle_drag: None,
@@ -235,6 +236,12 @@ impl WidgetHostNative {
         if let Some(preview) = self.preview.as_mut() {
             preview.set_now_ms(now_ms);
         }
+    }
+}
+
+impl Default for WidgetHostNative {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

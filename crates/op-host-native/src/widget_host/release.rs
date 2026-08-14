@@ -71,21 +71,24 @@ impl WidgetHostNative {
             return true;
         }
         if self.rotate_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.handle_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.create_drag.take().is_some() {
             // Switch back to Select for immediate shape refinement.
             self.editor_state.tool = op_editor_core::Tool::Select;
-            self.mark_dirty();
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.finish_image_crop_drag() {
             return true;
         }
         if let Some(drag) = self.node_drag.take() {
+            self.canvas_drop_index = None;
             // Drag ended — drop the transient smart-guide lines, then
             // run the drop policy (auto-layout reorder / reparent).
             self.refresh_layout_scene();
@@ -238,20 +241,23 @@ impl WidgetHostNative {
             return true;
         }
         if self.rotate_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.handle_drag.take().is_some() {
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.create_drag.take().is_some() {
             self.editor_state.tool = op_editor_core::Tool::Select;
-            self.mark_dirty();
+            self.invalidate_live_scene_for_rebuild();
             return true;
         }
         if self.finish_image_crop_drag() {
             return true;
         }
         if let Some(drag) = self.node_drag.take() {
+            self.canvas_drop_index = None;
             // Drag ended — drop the transient smart-guide lines, then
             // run the drop policy (auto-layout reorder / reparent).
             self.refresh_layout_scene();

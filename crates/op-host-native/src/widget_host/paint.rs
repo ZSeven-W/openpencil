@@ -216,7 +216,7 @@ impl WidgetHostNative {
                     let canvas_scene = transition_scene.as_ref().unwrap_or(&self.layout_scene);
                     let mut canvas = CanvasViewport::from_editor(&self.editor_state, canvas_scene);
                     canvas.now_ms = self.now_ms;
-                    canvas.fast_interaction = self.fast_interaction_active();
+                    canvas.fast_interaction = self.canvas_fast_interaction_active();
                     canvas.set_node_drag_active(
                         self.node_drag.as_ref().is_some_and(|drag| drag.moved),
                     );

@@ -248,6 +248,46 @@ fn overlapping_rect_stack(count: usize) -> String {
     format!(r#"{{"version":"1.0.0","children":[{children}]}}"#)
 }
 
+fn overlapping_container_stack(count: usize) -> String {
+    let containers = (0..count)
+        .map(|i| {
+            format!(
+                r#"{{"type":"frame","id":"frame-{i}","name":"Frame {i}","x":650,"y":250,"width":240,"height":240,"children":[]}}"#
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        r#"{{"version":"1.0.0","children":[{{"type":"rectangle","id":"dragged","name":"Dragged","x":700,"y":300,"width":40,"height":40}},{containers}]}}"#
+    )
+}
+
+#[test]
+fn drop_preview_reuses_container_index_across_pointer_frames() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, &overlapping_container_stack(200));
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("dragged"));
+    host.node_drag = Some(NodeDragState {
+        last_screen_x: 0.0,
+        last_screen_y: 0.0,
+        press_screen_x: 0.0,
+        press_screen_y: 0.0,
+        moved: true,
+        total_dx: 0.0,
+        total_dy: 0.0,
+        overlay_bounds: None,
+    });
+    host.refresh_layout_scene();
+    let drag = host.node_drag.expect("active drag");
+    super::canvas_select_drag::reset_drop_index_build_count();
+
+    host.apply_live_node_drag_preview(&drag);
+    host.apply_live_node_drag_preview(&drag);
+
+    assert_eq!(super::canvas_select_drag::drop_index_build_count(), 1);
+}
+
 #[test]
 fn canvas_selection_scrolls_layer_panel_to_hidden_selected_row() {
     let mut host = WidgetHostNative::new();

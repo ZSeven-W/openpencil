@@ -18,7 +18,7 @@
 use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::host_frame_bookkeeping as bookkeeping;
-use op_editor_ui::widgets::SelectionHandle;
+use op_editor_ui::widgets::{drag_flow::CanvasDropIndex, SelectionHandle};
 use op_editor_ui::{Rect, Theme};
 
 mod a11y;
@@ -47,7 +47,10 @@ mod auth_flow;
 mod blur_inputs;
 #[cfg(test)]
 mod blur_inputs_tests;
+#[cfg(test)]
+mod canvas_drag_transition_tests;
 mod canvas_pan_cache;
+mod canvas_scene_patch;
 mod canvas_select_drag;
 #[cfg(test)]
 mod canvas_select_drag_tests;
@@ -400,6 +403,8 @@ pub struct WidgetHostNative {
     /// cursor anchor so each `apply_cursor_move` translates the
     /// selected node by the delta.
     pub(in crate::widget_host) node_drag: Option<NodeDragState>,
+    /// Gesture-scoped drop-target index reused across pointer frames.
+    pub(in crate::widget_host) canvas_drop_index: Option<CanvasDropIndex>,
     /// Original selected ids for an active Option-drag clone move.
     /// Drop hit-testing skips these so a fresh clone does not
     /// immediately reparent back into the source it overlaps.
@@ -792,9 +797,3 @@ impl WidgetHostNative {
 /// interactive-degrade mode. Long enough to cover trackpad event gaps,
 /// short enough that full quality returns imperceptibly after release.
 const INTERACTION_HOT_MS: u64 = 150;
-
-impl Default for WidgetHostNative {
-    fn default() -> Self {
-        Self::new()
-    }
-}
