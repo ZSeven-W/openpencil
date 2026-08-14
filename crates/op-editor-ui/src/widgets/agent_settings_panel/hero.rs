@@ -49,13 +49,14 @@ pub(super) fn paint_agents_hero(
     theme: &Theme,
     ui: &EditorUiState,
     content: Rect,
+    show_provider_roll: bool,
 ) {
-    let roll = provider_roll(ui);
+    let roll = show_provider_roll.then(|| provider_roll(ui));
     crate::widgets::agent_settings_rows::paint_tab_intro(
         cx,
         theme,
         content,
         t_settings(ui, "settings.agents.heroTitle"),
-        Some(&roll),
+        roll.as_deref(),
     );
 }

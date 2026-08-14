@@ -623,6 +623,10 @@ fn tabs_of(width: f32, active: LeftPanelTab, labels: (&str, &str)) -> SlidesPane
     SlidesPanelTabs::new(rail(width), active, labels.0, labels.1)
 }
 
+fn touch_tabs_of(width: f32, active: LeftPanelTab, labels: (&str, &str)) -> SlidesPanelTabs {
+    SlidesPanelTabs::new_touch(rail(width), active, labels.0, labels.1)
+}
+
 #[test]
 fn a_rail_with_room_for_its_labels_keeps_them() {
     let tabs = tabs_of(240.0, LeftPanelTab::Slides, EN);
@@ -679,6 +683,28 @@ fn a_rail_too_narrow_for_its_labels_falls_back_to_icons() {
         tabs.hit(Point2D::new(tabs.slides.origin.x + 2.0, mid_y)),
         Some(SlidesPanelTarget::SlidesTab)
     );
+}
+
+#[test]
+fn touch_icon_tabs_keep_full_44_point_targets() {
+    for active in [LeftPanelTab::Layers, LeftPanelTab::Slides] {
+        let tabs = touch_tabs_of(180.0, active, VI);
+        assert!(tabs.compact, "Vietnamese labels use icon mode at 180pt");
+        for rect in [tabs.layers, tabs.slides] {
+            assert!(
+                rect.size.x >= 44.0 && rect.size.y >= 44.0,
+                "every painted touch tab stays at least 44x44: {rect:?}"
+            );
+            assert!(
+                tabs.row.contains(rect.origin)
+                    && tabs.row.contains(Point2D::new(
+                        rect.origin.x + rect.size.x,
+                        rect.origin.y + rect.size.y,
+                    )),
+                "the full target stays inside the visible row: {rect:?}"
+            );
+        }
+    }
 }
 
 #[test]

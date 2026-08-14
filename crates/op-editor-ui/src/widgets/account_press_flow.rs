@@ -13,9 +13,7 @@ use op_editor_core::{AccountMenuRow, AccountState, ButtonPressTarget, EditorStat
 
 use crate::widgets::account_menu::AccountMenu;
 use crate::widgets::login_modal::{LoginModal, LoginModalHit};
-use crate::widgets::top_bar::TopBar;
-use crate::widgets::TOP_BAR_HEIGHT;
-use crate::{Point2D, Rect};
+use crate::Point2D;
 
 /// What the host still owes after a sign-in-modal press. Every variant
 /// consumes the press.
@@ -105,17 +103,12 @@ pub fn press_account_menu(
     viewport_width: f32,
     now_ms: u64,
 ) -> AccountMenuPress {
-    let top_bar_rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
-    };
-    let top_bar = TopBar::for_editor_ui(&state.editor_ui);
-    let anchor = top_bar.account_button_rect(top_bar_rect);
     let Some(menu) = AccountMenu::for_editor_ui(&state.editor_ui) else {
         state.editor_ui.account_menu_open = false;
         return AccountMenuPress::Vanished;
     };
-    let menu_rect = menu.rect_at(anchor);
+    let menu_rect =
+        crate::widgets::touch_overlay_geometry::account_menu_rect(state, &menu, viewport_width);
     let point = Point2D::new(x, y);
     match menu.hit_test(menu_rect, point) {
         Some(AccountMenuRow::Settings) => {

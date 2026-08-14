@@ -396,7 +396,7 @@ impl WidgetHostNative {
             || self.chat_resize.is_some()
             || self.chat_drag.is_some()
             || self.drag.is_some();
-        if !late_pointer_capture_active {
+        if !late_pointer_capture_active && !self.editor_state.editor_ui.touch_chrome() {
             let over_align = !over_topmost
                 && self
                     .align_toolbar_rect(self.last_viewport_w, self.last_viewport_h)

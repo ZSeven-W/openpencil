@@ -24,6 +24,7 @@ const ADVANCED_TOP_GAP: f32 = 10.0;
 const SUB_LABEL_H: f32 = 18.0;
 const GRID_CELL_W: f32 = 34.0;
 const GRID_CELL_H: f32 = 22.0;
+const TOUCH_GRID_CELL_H: f32 = 30.0;
 const GRID_GAP: f32 = 3.0;
 /// Internal padding of the alignment grid box (TS `p-2` == 8px) —
 /// insets the dot cells inside the `theme.muted` box so the box top
@@ -40,6 +41,7 @@ const GRID_COL_GAP: f32 = GRID_PAD * 2.0 + 8.0;
 /// alignment grid's 88px block (so the block height — and every section
 /// below — is unchanged), just more compact.
 const GAP_ROW_H: f32 = 20.0;
+const TOUCH_GAP_ROW_H: f32 = 30.0;
 const GAP_ROW_GAP: f32 = 2.0;
 /// RadioCircle geometry (compact ring + dot).
 const RADIO_SIZE: f32 = 13.0;
@@ -48,41 +50,74 @@ const RADIO_SIZE: f32 = 13.0;
 const RADIO_GUTTER: f32 = 6.0 + RADIO_SIZE;
 const PADDING_ROW_GAP: f32 = 6.0;
 
-fn alignment_grid_h() -> f32 {
-    GRID_CELL_H * 3.0 + GRID_GAP * 2.0 + GRID_PAD * 2.0
+fn grid_cell_h(touch_controls: bool) -> f32 {
+    if touch_controls {
+        TOUCH_GRID_CELL_H
+    } else {
+        GRID_CELL_H
+    }
 }
 
-fn gap_column_h() -> f32 {
-    GAP_ROW_H * 3.0 + GAP_ROW_GAP * 2.0
+fn gap_row_h(touch_controls: bool) -> f32 {
+    if touch_controls {
+        TOUCH_GAP_ROW_H
+    } else {
+        GAP_ROW_H
+    }
+}
+
+fn alignment_grid_h(touch_controls: bool) -> f32 {
+    grid_cell_h(touch_controls) * 3.0 + GRID_GAP * 2.0 + GRID_PAD * 2.0
+}
+
+fn gap_column_h(touch_controls: bool) -> f32 {
+    gap_row_h(touch_controls) * 3.0 + GAP_ROW_GAP * 2.0
 }
 
 /// Top-Y of gap radio row `i` (0 = numeric/input, 1 = space-between,
 /// 2 = space-around). Single source of truth so paint + both hit-test
 /// walkers can never drift.
-fn gap_row_y(grid_y: f32, i: usize) -> f32 {
-    grid_y + i as f32 * (GAP_ROW_H + GAP_ROW_GAP)
+fn gap_row_y(grid_y: f32, i: usize, touch_controls: bool) -> f32 {
+    grid_y + i as f32 * (gap_row_h(touch_controls) + GAP_ROW_GAP)
 }
 
-fn alignment_block_body_h() -> f32 {
-    alignment_grid_h().max(gap_column_h())
+fn alignment_block_body_h(touch_controls: bool) -> f32 {
+    alignment_grid_h(touch_controls).max(gap_column_h(touch_controls))
 }
 
 /// Geometry of the padding-section gear + its mode popover, anchored off
 /// the flex section's top `y` (same origin `push_flex_action_rects`
 /// uses). Returns `(gear_rect, popover_box, [single, axis, individual]
 /// row rects)` so paint + hit-test share one source of truth.
-fn padding_mode_popover_layout(x0: f32, y: f32, width: f32) -> (Rect, Rect, [Rect; 3]) {
+fn padding_mode_popover_layout(
+    x0: f32,
+    y: f32,
+    width: f32,
+    touch_controls: bool,
+) -> (Rect, Rect, [Rect; 3]) {
     let grid_y = y + DIR_BUTTON_H + 12.0 + ADVANCED_TOP_GAP + SUB_LABEL_H;
-    let sublabel_y = grid_y + alignment_block_body_h() + 8.0;
+    let sublabel_y = grid_y + alignment_block_body_h(touch_controls) + 8.0;
+    let gear_size = if touch_controls { 30.0 } else { 18.0 };
     let gear = Rect {
-        origin: Point2D::new(x0 + width - PAD_X - 18.0, sublabel_y - 2.0),
-        size: Point2D::new(18.0, 18.0),
+        origin: Point2D::new(
+            x0 + width - PAD_X - gear_size,
+            sublabel_y + 7.0 - gear_size / 2.0,
+        ),
+        size: Point2D::new(gear_size, gear_size),
     };
-    let pop_box = mode_popover::mode_popover_rect_from_gear(gear, width);
-    (gear, pop_box, mode_popover::mode_popover_rows(pop_box))
+    let pop_box = mode_popover::mode_popover_rect_from_gear(gear, width, touch_controls);
+    (
+        gear,
+        pop_box,
+        mode_popover::mode_popover_rows(pop_box, touch_controls),
+    )
 }
 
-pub fn flex_section_height(active: FlexLayout, padding_mode: PaddingEditMode) -> f32 {
+pub fn flex_section_height(
+    active: FlexLayout,
+    padding_mode: PaddingEditMode,
+    touch_controls: bool,
+) -> f32 {
     let base = SECTION_HEADER_HEIGHT + DIR_BUTTON_H + 12.0;
     if active == FlexLayout::Free {
         return base + SECTION_GAP;
@@ -97,7 +132,7 @@ pub fn flex_section_height(active: FlexLayout, padding_mode: PaddingEditMode) ->
     let padding_block = SUB_LABEL_H + INPUT_HEIGHT * rows + PADDING_ROW_GAP * (rows - 1.0) + 12.0;
     base + ADVANCED_TOP_GAP
         + SUB_LABEL_H
-        + alignment_block_body_h()
+        + alignment_block_body_h(touch_controls)
         + 8.0
         + padding_block
         + SECTION_GAP
@@ -112,6 +147,7 @@ pub fn paint_flex_section(
     labels: &PropertyLabels,
     locale: op_editor_core::Locale,
     padding_mode: PaddingEditMode,
+    touch_controls: bool,
     x: f32,
     y: f32,
     width: f32,
@@ -121,7 +157,17 @@ pub fn paint_flex_section(
     y += DIR_BUTTON_H + 12.0;
     if snapshot.flex_layout != FlexLayout::Free {
         y += ADVANCED_TOP_GAP;
-        y = paint_alignment_and_gap(cx, theme, snapshot, edit, locale, x, y, width);
+        y = paint_alignment_and_gap(
+            cx,
+            theme,
+            snapshot,
+            edit,
+            locale,
+            touch_controls,
+            x,
+            y,
+            width,
+        );
         y = paint_padding_inputs(cx, theme, snapshot, edit, locale, padding_mode, x, y, width);
     }
     paint_section_divider(cx, theme, x, y, width);
@@ -137,6 +183,7 @@ pub fn push_flex_input_rects(
     active: FlexLayout,
     justify: LayoutJustifyValue,
     padding_mode: PaddingEditMode,
+    touch_controls: bool,
 ) {
     if active == FlexLayout::Free {
         return;
@@ -160,12 +207,12 @@ pub fn push_flex_input_rects(
         rects.push((
             PropertyFocus::LayoutGap,
             Rect {
-                origin: Point2D::new(gap_x + RADIO_GUTTER, gap_row_y(y, 0)),
-                size: Point2D::new(gap_w - RADIO_GUTTER, GAP_ROW_H),
+                origin: Point2D::new(gap_x + RADIO_GUTTER, gap_row_y(y, 0, touch_controls)),
+                size: Point2D::new(gap_w - RADIO_GUTTER, gap_row_h(touch_controls)),
             },
         ));
     }
-    y += alignment_block_body_h() + 8.0;
+    y += alignment_block_body_h(touch_controls) + 8.0;
     y += SUB_LABEL_H;
     let half_w = (usable_w - 8.0) / 2.0;
     let cell = |col: f32, row: f32| Rect {
@@ -209,6 +256,7 @@ pub fn push_flex_action_rects(
     active: FlexLayout,
     justify: LayoutJustifyValue,
     padding_mode_popover_open: bool,
+    touch_controls: bool,
 ) {
     let row_x = x0 + PAD_X;
     let modes = [
@@ -262,9 +310,9 @@ pub fn push_flex_action_rects(
                 Rect {
                     origin: Point2D::new(
                         x0 + PAD_X + GRID_PAD + col as f32 * (GRID_CELL_W + GRID_GAP),
-                        grid_y + GRID_PAD + row as f32 * (GRID_CELL_H + GRID_GAP),
+                        grid_y + GRID_PAD + row as f32 * (grid_cell_h(touch_controls) + GRID_GAP),
                     ),
-                    size: Point2D::new(GRID_CELL_W, GRID_CELL_H),
+                    size: Point2D::new(GRID_CELL_W, grid_cell_h(touch_controls)),
                 },
             ));
         }
@@ -283,7 +331,9 @@ pub fn push_flex_action_rects(
         // The numeric/Start row's target is just the radio circle — centre its
         // hover-wash cell on the RADIO_SIZE glyph (the radio paints at gap_x,
         // column-aligned with the other rows, so shift the cell left instead).
-        let (row_x, row_w) = if circle_only {
+        let (row_x, row_w) = if circle_only && touch_controls {
+            (gap_x + RADIO_GUTTER - TOUCH_GAP_ROW_H, TOUCH_GAP_ROW_H)
+        } else if circle_only {
             (gap_x - (RADIO_GUTTER - RADIO_SIZE) / 2.0, RADIO_GUTTER)
         } else {
             (gap_x, gap_w)
@@ -291,8 +341,8 @@ pub fn push_flex_action_rects(
         out.push((
             PropertyPanelAction::SetLayoutJustify(justify_value),
             Rect {
-                origin: Point2D::new(row_x, gap_row_y(grid_y, i)),
-                size: Point2D::new(row_w, GAP_ROW_H),
+                origin: Point2D::new(row_x, gap_row_y(grid_y, i, touch_controls)),
+                size: Point2D::new(row_w, gap_row_h(touch_controls)),
             },
         ));
     }
@@ -300,7 +350,7 @@ pub fn push_flex_action_rects(
     // Padding gear + (when open) the 3 mode-radio rows. The radio rects
     // are appended LAST so the open popover wins the hit-test over the
     // sections it overlaps; the host gates them behind dismiss-on-press.
-    let (gear, _box, mode_rows) = padding_mode_popover_layout(x0, y, width);
+    let (gear, _box, mode_rows) = padding_mode_popover_layout(x0, y, width, touch_controls);
     out.push((PropertyPanelAction::TogglePaddingModePopover, gear));
     if padding_mode_popover_open {
         for (i, rect) in mode_rows.into_iter().enumerate() {
@@ -355,6 +405,7 @@ fn paint_alignment_and_gap(
     snapshot: &NodeSnapshot,
     edit: &EditContext<'_>,
     locale: op_editor_core::Locale,
+    touch_controls: bool,
     x: f32,
     y: f32,
     width: f32,
@@ -371,16 +422,17 @@ fn paint_alignment_and_gap(
     // No "间距" sub-label over the gap column — TS GapSection has no
     // header; the three radio rows are the whole control.
     let grid_y = y + SUB_LABEL_H;
-    paint_alignment_grid(cx, theme, snapshot, x + PAD_X, grid_y);
+    paint_alignment_grid(cx, theme, snapshot, x + PAD_X, grid_y, touch_controls);
     let gap_x = x + PAD_X + grid_w + GRID_COL_GAP;
     let gap_w = usable_w - grid_w - GRID_COL_GAP;
     let content_x = gap_x + RADIO_GUTTER;
     let content_w = gap_w - RADIO_GUTTER;
-    let circle_y = |row_y: f32| row_y + (GAP_ROW_H - RADIO_SIZE) / 2.0;
+    let row_h = gap_row_h(touch_controls);
+    let circle_y = |row_y: f32| row_y + (row_h - RADIO_SIZE) / 2.0;
     let justify = snapshot.layout_justify;
 
     // Row 0 — numeric: radio + bare number input (no "G" prefix).
-    let r0_y = gap_row_y(grid_y, 0);
+    let r0_y = gap_row_y(grid_y, 0, touch_controls);
     paint_radio_circle(
         cx,
         theme,
@@ -391,7 +443,7 @@ fn paint_alignment_and_gap(
     let gap_text = format_panel_number(snapshot.layout_gap);
     let gap_rect = Rect {
         origin: Point2D::new(content_x, r0_y),
-        size: Point2D::new(content_w, GAP_ROW_H),
+        size: Point2D::new(content_w, row_h),
     };
     // Space-between / space-around distribute the gap automatically, so
     // the explicit gap value is ignored. Paint the input disabled
@@ -411,8 +463,10 @@ fn paint_alignment_and_gap(
             (theme.muted_foreground).to_jian(),
             Point2D::new(0.0, 0.0),
         );
-        cx.backend
-            .draw_text(&muted, Point2D::new(content_x + 10.0, r0_y + 14.0));
+        cx.backend.draw_text(
+            &muted,
+            Point2D::new(content_x + 10.0, r0_y + row_h / 2.0 + 4.0),
+        );
     } else {
         paint_input_with_suffix_focused_state(
             cx,
@@ -429,7 +483,7 @@ fn paint_alignment_and_gap(
     }
 
     // Row 1 — space-between, Row 2 — space-around: radio + label.
-    let r1_y = gap_row_y(grid_y, 1);
+    let r1_y = gap_row_y(grid_y, 1, touch_controls);
     paint_radio_circle(
         cx,
         theme,
@@ -437,8 +491,16 @@ fn paint_alignment_and_gap(
         circle_y(r1_y),
         justify == LayoutJustifyValue::SpaceBetween,
     );
-    paint_gap_row_label(cx, theme, locale, content_x, r1_y, "layout.spaceBetween");
-    let r2_y = gap_row_y(grid_y, 2);
+    paint_gap_row_label(
+        cx,
+        theme,
+        locale,
+        content_x,
+        r1_y,
+        row_h,
+        "layout.spaceBetween",
+    );
+    let r2_y = gap_row_y(grid_y, 2, touch_controls);
     paint_radio_circle(
         cx,
         theme,
@@ -446,9 +508,17 @@ fn paint_alignment_and_gap(
         circle_y(r2_y),
         justify == LayoutJustifyValue::SpaceAround,
     );
-    paint_gap_row_label(cx, theme, locale, content_x, r2_y, "layout.spaceAround");
+    paint_gap_row_label(
+        cx,
+        theme,
+        locale,
+        content_x,
+        r2_y,
+        row_h,
+        "layout.spaceAround",
+    );
 
-    grid_y + alignment_block_body_h() + 8.0
+    grid_y + alignment_block_body_h(touch_controls) + 8.0
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -550,8 +620,9 @@ pub fn paint_padding_mode_popover(
     x0: f32,
     y: f32,
     width: f32,
+    touch_controls: bool,
 ) {
-    let (_gear, pop_box, rows) = padding_mode_popover_layout(x0, y, width);
+    let (_gear, pop_box, rows) = padding_mode_popover_layout(x0, y, width, touch_controls);
     mode_popover::paint_mode_popover(
         cx,
         theme,
@@ -572,6 +643,7 @@ fn paint_alignment_grid(
     snapshot: &NodeSnapshot,
     x: f32,
     y: f32,
+    touch_controls: bool,
 ) {
     let is_space = matches!(
         snapshot.layout_justify,
@@ -586,7 +658,7 @@ fn paint_alignment_grid(
         origin: Point2D::new(x, y),
         size: Point2D::new(
             GRID_CELL_W * 3.0 + GRID_GAP * 2.0 + GRID_PAD * 2.0,
-            GRID_CELL_H * 3.0 + GRID_GAP * 2.0 + GRID_PAD * 2.0,
+            grid_cell_h(touch_controls) * 3.0 + GRID_GAP * 2.0 + GRID_PAD * 2.0,
         ),
     };
     cx.backend.fill_round_rect(bg, 6.0, theme.muted);
@@ -610,18 +682,24 @@ fn paint_alignment_grid(
             let cell = Rect {
                 origin: Point2D::new(
                     x + GRID_PAD + col as f32 * (GRID_CELL_W + GRID_GAP),
-                    y + GRID_PAD + row as f32 * (GRID_CELL_H + GRID_GAP),
+                    y + GRID_PAD + row as f32 * (grid_cell_h(touch_controls) + GRID_GAP),
                 ),
-                size: Point2D::new(GRID_CELL_W, GRID_CELL_H),
+                size: Point2D::new(GRID_CELL_W, grid_cell_h(touch_controls)),
             };
             let dot = if active {
                 Rect {
-                    origin: Point2D::new(cell.origin.x + 12.0, cell.origin.y + 6.0),
+                    origin: Point2D::new(
+                        cell.origin.x + 12.0,
+                        cell.origin.y + (cell.size.y - 10.0) / 2.0,
+                    ),
                     size: Point2D::new(10.0, 10.0),
                 }
             } else {
                 Rect {
-                    origin: Point2D::new(cell.origin.x + 15.0, cell.origin.y + 9.0),
+                    origin: Point2D::new(
+                        cell.origin.x + 15.0,
+                        cell.origin.y + (cell.size.y - 4.0) / 2.0,
+                    ),
                     size: Point2D::new(4.0, 4.0),
                 }
             };
@@ -651,6 +729,7 @@ fn paint_gap_row_label(
     locale: op_editor_core::Locale,
     x: f32,
     row_y: f32,
+    row_h: f32,
     label_key: &'static str,
 ) {
     let label = TextLayout::single_run(
@@ -661,7 +740,7 @@ fn paint_gap_row_label(
         Point2D::new(0.0, 0.0),
     );
     cx.backend
-        .draw_text(&label, Point2D::new(x, row_y + GAP_ROW_H / 2.0 + 4.0));
+        .draw_text(&label, Point2D::new(x, row_y + row_h / 2.0 + 4.0));
 }
 
 fn paint_sub_label(cx: &mut PaintCx<'_>, theme: &Theme, label: &str, x: f32, y: f32) {

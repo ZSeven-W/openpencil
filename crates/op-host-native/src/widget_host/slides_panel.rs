@@ -10,6 +10,7 @@
 //! browser has no local board renderer.
 
 use super::WidgetHostNative;
+use op_editor_core::size_class::MobileSheetKind;
 use op_editor_core::LeftPanelTab;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::slides_panel_flow as flow;
@@ -27,31 +28,60 @@ pub(in crate::widget_host) struct SlidesFrame {
 }
 
 impl WidgetHostNative {
-    /// Screen rect of the whole left rail.
-    fn slides_panel_rect(&self, viewport_h: f32) -> Rect {
+    /// Whether the left rail is actually visible on the current surface.
+    ///
+    /// Compact and Medium touch layouts show it in the Layers sheet while
+    /// keeping `sidebar_open = false`; desktop and Expanded keep using the
+    /// persistent sidebar flag.
+    pub(in crate::widget_host) fn left_rail_visible(&self) -> bool {
+        let ui = &self.editor_state.editor_ui;
+        ui.sidebar_open || (ui.touch_chrome() && ui.mobile_sheet == Some(MobileSheetKind::Layers))
+    }
+
+    /// Canonical visible rect for rail content.
+    ///
+    /// A touch sheet owns a shared title / close band. Slides tabs, slide
+    /// rows and Layers rows all start below that band; desktop keeps the
+    /// original full rail. Every paint, hit and scroll entry point derives
+    /// from this answer.
+    fn slides_panel_rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
+        if self.editor_state.editor_ui.touch_chrome()
+            && self.editor_state.editor_ui.mobile_sheet == Some(MobileSheetKind::Layers)
+        {
+            let sheet = self.mobile_sheet_rect(viewport_w, viewport_h, MobileSheetKind::Layers);
+            return op_editor_ui::widgets::mobile_chrome::sheet_content_rect(sheet);
+        }
         canvas_geometry::layer_panel_rect(&self.editor_state, viewport_h)
     }
 
-    /// The tab row, when this document shows one and the rail is open.
-    /// `None` covers both "not a scenario document" and "sidebar
-    /// collapsed", so no caller has to remember the second half.
+    /// The tab row, when this document shows one and a persistent rail or
+    /// touch Layers sheet is open. `None` covers both "nothing to list"
+    /// and "rail surface closed".
     pub(in crate::widget_host) fn slides_tab_row(
         &self,
+        viewport_w: f32,
         viewport_h: f32,
     ) -> Option<SlidesPanelTabs> {
-        if !self.editor_state.editor_ui.sidebar_open {
+        if !self.left_rail_visible() {
             return None;
         }
-        flow::tab_row(&self.editor_state, self.slides_panel_rect(viewport_h))
+        flow::tab_row(
+            &self.editor_state,
+            self.slides_panel_rect(viewport_w, viewport_h),
+        )
     }
 
     /// The rail rect the Layers tree gets — the whole rail, less the tab
     /// row when one shows. Paint, hit-test, drag and scroll all derive
     /// from this, so the tab row can never shift the layer rows out from
     /// under their own click targets.
-    pub(in crate::widget_host) fn layers_content_rect(&self, viewport_h: f32) -> Rect {
-        let panel = self.slides_panel_rect(viewport_h);
-        if !self.editor_state.editor_ui.sidebar_open {
+    pub(in crate::widget_host) fn layers_content_rect(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Rect {
+        let panel = self.slides_panel_rect(viewport_w, viewport_h);
+        if !self.left_rail_visible() {
             return panel;
         }
         flow::layers_content_rect(&self.editor_state, panel)
@@ -66,10 +96,10 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<SlidesFrame> {
-        if !self.editor_state.editor_ui.sidebar_open {
+        if !self.left_rail_visible() {
             return None;
         }
-        let panel = self.slides_panel_rect(viewport_h);
+        let panel = self.slides_panel_rect(viewport_w, viewport_h);
         let chips = flow::slides(&self.editor_state);
         self.refresh_layout_scene();
         let layout = flow::layout(&self.editor_state, &chips, &self.layout_scene, panel)?;
@@ -250,7 +280,7 @@ impl WidgetHostNative {
             };
         }
         // The Layers tab owns the rail: only the tab row itself is ours.
-        let Some(tabs) = self.slides_tab_row(viewport_h) else {
+        let Some(tabs) = self.slides_tab_row(viewport_w, viewport_h) else {
             return false;
         };
         let Some(target) = tabs.hit(point) else {
@@ -282,7 +312,7 @@ impl WidgetHostNative {
                 || self.editor_state.editor_ui.slides_panel.drag.is_some();
             return (owns, changed);
         }
-        let Some(tabs) = self.slides_tab_row(viewport_h) else {
+        let Some(tabs) = self.slides_tab_row(viewport_w, viewport_h) else {
             // No tab row on this document — drop any hover it left.
             let changed = self.editor_state.editor_ui.slides_panel.clear_pointer();
             if changed {

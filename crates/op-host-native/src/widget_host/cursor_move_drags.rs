@@ -168,10 +168,14 @@ impl WidgetHostNative {
             return Some(true);
         }
         if self.layer_drag.is_some() {
-            let should_activate = self
-                .layer_drag
-                .as_ref()
-                .is_some_and(|drag| !drag.active && (y - drag.start_y).abs() > 4.0);
+            let activation_threshold = if self.editor_state.editor_ui.touch_chrome() {
+                12.0
+            } else {
+                4.0
+            };
+            let should_activate = self.layer_drag.as_ref().is_some_and(|drag| {
+                !drag.active && (y - drag.start_y).abs() > activation_threshold
+            });
             if should_activate
                 && !self.collab_allows_document_mutation(
                     op_editor_core::CollabDocumentMutation::NodeMove,
@@ -196,8 +200,12 @@ impl WidgetHostNative {
             d.current_y = y;
             // Vertical-only activation — horizontal wiggle preserved
             // for selection / eye / lock click-feel.
-            if !d.active && (y - d.start_y).abs() > 4.0 {
+            if !d.active && (y - d.start_y).abs() > activation_threshold {
                 d.active = true;
+            }
+            let active = d.active;
+            if active {
+                self.auto_scroll_touch_layer_drag(y);
             }
             return Some(true);
         }

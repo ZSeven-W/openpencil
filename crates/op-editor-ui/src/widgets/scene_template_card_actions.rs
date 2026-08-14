@@ -24,7 +24,7 @@ use op_editor_core::AssetCenterTab;
 
 use super::panel_control_metrics::{CHIP_H, CHIP_LABEL_SIZE};
 use super::prompt_center_panel::estimated_text_width;
-use super::scene_template_panel::{SceneTemplateHit, SceneTemplatePanel, GENERATE_INPUT_H};
+use super::scene_template_panel::{SceneTemplateHit, SceneTemplatePanel};
 use crate::{Point2D, Rect};
 
 /// Hover-token band for the "add to canvas" button of card `index`.
@@ -79,7 +79,6 @@ pub(super) const ACTION_GAP: f32 = 8.0;
 pub(super) const ACTION_LABEL_SIZE: f32 = CHIP_LABEL_SIZE;
 pub(super) const ACTION_RADIUS: f32 = 7.0;
 
-pub(super) const BASIS_CHIP_H: f32 = CHIP_H;
 pub(super) const BASIS_CHIP_LABEL_SIZE: f32 = 11.5;
 /// Room for the label's left padding plus the dismiss glyph and its gutter.
 pub(super) const BASIS_CHIP_PAD_X: f32 = 10.0;
@@ -149,6 +148,10 @@ impl SceneTemplatePanel<'_> {
         if index < self.user_card_count() {
             return false;
         }
+        // Touch layouts cannot rely on hover to reveal the action strip.
+        if self.touch_density_active() {
+            return true;
+        }
         let hover = self.state.editor_ui.scene_template_center.hover;
         hover == Some(index)
             || hover == Some(card_add_hover_token(index))
@@ -199,7 +202,7 @@ impl SceneTemplatePanel<'_> {
         let Some(template) = self.filtered().get(index - self.user_card_count()).copied() else {
             return index;
         };
-        let (add, generate) = card_action_rects(card, self.card_offers_generate(template));
+        let (add, generate) = self.card_action_rects_for(card, self.card_offers_generate(template));
         if generate.is_some_and(|rect| rect.contains(point)) {
             return card_generate_hover_token(index);
         }
@@ -223,7 +226,7 @@ impl SceneTemplatePanel<'_> {
         point: Point2D,
     ) -> SceneTemplateHit {
         if self.card_actions_visible(index) && self.card_offers_generate(template) {
-            let (_, generate) = card_action_rects(card, true);
+            let (_, generate) = self.card_action_rects_for(card, true);
             if generate.is_some_and(|rect| rect.contains(point)) {
                 return SceneTemplateHit::GenerateFromTemplate(template.id.clone());
             }
@@ -235,21 +238,27 @@ impl SceneTemplatePanel<'_> {
     pub fn basis_chip_rect(&self, panel: Rect) -> Option<Rect> {
         let label = self.basis_chip_label()?;
         let input_row_y = self.generate_row_top(panel) + 6.0;
+        let chip_h = self.density().chip_h;
         Some(Rect::xywh(
             Self::content_rect(panel).origin.x,
-            input_row_y + (GENERATE_INPUT_H - BASIS_CHIP_H) / 2.0,
+            input_row_y + (self.generate_input_height_for() - chip_h) / 2.0,
             basis_chip_width(&label),
-            BASIS_CHIP_H,
+            chip_h,
         ))
     }
 
     /// The dismiss target inside the basis chip.
     pub(super) fn basis_chip_dismiss_rect(&self, panel: Rect) -> Option<Rect> {
         let chip = self.basis_chip_rect(panel)?;
+        let dismiss_w = if self.touch_density_active() {
+            self.density().chip_h
+        } else {
+            BASIS_CHIP_DISMISS_W
+        };
         Some(Rect::xywh(
-            chip.origin.x + chip.size.x - BASIS_CHIP_DISMISS_W,
+            chip.origin.x + chip.size.x - dismiss_w,
             chip.origin.y,
-            BASIS_CHIP_DISMISS_W,
+            dismiss_w,
             chip.size.y,
         ))
     }

@@ -7,17 +7,18 @@ server.
 
 ## Current status
 
-The six `0.8.3` archives are legacy ABI-v1 compatibility artifacts:
+The six committed desktop `0.8.4` archives are signed ABI-v3 artifacts:
 
-- Their bytes are pinned by the adjacent `SHA256`.
-- Their exposed `op_auth_*` names match the eight-symbol ABI-v1 allowlist.
-- They are not signed release-provenance artifacts.
-- They contain substantial source/build-path and debug metadata leakage.
-- They must not be relabeled `op-auth-hardened-v1` or promoted to production
-  collaboration ABI-v2 without a private-source rebuild.
+- Their bytes are pinned by the adjacent `SHA256` and signed `PROVENANCE`.
+- Their target, app version, ABI, private revision, build id, and hardening
+  declaration are covered by the repository release public key.
+- Their exposed `op_auth_*` names match the ABI-v3 allowlist.
+- Mach-O and ELF use the hardened profile. The signed Windows pass-through
+  declares the lower `op-auth-signed-unobfuscated-v1` anti-reversing profile.
 
 `tools/check-op-auth-prebuilt.sh` reports the measured leakage without changing
-archive bytes. `--require-hardened` intentionally rejects all current archives.
+archive bytes. `--require-hardened` requires signed provenance for every ABI-v2+
+archive and additionally enforces the profile-specific hardening boundary.
 Do not run `strip`, `objcopy`, or an obfuscator in place on these committed
 files: archive members and cross-object symbols may be required by the final
 link.
@@ -30,12 +31,17 @@ host toolchain's own personality routine. The transformation happens only
 after provenance validation, preserves archive layout, and rejects ambiguous
 input; it never weakens the linker's duplicate-symbol checks.
 
-## ABI-v2 signed provenance
+No signed iOS or Android archive is currently committed. Mobile production
+authentication therefore stays fail-closed until private release CI stages an
+exact-version target artifact. Unsigned local mobile archives belong only in
+the explicit Debug override and must never be copied into this directory.
+
+## ABI-v2 / ABI-v3 signed provenance
 
 Every production target directory must contain:
 
 ```text
-ABI_VERSION       exactly 2
+ABI_VERSION       exactly 2 or 3
 VERSION           application package version
 SHA256            lowercase digest of the archive
 PROVENANCE        signed key/value manifest
@@ -50,9 +56,8 @@ private release system. `build.rs` verifies the signature over the exact
 `PROVENANCE` bytes and rejects a mismatched target, filename, version, ABI,
 archive digest, hardening profile, source revision, or build id.
 
-No release public key is committed yet because the private release signer has
-not been provisioned. Consequently an ABI-v2 archive cannot accidentally link
-until that external production step is complete.
+ABI v3 appends relay-token minting to the ABI-v2 login and collaboration-ticket
+surface. The build bridge gates each appended symbol set by the validated ABI.
 
 ## Private rebuild profile
 
@@ -103,11 +108,12 @@ directory:
 tools/package-op-auth-prebuilt.sh \
   --artifact /private-ci/out/libop_auth.a \
   --target x86_64-unknown-linux-gnu \
-  --version 0.8.3 \
+  --version 0.8.4 \
   --source-revision <full-private-source-revision> \
   --build-id <immutable-ci-build-id> \
   --signing-key /private-ci/secrets/op-auth-ed25519.pem \
-  --output-root /private-ci/staged-prebuilt
+  --output-root /private-ci/staged-prebuilt \
+  --abi 3
 ```
 
 The packaging script never modifies the candidate archive. It produces fresh

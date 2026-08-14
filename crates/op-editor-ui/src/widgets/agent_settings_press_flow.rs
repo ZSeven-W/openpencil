@@ -234,7 +234,12 @@ pub fn apply_agent_settings_hit(
             SettingsPressOutcome::handled()
         }
         AgentSettingsHit::OpenLoginModal => {
-            state.editor_ui.agent_settings_open = false;
+            // Switching modals is also a Settings dismissal: land the active
+            // draft, release keyboard ownership, and close a missing-font
+            // picker belonging to the Settings Fonts tab before login appears.
+            commit(state);
+            state.editor_ui.close_font_picker();
+            state.editor_ui.escape_agent_settings_modal();
             state.editor_ui.login_modal_open = true;
             state.editor_ui.login_modal_hover = None;
             SettingsPressOutcome::handled()

@@ -140,8 +140,8 @@ impl Widget for CollabPanel<'_> {
             cx.backend,
             Icon::Close,
             Point2D::new(
-                self.close_rect(rect).origin.x + 7.0,
-                self.close_rect(rect).origin.y + 6.0,
+                self.close_rect(rect).origin.x + (self.close_rect(rect).size.x - 16.0) / 2.0,
+                self.close_rect(rect).origin.y + (self.close_rect(rect).size.y - 16.0) / 2.0,
             ),
             16.0,
             if close_hovered {
@@ -654,3 +654,7 @@ mod tests;
 #[cfg(test)]
 #[path = "collab_panel_region_tests.rs"]
 mod region_tests;
+
+#[cfg(test)]
+#[path = "collab_panel_touch_tests.rs"]
+mod touch_tests;

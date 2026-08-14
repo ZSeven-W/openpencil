@@ -201,16 +201,20 @@ jobs:
           - label: ios-aarch64
             runner: macos-latest
             target: aarch64-apple-ios
+            features: metal
           - label: ios-aarch64-sim
             runner: macos-latest
             target: aarch64-apple-ios-sim
+            features: metal
           # Android targets via NDK — Linux runner.
           - label: android-aarch64
             runner: ubuntu-latest
             target: aarch64-linux-android
+            features: gl
           - label: android-x86_64
             runner: ubuntu-latest
             target: x86_64-linux-android
+            features: gl
     steps:
       - uses: actions/checkout@v4
         with:
@@ -267,5 +271,10 @@ jobs:
       #   stack (glutin / winit) is target-gated to desktop in Cargo.toml +
       #   GlutinProvider source is cfg-gated to desktop OS only. Real SDK
       #   linking and iOS/Android runtime is Step 1f.
+      # - op-engine-ffi (the player C ABI) + op-engine-jni (Android JNI
+      #   marshalling) compile on every mobile target with the platform GPU
+      #   feature (metal on iOS, gl on Android).
       - run: cargo check -p op-editor-ui --target ${{ matrix.target }}
       - run: cargo check -p op-host-native --target ${{ matrix.target }}
+      - run: cargo check -p op-engine-ffi --target ${{ matrix.target }} --features ${{ matrix.features }}
+      - run: cargo check -p op-engine-jni --target ${{ matrix.target }} --features ${{ matrix.features }}

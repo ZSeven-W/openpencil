@@ -114,6 +114,15 @@ fn toolbar_height(toolbar: &Toolbar, dpi: f32) -> f32 {
 /// Shape-picker dropdown rect — anchored to the right of the toolbar's
 /// shape slot, clamped so it never overhangs the canvas right edge.
 pub fn shape_picker_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Rect {
+    // Mobile: anchored above the dock's Shape slot, centered.
+    if state.editor_ui.touch_chrome() {
+        let dock = super::host_canvas_geometry::touch_dock_rect(state, viewport_w, viewport_h);
+        let x = ((viewport_w - SHAPE_PICKER_WIDTH) / 2.0).max(4.0);
+        return Rect {
+            origin: Point2D::new(x, dock.origin.y - ShapePicker::panel_height() - 8.0),
+            size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
+        };
+    }
     let (cx0, _cy, cw, _ch) = canvas_region(state, viewport_w, viewport_h);
     let toolbar = Toolbar::for_editor(state);
     let toolbar_rect = Rect {
@@ -290,7 +299,9 @@ pub fn prompt_center_panel_rect(
 }
 
 /// Asset Center rect — inset by [`SCENE_TEMPLATE_GALLERY_INSET`] from the
-/// WHOLE viewport horizontally, and from the top bar's underside down.
+/// usable host viewport. Desktop keeps the persistent top bar clear; touch
+/// hosts hand the gallery the full safe-area-adjusted viewport because their
+/// desktop top bar is not painted.
 ///
 /// Unlike the Prompt Center it has no intrinsic size. It is a gallery: the
 /// bigger the window, the bigger the previews, because everything inside
@@ -316,13 +327,18 @@ pub fn scene_template_panel_rect(
         return None;
     }
     let available_w = viewport_w.max(0.0);
-    let available_h = (viewport_h - TOP_BAR_HEIGHT).max(0.0);
+    let top = if state.editor_ui.touch_chrome() {
+        0.0
+    } else {
+        TOP_BAR_HEIGHT
+    };
+    let available_h = (viewport_h - top).max(0.0);
     let inset = SCENE_TEMPLATE_GALLERY_INSET
         .min(available_w / 8.0)
         .min(available_h / 8.0)
         .max(0.0);
     Some(Rect {
-        origin: Point2D::new(inset, TOP_BAR_HEIGHT + inset),
+        origin: Point2D::new(inset, top + inset),
         size: Point2D::new(
             (available_w - inset * 2.0).max(0.0),
             (available_h - inset * 2.0).max(0.0),

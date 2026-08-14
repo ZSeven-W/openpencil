@@ -1,0 +1,370 @@
+{
+  "version": "1.0.0",
+  "name": "日签卡 · 园林框景 3:4",
+  "variables": {
+    "c-limewash": {
+      "type": "color",
+      "value": "#F2F0EC"
+    },
+    "c-limewash-deep": {
+      "type": "color",
+      "value": "#E2DFDA"
+    },
+    "c-ink": {
+      "type": "color",
+      "value": "#24211E"
+    },
+    "c-ink-soft": {
+      "type": "color",
+      "value": "#5F5A55"
+    },
+    "c-tile": {
+      "type": "color",
+      "value": "#70757A"
+    },
+    "c-tile-dark": {
+      "type": "color",
+      "value": "#383E43"
+    },
+    "c-chestnut": {
+      "type": "color",
+      "value": "#6A4A35"
+    },
+    "c-moss": {
+      "type": "color",
+      "value": "#647C64"
+    }
+  },
+  "children": [
+    {
+      "type": "frame",
+      "id": "f18",
+      "name": "日签卡 · 园林框景",
+      "width": 1080,
+      "height": 1440,
+      "layout": "none",
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$c-limewash"
+        }
+      ],
+      "clipContent": true,
+      "children": [
+        {
+          "type": "frame",
+          "id": "f1",
+          "name": "日签卡 · 正文",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "padding": [
+            96,
+            80,
+            128,
+            80
+          ],
+          "gap": 0,
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "fill": [],
+          "children": [
+            {
+              "type": "text",
+              "id": "t2",
+              "name": "刊头",
+              "content": "一日一见 · 园记",
+              "fontFamily": "Noto Sans SC",
+              "fontSize": 32,
+              "fontWeight": 500,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$c-tile"
+                }
+              ],
+              "lineHeight": 1.5,
+              "letterSpacing": 0.6,
+              "textGrowth": "auto",
+              "width": "fit_content"
+            },
+            {
+              "type": "frame",
+              "id": "f3",
+              "name": "洞内",
+              "width": 530,
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 28,
+              "alignItems": "center",
+              "fill": [],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "t4",
+                  "name": "日期",
+                  "content": "08 / 09",
+                  "fontFamily": "Inter",
+                  "fontSize": 48,
+                  "fontWeight": 600,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$c-tile"
+                    }
+                  ],
+                  "lineHeight": 1.3,
+                  "letterSpacing": 0,
+                  "textGrowth": "auto",
+                  "width": "fit_content"
+                },
+                {
+                  "type": "text",
+                  "id": "t5",
+                  "name": "金句",
+                  "content": "先留白，\n再住人。",
+                  "fontFamily": "Songti SC",
+                  "fontSize": 88,
+                  "fontWeight": 700,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$c-ink"
+                    }
+                  ],
+                  "lineHeight": 1.15,
+                  "letterSpacing": 0,
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "textAlign": "center"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "f7",
+              "name": "落款",
+              "width": "fit_content",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 8,
+              "alignItems": "center",
+              "fill": [],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "t6",
+                  "name": "署名",
+                  "content": "@ 你的账号名",
+                  "fontFamily": "Noto Sans SC",
+                  "fontSize": 32,
+                  "fontWeight": 500,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$c-ink-soft"
+                    }
+                  ],
+                  "lineHeight": 1.5,
+                  "letterSpacing": 0.6,
+                  "textGrowth": "auto",
+                  "width": "fit_content",
+                  "textAlign": "center"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "f19",
+          "name": "日签卡 · 园林框景 · 装饰",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "none",
+          "fill": [],
+          "children": [
+            {
+              "type": "path",
+              "id": "p8",
+              "name": "檐线 1",
+              "d": "M0 44 Q140 0 280 44",
+              "width": 280,
+              "height": 44,
+              "fill": [],
+              "stroke": {
+                "thickness": 3,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "$c-tile"
+                  }
+                ]
+              },
+              "x": 120,
+              "y": 40
+            },
+            {
+              "type": "path",
+              "id": "p9",
+              "name": "檐线 2",
+              "d": "M0 44 Q140 0 280 44",
+              "width": 280,
+              "height": 44,
+              "fill": [],
+              "stroke": {
+                "thickness": 3,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "$c-tile"
+                  }
+                ]
+              },
+              "x": 400,
+              "y": 40
+            },
+            {
+              "type": "path",
+              "id": "p10",
+              "name": "檐线 3",
+              "d": "M0 44 Q140 0 280 44",
+              "width": 280,
+              "height": 44,
+              "fill": [],
+              "stroke": {
+                "thickness": 3,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "$c-tile"
+                  }
+                ]
+              },
+              "x": 680,
+              "y": 40
+            },
+            {
+              "type": "path",
+              "id": "p11",
+              "name": "漏窗 · 六角",
+              "d": "M350 0 L700 175 L700 525 L350 700 L0 525 L0 175 Z",
+              "width": 700,
+              "height": 700,
+              "fill": [],
+              "stroke": {
+                "thickness": 4,
+                "fill": [
+                  {
+                    "type": "solid",
+                    "color": "$c-chestnut"
+                  }
+                ]
+              },
+              "x": 190,
+              "y": 370
+            },
+            {
+              "type": "rectangle",
+              "id": "r12",
+              "name": "苔 1",
+              "width": 6,
+              "height": 6,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$c-moss"
+                }
+              ],
+              "opacity": 0.4,
+              "x": 386,
+              "y": 856
+            },
+            {
+              "type": "rectangle",
+              "id": "r13",
+              "name": "苔 2",
+              "width": 6,
+              "height": 6,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$c-moss"
+                }
+              ],
+              "opacity": 0.4,
+              "x": 428,
+              "y": 882
+            },
+            {
+              "type": "rectangle",
+              "id": "r14",
+              "name": "苔 3",
+              "width": 6,
+              "height": 6,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$c-moss"
+                }
+              ],
+              "opacity": 0.4,
+              "x": 490,
+              "y": 898
+            },
+            {
+              "type": "rectangle",
+              "id": "r15",
+              "name": "苔 4",
+              "width": 6,
+              "height": 6,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$c-moss"
+                }
+              ],
+              "opacity": 0.4,
+              "x": 582,
+              "y": 904
+            },
+            {
+              "type": "rectangle",
+              "id": "r16",
+              "name": "苔 5",
+              "width": 6,
+              "height": 6,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$c-moss"
+                }
+              ],
+              "opacity": 0.4,
+              "x": 642,
+              "y": 886
+            },
+            {
+              "type": "rectangle",
+              "id": "r17",
+              "name": "苔 6",
+              "width": 6,
+              "height": 6,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$c-moss"
+                }
+              ],
+              "opacity": 0.4,
+              "x": 688,
+              "y": 858
+            }
+          ]
+        }
+      ],
+      "x": 0,
+      "y": 0
+    }
+  ]
+}

@@ -265,7 +265,7 @@ impl WidgetHost {
         if self.try_scroll_chat_transcript(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
-        if self.try_scroll_property_panel(x, y, dy, viewport_width, viewport_height) {
+        if self.try_scroll_property_panel_2d(x, y, dx, dy, viewport_width, viewport_height) {
             return true;
         }
         if self.try_scroll_layer_panel(x, y, dx, dy, viewport_height) {

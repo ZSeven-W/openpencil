@@ -668,15 +668,18 @@ impl super::WidgetHostNative {
     /// Canvas rect shared by switcher paint and hit-testing.
     pub(crate) fn preview_canvas_rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
         if self.preview_slideshow_active() {
-            // Presenting hides the rails, so the stage is everything under
-            // the TopBar. Derived, never stored: panel state is untouched, so
-            // the moment the presentation ends this returns the ordinary
-            // canvas region again with nothing to restore. Paint, the board
-            // fit and the toolbar's hit-test all read it, so they cannot
-            // disagree about where the stage is.
+            // Presenting hides the rails. Desktop keeps its TopBar because
+            // it remains painted; touch layouts hide their app bar and dock
+            // in favour of presenter controls, so their safe-area-local
+            // viewport is the whole stage with no unexplained top band.
+            let top = if self.editor_state.editor_ui.touch_chrome() {
+                0.0
+            } else {
+                TOP_BAR_HEIGHT
+            };
             return Rect {
-                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                size: Point2D::new(viewport_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+                origin: Point2D::new(0.0, top),
+                size: Point2D::new(viewport_w, (viewport_h - top).max(0.0)),
             };
         }
         let (canvas_x, canvas_y, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);

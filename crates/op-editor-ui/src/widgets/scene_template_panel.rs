@@ -29,7 +29,6 @@ use op_editor_core::{
 };
 
 use super::asset_center_style_cards::{filtered_style_guide_cards, StyleGuideCard};
-use super::panel_control_metrics::SEGMENT_TRACK_H;
 use super::panel_controls::{segment_rects, segment_track_width, segment_width_for};
 use super::prompt_center_panel::estimated_text_width;
 use super::scene_template_card_actions::basis_chip_reserved_width;
@@ -91,7 +90,7 @@ pub(super) const TITLE_SIZE: f32 = 24.0;
 pub(super) const TAB_ROW_H: f32 = 48.0;
 pub(super) const SEARCH_ROW_H: f32 = 52.0;
 pub(super) const FILTER_ROW_H: f32 = 44.0;
-use crate::widgets::panel_control_metrics::{CHIP_GAP, CHIP_PAD_X};
+use crate::widgets::panel_control_metrics::CHIP_PAD_X;
 /// Every control in this panel measures against the shared ladder in
 /// `panel_control_metrics` rather than declaring its own box. The four
 /// aliases below exist only so the call sites already written against these
@@ -432,11 +431,14 @@ impl<'a> SceneTemplatePanel<'a> {
             .into_iter()
             .map(|tab| self.tab_label(tab))
             .collect();
+        let track_h = self.tab_track_height_for();
         Rect::xywh(
             Self::content_rect(panel).origin.x,
-            panel.origin.y + HEADER_H + (TAB_ROW_H - SEGMENT_TRACK_H) / 2.0,
+            panel.origin.y
+                + self.header_height_for(panel)
+                + (self.tab_row_height_for(panel) - track_h) / 2.0,
             segment_track_width(labels.len(), segment_width_for(&labels)),
-            SEGMENT_TRACK_H,
+            track_h,
         )
     }
 
@@ -479,33 +481,8 @@ impl<'a> SceneTemplatePanel<'a> {
             .map(|index| (index, segments[index].1))
     }
 
-    /// The scene-filter row belongs to the template catalogue; the style
-    /// catalogue has its own vocabulary (tags) and is searched, not filtered.
-    /// Collapsing the row to zero height rather than hiding it in paint keeps
-    /// every rect below it in one place.
-    fn filter_row_height(&self) -> f32 {
-        match self.tab() {
-            AssetCenterTab::Templates => FILTER_ROW_H,
-            AssetCenterTab::Styles => 0.0,
-        }
-    }
-
     pub(super) fn filter_chip_rects(&self, panel: Rect) -> Vec<(Rect, SceneFilter)> {
-        if self.tab() != AssetCenterTab::Templates {
-            return Vec::new();
-        }
-        let top =
-            panel.origin.y + HEADER_H + TAB_ROW_H + SEARCH_ROW_H + (FILTER_ROW_H - CHIP_H) / 2.0;
-        let mut x = Self::content_rect(panel).origin.x;
-        self.filters()
-            .into_iter()
-            .map(|filter| {
-                let width = chip_width(self.filter_label(filter));
-                let rect = Rect::xywh(x, top, width, CHIP_H);
-                x += width + CHIP_GAP;
-                (rect, filter)
-            })
-            .collect()
+        self.filter_chip_layout(panel).0
     }
 
     /// Whether the prompt-to-deck row paints.
@@ -533,16 +510,12 @@ impl<'a> SceneTemplatePanel<'a> {
         )
     }
 
-    fn generate_row_height(&self) -> f32 {
-        if self.generate_row_visible() {
-            GENERATE_ROW_H
-        } else {
-            0.0
-        }
-    }
-
     pub(super) fn generate_row_top(&self, panel: Rect) -> f32 {
-        panel.origin.y + HEADER_H + TAB_ROW_H + SEARCH_ROW_H + self.filter_row_height()
+        panel.origin.y
+            + self.header_height_for(panel)
+            + self.tab_row_height_for(panel)
+            + self.search_row_height_for(panel)
+            + self.filter_row_height_for(panel)
     }
 
     /// Topic field rect, or `None` when the row does not paint.
@@ -552,16 +525,18 @@ impl<'a> SceneTemplatePanel<'a> {
     /// about to be typed, and a row reads as one sentence only while the two
     /// stay on one line.
     pub fn generate_input_rect(&self, panel: Rect) -> Option<Rect> {
-        if !self.generate_row_visible() {
+        if !self.generate_row_visible_in(panel) {
             return None;
         }
         let content = Self::control_rect(panel);
         let reserved = basis_chip_reserved_width(self.basis_chip_rect(panel), GENERATE_GAP);
+        let input_h = self.generate_input_height_for();
+        let button_w = self.generate_button_width_for();
         Some(Rect::xywh(
             content.origin.x + reserved,
             self.generate_row_top(panel) + 6.0,
-            (content.size.x - reserved - GENERATE_BUTTON_W - GENERATE_GAP).max(0.0),
-            GENERATE_INPUT_H,
+            (content.size.x - reserved - button_w - GENERATE_GAP).max(0.0),
+            input_h,
         ))
     }
 
@@ -571,13 +546,13 @@ impl<'a> SceneTemplatePanel<'a> {
         Some(Rect::xywh(
             input.origin.x + input.size.x + GENERATE_GAP,
             input.origin.y,
-            GENERATE_BUTTON_W,
-            GENERATE_INPUT_H,
+            self.generate_button_width_for(),
+            self.generate_input_height_for(),
         ))
     }
 
     pub(super) fn cards_top(&self, panel: Rect) -> f32 {
-        self.generate_row_top(panel) + self.generate_row_height()
+        self.generate_row_top(panel) + self.generate_row_height_for(panel)
     }
 
     pub fn cards_viewport(&self, panel: Rect) -> Rect {
@@ -601,11 +576,13 @@ impl<'a> SceneTemplatePanel<'a> {
     /// count so the two tabs do not disagree about how wide a card is.
     pub(super) fn grid_metrics(&self, panel: Rect) -> (usize, f32, f32) {
         let viewport_w = self.cards_viewport(panel).size.x;
-        let columns = grid_columns(viewport_w);
+        let columns = self
+            .touch_grid_columns(viewport_w)
+            .unwrap_or_else(|| grid_columns(viewport_w));
         let card_w = card_width(viewport_w, columns);
         let card_h = match self.tab() {
             AssetCenterTab::Templates => template_card_height(card_w),
-            AssetCenterTab::Styles => STYLE_CARD_H,
+            AssetCenterTab::Styles => self.touch_style_card_height(),
         };
         (columns, card_w, card_h)
     }
@@ -716,6 +693,9 @@ impl<'a> SceneTemplatePanel<'a> {
     /// Whether `field` is the one the caret paints in.
     pub(super) fn field_focused(&self, field: SceneTemplateFocus) -> bool {
         let center = &self.state.editor_ui.scene_template_center;
+        if !center.input_focus_active {
+            return false;
+        }
         // A hidden row cannot hold focus: the filter can change under a
         // focused topic field, and a caret blinking in an unpainted input
         // would leave the panel with no visible focus at all.
@@ -729,7 +709,7 @@ impl<'a> SceneTemplatePanel<'a> {
     }
 }
 
-fn chip_width(label: &str) -> f32 {
+pub(super) fn chip_width(label: &str) -> f32 {
     // Reuses the Prompt Center's estimate on purpose: the tab row and the
     // filter row use the same chip shape, and a second width model would
     // drift them apart for the same label.

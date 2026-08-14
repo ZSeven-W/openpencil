@@ -124,6 +124,7 @@ impl WidgetHostNative {
                     x,
                     y,
                     text_edit_was_active,
+                    viewport_width,
                     viewport_height,
                 );
             }
@@ -245,6 +246,7 @@ impl WidgetHostNative {
                 x,
                 y,
                 text_edit_was_active,
+                viewport_width,
                 viewport_height,
             );
         }
@@ -263,10 +265,23 @@ impl WidgetHostNative {
                 x,
                 y,
                 text_edit_was_active,
+                viewport_width,
                 viewport_height,
             );
         }
-        // Empty canvas press — start a marquee.
+        // A touch down on empty canvas stays pending until it either crosses
+        // gesture slop (viewport pan) or releases as a tap (clear selection).
+        // Node hits above retain their ordinary selection / node-drag path.
+        if self.editor_state.editor_ui.touch_chrome() {
+            // Break node double-tap continuity on down even though selection
+            // clearing waits for release. A blank pan must never let the next
+            // node tap drill using a stale prior click.
+            self.editor_state.editor_ui.last_canvas_click = None;
+            self.begin_canvas_touch_gesture(x, y, viewport_width, viewport_height);
+            return blurred;
+        }
+
+        // Desktop empty-canvas press — start a marquee.
         self.editor_state.editor_ui.last_canvas_click = None;
         let cleared_now = core_press::clear_selection_on_empty_canvas_press(
             &mut self.editor_state,

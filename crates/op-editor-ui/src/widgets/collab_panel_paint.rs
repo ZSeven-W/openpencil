@@ -132,9 +132,16 @@ impl CollabPanel<'_> {
         body_top: f32,
         key: &'static str,
     ) {
+        let message = op_i18n::translate(self.ui.effective_locale(), key);
+        let message = text_metrics::fit_chrome(
+            cx.backend,
+            message,
+            (rect.size.x - PAD * 2.0).max(0.0),
+            12.0,
+        );
         paint_text(
             cx,
-            op_i18n::translate(self.ui.effective_locale(), key),
+            &message,
             12.0,
             self.theme.muted_foreground,
             Point2D::new(rect.origin.x + PAD, body_top + 29.0),

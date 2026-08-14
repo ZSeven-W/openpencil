@@ -280,6 +280,8 @@ pub enum Icon {
     LayersStack,
     /// Custom presentation screen — the left rail's Slides tab, icon mode.
     PresentationScreen,
+    /// Layers — touch-first entry to the document layer hierarchy.
+    Layers,
 }
 
 impl Icon {
@@ -435,6 +437,7 @@ impl Icon {
             Icon::SquaresExclude => SQUARES_EXCLUDE,
             Icon::LayersStack => LAYERS_STACK,
             Icon::PresentationScreen => PRESENTATION_SCREEN,
+            Icon::Layers => LAYERS,
             Icon::Palette => PALETTE,
         }
     }
@@ -507,12 +510,13 @@ impl Icon {
             "type" | "text" => Icon::Type,
             "frame" => Icon::Frame,
             "hand" => Icon::Hand,
-            "cursor" | "mouse-pointer" => Icon::Cursor,
+            "cursor" | "mouse-pointer" | "mouse-pointer-2" => Icon::Cursor,
             "maximize" | "fullscreen" => Icon::Maximize,
             "minimize" | "minimize-2" | "restore" => Icon::Minimize,
             "sun" => Icon::Sun,
             "moon" => Icon::Moon,
             "panel-left" => Icon::PanelLeft,
+            "layers" | "layers-2" => Icon::Layers,
             "braces" | "code" => Icon::Braces,
             "book-open" => Icon::BookOpen,
             "library" => Icon::Library,

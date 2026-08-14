@@ -296,14 +296,14 @@ fn clicking_the_board_advances_and_holds_at_the_last_slide() {
 }
 
 #[test]
-fn dragging_across_the_board_does_not_advance() {
+fn a_vertical_drag_across_the_board_does_not_advance() {
     let _guard = test_lock();
     let mut host = presenting_host();
     let start = board_point(&host);
 
     host.apply_cursor_move(start.x, start.y);
     host.apply_press(start.x, start.y, VW, VH);
-    host.apply_cursor_move(start.x + 240.0, start.y + 40.0);
+    host.apply_cursor_move(start.x + 40.0, start.y + 240.0);
     host.apply_release_with_viewport(VW, VH);
 
     assert_eq!(
@@ -539,4 +539,78 @@ fn the_rails_are_not_painted_while_presenting() {
         presenting, editing,
         "the rail must be painted again once the presentation ends"
     );
+}
+
+#[test]
+fn touch_account_and_collaboration_overlays_are_neither_painted_nor_hit_while_presenting() {
+    use crate::backend::{NativeBackend, NativeFrameBackend};
+    use op_editor_ui::widgets::login_modal::LoginModal;
+    use op_editor_ui::widgets::CollabPanel;
+
+    let _guard = test_lock();
+    let mut host = presenting_host();
+    host.editor_state.editor_ui.touch = true;
+    host.editor_state.editor_ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+
+    fn center_pixel(host: &mut WidgetHostNative) -> [u8; 4] {
+        let mut surface = skia_safe::surfaces::raster_n32_premul((VW as i32, VH as i32))
+            .expect("raster surface allocated");
+        let mut backend = NativeBackend::with_dpi(1.0);
+        {
+            let mut frame = NativeFrameBackend::new(&mut backend, surface.canvas());
+            host.paint(&mut frame, VW, VH);
+        }
+        let stride = VW as usize * 4;
+        let mut pixels = vec![0u8; stride * VH as usize];
+        let info = skia_safe::ImageInfo::new(
+            (VW as i32, VH as i32),
+            skia_safe::ColorType::RGBA8888,
+            skia_safe::AlphaType::Premul,
+            None,
+        );
+        assert!(surface.read_pixels(&info, &mut pixels, stride, (0, 0)));
+        let offset = VH as usize / 2 * stride + VW as usize / 2 * 4;
+        pixels[offset..offset + 4].try_into().unwrap()
+    }
+
+    let baseline = center_pixel(&mut host);
+    host.editor_state.editor_ui.login_modal_open = true;
+    host.editor_state.editor_ui.collab.panel.open = true;
+    host.editor_state.editor_ui.agent_settings_open = true;
+    assert_eq!(
+        center_pixel(&mut host),
+        baseline,
+        "stale touch overlays must not alter a presentation frame"
+    );
+
+    host.editor_state.editor_ui.collab.panel.open = false;
+    let login = LoginModal::for_editor(&host.editor_state);
+    let login_rect = login.rect(VW, VH);
+    click(
+        &mut host,
+        Point2D::new(login_rect.origin.x + 24.0, login_rect.origin.y + 120.0),
+    );
+    assert_eq!(board_on_screen(&host).as_deref(), Some("slide-2"));
+    assert!(host.editor_state.editor_ui.login_modal_open);
+    assert!(!host.editor_state.editor_ui.login_modal_stub_hint_shown);
+
+    host.editor_state.editor_ui.login_modal_open = false;
+    host.editor_state.editor_ui.collab.panel.open = true;
+    let panel = CollabPanel::for_editor_ui(&host.editor_state.editor_ui).unwrap();
+    let rect = op_editor_ui::widgets::touch_overlay_geometry::collaboration_panel_rect(
+        &host.editor_state,
+        &panel,
+        VW,
+        VH,
+    );
+    click(
+        &mut host,
+        Point2D::new(
+            rect.origin.x + rect.size.x / 2.0,
+            rect.origin.y + rect.size.y / 2.0,
+        ),
+    );
+    assert_eq!(board_on_screen(&host).as_deref(), Some("slide-3"));
+    assert!(host.editor_state.editor_ui.collab.panel.open);
+    assert_eq!(host.editor_state.editor_ui.collab.pending_action, None);
 }

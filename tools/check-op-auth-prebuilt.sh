@@ -2,7 +2,7 @@
 # Audit committed op-auth archives without modifying their bytes.
 #
 # Legacy ABI-v1 artifacts are integrity-pinned compatibility inputs and may
-# still contain source/debug metadata. ABI-v2 artifacts are production
+# still contain source/debug metadata. ABI-v2+ artifacts are production
 # collaboration inputs: they must pass the hardened profile and signed
 # provenance checks in addition to exposing only the documented C ABI.
 
@@ -168,7 +168,7 @@ while IFS= read -r artifact; do
         hardened=1
         for signed_file in PROVENANCE PROVENANCE.sig; do
             if [[ ! -s "$target_dir/$signed_file" ]]; then
-                record_failure "$target: signed ABI-v2 $signed_file is missing"
+                record_failure "$target: signed ABI-v2+ $signed_file is missing"
             fi
         done
         if [[ ! -s "$prebuilt_root/PROVENANCE_PUBKEY" ]]; then

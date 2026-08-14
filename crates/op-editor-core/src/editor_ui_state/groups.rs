@@ -374,6 +374,12 @@ pub struct SceneTemplateCenterState {
     pub generate: jian_core::text_input::TextInputState,
     /// Which of the two fields the keyboard writes into.
     pub focus: SceneTemplateFocus,
+    /// Whether that field currently owns platform text input.
+    ///
+    /// Desktop opens with search active for keyboard-first workflows. Touch
+    /// opens as a gallery and activates the IME only after an explicit field
+    /// tap, so the software keyboard cannot cover the cards on entry.
+    pub input_focus_active: bool,
     /// Which asset family the panel is showing.
     pub tab: AssetCenterTab,
     /// Active catalogue filter.
@@ -448,6 +454,7 @@ impl Default for SceneTemplateCenterState {
             search: Default::default(),
             generate: Default::default(),
             focus: SceneTemplateFocus::Search,
+            input_focus_active: false,
             tab: AssetCenterTab::default(),
             filter: SceneFilter::All,
             scroll: Default::default(),
@@ -474,18 +481,22 @@ impl SceneTemplateCenterState {
         std::mem::take(&mut self.pending_save_current)
     }
 
-    /// Open the panel with search focused and no stale hover/scroll.
-    pub fn open(&mut self, now_ms: u64) {
+    /// Open the panel with no stale hover/scroll.
+    pub fn open(&mut self, now_ms: u64, focus_search: bool) {
         self.open = true;
         self.hover = None;
         self.scroll.offset = 0.0;
         self.focus = SceneTemplateFocus::Search;
-        self.search.touch(now_ms);
+        self.input_focus_active = focus_search;
+        if focus_search {
+            self.search.touch(now_ms);
+        }
     }
 
     /// Close only this panel layer.
     pub fn close(&mut self) {
         self.open = false;
+        self.input_focus_active = false;
         self.hover = None;
         // The paste box is a layer inside this panel; leaving it armed would
         // reopen the gallery with somebody's half-finished import on top.
@@ -527,6 +538,11 @@ impl SceneTemplateCenterState {
         }
     }
 
+    /// Whether a visible Asset Center field owns keyboard and IME input.
+    pub fn input_active(&self) -> bool {
+        self.open && self.input_focus_active
+    }
+
     /// Ask the host to open a file dialog for a `DESIGN.md`.
     pub fn request_style_import_file(&mut self) {
         self.import.error_key = None;
@@ -545,6 +561,7 @@ impl SceneTemplateCenterState {
         self.import.text.set_text("");
         self.import.text.touch(now_ms);
         self.focus = SceneTemplateFocus::Import;
+        self.input_focus_active = true;
     }
 
     /// Close the paste box, handing the keyboard back to the search field.

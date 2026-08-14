@@ -19,12 +19,67 @@ pub const PAD_X: f32 = 16.0;
 pub const SECTION_GAP: f32 = 8.0;
 pub const ROW_HEIGHT: f32 = 28.0;
 pub const INPUT_HEIGHT: f32 = 30.0;
+pub const SIZE_CHECK_ROW_HEIGHT: f32 = 22.0;
+pub const TOUCH_SIZE_CHECK_ROW_HEIGHT: f32 = 30.0;
+pub const SIZE_CHECK_BOX_SIZE: f32 = 16.0;
+pub const TOUCH_SIZE_CHECK_BOX_SIZE: f32 = 14.0;
+
+pub const fn size_check_row_height(touch_controls: bool) -> f32 {
+    if touch_controls {
+        TOUCH_SIZE_CHECK_ROW_HEIGHT
+    } else {
+        SIZE_CHECK_ROW_HEIGHT
+    }
+}
+
+pub const fn size_check_box_size(touch_controls: bool) -> f32 {
+    if touch_controls {
+        TOUCH_SIZE_CHECK_BOX_SIZE
+    } else {
+        SIZE_CHECK_BOX_SIZE
+    }
+}
+
+pub const fn size_check_label_offset(touch_controls: bool) -> f32 {
+    size_check_box_size(touch_controls) + 6.0
+}
 pub const INPUT_RADIUS: f32 = 8.0;
 pub const COLOR_VARIABLE_BUTTON_W: f32 = 28.0;
 pub const COLOR_VARIABLE_GAP: f32 = 6.0;
 pub const SECTION_HEADER_HEIGHT: f32 = 24.0;
+pub const TOUCH_ACTION_TARGET: f32 = 30.0;
+pub const COLOR_SWATCH_ACTION_WIDTH: f32 = 28.0;
 pub const TAB_HEIGHT: f32 = 36.0;
 pub const HEADER_HEIGHT: f32 = 30.0;
+
+/// Hit geometry for the trailing "+" affordance in section headers.
+///
+/// Touch panels are painted through a 1.47 density transform, so a 30-point
+/// logical target resolves to a 44.1-point physical target while the glyph
+/// remains visually compact.
+pub fn section_add_target(x: f32, y: f32, width: f32, touch_controls: bool) -> Rect {
+    if touch_controls {
+        Rect::xywh(
+            x + width - PAD_X - 22.0,
+            y + (SECTION_HEADER_HEIGHT - TOUCH_ACTION_TARGET) / 2.0,
+            TOUCH_ACTION_TARGET,
+            TOUCH_ACTION_TARGET,
+        )
+    } else {
+        Rect::xywh(x + width - PAD_X - 22.0, y, 28.0, SECTION_HEADER_HEIGHT)
+    }
+}
+
+/// Width of the invisible colour-swatch action strip at the start of colour
+/// inputs. The painted 16-point swatch stays unchanged; touch only grows the
+/// surrounding action strip to the 30 logical points that scale to 44.1pt.
+pub const fn color_swatch_action_width(touch_controls: bool) -> f32 {
+    if touch_controls {
+        TOUCH_ACTION_TARGET
+    } else {
+        COLOR_SWATCH_ACTION_WIDTH
+    }
+}
 
 /// "Create component" button metrics — shared by `paint_create_component`
 /// and every layout walker so paint ↔ hit-test ↔ section offsets stay in

@@ -130,7 +130,7 @@ fn rejects_unsigned_abi_v2_artifacts() {
     fs::write(fixture.target_dir.join("ABI_VERSION"), "2\n").unwrap();
     assert_eq!(
         fixture.validate().unwrap_err(),
-        "ABI-v2 provenance manifest is missing"
+        "ABI-v2+ provenance manifest is missing"
     );
 }
 
@@ -144,7 +144,7 @@ fn rejects_tampered_signed_provenance() {
     );
     assert_eq!(
         fixture.validate().unwrap_err(),
-        "ABI-v2 provenance signature verification failed"
+        "ABI-v2+ provenance signature verification failed"
     );
 }
 
@@ -189,7 +189,7 @@ fn validates_every_committed_target_archive() {
         if validated.abi_version >= 2 {
             assert!(
                 validated.signed_provenance,
-                "{target}: ABI-v2 must have verified provenance"
+                "{target}: ABI-v2+ must have verified provenance"
             );
         }
         validated_targets += 1;

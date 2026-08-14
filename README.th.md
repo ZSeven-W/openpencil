@@ -390,6 +390,7 @@ OpenPencil เป็นส่วนหนึ่งของตระกูลเ
 
 | โปรเจกต์ | คืออะไร |
 | -------- | ------- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | ปลั๊กอิน DeepSeek Harness สำหรับ OpenPencil — การแสดงตัวอย่าง `.op` หลายเฟรมที่แม่นยำ แคนวาสแบบอินเทอร์แอคทีฟ และเอดิเตอร์ที่มีการจัดการพร้อมเครื่องมือออกแบบแบบเอเจนต์เนทีฟ ภายในบทสนทนา |
 | **[Zode](https://github.com/ZSeven-W/zode)** | ผู้ช่วยเขียนโค้ดแบบโอเพนซอร์สที่ขับเคลื่อนด้วย AI สำหรับเทอร์มินัลของคุณ — Rust TUI (`ratatui`) ที่รวดเร็วซึ่งอ่านโค้ดของคุณ รันคำสั่ง ค้นหาไฟล์ และจัดการ git ขับเคลื่อน OpenPencil ผ่าน MCP |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | async runtime แบบ pure-Rust สำหรับส่งมอบ LLM agent — รองรับหลายผู้ให้บริการ ใช้เครื่องมือได้แบบ end-to-end สิทธิ์แบบมีโครงสร้าง MCP จริง และ `unsafe` เป็นศูนย์ ขับเคลื่อน agent runtime ในตัวของ OpenPencil (`vendor/agent`) และ Zode |
 | **[jian](https://github.com/ZSeven-W/jian)** | เฟรมเวิร์ก UI แบบ GPU-Skia ที่เป็น pure-Rust — widgets, layout, events และ hot reload ในสแตกเดียว เปลี่ยนเอกสาร `.op` แบบ declarative ให้เป็นแอปแบบ native ที่ควบคุมด้วย AI ได้ โดยไม่มี JS runtime, ไม่มี DOM, ไม่มี Electron เฟรมเวิร์ก UI ของ OpenPencil (`vendor/jian`) |

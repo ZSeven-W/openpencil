@@ -1,0 +1,4 @@
+"embeddedLogin.title" = "登录";
+"embeddedLogin.close" = "关闭登录";
+"embeddedLogin.loadError" = "无法加载登录页面，请检查网络连接后重试。";
+"embeddedLogin.externalBrowser" = "请在浏览器中继续登录，完成后返回 OpenPencil。";

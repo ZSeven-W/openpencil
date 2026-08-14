@@ -13,6 +13,41 @@ use std::time::{Duration, Instant};
 const RESTORED_SESSION_REFRESH_WINDOW: Duration = Duration::from_secs(30);
 
 impl WidgetHostNative {
+    /// Configure the process-global auth runtime for an embedded mobile shell
+    /// and mirror any persisted session into this editor host.
+    ///
+    /// The caller owns platform storage protection and supplies a private app
+    /// directory. The SSO origin remains pinned inside `op-auth-bridge`.
+    pub fn configure_mobile_auth(
+        &mut self,
+        storage_dir: std::path::PathBuf,
+        device_name: String,
+        app_version: String,
+    ) -> bool {
+        let config = op_auth_bridge::mobile_init_config(storage_dir, device_name, app_version);
+        if !op_auth_bridge::available() || !op_auth_bridge::init_mobile(&config) {
+            self.editor_state.editor_ui.account_ui_available = false;
+            return false;
+        }
+
+        self.editor_state.editor_ui.account_ui_available = true;
+        let restored = op_auth_bridge::restore();
+        if let AuthStatus::SignedIn {
+            display_name,
+            username,
+            avatar_url,
+            ..
+        } = op_auth_bridge::poll(op_auth_bridge::SESSION_HANDLE)
+        {
+            let _ = self.adopt_auth_session_profile(display_name, username, avatar_url);
+        }
+        if restored {
+            self.arm_auth_session_refresh();
+        }
+        self.mark_dirty();
+        true
+    }
+
     /// Start the browser device-login flow (called from the sign-in
     /// modal's primary button when a real auth backend is linked).
     pub(in crate::widget_host) fn begin_browser_login(&mut self) {
@@ -35,8 +70,23 @@ impl WidgetHostNative {
     /// bridge flow settles into Canceled on its own thread; UI state
     /// resets immediately.
     pub fn cancel_auth_login(&mut self) {
+        self.cancel_auth_login_with(op_auth_bridge::cancel);
+    }
+
+    /// Engine-teardown hook. It is deliberately idempotent so both an
+    /// explicit platform cancellation and final engine destruction can run
+    /// without sending duplicate cancellation to the backend.
+    pub fn shutdown_auth(&mut self) {
+        self.shutdown_auth_with(op_auth_bridge::cancel);
+    }
+
+    fn shutdown_auth_with(&mut self, cancel: impl FnOnce(u64)) {
+        self.cancel_auth_login_with(cancel);
+    }
+
+    fn cancel_auth_login_with(&mut self, cancel: impl FnOnce(u64)) {
         if let Some(handle) = self.auth_login_handle.take() {
-            op_auth_bridge::cancel(handle);
+            cancel(handle);
         }
         self.auth_browser_opened = false;
         self.auth_pending_browser_url = None;
@@ -51,6 +101,11 @@ impl WidgetHostNative {
             || self
                 .auth_session_refresh_deadline
                 .is_some_and(|deadline| Instant::now() < deadline)
+    }
+
+    /// Whether a user-initiated login (as opposed to session refresh) is live.
+    pub fn auth_login_active(&self) -> bool {
+        self.auth_login_handle.is_some()
     }
 
     /// Keep the idle desktop awake briefly after optimistic session restore.
@@ -268,5 +323,18 @@ mod tests {
         assert!(host.auth_account_avatar_revision.is_none());
         assert!(!host.auth_flow_active());
         assert!(!op_editor_ui::collab_avatar_runtime::has_pending_collab_avatar_requests());
+    }
+
+    #[test]
+    fn shutting_down_auth_invokes_backend_cancel_once() {
+        let mut host = WidgetHostNative::new();
+        host.auth_login_handle = Some(42);
+        let mut canceled = Vec::new();
+
+        host.shutdown_auth_with(|handle| canceled.push(handle));
+        host.shutdown_auth_with(|handle| canceled.push(handle));
+
+        assert_eq!(canceled, vec![42]);
+        assert!(host.auth_login_handle.is_none());
     }
 }

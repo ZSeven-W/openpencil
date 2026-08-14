@@ -171,6 +171,7 @@ fn pressed_font_weight_picker_row_uses_shared_feedback() {
         panel_rect.origin.x,
         crate::widgets::property_panel_text::text_section_top(panel_rect, visible).unwrap(),
         panel_rect.size.x - crate::widgets::property_panel_inputs::PAD_X * 2.0,
+        visible.touch_controls,
     );
     let expected_row = rows[0].1;
     let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
