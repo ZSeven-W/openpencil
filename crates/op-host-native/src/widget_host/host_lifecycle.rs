@@ -239,6 +239,12 @@ impl WidgetHostNative {
     }
 }
 
+impl Default for WidgetHostNative {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod keyboard_occlusion_tests {
     use super::*;

@@ -18,7 +18,7 @@
 use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::host_frame_bookkeeping as bookkeeping;
-use op_editor_ui::widgets::SelectionHandle;
+use op_editor_ui::widgets::{drag_flow::CanvasDropIndex, SelectionHandle};
 use op_editor_ui::{Rect, Theme};
 
 mod a11y;
@@ -404,8 +404,7 @@ pub struct WidgetHostNative {
     /// selected node by the delta.
     pub(in crate::widget_host) node_drag: Option<NodeDragState>,
     /// Gesture-scoped drop-target index reused across pointer frames.
-    pub(in crate::widget_host) canvas_drop_index:
-        Option<op_editor_ui::widgets::drag_flow::CanvasDropIndex>,
+    pub(in crate::widget_host) canvas_drop_index: Option<CanvasDropIndex>,
     /// Original selected ids for an active Option-drag clone move.
     /// Drop hit-testing skips these so a fresh clone does not
     /// immediately reparent back into the source it overlaps.
@@ -799,8 +798,3 @@ impl WidgetHostNative {
 /// short enough that full quality returns imperceptibly after release.
 const INTERACTION_HOT_MS: u64 = 150;
 
-impl Default for WidgetHostNative {
-    fn default() -> Self {
-        Self::new()
-    }
-}
