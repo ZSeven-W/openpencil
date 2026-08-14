@@ -11,7 +11,6 @@ use op_editor_ui::Point2D;
 impl WidgetHostNative {
     pub fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
         use op_editor_core::AgentSettingsTab;
-        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
         self.refresh_layout_scene();
         let point = Point2D::new(x, y);
         let (
@@ -35,8 +34,8 @@ impl WidgetHostNative {
             new_image_profile_test_hover,
             new_image_provider_option_hover,
         ) = {
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+            let (panel, panel_rect) =
+                self.agent_settings_geometry(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
             let tab = self.editor_state.editor_ui.agent_settings.tab;
             let is_agents = matches!(tab, AgentSettingsTab::Agents);
@@ -388,8 +387,8 @@ impl WidgetHostNative {
         ) {
             use op_editor_ui::widgets::agent_settings_fonts::FontsHit;
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit;
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+            let (panel, panel_rect) =
+                self.agent_settings_geometry(self.last_viewport_w, self.last_viewport_h);
             match panel.hit_test(panel_rect, point) {
                 AgentSettingsHit::Fonts(FontsHit::ChooseFont(row)) => (
                     Some(op_editor_core::missing_fonts::MissingFontsHover::ChooseFile(row)),

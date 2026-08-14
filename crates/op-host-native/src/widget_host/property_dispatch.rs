@@ -108,6 +108,11 @@ impl WidgetHostNative {
                 self.editor_state.history_push_past(before);
             }
         }
+        // Opening an input-owning Property overlay while the software
+        // keyboard is already visible must reveal it immediately. This is
+        // idempotent for ordinary actions and complements body-row focus,
+        // which is seeded directly by the press tier.
+        self.reveal_property_keyboard_owner();
         self.mark_dirty();
     }
 

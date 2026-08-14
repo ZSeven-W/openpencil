@@ -120,6 +120,11 @@ impl WidgetHostNative {
         let mut top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         top_bar.chip_text_w = Some(self.topbar_chip_text_w(&top_bar));
         if let Some(hit) = self.topbar_hit_test(&top_bar, top_bar_rect, Point2D::new(x, y)) {
+            if hit == TopBarHit::OpenAgentSettings {
+                // The modal paints above the inspector. Release its complete
+                // input family before the shared flow makes Settings visible.
+                self.release_property_keyboard_owner();
+            }
             self.close_image_popovers_for_higher_overlay();
             // A TopBar destination replaces the collaboration Join caret.
             // Clear even stale focus so reopening Join cannot resurrect it.
@@ -250,5 +255,355 @@ impl WidgetHostNative {
             return Some(true);
         }
         None
+    }
+}
+
+impl WidgetHostNative {
+    /// Mobile layout: the compact app bar — layers / fit / undo / redo /
+    /// overflow. Every action routes through the same shared transitions
+    /// the desktop chrome uses.
+    pub(in crate::widget_host) fn press_mobile_app_bar_tier(
+        &mut self,
+        ctx: &PressCtx,
+    ) -> Option<bool> {
+        if self.preview_slideshow_active() {
+            return None;
+        }
+        let point = Point2D::new(ctx.x, ctx.y);
+        let bar = op_editor_ui::widgets::MobileAppBar::for_editor(&self.editor_state);
+        let bar_rect = op_editor_ui::widgets::host_canvas_geometry::touch_app_bar_rect(
+            &self.editor_state,
+            ctx.viewport_width,
+        );
+        let hit = bar.hit_test(bar_rect, point)?;
+        let now = self.now_ms;
+        match hit {
+            op_editor_ui::widgets::MobileAppBarHit::Layers => {
+                if self.editor_state.editor_ui.expanded_touch_layout() {
+                    self.cancel_native_touch_gestures();
+                    let ui = &mut self.editor_state.editor_ui;
+                    ui.sidebar_open = !ui.sidebar_open;
+                } else {
+                    self.toggle_mobile_sheet(op_editor_core::size_class::MobileSheetKind::Layers);
+                }
+            }
+            op_editor_ui::widgets::MobileAppBarHit::Fit => {
+                self.zoom_to_fit(ctx.viewport_width, ctx.viewport_height);
+            }
+            op_editor_ui::widgets::MobileAppBarHit::Undo => {
+                self.apply_undo();
+            }
+            op_editor_ui::widgets::MobileAppBarHit::Redo => {
+                self.apply_redo();
+            }
+            op_editor_ui::widgets::MobileAppBarHit::Overflow => {
+                self.toggle_mobile_sheet(op_editor_core::size_class::MobileSheetKind::More);
+            }
+        }
+        let _ = now;
+        self.mark_dirty();
+        Some(true)
+    }
+
+    /// Mobile layout: the bottom tool dock — tool selection + shape
+    /// slot + More sheet.
+    pub(in crate::widget_host) fn press_mobile_dock_tier(
+        &mut self,
+        ctx: &PressCtx,
+    ) -> Option<bool> {
+        if self.preview_slideshow_active() {
+            return None;
+        }
+        let point = Point2D::new(ctx.x, ctx.y);
+        let dock = op_editor_ui::widgets::MobileDock::for_editor(&self.editor_state);
+        let dock_rect = op_editor_ui::widgets::host_canvas_geometry::touch_dock_rect(
+            &self.editor_state,
+            ctx.viewport_width,
+            ctx.viewport_height,
+        );
+        let hit = dock.hit_test(dock_rect, point)?;
+        match hit {
+            op_editor_ui::widgets::MobileDockHit::Tool(tool) => {
+                self.editor_state.tool = tool;
+            }
+            op_editor_ui::widgets::MobileDockHit::ShapeSlot => {
+                op_editor_core::host_press_transitions::toggle_shape_picker(
+                    &mut self.editor_state.editor_ui,
+                );
+            }
+            op_editor_ui::widgets::MobileDockHit::More => {
+                self.toggle_mobile_sheet(op_editor_core::size_class::MobileSheetKind::More);
+            }
+        }
+        self.mark_dirty();
+        Some(true)
+    }
+
+    /// Selected-node contextual capsule: open the inspector or delete the
+    /// complete selection. The explicit trash action uses document-delete
+    /// semantics directly, rather than keyboard Delete's focus-first path.
+    pub(in crate::widget_host) fn press_selection_actions_tier(
+        &mut self,
+        ctx: &PressCtx,
+    ) -> Option<bool> {
+        if !self.selection_actions_visible() {
+            return None;
+        }
+        let rect = op_editor_ui::widgets::mobile_chrome::selection_actions_rect_for(
+            &self.editor_state,
+            ctx.viewport_width,
+            ctx.viewport_height,
+        );
+        let hit = op_editor_ui::widgets::mobile_chrome::selection_action_hit(
+            rect,
+            Point2D::new(ctx.x, ctx.y),
+        )?;
+        match hit {
+            op_editor_ui::widgets::mobile_chrome::SelectionActionHit::Properties => {
+                self.editor_state.editor_ui.property_tab = op_editor_core::PropertyTab::Design;
+                if !self.editor_state.editor_ui.expanded_touch_layout() {
+                    self.editor_state.editor_ui.mobile_sheet =
+                        Some(op_editor_core::size_class::MobileSheetKind::Properties);
+                }
+            }
+            op_editor_ui::widgets::mobile_chrome::SelectionActionHit::Delete => {
+                if self.collab_allows_document_mutation(
+                    op_editor_core::CollabDocumentMutation::NodeDelete,
+                ) {
+                    let _ =
+                        op_editor_core::host_keyboard_transitions::delete_selection_with_history(
+                            &mut self.editor_state,
+                        );
+                }
+            }
+        }
+        self.mark_dirty();
+        Some(true)
+    }
+
+    /// Open/close the single mobile sheet; opening one closes the others.
+    pub(in crate::widget_host) fn toggle_mobile_sheet(
+        &mut self,
+        kind: op_editor_core::size_class::MobileSheetKind,
+    ) {
+        self.cancel_native_touch_gestures();
+        let current = self.editor_state.editor_ui.mobile_sheet;
+        let next = if current == Some(kind) {
+            None
+        } else {
+            Some(kind)
+        };
+        let replacing_surface = current.is_some() && current != next;
+        let hiding_expanded_property = current.is_none()
+            && self.editor_state.editor_ui.expanded_touch_layout()
+            && next.is_some();
+        if replacing_surface || hiding_expanded_property {
+            self.dismiss_mobile_surface();
+        }
+        let ui = &mut self.editor_state.editor_ui;
+        ui.mobile_sheet = next;
+        if kind == op_editor_core::size_class::MobileSheetKind::Ai {
+            // Toggling AI also flips the desktop chat visibility so the
+            // two stay consistent.
+            let chat = &mut self.editor_state.chat;
+            if ui.mobile_sheet == Some(kind) {
+                chat.collapsed = false;
+                chat.focused = true;
+            } else {
+                chat.collapsed = true;
+            }
+        }
+    }
+}
+
+impl WidgetHostNative {
+    /// Open touch surface modal ownership. A tap outside closes only the
+    /// surface; it never falls through to an app-bar, dock, page or canvas
+    /// action hidden below the scrim.
+    pub(in crate::widget_host) fn press_mobile_modal_surface_tier(
+        &mut self,
+        ctx: &PressCtx,
+    ) -> Option<bool> {
+        if !self.editor_state.editor_ui.touch_chrome() || self.preview_slideshow_active() {
+            return None;
+        }
+        if self.editor_state.editor_ui.variables_panel_open {
+            let panel = self.variables_panel_rect(ctx.viewport_width, ctx.viewport_height)?;
+            if !panel.contains(Point2D::new(ctx.x, ctx.y)) {
+                self.editor_state.editor_ui.variables_panel_open = false;
+                self.mark_dirty();
+                return Some(true);
+            }
+            return None;
+        }
+        let kind = self.editor_state.editor_ui.mobile_sheet?;
+        let panel = self.mobile_sheet_rect(ctx.viewport_width, ctx.viewport_height, kind);
+        let point = Point2D::new(ctx.x, ctx.y);
+
+        if kind == op_editor_core::size_class::MobileSheetKind::More && panel.contains(point) {
+            return self.press_mobile_more_sheet_tier(ctx);
+        }
+
+        let owns_shared_close = matches!(
+            kind,
+            op_editor_core::size_class::MobileSheetKind::Layers
+                | op_editor_core::size_class::MobileSheetKind::Properties
+                | op_editor_core::size_class::MobileSheetKind::More
+        );
+        if owns_shared_close
+            && op_editor_ui::widgets::mobile_chrome::sheet_close_rect(panel).contains(point)
+        {
+            self.cancel_native_touch_gestures();
+            self.dismiss_mobile_surface();
+            self.mark_dirty();
+            return Some(true);
+        }
+        if !panel.contains(point) {
+            self.cancel_native_touch_gestures();
+            self.dismiss_mobile_surface();
+            self.mark_dirty();
+            return Some(true);
+        }
+        None
+    }
+
+    /// Mobile More sheet: row presses + close. `None` when no More sheet
+    /// is open or the press is outside it.
+    pub(in crate::widget_host) fn press_mobile_more_sheet_tier(
+        &mut self,
+        ctx: &PressCtx,
+    ) -> Option<bool> {
+        if !self.editor_state.editor_ui.touch_chrome()
+            || self.editor_state.editor_ui.mobile_sheet
+                != Some(op_editor_core::size_class::MobileSheetKind::More)
+        {
+            return None;
+        }
+        let point = Point2D::new(ctx.x, ctx.y);
+        let sheet = self.mobile_sheet_rect(
+            ctx.viewport_width,
+            ctx.viewport_height,
+            op_editor_core::size_class::MobileSheetKind::More,
+        );
+        if !sheet.contains(point) {
+            return None;
+        }
+        let close = op_editor_ui::widgets::mobile_chrome::sheet_close_rect(sheet);
+        if close.contains(point) {
+            self.cancel_native_touch_gestures();
+            self.dismiss_mobile_surface();
+            self.mark_dirty();
+            return Some(true);
+        }
+        if let Some(entry) =
+            op_editor_ui::widgets::mobile_chrome::more_hit_test(&self.editor_state, sheet, point)
+        {
+            if entry == op_editor_ui::widgets::MobileMoreEntry::Ai {
+                self.toggle_mobile_sheet(op_editor_core::size_class::MobileSheetKind::Ai);
+                self.mark_dirty();
+                return Some(true);
+            }
+            self.cancel_native_touch_gestures();
+            // Every destination below hides the More surface. Commit and
+            // release all text owners first so an expanded Property field or
+            // stale collaboration caret cannot keep receiving the IME behind
+            // the newly visible overlay.
+            self.blur_text_inputs_on_blank_press();
+            self.release_property_keyboard_owner();
+            self.dismiss_mobile_surface();
+            match entry {
+                op_editor_ui::widgets::MobileMoreEntry::Ai => unreachable!("handled above"),
+                op_editor_ui::widgets::MobileMoreEntry::SignIn => {
+                    let backend_available = {
+                        let ui = &mut self.editor_state.editor_ui;
+                        ui.account_menu_open = false;
+                        ui.collab.panel.open = false;
+                        ui.collab.panel.join_address_focused = false;
+                        ui.login_modal_open = true;
+                        ui.login_modal_hover = None;
+                        // Mobile targets without the proprietary auth bridge
+                        // keep this entry visible, but the modal must say so
+                        // honestly.
+                        ui.login_modal_stub_hint_shown = !ui.account_ui_available;
+                        ui.account_ui_available
+                    };
+                    // A configured mobile backend starts immediately. The
+                    // modal remains behind the platform WebView so terminal
+                    // denial/expiry can still surface an actionable error.
+                    if backend_available {
+                        self.begin_browser_login();
+                    }
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Account => {
+                    // Touch chrome uses a full, reachable Account settings
+                    // surface rather than a dropdown anchored to an unpainted
+                    // desktop avatar button.
+                    let ui = &mut self.editor_state.editor_ui;
+                    ui.account_menu_open = false;
+                    ui.agent_settings_open = true;
+                    ui.agent_settings.tab =
+                        op_editor_core::agent_settings::AgentSettingsTab::Account;
+                    self.editor_state.chat.blur_input(self.now_ms);
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Collaboration => {
+                    let _ = op_editor_ui::widgets::press_flow::apply_shared_top_bar_hit(
+                        &mut self.editor_state,
+                        op_editor_ui::widgets::TopBarHit::Collaboration,
+                        self.now_ms,
+                    );
+                }
+                op_editor_ui::widgets::MobileMoreEntry::OpenFile => {
+                    if self.collab_allows_user_action(
+                        op_editor_core::CollabGateAction::ReplaceDocument,
+                    ) {
+                        self.editor_state.editor_ui.pending_file_action =
+                            Some(op_editor_core::editor_ui_state::FileAction::Open);
+                    }
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Templates
+                | op_editor_ui::widgets::MobileMoreEntry::Assets => {
+                    let tab = match entry {
+                        op_editor_ui::widgets::MobileMoreEntry::Templates => {
+                            op_editor_core::AssetCenterTab::Templates
+                        }
+                        op_editor_ui::widgets::MobileMoreEntry::Assets => {
+                            op_editor_core::AssetCenterTab::Styles
+                        }
+                        _ => unreachable!("matched mobile asset-center entry"),
+                    };
+                    let _ = op_editor_ui::widgets::press_flow::apply_shared_top_bar_hit(
+                        &mut self.editor_state,
+                        op_editor_ui::widgets::TopBarHit::OpenAssetCenter,
+                        self.now_ms,
+                    );
+                    self.editor_state
+                        .editor_ui
+                        .scene_template_center
+                        .select_tab(tab);
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Settings => {
+                    let _ = op_editor_ui::widgets::press_flow::apply_shared_top_bar_hit(
+                        &mut self.editor_state,
+                        op_editor_ui::widgets::TopBarHit::OpenAgentSettings,
+                        self.now_ms,
+                    );
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Variables => {
+                    self.editor_state.editor_ui.toggle_variables_panel();
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Preview => {
+                    let (_, _, cw, ch) =
+                        self.canvas_region(ctx.viewport_width, ctx.viewport_height);
+                    self.toggle_preview((cw, ch));
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Export => {
+                    self.editor_state.editor_ui.open_export_dialog();
+                }
+            }
+            self.mark_dirty();
+            return Some(true);
+        }
+        // Inside the sheet but off any row — consume the press.
+        Some(true)
     }
 }

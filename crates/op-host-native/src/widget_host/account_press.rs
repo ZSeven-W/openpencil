@@ -87,7 +87,14 @@ impl WidgetHostNative {
                 // Outside click — blank press: dismiss + blur inputs.
                 self.blur_text_inputs_on_blank_press();
             }
-            AccountMenuPress::Handled | AccountMenuPress::Ignored => {}
+            AccountMenuPress::Handled => {
+                // The only handled account-menu row opens Settings. The shared
+                // flow has already made that modal visible, so release every
+                // Property-owned input now before the next keyboard event can
+                // reach a field hidden underneath it.
+                self.release_property_keyboard_owner();
+            }
+            AccountMenuPress::Ignored => {}
         }
         self.mark_dirty();
     }

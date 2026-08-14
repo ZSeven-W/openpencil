@@ -15,7 +15,18 @@ impl PropertyPanel {
     /// `Row` = a choice was clicked, `Inside` = swallow (keep open),
     /// `Outside` = dismiss. Only meaningful while the menu is open.
     pub fn effect_add_menu_hit(&self, panel_rect: Rect, point: Point2D) -> EffectAddMenuHit {
-        let Some(menu) = self.effect_add_menu_rect(panel_rect) else {
+        self.effect_add_menu_hit_logical(
+            self.logical_rect(panel_rect),
+            self.logical_point(panel_rect, point),
+        )
+    }
+
+    pub(super) fn effect_add_menu_hit_logical(
+        &self,
+        panel_rect: Rect,
+        point: Point2D,
+    ) -> EffectAddMenuHit {
+        let Some(menu) = self.effect_add_menu_rect_logical(panel_rect) else {
             return EffectAddMenuHit::Outside;
         };
         for (action, row) in crate::widgets::property_panel_effects::effect_add_menu_row_rects(menu)
@@ -35,6 +46,12 @@ impl PropertyPanel {
     /// padded chrome. Hosts use this as the O(1) ownership/occlusion test;
     /// deriving it here keeps popup paint, hit, and hover geometry identical.
     pub fn effect_add_menu_rect(&self, panel_rect: Rect) -> Option<Rect> {
+        let logical = self.logical_rect(panel_rect);
+        self.effect_add_menu_rect_logical(logical)
+            .map(|rect| self.physical_rect(logical, rect))
+    }
+
+    fn effect_add_menu_rect_logical(&self, panel_rect: Rect) -> Option<Rect> {
         if !self.effect_add_picker_open {
             return None;
         }
@@ -51,7 +68,9 @@ impl PropertyPanel {
     /// Row index under `point` in the open Effects add-menu — drives the
     /// hover highlight (mirrors [`Self::export_picker_row_at`]).
     pub fn effect_add_menu_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
-        let menu = self.effect_add_menu_rect(panel_rect)?;
+        let point = self.logical_point(panel_rect, point);
+        let panel_rect = self.logical_rect(panel_rect);
+        let menu = self.effect_add_menu_rect_logical(panel_rect)?;
         crate::widgets::property_panel_effects::effect_add_menu_row_rects(menu)
             .into_iter()
             .position(|(_, row)| row.contains(point))
@@ -92,6 +111,17 @@ impl PropertyPanel {
     /// Hit-test the Interactions section's Navigate/Back/Remove popover
     /// against `point` (panel space). Mirrors [`Self::effect_add_menu_hit`].
     pub fn interaction_menu_hit(&self, panel_rect: Rect, point: Point2D) -> InteractionMenuHit {
+        self.interaction_menu_hit_logical(
+            self.logical_rect(panel_rect),
+            self.logical_point(panel_rect, point),
+        )
+    }
+
+    pub(super) fn interaction_menu_hit_logical(
+        &self,
+        panel_rect: Rect,
+        point: Point2D,
+    ) -> InteractionMenuHit {
         let Some(anchor) = self.interaction_menu_anchor_rect(self.scrolled_rect(panel_rect)) else {
             return InteractionMenuHit::Outside;
         };
@@ -119,6 +149,8 @@ impl PropertyPanel {
     /// Row index under `point` in the open Interactions popover — drives
     /// the hover highlight (mirrors [`Self::effect_add_menu_row_at`]).
     pub fn interaction_menu_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        let point = self.logical_point(panel_rect, point);
+        let panel_rect = self.logical_rect(panel_rect);
         let anchor = self.interaction_menu_anchor_rect(self.scrolled_rect(panel_rect))?;
         let rows = crate::widgets::property_panel_interactions::interaction_menu_rows(
             self.locale,

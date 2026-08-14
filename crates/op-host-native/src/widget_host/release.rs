@@ -13,6 +13,14 @@ use op_editor_ui::Point2D;
 impl WidgetHostNative {
     /// Mouse-release — ends active drag; chat-panel snaps corner.
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        if let Some(consumed) = self.release_agent_settings_touch_gesture() {
+            let pressed_released = self.release_pressed_feedback();
+            return consumed || pressed_released;
+        }
+        if let Some(consumed) = self.release_touch_panel_gesture() {
+            let pressed_released = self.release_pressed_feedback();
+            return consumed || pressed_released;
+        }
         let pressed_released = self.release_pressed_feedback();
         if self.screen_switcher_release() {
             return true;
@@ -166,7 +174,7 @@ impl WidgetHostNative {
             return true;
         }
         if let Some(d) = self.layer_drag.take() {
-            return self.commit_layer_drag(d, viewport_h);
+            return self.commit_layer_drag(d, viewport_w, viewport_h);
         }
         if let Some(d) = self.chat_drag.take() {
             // Snap using the live expanded/collapsed panel size.
@@ -189,6 +197,7 @@ impl WidgetHostNative {
     /// the tool branch; the shared cursor-move / release paths drive
     /// and end it like any pan drag.
     pub fn apply_pan_press(&mut self, x: f32, y: f32) -> bool {
+        self.cancel_native_touch_gestures();
         if self.over_topmost_panel(x, y, self.last_viewport_w, self.last_viewport_h) {
             return true;
         }
@@ -200,6 +209,14 @@ impl WidgetHostNative {
     }
 
     pub fn apply_release(&mut self) -> bool {
+        if let Some(consumed) = self.release_agent_settings_touch_gesture() {
+            let pressed_released = self.release_pressed_feedback();
+            return consumed || pressed_released;
+        }
+        if let Some(consumed) = self.release_touch_panel_gesture() {
+            let pressed_released = self.release_pressed_feedback();
+            return consumed || pressed_released;
+        }
         let pressed_released = self.release_pressed_feedback();
         // The slides tab needs a viewport to re-derive its row rects; the
         // cached one is what every other viewport-less path here uses, and

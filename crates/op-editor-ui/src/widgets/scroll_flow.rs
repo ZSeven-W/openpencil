@@ -9,6 +9,7 @@
 //! stay host-side because they are derived from host viewport
 //! bookkeeping, so callers pass them in.
 
+use op_editor_core::size_class::MobileSheetKind;
 use op_editor_core::EditorState;
 
 use crate::util::scroll_by_max;
@@ -188,6 +189,20 @@ pub fn scroll_property_panel_body(
     point: Point2D,
     delta_y: f32,
 ) -> Option<bool> {
+    scroll_property_panel_body_2d(state, panel, property_rect, point, 0.0, delta_y)
+}
+
+/// Two-axis counterpart used by trackpad and one-finger pan paths. Only the
+/// Code tab's framework strip consumes `delta_x`; the rest of the inspector
+/// keeps its established vertical `delta_y` behaviour.
+pub fn scroll_property_panel_body_2d(
+    state: &mut EditorState,
+    panel: &crate::widgets::PropertyPanel,
+    property_rect: Rect,
+    point: Point2D,
+    delta_x: f32,
+    delta_y: f32,
+) -> Option<bool> {
     use crate::widgets::property_panel_code;
     if !property_rect.contains(point) {
         return None;
@@ -196,20 +211,34 @@ pub fn scroll_property_panel_body(
         state.editor_ui.property_tab,
         op_editor_core::PropertyTab::Code
     ) {
+        let logical_rect = panel.logical_rect(property_rect);
+        let logical_point = panel.logical_point(property_rect, point);
         // Code tab: a wheel over the framework strip scrolls it
         // horizontally (it's a single row), not the panel vertically.
+        let touch_controls = state.editor_ui.touch_chrome();
         let (band_top, band_bottom) =
-            property_panel_code::framework_row_band(property_rect.origin.y);
-        if point.y >= band_top && point.y <= band_bottom {
-            let max = property_panel_code::framework_row_overflow(property_rect.size.x);
+            property_panel_code::framework_row_band_for(logical_rect.origin.y, touch_controls);
+        if logical_point.y >= band_top && logical_point.y <= band_bottom {
+            let max = panel.physical_length(property_panel_code::framework_row_overflow_for(
+                logical_rect.size.x,
+                touch_controls,
+            ));
+            let strip_delta = if delta_x != 0.0 { delta_x } else { delta_y };
             let cg = &mut state.codegen;
-            return Some(scroll_by_max(&mut cg.framework_scroll, -delta_y, max));
+            return Some(scroll_by_max(&mut cg.framework_scroll, -strip_delta, max));
         }
-        if property_panel_code::code_preview_rect(property_rect, &state.codegen)
-            .is_some_and(|rect| rect.contains(point))
+        let mut logical_codegen = state.codegen.clone();
+        logical_codegen.framework_scroll.offset =
+            panel.logical_length(logical_codegen.framework_scroll.offset);
+        logical_codegen.code_scroll.offset =
+            panel.logical_length(logical_codegen.code_scroll.offset);
+        if property_panel_code::code_preview_rect(logical_rect, &logical_codegen)
+            .is_some_and(|rect| rect.contains(logical_point))
         {
-            let max = property_panel_code::code_preview_max_scroll(property_rect, &state.codegen)
-                .unwrap_or(0.0);
+            let max = panel.physical_length(
+                property_panel_code::code_preview_max_scroll(logical_rect, &logical_codegen)
+                    .unwrap_or(0.0),
+            );
             let cg = &mut state.codegen;
             return Some(scroll_by_max(&mut cg.code_scroll, -delta_y, max));
         }
@@ -239,7 +268,7 @@ pub fn scroll_layer_panel(
     delta_x: f32,
     delta_y: f32,
 ) -> Option<bool> {
-    if !state.editor_ui.sidebar_open {
+    if !layer_panel_surface_open(state) {
         return None;
     }
     if !rect.contains(point) {
@@ -278,7 +307,7 @@ pub fn reveal_layer_panel_selection(
     panel: &LayerPanel,
     rect: Rect,
 ) -> bool {
-    if !state.editor_ui.sidebar_open {
+    if !layer_panel_surface_open(state) {
         return false;
     }
     let selected = state.selection.anchor.clone();
@@ -294,4 +323,10 @@ pub fn reveal_layer_panel_selection(
     }
     scroll.offset = next;
     true
+}
+
+fn layer_panel_surface_open(state: &EditorState) -> bool {
+    state.editor_ui.sidebar_open
+        || (state.editor_ui.touch_chrome()
+            && state.editor_ui.mobile_sheet == Some(MobileSheetKind::Layers))
 }

@@ -390,6 +390,7 @@ OpenPencil là một phần của bộ công cụ thuần Rust, thuần AI đế
 
 | Dự án | Là gì |
 | ----- | ----- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | Plugin DeepSeek Harness cho OpenPencil — bản xem trước `.op` nhiều khung chính xác, canvas tương tác và trình chỉnh sửa được quản lý với các công cụ thiết kế gốc cho agent, ngay trong cuộc trò chuyện. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | Trợ lý lập trình mã nguồn mở, thuần AI cho terminal của bạn — một Rust TUI nhanh (`ratatui`) đọc mã của bạn, chạy lệnh, tìm kiếm tệp và quản lý git. Điều khiển OpenPencil qua MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Một runtime bất đồng bộ thuần Rust để phát hành các tác nhân LLM — đa nhà cung cấp, hỗ trợ công cụ đầu-cuối, quyền có cấu trúc, MCP thực thụ, không có `unsafe`. Cung cấp năng lượng cho runtime tác nhân tích hợp sẵn của OpenPencil (`vendor/agent`) và Zode. |
 | **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia thuần Rust — widget, layout, sự kiện và hot reload trong một stack duy nhất. Biến một tài liệu `.op` khai báo thành một ứng dụng gốc, có thể điều khiển bằng AI mà không cần JS runtime, không DOM, không Electron. Framework UI của OpenPencil (`vendor/jian`). |

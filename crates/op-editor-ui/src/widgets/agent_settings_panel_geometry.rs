@@ -150,7 +150,14 @@ pub(super) const SECONDARY_HEADING_HAS_DESC: bool = true;
 /// their own geometry stays written against "the top of my body", so
 /// adding the intro needed no edits inside them.
 pub(super) fn hero_body_rect(content: Rect) -> Rect {
-    let dy = crate::widgets::agent_settings_rows::tab_intro_height(SECONDARY_HEADING_HAS_DESC);
+    hero_body_rect_for_ui(content, false)
+}
+
+pub(super) fn hero_body_rect_for_ui(content: Rect, touch: bool) -> Rect {
+    let dy = crate::widgets::agent_settings_rows::tab_intro_height_for_ui(
+        SECONDARY_HEADING_HAS_DESC,
+        touch,
+    );
     Rect {
         origin: Point2D::new(content.origin.x, content.origin.y + dy),
         size: Point2D::new(content.size.x, (content.size.y - dy).max(0.0)),

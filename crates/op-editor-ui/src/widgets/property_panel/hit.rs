@@ -13,11 +13,73 @@ use jian_widgets::components::select::SelectHit;
 use op_editor_core::PropertyFocus;
 
 impl PropertyPanel {
+    /// Whether a physical point is in the Code tab's horizontal framework
+    /// strip. Native touch arbitration uses this one bounded query instead of
+    /// duplicating the panel's density coordinate mapping.
+    pub fn code_framework_strip_contains(&self, panel_rect: Rect, point: Point2D) -> bool {
+        if !matches!(self.tab, op_editor_core::PropertyTab::Code) || !panel_rect.contains(point) {
+            return false;
+        }
+        let logical_rect = self.logical_rect(panel_rect);
+        let logical_point = self.logical_point(panel_rect, point);
+        let (top, bottom) = crate::widgets::property_panel_code::framework_row_band_for(
+            logical_rect.origin.y,
+            self.density_scale > 1.0,
+        );
+        logical_point.y >= top && logical_point.y <= bottom
+    }
+
+    /// Map a physical surface point over the Code tab to its hover state.
+    /// The panel-owned Codegen snapshot already carries logical scroll offsets.
+    pub(crate) fn code_hover_at(
+        &self,
+        panel_rect: Rect,
+        point: Point2D,
+    ) -> (
+        Option<op_editor_core::codegen::Framework>,
+        Option<op_editor_core::codegen::CodegenHover>,
+    ) {
+        if !matches!(self.tab, op_editor_core::PropertyTab::Code) {
+            return (None, None);
+        }
+        crate::widgets::property_panel_code::code_hover_at_with_locale_for_touch(
+            self.logical_rect(panel_rect),
+            &self.codegen,
+            self.logical_point(panel_rect, point),
+            self.locale,
+            self.density_scale > 1.0,
+        )
+    }
+
+    /// Map a physical surface point inside the generated-code preview to a
+    /// byte offset. Hosts use this for caret placement and selection drags.
+    pub fn code_text_offset_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        if !matches!(self.tab, op_editor_core::PropertyTab::Code) {
+            return None;
+        }
+        crate::widgets::property_panel_code::code_text_offset_at(
+            self.logical_rect(panel_rect),
+            &self.codegen,
+            self.logical_point(panel_rect, point),
+        )
+    }
+
     /// Hit-test the flex / size buttons + checkboxes. Returns the
     /// action the host should dispatch, or `None` if the cursor
     /// missed every clickable shape. Called AFTER `hit_test` so
     /// text inputs win over the action rects they overlap with.
     pub fn hit_test_action(&self, panel_rect: Rect, point: Point2D) -> Option<PropertyPanelAction> {
+        self.hit_test_action_logical(
+            self.logical_rect(panel_rect),
+            self.logical_point(panel_rect, point),
+        )
+    }
+
+    fn hit_test_action_logical(
+        &self,
+        panel_rect: Rect,
+        point: Point2D,
+    ) -> Option<PropertyPanelAction> {
         // Design / Code tab strip — clickable on either tab, incl. multi-select.
         if let Some(tab) = sections::tab_strip_hit(
             &self.labels,
@@ -25,6 +87,7 @@ impl PropertyPanel {
             panel_rect.origin.y,
             point,
             self.snapshot.widget.is_some(),
+            self.density_scale > 1.0,
         ) {
             return Some(PropertyPanelAction::SetPropertyTab(tab));
         }
@@ -33,11 +96,12 @@ impl PropertyPanel {
             return None;
         }
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            return crate::widgets::property_panel_code::code_action_hit_with_locale(
+            return crate::widgets::property_panel_code::code_action_hit_with_locale_for_touch(
                 panel_rect,
                 &self.codegen,
                 point,
                 self.locale,
+                self.density_scale > 1.0,
             );
         }
         if self.page_only {
@@ -54,7 +118,7 @@ impl PropertyPanel {
             }
         }
         if self.compositing_picker.open {
-            match self.compositing_picker_hit(panel_rect, point) {
+            match self.compositing_picker_hit_logical(panel_rect, point) {
                 SelectHit::Row(index) => {
                     if let Some(target) = self.compositing_picker_target {
                         return crate::widgets::property_panel_compositing::action_for_row(
@@ -96,7 +160,7 @@ impl PropertyPanel {
             }
         }
         if self.fill_type_picker.open {
-            match self.fill_type_picker_hit(panel_rect, point) {
+            match self.fill_type_picker_hit_logical(panel_rect, point) {
                 SelectHit::Row(idx) => {
                     if let Some(fill_type) = crate::widgets::property_panel_fill::fill_type_at(idx)
                     {
@@ -113,14 +177,14 @@ impl PropertyPanel {
         // Effects "+" add-menu: when open, its rows win over the panel
         // body; clicks inside its chrome are swallowed.
         if self.effect_add_picker_open {
-            match self.effect_add_menu_hit(panel_rect, point) {
+            match self.effect_add_menu_hit_logical(panel_rect, point) {
                 EffectAddMenuHit::Row(action) => return Some(action),
                 EffectAddMenuHit::Inside => return None,
                 EffectAddMenuHit::Outside => {}
             }
         }
         if self.interaction_menu_open {
-            match self.interaction_menu_hit(panel_rect, point) {
+            match self.interaction_menu_hit_logical(panel_rect, point) {
                 InteractionMenuHit::Row(action) => return Some(action),
                 InteractionMenuHit::Inside => return None,
                 InteractionMenuHit::Outside => {}
@@ -185,6 +249,13 @@ impl PropertyPanel {
     /// `SetExportFormat`), matching `paint_select_popup`'s row walk,
     /// so it can drive the popup's hover highlight.
     pub fn export_picker_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        self.export_picker_row_at_logical(
+            self.logical_rect(panel_rect),
+            self.logical_point(panel_rect, point),
+        )
+    }
+
+    fn export_picker_row_at_logical(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
         if !self.export_scale_picker_open && !self.export_format_picker_open {
             return None;
         }
@@ -221,6 +292,8 @@ impl PropertyPanel {
         field: op_editor_core::ImageAdjustmentField,
         x: f32,
     ) -> Option<PropertyPanelAction> {
+        let point = self.logical_point(panel_rect, Point2D::new(x, panel_rect.origin.y));
+        let panel_rect = self.logical_rect(panel_rect);
         if self.is_multi || !self.image_fill_popover_open {
             return None;
         }
@@ -229,7 +302,7 @@ impl PropertyPanel {
             self.visible_sections(),
             &self.snapshot,
             field,
-            x,
+            point.x,
         )
     }
 
@@ -239,6 +312,8 @@ impl PropertyPanel {
         effect_index: usize,
         x: f32,
     ) -> Option<PropertyPanelAction> {
+        let point = self.logical_point(panel_rect, Point2D::new(x, panel_rect.origin.y));
+        let panel_rect = self.logical_rect(panel_rect);
         if self.is_multi {
             return None;
         }
@@ -264,7 +339,7 @@ impl PropertyPanel {
                 Some(PropertyPanelAction::AdjustEffectParam {
                     effect,
                     field,
-                    new_value: crate::widgets::property_panel_effects::slider_value(rect, x),
+                    new_value: crate::widgets::property_panel_effects::slider_value(rect, point.x),
                 })
             }
             _ => None,
@@ -272,6 +347,13 @@ impl PropertyPanel {
     }
 
     pub fn image_fill_popover_contains(&self, panel_rect: Rect, point: Point2D) -> bool {
+        self.image_fill_popover_contains_logical(
+            self.logical_rect(panel_rect),
+            self.logical_point(panel_rect, point),
+        )
+    }
+
+    fn image_fill_popover_contains_logical(&self, panel_rect: Rect, point: Point2D) -> bool {
         !self.is_multi
             && self.image_fill_popover_open
             && sections::image_fill_popover_contains(
@@ -290,6 +372,8 @@ impl PropertyPanel {
         panel_rect: Rect,
         point: Point2D,
     ) -> Option<PropertyFocus> {
+        let point = self.logical_point(panel_rect, point);
+        let panel_rect = self.logical_rect(panel_rect);
         if self.is_multi || !self.image_fill_popover_open {
             return None;
         }
@@ -311,6 +395,8 @@ impl PropertyPanel {
     /// per-kind section filtering applied in `paint`, so rects
     /// after a skipped section don't drift out of alignment.
     pub fn hit_test(&self, panel_rect: Rect, point: Point2D) -> Option<PropertyFocus> {
+        let point = self.logical_point(panel_rect, point);
+        let panel_rect = self.logical_rect(panel_rect);
         if self.is_multi {
             // Inputs inert in v1 multi-select aggregate view.
             return None;
@@ -344,6 +430,13 @@ impl PropertyPanel {
     /// drives the per-button `theme.button_hover` wash. Shares the
     /// walker geometry with `hit_test_action` + paint so it can't drift.
     pub fn action_hover_index(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
+        self.action_hover_index_logical(
+            self.logical_rect(panel_rect),
+            self.logical_point(panel_rect, point),
+        )
+    }
+
+    fn action_hover_index_logical(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
         if self.is_multi || matches!(self.tab, op_editor_core::PropertyTab::Code) {
             return None;
         }
@@ -352,13 +445,13 @@ impl PropertyPanel {
         }
         if self.fill_type_picker.open
             && !matches!(
-                self.fill_type_picker_hit(panel_rect, point),
+                self.fill_type_picker_hit_logical(panel_rect, point),
                 SelectHit::Outside
             )
         {
             return None;
         }
-        if self.compositing_picker_contains(panel_rect, point) {
+        if self.compositing_picker_contains_logical(panel_rect, point) {
             return None;
         }
         if !self.point_in_section_viewport(panel_rect, point) {
@@ -388,12 +481,15 @@ impl PropertyPanel {
         panel_rect: Rect,
         point: Point2D,
     ) -> Option<op_editor_core::PropertyTab> {
+        let point = self.logical_point(panel_rect, point);
+        let panel_rect = self.logical_rect(panel_rect);
         sections::tab_strip_hit(
             &self.labels,
             panel_rect.origin.x,
             panel_rect.origin.y,
             point,
             self.snapshot.widget.is_some(),
+            self.density_scale > 1.0,
         )
     }
 }

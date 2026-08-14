@@ -441,6 +441,13 @@ pub(crate) const LAYERS_STACK: &[&str] = &[
     "M3 16.5 12 21 21 16.5",
 ];
 
+/// Lucide `layers.svg` — semantic layer hierarchy entry for touch chrome.
+pub(crate) const LAYERS: &[&str] = &[
+    "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z",
+    "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12",
+    "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17",
+];
+
 /// Custom presentation-screen glyph — the left rail's Slides tab when
 /// the rail is too narrow for its label. A screen on a stand, which is
 /// what a board in a deck is; the scenario-specific names (cards and

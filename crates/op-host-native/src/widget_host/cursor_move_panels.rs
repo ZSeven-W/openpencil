@@ -12,7 +12,7 @@
 
 use super::cursor_move_ctx::CursorMoveCtx;
 use super::WidgetHostNative;
-use op_editor_ui::widgets::{CollabPanel, PropertyPanel, TopBar, TOP_BAR_HEIGHT};
+use op_editor_ui::widgets::{CollabPanel, PropertyPanel};
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHostNative {
@@ -269,12 +269,13 @@ impl WidgetHostNative {
     ) -> Option<(Rect, Option<op_editor_core::CollabPanelHover>)> {
         let ui = &self.editor_state.editor_ui;
         CollabPanel::for_editor_ui(ui).map(|panel| {
-            let top_bar_rect = Rect::xywh(0.0, 0.0, self.last_viewport_w, TOP_BAR_HEIGHT);
-            let top_bar = TopBar::for_editor_ui(ui);
-            let panel_rect = panel.rect_at(
-                top_bar.collaboration_chip_rect_estimated(top_bar_rect),
-                Rect::xywh(0.0, 0.0, self.last_viewport_w, self.last_viewport_h),
-            );
+            let panel_rect =
+                op_editor_ui::widgets::touch_overlay_geometry::collaboration_panel_rect(
+                    &self.editor_state,
+                    &panel,
+                    self.last_viewport_w,
+                    self.last_viewport_h,
+                );
             (panel_rect, panel.hover_at(panel_rect, point))
         })
     }

@@ -9,6 +9,7 @@ use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::button::tokens_from_theme;
 use crate::widgets::icons::{draw_icon, Icon};
+use crate::widgets::settings_form::ellipsize;
 use crate::widgets::text_metrics;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -54,8 +55,19 @@ fn action_btn_rect(card: Rect) -> Rect {
     }
 }
 
+fn action_btn_target(card: Rect, touch: bool) -> Rect {
+    let visual = action_btn_rect(card);
+    if !touch {
+        return visual;
+    }
+    Rect {
+        origin: Point2D::new(visual.origin.x, card.origin.y + (CARD_H - 44.0) / 2.0),
+        size: Point2D::new(visual.size.x, 44.0),
+    }
+}
+
 pub fn hit_test(content: Rect, ui: &EditorUiState, scrolled: Point2D) -> AccountTabHit {
-    if !(action_btn_rect(card_rect(content))).contains(scrolled) {
+    if !action_btn_target(card_rect(content), ui.touch_chrome()).contains(scrolled) {
         return AccountTabHit::None;
     }
     if ui.account.is_signed_in() {
@@ -117,8 +129,15 @@ fn paint_signed_out(cx: &mut PaintCx<'_>, theme: &Theme, ui: &EditorUiState, car
     paint_avatar_tile(cx, theme, avatar_rect);
 
     let text_x = avatar_rect.origin.x + AVATAR + 12.0;
-    let label = TextLayout::single_run(
+    let text_w = (action_btn_rect(card).origin.x - text_x - 12.0).max(0.0);
+    let label_text = ellipsize(
+        cx,
         t_settings(ui, "settings.account.notSignedIn"),
+        text_w,
+        14.0,
+    );
+    let label = TextLayout::single_run(
+        &label_text,
         "system-ui",
         14.0,
         (theme.foreground).to_jian(),
@@ -129,8 +148,9 @@ fn paint_signed_out(cx: &mut PaintCx<'_>, theme: &Theme, ui: &EditorUiState, car
         &label,
         Point2D::new(text_x, card.origin.y + card.size.y / 2.0 - 4.0),
     );
+    let hint_text = ellipsize(cx, signed_out_hint(ui.effective_locale()), text_w, 11.0);
     let hint = TextLayout::single_run(
-        signed_out_hint(ui.effective_locale()),
+        &hint_text,
         "system-ui",
         11.0,
         theme.muted_foreground.to_jian(),
@@ -183,8 +203,10 @@ fn paint_signed_in(
         .stroke_oval(avatar_rect, theme.border.with_alpha(0.72), 1.0);
 
     let text_x = avatar_rect.origin.x + AVATAR + 12.0;
+    let text_w = (action_btn_rect(card).origin.x - text_x - 12.0).max(0.0);
+    let display_name = ellipsize(cx, display_name, text_w, 14.0);
     let name_label = TextLayout::single_run(
-        display_name,
+        &display_name,
         "system-ui",
         14.0,
         (theme.foreground).to_jian(),
@@ -196,6 +218,7 @@ fn paint_signed_in(
         Point2D::new(text_x, card.origin.y + CARD_H / 2.0 - 2.0),
     );
     let username_display = format!("@{}", username);
+    let username_display = ellipsize(cx, &username_display, text_w, 11.0);
     let username_label = TextLayout::single_run(
         &username_display,
         "system-ui",
@@ -373,6 +396,26 @@ mod tests {
             username: "kayshen".into(),
         };
         assert_eq!(hit_test(content, &ui, center), AccountTabHit::SignOut);
+    }
+
+    #[test]
+    fn touch_account_action_has_a_44_point_target() {
+        let content = Rect::xywh(16.0, 120.0, 288.0, 400.0);
+        let target = action_btn_target(card_rect(content), true);
+        let ui = EditorUiState {
+            touch: true,
+            ..EditorUiState::default()
+        };
+
+        assert_eq!(target.size.y, 44.0);
+        assert_eq!(
+            hit_test(
+                content,
+                &ui,
+                Point2D::new(target.origin.x + 1.0, target.origin.y + 1.0)
+            ),
+            AccountTabHit::SignIn
+        );
     }
 
     #[test]

@@ -120,7 +120,7 @@ printf '%s\n' \
 printf '2\n' > "$target_dir/ABI_VERSION"
 write_sha256 "$artifact" "$target_dir/SHA256"
 expect_failure "rejects unsigned ABI-v2 provenance" \
-    "signed ABI-v2 PROVENANCE is missing"
+    "signed ABI-v2+ PROVENANCE is missing"
 
 if [[ "$failure_count" -ne 0 ]]; then
     printf 'check-op-auth-prebuilt.test.sh: %s test(s) failed.\n' "$failure_count" >&2

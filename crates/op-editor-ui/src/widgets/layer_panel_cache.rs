@@ -118,6 +118,7 @@ struct LayerRowKey {
     active_page_index: usize,
     collapsed_fp: u64,
     rename_fp: u64,
+    touch_density: bool,
 }
 
 impl LayerRowKey {
@@ -127,6 +128,7 @@ impl LayerRowKey {
             active_page_index: state.ui.active_page_index,
             collapsed_fp: collapsed_fingerprint(state),
             rename_fp: rename_fingerprint(state),
+            touch_density: state.editor_ui.touch_chrome(),
         }
     }
 }

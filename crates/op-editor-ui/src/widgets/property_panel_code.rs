@@ -30,10 +30,13 @@ mod framework;
 mod generating;
 
 use framework::{
-    chips_body_top, framework_chevron_zones, framework_chip_rects, paint_framework_chips,
-    CHEVRON_ZONE_W,
+    chips_body_top, chips_body_top_for, framework_chevron_zones, framework_chevron_zones_for,
+    framework_chip_rects, framework_chip_rects_for, paint_framework_chips,
+    paint_framework_chips_for, CHEVRON_ZONE_W, TOUCH_TARGET_SIZE,
 };
 pub use framework::{framework_at, framework_row_band, framework_row_overflow};
+
+pub(crate) use framework::{framework_row_band_for, framework_row_overflow_for};
 
 /// Map a click on the Code tab to its action (framework chip / button), or
 /// `None`. Uses the same content origin the painter does (panel left,
@@ -52,7 +55,17 @@ pub fn code_action_hit_with_locale(
     point: Point2D,
     locale: Locale,
 ) -> Option<PropertyPanelAction> {
-    code_action_rects_in_panel_with_locale(panel_rect, state, locale)
+    code_action_hit_with_locale_for_touch(panel_rect, state, point, locale, false)
+}
+
+pub(crate) fn code_action_hit_with_locale_for_touch(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+    locale: Locale,
+    touch_controls: bool,
+) -> Option<PropertyPanelAction> {
+    code_action_rects_in_panel_with_locale_for_touch(panel_rect, state, locale, touch_controls)
         .into_iter()
         .find(|(_, r)| r.contains(point))
         .map(|(a, _)| PropertyPanelAction::Codegen(a))
@@ -74,10 +87,21 @@ pub fn code_hover_at_with_locale(
     point: Point2D,
     locale: Locale,
 ) -> (Option<Framework>, Option<CodegenHover>) {
-    let hit = code_action_rects_in_panel_with_locale(panel_rect, state, locale)
-        .into_iter()
-        .find(|(_, r)| r.contains(point))
-        .map(|(a, _)| a);
+    code_hover_at_with_locale_for_touch(panel_rect, state, point, locale, false)
+}
+
+pub(crate) fn code_hover_at_with_locale_for_touch(
+    panel_rect: Rect,
+    state: &CodegenState,
+    point: Point2D,
+    locale: Locale,
+    touch_controls: bool,
+) -> (Option<Framework>, Option<CodegenHover>) {
+    let hit =
+        code_action_rects_in_panel_with_locale_for_touch(panel_rect, state, locale, touch_controls)
+            .into_iter()
+            .find(|(_, r)| r.contains(point))
+            .map(|(a, _)| a);
     match hit {
         Some(CodegenAction::SelectFramework(fw)) => (Some(fw), None),
         Some(action) => (None, codegen_hover_for_action(action)),
@@ -127,9 +151,13 @@ fn complete_layout(panel_rect: Rect) -> complete::CompleteLayout {
 }
 
 fn code_body_y(panel_rect: Rect) -> f32 {
+    code_body_y_for(panel_rect, false)
+}
+
+fn code_body_y_for(panel_rect: Rect, touch_controls: bool) -> f32 {
     let tab_bottom = panel_rect.origin.y + TAB_HEIGHT;
     let chips_y = tab_bottom + SECTION_HEADER_HEIGHT;
-    chips_body_top(chips_y)
+    chips_body_top_for(chips_y, touch_controls)
 }
 
 fn panel_bottom(panel_rect: Rect) -> f32 {
@@ -449,6 +477,7 @@ pub fn paint_code_panel_at_with_locale(
         },
         now_ms,
         None,
+        false,
     )
 }
 
@@ -486,6 +515,22 @@ pub fn paint_code_panel_in_panel_with_locale_and_pressed(
     now_ms: u64,
     pressed: Option<CodegenHover>,
 ) -> f32 {
+    paint_code_panel_in_panel_with_locale_pressed_and_touch(
+        cx, theme, state, locale, panel_rect, now_ms, pressed, false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn paint_code_panel_in_panel_with_locale_pressed_and_touch(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    state: &CodegenState,
+    locale: Locale,
+    panel_rect: Rect,
+    now_ms: u64,
+    pressed: Option<CodegenHover>,
+    touch_controls: bool,
+) -> f32 {
     paint_code_panel_with_bottom(
         cx,
         theme,
@@ -499,9 +544,11 @@ pub fn paint_code_panel_in_panel_with_locale_and_pressed(
         },
         now_ms,
         pressed,
+        touch_controls,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_code_panel_with_bottom(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -510,12 +557,17 @@ fn paint_code_panel_with_bottom(
     layout: CodePanelLayout,
     now_ms: u64,
     pressed: Option<CodegenHover>,
+    touch_controls: bool,
 ) -> f32 {
     // A faint section label keeps the panel head consistent with Design.
     let x = layout.x;
     let w = layout.w;
     let mut y = paint_section_label(cx, theme, strings.title(), x, layout.y, w);
-    y = paint_framework_chips(cx, theme, state, x, y, w);
+    y = if touch_controls {
+        paint_framework_chips_for(cx, theme, state, x, y, w, true)
+    } else {
+        paint_framework_chips(cx, theme, state, x, y, w)
+    };
     match state.phase {
         CodegenPhase::Idle => paint_idle_body(cx, theme, state, strings, x, y, w),
         CodegenPhase::Generating => {
@@ -548,7 +600,15 @@ pub fn code_action_rects(
     w: f32,
     state: &CodegenState,
 ) -> Vec<(CodegenAction, Rect)> {
-    code_action_rects_with_bottom(x, y, w, state, None, CodePanelStrings::new(Locale::EnUs))
+    code_action_rects_with_bottom(
+        x,
+        y,
+        w,
+        state,
+        None,
+        CodePanelStrings::new(Locale::EnUs),
+        false,
+    )
 }
 
 pub fn code_action_rects_in_panel(
@@ -563,6 +623,15 @@ pub fn code_action_rects_in_panel_with_locale(
     state: &CodegenState,
     locale: Locale,
 ) -> Vec<(CodegenAction, Rect)> {
+    code_action_rects_in_panel_with_locale_for_touch(panel_rect, state, locale, false)
+}
+
+pub(crate) fn code_action_rects_in_panel_with_locale_for_touch(
+    panel_rect: Rect,
+    state: &CodegenState,
+    locale: Locale,
+    touch_controls: bool,
+) -> Vec<(CodegenAction, Rect)> {
     code_action_rects_with_bottom(
         panel_rect.origin.x,
         panel_rect.origin.y + TAB_HEIGHT,
@@ -570,6 +639,7 @@ pub fn code_action_rects_in_panel_with_locale(
         state,
         Some(panel_bottom(panel_rect)),
         CodePanelStrings::new(locale),
+        touch_controls,
     )
 }
 
@@ -580,13 +650,18 @@ fn code_action_rects_with_bottom(
     state: &CodegenState,
     panel_bottom: Option<f32>,
     strings: CodePanelStrings,
+    touch_controls: bool,
 ) -> Vec<(CodegenAction, Rect)> {
     let mut out: Vec<(CodegenAction, Rect)> = Vec::new();
     // Section label, then the framework chip row, then the phase body.
     let chips_y = y + SECTION_HEADER_HEIGHT;
     // When the strip overflows, the scroll chevrons take precedence over
     // chips at the band ends (pushed first → win the topmost hit-test).
-    let zones = framework_chevron_zones(x, chips_y, w);
+    let zones = if touch_controls {
+        framework_chevron_zones_for(x, chips_y, w, true)
+    } else {
+        framework_chevron_zones(x, chips_y, w)
+    };
     let framework_interactive = !matches!(state.phase, CodegenPhase::Generating);
     if framework_interactive {
         if let Some((left, right)) = zones {
@@ -594,15 +669,28 @@ fn code_action_rects_with_bottom(
             out.push((CodegenAction::ScrollFrameworksRight, right));
         }
     }
-    let inset = if zones.is_some() { CHEVRON_ZONE_W } else { 0.0 };
+    let inset = if zones.is_some() {
+        if touch_controls {
+            TOUCH_TARGET_SIZE
+        } else {
+            CHEVRON_ZONE_W
+        }
+    } else {
+        0.0
+    };
     let (band_l, band_r) = (x + PAD_X + inset, x + w - PAD_X - inset);
-    for (fw, rect) in framework_chip_rects(x, chips_y, w, state.framework_scroll.offset) {
+    let chip_rects = if touch_controls {
+        framework_chip_rects_for(x, chips_y, w, state.framework_scroll.offset, true)
+    } else {
+        framework_chip_rects(x, chips_y, w, state.framework_scroll.offset)
+    };
+    for (fw, rect) in chip_rects {
         // Clamp the clickable rect to the visible (chevron-inset) band so a
         // chip's scrolled-off / clipped portion is NOT clickable (matches the
         // painter's clip and the hover hit-test in `framework_at`).
         let left = rect.origin.x.max(band_l);
         let right = (rect.origin.x + rect.size.x).min(band_r);
-        if right - left <= 0.0 {
+        if right - left <= 0.0 || (touch_controls && right - left < TOUCH_TARGET_SIZE) {
             continue; // fully outside the visible band
         }
         let clipped = Rect {
@@ -613,7 +701,11 @@ fn code_action_rects_with_bottom(
             out.push((CodegenAction::SelectFramework(fw), clipped));
         }
     }
-    let body_y = chips_body_top(chips_y);
+    let body_y = if touch_controls {
+        chips_body_top_for(chips_y, true)
+    } else {
+        chips_body_top(chips_y)
+    };
     match state.phase {
         CodegenPhase::Idle => {
             let gen_y = idle_generate_y(state, body_y);

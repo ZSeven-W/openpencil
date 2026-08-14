@@ -50,7 +50,12 @@ impl WidgetHostNative {
             }
             return had;
         }
-        if self.editor_state.editor_ui.scene_template_center.open {
+        if self
+            .editor_state
+            .editor_ui
+            .scene_template_center
+            .input_active()
+        {
             if had {
                 self.mark_dirty();
             }
@@ -111,7 +116,12 @@ impl WidgetHostNative {
         // canvas, so a text node left mid-edit underneath it must not take
         // the candidate the user composed into the panel. Same stale-focus
         // rule the Prompt Center branch above encodes.
-        if self.editor_state.editor_ui.scene_template_center.open {
+        if self
+            .editor_state
+            .editor_ui
+            .scene_template_center
+            .input_active()
+        {
             let mut consumed = false;
             for ch in text.chars() {
                 if !ch.is_control() && self.apply_text(ch) {

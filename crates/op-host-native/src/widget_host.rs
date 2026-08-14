@@ -3,21 +3,6 @@
 //! shell-web `widget_host.rs` so the editor-UI composition is
 //! cross-platform: same widget code, same paint output.
 //!
-//! Layout matches `apps/web/src/components/editor/editor-layout.tsx`
-//! — TopBar / LayerPanel / Toolbar (vertical floating) / Canvas
-//! (fills) / RightPanel (only with selection) / StatusBar (floating
-//! bottom-right) / AIChatPlaceholder (floating bottom-center).
-//!
-//! ### Mobile (iOS / Android) — Step 1f path
-//!
-//! Spec §11 — shell-native is desktop-gated (`backend` /
-//! `widget_host` modules cfg-gated to `macos | linux | windows`).
-//! Mobile widget rendering lands in Step 1f via `context::EaglProvider`
-//! / `context::AndroidEglProvider`. Per the 2026-05-10 directive
-//! (Android and iOS need no IPC / local CLI — only a custom provider):
-//! mobile rendering is a custom-provider plugin point on the
-//! `GlContextProvider` trait, not a separate IPC / CLI pipeline.
-//!
 //! ### Module layout
 //!
 //! This file is the public spine. Implementation methods are split
@@ -29,7 +14,6 @@
 //! - [`scroll`] — wheel + trackpad-pan (zoom / canvas + diff scroll)
 //! - [`press`] — `apply_press` + new-node spawn (largest method)
 //! - [`git_press`] — Git-panel press dispatch
-//! - [`paint`] — full editor-UI composition paint pass
 
 use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
@@ -47,10 +31,14 @@ mod agent_settings_acp_tests;
 mod agent_settings_compact_press_tests;
 #[cfg(test)]
 mod agent_settings_form_press_tests;
+mod agent_settings_geometry;
 #[cfg(test)]
 mod agent_settings_image_gen_tests;
 #[cfg(test)]
 mod agent_settings_tests;
+mod agent_settings_touch;
+#[cfg(test)]
+mod agent_settings_touch_tests;
 mod ai_chat_geometry;
 #[cfg(test)]
 mod ai_chat_minimized_tests;
@@ -81,6 +69,7 @@ mod chat_style_card_tests;
 mod click;
 #[cfg(test)]
 mod codegen_framework_tests;
+#[cfg(feature = "gl-host")]
 mod collab_host_impl;
 #[cfg(test)]
 mod collab_input_tests;
@@ -159,6 +148,8 @@ mod keyboard_delete;
 mod keyboard_escape;
 mod keyboard_send;
 mod missing_fonts_dispatch;
+#[cfg(test)]
+mod mobile_touch_tests;
 mod mode_transition_host;
 #[cfg(test)]
 mod overlay_cursor_tests;
@@ -168,7 +159,9 @@ mod page_switch_center_tests;
 mod paint;
 mod paint_chrome_menus;
 mod paint_floating_panels;
+mod paint_mobile;
 mod paint_pan_cache;
+mod paint_rail;
 mod paint_topmost_overlays;
 #[cfg(test)]
 mod pan_cache_scroll_tests;
@@ -205,20 +198,27 @@ mod prompt_center_press;
 #[cfg(test)]
 mod property_compositing_tests;
 mod property_dispatch;
+#[cfg(test)]
+mod property_keyboard_occlusion_tests;
 mod property_layout_dispatch;
 #[cfg(test)]
 mod property_panel_interactions_tests;
 #[cfg(test)]
 mod property_panel_press_tests;
 mod property_popovers;
+mod property_scroll;
 mod release;
 mod release_feedback;
+mod responsive_geometry;
 mod scene_state;
 #[cfg(test)]
 mod scene_template_host_tests;
 #[cfg(test)]
 mod scene_template_ime_tests;
+mod scene_template_install;
 mod scene_template_press;
+#[cfg(test)]
+mod scene_template_touch_tests;
 mod screen_switcher;
 #[cfg(all(test, not(target_os = "windows")))]
 mod screen_switcher_tests;
@@ -248,6 +248,9 @@ mod toolbar_actions;
 mod toolbar_hover;
 #[cfg(test)]
 mod top_bar_tooltip_tests;
+mod touch_panel_gesture;
+#[cfg(test)]
+mod touch_panel_gesture_tests;
 #[cfg(test)]
 mod variables_panel_add_tests;
 mod variables_panel_commit;
@@ -324,6 +327,12 @@ pub struct WidgetHostNative {
     /// Active canvas pan-drag state — left-button press → motion
     /// → release.
     pub(in crate::widget_host) drag: Option<DragState>,
+    /// Pending one-finger gestures: touch Agent Settings body (release
+    /// commits, slop promotes to scroll) and touch Property / Layers / Slides
+    /// surfaces (stationary release replays the press, slop scrolls).
+    pub(in crate::widget_host) agent_settings_touch_gesture:
+        Option<agent_settings_touch::AgentSettingsTouchGesture>,
+    pub(in crate::widget_host) touch_panel_gesture: Option<touch_panel_gesture::TouchPanelGesture>,
     /// True while Space is held — transient pan mode (TS parity):
     /// canvas presses pan regardless of the active tool.
     pub(in crate::widget_host) space_pan: bool,
@@ -498,6 +507,7 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) toast_rect: Option<op_editor_ui::Rect>,
     pub(in crate::widget_host) last_viewport_w: f32,
     pub(in crate::widget_host) last_viewport_h: f32,
+    pub(in crate::widget_host) keyboard_occlusion: f32,
     /// Live canvas Preview (Play) session — `Some` while
     /// `editor_state.editor_ui.preview.mode` is set. Owns the jian
     /// `Runtime` (host-local; `!Send`). Built on enter from the
@@ -711,6 +721,7 @@ impl WidgetHostNative {
     /// Subtract / Intersect / Exclude). Backed by skia's `Path::op`.
     /// Returns true when the op committed (≥ 2 Path nodes were
     /// selected + the result yielded a non-empty polyline).
+    #[cfg(feature = "gl-host")]
     pub fn apply_boolean_op(&mut self, op: op_editor_core::BooleanOp) -> bool {
         // Codex stop-gate: boolean op shortcuts (Cmd+Alt+U/S/I/X)
         // mutate the document — commit any pending variable-row

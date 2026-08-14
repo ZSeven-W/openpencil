@@ -45,6 +45,7 @@ mod real_collab_ticket;
 mod backend;
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 pub use collab_claims::{
     CollabVerifierConfig, VerifiedCollabClaims, COLLAB_JWKS_PATH, COLLAB_JWS_ALGORITHM,
@@ -152,7 +153,7 @@ pub const ENV_DEV_FAKE_LOGIN: &str = "OPENPENCIL_DEV_FAKE_LOGIN";
 pub const PRODUCTION_SSO_ORIGIN: &str = "https://sso.zseven.cn";
 
 /// Everything the runtime needs at startup.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthInitConfig {
     /// Regional SSO origin, e.g. `https://sso.zseven.cn` (override via
     /// [`ENV_SSO_URL`]).
@@ -195,6 +196,28 @@ pub fn init(config: &AuthInitConfig) -> bool {
     backend::init(config)
 }
 
+/// Initialize the process-global runtime for an embedded mobile shell.
+///
+/// Mobile shells can recreate their editor engine while the process remains
+/// alive (for example after an Android activity recreation). The proprietary
+/// runtime intentionally rejects a second initialization, so this wrapper
+/// makes the *same* mobile configuration idempotent while still failing closed
+/// if a later engine tries to change the credential directory or identity.
+pub fn init_mobile(config: &AuthInitConfig) -> bool {
+    static INITIALIZED_CONFIG: Mutex<Option<AuthInitConfig>> = Mutex::new(None);
+    let mut initialized = INITIALIZED_CONFIG
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if let Some(existing) = initialized.as_ref() {
+        return existing == config;
+    }
+    if !backend::init(config) {
+        return false;
+    }
+    *initialized = Some(config.clone());
+    true
+}
+
 /// Load a persisted session, if any; the profile then arrives via
 /// `poll(SESSION_HANDLE)`. Returns whether a credential was restored.
 pub fn restore() -> bool {
@@ -223,12 +246,33 @@ pub fn sign_out() {
 
 /// The zseven-sso platform identifier for this build target.
 pub fn platform_id() -> &'static str {
-    if cfg!(target_os = "macos") {
+    if cfg!(target_os = "android") {
+        "android"
+    } else if cfg!(target_os = "ios") {
+        "ios"
+    } else if cfg!(target_os = "macos") {
         "desktop_macos"
     } else if cfg!(target_os = "windows") {
         "desktop_windows"
     } else {
         "desktop_linux"
+    }
+}
+
+/// Pinned production configuration for an embedded iOS or Android shell.
+/// Unlike desktop startup this deliberately ignores environment overrides:
+/// an app process must not redirect persisted device credentials through an
+/// ambient shell variable.
+pub fn mobile_init_config(
+    storage_dir: PathBuf,
+    device_name: impl Into<String>,
+    app_version: impl Into<String>,
+) -> AuthInitConfig {
+    AuthInitConfig {
+        base_url: PRODUCTION_SSO_ORIGIN.to_string(),
+        storage_dir,
+        device_name: device_name.into(),
+        app_version: app_version.into(),
     }
 }
 
@@ -378,6 +422,15 @@ mod abi_tests {
         assert!(supports_base_abi(2));
         assert!(supports_base_abi(3));
         assert!(!supports_base_abi(4));
+    }
+
+    #[test]
+    fn mobile_configuration_is_pinned_to_production() {
+        let config = mobile_init_config(PathBuf::from("/private/app/auth"), "Test Phone", "1.0.0");
+        assert_eq!(config.base_url, PRODUCTION_SSO_ORIGIN);
+        assert_eq!(config.storage_dir, PathBuf::from("/private/app/auth"));
+        assert_eq!(config.device_name, "Test Phone");
+        assert_eq!(config.app_version, "1.0.0");
     }
 
     #[test]

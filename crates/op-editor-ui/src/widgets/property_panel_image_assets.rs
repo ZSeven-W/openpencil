@@ -189,7 +189,7 @@ pub(crate) fn image_section_top(panel_rect: Rect, visible: VisibleSections) -> O
     }
     let mut y = crate::widgets::property_panel_text::sections_top_before_text(panel_rect, visible);
     if visible.text {
-        y += crate::widgets::property_panel_text::text_section_height();
+        y += crate::widgets::property_panel_text::text_section_height(visible.touch_controls);
         y += SECTION_GAP;
     }
     Some(y)
@@ -244,6 +244,8 @@ pub enum ImagePopoverInputKind {
 pub struct ImagePopoverInputGeometry {
     pub kind: ImagePopoverInputKind,
     pub line: crate::widgets::text_input::SingleLinePaintGeometry,
+    coordinate_origin: Point2D,
+    coordinate_scale: f32,
 }
 
 impl ImagePopoverInputGeometry {
@@ -260,12 +262,33 @@ impl ImagePopoverInputGeometry {
         point: Point2D,
         clamp_to_line: bool,
     ) -> Option<usize> {
+        let point = Point2D::new(
+            self.coordinate_origin.x + (point.x - self.coordinate_origin.x) / self.coordinate_scale,
+            self.coordinate_origin.y + (point.y - self.coordinate_origin.y) / self.coordinate_scale,
+        );
         self.line
             .byte_offset_at(self.input(state), point, clamp_to_line)
     }
 
     pub fn caret_rect(&self, state: &ImagePanelState) -> Option<Rect> {
-        self.line.caret_rect(self.input(state))
+        self.line.caret_rect(self.input(state)).map(|rect| Rect {
+            origin: Point2D::new(
+                self.coordinate_origin.x
+                    + (rect.origin.x - self.coordinate_origin.x) * self.coordinate_scale,
+                self.coordinate_origin.y
+                    + (rect.origin.y - self.coordinate_origin.y) * self.coordinate_scale,
+            ),
+            size: Point2D::new(
+                rect.size.x * self.coordinate_scale,
+                rect.size.y * self.coordinate_scale,
+            ),
+        })
+    }
+
+    pub(crate) fn with_coordinate_scale(mut self, origin: Point2D, scale: f32) -> Self {
+        self.coordinate_origin = origin;
+        self.coordinate_scale = scale;
+        self
     }
 }
 
@@ -620,6 +643,8 @@ pub fn image_popover_input_geometry(
         line: crate::widgets::text_input::SingleLinePaintGeometry::measure(
             input, rect, font_size, pad_x, backend,
         ),
+        coordinate_origin: panel_rect.origin,
+        coordinate_scale: 1.0,
     })
 }
 

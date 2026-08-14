@@ -119,10 +119,12 @@ pub fn editable_input_rects(
             visible.flex_layout_mode,
             visible.layout_justify,
             visible.padding_edit_mode,
+            visible.touch_controls,
         );
         y += crate::widgets::property_panel_flex::flex_section_height(
             visible.flex_layout_mode,
             visible.padding_edit_mode,
+            visible.touch_controls,
         );
     }
     if visible.size_options {
@@ -142,7 +144,8 @@ pub fn editable_input_rects(
             },
         ));
         y += INPUT_HEIGHT + 10.0;
-        let check_h = 22.0;
+        let check_h =
+            crate::widgets::property_panel_inputs::size_check_row_height(visible.touch_controls);
         y += check_h * if visible.clip_content { 3.0 } else { 2.0 };
         y += 12.0;
         y += SECTION_GAP;
@@ -151,8 +154,14 @@ pub fn editable_input_rects(
         y += crate::widgets::property_panel_icon::icon_section_height();
     }
     if visible.text {
-        crate::widgets::property_panel_text::push_text_input_rects(&mut rects, x0, y, usable_w);
-        y += crate::widgets::property_panel_text::text_section_height();
+        crate::widgets::property_panel_text::push_text_input_rects(
+            &mut rects,
+            x0,
+            y,
+            usable_w,
+            visible.touch_controls,
+        );
+        y += crate::widgets::property_panel_text::text_section_height(visible.touch_controls);
         y += SECTION_GAP;
     }
     if let Some(kind) = visible.widget {
@@ -172,7 +181,14 @@ pub fn editable_input_rects(
             PropertyFocus::Opacity,
             Rect {
                 origin: Point2D::new(x0 + PAD_X, y),
-                size: Point2D::new(usable_w / 2.0 - 4.0, INPUT_HEIGHT),
+                size: Point2D::new(
+                    crate::widgets::property_panel_layer::opacity_input_width(
+                        w,
+                        visible.polygon_sides,
+                        visible.touch_controls,
+                    ),
+                    INPUT_HEIGHT,
+                ),
             },
         ));
         if visible.polygon_sides {
@@ -219,7 +235,7 @@ pub fn editable_input_rects(
             // Head row: per-fill opacity input (the `%` box).
             rects.push((
                 PropertyFocus::FillOpacity(fi),
-                fill_head_rects(x0, y, w).opacity,
+                fill_head_rects(x0, y, w, visible.touch_controls).opacity,
             ));
             y += INPUT_HEIGHT + 6.0;
             match fill_type {
@@ -326,7 +342,12 @@ pub fn editable_input_rects(
     if visible.effects {
         y += SECTION_HEADER_HEIGHT;
         for (index, _) in effects.iter().enumerate() {
-            let row = crate::widgets::property_panel_effects::effect_row_rects(x0, y, w);
+            let row = crate::widgets::property_panel_effects::effect_row_rects(
+                x0,
+                y,
+                w,
+                visible.touch_controls,
+            );
             rects.push((PropertyFocus::EffectRadius(index), row.value));
             y += crate::widgets::property_panel_effects::EFFECT_ROW_HEIGHT
                 + crate::widgets::property_panel_effects::EFFECT_ROW_GAP;
@@ -354,10 +375,7 @@ pub(crate) fn push_fill_action_rects(
     // Header "+" appends a fill (TS-style stacked list).
     out.push((
         PropertyPanelAction::AddFill,
-        Rect {
-            origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
-            size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
-        },
+        crate::widgets::property_panel_inputs::section_add_target(x0, y, w, visible.touch_controls),
     ));
     if visible.path_fill_rule.is_some() {
         for (rule, rect) in crate::widgets::property_panel_fill::fill_rule_segment_rects(x0, y, w) {
@@ -371,7 +389,7 @@ pub(crate) fn push_fill_action_rects(
         let is_primary = fi == 0;
         let fill_type = fill.fill_type;
         // Head row: type dropdown + opacity + adjacent reorder / remove controls.
-        let head = fill_head_rects(x0, y, w);
+        let head = fill_head_rects(x0, y, w, visible.touch_controls);
         let dropdown_rect = head.dropdown;
         out.push((PropertyPanelAction::ToggleFillTypePicker(fi), dropdown_rect));
         if fi > 0 {
@@ -413,7 +431,12 @@ pub(crate) fn push_fill_action_rects(
                             PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Fill),
                             Rect {
                                 origin: Point2D::new(x0 + PAD_X, y),
-                                size: Point2D::new(28.0, INPUT_HEIGHT),
+                                size: Point2D::new(
+                                    crate::widgets::property_panel_inputs::color_swatch_action_width(
+                                        visible.touch_controls,
+                                    ),
+                                    INPUT_HEIGHT,
+                                ),
                             },
                         ));
                     }
@@ -437,7 +460,12 @@ pub(crate) fn push_fill_action_rects(
                         PropertyPanelAction::OpenFillColorPicker(fi),
                         Rect {
                             origin: Point2D::new(x0 + PAD_X, y),
-                            size: Point2D::new(28.0, INPUT_HEIGHT),
+                            size: Point2D::new(
+                                crate::widgets::property_panel_inputs::color_swatch_action_width(
+                                    visible.touch_controls,
+                                ),
+                                INPUT_HEIGHT,
+                            ),
                         },
                     ));
                 }
@@ -461,10 +489,12 @@ pub(crate) fn push_fill_action_rects(
                 }
                 out.push((
                     PropertyPanelAction::AddGradientStop,
-                    Rect {
-                        origin: Point2D::new(x0 + w - PAD_X - 22.0, stop_y),
-                        size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
-                    },
+                    crate::widgets::property_panel_inputs::section_add_target(
+                        x0,
+                        stop_y,
+                        w,
+                        visible.touch_controls,
+                    ),
                 ));
                 stop_y += SECTION_HEADER_HEIGHT; // 色标 header
                 for index in 0..visible.gradient_stop_count {
@@ -474,7 +504,12 @@ pub(crate) fn push_fill_action_rects(
                         ),
                         Rect {
                             origin: Point2D::new(x0 + PAD_X, stop_y),
-                            size: Point2D::new(28.0, INPUT_HEIGHT),
+                            size: Point2D::new(
+                                crate::widgets::property_panel_inputs::color_swatch_action_width(
+                                    visible.touch_controls,
+                                ),
+                                INPUT_HEIGHT,
+                            ),
                         },
                     ));
                     if visible.gradient_stop_count > 2 {

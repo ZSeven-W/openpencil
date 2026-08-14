@@ -17,42 +17,12 @@ use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::{AgentSettingsButton, ButtonPressTarget};
 
 mod hit_test;
+mod layout;
 mod paint;
 
 pub use hit_test::*;
+pub(super) use layout::*;
 pub(super) use paint::paint_images_tab;
-
-const TITLE_H: f32 = 36.0;
-const ADVANCED_ROW_H: f32 = 24.0;
-const SECTION_GAP: f32 = 28.0;
-const SECTION_TITLE_H: f32 = 36.0;
-const SUBTITLE_H: f32 = 22.0;
-const ROW_H: f32 = 36.0;
-const ROW_VGAP: f32 = 10.0;
-const LABEL_W: f32 = 110.0;
-const TEST_BTN_W: f32 = 56.0;
-const ADD_BTN_W: f32 = 72.0;
-const BTN_H: f32 = 28.0;
-const BODY_GAP: f32 = 14.0;
-const REGISTER_ROW_H: f32 = 36.0;
-// Fixed hit-rect width for the "Register at Openverse" link. Covers the
-// link text + trailing chevron across all locales without reaching the
-// right-aligned Test button.
-const REGISTER_LINK_W: f32 = 220.0;
-const PROFILE_ROW_H: f32 = 32.0;
-const PROFILE_ROW_GAP: f32 = 6.0;
-const PROFILE_ROW_INSET_X: f32 = 8.0;
-const PROFILE_LIST_TOP_GAP: f32 = 8.0;
-const ACTIVE_DOT: f32 = 14.0;
-const DELETE_W: f32 = 32.0;
-const DELETE_HOVER_INSET: f32 = 2.0;
-const DELETE_ICON: f32 = 12.0;
-const CHEVRON_W: f32 = 24.0;
-const PROFILE_FORM_TOP: f32 = 40.0;
-const PROFILE_FIELD_H: f32 = 24.0;
-const PROFILE_TEST_BTN_W: f32 = 56.0;
-const PROFILE_TEST_GAP: f32 = 8.0;
-const PROVIDER_OPTION_H: f32 = 24.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImagesHit {
@@ -77,77 +47,47 @@ pub enum ImagesHit {
     None,
 }
 
-fn advanced_body_h() -> f32 {
-    SUBTITLE_H + ROW_H + ROW_VGAP + ROW_H + BODY_GAP + REGISTER_ROW_H
+pub(super) fn responsive_content_height(
+    settings: &AgentSettings,
+    content_w: f32,
+    touch: bool,
+) -> f32 {
+    content_height_for_ui(settings, content_w, touch)
 }
 
-fn image_gen_section_top(content: Rect, settings: &AgentSettings) -> f32 {
-    let mut y = content.origin.y + TITLE_H + ADVANCED_ROW_H;
-    if settings.images_advanced_open {
-        y += advanced_body_h();
+/// Unscrolled rect for the active Images-tab input. Kept at the module
+/// boundary so callers do not depend on the private responsive layout spine.
+pub(super) fn focused_input_rect_for_ui(
+    content: Rect,
+    settings: &AgentSettings,
+    focus: SettingsFocus,
+    touch: bool,
+) -> Option<Rect> {
+    match focus {
+        SettingsFocus::ImageSearch(field) if settings.images_advanced_open => {
+            let index = match field {
+                ImageSearchField::ClientId => 0,
+                ImageSearchField::ClientSecret => 1,
+            };
+            Some(search_field_rect_for_ui(content, index, touch))
+        }
+        SettingsFocus::ImageGenProfile { index, field } => {
+            settings.image_gen_profiles.get(index)?;
+            let row = profile_row_rect_for_ui(content, settings, index, touch);
+            Some(profile_input_rect_for_ui(
+                row, settings, index, field, touch,
+            ))
+        }
+        _ => None,
     }
-    y + SECTION_GAP
-}
-
-pub(super) fn content_height(settings: &AgentSettings) -> f32 {
-    let mut h = TITLE_H + ADVANCED_ROW_H;
-    if settings.images_advanced_open {
-        h += advanced_body_h();
-    }
-    h + SECTION_GAP + SECTION_TITLE_H + PROFILE_LIST_TOP_GAP + profile_list_h(settings) + 24.0
-}
-
-fn profile_list_h(settings: &AgentSettings) -> f32 {
-    if settings.image_gen_profiles.is_empty() {
-        80.0
-    } else {
-        settings
-            .image_gen_profiles
-            .iter()
-            .enumerate()
-            .map(|(index, _)| profile_row_h(settings, index))
-            .sum::<f32>()
-            + settings.image_gen_profiles.len().saturating_sub(1) as f32 * PROFILE_ROW_GAP
-    }
-}
-
-fn profile_row_h(settings: &AgentSettings, index: usize) -> f32 {
-    if is_editing_profile(settings, index) {
-        PROFILE_ROW_H + 8.0 + 5.0 * ROW_H
-    } else {
-        PROFILE_ROW_H
-    }
-}
-
-#[rustfmt::skip]
-fn advanced_toggle_rect(content: Rect) -> Rect {
-    Rect::xywh(content.origin.x, content.origin.y + TITLE_H, 140.0, ADVANCED_ROW_H)
-}
-
-fn register_link_y(content: Rect) -> f32 {
-    content.origin.y + TITLE_H + ADVANCED_ROW_H + SUBTITLE_H + ROW_H + ROW_VGAP + ROW_H + BODY_GAP
 }
 
 /// Click target for the "Register at Openverse" link (text + chevron).
 /// A fixed `REGISTER_LINK_W` width covers every locale's link label
 /// without reaching the right-aligned Test button.
+#[cfg(test)]
 pub(super) fn register_link_rect(content: Rect) -> Rect {
-    Rect::xywh(
-        content.origin.x,
-        register_link_y(content),
-        REGISTER_LINK_W,
-        REGISTER_ROW_H,
-    )
-}
-
-#[rustfmt::skip]
-fn search_field_rect(content: Rect, index: usize) -> Rect {
-    let y = content.origin.y
-        + TITLE_H
-        + ADVANCED_ROW_H
-        + SUBTITLE_H
-        + if index == 0 { 0.0 } else { ROW_H + ROW_VGAP };
-    Rect::xywh(content.origin.x + LABEL_W, y, content.size.x - LABEL_W, ROW_H)
+    register_link_rect_for_ui(content, false)
 }
 
 fn has_search_credentials(settings: &AgentSettings) -> bool {
@@ -162,94 +102,6 @@ fn search_test_enabled(settings: &AgentSettings) -> bool {
 
 fn profile_test_enabled(profile: &ImageGenProfile) -> bool {
     !profile.api_key.trim().is_empty() && profile.test_status != ImageTestStatus::Testing
-}
-
-#[rustfmt::skip]
-fn test_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
-    if !settings.images_advanced_open {
-        return Rect::xywh(0.0, 0.0, 0.0, 0.0);
-    }
-    let y = register_link_y(content) + (REGISTER_ROW_H - BTN_H) / 2.0;
-    Rect::xywh(content.origin.x + content.size.x - TEST_BTN_W, y, TEST_BTN_W, BTN_H)
-}
-
-#[rustfmt::skip]
-fn add_btn_rect(content: Rect, settings: &AgentSettings) -> Rect {
-    let top = image_gen_section_top(content, settings);
-    Rect::xywh(content.origin.x + content.size.x - ADD_BTN_W, top + (SECTION_TITLE_H - BTN_H) / 2.0, ADD_BTN_W, BTN_H)
-}
-
-fn profile_row_rect(content: Rect, settings: &AgentSettings, index: usize) -> Rect {
-    let top = image_gen_section_top(content, settings) + SECTION_TITLE_H + PROFILE_LIST_TOP_GAP;
-    let y = settings
-        .image_gen_profiles
-        .iter()
-        .enumerate()
-        .take(index)
-        .fold(top, |acc, (i, _)| {
-            acc + profile_row_h(settings, i) + PROFILE_ROW_GAP
-        });
-    Rect::xywh(
-        content.origin.x + PROFILE_ROW_INSET_X,
-        y,
-        (content.size.x - PROFILE_ROW_INSET_X * 2.0).max(0.0),
-        profile_row_h(settings, index),
-    )
-}
-
-#[rustfmt::skip]
-fn profile_active_rect(row: Rect) -> Rect {
-    Rect::xywh(row.origin.x + 8.0, row.origin.y + (PROFILE_ROW_H - ACTIVE_DOT) / 2.0, ACTIVE_DOT, ACTIVE_DOT)
-}
-
-#[rustfmt::skip]
-fn profile_remove_rect(row: Rect) -> Rect {
-    Rect::xywh(row.origin.x + row.size.x - DELETE_W, row.origin.y, DELETE_W, PROFILE_ROW_H)
-}
-
-#[rustfmt::skip]
-fn profile_remove_hover_rect(row: Rect) -> Rect {
-    let target = profile_remove_rect(row);
-    Rect::xywh(target.origin.x + DELETE_HOVER_INSET, target.origin.y + DELETE_HOVER_INSET, target.size.x - DELETE_HOVER_INSET * 2.0, target.size.y - DELETE_HOVER_INSET * 2.0)
-}
-
-#[rustfmt::skip]
-fn profile_chevron_rect(row: Rect) -> Rect {
-    Rect::xywh(row.origin.x + row.size.x - DELETE_W - CHEVRON_W, row.origin.y + (PROFILE_ROW_H - CHEVRON_W) / 2.0, CHEVRON_W, CHEVRON_W)
-}
-
-#[rustfmt::skip]
-fn profile_header_rect(row: Rect) -> Rect {
-    Rect::xywh(row.origin.x, row.origin.y, row.size.x, PROFILE_ROW_H)
-}
-
-#[rustfmt::skip]
-fn profile_field_rect(row: Rect, field_index: usize) -> Rect {
-    Rect::xywh(row.origin.x + LABEL_W, row.origin.y + PROFILE_FORM_TOP + field_index as f32 * ROW_H, row.size.x - LABEL_W - 12.0, PROFILE_FIELD_H)
-}
-
-fn profile_input_rect(row: Rect, field: ImageGenField) -> Rect {
-    let mut input = profile_field_rect(row, profile_field_index(field));
-    if matches!(field, ImageGenField::ApiKey) {
-        input.size.x = (input.size.x - PROFILE_TEST_GAP - PROFILE_TEST_BTN_W).max(48.0);
-    }
-    input
-}
-
-#[rustfmt::skip]
-fn profile_test_btn_rect(row: Rect) -> Rect {
-    let input = profile_field_rect(row, profile_field_index(ImageGenField::ApiKey));
-    Rect::xywh(input.origin.x + input.size.x - PROFILE_TEST_BTN_W, input.origin.y, PROFILE_TEST_BTN_W, PROFILE_FIELD_H)
-}
-
-fn profile_provider_rect(row: Rect) -> Rect {
-    profile_field_rect(row, 1)
-}
-
-#[rustfmt::skip]
-fn profile_provider_option_rect(row: Rect, option_index: usize) -> Rect {
-    let provider = profile_provider_rect(row);
-    Rect::xywh(provider.origin.x, provider.origin.y + provider.size.y + option_index as f32 * PROVIDER_OPTION_H, provider.size.x, PROVIDER_OPTION_H)
 }
 
 fn profile_field_index(field: ImageGenField) -> usize {
@@ -271,4 +123,200 @@ fn is_editing_profile(settings: &AgentSettings, index: usize) -> bool {
         settings.focus,
         Some(SettingsFocus::ImageGenProfile { index: i, .. }) if i == index
     )
+}
+
+#[cfg(test)]
+mod touch_tests {
+    use super::*;
+
+    fn settings_with_expanded_profile(menu_open: bool) -> AgentSettings {
+        let mut settings = AgentSettings {
+            images_advanced_open: true,
+            openverse_client_id: "client-id".into(),
+            ..AgentSettings::default()
+        };
+        settings.add_image_gen_profile();
+        settings.focus = Some(SettingsFocus::ImageGenProfile {
+            index: 0,
+            field: ImageGenField::Name,
+        });
+        if menu_open {
+            settings.image_gen_provider_menu_open = Some(0);
+        }
+        settings
+    }
+
+    fn center(rect: Rect) -> Point2D {
+        Point2D::new(
+            rect.origin.x + rect.size.x / 2.0,
+            rect.origin.y + rect.size.y / 2.0,
+        )
+    }
+
+    fn assert_touch_rect(rect: Rect, label: &str) {
+        assert!(
+            rect.size.x >= 44.0 && rect.size.y >= 44.0,
+            "{label} must have a 44pt touch target, got {rect:?}"
+        );
+    }
+
+    fn assert_above(a: Rect, b: Rect, label: &str) {
+        assert!(
+            a.origin.y + a.size.y <= b.origin.y + 0.01,
+            "{label} must not overlap: {a:?} / {b:?}"
+        );
+    }
+
+    #[test]
+    fn compact_390_stacks_search_and_profile_actions_at_touch_size() {
+        let settings = settings_with_expanded_profile(false);
+        let content = Rect::xywh(16.0, 80.0, 358.0, 0.0);
+
+        let advanced = advanced_toggle_rect_for_ui(content, true);
+        let client_id = search_field_rect_for_ui(content, 0, true);
+        let secret = search_field_rect_for_ui(content, 1, true);
+        let register = register_link_rect_for_ui(content, true);
+        let search_test = test_btn_rect_for_ui(content, &settings, true);
+        let add = add_btn_rect_for_ui(content, &settings, true);
+        for (rect, label) in [
+            (advanced, "advanced"),
+            (client_id, "client id"),
+            (secret, "client secret"),
+            (register, "register link"),
+            (search_test, "search test"),
+            (add, "add profile"),
+        ] {
+            assert_touch_rect(rect, label);
+        }
+        assert_above(client_id, secret, "search fields");
+        assert_above(secret, register, "secret and register link");
+        assert_above(register, search_test, "compact register and test rows");
+
+        let row = profile_row_rect_for_ui(content, &settings, 0, true);
+        let active = profile_active_target_rect(row, true);
+        let remove = profile_remove_rect_for_ui(row, true);
+        let header = profile_header_rect_for_ui(row, true);
+        assert_touch_rect(active, "active profile");
+        assert_touch_rect(remove, "remove profile");
+        assert_touch_rect(header, "profile header");
+
+        let provider = profile_provider_rect_for_ui(row, &settings, 0, true);
+        let api = profile_input_rect_for_ui(row, &settings, 0, ImageGenField::ApiKey, true);
+        let test = profile_test_btn_rect_for_ui(row, &settings, 0, true);
+        let model = profile_input_rect_for_ui(row, &settings, 0, ImageGenField::Model, true);
+        for (rect, label) in [
+            (provider, "provider"),
+            (api, "api key"),
+            (test, "profile test"),
+            (model, "model"),
+        ] {
+            assert_touch_rect(rect, label);
+        }
+        assert!(api.size.x > 280.0, "API input should retain compact width");
+        assert_above(api, test, "API input and test action");
+        assert_above(test, model, "test action and model input");
+
+        assert_eq!(
+            hit_test_for_ui(content, &settings, center(api), true),
+            ImagesHit::FocusGenConfig {
+                index: 0,
+                field: ImageGenField::ApiKey
+            }
+        );
+        assert_eq!(
+            hit_test_for_ui(content, &settings, center(provider), true),
+            ImagesHit::ToggleGenProviderMenu(0)
+        );
+    }
+
+    #[test]
+    fn medium_834_keeps_side_by_side_search_action_and_44pt_profile_controls() {
+        let settings = settings_with_expanded_profile(false);
+        let content = Rect::xywh(80.0, 180.0, 680.0, 0.0);
+        let register = register_link_rect_for_ui(content, true);
+        let test = test_btn_rect_for_ui(content, &settings, true);
+        assert_touch_rect(register, "register link");
+        assert_touch_rect(test, "search test");
+        assert!(
+            register.origin.x + register.size.x <= test.origin.x,
+            "medium search actions should not overlap"
+        );
+
+        let row = profile_row_rect_for_ui(content, &settings, 0, true);
+        for field in image_gen_fields() {
+            assert_touch_rect(
+                profile_input_rect_for_ui(row, &settings, 0, field, true),
+                "profile input",
+            );
+        }
+        assert_eq!(
+            hit_test_for_ui(
+                content,
+                &settings,
+                center(profile_remove_rect_for_ui(row, true)),
+                true,
+            ),
+            ImagesHit::RemoveGenConfig(0)
+        );
+    }
+
+    #[test]
+    fn touch_provider_menu_rows_shift_following_fields_and_content_height() {
+        let closed = settings_with_expanded_profile(false);
+        let open = settings_with_expanded_profile(true);
+        let content = Rect::xywh(16.0, 80.0, 358.0, 0.0);
+        let closed_row = profile_row_rect_for_ui(content, &closed, 0, true);
+        let open_row = profile_row_rect_for_ui(content, &open, 0, true);
+
+        assert_eq!(open_row.size.y - closed_row.size.y, 176.0);
+        assert_eq!(
+            content_height_for_ui(&open, content.size.x, true)
+                - content_height_for_ui(&closed, content.size.x, true),
+            176.0
+        );
+        let api = profile_input_rect_for_ui(open_row, &open, 0, ImageGenField::ApiKey, true);
+        for (option_index, expected) in ImageGenProvider::ALL.iter().enumerate() {
+            let option =
+                profile_provider_option_rect_for_ui(open_row, &open, 0, option_index, true);
+            assert_touch_rect(option, "provider option");
+            assert_eq!(
+                hit_test_for_ui(content, &open, center(option), true),
+                ImagesHit::SelectGenProvider {
+                    index: 0,
+                    provider: *expected
+                }
+            );
+            assert_above(option, api, "provider menu and following API input");
+        }
+        let last = profile_provider_option_rect_for_ui(open_row, &open, 0, 3, true);
+        assert_above(last, api, "complete provider menu and API input");
+        let base_url = profile_input_rect_for_ui(open_row, &open, 0, ImageGenField::BaseUrl, true);
+        assert!(
+            base_url.origin.y + base_url.size.y <= open_row.origin.y + open_row.size.y,
+            "expanded profile must contain its final field"
+        );
+    }
+
+    #[test]
+    fn desktop_geometry_keeps_legacy_pixel_density() {
+        let settings = settings_with_expanded_profile(true);
+        let content = Rect::xywh(40.0, 80.0, 760.0, 0.0);
+        assert_eq!(advanced_toggle_rect_for_ui(content, false).size.y, 24.0);
+        assert_eq!(search_field_rect_for_ui(content, 0, false).size.y, 36.0);
+        assert_eq!(add_btn_rect_for_ui(content, &settings, false).size.y, 28.0);
+        let row = profile_row_rect_for_ui(content, &settings, 0, false);
+        assert_eq!(profile_header_rect_for_ui(row, false).size.y, 32.0);
+        assert_eq!(
+            profile_provider_option_rect_for_ui(row, &settings, 0, 0, false)
+                .size
+                .y,
+            24.0
+        );
+        assert_eq!(
+            profile_input_rect_for_ui(row, &settings, 0, ImageGenField::Name, false)
+                .size
+                .y,
+            24.0
+        );
+    }
 }

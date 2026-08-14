@@ -109,13 +109,14 @@ fn mcp_running_client_config_copy_icon_is_clickable() {
     let offset = copy.origin.y - content.origin.y;
     state.editor_ui.agent_settings.scroll_y.offset = offset;
     let panel = AgentSettingsPanel::for_editor(&state);
+    let effective_scroll = panel.effective_scroll(rect);
 
     assert_eq!(
         panel.hit_test(
             rect,
             Point2D::new(
                 copy.origin.x + copy.size.x / 2.0,
-                copy.origin.y + copy.size.y / 2.0 - offset
+                copy.origin.y + copy.size.y / 2.0 - effective_scroll
             )
         ),
         AgentSettingsHit::CopyMcpClientConfig

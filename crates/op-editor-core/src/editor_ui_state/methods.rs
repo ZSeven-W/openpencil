@@ -182,7 +182,8 @@ impl EditorUiState {
         self.close_icon_picker();
         self.close_chat_model_picker();
         self.close_parallel_agents_picker();
-        self.scene_template_center.open(now_ms);
+        self.scene_template_center
+            .open(now_ms, !self.touch_chrome());
     }
 
     /// Close the Scene Template Center and clear its transient state.
@@ -200,6 +201,17 @@ impl EditorUiState {
             self.pressed_button = None;
         }
         true
+    }
+
+    /// Close the style-import layer and resolve keyboard ownership for the
+    /// current input mode. Pointer-driven desktop keeps its search focus;
+    /// touch returns to browsing until the user taps a field again.
+    pub fn close_scene_template_style_import(&mut self) -> bool {
+        let changed = self.scene_template_center.close_style_import();
+        if changed && self.touch_chrome() {
+            self.scene_template_center.input_focus_active = false;
+        }
+        changed
     }
 
     /// Aim the generate row at a template: pin its style guide, narrow the
@@ -236,6 +248,8 @@ impl EditorUiState {
         }
         changed |= center.focus != SceneTemplateFocus::Generate;
         center.focus = SceneTemplateFocus::Generate;
+        changed |= !center.input_focus_active;
+        center.input_focus_active = true;
         changed |= center.generate_basis.as_deref() != Some(template.id.as_str());
         center.generate_basis = Some(template.id.clone());
         changed
@@ -623,5 +637,32 @@ impl EditorUiState {
         // preserve-geometry layout path) — matches file-open, which resets it
         // via a fresh `editor_ui`.
         self.preserve_authored_geometry = false;
+    }
+}
+
+impl EditorUiState {
+    /// Phone bottom-sheet layout. Kept as a narrow compatibility helper;
+    /// tablet and input-density decisions must use the explicit predicates
+    /// below so Medium never silently collapses into Compact again.
+    pub fn mobile_layout(&self) -> bool {
+        self.touch && self.size_class.is_compact()
+    }
+
+    /// Native touch chrome is shared by phone and tablet players. Layout
+    /// geometry still branches on the three size classes.
+    pub fn touch_chrome(&self) -> bool {
+        self.touch
+    }
+
+    pub fn compact_layout(&self) -> bool {
+        self.touch && self.size_class.is_compact()
+    }
+
+    pub fn medium_layout(&self) -> bool {
+        self.touch && self.size_class.is_medium()
+    }
+
+    pub fn expanded_touch_layout(&self) -> bool {
+        self.touch && self.size_class.is_expanded()
     }
 }

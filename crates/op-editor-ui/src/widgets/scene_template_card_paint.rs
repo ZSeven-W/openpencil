@@ -31,8 +31,7 @@ use super::asset_center_template_cards::UserTemplateCard;
 use super::icons::{draw_icon, Icon};
 use super::panel_controls::{paint_accent_button, paint_neutral_button, ButtonSpec};
 use super::scene_template_card_actions::{
-    card_action_rects, card_add_hover_token, card_generate_hover_token, ACTION_INSET,
-    ACTION_LABEL_SIZE, ACTION_RADIUS,
+    card_add_hover_token, card_generate_hover_token, ACTION_INSET, ACTION_LABEL_SIZE, ACTION_RADIUS,
 };
 use super::scene_template_panel::{
     preview_height, SceneTemplatePanel, CARD_PALETTE_H, CARD_PREVIEW_INSET,
@@ -316,7 +315,7 @@ impl SceneTemplatePanel<'_> {
         template: &'static SceneTemplateDefinition,
     ) {
         let picture = Self::card_preview_rect(card);
-        let (actions, _) = card_action_rects(card, self.card_offers_generate(template));
+        let (actions, _) = self.card_action_rects_for(card, self.card_offers_generate(template));
         let text_w = (picture.size.x - ACTION_INSET * 2.0).max(0.0);
         let lines = wrap_to_width(
             template.summary_for_locale(self.locale),
@@ -368,7 +367,7 @@ impl SceneTemplatePanel<'_> {
         template: &'static SceneTemplateDefinition,
         index: usize,
     ) {
-        let (add, generate) = card_action_rects(card, self.card_offers_generate(template));
+        let (add, generate) = self.card_action_rects_for(card, self.card_offers_generate(template));
         self.paint_card_action(
             cx,
             add,

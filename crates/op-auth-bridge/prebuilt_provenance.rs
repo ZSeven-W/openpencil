@@ -78,7 +78,7 @@ pub fn validate_prebuilt(
     }
 
     let manifest_bytes = fs::read(target_dir.join("PROVENANCE"))
-        .map_err(|_| ProvenanceError("ABI-v2 provenance manifest is missing"))?;
+        .map_err(|_| ProvenanceError("ABI-v2+ provenance manifest is missing"))?;
     let manifest = parse_manifest(&manifest_bytes)?;
     require_field(&manifest, "format", "1")?;
     require_field(&manifest, "target", target)?;
@@ -100,17 +100,17 @@ pub fn validate_prebuilt(
     )?;
     let signature_hex = read_trimmed(
         &target_dir.join("PROVENANCE.sig"),
-        "ABI-v2 provenance signature is missing",
+        "ABI-v2+ provenance signature is missing",
     )?;
     let public_key = decode_fixed::<32>(&public_key_hex)
         .ok_or(ProvenanceError("release provenance public key is invalid"))?;
     let signature = decode_fixed::<64>(&signature_hex)
-        .ok_or(ProvenanceError("ABI-v2 provenance signature is invalid"))?;
+        .ok_or(ProvenanceError("ABI-v2+ provenance signature is invalid"))?;
     let verifying_key = VerifyingKey::from_bytes(&public_key)
         .map_err(|_| ProvenanceError("release provenance public key is invalid"))?;
     verifying_key
         .verify_strict(&manifest_bytes, &Signature::from_bytes(&signature))
-        .map_err(|_| ProvenanceError("ABI-v2 provenance signature verification failed"))?;
+        .map_err(|_| ProvenanceError("ABI-v2+ provenance signature verification failed"))?;
 
     Ok(ValidatedPrebuilt {
         abi_version,

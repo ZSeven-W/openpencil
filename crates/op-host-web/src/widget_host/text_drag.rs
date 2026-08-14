@@ -29,11 +29,8 @@ impl WidgetHost {
             origin: Point2D::new(panel_x, TOP_BAR_HEIGHT),
             size: Point2D::new(pw, (self.last_viewport_h - TOP_BAR_HEIGHT).max(0.0)),
         };
-        op_editor_ui::widgets::property_panel_code::code_text_offset_at(
-            panel_rect,
-            &self.editor_state.codegen,
-            Point2D::new(x, y),
-        )
+        op_editor_ui::widgets::PropertyPanel::for_selection(&self.editor_state)?
+            .code_text_offset_at(panel_rect, Point2D::new(x, y))
     }
 
     pub(in crate::widget_host) fn apply_code_selection_drag_cursor_move(

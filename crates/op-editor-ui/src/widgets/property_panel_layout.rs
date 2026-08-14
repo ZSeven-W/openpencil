@@ -270,10 +270,12 @@ pub fn action_button_rects_with_fill_picker(
             visible.flex_layout_mode,
             visible.layout_justify,
             padding_mode_popover_open,
+            visible.touch_controls,
         );
         y += crate::widgets::property_panel_flex::flex_section_height(
             visible.flex_layout_mode,
             visible.padding_edit_mode,
+            visible.touch_controls,
         ) - SECTION_HEADER_HEIGHT;
     }
 
@@ -282,7 +284,8 @@ pub fn action_button_rects_with_fill_picker(
         // W/H remain editable in every sizing mode. Committing a number
         // switches only that axis back to fixed sizing.
         y += INPUT_HEIGHT + 10.0;
-        let row_h = 22.0;
+        let row_h =
+            crate::widgets::property_panel_inputs::size_check_row_height(visible.touch_controls);
         out.push((
             PropertyPanelAction::ToggleSizeFillWidth,
             Rect {
@@ -334,7 +337,10 @@ pub fn action_button_rects_with_fill_picker(
 
     if visible.text {
         out.extend(crate::widgets::property_panel_text::text_action_rects(
-            x0, y, usable_w,
+            x0,
+            y,
+            usable_w,
+            visible.touch_controls,
         ));
         // The font-family picker is an overlay now (searchable list,
         // `property_panel_typography.rs`) — its rows are hit-tested
@@ -343,11 +349,14 @@ pub fn action_button_rects_with_fill_picker(
         if font_weight_picker_open {
             out.extend(
                 crate::widgets::property_panel_text::font_weight_picker_action_rects(
-                    x0, y, usable_w,
+                    x0,
+                    y,
+                    usable_w,
+                    visible.touch_controls,
                 ),
             );
         }
-        y += crate::widgets::property_panel_text::text_section_height();
+        y += crate::widgets::property_panel_text::text_section_height(visible.touch_controls);
         y += SECTION_GAP;
     }
 
@@ -401,7 +410,14 @@ pub fn action_button_rects_with_fill_picker(
     if visible.stroke {
         // Mirrors paint_stroke_section: header + hex/width row + side grid.
         let section_y = y;
-        push_stroke_action_rects(&mut out, x0, section_y, w, visible.stroke_mode_popover_open);
+        push_stroke_action_rects(
+            &mut out,
+            x0,
+            section_y,
+            w,
+            visible.stroke_mode_popover_open,
+            visible.touch_controls,
+        );
         y += SECTION_HEADER_HEIGHT;
         // The stroke hex row's leading colour swatch opens the picker.
         let show_var = visible.color_variable_count > 0 || visible.stroke_variable_bound;
@@ -422,7 +438,12 @@ pub fn action_button_rects_with_fill_picker(
                 PropertyPanelAction::OpenColorPicker(op_editor_core::ColorTarget::Stroke),
                 Rect {
                     origin: Point2D::new(x0 + PAD_X, y),
-                    size: Point2D::new(28.0, INPUT_HEIGHT),
+                    size: Point2D::new(
+                        crate::widgets::property_panel_inputs::color_swatch_action_width(
+                            visible.touch_controls,
+                        ),
+                        INPUT_HEIGHT,
+                    ),
                 },
             ));
         }
@@ -442,14 +463,21 @@ pub fn action_button_rects_with_fill_picker(
     if visible.effects {
         // Mirrors `paint_effects_section`: header + one block per
         // effect. The header's "+" opens the three-kind add-menu.
-        let plus = Rect {
-            origin: Point2D::new(x0 + w - PAD_X - 22.0, y),
-            size: Point2D::new(28.0, SECTION_HEADER_HEIGHT),
-        };
+        let plus = crate::widgets::property_panel_inputs::section_add_target(
+            x0,
+            y,
+            w,
+            visible.touch_controls,
+        );
         out.push((PropertyPanelAction::ToggleEffectAddPicker, plus));
         y += SECTION_HEADER_HEIGHT;
         for (ei, eff) in effects.iter().enumerate() {
-            let rects = crate::widgets::property_panel_effects::effect_row_rects(x0, y, w);
+            let rects = crate::widgets::property_panel_effects::effect_row_rects(
+                x0,
+                y,
+                w,
+                visible.touch_controls,
+            );
             out.push((PropertyPanelAction::RemoveEffect(ei), rects.remove));
             out.push((
                 PropertyPanelAction::SetEffectVisible(ei, !eff.visible),
