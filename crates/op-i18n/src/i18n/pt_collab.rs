@@ -135,6 +135,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Não foi possível salvar o modelo",
         "assetCenter.template.mine" => "Meus modelos",
         "assetCenter.template.builtIn" => "Modelos integrados",
+        "ai.designProgress.detail.failureReason" => "Motivo: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "O agente falhou sem retornar uma descrição do erro.",
+        "ai.designProgress.detail.noResult" => "O agente parou antes de retornar um resultado para esta seção.",
+        "ai.designProgress.detail.connectionClosed" => "A conexão do agente foi encerrada antes do resultado desta seção.",
+        "ai.designProgress.detail.stoppedByUser" => "Interrompido pelo usuário antes da conclusão desta seção.",
         _ => return None,
     })
 }

@@ -195,6 +195,13 @@ fn matches_any_word_phrase(text_lower: &str, phrases: &[&str]) -> bool {
     phrases.iter().any(|p| matches_word_phrase(text_lower, p))
 }
 
+/// True when the message has no word or number content to route.
+/// Punctuation-only reactions must stay in chat instead of opening a design
+/// turn that can mutate the canvas.
+pub fn is_non_request_text(text: &str) -> bool {
+    !text.chars().any(char::is_alphanumeric)
+}
+
 /// TS `classifyByKeywords` — verbatim rule order.
 pub fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
@@ -225,6 +232,9 @@ pub fn classify_intent_for_standard_route(
     text: &str,
     model: Option<String>,
 ) -> DesignIntent {
+    if is_non_request_text(text) {
+        return DesignIntent::Chat;
+    }
     // A whole-screen *draw* (creation verb + page noun, e.g. "重新画一个
     // search 页面") is unambiguously a new screen — it must win over the
     // modify classifier so it routes to the new-frame path, not edit-in-place.
@@ -265,12 +275,12 @@ pub fn parse_classified(text: &str) -> DesignIntent {
     if upper.contains("CHAT") {
         return DesignIntent::Chat;
     }
-    DesignIntent::New
+    DesignIntent::Chat
 }
 
 /// TS `classifyIntent` — one lightweight LLM call through the (chat-
 /// session-untracked) provider, with the TS 8s abort and the TS
-/// fallback to `new` on any failure / timeout.
+/// conservative fallback to chat on any failure / timeout.
 pub fn classify_intent_llm(
     provider: &dyn ChatProvider,
     text: &str,
@@ -308,9 +318,8 @@ fn classify_intent_llm_with_timeout(
             }
         });
     if let Err(err) = spawned {
-        // TS: any classification failure falls back to { intent: 'new' }.
         eprintln!("[chat-intent] failed to spawn classify drain thread: {err}");
-        return DesignIntent::New;
+        return DesignIntent::Chat;
     }
 
     let deadline = Instant::now() + timeout;
@@ -318,17 +327,15 @@ fn classify_intent_llm_with_timeout(
     loop {
         let now = Instant::now();
         if now >= deadline {
-            // TS: AbortController fires → catch → { intent: 'new' }.
-            return DesignIntent::New;
+            return parse_classified(&out);
         }
         match rx.recv_timeout(deadline - now) {
             Ok(ChatDelta::TextDelta(s)) => out.push_str(&s),
             // TS consumeSSEAsText only accumulates text chunks.
             Ok(ChatDelta::Thinking(_)) | Ok(ChatDelta::ToolUse { .. }) => {}
-            // TS: `if (!response.ok) throw` → catch → 'new'.
-            Ok(ChatDelta::Error(_)) => return DesignIntent::New,
+            Ok(ChatDelta::Error(_)) => return parse_classified(&out),
             Ok(ChatDelta::Done { .. }) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => return DesignIntent::New,
+            Err(mpsc::RecvTimeoutError::Timeout) => return parse_classified(&out),
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }

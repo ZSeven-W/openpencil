@@ -175,6 +175,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Could not save the template",
         "assetCenter.template.mine" => "My templates",
         "assetCenter.template.builtIn" => "Built-in templates",
+        "ai.designProgress.detail.failureReason" => "Reason: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "The agent failed without returning an error description.",
+        "ai.designProgress.detail.noResult" => "The agent stopped before returning a result for this section.",
+        "ai.designProgress.detail.connectionClosed" => "The agent connection closed before this section returned a result.",
+        "ai.designProgress.detail.stoppedByUser" => "Stopped by the user before this section completed.",
         _ => return None,
     })
 }

@@ -250,7 +250,9 @@ fn worker_summary_finishes_all_messages_and_keeps_retry_on_owning_worker() {
     assert_eq!(worker.failed_subtasks.len(), 1);
     assert_eq!(worker.failed_subtasks[0].subtask_id, "hero");
     assert_eq!(worker.activities[0].status, ChatActivityStatus::Error);
-    assert!(worker.content.contains("need attention"));
+    assert!(worker
+        .content
+        .contains("failed sections are expanded with their reasons"));
 }
 
 #[test]
@@ -292,12 +294,20 @@ fn terminal_design_error_stops_primary_and_every_worker_message() {
     assert!(messages.iter().all(|message| !message.streaming));
     assert!(messages[0].content.contains("error:"));
     assert_eq!(messages[0].activities[0].status, ChatActivityStatus::Error);
+    assert!(messages[0].activities[0]
+        .detail
+        .as_deref()
+        .is_some_and(|detail| detail.starts_with("Reason:") && detail.contains("boom")));
     let worker = messages
         .iter()
         .find(|message| message.design_worker_group == Some(1))
         .unwrap();
     assert!(worker.content.contains("Stopped designing"));
     assert_eq!(worker.activities[0].status, ChatActivityStatus::Error);
+    assert!(worker.activities[0]
+        .detail
+        .as_deref()
+        .is_some_and(|detail| detail.starts_with("Reason:") && detail.contains("boom")));
 }
 
 #[test]
@@ -306,6 +316,7 @@ fn disconnected_session_marks_active_worker_rows_error_before_stopping() {
     let (_cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
     let mut current = Some(DesignSession::from_channels(delta_rx, cmd_rx));
     let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.locale = Locale::EnUs;
     host.editor_state_mut()
         .chat
         .messages
@@ -334,6 +345,10 @@ fn disconnected_session_marks_active_worker_rows_error_before_stopping() {
         .unwrap();
     assert!(!worker.streaming);
     assert_eq!(worker.activities[0].status, ChatActivityStatus::Error);
+    assert_eq!(
+        worker.activities[0].detail.as_deref(),
+        Some("The agent connection closed before this section returned a result.")
+    );
 }
 
 #[test]
@@ -568,6 +583,13 @@ fn partial_summary_marks_omitted_active_rows_error() {
     assert_eq!(row("trips").status, ChatActivityStatus::Done);
     assert_eq!(row("profile").status, ChatActivityStatus::Error);
     assert_eq!(row("saved").status, ChatActivityStatus::Error);
+    for id in ["profile", "saved"] {
+        assert_eq!(
+            row(id).detail.as_deref(),
+            Some("The agent stopped before returning a result for this section."),
+            "omitted summary row {id} needs a concrete terminal reason"
+        );
+    }
     assert!(messages
         .iter()
         .filter(|message| message.role == ChatRole::Assistant)
@@ -582,7 +604,10 @@ fn partial_summary_marks_omitted_active_rows_error() {
     let primary = &messages[1];
     assert_eq!(primary.completion.unwrap().succeeded, 1);
     assert_eq!(primary.completion.unwrap().failed, 2);
-    assert!(primary.content.contains("2 need attention"));
+    assert!(primary.content.contains("2 failed"));
+    assert!(primary
+        .content
+        .contains("failed sections below show the exact reasons"));
 }
 
 #[test]

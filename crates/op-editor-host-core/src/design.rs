@@ -44,6 +44,9 @@ pub enum DesignDelta {
 /// Request from worker to UI to apply one editor mutation or batch boundary.
 pub struct DesignCmdReq {
     pub op: DesignCmdOp,
+    /// Page the design turn started on. Hosts apply every command against
+    /// this page even when the user switches pages while the worker runs.
+    pub target_page_id: Option<String>,
     pub ack: SyncSender<DesignCmdAck>,
 }
 
@@ -151,19 +154,32 @@ impl DesignSession {
 pub struct RemoteDocSink {
     cmd_tx: Sender<DesignCmdReq>,
     mirror: EditorState,
+    target_page_id: Option<String>,
 }
 
 impl RemoteDocSink {
     pub fn new(cmd_tx: Sender<DesignCmdReq>, initial_state: EditorState) -> Self {
+        let target_page_id = initial_state
+            .doc
+            .pages
+            .as_ref()
+            .and_then(|pages| pages.get(initial_state.ui.active_page_index))
+            .map(|page| page.id.clone())
+            .or_else(|| Some("0".into()));
         Self {
             cmd_tx,
             mirror: initial_state,
+            target_page_id,
         }
     }
 
     fn send_and_wait(&mut self, op: DesignCmdOp) -> bool {
         let (ack_tx, ack_rx) = mpsc::sync_channel::<DesignCmdAck>(1);
-        let req = DesignCmdReq { op, ack: ack_tx };
+        let req = DesignCmdReq {
+            op,
+            target_page_id: self.target_page_id.clone(),
+            ack: ack_tx,
+        };
         if self.cmd_tx.send(req).is_err() {
             return false;
         }

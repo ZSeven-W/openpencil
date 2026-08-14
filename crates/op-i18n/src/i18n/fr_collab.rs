@@ -135,6 +135,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Impossible d'enregistrer le modèle",
         "assetCenter.template.mine" => "Mes modèles",
         "assetCenter.template.builtIn" => "Modèles intégrés",
+        "ai.designProgress.detail.failureReason" => "Raison : {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "L’agent a échoué sans fournir de description de l’erreur.",
+        "ai.designProgress.detail.noResult" => "L’agent s’est arrêté avant de renvoyer un résultat pour cette section.",
+        "ai.designProgress.detail.connectionClosed" => "La connexion de l’agent s’est interrompue avant le résultat de cette section.",
+        "ai.designProgress.detail.stoppedByUser" => "Arrêté par l’utilisateur avant la fin de cette section.",
         _ => return None,
     })
 }

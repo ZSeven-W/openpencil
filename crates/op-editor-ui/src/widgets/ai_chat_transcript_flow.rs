@@ -98,7 +98,7 @@ pub(crate) fn build_activity_flow(
                 .get(source_index)
                 .copied()
                 .flatten()
-                .unwrap_or(active);
+                .unwrap_or(active || failed);
             let height = action_step_height(expanded, details.len());
             // `index` is a direct `msg.activities` index here (unlike the
             // legacy thinking-text-derived steps in `build_item`), so the

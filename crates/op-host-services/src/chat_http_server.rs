@@ -46,6 +46,9 @@ use crate::chat_spawn::{build_command, find_binary};
 #[path = "chat_http_server_error.rs"]
 mod error;
 pub use error::OpenCodeError;
+#[path = "chat_http_server_completion.rs"]
+mod completion;
+use completion::{abort_session, latest_assistant_text};
 
 /// TS `opencode-client.ts` reuses an existing server on the default
 /// port before spawning its own.
@@ -321,7 +324,13 @@ async fn run_opencode_turn(
     tokio::time::sleep(SSE_SETTLE).await;
 
     // 6. Send the prompt (TS chat.ts:659-664, 710-716).
-    let mut prompt_payload = serde_json::json!({ "parts": parts });
+    // This bridge returns one text completion to the orchestrator. Disabling
+    // tools prevents OpenCode from stranding the response in an unhandled
+    // tool call.
+    let mut prompt_payload = serde_json::json!({
+        "parts": parts,
+        "tools": { "*": false },
+    });
     if let Some((provider_id, model_id)) = &parsed_model {
         prompt_payload["model"] = serde_json::json!({
             "providerID": provider_id,
@@ -343,15 +352,21 @@ async fn run_opencode_turn(
     // 7. Consume events until idle / error / timeout
     // (TS chat.ts:718-776).
     let deadline = tokio::time::Instant::now() + STREAM_TIMEOUT;
-    let mut emitted_text = false;
+    let mut streamed_text = String::new();
     let mut canceled = false;
+    let mut timed_out = false;
+    let mut terminal_error = None;
+    let mut tool_escape = None;
     loop {
         tokio::select! {
             biased;
             _ = tx.closed() => { canceled = true; break }
             // TS streamWithTimeout: the 180s budget ends the stream;
             // the fallback + empty checks still run after it.
-            _ = tokio::time::sleep_until(deadline) => break,
+            _ = tokio::time::sleep_until(deadline) => {
+                timed_out = true;
+                break;
+            },
             ev = events_rx.recv() => {
                 let Some(val) = ev else { break }; // SSE stream ended
                 let Some(ty) = val.get("type").and_then(|v| v.as_str()) else { continue };
@@ -371,7 +386,7 @@ async fn run_opencode_turn(
                                 canceled = true;
                                 break;
                             }
-                            emitted_text = true;
+                            streamed_text.push_str(delta);
                         }
                         // Forward reasoning deltas as thinking chunks.
                         if prop_session == Some(session_id.as_str())
@@ -382,6 +397,23 @@ async fn run_opencode_turn(
                             break;
                         }
                     }
+                    "message.part.updated" => {
+                        let part = props.and_then(|p| p.get("part"));
+                        let part_session = part
+                            .and_then(|p| p.get("sessionID"))
+                            .and_then(|v| v.as_str());
+                        if part_session == Some(session_id.as_str())
+                            && part.and_then(|p| p.get("type")).and_then(|v| v.as_str())
+                                == Some("tool")
+                        {
+                            let name = part
+                                .and_then(|p| p.get("tool"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown");
+                            tool_escape = Some(name.to_string());
+                            break;
+                        }
+                    }
                     // Session went idle — response complete.
                     "session.idle" => {
                         if prop_session == Some(session_id.as_str()) {
@@ -389,16 +421,14 @@ async fn run_opencode_turn(
                         }
                     }
                     // Session error: ours, or one with no session id.
-                    "session.error" => {
-                        if prop_session == Some(session_id.as_str()) || prop_session.is_none() {
-                            let err = props.and_then(|p| p.get("error"));
-                            let msg = format_opencode_error(err);
-                            eprintln!("[AI] OpenCode session error: {msg}");
-                            if tx.send(ChatDelta::Error(msg)).await.is_err() {
-                                canceled = true;
-                            }
-                            break;
-                        }
+                    "session.error"
+                        if prop_session == Some(session_id.as_str()) || prop_session.is_none() =>
+                    {
+                        let err = props.and_then(|p| p.get("error"));
+                        let msg = format_opencode_error(err);
+                        eprintln!("[AI] OpenCode session error: {msg}");
+                        terminal_error = Some(msg);
+                        break;
                     }
                     _ => {}
                 }
@@ -410,54 +440,73 @@ async fn run_opencode_turn(
         return;
     }
 
-    // 8. Fallback: no streamed text → read the session messages
-    // directly (TS chat.ts:778-802; failures fall through to the
-    // empty-response error).
-    if !emitted_text {
-        if let Ok(messages) = get_json(&ops, &format!("{base}/session/{session_id}/message")).await
-        {
-            if let Some(items) = messages.as_array() {
-                let assistant = items.iter().rev().find(|m| {
-                    m.get("info")
-                        .and_then(|i| i.get("role"))
-                        .and_then(|v| v.as_str())
-                        == Some("assistant")
-                });
-                if let Some(parts) = assistant
-                    .and_then(|m| m.get("parts"))
-                    .and_then(|p| p.as_array())
+    if timed_out {
+        abort_session(&ops, &base, &session_id).await;
+        return fail(
+            tx,
+            format!(
+                "OpenCode timed out after {} seconds before the session completed.",
+                STREAM_TIMEOUT.as_secs()
+            ),
+        )
+        .await;
+    }
+    if let Some(name) = tool_escape {
+        abort_session(&ops, &base, &session_id).await;
+        return fail(
+            tx,
+            format!(
+                "OpenCode attempted the forbidden `{name}` tool during a text-only completion."
+            ),
+        )
+        .await;
+    }
+    if let Some(error) = terminal_error {
+        return fail(tx, error).await;
+    }
+
+    // 8. Reconcile against the persisted assistant message even when SSE
+    // produced text. OpenCode can reach idle after dropping a final delta;
+    // emitting only the missing suffix keeps the completion exact.
+    if let Ok(messages) = get_json(&ops, &format!("{base}/session/{session_id}/message")).await {
+        if let Some(final_text) = latest_assistant_text(&messages) {
+            if streamed_text.is_empty() {
+                if tx
+                    .send(ChatDelta::TextDelta(final_text.clone()))
+                    .await
+                    .is_err()
                 {
-                    for part in parts {
-                        if part.get("type").and_then(|v| v.as_str()) == Some("text") {
-                            if let Some(text) = part
-                                .get("text")
-                                .and_then(|v| v.as_str())
-                                .filter(|t| !t.is_empty())
-                            {
-                                if tx
-                                    .send(ChatDelta::TextDelta(text.to_string()))
-                                    .await
-                                    .is_err()
-                                {
-                                    return;
-                                }
-                                emitted_text = true;
-                            }
-                        }
-                    }
+                    return;
                 }
+                streamed_text = final_text;
+            } else if let Some(suffix) = final_text.strip_prefix(&streamed_text) {
+                if !suffix.is_empty()
+                    && tx
+                        .send(ChatDelta::TextDelta(suffix.to_string()))
+                        .await
+                        .is_err()
+                {
+                    return;
+                }
+                streamed_text = final_text;
+            } else if final_text != streamed_text {
+                return fail(
+                    tx,
+                    "OpenCode stream did not match its persisted final response.".into(),
+                )
+                .await;
             }
         }
     }
 
-    // 9. Still nothing → the TS empty-response error (chat.ts:804-811).
-    if !emitted_text {
-        let _ = tx
-            .send(ChatDelta::Error(
-                "OpenCode returned an empty response. The model may not have generated any output."
-                    .into(),
-            ))
-            .await;
+    // 9. Still nothing → terminal empty-response failure.
+    if streamed_text.is_empty() {
+        return fail(
+            tx,
+            "OpenCode returned an empty response. The model may not have generated any output."
+                .into(),
+        )
+        .await;
     }
 
     let _ = tx

@@ -80,7 +80,7 @@ pub struct ChatMessage {
     pub design_block_expanded_overrides: Vec<Option<bool>>,
     /// Per-action-step (subtask card) expanded-state overrides. Missing
     /// / `None` entries fall back to the transcript default (expanded
-    /// only while the step is the active/streaming one).
+    /// while the step is active or failed so diagnostics stay visible).
     pub action_step_expanded_overrides: Vec<Option<bool>>,
     /// True while this (assistant) message's turn streams in.
     pub streaming: bool,

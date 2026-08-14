@@ -165,6 +165,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Не удалось сохранить шаблон",
         "assetCenter.template.mine" => "Мои шаблоны",
         "assetCenter.template.builtIn" => "Встроенные шаблоны",
+        "ai.designProgress.detail.failureReason" => "Причина: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "Агент завершился с ошибкой, не вернув её описание.",
+        "ai.designProgress.detail.noResult" => "Агент остановился до получения результата для этого раздела.",
+        "ai.designProgress.detail.connectionClosed" => "Соединение с агентом закрылось до получения результата для этого раздела.",
+        "ai.designProgress.detail.stoppedByUser" => "Остановлено пользователем до завершения этого раздела.",
         _ => return None,
     })
 }

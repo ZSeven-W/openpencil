@@ -135,6 +135,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "無法儲存範本",
         "assetCenter.template.mine" => "我的範本",
         "assetCenter.template.builtIn" => "內建範本",
+        "ai.designProgress.detail.failureReason" => "失敗原因：{{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "Agent 執行失敗，但沒有回傳錯誤說明。",
+        "ai.designProgress.detail.noResult" => "Agent 在該區塊回傳結果前已停止。",
+        "ai.designProgress.detail.connectionClosed" => "Agent 連線在該區塊回傳結果前已中斷。",
+        "ai.designProgress.detail.stoppedByUser" => "使用者已停止，該區塊尚未完成。",
         _ => return None,
     })
 }

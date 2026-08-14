@@ -139,6 +139,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "टेम्पलेट सहेजा नहीं जा सका",
         "assetCenter.template.mine" => "मेरे टेम्पलेट",
         "assetCenter.template.builtIn" => "अंतर्निहित टेम्पलेट",
+        "ai.designProgress.detail.failureReason" => "विफलता का कारण: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "एजेंट त्रुटि विवरण लौटाए बिना विफल हो गया।",
+        "ai.designProgress.detail.noResult" => "इस सेक्शन का परिणाम लौटाने से पहले एजेंट रुक गया।",
+        "ai.designProgress.detail.connectionClosed" => "इस सेक्शन का परिणाम मिलने से पहले एजेंट कनेक्शन बंद हो गया।",
+        "ai.designProgress.detail.stoppedByUser" => "उपयोगकर्ता ने इस सेक्शन के पूरा होने से पहले रोक दिया।",
         _ => return None,
     })
 }

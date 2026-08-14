@@ -257,6 +257,12 @@ fn pump_progress_captures_failed_subtask_specs_for_manual_retry() {
         .messages
         .last()
         .expect("seeded bubble survives");
+    assert_eq!(msg.activities.len(), 1);
+    assert_eq!(msg.activities[0].title, "Hero");
+    assert_eq!(
+        msg.activities[0].detail.as_deref(),
+        Some("Reason: empty content from provider")
+    );
     assert_eq!(msg.failed_subtasks.len(), 1, "{:?}", msg.failed_subtasks);
     assert_eq!(msg.failed_subtasks[0].subtask_id, "hero");
     let restored: op_orchestrator::plan::Subtask =
@@ -431,6 +437,7 @@ fn pump_commands_refits_viewport_after_design_insert() {
                 parent_id: op_editor_core::NodeId::NONE,
                 page_id: None,
             }),
+            target_page_id: None,
             ack: ack_tx,
         })
         .expect("request should queue");
@@ -457,6 +464,60 @@ fn pump_commands_refits_viewport_after_design_insert() {
         "mobile root should fit viewport height, got zoom {}",
         after.zoom
     );
+}
+
+#[test]
+fn pump_commands_keeps_a_design_turn_bound_to_its_start_page() {
+    use jian_ops_schema::page::PenPage;
+
+    let (_delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
+    let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
+    let mut current = Some(DesignSession::from_channels(delta_rx, cmd_rx));
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().doc.children.clear();
+    host.editor_state_mut().doc.pages = Some(vec![
+        PenPage {
+            id: "page-design".into(),
+            name: "Design".into(),
+            children: Vec::new(),
+            background_color: None,
+            state: None,
+            lifecycle: None,
+        },
+        PenPage {
+            id: "page-user".into(),
+            name: "User".into(),
+            children: Vec::new(),
+            background_color: None,
+            state: None,
+            lifecycle: None,
+        },
+    ]);
+    host.editor_state_mut().ui.active_page_index = 1;
+
+    let (ack_tx, ack_rx) = mpsc::sync_channel::<DesignCmdAck>(1);
+    cmd_tx
+        .send(DesignCmdReq {
+            op: DesignCmdOp::Apply(EditorCommand::InsertSubtree {
+                nodes: vec![mobile_root()],
+                parent_id: op_editor_core::NodeId::NONE,
+                page_id: None,
+            }),
+            target_page_id: Some("page-design".into()),
+            ack: ack_tx,
+        })
+        .expect("request should queue");
+
+    assert!(pump_commands(&mut host, &mut current, 1440.0, 900.0));
+    let ack = ack_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("pump should ack apply request");
+    assert!(ack.applied);
+    assert_eq!(ack.new_state.ui.active_page_index, 0);
+    let pages = host.editor_state().doc.pages.as_ref().unwrap();
+    assert_eq!(pages[0].children.len(), 1);
+    assert!(pages[1].children.is_empty());
+    assert_eq!(host.editor_state().ui.active_page_index, 1);
 }
 
 #[test]
@@ -614,6 +675,54 @@ fn typed_progress_updates_retry_without_duplicating_the_activity() {
         op_editor_core::ChatActivityStatus::Running
     );
     assert!(!format!("{:?}", message.activities).contains("zero nodes"));
+}
+
+#[test]
+fn failed_subtask_keeps_the_actionable_error_in_the_activity() {
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    assert!(super::apply_progress(
+        &mut message,
+        &[
+            Progress::SubtaskStarted {
+                id: "hero".into(),
+                label: "Hero".into(),
+            },
+            Progress::SubtaskFailed {
+                id: "hero".into(),
+                error: "InsertSubtree rejected: parent_id=root status=missing".into(),
+            },
+        ],
+        Locale::EnUs,
+    ));
+    let detail = message.activities[0].detail.as_deref().unwrap();
+    assert!(detail.starts_with("Reason:"), "{detail}");
+    assert!(detail.contains("parent_id=root status=missing"), "{detail}");
+}
+
+#[test]
+fn failed_subtask_uses_localized_reason_label() {
+    let mut message = op_editor_core::ChatMessage::assistant_streaming();
+    assert!(super::apply_progress(
+        &mut message,
+        &[Progress::SubtaskFailed {
+            id: "customer-table".into(),
+            error: "parent_id=dashboard was not found".into(),
+        }],
+        Locale::ZhCn,
+    ));
+
+    assert_eq!(
+        message.activities[0].detail.as_deref(),
+        Some("失败原因：parent_id=dashboard was not found")
+    );
+}
+
+#[test]
+fn failed_subtask_without_provider_detail_reports_the_missing_diagnostic() {
+    assert_eq!(
+        super::subtask_failure_detail(Locale::ZhCn, " \n\t"),
+        "Agent 执行失败，但没有返回错误说明。"
+    );
 }
 
 #[test]

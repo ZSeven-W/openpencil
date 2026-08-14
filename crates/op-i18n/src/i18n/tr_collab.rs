@@ -135,6 +135,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "menu.saveAsTemplate.failed" => "Şablon kaydedilemedi",
         "assetCenter.template.mine" => "Şablonlarım",
         "assetCenter.template.builtIn" => "Yerleşik şablonlar",
+        "ai.designProgress.detail.failureReason" => "Neden: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "Agent bir hata açıklaması döndürmeden başarısız oldu.",
+        "ai.designProgress.detail.noResult" => "Agent bu bölüm için sonuç döndürmeden durdu.",
+        "ai.designProgress.detail.connectionClosed" => "Bu bölümün sonucu dönmeden agent bağlantısı kapandı.",
+        "ai.designProgress.detail.stoppedByUser" => "Bu bölüm tamamlanmadan kullanıcı tarafından durduruldu.",
         _ => return None,
     })
 }
