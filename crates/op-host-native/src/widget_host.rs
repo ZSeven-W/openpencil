@@ -797,4 +797,3 @@ impl WidgetHostNative {
 /// interactive-degrade mode. Long enough to cover trackpad event gaps,
 /// short enough that full quality returns imperceptibly after release.
 const INTERACTION_HOT_MS: u64 = 150;
-
