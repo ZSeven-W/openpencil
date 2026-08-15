@@ -217,6 +217,120 @@ fn apply_result_repaints_placeholder_rectangle_with_image_fill() {
     assert_eq!(image_fill.mode, Some(ImageFillMode::Crop));
 }
 
+/// GLM-shaped slot: a rectangle that already carries ONE image fill whose
+/// url is still empty. It must be collected (no solid-fill heuristic gate)
+/// and, on `apply_result`, keep its authored fill body — only the url lands.
+#[test]
+fn collect_targets_includes_rect_with_empty_image_fill() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(rectangle_node(
+        "photo",
+        "Album Cover",
+        Some(vec![image_fill("")]),
+    ));
+
+    let targets = collect_targets(&state, &HashSet::new());
+
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0].node_id.as_str(), "photo");
+    assert_eq!(targets[0].query, "Album Cover");
+}
+
+#[test]
+fn collect_targets_skips_rect_with_landed_image_fill() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(rectangle_node(
+        "photo",
+        "Album Cover",
+        Some(vec![image_fill("https://example.com/photo.jpg")]),
+    ));
+
+    let targets = collect_targets(&state, &HashSet::new());
+
+    assert!(
+        targets.is_empty(),
+        "a landed image fill is already filled: {targets:?}"
+    );
+}
+
+/// Regression for the placeholder-frame detector: an image fill with an
+/// EMPTY url is "still unfilled" — before the fix it read as done.
+#[test]
+fn collect_targets_includes_placeholder_frame_with_empty_image_fill() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(frame_node(
+        "photo",
+        "Image",
+        Some("image-placeholder"),
+        Some(vec![image_fill("")]),
+        vec![text_label(
+            "label",
+            Some("image-placeholder-label"),
+            "pizza hero",
+        )],
+    ));
+
+    let targets = collect_targets(&state, &HashSet::new());
+
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0].node_id.as_str(), "photo");
+    assert_eq!(targets[0].query, "pizza hero");
+}
+
+#[test]
+fn apply_result_overwrites_only_url_of_empty_image_fill_rectangle() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    // A body with distinctive authored fields: everything except the url
+    // must survive the write-back.
+    state.active_children_mut().push(rectangle_node(
+        "photo",
+        "Album Cover",
+        Some(vec![PenFill::Image(ImageFillBody {
+            url: "".into(),
+            mode: Some(ImageFillMode::Fill),
+            original_size: None,
+            transform: None,
+            tile_scale: Some(2.0),
+            explain: None,
+            opacity: Some(0.75),
+            blend_mode: None,
+            exposure: None,
+            contrast: None,
+            saturation: None,
+            temperature: None,
+            tint: None,
+            highlights: None,
+            shadows: None,
+        })]),
+    ));
+    let revision_before = state.document_revision();
+
+    assert!(apply_result(
+        &mut state,
+        &NodeId::new("photo"),
+        "https://example.com/photo.jpg"
+    ));
+    let PenNode::Rectangle(rect) = &state.active_children()[0] else {
+        panic!("write-back must keep the rectangle node kind");
+    };
+    let Some([PenFill::Image(image_fill)]) = rect.container.fill.as_deref() else {
+        panic!("expected the single image fill");
+    };
+    assert_eq!(image_fill.url, "https://example.com/photo.jpg");
+    assert_eq!(image_fill.mode, Some(ImageFillMode::Fill));
+    assert_eq!(image_fill.tile_scale, Some(2.0));
+    assert_eq!(image_fill.opacity, Some(0.75));
+    assert_ne!(
+        state.document_revision(),
+        revision_before,
+        "a content-mutating apply_result must advance document_revision"
+    );
+}
+
 #[test]
 fn failed_search_writes_the_adaptive_placeholder_sentinel() {
     let mut state = EditorState::default();

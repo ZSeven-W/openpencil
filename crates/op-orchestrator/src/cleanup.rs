@@ -45,6 +45,8 @@ mod cleanup_bottom_nav_repairs;
 mod cleanup_clip_row_stroke;
 #[path = "cleanup_container_geometry.rs"]
 mod cleanup_container_geometry;
+#[path = "cleanup_image_slots.rs"]
+mod cleanup_image_slots;
 #[path = "cleanup_root_and_nav.rs"]
 mod cleanup_root_and_nav;
 #[path = "cleanup_root_transform.rs"]
@@ -55,6 +57,7 @@ mod cleanup_section_sizing;
 use cleanup_bottom_nav_repairs::*;
 use cleanup_clip_row_stroke::*;
 use cleanup_container_geometry::*;
+use cleanup_image_slots::*;
 use cleanup_root_and_nav::*;
 use cleanup_root_patches::*;
 use cleanup_root_transform::*;
@@ -613,6 +616,11 @@ fn run_cleanup_passes_with_summary_and_policy(
         // the corrected tree, not the pre-repair one.
         crate::section_shell_fill_repair::repair_section_shell_fill_ownership(sink, rid);
         counter.checkpoint(summary, CheckCategory::Structure, "radial+stub+shell");
+        // Weak-model "image slots" authored as a childless frame/rect with one
+        // still-empty image fill become real Image nodes BEFORE the geometry
+        // passes below, so the slot resolves and validates like any other.
+        materialize_empty_image_fill_slots(sink, rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "materialize-image-slots");
         // No-nav mobile screens share one deterministic closing contract:
         // 24-32px of bottom room. The repair reads the same resolved geometry
         // as the diagnostic and grows only root padding, never business nodes.
@@ -771,6 +779,10 @@ mod tests_fill_container_content;
 #[cfg(test)]
 #[path = "cleanup_clip_row_stroke_tests.rs"]
 mod tests_clip_row_stroke;
+
+#[cfg(test)]
+#[path = "cleanup_image_slots_tests.rs"]
+mod cleanup_image_slots_tests;
 
 #[cfg(test)]
 #[path = "cleanup_card_height_equalize_tests.rs"]

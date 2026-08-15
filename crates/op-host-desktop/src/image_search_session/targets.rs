@@ -190,12 +190,17 @@ fn image_search_target_for(
         && is_bare_anonymous_slot(node);
     let needs_image = match node {
         PenNode::Image(image) => is_placeholder_src(&image.src),
-        PenNode::Frame(_) => is_frame_placeholder_still_unfilled(node) || bare_slot_with_context,
+        PenNode::Frame(_) => {
+            is_frame_placeholder_still_unfilled(node)
+                || bare_slot_with_context
+                || has_empty_image_fill(node)
+        }
         // (rectangles fall through to the arm below)
         PenNode::Rectangle(_) => {
             is_image_area_rectangle_by_heuristic(node)
                 || is_unnamed_media_slot_in_context(node, parent_names)
                 || bare_slot_with_context
+                || has_empty_image_fill(node)
         }
         _ => false,
     };
@@ -307,6 +312,20 @@ fn is_placeholder_src(src: &str) -> bool {
     src.trim().is_empty() || src.starts_with("data:image/svg+xml;charset=utf-8,%3Csvg")
 }
 
+/// A single image fill whose url is still the placeholder/empty value —
+/// the author asked for an image here but none has landed yet.
+pub(super) fn has_empty_image_fill(node: &PenNode) -> bool {
+    let container = match node {
+        PenNode::Frame(frame) => &frame.container,
+        PenNode::Rectangle(rect) => &rect.container,
+        _ => return false,
+    };
+    let Some([PenFill::Image(body)]) = container.fill.as_deref() else {
+        return false;
+    };
+    is_placeholder_src(&body.url)
+}
+
 fn is_image_placeholder_frame(node: &PenNode) -> bool {
     matches!(node, PenNode::Frame(_)) && node.base().role.as_deref() == Some("image-placeholder")
 }
@@ -324,7 +343,9 @@ fn is_unfilled_image_placeholder_frame(node: &PenNode) -> bool {
     };
     match frame.container.fill.as_deref() {
         None | Some([]) => true,
-        Some([PenFill::Image(_), ..]) => false,
+        // An image fill whose url is still the placeholder value means the
+        // slot was never actually filled — only a landed url counts as done.
+        Some([PenFill::Image(body), ..]) => is_placeholder_src(&body.url),
         Some(_) => true,
     }
 }

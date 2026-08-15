@@ -600,8 +600,8 @@ use fetch::fetch_first_image_url_blocking;
 pub(crate) use fetch::fetch_image_data_url;
 pub(crate) use targets::{collect_targets, image_request_mode};
 use targets::{
-    collect_targets_with_scene, current_intent_fingerprints, intent_fingerprint,
-    is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic,
+    collect_targets_with_scene, current_intent_fingerprints, has_empty_image_fill,
+    intent_fingerprint, is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic,
 };
 
 fn collaboration_image_result_gate(state: &EditorState) -> Result<(), CollabGateReason> {
@@ -627,6 +627,7 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
     };
     let is_unfilled_placeholder_frame = is_frame_placeholder_still_unfilled(node);
     let is_unfilled_placeholder_rectangle = is_image_area_rectangle_by_heuristic(node);
+    let has_empty_image_fill = has_empty_image_fill(node);
     let changed = match node {
         PenNode::Image(image) => {
             if image.src == url {
@@ -635,46 +636,64 @@ pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str)
             image.src = url.into();
             true
         }
-        PenNode::Frame(frame) if is_unfilled_placeholder_frame => {
-            frame.container.fill = Some(vec![PenFill::Image(ImageFillBody {
-                url: url.into(),
-                mode: Some(ImageFillMode::Crop),
-                original_size: None,
-                transform: None,
-                tile_scale: None,
-                explain: None,
-                opacity: None,
-                blend_mode: None,
-                exposure: None,
-                contrast: None,
-                saturation: None,
-                temperature: None,
-                tint: None,
-                highlights: None,
-                shadows: None,
-            })]);
-            frame.children = Some(Vec::new());
+        PenNode::Frame(frame) if is_unfilled_placeholder_frame || has_empty_image_fill => {
+            match frame.container.fill.as_deref_mut() {
+                // A slot already authored as a single image fill keeps its
+                // body — only the still-empty url lands.
+                Some([PenFill::Image(body)]) => {
+                    body.url = url.into();
+                }
+                _ => {
+                    frame.container.fill = Some(vec![PenFill::Image(ImageFillBody {
+                        url: url.into(),
+                        mode: Some(ImageFillMode::Crop),
+                        original_size: None,
+                        transform: None,
+                        tile_scale: None,
+                        explain: None,
+                        opacity: None,
+                        blend_mode: None,
+                        exposure: None,
+                        contrast: None,
+                        saturation: None,
+                        temperature: None,
+                        tint: None,
+                        highlights: None,
+                        shadows: None,
+                    })]);
+                    frame.children = Some(Vec::new());
+                }
+            }
             true
         }
-        PenNode::Rectangle(rect) if is_unfilled_placeholder_rectangle => {
-            rect.container.fill = Some(vec![PenFill::Image(ImageFillBody {
-                url: url.into(),
-                mode: Some(ImageFillMode::Crop),
-                original_size: None,
-                transform: None,
-                tile_scale: None,
-                explain: None,
-                opacity: None,
-                blend_mode: None,
-                exposure: None,
-                contrast: None,
-                saturation: None,
-                temperature: None,
-                tint: None,
-                highlights: None,
-                shadows: None,
-            })]);
-            rect.children = Some(Vec::new());
+        PenNode::Rectangle(rect) if is_unfilled_placeholder_rectangle || has_empty_image_fill => {
+            match rect.container.fill.as_deref_mut() {
+                // Same in-place url overwrite as the frame branch: the authored
+                // image-fill body (mode, crop, adjustments) survives.
+                Some([PenFill::Image(body)]) => {
+                    body.url = url.into();
+                }
+                _ => {
+                    rect.container.fill = Some(vec![PenFill::Image(ImageFillBody {
+                        url: url.into(),
+                        mode: Some(ImageFillMode::Crop),
+                        original_size: None,
+                        transform: None,
+                        tile_scale: None,
+                        explain: None,
+                        opacity: None,
+                        blend_mode: None,
+                        exposure: None,
+                        contrast: None,
+                        saturation: None,
+                        temperature: None,
+                        tint: None,
+                        highlights: None,
+                        shadows: None,
+                    })]);
+                    rect.children = Some(Vec::new());
+                }
+            }
             true
         }
         _ => false,
