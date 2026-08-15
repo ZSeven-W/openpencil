@@ -51,8 +51,11 @@ op_auth.lib       MSVC targets
 ```
 
 The shared `prebuilt/PROVENANCE_PUBKEY` contains the 32-byte Ed25519 release
-public key as lowercase hex. The private signing key must exist only in the
-private release system. `build.rs` verifies the signature over the exact
+public key as lowercase hex. The private signing key exists only in the public
+repository's reviewer-protected `auth-production` environment; it is exposed
+to one isolated GitHub-hosted signer job and deleted before that runner exits.
+The later push credential is available only on a different fresh runner.
+`build.rs` verifies the signature over the exact
 `PROVENANCE` bytes and rejects a mismatched target, filename, version, ABI,
 archive digest, hardening profile, source revision, or build id.
 
@@ -101,21 +104,32 @@ inspectable. Decrypt into an ephemeral private-CI staging area, run the same
 functional and hardening gates, and only then package/sign the reviewed
 candidate.
 
-Once the candidate already passes its private tests, stage it in a new
-directory:
+## Production promotion boundary
 
-```text
-tools/package-op-auth-prebuilt.sh \
-  --artifact /private-ci/out/libop_auth.a \
-  --target x86_64-unknown-linux-gnu \
-  --version 0.8.4 \
-  --source-revision <full-private-source-revision> \
-  --build-id <immutable-ci-build-id> \
-  --signing-key /private-ci/secrets/op-auth-ed25519.pem \
-  --output-root /private-ci/staged-prebuilt \
-  --abi 3
-```
+Production is deliberately split across repositories:
 
-The packaging script never modifies the candidate archive. It produces fresh
-metadata, signs it, verifies the signature, and runs the hardened archive gate.
-Copy the reviewed staged files into this directory only after that succeeds.
+1. The private `prebuilt-production` workflow resolves exact public source S,
+   rebuilds and audits all ten ABI-v3 targets, and uploads exactly ten unsigned,
+   immutable candidate artifacts. It has no provenance root and no OpenPencil
+   write credential.
+2. A reviewer dispatches `.github/workflows/auth-production.yml` from the exact
+   target branch with the private workflow run ID, private head SHA, public S,
+   and that same target branch. The workflow commit, branch head, and S must be
+   identical. A narrowly scoped Actions-read credential authenticates the
+   private run, workflow path, ten artifact IDs, artifact ZIP digests, and
+   canonical candidate metadata on an acquisition-only runner.
+3. The acquisition job uploads one immutable, one-day candidate handoff whose
+   artifact ID, archive digest, and canonical tree digest are passed forward.
+   A fresh signer runner downloads that exact artifact ID, independently
+   re-verifies it, receives only the provenance root, signs every target and the
+   complete release matrix, deletes the root, and uploads a second immutable
+   one-day handoff with its own ID and digests.
+4. A third fresh runner receives only the public write credential, downloads
+   the exact signed artifact ID, independently verifies its tree digest,
+   signatures, trusted public key, and matrix, creates the single-parent
+   auth-only child A, and pushes A with an exact S lease. Rust releases and
+   TestFlight accept only a verified A whose parent is S.
+
+`tools/package-op-auth-prebuilt.sh` remains a low-level local packaging utility;
+it is not the production promotion path and must not receive the production
+root. The production signer never modifies or executes candidate archives.
