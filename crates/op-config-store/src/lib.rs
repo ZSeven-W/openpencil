@@ -1,17 +1,19 @@
-//! `~/.openpencil` file-backed config primitives.
+//! Per-user file-backed config primitives.
 //!
-//! The crate centralizes the home-directory resolver plus JSON
-//! read/write helpers used by OpenPencil native tools.
+//! Desktop defaults to `~/.openpencil`. Embedded hosts must call
+//! [`configure_user_root`] with their private app-sandbox directory before
+//! any process-level config access.
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::ffi::OsString;
 use std::io::{Error, ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
-/// Process-wide replacement for the `~/.openpencil` root. See
-/// [`redirect_user_root_for_tests`].
+/// Process-wide config root. First resolution wins so a late mobile
+/// reconfiguration cannot split state between HOME and the app sandbox.
 static USER_ROOT_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+static USER_ROOT_INIT_LOCK: Mutex<()> = Mutex::new(());
 
 /// Name of the per-user config directory under the home directory
 /// (`~/.openpencil`). Exposed for callers that must resolve the
@@ -80,6 +82,35 @@ pub fn openpencil_dir() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Selects the private application-sandbox directory used by every
+/// process-level config helper.
+///
+/// This must run before [`ConfigStore::user`], [`openpencil_dir`],
+/// [`read_json`], or [`write_json`]. Repeating the same canonical directory is
+/// idempotent; selecting a different directory after initialization is
+/// rejected. The root itself must be an absolute, real directory rather than
+/// a symlink. On Unix its permissions are restricted to the current user.
+pub fn configure_user_root(root: impl Into<PathBuf>) -> std::io::Result<&'static Path> {
+    let _guard = USER_ROOT_INIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    configure_user_root_in(&USER_ROOT_OVERRIDE, root.into())
+}
+
+fn configure_user_root_in(slot: &OnceLock<PathBuf>, root: PathBuf) -> std::io::Result<&Path> {
+    if let Some(current) = slot.get() {
+        return match existing_explicit_user_root(&root) {
+            Ok(requested) if &requested == current => Ok(current.as_path()),
+            Ok(_) | Err(_) => Err(Error::new(
+                ErrorKind::AlreadyExists,
+                "config root is already initialized",
+            )),
+        };
+    }
+    let root = prepare_explicit_user_root(root)?;
+    install_user_root(slot, root)
+}
+
 pub fn read_json<T: DeserializeOwned>(file: &str) -> std::io::Result<Option<T>> {
     ConfigStore::user()?.read_json(file)
 }
@@ -135,10 +166,84 @@ pub fn redirect_user_root_for_tests(root: impl Into<PathBuf>) -> &'static Path {
 }
 
 fn default_openpencil_dir() -> std::io::Result<PathBuf> {
+    let _guard = USER_ROOT_INIT_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(root) = USER_ROOT_OVERRIDE.get() {
         return Ok(root.clone());
     }
-    home_dir().map(|home| home.join(OPENPENCIL_DIR_NAME))
+    let default = home_dir()?.join(OPENPENCIL_DIR_NAME);
+    Ok(install_user_root(&USER_ROOT_OVERRIDE, default)?.to_path_buf())
+}
+
+fn existing_explicit_user_root(root: &Path) -> std::io::Result<PathBuf> {
+    if !root.is_absolute() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "config root must be absolute",
+        ));
+    }
+    let metadata = std::fs::symlink_metadata(root)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "config root must be a real directory",
+        ));
+    }
+    root.canonicalize()
+}
+
+fn prepare_explicit_user_root(root: PathBuf) -> std::io::Result<PathBuf> {
+    if !root.is_absolute() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "config root must be absolute",
+        ));
+    }
+    std::fs::create_dir_all(&root)?;
+    let metadata = std::fs::symlink_metadata(&root)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "config root must be a real directory",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))?;
+    }
+    root.canonicalize()
+}
+
+fn install_user_root(slot: &OnceLock<PathBuf>, root: PathBuf) -> std::io::Result<&Path> {
+    if let Some(current) = slot.get() {
+        return if current == &root {
+            Ok(current.as_path())
+        } else {
+            Err(Error::new(
+                ErrorKind::AlreadyExists,
+                "config root is already initialized",
+            ))
+        };
+    }
+    match slot.set(root) {
+        Ok(()) => Ok(slot
+            .get()
+            .expect("config root was just installed")
+            .as_path()),
+        Err(root) => {
+            let current = slot.get().expect("another thread installed config root");
+            if current == &root {
+                Ok(current.as_path())
+            } else {
+                Err(Error::new(
+                    ErrorKind::AlreadyExists,
+                    "config root is already initialized",
+                ))
+            }
+        }
+    }
 }
 
 pub fn home_dir() -> std::io::Result<PathBuf> {
@@ -304,5 +409,74 @@ mod tests {
         assert_eq!(well_known::GIT_AUTH, "git-auth.json");
         assert_eq!(well_known::LIVE_MCP_PORT, ".op-mcp-port");
         assert_eq!(well_known::CLI_SESSION, "cli-session.op");
+    }
+
+    #[test]
+    fn sandbox_root_configuration_is_idempotent_and_rejects_identity_drift() {
+        let slot = OnceLock::new();
+        let first = temp_root("sandbox-first");
+        let second = temp_root("sandbox-second");
+
+        assert_eq!(
+            configure_user_root_in(&slot, first.clone()).unwrap(),
+            first.canonicalize().unwrap()
+        );
+        assert_eq!(
+            configure_user_root_in(&slot, first.clone()).unwrap(),
+            first.canonicalize().unwrap()
+        );
+        let error = configure_user_root_in(&slot, second).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::AlreadyExists);
+        assert_eq!(slot.get(), Some(&first.canonicalize().unwrap()));
+    }
+
+    #[test]
+    fn explicit_sandbox_root_requires_an_absolute_real_directory() {
+        let relative = prepare_explicit_user_root(PathBuf::from("relative/root")).unwrap_err();
+        assert_eq!(relative.kind(), ErrorKind::InvalidInput);
+
+        let root = temp_root("sandbox-private");
+        let prepared = prepare_explicit_user_root(root.clone()).unwrap();
+        assert_eq!(prepared, root.canonicalize().unwrap());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&root).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
+        }
+    }
+
+    #[test]
+    fn rejected_late_root_is_not_created_or_permission_mutated() {
+        let slot = OnceLock::new();
+        let first = temp_root("late-first");
+        configure_user_root_in(&slot, first).unwrap();
+        let absent = std::env::temp_dir().join(format!(
+            "op-config-store-late-absent-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&absent);
+        assert!(!absent.exists());
+
+        let result = configure_user_root_in(&slot, absent.clone());
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::AlreadyExists);
+        assert!(!absent.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_sandbox_root_rejects_a_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let parent = temp_root("sandbox-symlink");
+        let real = parent.join("real");
+        let link = parent.join("link");
+        std::fs::create_dir(&real).unwrap();
+        symlink(&real, &link).unwrap();
+
+        let error = prepare_explicit_user_root(link).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
     }
 }
