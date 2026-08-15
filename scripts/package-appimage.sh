@@ -7,9 +7,9 @@
 #   usr/bin/{openpencil-desktop,op}
 #   usr/share/{applications,mime/packages,icons,pixmaps}/...
 #
-# The actual packing tool (appimagetool) is downloaded pinned-by-URL by the
-# workflow and passed in via --tool; this script only assembles the AppDir
-# and invokes it. Without --tool (or with --layout-only) it stops after
+# The packing tool and type2 runtime are downloaded with reviewed SHA-256 pins
+# by the workflow and passed via --tool/--runtime-file; this script only
+# assembles the AppDir and invokes them. Without --tool (or with --layout-only) it stops after
 # assembly and prints the tree — that is the only mode runnable on macOS,
 # since appimagetool is a Linux ELF.
 #
@@ -22,7 +22,8 @@
 # Usage:
 #   package-appimage.sh --desktop-bin PATH --cli-bin PATH --icon PATH \
 #                       --version X.Y.Z --arch x86_64|aarch64 \
-#                       --out-dir DIR [--tool PATH] [--layout-only]
+#                       --out-dir DIR [--tool PATH --runtime-file PATH] \
+#                       [--layout-only]
 #
 # Output: <out-dir>/OpenPencil-<version>-<x64|arm64>-linux.AppImage
 # (matches electron-builder's `${productName}-${version}-${arch}-linux.${ext}`)
@@ -30,10 +31,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=package-linux-common.sh
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/package-linux-common.sh"
 
 DESKTOP_BIN="" CLI_BIN="" ICON_PNG="" VERSION="" AI_ARCH="" OUT_DIR="" TOOL=""
+RUNTIME_FILE=""
 LAYOUT_ONLY=0
 
 usage() {
@@ -50,6 +52,7 @@ while [ $# -gt 0 ]; do
     --arch)        AI_ARCH="$2"; shift 2 ;;
     --out-dir)     OUT_DIR="$2"; shift 2 ;;
     --tool)        TOOL="$2"; shift 2 ;;
+    --runtime-file) RUNTIME_FILE="$2"; shift 2 ;;
     --layout-only) LAYOUT_ONLY=1; shift ;;
     -h|--help)     usage 0 ;;
     *) echo "error: unknown argument '$1'" >&2; usage ;;
@@ -96,6 +99,10 @@ if [ "$LAYOUT_ONLY" = 1 ] || [ -z "$TOOL" ]; then
 fi
 
 [ -x "$TOOL" ] || { echo "error: appimagetool not executable: $TOOL" >&2; exit 1; }
+[ -f "$RUNTIME_FILE" ] && [ ! -L "$RUNTIME_FILE" ] || {
+  echo "error: --runtime-file must be a verified regular file" >&2
+  exit 1
+}
 
 mkdir -p "$OUT_DIR"
 OUT_PATH="$OUT_DIR/OpenPencil-$VERSION-$ARTIFACT_ARCH-linux.AppImage"
@@ -103,5 +110,6 @@ echo "==> packing AppImage ($AI_ARCH)"
 # --appimage-extract-and-run: appimagetool itself ships as an AppImage and
 # CI runners have no FUSE; this flag self-extracts instead of mounting.
 # ARCH is required when the tool cannot infer the target architecture.
-ARCH="$AI_ARCH" "$TOOL" --appimage-extract-and-run "$APPDIR" "$OUT_PATH"
+ARCH="$AI_ARCH" "$TOOL" --appimage-extract-and-run \
+  --runtime-file "$RUNTIME_FILE" "$APPDIR" "$OUT_PATH"
 echo "AppImage ready: $OUT_PATH"

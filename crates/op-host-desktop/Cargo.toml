@@ -16,6 +16,9 @@ path = "src/main.rs"
 [features]
 default = []
 mcp-debug-tools = ["op-mcp/debug-tools"]
+# Production release lane: a missing reviewed binary cache must fail instead
+# of silently compiling or downloading an unreviewed Skia build.
+pinned-skia-binaries = ["skia-safe/no-compile"]
 # Local-only collaboration development against an external private ABI-v2
 # archive. Release builds are rejected by op-auth-bridge's build script.
 dev-op-auth-abi-v2 = [

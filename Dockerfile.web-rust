@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.26.0@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 #
 # Dockerfile.web-rust — container for the RUST web host (C1).
 #
@@ -47,13 +47,17 @@
 # rust:1.94 ships cargo + a Debian (bookworm) base. Debian's apt binaryen is
 # too old for rustc 1.94's wasm feature set, so wasm-opt is pinned below to the
 # same modern Binaryen release used by the wasm bundle CI.
-FROM rust:1.94-bookworm AS builder
+FROM rust:1.94-bookworm@sha256:6ae102bdbf528294bc79ad6e1fae682f6f7c2a6e6621506ba959f9685b308a55 AS builder
 
 # WEB_BUNDLE_SOURCE = build  -> build the wasm bundle in this stage (default).
 #                   = copy   -> skip the build; the runtime stage COPYs a
 #                              prebuilt ./web-bundle from the build context.
 ARG WEB_BUNDLE_SOURCE=build
-ARG BINARYEN_VERSION=version_123
+ENV BINARYEN_VERSION=version_123 \
+    BINARYEN_SHA256=e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe \
+    SKIA_BINARY_KEY=da8fc6731fc439bc3b6a-x86_64-unknown-linux-gnu-jpegd-jpege-pdf-textlayout \
+    SKIA_BINARY_SHA256=c066658b13e257d418f647447d06eb8a83cb060b037228da838589dd863bf053 \
+    SKIA_BINARIES_URL=file:///opt/openpencil-skia-cache/skia-binaries-{key}.tar.gz
 
 # Port baked into the image's CMD; overridable at build + run time.
 ARG SERVE_PORT=3100
@@ -63,7 +67,12 @@ ARG SERVE_PORT=3100
 # only — no winit/glutin/skia-GL under Approach Y), so NONE of the GL/X11
 # link-time libs the desktop binary needed are required here; only
 # freetype/fontconfig (+ CJK fonts) for skia's raster text shaping at export.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -ri \
+      -e 's|^URIs: http://deb.debian.org/debian$|URIs: http://snapshot.debian.org/archive/debian/20260406T000000Z|' \
+      -e 's|^URIs: http://deb.debian.org/debian-security$|URIs: http://snapshot.debian.org/archive/debian-security/20260406T000000Z|' \
+      -e '/^Signed-By:/a Check-Valid-Until: no' \
+      /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
       curl \
       nodejs \
       gzip \
@@ -71,11 +80,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       pkg-config \
       libfreetype-dev libfontconfig1-dev fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL \
+    && curl -fsSL --output /tmp/binaryen.tar.gz \
       "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
-      | tar -xz -C /opt \
+    && printf '%s  %s\n' "$BINARYEN_SHA256" /tmp/binaryen.tar.gz | sha256sum -c - \
+    && tar -xzf /tmp/binaryen.tar.gz -C /opt \
+    && rm -f /tmp/binaryen.tar.gz \
     && ln -s "/opt/binaryen-${BINARYEN_VERSION}/bin/wasm-opt" /usr/local/bin/wasm-opt \
-    && wasm-opt --version
+    && wasm-opt --version \
+    && mkdir -p /opt/openpencil-skia-cache \
+    && curl -fsSL --output "/opt/openpencil-skia-cache/skia-binaries-${SKIA_BINARY_KEY}.tar.gz" \
+      "https://github.com/rust-skia/skia-binaries/releases/download/0.97.2/skia-binaries-${SKIA_BINARY_KEY}.tar.gz" \
+    && printf '%s  %s\n' "$SKIA_BINARY_SHA256" "/opt/openpencil-skia-cache/skia-binaries-${SKIA_BINARY_KEY}.tar.gz" \
+      | sha256sum -c -
 
 WORKDIR /src
 
@@ -87,7 +103,7 @@ COPY . .
 # Build the headless web/MCP server binary (the `--serve-web` host) — links
 # op-host-services only, no winit/skia-GL. Always built; this is the runtime
 # binary regardless of how the web bundle is produced.
-RUN cargo build -p op-host-web-server --release
+RUN cargo build -p op-host-web-server --features pinned-skia-binaries --release --locked
 
 # Build the canvaskit wasm bundle in-image, UNLESS WEB_BUNDLE_SOURCE=copy.
 # Mirrors `tools/check-wasm-bundle.sh` exactly (cargo build --features canvaskit
@@ -97,9 +113,11 @@ RUN cargo build -p op-host-web-server --release
 RUN if [ "$WEB_BUNDLE_SOURCE" = "build" ]; then \
       rustup target add wasm32-unknown-unknown && \
       version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)" && \
-      if [ -z "$version" ]; then echo "could not resolve wasm-bindgen version from Cargo.lock" >&2; exit 2; fi && \
-      cargo install wasm-bindgen-cli --version "$version" --locked && \
-      bash tools/check-wasm-bundle.sh ; \
+      if [ "$version" != 0.2.117 ]; then echo "Cargo.lock wasm-bindgen must match the reviewed 0.2.117 CLI" >&2; exit 2; fi && \
+      tools/pinned-release-tools.sh cargo-cli wasm-bindgen-cli \
+        /opt/wasm-bindgen-cli-0.2.117 >/dev/null && \
+      PATH="/opt/wasm-bindgen-cli-0.2.117/bin:$PATH" \
+        bash tools/check-wasm-bundle.sh ; \
     else \
       echo "WEB_BUNDLE_SOURCE=$WEB_BUNDLE_SOURCE — skipping in-image wasm build; runtime stage will COPY ./web-bundle from the build context" ; \
     fi
@@ -134,7 +152,7 @@ RUN mkdir -p /out/web-bundle && \
 # ── Stage 2: runtime (slim) ───────────────────────────────────────────────────
 # Only the runtime shared libs the daemon dlopens at run time (GL / fontconfig /
 # freetype + CJK fonts). No Rust toolchain, no node, no build deps.
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS runtime
 
 ARG SERVE_PORT=3100
 # `local` keeps the historical single-user daemon; `online` adds `--online`,
@@ -143,7 +161,12 @@ ARG SERVE_MODE=local
 ENV OPENPENCIL_SERVE_PORT=${SERVE_PORT} \
     OPENPENCIL_SERVE_MODE=${SERVE_MODE}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -ri \
+      -e 's|^URIs: http://deb.debian.org/debian$|URIs: http://snapshot.debian.org/archive/debian/20260803T000000Z|' \
+      -e 's|^URIs: http://deb.debian.org/debian-security$|URIs: http://snapshot.debian.org/archive/debian-security/20260803T000000Z|' \
+      -e '/^Signed-By:/a Check-Valid-Until: no' \
+      /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates wget \
       libfreetype6 libfontconfig1 fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \

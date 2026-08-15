@@ -119,12 +119,14 @@
     "test:integration": "bun test test/integration"
   },
   "devDependencies": {
+    "@vscode/vsce": "3.9.2",
     "@types/vscode": "~1.90",
     "@types/node": "^20",
     "@types/bun": "latest",
     "typescript": "^5",
     "esbuild": "^0.21",
     "jsonc-parser": "^3",
+    "ovsx": "1.1.1",
     "oxlint": "latest"
   },
   "repository": {

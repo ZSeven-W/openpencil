@@ -87,7 +87,7 @@ need wasm-opt
 need node
 need gzip
 
-step 2 5 "cargo build -p op-web-sdk --target wasm32-unknown-unknown --features canvaskit --release"
+step 2 5 "cargo build -p op-web-sdk --target wasm32-unknown-unknown --features canvaskit --release --locked"
 # Run from the workspace root so cargo resolves the workspace Cargo.toml.
 # --no-default-features is omitted intentionally: op-web-sdk has no default
 # features (default = [] in Cargo.toml), so the flag is a no-op and omitting
@@ -96,7 +96,8 @@ cd "${WORKSPACE_ROOT}"
 cargo build -p op-web-sdk \
   --target wasm32-unknown-unknown \
   --features canvaskit \
-  --release
+  --release \
+  --locked
 
 step 3 5 "wasm-bindgen --target web → ${PKG_DIR}/"
 mkdir -p "${PKG_DIR}"

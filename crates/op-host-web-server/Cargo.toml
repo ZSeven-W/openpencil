@@ -11,6 +11,7 @@ name = "op-host-web-server"
 path = "src/main.rs"
 
 [features]
+pinned-skia-binaries = ["op-host-services/pinned-skia-binaries"]
 # Forwarded to op-host-services so a dev daemon can mint collaboration
 # tickets from the locally built ABI-v2 op-auth archive (debug only).
 dev-op-auth-abi-v2 = ["op-host-services/dev-op-auth-abi-v2"]

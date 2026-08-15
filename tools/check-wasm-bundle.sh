@@ -84,7 +84,7 @@ node --test crates/op-host-web/tests/op_ck_bridge_scale.test.mjs
 # IO, clipboard/Figma paste, icon search, system fonts, and the codegen pipeline.
 step 3 7 "Build shell-web wasm32-unknown-unknown with --features canvaskit"
 cargo build -p op-host-web \
-  --target wasm32-unknown-unknown --no-default-features --features canvaskit --release >/dev/null
+  --target wasm32-unknown-unknown --no-default-features --features canvaskit --release --locked >/dev/null
 
 step 4 7 "wasm-bindgen --target web → ${PKG_DIR}/"
 wasm-bindgen --target web --out-dir "${PKG_DIR}" "${TARGET_WASM}" >/dev/null

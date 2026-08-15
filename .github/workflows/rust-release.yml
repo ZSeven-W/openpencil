@@ -45,26 +45,8 @@ name: Rust release artifacts
 # NOT electron's dev.openpencil.app, so the Electron and Rust apps can
 # coexist without fighting over file-association ownership.
 #
-# ─── Local-verification caveats (2026-06-10, macOS dev machine) ────────────
-# Verified locally:
-#   * bash -n on scripts/bundle-macos.sh, package-deb.sh, package-appimage.sh,
-#     package-linux-common.sh
-#   * YAML parse of this file
-#   * package-deb.sh --layout-only and package-appimage.sh layout dry-runs
-#     with stub binaries (payload tree, control file, desktop entry, mime XML)
-#   * appimagetool 1.9.1 pinned release assets (x86_64 + aarch64) exist
-#     (checked via GitHub API); cargo-bundle `--target` flag confirmed
-#     against upstream source (present since v0.9.0)
-# NOT verifiable locally — needs a real tag-push CI run:
-#   * makensis compile of scripts/package-windows.nsi (no makensis on macOS;
-#     CI installs NSIS on windows-latest before packaging)
-#   * actual AppImage assembly (appimagetool is a Linux ELF; it also
-#     downloads its type2-runtime from GitHub at pack time — needs network)
-#   * dpkg-deb --build (no dpkg locally; only the layout path was dry-run)
-#   * cargo-bundle bootstrap + `--target` bundling + hdiutil DMG creation on
-#     the GitHub macOS runner
-#   * installer smoke tests (NSIS install/uninstall + HKCR assoc, deb
-#     postinst mime refresh, AppImage launch, DMG mount + Gatekeeper)
+# Platform installer and notarization paths still require a real tag run;
+# repository-owned scripts and workflow contract checks cover local validation.
 #
 # The `build` job builds the real `op-host-desktop` crate (winit + skia-safe
 # runner that drives the Rust editor); its shipped executable keeps the
@@ -81,62 +63,60 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      auth_artifact_ref:
+        description: Full SHA of the auth-matrix-only commit selected as this run's ref
+        required: true
+        type: string
 
 permissions:
-  contents: write
-  packages: write
-  pull-requests: write
+  contents: read
 
 jobs:
   version:
-    name: Validate release version
-    runs-on: ubuntu-latest
+    name: Validate release version and production auth matrix
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Validate Cargo and tag versions
+      - name: Checkout the candidate auth artifact commit without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Validate Cargo version and the signed auth-only parent transition
         id: version
         shell: bash
+        env:
+          OP_AUTH_ARTIFACT_COMMIT: ${{ github.sha }}
+          OP_AUTH_ARTIFACT_SELECTED_COMMIT: ${{ inputs.auth_artifact_ref || github.sha }}
+          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          cargo_version="$(scripts/workspace-version.sh)"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tag_version="${GITHUB_REF_NAME#v}"
-            if [[ "$tag_version" != "$cargo_version" ]]; then
-              echo "::error::release tag version $tag_version does not match Cargo workspace version $cargo_version"
-              exit 1
-            fi
-          fi
-          echo "version=$cargo_version" >> "$GITHUB_OUTPUT"
+          tools/check-rust-release-auth-workflow.sh
+          tools/check-release-workflow-policy.test.sh rust
+          tools/check-op-auth-artifact-commit.test.sh
+          tools/check-op-auth-release-matrix.test.sh
+          tools/check-op-auth-cargo-build.test.sh
+          tools/pinned-release-tools.test.sh
+          OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
+            tools/check-op-auth-artifact-commit.sh
 
   build:
     name: ${{ matrix.label }}
     needs: version
+    environment: release-production
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     env:
       OP_VERSION: ${{ needs.version.outputs.version }}
-      # Production collaboration hub URLs live only in repository secrets and
-      # are baked in at compile time (option_env! in relay_bootstrap_select.rs);
-      # the source tree deliberately carries no production endpoint. A fork or
-      # secretless build simply produces a binary without built-in hubs.
-      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
-      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
       HAS_APPLE_CERTIFICATE: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' && secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && 'true' || 'false' }}
-      HAS_WINDOWS_CERTIFICATE: ${{ secrets.WIN_CSC_LINK != '' && secrets.WIN_CSC_KEY_PASSWORD != '' && 'true' || 'false' }}
-      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-      # ANGLE runtime DLLs (libEGL / libGLESv2 / d3dcompiler_47) shipped
-      # in the Windows installer so glutin's EGL fallback can drive Skia
-      # on machines whose native WGL OpenGL is the GDI-generic 1.1
-      # software renderer (no/old GPU driver, VMs, RDP) — those were the
-      # startup flash-exits. We don't build ANGLE from source (heavy,
-      # brittle); we lift the prebuilt, arch-matched DLLs out of an
-      # Electron release zip (BSD-licensed ANGLE + MS-redistributable
-      # d3dcompiler, published at the zip root for x64 + arm64).
-      # Bump freely; verify the tag exists at
-      # https://github.com/electron/electron/releases before changing.
-      ANGLE_ELECTRON_VERSION: v33.0.0
+      HAS_WINDOWS_CERTIFICATE: ${{ secrets.WIN_CSC_LINK != '' && secrets.WIN_CSC_KEY_PASSWORD != '' && secrets.WIN_CSC_PFX_SHA256 != '' && secrets.WIN_CSC_CERTIFICATE_SHA1 != '' && 'true' || 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -155,7 +135,7 @@ jobs:
             archive: tar.gz
             arch: x64
           - label: linux-x86_64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             archive: tar.gz
             arch: x64
@@ -181,14 +161,15 @@ jobs:
             archive: zip
             arch: arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
+          persist-credentials: false
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
         with:
           toolchain: '1.94'
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: release-${{ matrix.target }}
       - name: Install Linux GL/EGL prereqs
@@ -196,6 +177,40 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          snapshot_url=https://snapshot.ubuntu.com/ubuntu/20260801T000000Z/
+          sources_file=$RUNNER_TEMP/openpencil-release.sources
+          apt_lists=$RUNNER_TEMP/openpencil-apt-lists
+          cat > "$sources_file" <<EOF
+          Types: deb
+          URIs: $snapshot_url
+          Suites: noble noble-updates noble-backports noble-security
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          Check-Valid-Until: no
+          EOF
+          mkdir -p "$apt_lists/partial"
+          apt_options=(
+            -o "Dir::Etc::sourcelist=$sources_file"
+            -o Dir::Etc::sourceparts=-
+            -o "Dir::State::lists=$apt_lists"
+            -o Acquire::ForceIPv4=true
+            -o Acquire::Retries=3
+            -o Acquire::https::Timeout=30
+          )
+          uri_plan=$(sudo apt-get "${apt_options[@]}" --print-uris update)
+          mapfile -t requested_uris < <(
+            sed -n "s/^'\([^']*\)'.*/\1/p" <<< "$uri_plan"
+          )
+          if [[ ${#requested_uris[@]} -eq 0 ]]; then
+            echo "::error::Ubuntu snapshot preflight produced no package index URIs"
+            exit 1
+          fi
+          for uri in "${requested_uris[@]}"; do
+            if [[ $uri != "$snapshot_url"* ]]; then
+              echo "::error::unreviewed apt index URI: $uri"
+              exit 1
+            fi
+          done
           packages=(
             libxkbcommon-dev libxkbcommon-x11-dev \
             libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
@@ -203,16 +218,8 @@ jobs:
             libfreetype-dev libfontconfig1-dev
           )
           for attempt in 1 2 3 4; do
-            if sudo apt-get \
-                -o Acquire::ForceIPv4=true \
-                -o Acquire::Retries=3 \
-                -o Acquire::http::Timeout=30 \
-                update && \
-              sudo apt-get \
-                -o Acquire::ForceIPv4=true \
-                -o Acquire::Retries=3 \
-                -o Acquire::http::Timeout=30 \
-                install --yes "${packages[@]}"; then
+            if sudo apt-get "${apt_options[@]}" update && \
+              sudo apt-get "${apt_options[@]}" install --yes "${packages[@]}"; then
               break
             fi
             if [[ "$attempt" == 4 ]]; then
@@ -223,8 +230,18 @@ jobs:
             echo "::warning::apt prerequisites attempt $attempt failed; retrying in ${delay}s"
             sleep "$delay"
           done
+      - name: Stage digest-pinned Skia binary cache
+        shell: bash
+        run: >-
+          tools/pinned-release-tools.sh skia desktop '${{ matrix.target }}'
+          "$RUNNER_TEMP/openpencil-skia-${{ matrix.target }}"
       - name: Build (host)
-        run: cargo build -p op-host-desktop -p op-cli -p op-host-web-server --target ${{ matrix.target }} --release
+        shell: bash
+        env:
+          OPENPENCIL_RELEASE_TARGET: ${{ matrix.target }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+        run: scripts/build-rust-release-host.sh
       - name: Package archives (unix)
         if: matrix.archive == 'tar.gz'
         shell: bash
@@ -244,9 +261,15 @@ jobs:
           Compress-Archive `
             -Path target\${{ matrix.target }}\release\op.exe `
             -DestinationPath op-cli-${{ matrix.label }}.zip
+      - name: Install digest-pinned cargo-bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: >-
+          tools/pinned-release-tools.sh cargo-cli cargo-bundle
+          "$RUNNER_TEMP/cargo-bundle-0.10.0"
       - name: Import codesign certificate (macos)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
-        uses: apple-actions/import-codesign-certs@v3
+        uses: apple-actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3.0.0
         with:
           p12-file-base64: ${{ secrets.CSC_LINK }}
           p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -387,9 +410,10 @@ jobs:
       #   APPLE_APP_SPECIFIC_PASSWORD app-specific password for notarytool
       #
       # Required Windows secrets (Authenticode):
-      #   WIN_CSC_LINK                base64/data URL/URL of the code-signing
-      #                               .pfx
+      #   WIN_CSC_LINK                base64/data URL of the code-signing .pfx
       #   WIN_CSC_KEY_PASSWORD        password for that .pfx
+      #   WIN_CSC_PFX_SHA256          independent SHA-256 of the .pfx bytes
+      #   WIN_CSC_CERTIFICATE_SHA1    reviewed signer certificate thumbprint
       #
       # Optional downstream publish secrets consumed by release packaging:
       #   NPM_TOKEN                   npm registry token for SDK publishing
@@ -398,50 +422,19 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          choco install nsis -y --no-progress
-          $nsisRoots = @(
-            "${env:ProgramFiles(x86)}\NSIS",
-            "$env:ProgramFiles\NSIS"
-          )
-          $makensis = $null
-          foreach ($root in $nsisRoots) {
-            $candidate = Join-Path $root "makensis.exe"
-            if (Test-Path $candidate) {
-              $makensis = $candidate
-              break
-            }
-          }
-          if (-not $makensis) {
-            throw "makensis.exe not found after NSIS install"
-          }
-          Split-Path $makensis | Out-File -FilePath $env:GITHUB_PATH -Append
-          & $makensis /VERSION
+          & tools/install-pinned-nsis.ps1 -SelfTest
+          & tools/install-pinned-nsis.ps1
+      - name: Validate Windows signing input policy
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '& tools/sign-windows-release.ps1 -SelfTest'
       - name: Stage ANGLE DLLs (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          # Electron's win32 arch token matches our matrix arch (x64 / arm64).
-          $arch = "${{ matrix.arch }}"
-          $ver = "$env:ANGLE_ELECTRON_VERSION"
-          $url = "https://github.com/electron/electron/releases/download/$ver/electron-$ver-win32-$arch.zip"
-          $zip = Join-Path $env:RUNNER_TEMP "electron-$arch.zip"
-          $extract = Join-Path $env:RUNNER_TEMP "electron-$arch"
-          Write-Host "Fetching ANGLE DLLs from $url"
-          Invoke-WebRequest -Uri $url -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath $extract -Force
-          $dest = "$env:GITHUB_WORKSPACE\target\${{ matrix.target }}\release"
-          # d3dcompiler_47.dll ships in Win10/11 System32, but bundling it
-          # keeps ANGLE self-contained across all environments.
-          $dlls = @("libEGL.dll", "libGLESv2.dll", "d3dcompiler_47.dll")
-          foreach ($dll in $dlls) {
-            $src = Join-Path $extract $dll
-            if (-not (Test-Path $src)) {
-              throw "ANGLE DLL '$dll' not found in $url — the fallback would ship broken; failing the release."
-            }
-            Copy-Item -Path $src -Destination $dest -Force
-            Write-Host "Staged $dll -> $dest"
-          }
+          & tools/stage-pinned-angle.ps1 -SelfTest
+          & tools/stage-pinned-angle.ps1 \
+            -Architecture '${{ matrix.arch }}' -Target '${{ matrix.target }}'
       - name: Package NSIS installer (windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -464,32 +457,16 @@ jobs:
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_PFX_SHA256: ${{ secrets.WIN_CSC_PFX_SHA256 }}
+          WIN_CSC_CERTIFICATE_SHA1: ${{ secrets.WIN_CSC_CERTIFICATE_SHA1 }}
         run: |
-          # Materialize the .pfx from a base64/data-url/url secret into a temp file.
-          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
-          $link = $env:WIN_CSC_LINK
-          if ($link -match '^https?://') {
-            Invoke-WebRequest -Uri $link -OutFile $pfx
-          } else {
-            if ($link -match '^data:.*;base64,(.+)$') {
-              $link = $Matches[1]
-            }
-            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($link))
-          }
           $exe = "OpenPencil-$env:OP_VERSION-${{ matrix.arch }}-win-setup.exe"
-          # signtool ships with the Windows SDK preinstalled on
-          # windows-latest. RFC-3161 timestamp so signatures outlive the
-          # cert's validity window.
-          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
-            Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          & $signtool sign `
-            /f $pfx `
-            /p $env:WIN_CSC_KEY_PASSWORD `
-            /fd SHA256 `
-            /tr http://timestamp.digicert.com `
-            /td SHA256 `
-            $exe
-          Remove-Item $pfx -Force
+          & tools/sign-windows-release.ps1 `
+            -CertificateBase64 $env:WIN_CSC_LINK `
+            -CertificatePassword $env:WIN_CSC_KEY_PASSWORD `
+            -ExpectedPfxSha256 $env:WIN_CSC_PFX_SHA256 `
+            -ExpectedCertificateSha1 $env:WIN_CSC_CERTIFICATE_SHA1 `
+            -Executable $exe
       - name: Package .deb (linux)
         if: runner.os == 'Linux'
         shell: bash
@@ -515,23 +492,21 @@ jobs:
             aarch64-*) AI_ARCH=aarch64 ;;
             *) echo "unmapped AppImage arch for ${{ matrix.target }}" >&2; exit 1 ;;
           esac
-          # appimagetool pinned by URL (release 1.9.1 ships native builds for
-          # both runner arches, so each matrix leg packs natively). NOTE:
-          # appimagetool 1.9.x downloads the matching static type2-runtime
-          # from GitHub at pack time — the runner needs network access.
-          curl -fsSL --retry 3 -o /tmp/appimagetool \
-            "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${AI_ARCH}.AppImage"
-          chmod +x /tmp/appimagetool
+          appimagetool="$RUNNER_TEMP/appimagetool"
+          runtime="$RUNNER_TEMP/appimage-runtime"
+          tools/pinned-release-tools.sh appimage \
+            "$AI_ARCH" "$appimagetool" "$runtime"
           bash scripts/package-appimage.sh \
             --desktop-bin "target/${{ matrix.target }}/release/openpencil-desktop" \
             --cli-bin "target/${{ matrix.target }}/release/op" \
             --icon crates/op-host-desktop/assets/icon.png \
             --version "$OP_VERSION" \
             --arch "$AI_ARCH" \
-            --tool /tmp/appimagetool \
+            --tool "$appimagetool" \
+            --runtime-file "$runtime" \
             --out-dir .
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: openpencil-desktop-${{ matrix.label }}
           path: |
@@ -548,7 +523,7 @@ jobs:
       # runtime). No archive extension, so release-draft's flatten step
       # never picks it up as a release file on its own.
       - name: Upload daemon binary for the VS Code extension
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: openpencil-daemon-${{ matrix.label }}
           path: |
@@ -559,7 +534,11 @@ jobs:
   web-docker:
     name: Build and push web Docker image
     needs: version
+    environment: release-production
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       OP_VERSION: ${{ needs.version.outputs.version }}
@@ -568,12 +547,23 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
+          persist-credentials: false
           submodules: recursive
-      - uses: docker/setup-buildx-action@v3
+      - name: Install digest-pinned Buildx
+        shell: bash
+        run: |
+          set -euo pipefail
+          buildx="$HOME/.docker/cli-plugins/docker-buildx"
+          tools/pinned-release-tools.sh buildx "$buildx"
+          docker buildx version | grep -F 'github.com/docker/buildx v0.36.1 '
+          buildkit=moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
+          docker buildx create --name openpencil-release --driver docker-container \
+            --driver-opt "image=$buildkit" --use
+          docker buildx inspect openpencil-release --bootstrap
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -589,7 +579,7 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: Dockerfile.web-rust
@@ -599,56 +589,47 @@ jobs:
   sdk-packages:
     name: Build and publish web SDK npm packages
     needs: version
+    environment: release-production
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       OP_VERSION: ${{ needs.version.outputs.version }}
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
+          persist-credentials: false
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
         with:
           toolchain: '1.94'
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: web-sdk-release
-      - uses: oven-sh/setup-bun@v2
-      - name: Install wasm-bindgen-cli (pinned to Cargo.lock)
+      - name: Install digest-pinned Bun
+        run: tools/pinned-release-tools.sh bun "$RUNNER_TEMP/bun-1.3.14"
+      - name: Install digest-pinned Node
+        run: tools/pinned-release-tools.sh node "$RUNNER_TEMP/node-20.20.2"
+      - name: Install digest-pinned wasm-bindgen-cli
         shell: bash
         run: |
           version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)"
-          if [ -z "$version" ]; then
-            echo "::error::could not resolve wasm-bindgen version from Cargo.lock"
+          if [ "$version" != 0.2.117 ]; then
+            echo "::error::Cargo.lock wasm-bindgen must match the reviewed 0.2.117 CLI"
             exit 1
           fi
-          cargo install wasm-bindgen-cli --version "$version" --locked
+          tools/pinned-release-tools.sh cargo-cli wasm-bindgen-cli \
+            "$RUNNER_TEMP/wasm-bindgen-cli-0.2.117"
       - name: Install binaryen
-        run: |
-          BINARYEN_VERSION=version_123
-          curl -fsSL \
-            "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
-            | tar -xz
-          echo "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+        run: tools/pinned-release-tools.sh binaryen "$GITHUB_WORKSPACE"
       - name: Install package workspace dependencies
         working-directory: packages
         run: bun install --frozen-lockfile
       - name: Verify package versions
         working-directory: packages
         run: bun run sync-version:check
-      - name: Configure npm auth
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${NPM_TOKEN:-}" ]; then
-            echo "::error::NPM_TOKEN is required to publish web SDK packages"
-            exit 1
-          fi
-          echo "::notice::NPM_TOKEN must be scoped for @zseven-w packages and have bypass 2FA enabled"
-          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > ~/.npmrc
-          npm whoami
       - name: Build wasm-backed SDK packages
         shell: bash
         run: |
@@ -671,8 +652,24 @@ jobs:
           ls -la sdk-packages
       - name: Publish npm packages
         shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
+          npm_token=${NPM_TOKEN-}
+          export -n npm_token
+          unset NPM_TOKEN
+          umask 077
+          if [ -z "$npm_token" ]; then
+            echo "::error::NPM_TOKEN is required to publish web SDK packages"
+            exit 1
+          fi
+          npmrc=$(mktemp)
+          trap 'rm -f "$npmrc"' EXIT
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$npm_token" > "$npmrc"
+          npm_token=
+          export NPM_CONFIG_USERCONFIG=$npmrc
+          npm whoami
           version="$OP_VERSION"
           publish_pkg() {
             local name="$1"
@@ -693,7 +690,7 @@ jobs:
           publish_pkg "@zseven-w/op-web-sdk-react" "sdk-packages/zseven-w-op-web-sdk-react-${version}.tgz"
           publish_pkg "@zseven-w/op-web-sdk-vue" "sdk-packages/zseven-w-op-web-sdk-vue-${version}.tgz"
       - name: Upload SDK tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: openpencil-web-sdk-packages
           path: sdk-packages/*.tgz
@@ -702,45 +699,45 @@ jobs:
   vsix:
     name: Package VS Code extension (platform vsix with bundled runtime)
     needs: [version, build]
+    environment: release-production
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       OP_VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
+          persist-credentials: false
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
         with:
           toolchain: '1.94'
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: web-sdk-release
-      - uses: oven-sh/setup-bun@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install wasm-bindgen-cli (pinned to Cargo.lock)
+      - name: Install digest-pinned Bun
+        run: tools/pinned-release-tools.sh bun "$RUNNER_TEMP/bun-1.3.14"
+      - name: Install digest-pinned Node
+        run: tools/pinned-release-tools.sh node "$RUNNER_TEMP/node-20.20.2"
+      - name: Install digest-pinned wasm-bindgen-cli
         shell: bash
         run: |
           version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)"
-          if [ -z "$version" ]; then
-            echo "::error::could not resolve wasm-bindgen version from Cargo.lock"
+          if [ "$version" != 0.2.117 ]; then
+            echo "::error::Cargo.lock wasm-bindgen must match the reviewed 0.2.117 CLI"
             exit 1
           fi
-          cargo install wasm-bindgen-cli --version "$version" --locked
+          tools/pinned-release-tools.sh cargo-cli wasm-bindgen-cli \
+            "$RUNNER_TEMP/wasm-bindgen-cli-0.2.117"
       - name: Install binaryen
-        run: |
-          BINARYEN_VERSION=version_123
-          curl -fsSL \
-            "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
-            | tar -xz
-          echo "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+        run: tools/pinned-release-tools.sh binaryen "$GITHUB_WORKSPACE"
       - name: Build web bundle (served by the bundled daemon)
         run: bash tools/check-wasm-bundle.sh
       - name: Download daemon binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: daemons
           pattern: openpencil-daemon-*
@@ -752,7 +749,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bunx tsc -p tsconfig.json --noEmit
+          ./node_modules/.bin/tsc -p tsconfig.json --noEmit
           bun test src
           node build.mjs
           # Stamp the release version into the manifest (runtime-only — the
@@ -794,13 +791,13 @@ jobs:
             # op_host_web_bg.wasm — shipping both doubles the vsix.
             rm -f web/pkg/*.opt.wasm web/pkg/*.d.ts
             cp -R ../../crates/op-host-web/assets/canvaskit web/canvaskit
-            bunx @vscode/vsce package --no-dependencies --allow-missing-repository \
+            ./node_modules/.bin/vsce package --no-dependencies --allow-missing-repository \
               --target "$vs_target" \
               --out "openpencil-vscode-${OP_VERSION}-${vs_target}.vsix"
           done
           ls -la ./*.vsix
       - name: Upload .vsix artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: openpencil-vscode-vsix
           path: packages/op-vscode/*.vsix
@@ -816,12 +813,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${OPENVSX_TOKEN:-}" ]; then
+          openvsx_token=${OPENVSX_TOKEN-}
+          export -n openvsx_token
+          unset OPENVSX_TOKEN
+          if [ -z "$openvsx_token" ]; then
             echo "::error::OPENVSX_TOKEN is required to publish to open-vsx.org (create it at https://open-vsx.org/user-settings/tokens, add as repo secret)"
             exit 1
           fi
           # First-run namespace claim; harmless "already exists" afterwards.
-          bunx ovsx create-namespace openpencil -p "$OPENVSX_TOKEN" || true
+          ./node_modules/.bin/ovsx create-namespace openpencil -p "$openvsx_token" || true
           # Per-file tolerance so a partial failure is retryable: a re-run
           # skips targets that already landed ("already published") instead
           # of aborting the loop on them, keeps going past a real failure to
@@ -829,7 +829,7 @@ jobs:
           # if anything genuinely failed.
           failed=0
           for f in ./openpencil-vscode-"${OP_VERSION}"-*.vsix; do
-            if out="$(bunx ovsx publish --packagePath "$f" -p "$OPENVSX_TOKEN" 2>&1)"; then
+            if out="$(./node_modules/.bin/ovsx publish --packagePath "$f" -p "$openvsx_token" 2>&1)"; then
               printf '%s\n' "$out"
             elif printf '%s' "$out" | grep -qiE "already (exists|published)"; then
               echo "skipping ${f}: this target/version is already on open-vsx"
@@ -844,6 +844,7 @@ jobs:
   release-draft:
     name: Create / update GitHub prerelease
     needs: [version, build, web-docker, sdk-packages, vsix]
+    environment: release-production
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     # id-token + attestations power the build-provenance step below; the
@@ -856,12 +857,16 @@ jobs:
       attestations: write
     env:
       OP_VERSION: ${{ needs.version.outputs.version }}
-      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+    outputs:
+      package_manager_artifact_id: ${{ steps.package_manager_handoff.outputs.artifact-id }}
+      package_manager_artifact_digest: ${{ steps.package_manager_handoff.outputs.artifact-digest }}
+      package_manager_manifest_sha256: ${{ steps.package_manager_manifest.outputs.manifest_sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: dist
           pattern: openpencil-*
@@ -964,8 +969,22 @@ jobs:
           (cd release-files && sha256sum -- * | sort -k2 > ../SHA256SUMS.txt)
           mv SHA256SUMS.txt release-files/
           cat release-files/SHA256SUMS.txt
+      - name: Stage package-manager handoff
+        id: package_manager_manifest
+        shell: bash
+        run: >-
+          tools/package-manager-handoff.sh stage release-files package-manager-handoff
+          "$OP_VERSION" "$GITHUB_OUTPUT"
+      - name: Upload immutable package-manager handoff
+        id: package_manager_handoff
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-manager-assets-${{ github.run_id }}-${{ github.run_attempt }}
+          path: package-manager-handoff/
+          if-no-files-found: error
+          retention-days: 1
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: release-files/*
       - name: Prepare release body
@@ -998,7 +1017,7 @@ jobs:
             printf 'Some antivirus engines heuristically flag low-prevalence installers — see [docs/security/antivirus-false-positives.md](https://github.com/%s/blob/main/docs/security/antivirus-false-positives.md).\n' '${{ github.repository }}'
           } >> release-body.md
       - name: Create / update GitHub prerelease
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           draft: false
           prerelease: true
@@ -1067,77 +1086,46 @@ jobs:
   package-managers:
     name: Update Homebrew tap and Scoop bucket
     needs: [version, release-draft]
+    environment: release-production
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     if: startsWith(github.ref, 'refs/tags/v')
     env:
       OP_VERSION: ${{ needs.version.outputs.version }}
-      TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
       HOMEBREW_TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY || 'ZSeven-W/homebrew-openpencil' }}
       SCOOP_BUCKET_REPOSITORY: ${{ vars.SCOOP_BUCKET_REPOSITORY || 'ZSeven-W/scoop-openpencil' }}
     steps:
-      - name: Validate package-manager token
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${TAP_GITHUB_TOKEN:-}" ]; then
-            echo "::error::TAP_GITHUB_TOKEN is required to update Homebrew and Scoop repositories"
-            exit 1
-          fi
-
-      - name: Download release assets and compute hashes
+      - name: Checkout release helpers without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Download immutable same-run package-manager handoff
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          version="$OP_VERSION"
-          mkdir -p release-assets
-          gh release download "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --dir release-assets \
-            --clobber
-
-          required=(
-            "OpenPencil-${version}-arm64-mac.dmg"
-            "OpenPencil-${version}-x64-mac.dmg"
-            "openpencil-desktop-windows-x86_64.zip"
-            "openpencil-desktop-windows-aarch64.zip"
-            "op-cli-macos-aarch64.tar.gz"
-            "op-cli-macos-x86_64.tar.gz"
-            "op-cli-linux-aarch64.tar.gz"
-            "op-cli-linux-x86_64.tar.gz"
-            "op-cli-windows-aarch64.zip"
-            "op-cli-windows-x86_64.zip"
-          )
-          for file in "${required[@]}"; do
-            if [ ! -f "release-assets/$file" ]; then
-              echo "::error::missing release asset for package-manager update: $file"
-              exit 1
-            fi
-          done
-
-          sha_file() {
-            sha256sum "release-assets/$1" | awk '{print $1}'
-          }
-
-          {
-            echo "MAC_ARM_DMG_SHA=$(sha_file "OpenPencil-${version}-arm64-mac.dmg")"
-            echo "MAC_X64_DMG_SHA=$(sha_file "OpenPencil-${version}-x64-mac.dmg")"
-            echo "CLI_MAC_ARM_SHA=$(sha_file "op-cli-macos-aarch64.tar.gz")"
-            echo "CLI_MAC_X64_SHA=$(sha_file "op-cli-macos-x86_64.tar.gz")"
-            echo "CLI_LINUX_ARM_SHA=$(sha_file "op-cli-linux-aarch64.tar.gz")"
-            echo "CLI_LINUX_X64_SHA=$(sha_file "op-cli-linux-x86_64.tar.gz")"
-            echo "DESKTOP_WIN_ARM_SHA=$(sha_file "openpencil-desktop-windows-aarch64.zip")"
-            echo "DESKTOP_WIN_X64_SHA=$(sha_file "openpencil-desktop-windows-x86_64.zip")"
-            echo "CLI_WIN_ARM_SHA=$(sha_file "op-cli-windows-aarch64.zip")"
-            echo "CLI_WIN_X64_SHA=$(sha_file "op-cli-windows-x86_64.zip")"
-          } >> "$GITHUB_ENV"
+        run: >-
+          tools/package-manager-handoff.sh download
+          "${{ needs.release-draft.outputs.package_manager_artifact_id }}"
+          "${{ needs.release-draft.outputs.package_manager_artifact_digest }}"
+          "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          "$GITHUB_API_URL" release-assets "$OP_VERSION"
+      - name: Verify handoff manifest and compute hashes
+        shell: bash
+        env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.release-draft.outputs.package_manager_artifact_digest }}
+          EXPECTED_MANIFEST_SHA256: ${{ needs.release-draft.outputs.package_manager_manifest_sha256 }}
+        run: >-
+          tools/package-manager-handoff.sh verify release-assets "$OP_VERSION"
+          "$EXPECTED_ARTIFACT_DIGEST" "$EXPECTED_MANIFEST_SHA256" "$GITHUB_ENV"
 
       - name: Checkout Homebrew tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: ${{ env.HOMEBREW_TAP_REPOSITORY }}
-          token: ${{ env.TAP_GITHUB_TOKEN }}
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
           path: homebrew-tap
 
       - name: Update Homebrew cask and formula
@@ -1230,10 +1218,10 @@ jobs:
           fi
 
       - name: Checkout Scoop bucket
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           repository: ${{ env.SCOOP_BUCKET_REPOSITORY }}
-          token: ${{ env.TAP_GITHUB_TOKEN }}
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
           path: scoop-bucket
 
       - name: Update Scoop manifests

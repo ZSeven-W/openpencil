@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Mutation tests proving the release contracts reject policy regressions.
+
+set -euo pipefail
+
+script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+repo_root=$(CDPATH='' cd "$script_dir/.." && pwd)
+temporary=$(mktemp -d)
+trap 'rm -rf "$temporary"' EXIT
+
+mutate() {
+    python3 - "$1" "$2" "$3" <<'PYTHON'
+import pathlib
+import sys
+
+source, destination, mode = map(pathlib.Path, sys.argv[1:])
+text = source.read_text()
+if str(mode) == "mutable-action":
+    old = "actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955"
+    new = "actions/checkout@v4"
+elif str(mode) == "broad-permission":
+    old = "permissions:\n  contents: read"
+    new = "permissions:\n  contents: write"
+elif str(mode) == "job-secret":
+    marker = "  sdk-packages:\n"
+    start = text.index(marker)
+    end = text.index("\n  vsix:\n", start)
+    section = text[start:end]
+    old = "    env:\n"
+    new = "    env:\n      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n"
+    if old not in section:
+        raise SystemExit("mutation marker missing: sdk env")
+    text = text[:start] + section.replace(old, new, 1) + text[end:]
+    destination.write_text(text)
+    raise SystemExit(0)
+elif str(mode) == "mutable-package-assets":
+    old = "tools/package-manager-handoff.sh download"
+    new = 'gh release download "$GITHUB_REF_NAME"'
+elif str(mode) == "mutable-apt-source":
+    old = "https://snapshot.ubuntu.com/ubuntu/20260801T000000Z/"
+    new = "http://ports.ubuntu.com/ubuntu-ports/"
+elif str(mode) == "direct-cargo-cli":
+    old = '''tools/pinned-release-tools.sh cargo-cli wasm-bindgen-cli \\
+            "$RUNNER_TEMP/wasm-bindgen-cli-0.2.117"'''
+    new = "cargo install wasm-bindgen-cli --version 0.2.117 --locked"
+elif str(mode) == "cargo-cli-digest":
+    old = "bb3601b2899d4887512bdcaad115074750be7c212b122fa7ed4faed6c919229e"
+    new = "0" * 64
+elif str(mode) == "docker-direct-cargo-cli":
+    old = "tools/pinned-release-tools.sh cargo-cli wasm-bindgen-cli " + "\\"
+    new = 'cargo install wasm-bindgen-cli --version "$version" --locked #'
+elif str(mode) == "ios-skia-profile":
+    old = "tools/pinned-release-tools.sh skia ios aarch64-apple-ios"
+    new = "tools/pinned-release-tools.sh skia web aarch64-apple-ios"
+elif str(mode) == "ios-skia-digest":
+    old = "4abbaea5e4e8934a6f19c5de44eaba9bf9238af4abbe57dbac5f2dc03923b182"
+    new = "0" * 64
+elif str(mode) == "rust-skia-force":
+    old = "[[ -z ${FORCE_SKIA_BINARIES_DOWNLOAD:-} && ${SKIA_BINARIES_URL:-} == file://* ]]"
+    new = "[[ ${FORCE_SKIA_BINARIES_DOWNLOAD:-} == 1 && ${SKIA_BINARIES_URL:-} == file://* ]]"
+else:
+    raise SystemExit(f"unknown mutation: {mode}")
+if old not in text:
+    raise SystemExit(f"mutation marker missing: {mode}")
+destination.write_text(text.replace(old, new, 1))
+PYTHON
+}
+
+expect_rejected() {
+    local label=$1 env_name=$2 checker=$3 fixture=$4
+    if env "$env_name=$fixture" bash "$checker" >"$temporary/$label.log" 2>&1; then
+        printf 'error: release policy mutation was accepted: %s\n' "$label" >&2
+        exit 1
+    fi
+}
+
+case ${1-} in
+    rust)
+        for mutation in mutable-action broad-permission job-secret mutable-package-assets mutable-apt-source direct-cargo-cli; do
+            fixture=$temporary/rust-$mutation.yml
+            mutate "$repo_root/.github/workflows/rust-release.yml" "$fixture" "$mutation"
+            expect_rejected "$mutation" OPENPENCIL_RUST_RELEASE_WORKFLOW \
+                "$repo_root/tools/check-rust-release-auth-workflow.sh" "$fixture"
+        done
+        fixture=$temporary/build-rust-release-host.sh
+        mutate "$repo_root/scripts/build-rust-release-host.sh" "$fixture" rust-skia-force
+        expect_rejected rust-skia-force OPENPENCIL_RUST_RELEASE_BUILDER \
+            "$repo_root/tools/check-rust-release-auth-workflow.sh" "$fixture"
+        fixture=$temporary/pinned-release-tools.sh
+        mutate "$repo_root/tools/pinned-release-tools.sh" "$fixture" cargo-cli-digest
+        expect_rejected cargo-cli-digest OPENPENCIL_PINNED_RELEASE_TOOLS \
+            "$repo_root/tools/check-rust-release-auth-workflow.sh" "$fixture"
+        fixture=$temporary/Dockerfile.web-rust
+        mutate "$repo_root/Dockerfile.web-rust" "$fixture" docker-direct-cargo-cli
+        expect_rejected docker-direct-cargo-cli OPENPENCIL_WEB_DOCKERFILE \
+            "$repo_root/tools/check-rust-release-auth-workflow.sh" "$fixture"
+        ;;
+    ios)
+        fixture=$temporary/ios-skia-profile.yml
+        mutate "$repo_root/.github/workflows/ios-testflight.yml" "$fixture" ios-skia-profile
+        expect_rejected ios-skia-profile OPENPENCIL_IOS_TESTFLIGHT_WORKFLOW \
+            "$repo_root/tools/check-ios-testflight-workflow.sh" "$fixture"
+        fixture=$temporary/publish-ios-testflight.sh
+        mutate "$repo_root/scripts/publish-ios-testflight.sh" "$fixture" ios-skia-digest
+        expect_rejected ios-skia-digest OPENPENCIL_IOS_TESTFLIGHT_PUBLISHER \
+            "$repo_root/tools/check-ios-testflight-workflow.sh" "$fixture"
+        ;;
+    *)
+        printf 'usage: %s {rust|ios}\n' "$0" >&2
+        exit 2
+        ;;
+esac
+
+printf 'check-release-workflow-policy.test.sh: %s mutations were rejected.\n' "$1"

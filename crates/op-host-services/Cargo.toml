@@ -14,6 +14,8 @@ path = "src/lib.rs"
 default = []
 # Mirrors op-host-desktop's debug-tools toggle for the MCP server.
 mcp-debug-tools = ["op-mcp/debug-tools"]
+# Production release lane; forwarded by op-host-web-server.
+pinned-skia-binaries = ["skia-safe/no-compile"]
 # Dev-only collaboration tickets for the serve-web daemon, mirroring
 # op-host-desktop's flag of the same name: links the locally built ABI-v2
 # op-auth archive (debug profile only; see op-auth-bridge/README).
