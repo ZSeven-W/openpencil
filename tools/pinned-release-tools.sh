@@ -199,7 +199,7 @@ verify_pinned_ripgrep_binary() {
     local binary=$1 actual first_line
     actual=$("$binary" --version) || return 1
     first_line=${actual%%$'\n'*}
-    [[ $first_line == 'ripgrep 15.2.0' ]] || {
+    [[ $first_line == 'ripgrep 15.2.0 (rev e89fff89ac)' ]] || {
         printf 'error: installed ripgrep reports an unexpected version: %s\n' \
             "$first_line" >&2
         return 1
@@ -329,7 +329,7 @@ self_test() {
     bad_rg=$test_dir/bad-rg
     printf '#!/bin/sh\nprintf "cargo-bundle v0.10.0\\n"\n' > "$good_cli"
     printf '#!/bin/sh\nprintf "cargo-bundle 0.10.0\\n"\n' > "$bad_cli"
-    printf '#!/bin/sh\nprintf "ripgrep 15.2.0\\nfeatures:+pcre2\\n"\n' > "$good_rg"
+    printf '#!/bin/sh\nprintf "ripgrep 15.2.0 (rev e89fff89ac)\\nfeatures:+pcre2\\n"\n' > "$good_rg"
     printf '#!/bin/sh\nprintf "ripgrep 15.1.0\\nfeatures:+pcre2\\n"\n' > "$bad_rg"
     chmod 0755 "$good_cli" "$bad_cli" "$good_rg" "$bad_rg"
     verify_pinned_cargo_cli_binary cargo-bundle "$good_cli"
