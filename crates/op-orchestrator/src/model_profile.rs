@@ -41,6 +41,19 @@ enum Match {
     Prefix(&'static str),
     /// TS `/^deepseek-(chat|reasoner)$/`:精确命中其一。
     Exact(&'static [&'static str]),
+    /// Family lane with a version floor (new policy, no TS equivalent):
+    /// locate `prefix` with `contains` semantics (vendor prefixes such as
+    /// `ark/` are allowed), parse the dotted numeric version that follows
+    /// it, and match when that version is >= `min` AND the tail after the
+    /// version is exactly `suffix` (or empty). Same-family same-variant
+    /// newer versions inherit this entry's tier; an unknown variant tail
+    /// (e.g. `glm-6-air`) deliberately does NOT match and falls through to
+    /// the conservative default. See [`version_lane_matches`].
+    VersionLane {
+        prefix: &'static str,
+        min: &'static [u32],
+        suffix: Option<&'static str>,
+    },
 }
 
 struct Entry {
@@ -155,46 +168,121 @@ const MODEL_PROFILES: &[Entry] = &[
         true,
         "Gemini 2",
     ),
+    // DeepSeek V `-pro` lane, floor 4 — same-family-same-variant newer
+    // versions (deepseek-v5-pro, …) inherit Full automatically; an unknown
+    // variant suffix (e.g. `deepseek-v5-pro-max`) falls through to the
+    // conservative default. The `-flash` lane below is a separate entry
+    // because variant suffixes are lane boundaries (v4-pro=Full vs
+    // v4-flash=Standard is settled fact). Wire-control whitelists
+    // deliberately do NOT inherit this way (Moonshot k3 lesson).
     Entry {
-        matcher: Match::Sub("deepseek-v4-pro"),
+        matcher: Match::VersionLane {
+            prefix: "deepseek-v",
+            min: &[4],
+            suffix: Some("-pro"),
+        },
         tier: ModelTier::Full,
         thinking_disabled: true,
         timeout_multiplier: 2.0,
-        label: "DeepSeek V4 Pro",
+        label: "DeepSeek V4+ Pro",
     },
-    // GLM-5.2（及以后更高版本）—— ab-v9 manifest arm 实测很强（M3 96%、composite
-    // 5/5），给 Full tier。**只 5.2 起算强**（用户判定：glm-5 / glm-5.1 不够，不命中
-    // 这条 → 落 default Standard）。关思考与 tier 无关：builtin HTTP 路由按
-    // is_glm_model 对**所有** glm（含 5 / 5.1）强制下发 thinking:{type:disabled}，
-    // 因为它们都是推理模型、不关都会烧光 content。GLM 体量大、即便关思考也偏慢，
-    // timeout ×2。未来 glm-5.3 / glm-6 等更高版本同样算强，届时各加一条 matcher。
+    // GLM-5.3 — explicit override BEFORE the glm lane so its ×3 beats the
+    // lane's ×2. 0814 measurement: always thinks (`thinking:disabled` is
+    // silently ignored, not a 400), one card took 635s ≈ 10× DeepSeek,
+    // hence ×3.
     Entry {
-        matcher: Match::Sub("glm-5.2"),
+        matcher: Match::Sub("glm-5.3"),
+        tier: ModelTier::Full,
+        thinking_disabled: true,
+        timeout_multiplier: 3.0,
+        label: "GLM-5.3",
+    },
+    // GLM family lane, floor 5.2 — measured strong on the ab-v9 manifest arm
+    // (M3 96%, composite 5/5), and the user ruled only 5.2+ is strong.
+    // Same-family-same-variant newer versions (glm-6, …) inherit Full
+    // automatically; below the floor (glm-5 / glm-5.1) and unknown variant
+    // suffixes (glm-6-air) fall through to the conservative default.
+    // Thinking-off is tier-independent: the builtin HTTP route forces
+    // `thinking:{type:disabled}` on ALL glm ids (see reasoning_wire_control)
+    // because they are reasoning models that otherwise burn the whole
+    // content budget. GLM is slow even with thinking off, hence ×2.
+    // Wire-control whitelists deliberately do NOT inherit this way
+    // (Moonshot k3 lesson): wire behaviour stays per model id.
+    Entry {
+        matcher: Match::VersionLane {
+            prefix: "glm-",
+            min: &[5, 2],
+            suffix: None,
+        },
         tier: ModelTier::Full,
         thinking_disabled: true,
         timeout_multiplier: 2.0,
-        label: "GLM-5.2 (Coding Plan)",
+        label: "GLM 5.2+",
     },
-    // Kimi K3（及以后）—— 用户判定 K3 起算强；K2.x 不命中这条 → 落 default
-    // Standard。与 GLM 同理是推理模型,关思考防烧 content;时长无实测数据,先 ×1,
-    // 慢再调。未来 K4 等更高代际届时各加一条 matcher。
-    e(Match::Sub("kimi-k3"), ModelTier::Full, true, "Kimi K3"),
-    // MiniMax M3（及以后）—— 2026-07-18 3×2 A/B 实测（mobile 多屏/dashboard/
-    // landing）：Full 档几何 issue 5→1、总耗时快 30%、调用数更少、完整性更优，
-    // 全维度非边际胜出 → 升 Full。仅 M3 起算强（老 M 系/abab 落后面的泛 minimax
-    // Basic 条目）。thinking 由 ChatProviderLlmClient 的 m3_keeps_thinking 特判
-    // 保留（Adaptive），此处 thinking_disabled 对 M3 实际不生效，仅作族内一致。
+    // Kimi K3.1 preview — explicit row so the strict lane tail rule (an
+    // unknown variant suffix after the version does not inherit) keeps the
+    // shipped baseline: `kimi-k3.1-preview` was Full under the old
+    // `Sub("kimi-k3")` row and must stay Full.
     e(
-        Match::Sub("minimax-m3"),
+        Match::Sub("kimi-k3.1-preview"),
         ModelTier::Full,
         true,
-        "MiniMax M3",
+        "Kimi K3.1 Preview",
     ),
+    // Kimi K family lane, floor 3 — user verdict: K3+ is strong, K2.x is
+    // not (K2.x falls through to the conservative default). Same-family
+    // same-variant newer versions (kimi-k4, kimi-k3.x, …) inherit Full via
+    // the numeric floor; unknown variant suffixes fall through. No measured
+    // latency data yet, so ×1 for now. Wire-control whitelists deliberately
+    // do NOT inherit this way — Moonshot changed control fields within the
+    // family (k3 lesson), so wire behaviour stays per model id in
+    // `reasoning_wire_control`.
     e(
-        Match::Sub("deepseek-v4-flash"),
+        Match::VersionLane {
+            prefix: "kimi-k",
+            min: &[3],
+            suffix: None,
+        },
+        ModelTier::Full,
+        true,
+        "Kimi K3+",
+    ),
+    // MiniMax M family lane, floor 3 — 2026-07-18 3×2 A/B (mobile
+    // multi-screen / dashboard / landing): Full cut geometry issues 5→1,
+    // ~30% faster, fewer calls, better completeness — a non-marginal win on
+    // every axis. Only M3+ is strong; older M2.x / abab keep falling
+    // through to the generic minimax Basic row below (order unchanged).
+    // Same-family-same-variant newer versions (minimax-m4, …) inherit Full;
+    // unknown variant suffixes fall through to the conservative default.
+    // `thinking` is kept by ChatProviderLlmClient's m3_keeps_thinking
+    // special case (Adaptive), so thinking_disabled is effectively inactive
+    // for M3 and kept only for in-family consistency. Wire-control
+    // whitelists deliberately do NOT inherit this way (Moonshot k3 lesson).
+    e(
+        Match::VersionLane {
+            prefix: "minimax-m",
+            min: &[3],
+            suffix: None,
+        },
+        ModelTier::Full,
+        true,
+        "MiniMax M3+",
+    ),
+    // DeepSeek V `-flash` lane, floor 4 — the variant suffix is a lane
+    // boundary: `-pro` is Full (row above), `-flash` stays Standard.
+    // Same-family-same-variant newer versions (deepseek-v5-flash, …)
+    // inherit; unknown variant suffixes fall through to the conservative
+    // default. Wire-control whitelists deliberately do NOT inherit this way
+    // (Moonshot k3 lesson).
+    e(
+        Match::VersionLane {
+            prefix: "deepseek-v",
+            min: &[4],
+            suffix: Some("-flash"),
+        },
         ModelTier::Standard,
         true,
-        "DeepSeek V4 Flash",
+        "DeepSeek V4+ Flash",
     ),
     e(
         Match::Exact(&["deepseek-chat", "deepseek-reasoner"]),
@@ -232,7 +320,22 @@ const MODEL_PROFILES: &[Entry] = &[
     e(Match::Sub("llama"), ModelTier::Basic, true, "Llama"),
     e(Match::Sub("mistral"), ModelTier::Basic, true, "Mistral"),
     e(Match::Sub("gemma"), ModelTier::Basic, true, "Gemma"),
-    e(Match::Sub("glm"), ModelTier::Basic, true, "GLM"),
+    // Legacy GLM-4.x rows — the former blanket `Sub("glm")` catch-all is
+    // gone: under the lane policy every glm id not caught by a lane (below
+    // the floor, or an unknown variant suffix such as glm-6-air) must fall
+    // through to DEFAULT_PROFILE (Standard), not inherit a family-wide
+    // Basic tier. These three explicit ids stay Basic to preserve shipped
+    // behaviour (glm-4-plus is the Basic-tier fixture in orchestrator retry
+    // tests; glm-4.6 / glm-4 are the Basic arm in skill-budget and deck
+    // skill tests).
+    e(
+        Match::Sub("glm-4-plus"),
+        ModelTier::Basic,
+        true,
+        "GLM 4 Plus",
+    ),
+    e(Match::Sub("glm-4.6"), ModelTier::Basic, true, "GLM 4.6"),
+    e(Match::Exact(&["glm-4"]), ModelTier::Basic, true, "GLM 4"),
 ];
 
 /// `Entry` 构造简写(默认 `timeout_multiplier = 1.0`)。
@@ -243,6 +346,73 @@ const fn e(matcher: Match, tier: ModelTier, thinking_disabled: bool, label: &'st
         thinking_disabled,
         timeout_multiplier: 1.0,
         label,
+    }
+}
+
+/// Parses the dotted numeric version at the start of `s`. Returns the
+/// segment values and the number of bytes consumed. Requires at least one
+/// digit and rejects a trailing `.` without a following digit; the first
+/// character that is neither a digit nor a `.` ends the version.
+fn parse_dotted_version(s: &str) -> Option<(Vec<u32>, usize)> {
+    let mut segments: Vec<u32> = Vec::new();
+    let mut current: Option<u32> = None;
+    let mut consumed = 0usize;
+    for (offset, ch) in s.char_indices() {
+        match ch {
+            '0'..='9' => {
+                let digit = ch.to_digit(10).expect("matched digit range");
+                current = Some(current.unwrap_or(0).checked_mul(10)?.checked_add(digit)?);
+                consumed = offset + ch.len_utf8();
+            }
+            '.' => {
+                segments.push(current?);
+                current = None;
+                consumed = offset + ch.len_utf8();
+            }
+            _ => break,
+        }
+    }
+    segments.push(current?);
+    Some((segments, consumed))
+}
+
+/// Numeric comparison of two dotted versions with missing segments read as
+/// 0: `[6] >= [5,2]` holds, `[5,1] < [5,2]` does not.
+fn version_at_least(version: &[u32], min: &[u32]) -> bool {
+    let longest = version.len().max(min.len());
+    for i in 0..longest {
+        let a = version.get(i).copied().unwrap_or(0);
+        let b = min.get(i).copied().unwrap_or(0);
+        match a.cmp(&b) {
+            std::cmp::Ordering::Greater => return true,
+            std::cmp::Ordering::Less => return false,
+            std::cmp::Ordering::Equal => {}
+        }
+    }
+    true
+}
+
+/// [`Match::VersionLane`] semantics on the already-normalized lowercase id:
+/// locate `prefix` anywhere in the id, parse the dotted numeric version
+/// right after it, require version >= `min`, and require the tail after the
+/// version to be exactly `suffix` (or empty). An unknown variant tail (e.g.
+/// `glm-6-air`) therefore does not match and the id falls through to the
+/// conservative default.
+fn version_lane_matches(lower: &str, prefix: &str, min: &[u32], suffix: Option<&str>) -> bool {
+    let Some(start) = lower.find(prefix) else {
+        return false;
+    };
+    let after_prefix = &lower[start + prefix.len()..];
+    let Some((version, consumed)) = parse_dotted_version(after_prefix) else {
+        return false;
+    };
+    if !version_at_least(&version, min) {
+        return false;
+    }
+    let tail = &after_prefix[consumed..];
+    match suffix {
+        Some(suffix) => tail == suffix,
+        None => tail.is_empty(),
     }
 }
 
@@ -274,6 +444,11 @@ pub fn resolve_model_profile(model_id: &str) -> ModelProfile {
             Match::Sub(s) => lower.starts_with(s) || lower.contains(s),
             Match::Prefix(p) => lower.starts_with(p),
             Match::Exact(list) => list.contains(&lower.as_str()),
+            Match::VersionLane {
+                prefix,
+                min,
+                suffix,
+            } => version_lane_matches(&lower, prefix, min, *suffix),
         };
         if hit {
             return ModelProfile {
@@ -366,238 +541,5 @@ pub fn accepts_thinking_body_field(model_id: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn thinking_body_field_covers_every_reasoning_family_we_ship() {
-        // MiniMax (current + legacy naming).
-        assert!(accepts_thinking_body_field("MiniMax-M3"));
-        assert!(accepts_thinking_body_field("abab6.5s-chat"));
-        // GLM — `contains`, not `starts_with`: 方舟 ids carry a vendor prefix.
-        assert!(accepts_thinking_body_field("glm-5.2"));
-        assert!(accepts_thinking_body_field("ark/glm-5.1"));
-        // DeepSeek — the family this table was missing (2026-07-31).
-        assert!(accepts_thinking_body_field("deepseek-v4-pro"));
-        assert!(accepts_thinking_body_field("deepseek-v4-flash"));
-        assert!(accepts_thinking_body_field("deepseek-reasoner"));
-        // Endpoints that would 400 on an unknown body field stay out.
-        assert!(!accepts_thinking_body_field("gpt-5.6-sol"));
-        assert!(!accepts_thinking_body_field("qwen3-coder-plus"));
-        assert!(!accepts_thinking_body_field("claude-opus-5"));
-        assert!(!accepts_thinking_body_field(""));
-    }
-
-    #[test]
-    fn kimi_k3_uses_low_reasoning_effort_instead_of_thinking() {
-        for model in ["kimi-k3", "moonshot/kimi-k3", "kimi-k3.1-preview"] {
-            let profile = resolve_model_profile(model);
-            assert_eq!(profile.tier, ModelTier::Full, "model={model}");
-            assert!(profile.thinking_disabled, "model={model}");
-            assert_eq!(
-                reasoning_wire_control(model),
-                Some(ReasoningWireControl::ReasoningEffortLow),
-                "model={model}"
-            );
-            assert!(!accepts_thinking_body_field(model), "model={model}");
-        }
-    }
-
-    /// The capability table must cover every model whose profile asks for
-    /// thinking off — otherwise the profile's intent is silently dropped at
-    /// the wire, which is exactly how deepseek-v4-pro regressed.
-    #[test]
-    fn every_reasoning_model_we_reduce_can_express_it() {
-        for model in ["deepseek-v4-pro", "deepseek-v4-flash", "glm-5.2", "kimi-k3"] {
-            assert!(
-                resolve_model_profile(model).thinking_disabled,
-                "{model} profile should ask for thinking off"
-            );
-            assert!(
-                reasoning_wire_control(model).is_some(),
-                "{model} asks for reduced reasoning but cannot express it on the wire"
-            );
-        }
-    }
-
-    /// Models we ship a built-in preset for whose profile asks for thinking
-    /// off but which deliberately do NOT get the body field, each with the
-    /// reason. Being on this list is a decision, not an oversight — that
-    /// distinction is the whole point of the sweep below.
-    const REASONING_CONTROL_WITHHELD: &[(&str, &str)] = &[
-        (
-            "gpt-5.4",
-            "OpenAI's official endpoint rejects unknown body fields",
-        ),
-        (
-            "gpt-5.6",
-            "OpenAI's official endpoint rejects unknown body fields",
-        ),
-        (
-            "gemini-3-flash-preview",
-            "Google's OpenAI-compat shim is not documented to accept it",
-        ),
-        ("qwen-plus", "no verified thinking-disable field"),
-        ("qwen3-coder-plus", "no verified thinking-disable field"),
-        ("Qwen/Qwen3.5-35B-A3B", "no verified thinking-disable field"),
-        ("doubao-seed-2.0-pro", "no verified thinking-disable field"),
-        (
-            "doubao-seed-2-0-pro-260215",
-            "no verified thinking-disable field",
-        ),
-        ("ark-code-latest", "no verified thinking-disable field"),
-        ("mimo-v2-pro", "no verified thinking-disable field"),
-        ("mimo-v2.5-pro", "no verified thinking-disable field"),
-        ("step-3.5-flash", "no verified thinking-disable field"),
-        ("step-3-coding", "no verified thinking-disable field"),
-        (
-            "nvidia/llama-3.1-nemotron-70b-instruct",
-            "no verified thinking-disable field",
-        ),
-    ];
-
-    /// The blind spot that let kimi-k3 through, closed mechanically.
-    ///
-    /// The previous guard walked a hand-written list of three model ids, so
-    /// it could only catch families someone had already remembered — which
-    /// is not a guard at all. Walking the profile table instead does not
-    /// work either: `thinking_disabled` is set to `true` on nearly every
-    /// entry, including models with no thinking mode to disable, so it
-    /// cannot distinguish "we mean this" from "the constructor defaulted".
-    ///
-    /// The models we actually ship *are* enumerable: the built-in provider
-    /// presets. Every one whose profile asks for thinking off must be
-    /// explicitly classified — either the wire table carries it, or it is
-    /// listed above with a reason. Adding a preset with a new default model
-    /// fails here until someone decides which.
-    #[test]
-    fn every_shipped_preset_model_is_classified_for_reasoning_control() {
-        for preset in op_editor_core::BUILTIN_AGENT_PRESETS {
-            // The Custom preset's `model` is a form placeholder, not an id.
-            if preset.key == op_editor_core::BuiltinAgentPresetKey::Custom {
-                continue;
-            }
-            let model = preset.model;
-            if !resolve_model_profile(model).thinking_disabled {
-                continue;
-            }
-            let on_the_wire = reasoning_wire_control(model).is_some();
-            let withheld = REASONING_CONTROL_WITHHELD
-                .iter()
-                .any(|(listed, _)| *listed == model);
-            assert!(
-                on_the_wire != withheld,
-                "preset `{}` ships model `{model}`, whose profile asks for \
-                 thinking off, but it is {} — add it to \
-                 `reasoning_wire_control` (with a source) or to \
-                 REASONING_CONTROL_WITHHELD (with a reason)",
-                preset.display_name,
-                if on_the_wire {
-                    "both sent on the wire AND listed as withheld"
-                } else {
-                    "neither sent on the wire nor listed as withheld"
-                },
-            );
-        }
-    }
-
-    /// Kimi is per-model, not per-family: the preset default (`kimi-k3`)
-    /// must stay OFF the wire table while the two ids that document the
-    /// field stay on it.
-    #[test]
-    fn kimi_thinking_field_is_scoped_to_the_models_that_accept_it() {
-        assert!(accepts_thinking_body_field("kimi-k2.5"));
-        assert!(accepts_thinking_body_field("kimi-k2.6"));
-        assert!(accepts_thinking_body_field("moonshot/kimi-k2.6"));
-        // k3 rejects `thinking` outright (mutually exclusive with
-        // `reasoning_effort`), so a blanket `kimi` prefix would 400 every
-        // request from the shipped Kimi preset.
-        assert!(!accepts_thinking_body_field("kimi-k3"));
-        assert!(!accepts_thinking_body_field("kimi-k2.7-code"));
-        assert!(!accepts_thinking_body_field("kimi-k2-thinking"));
-        assert!(!accepts_thinking_body_field("moonshot-v1-128k"));
-    }
-
-    #[test]
-    fn full_tier_models() {
-        let fable = resolve_model_profile("claude-fable-5");
-        assert_eq!(fable.tier, ModelTier::Full);
-        assert!(!fable.thinking_disabled);
-        assert_eq!(resolve_model_profile("kimi-k3").tier, ModelTier::Full);
-        // K2.x stays below the strong line (falls to the unknown default).
-        assert_eq!(resolve_model_profile("kimi-k2.5").tier, ModelTier::Standard);
-        // M3 measured full-tier (2026-07-18 A/B); older MiniMax stays Basic.
-        assert_eq!(resolve_model_profile("MiniMax-M3").tier, ModelTier::Full);
-        assert_eq!(resolve_model_profile("MiniMax-M2.7").tier, ModelTier::Basic);
-        assert_eq!(
-            resolve_model_profile("claude-opus-4-1").tier,
-            ModelTier::Full
-        );
-        assert_eq!(
-            resolve_model_profile("claude-sonnet-4").tier,
-            ModelTier::Full
-        );
-        assert_eq!(
-            resolve_model_profile("gemini-2.5-pro").tier,
-            ModelTier::Full
-        );
-    }
-
-    #[test]
-    fn basic_tier_models() {
-        assert_eq!(resolve_model_profile("claude-haiku").tier, ModelTier::Basic);
-        assert_eq!(resolve_model_profile("minimax-01").tier, ModelTier::Basic);
-        assert_eq!(resolve_model_profile("glm-4-plus").tier, ModelTier::Basic);
-        assert_eq!(resolve_model_profile("qwen-max").tier, ModelTier::Basic);
-        assert_eq!(
-            resolve_model_profile("acp:vendor/custom-agent").tier,
-            ModelTier::Basic
-        );
-    }
-
-    #[test]
-    fn standard_tier_models() {
-        assert_eq!(resolve_model_profile("gpt-4o").tier, ModelTier::Standard);
-        assert_eq!(
-            resolve_model_profile("gemini-2.5-flash").tier,
-            ModelTier::Standard
-        );
-    }
-
-    #[test]
-    fn provider_prefix_is_stripped() {
-        assert_eq!(
-            resolve_model_profile("opencode/gpt-4o").tier,
-            ModelTier::Standard
-        );
-    }
-
-    #[test]
-    fn regex_entries_match() {
-        assert_eq!(
-            resolve_model_profile("gemini-3-ultra").tier,
-            ModelTier::Full
-        );
-        assert_eq!(
-            resolve_model_profile("deepseek-chat").tier,
-            ModelTier::Standard
-        );
-        assert_eq!(
-            resolve_model_profile("deepseek-v4-pro").timeout_multiplier,
-            2.0
-        );
-    }
-
-    #[test]
-    fn empty_id_forces_full() {
-        assert_eq!(resolve_model_profile("").tier, ModelTier::Full);
-    }
-
-    #[test]
-    fn unknown_id_defaults_standard() {
-        assert_eq!(
-            resolve_model_profile("some-unknown-model").tier,
-            ModelTier::Standard
-        );
-    }
-}
+#[path = "model_profile_tests.rs"]
+mod tests;
