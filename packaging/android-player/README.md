@@ -42,11 +42,24 @@ The bridge accepts that override only in Cargo's `debug` profile. The archive
 is linked into `libop_engine_jni.so`; it is never packaged as an Android asset
 or standalone `.a`. Both the archive and generated `.so` stay ignored by Git.
 The Gradle Release variant reads only `app/src/release/jniLibs`, so a local
-Debug auth library cannot leak into Release. A shipping build must first use a
-version-matched, SHA-pinned, Ed25519-signed production archive under
-`crates/op-auth-bridge/prebuilt/aarch64-linux-android/`; none is currently
-committed, so authenticated Release builds remain unavailable rather than
-silently consuming unsigned bytes.
+Debug auth library cannot leak into Release. The `0.8.5` source commit S has no
+Android auth directory; its six inherited signed desktop archives are for
+`0.8.4` and are ignored by the version gate. A build from S can therefore use
+only the public stub. It cannot silently turn a missing, stale, mismatched, or
+unsigned archive into authenticated Release code.
+
+Private release CI builds ten immutable ABI-v3 candidates. Protected promotion
+signs the complete release manifest and creates exactly one auth-only child A
+of S, atomically replacing all six desktop directories and adding
+`aarch64-linux-android`, `x86_64-linux-android`, both iOS targets, and the other
+refreshed targets. The candidate artifacts are never production link inputs.
+An authenticated Android Release must be built from verified A: first verify
+the whole signed `0.8.5` matrix and the exact S -> A transition, then build both
+JNI ABIs in Cargo's release profile into `app/src/release/jniLibs`. Only the
+resulting `libop_engine_jni.so` files enter the APK; the `.a` archives are never
+packaged as assets. If any matrix, provenance, ABI, version, or digest check
+fails, the authenticated Release must stop instead of falling back to unsigned
+code.
 
 ## Versioning
 

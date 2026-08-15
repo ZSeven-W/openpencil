@@ -5,9 +5,16 @@ final application link. Client-side secrecy is defense in depth, not the trust
 root. Ticket signing keys, token exchange, and authorization policy stay on the
 server.
 
-## Current status
+## Source S and production A
 
-The six committed desktop `0.8.4` archives are signed ABI-v3 artifacts:
+The `0.8.5` source commit S deliberately does **not** contain its production
+authentication matrix. The six archives inherited from `0.8.4` cover desktop
+targets only. Although those older archives are signed ABI-v3 artifacts, their
+`VERSION` does not match the `0.8.5` workspace, so `build.rs` ignores them and
+uses the public stub. There are no mobile archives in S. Consequently, S alone
+cannot produce a collaboration-enabled production build.
+
+The older desktop artifacts remain independently inspectable:
 
 - Their bytes are pinned by the adjacent `SHA256` and signed `PROVENANCE`.
 - Their target, app version, ABI, private revision, build id, and hardening
@@ -31,10 +38,26 @@ host toolchain's own personality routine. The transformation happens only
 after provenance validation, preserves archive layout, and rejects ambiguous
 input; it never weakens the linker's duplicate-symbol checks.
 
-No signed iOS or Android archive is currently committed. Mobile production
-authentication therefore stays fail-closed until private release CI stages an
-exact-version target artifact. Unsigned local mobile archives belong only in
-the explicit Debug override and must never be copied into this directory.
+Production promotion creates exactly one auth-only child A of S. A atomically
+replaces the six stale desktop directories and adds four mobile directories,
+yielding this complete signed `0.8.5` ABI-v3 matrix:
+
+```text
+aarch64-apple-darwin       aarch64-apple-ios
+aarch64-apple-ios-sim      aarch64-linux-android
+aarch64-pc-windows-msvc    aarch64-unknown-linux-gnu
+x86_64-apple-darwin        x86_64-linux-android
+x86_64-pc-windows-msvc     x86_64-unknown-linux-gnu
+```
+
+The signed release manifest binds all ten targets to the same application
+version, public source S, private source revision, and immutable build id.
+Release and TestFlight workflows accept A only after verifying both the whole
+matrix and the S -> A auth-only transition. Until A exists, mobile production
+authentication stays fail-closed: an authenticated Release cannot silently use
+a missing, stale, mismatched, or unsigned archive. Unsigned local mobile
+archives belong only in the explicit Debug override and must never be copied
+into this directory.
 
 ## ABI-v2 / ABI-v3 signed provenance
 
@@ -110,8 +133,10 @@ Production is deliberately split across repositories:
 
 1. The private `prebuilt-production` workflow resolves exact public source S,
    rebuilds and audits all ten ABI-v3 targets, and uploads exactly ten unsigned,
-   immutable candidate artifacts. It has no provenance root and no OpenPencil
-   write credential.
+   immutable candidate artifacts. A candidate is build evidence, not a
+   production input: it has neither provenance signatures nor authority to
+   replace the artifacts in S. The private workflow has no provenance root and
+   no OpenPencil write credential.
 2. A reviewer dispatches `.github/workflows/auth-production.yml` from the exact
    target branch with the private workflow run ID, private head SHA, public S,
    and that same target branch. The workflow commit, branch head, and S must be
@@ -126,9 +151,10 @@ Production is deliberately split across repositories:
    one-day handoff with its own ID and digests.
 4. A third fresh runner receives only the public write credential, downloads
    the exact signed artifact ID, independently verifies its tree digest,
-   signatures, trusted public key, and matrix, creates the single-parent
-   auth-only child A, and pushes A with an exact S lease. Rust releases and
-   TestFlight accept only a verified A whose parent is S.
+   signatures, trusted public key, and matrix, atomically replaces the stale
+   directories and adds the missing mobile directories, creates the
+   single-parent auth-only child A, and pushes A with an exact S lease. Rust
+   releases and TestFlight accept only a verified A whose parent is S.
 
 `tools/package-op-auth-prebuilt.sh` remains a low-level local packaging utility;
 it is not the production promotion path and must not receive the production

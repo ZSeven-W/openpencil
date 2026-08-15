@@ -8,19 +8,19 @@ Gestures are interpreted by the engine, not the shell: single-finger tap selects
 
 ## Build inputs
 
-From the repository root, build the archive matching the destination if it is not already present:
+From the repository root, build the archive matching the destination if it is
+not already present:
 
 ```bash
-cd /Users/kayshen/Workspace/ZSeven-W/openpencil
 # `editor` enables the full desktop chrome (viewer-only without it).
 cargo build -p op-engine-ffi --release --target aarch64-apple-ios-sim --features metal,editor
 cargo build -p op-engine-ffi --release --target aarch64-apple-ios --features metal,editor
 ```
 
-The resulting archives are:
+The resulting archives are relative to the repository root:
 
-- Simulator: `/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios-sim/release/libop_engine_ffi.a`
-- Device: `/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios/release/libop_engine_ffi.a`
+- Simulator: `target/aarch64-apple-ios-sim/release/libop_engine_ffi.a`
+- Device: `target/aarch64-apple-ios/release/libop_engine_ffi.a`
 
 Authentication is an optional, explicit final-link input. A normal source
 checkout leaves `OP_AUTH_ARCHIVE` empty and uses the public stub. For local
@@ -37,14 +37,26 @@ Then pass that exact archive to Xcode as `OP_AUTH_ARCHIVE` and repeat the ABI
 with `OPENPENCIL_DEV_OP_AUTH_ABI_VERSION`. The project pre-build gate accepts
 an unsigned archive only for `CONFIGURATION=Debug`. Release linking accepts
 only a version-matched, SHA-pinned and Ed25519-signed archive under
-`crates/op-auth-bridge/prebuilt/<target>/`; because no signed iOS archive is
-currently committed, Release authentication fails closed. Never copy a local
-private archive into this source tree or into an Xcode resource phase.
+`crates/op-auth-bridge/prebuilt/<target>/`. The `0.8.5` source commit S contains
+neither iOS target; its inherited signed desktop archives are for `0.8.4` and
+are ignored. S can build with the public stub, but it cannot silently become a
+collaboration-enabled Release. Never copy a local private archive into this
+source tree or into an Xcode resource phase.
+
+The protected production flow rebuilds ten immutable ABI-v3 candidates, then
+signs and promotes the complete matrix in one auth-only child A of S. A adds
+`aarch64-apple-ios` and `aarch64-apple-ios-sim` together with both Android and
+all six refreshed desktop targets. The TestFlight workflow accepts only a
+verified A whose sole parent is S. Its publisher checks out trusted source S,
+copies only the signed artifacts from A, verifies the entire ten-target matrix,
+and stages the exact device archive for the final link. A missing target,
+version/digest/signature mismatch, incomplete matrix, or non-auth change stops
+the release before upload; an unsigned candidate is never a Release input.
 
 Generate the project (do this again after changing `project.yml`):
 
 ```bash
-cd /Users/kayshen/Workspace/ZSeven-W/openpencil/packaging/ios-player
+cd packaging/ios-player
 xcodegen generate --spec project.yml
 ```
 
@@ -53,7 +65,7 @@ xcodegen generate --spec project.yml
 On this host, pass the SDK, destination, Rust archive, and linker flags explicitly. Link the archive by path: `-lop_engine_ffi` can select the adjacent simulator dylib and leave the app with a non-redistributable local dependency. Replace `<sim-id>` with an installed iOS simulator UUID:
 
 ```bash
-cd /Users/kayshen/Workspace/ZSeven-W/openpencil/packaging/ios-player
+cd packaging/ios-player
 xcodebuild \
   -project OpenPencilPlayer.xcodeproj \
   -scheme OpenPencilPlayer \
@@ -61,8 +73,8 @@ xcodebuild \
   -sdk iphonesimulator26.4 \
   -destination 'platform=iOS Simulator,id=<sim-id>' \
   -derivedDataPath "$PWD/.derived-data" \
-  HEADER_SEARCH_PATHS=/Users/kayshen/Workspace/ZSeven-W/openpencil/crates/op-engine-ffi/include \
-  OTHER_LDFLAGS='/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios-sim/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore -framework Security' \
+  HEADER_SEARCH_PATHS="$PWD/../../crates/op-engine-ffi/include" \
+  OTHER_LDFLAGS="$PWD/../../target/aarch64-apple-ios-sim/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore -framework Security" \
   build
 
 xcrun simctl install <sim-id> "$PWD/.derived-data/Build/Products/Release-iphonesimulator/OpenPencilPlayer.app"
@@ -74,7 +86,7 @@ xcrun simctl launch <sim-id> tech.zseven.openpencil
 Use the device archive and replace `<device-id>` with the attached phone's destination identifier. Signing values may be supplied by the orchestrator or selected in Xcode:
 
 ```bash
-cd /Users/kayshen/Workspace/ZSeven-W/openpencil/packaging/ios-player
+cd packaging/ios-player
 xcodebuild \
   -project OpenPencilPlayer.xcodeproj \
   -scheme OpenPencilPlayer \
@@ -82,8 +94,8 @@ xcodebuild \
   -sdk iphoneos26.4 \
   -destination 'platform=iOS,id=<device-id>' \
   -derivedDataPath "$PWD/.derived-data-device" \
-  HEADER_SEARCH_PATHS=/Users/kayshen/Workspace/ZSeven-W/openpencil/crates/op-engine-ffi/include \
-  OTHER_LDFLAGS='/Users/kayshen/Workspace/ZSeven-W/openpencil/target/aarch64-apple-ios/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore -framework Security' \
+  HEADER_SEARCH_PATHS="$PWD/../../crates/op-engine-ffi/include" \
+  OTHER_LDFLAGS="$PWD/../../target/aarch64-apple-ios/release/libop_engine_ffi.a -lc++ -framework CoreFoundation -framework CoreGraphics -framework CoreText -framework ImageIO -framework MobileCoreServices -framework UIKit -framework Foundation -framework Metal -framework QuartzCore -framework Security" \
   build
 ```
 
@@ -113,6 +125,5 @@ CADisplayLink is paused before every frame. A redraw callback caused by a mutati
 This does not generate a project or link an app. It checks the YAML/resource contract, compiles the bridging header, and type-checks every Swift source against the iOS simulator SDK and the checked-in `op_engine.h`:
 
 ```bash
-cd /Users/kayshen/Workspace/ZSeven-W/openpencil
 bash packaging/ios-player/Tests/validate_sources.sh
 ```

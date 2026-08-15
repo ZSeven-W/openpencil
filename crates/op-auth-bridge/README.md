@@ -14,13 +14,24 @@ crate's Cargo source package and this crate is not published to a registry.
 Their licensing and provenance are managed by their independent source rather
 than by this crate's notice.
 
-The committed desktop ABI-v3 archives are exact-byte SHA-256 pinned, signed,
-version-bound, and checked against the documented `op_auth_*` C ABI. Mach-O and
-ELF declare the hardened profile; Windows explicitly declares its signed but
-unobfuscated compatibility profile. Run `tools/check-op-auth-prebuilt.sh` for
-the current measured audit. No production iOS or Android archive is committed,
-so mobile authentication remains unavailable in Release rather than silently
-falling back to an unsigned binary.
+The `0.8.5` source commit S does not itself carry the matching production
+authentication matrix. Its six inherited desktop archives are signed ABI-v3
+`0.8.4` inputs, but the version gate ignores them for `0.8.5`; S also contains
+no iOS or Android archive. Run `tools/check-op-auth-prebuilt.sh` for the current
+measured audit. A source-only build therefore uses the public stub, and mobile
+authentication remains unavailable in Release rather than silently accepting
+a stale, mismatched, or unsigned binary.
+
+Private release CI rebuilds an immutable unsigned candidate for every supported
+target. The protected public promotion then verifies that candidate, signs each
+artifact and the complete release manifest, and creates the single-parent
+auth-only child A of S. A atomically replaces the six stale desktop directories
+and adds iOS device, iOS simulator, Android arm64, and Android x86_64, producing
+the complete ten-target `0.8.5` ABI-v3 signed matrix. Candidates are never linked
+directly into production. Rust releases and TestFlight require both the signed
+matrix and the exact S -> A transition; see
+[`prebuilt/README.md`](prebuilt/README.md) for the target list and promotion
+boundary.
 
 The Linux and MSVC artifacts were built as C-facing Rust `staticlib` archives,
 so they also contain the producing toolchain's Rust runtime. Before a Rust host
