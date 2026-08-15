@@ -182,6 +182,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "Stopped by the user before this section completed.",
         "builtin.modelsOnePerLine" => "Model IDs, one per line",
         "builtin.typeModelManually" => "Failed to fetch the model list. Enter model IDs manually, one per line.",
+        "settings.provider.deepSeekHarness" => "DeepSeek Harness models",
         _ => return None,
     })
 }

@@ -120,13 +120,16 @@ fn checked_settings_load_migrates_retired_gemini_cli_slots() {
 
     load_checked_from_path(&mut state, &path).expect("legacy v1 layout should migrate");
 
+    // Seven connected slots are the CURRENT layout (DeepSeek Harness
+    // appended at the tail) — they round-trip verbatim; the MCP flags
+    // below are the legacy eight-slot layout that drops Gemini.
     assert_eq!(
         state.editor_ui.agent_settings.connected,
-        [true, false, true, false, true, false]
+        [true, false, true, false, true, true, false]
     );
     assert_eq!(
         state.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, false, true, true, false, false, false, false, false]
+        [true, false, false, true, false, true, true, false, false, false, false, false, false]
     );
     let _ = std::fs::remove_dir_all(root);
 }

@@ -154,6 +154,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "Người dùng đã dừng trước khi phần này hoàn tất.",
         "builtin.modelsOnePerLine" => "ID model, mỗi dòng một mã",
         "builtin.typeModelManually" => "Không lấy được danh sách model. Nhập ID thủ công, mỗi dòng một mã.",
+        "settings.provider.deepSeekHarness" => "Mô hình DeepSeek Harness",
         _ => return None,
     })
 }

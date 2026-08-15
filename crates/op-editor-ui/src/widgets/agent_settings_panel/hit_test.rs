@@ -170,12 +170,16 @@ impl AgentSettingsPanel<'_> {
                     }
                     AcpHit::None => {}
                 }
-                for (i, provider) in AgentProvider::ALL.iter().enumerate() {
-                    let card = agent_card_rect_in(panel, i, &self.settings);
+                for (row, provider) in AgentProvider::DISPLAY.iter().enumerate() {
+                    let card = agent_card_rect_in(panel, row, &self.settings);
                     if !(card).contains(scrolled) {
                         continue;
                     }
-                    if self.settings.provider_verified_connected_at(i) {
+                    // Connect state is indexed by AgentProvider::ALL
+                    // (the append-only persistence layout), not by the
+                    // DISPLAY row position.
+                    let index = AgentSettings::provider_index(*provider);
+                    if self.settings.provider_verified_connected_at(index) {
                         let disc = disconnect_btn_rect_at(card);
                         if (disc).contains(scrolled) {
                             return AgentSettingsHit::Connect(*provider);
@@ -290,8 +294,13 @@ impl AgentSettingsPanel<'_> {
             return None;
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
-        (0..AgentProvider::ALL.len())
-            .find(|&i| (agent_card_rect_in(panel, i, &self.settings)).contains(scrolled))
+        // Returns the ALL storage index of the hovered card — rows walk
+        // DISPLAY order, state reads/writes ALL order.
+        AgentProvider::DISPLAY
+            .iter()
+            .enumerate()
+            .find(|(row, _)| (agent_card_rect_in(panel, *row, &self.settings)).contains(scrolled))
+            .map(|(_, provider)| AgentSettings::provider_index(*provider))
     }
 
     pub fn builtin_card_at(&self, panel: Rect, point: Point2D) -> Option<usize> {

@@ -38,6 +38,7 @@ pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
         ScP::GithubCopilot => op_editor_core::AgentProvider::GithubCopilot,
         ScP::Antigravity => op_editor_core::AgentProvider::Antigravity,
         ScP::GrokBuild => op_editor_core::AgentProvider::GrokBuild,
+        ScP::DeepSeekHarness => op_editor_core::AgentProvider::DeepSeekHarness,
     };
     op_editor_core::ModelEntry::new(provider, m.value, m.display_name)
 }
@@ -46,12 +47,12 @@ pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
 /// provider-grouped model list. Safe to call off the UI thread —
 /// it only reads files and spawns short-lived subprocesses.
 pub fn discover_models() -> Vec<ModelEntry> {
-    discover_models_for_connected([true; 6])
+    discover_models_for_connected([true; 7])
 }
 
 /// Discover a startup-selected provider set concurrently while preserving
 /// the stable Settings/model-picker provider order in the returned catalog.
-pub fn discover_models_for_connected(connected: [bool; 6]) -> Vec<ModelEntry> {
+pub fn discover_models_for_connected(connected: [bool; 7]) -> Vec<ModelEntry> {
     let workers: Vec<_> = discovery_provider_order()
         .into_iter()
         .enumerate()
@@ -74,12 +75,13 @@ fn discover_provider(provider: AgentProvider) -> Vec<ModelEntry> {
         AgentProvider::GithubCopilot => discover_copilot(),
         AgentProvider::Antigravity => crate::cli_model_discovery::discover_antigravity(),
         AgentProvider::GrokBuild => crate::cli_model_discovery::discover_grok(),
+        AgentProvider::DeepSeekHarness => crate::cli_model_discovery::discover_deepseek_harness(),
     }
 }
 
 /// Provider probe order mirrors TS `DEFAULT_PROVIDERS`, which is
 /// also the core `AgentProvider::ALL` order used by Settings.
-fn discovery_provider_order() -> [AgentProvider; 6] {
+fn discovery_provider_order() -> [AgentProvider; 7] {
     AgentProvider::ALL
 }
 

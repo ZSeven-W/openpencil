@@ -142,6 +142,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "Bu bölüm tamamlanmadan kullanıcı tarafından durduruldu.",
         "builtin.modelsOnePerLine" => "Model kimlikleri, her satıra bir tane",
         "builtin.typeModelManually" => "Model listesi alınamadı. Kimlikleri elle, her satıra bir tane girin.",
+        "settings.provider.deepSeekHarness" => "DeepSeek Harness modelleri",
         _ => return None,
     })
 }

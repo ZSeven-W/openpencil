@@ -111,7 +111,7 @@ fn legacy_mcp_flags_drop_gemini_without_shifting_google_antigravity() {
     );
     assert_eq!(
         state.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, false, true, true, false, false, false, false, false]
+        [true, false, false, true, false, true, true, false, false, false, false, false, false]
     );
     let rewritten = writes
         .iter()
@@ -121,7 +121,7 @@ fn legacy_mcp_flags_drop_gemini_without_shifting_google_antigravity() {
     assert_eq!(
         value["mcp_cli_enabled"],
         serde_json::json!([
-            true, false, false, true, false, true, true, false, false, false, false, false
+            true, false, false, true, false, true, true, false, false, false, false, false, false
         ])
     );
 }

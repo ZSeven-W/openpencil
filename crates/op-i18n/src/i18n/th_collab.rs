@@ -144,6 +144,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "ผู้ใช้หยุดก่อนที่ส่วนนี้จะเสร็จสมบูรณ์",
         "builtin.modelsOnePerLine" => "รหัสโมเดล หนึ่งรายการต่อบรรทัด",
         "builtin.typeModelManually" => "ดึงรายการโมเดลไม่สำเร็จ โปรดกรอกรหัสโมเดลด้วยตนเอง หนึ่งรายการต่อบรรทัด",
+        "settings.provider.deepSeekHarness" => "โมเดล DeepSeek Harness",
         _ => return None,
     })
 }

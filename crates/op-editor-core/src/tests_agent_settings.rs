@@ -1,6 +1,6 @@
 use crate::agent_settings::{
-    AcpConnectionType, AgentSettings, AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentKind,
-    ImageGenProvider, ImageTestStatus, McpCli,
+    AcpConnectionType, AgentProvider, AgentSettings, AgentSettingsTab, BuiltinAgentConfig,
+    BuiltinAgentKind, ImageGenProvider, ImageTestStatus, McpCli,
 };
 use crate::agent_settings_builtin_presets::{builtin_agent_preset, BuiltinAgentPresetKey};
 
@@ -8,7 +8,7 @@ use crate::agent_settings_builtin_presets::{builtin_agent_preset, BuiltinAgentPr
 fn default_settings_are_quiescent() {
     let s = AgentSettings::default();
     assert_eq!(s.tab, AgentSettingsTab::Agents);
-    assert_eq!(s.connected, [false; 6]);
+    assert_eq!(s.connected, [false; 7]);
     assert!(s.builtin_agents.is_empty());
     assert!(s.builtin_agent_draft.is_none());
     assert!(s.acp_agent_draft.is_none());
@@ -31,12 +31,104 @@ fn default_settings_are_quiescent() {
 #[test]
 fn tab_and_cli_arrays_cover_all_variants() {
     assert_eq!(AgentSettingsTab::ALL.len(), 6);
-    assert_eq!(McpCli::ALL.len(), 12);
+    assert_eq!(McpCli::ALL.len(), 13);
     assert_eq!(
         AgentSettings::default().mcp_cli_enabled.len(),
         McpCli::ALL.len(),
         "the toggle array is indexed by McpCli::ALL"
     );
+    assert_eq!(
+        AgentSettings::default().connected.len(),
+        AgentProvider::ALL.len(),
+        "the connect array is indexed by AgentProvider::ALL"
+    );
+}
+
+/// The sync guard for `AgentProvider::DISPLAY`: it must stay a
+/// permutation of `AgentProvider::ALL` (paint and hit-test walk DISPLAY
+/// while connect state is read through `AgentProvider::index` into ALL
+/// order), with DeepSeek Harness shown right after Claude Code / Codex.
+/// The ALL tail-append keeps persisted `connected` flags positional
+/// stable — see `chat::models::AgentProvider::ALL`.
+#[test]
+fn agent_provider_display_is_a_permutation_of_all_with_dsh_third() {
+    assert_eq!(AgentProvider::ALL.len(), 7);
+    assert_eq!(
+        AgentProvider::ALL,
+        [
+            AgentProvider::ClaudeCode,
+            AgentProvider::CodexCli,
+            AgentProvider::OpenCode,
+            AgentProvider::GithubCopilot,
+            AgentProvider::Antigravity,
+            AgentProvider::GrokBuild,
+            AgentProvider::DeepSeekHarness,
+        ],
+        "ALL is append-only: existing persisted indices must never shift"
+    );
+    assert_eq!(AgentProvider::DISPLAY.len(), AgentProvider::ALL.len());
+    for provider in AgentProvider::DISPLAY {
+        assert!(
+            AgentProvider::ALL.contains(&provider),
+            "DISPLAY entry {provider:?} is not in ALL"
+        );
+    }
+    for provider in AgentProvider::ALL {
+        assert!(
+            AgentProvider::DISPLAY.contains(&provider),
+            "ALL entry {provider:?} is missing from DISPLAY"
+        );
+    }
+    // DeepSeek Harness renders right after Codex, before OpenCode.
+    assert_eq!(
+        AgentProvider::DISPLAY[..4],
+        [
+            AgentProvider::ClaudeCode,
+            AgentProvider::CodexCli,
+            AgentProvider::DeepSeekHarness,
+            AgentProvider::OpenCode,
+        ]
+    );
+    // Every DISPLAY row maps back to its own storage slot.
+    for provider in AgentProvider::DISPLAY {
+        assert_eq!(AgentProvider::ALL[provider.index()], provider);
+    }
+    // Append-only invariant: DeepSeek Harness is the 7th (last) slot, so
+    // persisted flags for the previous six providers keep their meaning.
+    assert_eq!(AgentProvider::DeepSeekHarness.index(), 6);
+    assert_eq!(AgentProvider::GrokBuild.index(), 5);
+}
+
+/// The sync guard for `McpCli::DISPLAY`: it must stay a permutation of
+/// `McpCli::ALL` (paint and hit-test walk DISPLAY while toggle state is
+/// read through `McpCli::index` into ALL order), with DeepSeek Harness
+/// shown right after Claude Code / Codex.
+#[test]
+fn display_order_is_a_permutation_of_all_with_dsh_third() {
+    assert_eq!(McpCli::DISPLAY.len(), McpCli::ALL.len());
+    for cli in McpCli::DISPLAY {
+        assert!(
+            McpCli::ALL.contains(&cli),
+            "DISPLAY entry {cli:?} is not in ALL"
+        );
+    }
+    for cli in McpCli::ALL {
+        assert!(
+            McpCli::DISPLAY.contains(&cli),
+            "ALL entry {cli:?} is missing from DISPLAY"
+        );
+    }
+    assert_eq!(
+        McpCli::DISPLAY[..3],
+        [McpCli::ClaudeCode, McpCli::Codex, McpCli::Dsh]
+    );
+    // Every DISPLAY row maps back to its own storage slot.
+    for cli in McpCli::DISPLAY {
+        assert_eq!(McpCli::ALL[cli.index()], cli);
+    }
+    // Append-only invariant: DeepSeek Harness is the 13th (last) slot, so
+    // persisted flags for the previous twelve CLIs keep their meaning.
+    assert_eq!(McpCli::Dsh.index(), 12);
 }
 
 #[test]

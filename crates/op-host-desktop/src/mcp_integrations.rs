@@ -14,6 +14,7 @@ use crate::mcp_config_error::McpConfigError;
 use crate::mcp_config_io::{
     atomic_write, grok_config_has_openpencil, update_grok_config, FileSnapshot,
 };
+use crate::mcp_integrations_dsh::{dsh_config_has_openpencil, update_dsh_patch_config};
 
 const SERVER_NAME: &str = "openpencil";
 const ANTIGRAVITY_MCP_PERMISSION: &str = "mcp(openpencil/*)";
@@ -31,9 +32,9 @@ pub(crate) fn set_cli_enabled(
     set_cli_enabled_at_path(cli, enabled, port, path)
 }
 
-pub(crate) fn detect_enabled_clis() -> [bool; 12] {
+pub(crate) fn detect_enabled_clis() -> [bool; 13] {
     let Some(home) = dirs::home_dir() else {
-        return [false; 12];
+        return [false; 13];
     };
     detect_enabled_clis_for_home(&home, true)
 }
@@ -55,12 +56,12 @@ pub(crate) fn set_cli_enabled_at_home(
 }
 
 /// Like [`detect_enabled_clis`] but against an explicit home dir (no env).
-pub(crate) fn detect_enabled_clis_at_home(home: &Path) -> [bool; 12] {
+pub(crate) fn detect_enabled_clis_at_home(home: &Path) -> [bool; 13] {
     detect_enabled_clis_for_home(home, false)
 }
 
-fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 12] {
-    let mut flags = [false; 12];
+fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 13] {
+    let mut flags = [false; 13];
     for (idx, cli) in McpCli::ALL.iter().copied().enumerate() {
         flags[idx] = if cli == McpCli::Antigravity {
             antigravity_config_has_openpencil(&config_path(cli, home, use_env))
@@ -86,6 +87,7 @@ fn set_cli_enabled_at_path(
         McpCli::QwenCode => update_mcp_servers_json(&path, enabled, qwen_server(port))?,
         McpCli::Kimi => update_mcp_servers_json(&path, enabled, kimi_server(port))?,
         McpCli::ZCode => update_zcode_config(&path, enabled, port)?,
+        McpCli::Dsh => update_dsh_patch_config(&path, enabled, port)?,
         McpCli::ClaudeCode
         | McpCli::OpenCode
         | McpCli::Kiro
@@ -106,6 +108,7 @@ fn cli_config_has_openpencil(cli: McpCli, path: &Path) -> bool {
             .unwrap_or(false),
         McpCli::Antigravity => antigravity_config_has_openpencil(path),
         McpCli::ZCode => zcode_config_has_openpencil(path),
+        McpCli::Dsh => dsh_config_has_openpencil(path),
         // Every remaining CLI keys its servers off `mcpServers.openpencil`;
         // only the value shape differs, so presence is the same check.
         McpCli::ClaudeCode
@@ -162,6 +165,20 @@ fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
         // this toggle; a dedicated "cross-agent standard" integration would
         // be the place for it.
         McpCli::ZCode => home.join(".zcode").join("cli").join("config.json"),
+        // DeepSeek Harness reads its home-level patch layer — one file
+        // that applies across all profiles, so a single write covers every
+        // profile. `DSH_HOME` overrides the data root, mirroring Codex's
+        // `CODEX_HOME` handling.
+        McpCli::Dsh => {
+            if use_env {
+                std::env::var_os("DSH_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| home.join(".dsh"))
+                    .join("cordis.patch.yml")
+            } else {
+                home.join(".dsh").join("cordis.patch.yml")
+            }
+        }
         McpCli::GrokBuild => {
             if use_env {
                 std::env::var_os("GROK_HOME")
@@ -555,3 +572,7 @@ fn toml_basic_string_escape(s: &str) -> String {
 #[cfg(test)]
 #[path = "mcp_integrations_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mcp_integrations_dsh_tests.rs"]
+mod dsh_tests;

@@ -142,6 +142,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "使用者已停止，該區塊尚未完成。",
         "builtin.modelsOnePerLine" => "模型 ID，每行一個",
         "builtin.typeModelManually" => "取得模型清單失敗，請手動輸入模型 ID，每行一個",
+        "settings.provider.deepSeekHarness" => "DeepSeek Harness 模型",
         _ => return None,
     })
 }

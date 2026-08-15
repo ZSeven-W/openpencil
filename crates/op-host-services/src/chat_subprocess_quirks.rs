@@ -10,6 +10,14 @@
 
 use op_ai::chat_provider::{ChatDelta, EffortLevel, StopReason, ThinkingMode};
 
+/// TS `DEFAULT_CODEX_TIMEOUT_MS` — the reference client caps a turn
+/// at 15 minutes then SIGTERM. Lives here rather than in
+/// `chat_subprocess.rs`: it is a Codex-specific quirk, and the bridge
+/// spine sits at the 800-line cap. `pub(crate)` so the DeepSeek
+/// Harness sibling (`chat_subprocess_dsh`) can assert its own budget
+/// stays aligned with the crate's widest subprocess tier.
+pub(crate) const CODEX_TURN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
 /// Allowlist-based env filter for the Codex CLI subprocess. Only
 /// passes through safe system vars and provider-specific prefixes —
 /// prevents leaking secrets like ANTHROPIC_API_KEY, AWS_SECRET_KEY,

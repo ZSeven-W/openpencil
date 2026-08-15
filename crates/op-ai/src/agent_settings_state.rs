@@ -35,17 +35,47 @@ pub enum AgentProvider {
     GithubCopilot,
     Antigravity,
     GrokBuild,
+    /// DeepSeek Harness (`dsh`) — one-shot subprocess CLI, no ACP.
+    DeepSeekHarness,
 }
 
 impl AgentProvider {
-    pub const ALL: [AgentProvider; 6] = [
+    /// Append-only (mirror of `op_editor_core::chat::models`):
+    /// persisted `connected` flags are indexed positionally, so the
+    /// DeepSeek Harness slot was appended at the tail and positioned in
+    /// the card list via [`AgentProvider::DISPLAY`].
+    pub const ALL: [AgentProvider; 7] = [
         AgentProvider::ClaudeCode,
         AgentProvider::CodexCli,
         AgentProvider::OpenCode,
         AgentProvider::GithubCopilot,
         AgentProvider::Antigravity,
         AgentProvider::GrokBuild,
+        AgentProvider::DeepSeekHarness,
     ];
+
+    /// Card order on the Agents tab — a permutation of `ALL`, NOT the
+    /// persistence order. DeepSeek Harness renders after Codex, before
+    /// OpenCode (above the generic ACP block).
+    pub const DISPLAY: [AgentProvider; 7] = [
+        AgentProvider::ClaudeCode,
+        AgentProvider::CodexCli,
+        AgentProvider::DeepSeekHarness,
+        AgentProvider::OpenCode,
+        AgentProvider::GithubCopilot,
+        AgentProvider::Antigravity,
+        AgentProvider::GrokBuild,
+    ];
+
+    /// Position in [`AgentProvider::ALL`] — the index of this
+    /// provider's flag in the persisted positional flag arrays.
+    pub fn index(self) -> usize {
+        AgentProvider::ALL
+            .iter()
+            .position(|candidate| *candidate == self)
+            .expect("every AgentProvider variant is registered in AgentProvider::ALL")
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             AgentProvider::ClaudeCode => "Claude Code",
@@ -54,6 +84,7 @@ impl AgentProvider {
             AgentProvider::GithubCopilot => "GitHub Copilot",
             AgentProvider::Antigravity => "Antigravity",
             AgentProvider::GrokBuild => "Grok Build",
+            AgentProvider::DeepSeekHarness => "DeepSeek Harness",
         }
     }
     /// i18n key for the provider's subtitle. Paint code resolves
@@ -69,6 +100,7 @@ impl AgentProvider {
             AgentProvider::GithubCopilot => "settings.provider.githubCopilot",
             AgentProvider::Antigravity => "settings.provider.antigravity",
             AgentProvider::GrokBuild => "settings.provider.grokBuild",
+            AgentProvider::DeepSeekHarness => "settings.provider.deepSeekHarness",
         }
     }
 }
@@ -76,8 +108,8 @@ impl AgentProvider {
 /// Terminal-side MCP integrations the user can flip on/off. Order
 /// matches the product's MCP settings grid (Claude / Codex / OpenCode /
 /// Kiro / Copilot / Antigravity / Grok Build / Gemini / Qwen / Cursor /
-/// Kimi / ZCode) so the index is reusable for both layout and
-/// `mcp_cli_enabled[i]`. Kept in sync with
+/// Kimi / ZCode / DeepSeek Harness) so the index is reusable for both
+/// layout and `mcp_cli_enabled[i]`. Kept in sync with
 /// `op_editor_core::agent_settings::McpCli`; append only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum McpCli {
@@ -93,10 +125,11 @@ pub enum McpCli {
     Cursor,
     Kimi,
     ZCode,
+    Dsh,
 }
 
 impl McpCli {
-    pub const ALL: [McpCli; 12] = [
+    pub const ALL: [McpCli; 13] = [
         McpCli::ClaudeCode,
         McpCli::Codex,
         McpCli::OpenCode,
@@ -109,6 +142,7 @@ impl McpCli {
         McpCli::Cursor,
         McpCli::Kimi,
         McpCli::ZCode,
+        McpCli::Dsh,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -124,6 +158,7 @@ impl McpCli {
             McpCli::Cursor => "Cursor",
             McpCli::Kimi => "Kimi CLI",
             McpCli::ZCode => "ZCode",
+            McpCli::Dsh => "DeepSeek Harness",
         }
     }
 }
@@ -157,13 +192,13 @@ pub enum SettingsFocus {
 #[derive(Debug, Clone, Copy)]
 pub struct AgentSettings {
     pub tab: AgentSettingsTab,
-    pub connected: [bool; 6],
+    pub connected: [bool; 7],
     /// Vertical scroll offset of the right content pane in px.
     /// Clamped to `[0, content_height - viewport_height]` by the
     /// host on wheel input.
     pub scroll_y: f32,
     pub mcp_server: McpServer,
-    pub mcp_cli_enabled: [bool; 12],
+    pub mcp_cli_enabled: [bool; 13],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
     /// Currently-focused editable input on the modal. `None` while
@@ -187,10 +222,10 @@ impl Default for AgentSettings {
             tab: AgentSettingsTab::Agents,
             // Connection state is wired manually for now — no auth
             // backend exists, so every provider starts disconnected.
-            connected: [false; 6],
+            connected: [false; 7],
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
-            mcp_cli_enabled: [false; 12],
+            mcp_cli_enabled: [false; 13],
             images_advanced_open: true,
             images_search_ready: true,
             focus: None,

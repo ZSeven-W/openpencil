@@ -158,6 +158,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "사용자가 중지하여 이 섹션이 완료되지 않았습니다.",
         "builtin.modelsOnePerLine" => "모델 ID, 한 줄에 하나씩",
         "builtin.typeModelManually" => "모델 목록을 가져오지 못했습니다. 모델 ID를 한 줄에 하나씩 입력하세요",
+        "settings.provider.deepSeekHarness" => "DeepSeek Harness 모델",
         _ => return None,
     })
 }

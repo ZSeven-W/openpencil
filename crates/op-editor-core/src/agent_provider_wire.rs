@@ -10,6 +10,7 @@ impl AgentProvider {
             Self::GithubCopilot => "github-copilot",
             Self::Antigravity => "antigravity",
             Self::GrokBuild => "grok-build",
+            Self::DeepSeekHarness => "deepseek-harness",
         }
     }
 
@@ -22,6 +23,7 @@ impl AgentProvider {
             "github-copilot" => Some(Self::GithubCopilot),
             "antigravity" => Some(Self::Antigravity),
             "grok-build" => Some(Self::GrokBuild),
+            "deepseek-harness" => Some(Self::DeepSeekHarness),
             _ => None,
         }
     }

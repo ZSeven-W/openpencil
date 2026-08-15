@@ -26,7 +26,7 @@ pub(super) fn agents_content_height(
         origin: Point2D::new(0.0, 0.0),
         size: Point2D::new(0.0, 0.0),
     };
-    let last = AgentProvider::ALL.len() - 1;
+    let last = AgentProvider::DISPLAY.len() - 1;
     provider_rows_top(at_origin, settings)
         + last as f32 * (CARD_HEIGHT + CARD_GAP)
         + CARD_HEIGHT
@@ -281,12 +281,15 @@ fn paint_agents_tab(
         y,
         content.size.x,
     );
-    for (i, provider) in AgentProvider::ALL.iter().enumerate() {
+    for provider in AgentProvider::DISPLAY {
         let card = agent_card_rect_at(content.origin.x, y, content.size.x);
-        paint_agent_card(cx, theme, settings, ui, *provider, card, i);
+        // `index` is the ALL storage index (connect state); the card
+        // list itself walks DISPLAY order.
+        let index = AgentSettings::provider_index(provider);
+        paint_agent_card(cx, theme, settings, ui, provider, card, index);
         y += CARD_HEIGHT + CARD_GAP;
         if matches!(provider, AgentProvider::ClaudeCode)
-            && settings.provider_verified_connected_at(i)
+            && settings.provider_verified_connected_at(index)
         {
             let hint = TextLayout::single_run(
                 t_settings(ui, "settings.agents.claudeHint"),

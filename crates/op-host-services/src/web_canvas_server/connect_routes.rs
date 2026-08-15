@@ -184,6 +184,7 @@ pub(super) fn parse_agent_provider(raw: &str) -> Option<op_editor_core::AgentPro
         "githubcopilot" | "copilot" => Some(AgentProvider::GithubCopilot),
         "antigravity" | "agy" => Some(AgentProvider::Antigravity),
         "grok" | "grokbuild" => Some(AgentProvider::GrokBuild),
+        "dsh" | "deepseekharness" => Some(AgentProvider::DeepSeekHarness),
         _ => None,
     }
 }
@@ -200,6 +201,7 @@ pub(super) fn provider_to_probe(
         AgentProvider::GithubCopilot => ProbeProvider::GithubCopilot,
         AgentProvider::Antigravity => ProbeProvider::Antigravity,
         AgentProvider::GrokBuild => ProbeProvider::GrokBuild,
+        AgentProvider::DeepSeekHarness => ProbeProvider::DeepSeekHarness,
     }
 }
 
@@ -303,5 +305,6 @@ pub(super) fn provider_key(provider: op_editor_core::AgentProvider) -> &'static 
         AgentProvider::GithubCopilot => "github-copilot",
         AgentProvider::Antigravity => "antigravity",
         AgentProvider::GrokBuild => "grok-build",
+        AgentProvider::DeepSeekHarness => "deepseek-harness",
     }
 }

@@ -92,6 +92,7 @@ fn provider_to_sc(p: op_editor_core::AgentProvider) -> op_ai::agent_settings_sta
         op_editor_core::AgentProvider::GithubCopilot => Sc::GithubCopilot,
         op_editor_core::AgentProvider::Antigravity => Sc::Antigravity,
         op_editor_core::AgentProvider::GrokBuild => Sc::GrokBuild,
+        op_editor_core::AgentProvider::DeepSeekHarness => Sc::DeepSeekHarness,
     }
 }
 

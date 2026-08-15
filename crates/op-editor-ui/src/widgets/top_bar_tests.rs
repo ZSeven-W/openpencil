@@ -126,7 +126,7 @@ fn title_group_center_is_independent_of_asymmetric_chrome() {
     let mut crowded = TopBar::new("Untitled");
     crowded.git_branch = Some("main".to_string());
     crowded.agent_count = 6;
-    crowded.connected = [true; 6];
+    crowded.connected = [true; 7];
     crowded.mcp_count = 8;
     crowded.account_button_visible = true;
     crowded.collab.visible = true;
@@ -676,10 +676,10 @@ fn agent_chip_counts_ready_builtin_agents() {
 fn chip_with_only_builtin_agents_reserves_no_icon_cluster() {
     let mut bar = TopBar::new("test.op");
     bar.agent_count = 4;
-    bar.connected = [false; 6];
+    bar.connected = [false; 7];
     assert_eq!(bar.agent_icons_span(), 0.0, "no painted icons, no span");
 
-    bar.connected = [true, false, false, false, false, false];
+    bar.connected = [true, false, false, false, false, false, false];
     assert!(
         bar.agent_icons_span() > 0.0,
         "a connected CLI provider brings the cluster back"

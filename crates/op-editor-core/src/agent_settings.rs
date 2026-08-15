@@ -84,14 +84,17 @@ pub enum McpCli {
     Cursor,
     Kimi,
     ZCode,
+    Dsh,
 }
 
 impl McpCli {
     /// Append-only: `mcp_cli_enabled` is indexed positionally by this
     /// array, and `migrate_mcp_cli_flags` reads persisted settings by the
     /// same index. Inserting in the middle silently reassigns a user's
-    /// saved toggles to the wrong CLIs.
-    pub const ALL: [McpCli; 12] = [
+    /// saved toggles to the wrong CLIs. New CLIs must be appended at the
+    /// end (12 → 13) and appended to `DISPLAY` wherever the product wants
+    /// the row to show.
+    pub const ALL: [McpCli; 13] = [
         McpCli::ClaudeCode,
         McpCli::Codex,
         McpCli::OpenCode,
@@ -104,7 +107,38 @@ impl McpCli {
         McpCli::Cursor,
         McpCli::Kimi,
         McpCli::ZCode,
+        McpCli::Dsh,
     ];
+
+    /// Row order on the MCP tab's terminal-integrations list. Deliberately
+    /// NOT the persistence order — paint and hit-test both walk this array
+    /// (row `i` shows `DISPLAY[i]`) while the toggle state is read through
+    /// [`McpCli::index`] into the append-only `mcp_cli_enabled` layout.
+    /// Kept a permutation of `ALL`; `tests_agent_settings.rs` asserts that.
+    pub const DISPLAY: [McpCli; 13] = [
+        McpCli::ClaudeCode,
+        McpCli::Codex,
+        McpCli::Dsh,
+        McpCli::OpenCode,
+        McpCli::Kiro,
+        McpCli::GithubCopilot,
+        McpCli::Antigravity,
+        McpCli::GrokBuild,
+        McpCli::GeminiCli,
+        McpCli::QwenCode,
+        McpCli::Cursor,
+        McpCli::Kimi,
+        McpCli::ZCode,
+    ];
+
+    /// Position in [`McpCli::ALL`] — the index of this CLI's toggle in
+    /// `mcp_cli_enabled` (and in the persisted positional flag arrays).
+    pub fn index(self) -> usize {
+        McpCli::ALL
+            .iter()
+            .position(|candidate| *candidate == self)
+            .expect("every McpCli variant is registered in McpCli::ALL")
+    }
 
     pub fn label(self) -> &'static str {
         match self {
@@ -120,6 +154,7 @@ impl McpCli {
             McpCli::Cursor => "Cursor",
             McpCli::Kimi => "Kimi CLI",
             McpCli::ZCode => "ZCode",
+            McpCli::Dsh => "DeepSeek Harness",
         }
     }
 }
@@ -218,7 +253,7 @@ pub enum BuiltinModelMenuTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentSettings {
     pub tab: AgentSettingsTab,
-    pub connected: [bool; 6],
+    pub connected: [bool; 7],
     /// The embedding host's real MCP endpoint (e.g. the VS Code
     /// extension's McpProxy URL), delivered via the bridge `init`
     /// message. When set, the MCP tab's client-config card displays
@@ -228,7 +263,7 @@ pub struct AgentSettings {
     pub embed_mcp_url: Option<String>,
     /// Probe-derived per-provider connect status, indexed like
     /// `connected`. Runtime-only — not persisted.
-    pub provider_connection: [ProviderConnection; 6],
+    pub provider_connection: [ProviderConnection; 7],
     /// Connect-press request seam — the desktop host drains this
     /// into the async provider probe (`provider_probe_host.rs`).
     pub pending_provider_connect: Option<AgentProvider>,
@@ -272,7 +307,7 @@ pub struct AgentSettings {
     pub acp_preset_installed: BTreeMap<String, bool>,
     pub scroll_y: jian_core::scroll::ScrollState,
     pub mcp_server: McpServer,
-    pub mcp_cli_enabled: [bool; 12],
+    pub mcp_cli_enabled: [bool; 13],
     pub mcp_client_config_copied_at_ms: Option<u64>,
     pub hover_agent_settings_close: bool,
     pub hover_mcp_server_button: bool,
@@ -326,7 +361,7 @@ impl Default for AgentSettings {
     fn default() -> Self {
         Self {
             tab: AgentSettingsTab::Agents,
-            connected: [false; 6],
+            connected: [false; 7],
             embed_mcp_url: None,
             provider_connection: Default::default(),
             pending_provider_connect: None,
@@ -352,7 +387,7 @@ impl Default for AgentSettings {
             acp_preset_installed: BTreeMap::new(),
             scroll_y: Default::default(),
             mcp_server: McpServer::default(),
-            mcp_cli_enabled: [false; 12],
+            mcp_cli_enabled: [false; 13],
             mcp_client_config_copied_at_ms: None,
             hover_agent_settings_close: false,
             hover_mcp_server_button: false,

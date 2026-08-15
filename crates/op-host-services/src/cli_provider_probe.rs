@@ -156,6 +156,58 @@ pub fn connect_grok_build_localized(locale: Locale) -> ProbeOutcome {
     }
 }
 
+/// See [`connect_antigravity`] for why this resolves its own locale.
+pub fn connect_deepseek_harness() -> ProbeOutcome {
+    connect_deepseek_harness_localized(crate::provider_probe::resolved_ui_locale())
+}
+
+/// DeepSeek Harness connect probe.
+///
+/// Same shape as the Antigravity / Grok Build probes: binary
+/// resolution (the GUI process runs the login-shell environment
+/// repair at startup, so `resolve_cli` sees the merged PATH), then a
+/// `--version` responsiveness gate. `dsh` has NO verified
+/// model-listing command (its verified surface is the one-shot
+/// `dsh --profile headless "<prompt>"`), so — unlike Antigravity /
+/// Grok — there is no `models` query here: the probe returns the
+/// single `default` catalog entry, mirroring the
+/// `antigravity_default_model` fallback shape.
+pub fn connect_deepseek_harness_localized(locale: Locale) -> ProbeOutcome {
+    let Some(exe) = resolve_cli("dsh") else {
+        return not_installed(
+            tw(
+                locale,
+                "providerProbe.cliNotFound",
+                &[("name", "DeepSeek Harness")],
+            ),
+            AgentProvider::DeepSeekHarness,
+        );
+    };
+    let version = match cli_version(
+        locale,
+        CliName::Dsh,
+        &exe,
+        &["--version"],
+        "DeepSeek Harness",
+        "`dsh`",
+    ) {
+        Ok(version) => version,
+        Err(error) => return failed(error.to_string()),
+    };
+    ProbeOutcome {
+        connected: true,
+        models: crate::cli_model_discovery::deepseek_harness_default_model(),
+        connection_info: Some(tw(
+            locale,
+            "providerProbe.connectedViaCli",
+            &[("name", "DeepSeek Harness")],
+        )),
+        // No verified per-user config path to hint at — omitted.
+        version: Some(version),
+        ..ProbeOutcome::default()
+    }
+}
+
 fn not_installed(error: String, provider: AgentProvider) -> ProbeOutcome {
     ProbeOutcome {
         error: Some(error),
@@ -361,6 +413,19 @@ mod tests {
             crate::cli_model_discovery::antigravity_default_model()[0].provider,
             AgentProvider::Antigravity
         );
+    }
+
+    #[test]
+    fn deepseek_harness_default_model_owns_the_dsh_provider() {
+        // dsh has no verified `models` command, so both the connect
+        // probe and startup discovery advertise the single default
+        // entry — owned by the DeepSeekHarness provider, never a
+        // neighbour.
+        let models = crate::cli_model_discovery::deepseek_harness_default_model();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].provider, AgentProvider::DeepSeekHarness);
+        assert_eq!(models[0].value, "default");
+        assert_eq!(models[0].display_name, "DeepSeek Harness default");
     }
 
     #[test]

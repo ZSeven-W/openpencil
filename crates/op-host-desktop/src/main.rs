@@ -73,6 +73,7 @@ mod macos_app;
 mod mcp_config_error;
 mod mcp_config_io;
 mod mcp_integrations;
+mod mcp_integrations_dsh;
 mod mcp_port_file;
 mod mcp_runtime;
 mod mcp_serve;
@@ -350,11 +351,11 @@ struct DesktopApp {
     /// only when the user explicitly disconnects. Deliberately not a
     /// mirror of the live `connected` flags: a failed probe must not
     /// evict a provider from next launch's reconnect replay.
-    remembered_connections: [bool; 6],
+    remembered_connections: [bool; 7],
     /// Previous frame's per-provider connect phase, so
     /// `persist_connection_changes` can tell an explicit Disconnect (card
     /// returns to Idle) from a probe failure (card shows Error).
-    last_seen_provider_phase: [op_editor_core::agent_settings::ProviderConnectPhase; 6],
+    last_seen_provider_phase: [op_editor_core::agent_settings::ProviderConnectPhase; 7],
     /// In-flight ACP-agent connect probe (Settings → Agents → ACP
     /// Connect), drained by `drain_acp_agent_connect`.
     acp_agent_connect_job: Option<acp_agent_probe_host::AcpAgentConnectJob>,

@@ -417,6 +417,10 @@ fn builtin_group_header_falls_back_to_generic_label_without_retained_name() {
 fn newer_provider_group_labels_match_their_provider_names() {
     assert_eq!(provider_label(AgentProvider::Antigravity), "ANTIGRAVITY");
     assert_eq!(provider_label(AgentProvider::GrokBuild), "GROK BUILD");
+    assert_eq!(
+        provider_label(AgentProvider::DeepSeekHarness),
+        "DEEPSEEK HARNESS"
+    );
 }
 
 #[test]

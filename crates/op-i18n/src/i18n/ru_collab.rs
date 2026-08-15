@@ -172,6 +172,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "Остановлено пользователем до завершения этого раздела.",
         "builtin.modelsOnePerLine" => "ID моделей, по одному в строке",
         "builtin.typeModelManually" => "Не удалось получить список моделей. Введите ID вручную, по одному в строке.",
+        "settings.provider.deepSeekHarness" => "Модели DeepSeek Harness",
         _ => return None,
     })
 }

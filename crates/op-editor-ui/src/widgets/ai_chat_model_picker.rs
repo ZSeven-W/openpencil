@@ -5,7 +5,9 @@
 //! check / badges).
 
 use crate::theme::Theme;
-use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
+use crate::widgets::brand_icons::{
+    paint_brand_logo, paint_deepseek_harness_logo, paint_opencode_logo, BrandLogo,
+};
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_text_input::paint_text_input_view_value;
@@ -624,6 +626,9 @@ pub fn paint_provider_logo(
         AgentProvider::GrokBuild => {
             paint_brand_logo(cx.backend, BrandLogo::Grok, top_left, size, color)
         }
+        AgentProvider::DeepSeekHarness => {
+            paint_deepseek_harness_logo(cx.backend, top_left, size, color)
+        }
     }
 }
 
@@ -637,6 +642,7 @@ pub(super) fn provider_label(provider: AgentProvider) -> &'static str {
         AgentProvider::OpenCode => "OPENCODE",
         AgentProvider::Antigravity => "ANTIGRAVITY",
         AgentProvider::GrokBuild => "GROK BUILD",
+        AgentProvider::DeepSeekHarness => "DEEPSEEK HARNESS",
     }
 }
 
@@ -649,6 +655,7 @@ fn group_label(provider: AgentProvider, builtin: bool) -> &'static str {
             AgentProvider::OpenCode => "OPENCODE API KEY",
             AgentProvider::Antigravity => "ANTIGRAVITY API KEY",
             AgentProvider::GrokBuild => "GROK BUILD API KEY",
+            AgentProvider::DeepSeekHarness => "DEEPSEEK API KEY",
         }
     } else {
         provider_label(provider)

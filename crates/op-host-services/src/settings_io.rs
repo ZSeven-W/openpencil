@@ -58,14 +58,14 @@ pub struct Fingerprint {
     theme: ThemeMode,
     locale: Locale,
     port: u16,
-    cli: [bool; 12],
+    cli: [bool; 13],
     images_adv: bool,
     openverse_client_id: String,
     openverse_client_secret: String,
     openverse_credential_owner: Option<String>,
     auto_update_enabled: bool,
     experimental_features_enabled: bool,
-    connected: [bool; 6],
+    connected: [bool; 7],
     builtin_agents: Vec<BuiltinAgentConfig>,
     acp_agents: Vec<AcpAgentConfig>,
     image_gen_profiles: Vec<ImageGenProfile>,
@@ -339,17 +339,25 @@ fn apply_payload_with_options(
 /// Remove the retired Gemini CLI slot from positional v1 settings without
 /// shifting the providers that followed it. Released settings used either
 /// five slots (through Gemini) or seven slots (Gemini + Antigravity + Grok);
-/// the current six-slot layout omits Gemini.
-fn migrate_connected_provider_flags(flags: Vec<bool>) -> [bool; 6] {
-    let mut migrated = [false; 6];
+/// the current seven-slot layout omits Gemini and appends DeepSeek Harness
+/// at the tail (see `chat::models::AgentProvider::ALL` — append-only, so
+/// persisted indices never shift).
+///
+/// Length disambiguation: 7 is the CURRENT layout, so a 7-entry file is
+/// copied verbatim (a round-trip must be lossless). The one casualty is a
+/// legacy Gemini-era 7-entry file that was never opened since the
+/// retirement — its index-4 Gemini flag reads as Antigravity — but the
+/// startup reconnect replay re-probes every remembered provider, so an
+/// uninstalled / unauthenticated CLI honestly degrades back to
+/// disconnected on first launch. Treating 7 as legacy instead would
+/// corrupt EVERY current file on every load, which is far worse.
+fn migrate_connected_provider_flags(flags: Vec<bool>) -> [bool; 7] {
+    let mut migrated = [false; 7];
     match flags.len() {
-        6 => migrated.copy_from_slice(&flags),
+        // Current layout (or a longer one written by a newer build).
+        7.. => migrated.copy_from_slice(&flags[..7]),
+        6 => migrated[..6].copy_from_slice(&flags),
         5 => migrated[..4].copy_from_slice(&flags[..4]),
-        7.. => {
-            migrated[..4].copy_from_slice(&flags[..4]);
-            migrated[4] = flags[5];
-            migrated[5] = flags[6];
-        }
         _ => {
             let unchanged = flags.len().min(4);
             migrated[..unchanged].copy_from_slice(&flags[..unchanged]);

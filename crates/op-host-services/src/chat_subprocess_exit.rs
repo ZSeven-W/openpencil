@@ -20,6 +20,35 @@ use crate::chat_spawn::exit_status_label;
 use crate::chat_subprocess_quirks as quirks;
 use crate::chat_subprocess_safety as safety;
 
+/// Cap on the retained Codex stderr tail used for error extraction.
+/// Lives here (rather than in the bridge spine) so `chat_subprocess.rs`
+/// stays under the 800-line cap — pure code motion.
+pub(crate) const STDERR_TAIL_CAP: usize = 64 * 1024;
+
+/// Line cap paired with [`STDERR_TAIL_CAP`]. Generous: the Codex error
+/// extractor scans the whole retained blob, and a stack trace is worth
+/// keeping in full when it fits inside the byte budget.
+pub(crate) const STDERR_TAIL_LINES: usize = 2048;
+
+/// Cap on the retained stdout tail — read only on the failure path, for
+/// CLIs that report their diagnosis on stdout. Smaller than the stderr
+/// budget: a healthy turn's stdout is the answer, not diagnostics.
+pub(crate) const STDOUT_TAIL_CAP: usize = 8 * 1024;
+
+/// Line cap paired with [`STDOUT_TAIL_CAP`].
+pub(crate) const STDOUT_TAIL_LINES: usize = 256;
+
+/// How long a reaped turn waits for the stderr drain to reach EOF
+/// before formatting its failure message. The child is already reaped so
+/// its pipe is at EOF and the drain finishes the instant it is polled —
+/// the wait is really for the drain TASK to be scheduled, not for I/O.
+/// Under a saturated runtime (the orchestrator's parallel turns, or the
+/// concurrent stress test) that scheduling latency occasionally ran past
+/// a two-second bound and the tail read back empty, so this is generous:
+/// it only has to outlast scheduler starvation, while still capping a
+/// genuinely wedged reader (a grandchild holding the pipe open).
+pub(crate) const STDERR_DRAIN_GRACE: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Budget for the tail appended to a *classified* failure. Shorter than
 /// the unclassified one: the friendly sentence already carries the
 /// meaning, and the quote is there as corroboration — so it must be

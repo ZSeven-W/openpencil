@@ -142,6 +142,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "Dihentikan oleh pengguna sebelum bagian ini selesai.",
         "builtin.modelsOnePerLine" => "ID model, satu per baris",
         "builtin.typeModelManually" => "Gagal mengambil daftar model. Masukkan ID secara manual, satu per baris.",
+        "settings.provider.deepSeekHarness" => "Model DeepSeek Harness",
         _ => return None,
     })
 }

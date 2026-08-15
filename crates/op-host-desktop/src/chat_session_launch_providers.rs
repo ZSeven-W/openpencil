@@ -23,10 +23,11 @@ use op_host_services::chat_subprocess::SubprocessProvider;
 
 /// Build the `ChatProvider` for an agent index (into
 /// `AgentProvider::ALL`: 0 ClaudeCode, 1 CodexCli, 2 OpenCode,
-/// 3 GithubCopilot, 4 Antigravity, 5 GrokBuild). Claude Code uses its dedicated
-/// SDK adapter; Codex uses the subprocess transport; Copilot
+/// 3 GithubCopilot, 4 Antigravity, 5 GrokBuild, 6 DeepSeekHarness). Claude Code uses its
+/// dedicated SDK adapter; Codex uses the subprocess transport; Copilot
 /// rides the official SDK; OpenCode chats over its local HTTP server
-/// (`chat_http_server.rs`).
+/// (`chat_http_server.rs`); DeepSeek Harness is a one-shot subprocess
+/// bridge (`chat_subprocess_dsh.rs`).
 ///
 /// `chat_session` opts the Claude Code and Copilot adapters into
 /// their process-wide chat resume slots (multi-turn context via
@@ -52,6 +53,7 @@ fn provider_for_agent(agent_idx: usize, chat_session: bool) -> Option<Box<dyn Ch
         })),
         4 => subprocess_provider(CliName::Antigravity, chat_session),
         5 => subprocess_provider(CliName::GrokBuild, chat_session),
+        6 => subprocess_provider(CliName::Dsh, chat_session),
         _ => None,
     }
 }
@@ -247,4 +249,41 @@ pub(super) fn selected_provider_label(host: &WidgetHostNative) -> String {
         .get(agent_idx)
         .map(|a| a.name().to_string())
         .unwrap_or_else(|| "This agent".into())
+}
+
+#[cfg(test)]
+mod routing_tests {
+    use super::*;
+
+    #[test]
+    fn deepseek_harness_routes_to_the_dsh_subprocess_provider() {
+        // ALL index 6 is the append-only DeepSeek Harness tail slot
+        // (its persisted `connected` flag lives there too).
+        assert_eq!(
+            op_editor_core::AgentProvider::ALL[6],
+            op_editor_core::AgentProvider::DeepSeekHarness
+        );
+        let design = provider_for_agent(6, false).expect("DSH routes to a provider");
+        assert_eq!(design.provider_label(), "DeepSeek Harness");
+        // The chat-session path routes the same CLI (single-shot
+        // subprocess — there is no session-resume slot to join).
+        let chat = provider_for_agent(6, true).expect("chat DSH routes too");
+        assert_eq!(chat.provider_label(), "DeepSeek Harness");
+        // Out-of-range agent indices stay unrouted (fail-closed).
+        assert!(provider_for_agent(7, false).is_none());
+    }
+
+    #[test]
+    fn every_all_index_has_a_provider_route() {
+        // The ALL array is append-only, so routing must stay keyed to
+        // it: a new tail entry with no route arm would silently fall
+        // through to `None` and strand the user's agent picker.
+        for index in 0..op_editor_core::AgentProvider::ALL.len() {
+            let provider = provider_for_agent(index, false);
+            assert!(
+                provider.is_some(),
+                "AgentProvider::ALL index {index} has no provider route"
+            );
+        }
+    }
 }

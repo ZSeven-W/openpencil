@@ -146,6 +146,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.stoppedByUser" => "उपयोगकर्ता ने इस सेक्शन के पूरा होने से पहले रोक दिया।",
         "builtin.modelsOnePerLine" => "मॉडल आईडी, प्रति पंक्ति एक",
         "builtin.typeModelManually" => "मॉडल सूची प्राप्त नहीं हुई। मॉडल आईडी मैन्युअल रूप से दर्ज करें, प्रति पंक्ति एक।",
+        "settings.provider.deepSeekHarness" => "DeepSeek Harness मॉडल",
         _ => return None,
     })
 }

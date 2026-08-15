@@ -10,17 +10,55 @@ pub enum AgentProvider {
     GithubCopilot,
     Antigravity,
     GrokBuild,
+    /// DeepSeek Harness (`dsh`) — one-shot subprocess CLI, no ACP.
+    DeepSeekHarness,
 }
 
 impl AgentProvider {
-    pub const ALL: [AgentProvider; 6] = [
+    /// Append-only: the persisted `connected` flags in `settings.json`
+    /// are indexed positionally by this array, and
+    /// `settings_io::migrate_connected_provider_flags` reads saved
+    /// flags by the same index. Inserting in the middle silently
+    /// reassigns a user's saved connections to the wrong providers —
+    /// the DeepSeek Harness slot was therefore APPENDED at the tail
+    /// (5 → 6) and positioned in the card list via [`AgentProvider::DISPLAY`]
+    /// instead, exactly like `McpCli::ALL` / `McpCli::DISPLAY`.
+    pub const ALL: [AgentProvider; 7] = [
         AgentProvider::ClaudeCode,
         AgentProvider::CodexCli,
         AgentProvider::OpenCode,
         AgentProvider::GithubCopilot,
         AgentProvider::Antigravity,
         AgentProvider::GrokBuild,
+        AgentProvider::DeepSeekHarness,
     ];
+
+    /// Card order on the Agents tab. Deliberately NOT the persistence
+    /// order — paint and hit-test both walk this array (row `i` shows
+    /// `DISPLAY[i]`) while the connect state is read through
+    /// [`AgentProvider::index`] into the append-only `connected`
+    /// layout. Product order: Claude Code, Codex, DeepSeek Harness,
+    /// OpenCode, … (DeepSeek Harness sits above the generic ACP block).
+    /// Kept a permutation of `ALL`; asserted by tests.
+    pub const DISPLAY: [AgentProvider; 7] = [
+        AgentProvider::ClaudeCode,
+        AgentProvider::CodexCli,
+        AgentProvider::DeepSeekHarness,
+        AgentProvider::OpenCode,
+        AgentProvider::GithubCopilot,
+        AgentProvider::Antigravity,
+        AgentProvider::GrokBuild,
+    ];
+
+    /// Position in [`AgentProvider::ALL`] — the index of this
+    /// provider's flag in `connected` (and in the persisted positional
+    /// flag arrays).
+    pub fn index(self) -> usize {
+        AgentProvider::ALL
+            .iter()
+            .position(|candidate| *candidate == self)
+            .expect("every AgentProvider variant is registered in AgentProvider::ALL")
+    }
 
     pub fn name(self) -> &'static str {
         match self {
@@ -30,6 +68,7 @@ impl AgentProvider {
             AgentProvider::GithubCopilot => "GitHub Copilot",
             AgentProvider::Antigravity => "Antigravity",
             AgentProvider::GrokBuild => "Grok Build",
+            AgentProvider::DeepSeekHarness => "DeepSeek Harness",
         }
     }
 
@@ -42,6 +81,7 @@ impl AgentProvider {
             AgentProvider::GithubCopilot => "settings.provider.githubCopilot",
             AgentProvider::Antigravity => "settings.provider.antigravity",
             AgentProvider::GrokBuild => "settings.provider.grokBuild",
+            AgentProvider::DeepSeekHarness => "settings.provider.deepSeekHarness",
         }
     }
 }

@@ -189,6 +189,11 @@ fn install_commands_mirror_install_agent_ts() {
     };
     assert_eq!(install_command(AgentProvider::Antigravity), antigravity);
     assert_eq!(install_command(AgentProvider::GrokBuild), grok);
+    // The verified dsh install hint: the npm global package.
+    assert_eq!(
+        install_command(AgentProvider::DeepSeekHarness),
+        "npm install -g @deepseek-ai/dsh"
+    );
 }
 
 #[test]

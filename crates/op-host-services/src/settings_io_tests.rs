@@ -219,9 +219,10 @@ fn imported_agents_are_excluded_from_persistence() {
 
 #[test]
 fn connected_state_round_trips_through_payload() {
-    // Connect Claude (0) + Antigravity (4), leave the rest off.
+    // Connect Claude (0) + Antigravity (4) + DeepSeek Harness (6,
+    // the append-only tail slot), leave the rest off.
     let mut src = EditorState::new();
-    src.editor_ui.agent_settings.connected = [true, false, false, false, true, false];
+    src.editor_ui.agent_settings.connected = [true, false, false, false, true, false, true];
     // Serialize → JSON → deserialize, the real on-disk path.
     let json = serde_json::to_string(&to_payload(&src)).unwrap();
     let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
@@ -229,7 +230,7 @@ fn connected_state_round_trips_through_payload() {
     apply_payload(&mut dst, payload);
     assert_eq!(
         dst.editor_ui.agent_settings.connected,
-        [true, false, false, false, true, false]
+        [true, false, false, false, true, false, true]
     );
 }
 
@@ -240,13 +241,13 @@ fn six_cli_mcp_payload_migrates_to_new_cli_count() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 12];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, true, false, false, false, false, false, false, false]
+        [true, false, false, true, true, false, false, false, false, false, false, false, false]
     );
 }
 
@@ -257,13 +258,13 @@ fn seven_cli_mcp_payload_keeps_its_toggles_and_leaves_the_new_clis_off() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 12];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, true, false, true, false, true, false, false, false, false, false]
+        [true, false, true, false, true, false, true, false, false, false, false, false, false]
     );
 }
 
@@ -274,13 +275,13 @@ fn eleven_cli_mcp_payload_keeps_its_toggles_and_leaves_zcode_off() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 12];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, true, false, true, false, true, true, false, true, false, false]
+        [true, false, true, false, true, false, true, true, false, true, false, false, false]
     );
 }
 
@@ -296,12 +297,16 @@ fn eight_cli_mcp_payload_drops_gemini_without_shifting_later_clis() {
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, false, true, true, false, false, false, false, false]
+        [true, false, false, true, false, true, true, false, false, false, false, false, false]
     );
 }
 
 #[test]
-fn seven_provider_connected_payload_drops_gemini_without_shifting_later_providers() {
+fn seven_provider_connected_payload_is_the_current_layout_and_round_trips() {
+    // The current layout has seven slots (DeepSeek Harness appended at
+    // the tail). A 7-entry file must round-trip VERBATIM — treating it
+    // as the legacy Gemini-era layout would silently shift every saved
+    // connection on every load.
     let payload: SettingsPayload = serde_json::from_str(
         r#"{"version":1,"connected":[true,false,true,false,true,true,false]}"#,
     )
@@ -312,7 +317,24 @@ fn seven_provider_connected_payload_drops_gemini_without_shifting_later_provider
 
     assert_eq!(
         dst.editor_ui.agent_settings.connected,
-        [true, false, true, false, true, false]
+        [true, false, true, false, true, true, false]
+    );
+}
+
+#[test]
+fn six_provider_connected_payload_keeps_flags_and_leaves_dsh_off() {
+    // Files written since the Gemini retirement have six slots; the
+    // appended DeepSeek Harness slot starts disconnected.
+    let payload: SettingsPayload =
+        serde_json::from_str(r#"{"version":1,"connected":[true,false,true,false,true,true]}"#)
+            .unwrap();
+    let mut dst = EditorState::new();
+
+    apply_payload(&mut dst, payload);
+
+    assert_eq!(
+        dst.editor_ui.agent_settings.connected,
+        [true, false, true, false, true, true, false]
     );
 }
 
@@ -321,11 +343,11 @@ fn five_provider_connected_payload_drops_retired_gemini() {
     let payload: SettingsPayload =
         serde_json::from_str(r#"{"version":1,"connected":[true,false,false,false,true]}"#).unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.connected = [false, false, false, false, true, true];
+    dst.editor_ui.agent_settings.connected = [false, false, false, false, true, true, true];
     apply_payload(&mut dst, payload);
     assert_eq!(
         dst.editor_ui.agent_settings.connected,
-        [true, false, false, false, false, false]
+        [true, false, false, false, false, false, false]
     );
 }
 
@@ -338,7 +360,7 @@ fn legacy_settings_without_connected_field_default_to_disconnected() {
     let payload: SettingsPayload = serde_json::from_str(legacy).unwrap();
     let mut dst = EditorState::new();
     apply_payload(&mut dst, payload);
-    assert_eq!(dst.editor_ui.agent_settings.connected, [false; 6]);
+    assert_eq!(dst.editor_ui.agent_settings.connected, [false; 7]);
 }
 
 #[test]

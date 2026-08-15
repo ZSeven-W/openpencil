@@ -554,7 +554,7 @@ fn rebuild_available_models_keeps_only_connected_providers() {
         ..Default::default()
     };
     // Only Claude Code (index 0 of AgentProvider::ALL) connected.
-    let mut connected = [false; 6];
+    let mut connected = [false; 7];
     connected[0] = true;
     chat.rebuild_available_models(&connected);
     assert_eq!(chat.available_models.len(), 2);
@@ -573,7 +573,7 @@ fn rebuild_available_models_preserves_selection_by_identity() {
         ],
         ..Default::default()
     };
-    let mut connected = [false; 6];
+    let mut connected = [false; 7];
     connected[0] = true; // Claude
     connected[1] = true; // Codex
     chat.rebuild_available_models(&connected);

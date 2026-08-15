@@ -547,6 +547,34 @@ pub fn exit_status_label(status: &std::process::ExitStatus) -> String {
     "?".into()
 }
 
+/// Dangerous environment variables that should never be propagated to
+/// the spawned CLI: linker preload paths can hijack execution; PATH
+/// can substitute a malicious binary; runtime-library paths
+/// (NODE_OPTIONS, PYTHONPATH, etc.) can inject code into Node-based
+/// CLIs. Mirrors bartolli/anthropic-agent-sdk's `DANGEROUS_ENV_VARS`.
+/// Used for Claude Code + custom binaries; Codex gets the stricter
+/// TS allowlist (`chat_subprocess_quirks`). Returns the
+/// env-var pairs the child will receive (parent env minus the
+/// dangerous names — preserving every safe var so node version
+/// managers like nvm / volta still pick the right Node). Moved here
+/// from `chat_subprocess.rs` to keep that spine under the 800-line
+/// cap — pure code motion.
+pub(crate) fn scrubbed_child_env() -> Vec<(String, String)> {
+    const DANGEROUS: &[&str] = &[
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "NODE_OPTIONS",
+        "PYTHONPATH",
+        "PERL5LIB",
+        "RUBYLIB",
+    ];
+    std::env::vars()
+        .filter(|(k, _)| !DANGEROUS.iter().any(|d| k.eq_ignore_ascii_case(d)))
+        .collect()
+}
+
 #[cfg(test)]
 mod login_shell_tests {
     use super::*;

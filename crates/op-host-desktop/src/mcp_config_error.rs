@@ -75,6 +75,13 @@ pub(crate) enum McpConfigError {
     GrokMcpServersMissing,
     /// `mcp_servers` exists in the Grok TOML but is not a table.
     GrokMcpServersNotATable,
+    /// The dsh patch file carries an `mcp-openpencil` entry the user wrote
+    /// by hand (no OpenPencil marker block). Disabling refuses to delete it
+    /// rather than silently dropping user content.
+    DshManualEntry { path: PathBuf },
+    /// The dsh patch file carries only one of the two OpenPencil markers —
+    /// the managed block was hand-edited. Refuse to touch it.
+    DshPatchMarkersMismatched { path: PathBuf },
     /// The shared crash-safe file primitives refused. Carries their message.
     AtomicFile(String),
     /// A multi-file transaction failed and its undo failed too. Keeps the
@@ -134,6 +141,20 @@ impl fmt::Display for McpConfigError {
             McpConfigError::McpServersNotAnObject => f.write_str("mcpServers is not an object"),
             McpConfigError::GrokMcpServersMissing => f.write_str("mcp_servers is missing"),
             McpConfigError::GrokMcpServersNotATable => f.write_str("mcp_servers must be a table"),
+            McpConfigError::DshManualEntry { path } => {
+                write!(
+                    f,
+                    "{} contains a manually added mcp-openpencil entry; remove it manually to disable this integration",
+                    path.display()
+                )
+            }
+            McpConfigError::DshPatchMarkersMismatched { path } => {
+                write!(
+                    f,
+                    "{} carries only one openpencil-mcp marker; repair or remove the marker block manually",
+                    path.display()
+                )
+            }
             McpConfigError::AtomicFile(message) => f.write_str(message),
             McpConfigError::Rollback { cause, failures } => {
                 let joined = failures
