@@ -565,6 +565,24 @@ fn parse_args_maps_read_nodes_to_ts_tool_shape() {
 }
 
 #[test]
+fn parse_args_keeps_each_read_nodes_positional_id() {
+    let p = parse_args(&[
+        "read-nodes".to_string(),
+        "n10".to_string(),
+        "n11".to_string(),
+    ])
+    .expect("parse");
+
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "read_nodes".to_string(),
+            args: vec![("nodeIds".to_string(), "n10,n11".to_string())],
+        }
+    );
+}
+
+#[test]
 fn parse_args_maps_theme_preset_commands_to_ts_tool_shape() {
     let save = parse_args(&[
         "theme:save".to_string(),

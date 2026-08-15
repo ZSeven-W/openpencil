@@ -111,8 +111,8 @@ pub(crate) fn map_delete(positionals: &[String], flags: &Flags) -> Result<Comman
 
 pub(crate) fn map_read_nodes(positionals: &[String], flags: &Flags) -> Result<Command, CliError> {
     let mut pairs = Vec::new();
-    if let Some(ids) = positionals.get(1) {
-        pairs.push(pair("nodeIds", ids.clone()));
+    if positionals.len() > 1 {
+        pairs.push(pair("nodeIds", positionals[1..].join(",")));
     }
     if let Some(depth) = flag_value(flags, "depth") {
         pairs.push(pair("depth", depth));
