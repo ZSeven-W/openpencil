@@ -232,10 +232,15 @@ assert_file_contains "$workflow" \
     'dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c' \
     'version sync immutable Rust setup'
 assert_file_contains "$workflow" "toolchain: '1.94'" 'version sync exact Rust toolchain'
+assert_file_contains "$workflow" 'tools/pinned-release-tools.test.sh' \
+    'version sync pinned tool contract tests'
 assert_file_contains "$workflow" \
     'tools/pinned-release-tools.sh bun "$RUNNER_TEMP/bun-1.3.14"' \
     'version sync digest-pinned Bun setup'
-assert_file_contains "$workflow" 'run: rg --version' 'version sync runner ripgrep gate'
+assert_file_contains "$workflow" \
+    'tools/pinned-release-tools.sh ripgrep "$RUNNER_TEMP/ripgrep-15.2.0"' \
+    'version sync digest-pinned ripgrep setup'
+assert_file_contains "$workflow" 'run: rg --version' 'version sync pinned ripgrep gate'
 assert_file_not_matches "$workflow" \
     'uses:[[:space:]]+[^@[:space:]]+@(v[0-9]+|stable|main|master|latest)|setup-bun|apt-get' \
     'version sync immutable tools policy'
@@ -252,10 +257,16 @@ for trigger in pull_request push; do
         in_trigger && ($0 ~ /^  [a-z_]+:$/ || $0 ~ /^[^ ]/) { exit }
         in_trigger { print }
     ' "$workflow")
-    rust_source_filter_count=$(grep -Fc -- '      - "crates/**/*.rs"' <<< "$trigger_block" || true)
-    if [[ "$rust_source_filter_count" -ne 1 ]]; then
-        fail "version sync workflow $trigger paths must include crates/**/*.rs exactly once (found $rust_source_filter_count)"
-    fi
+    for required_path in \
+        'crates/**/*.rs' \
+        'tools/pinned-release-tools.sh' \
+        'tools/pinned-release-tools.test.sh'; do
+        path_filter_count=$(grep -Fc -- "      - \"$required_path\"" \
+            <<< "$trigger_block" || true)
+        if [[ "$path_filter_count" -ne 1 ]]; then
+            fail "version sync workflow $trigger paths must include $required_path exactly once (found $path_filter_count)"
+        fi
+    done
 done
 assert_file_contains "$workflow" 'scripts/workspace-version.test.sh' 'version reader tests'
 assert_file_contains "$workflow" 'scripts/android-version.test.sh' 'Android version policy tests'

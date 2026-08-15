@@ -181,6 +181,17 @@ verify_pinned_cargo_cli_binary() {
     }
 }
 
+verify_pinned_ripgrep_binary() {
+    local binary=$1 actual first_line
+    actual=$("$binary" --version) || return 1
+    first_line=${actual%%$'\n'*}
+    [[ $first_line == 'ripgrep 15.2.0' ]] || {
+        printf 'error: installed ripgrep reports an unexpected version: %s\n' \
+            "$first_line" >&2
+        return 1
+    }
+}
+
 install_pinned_cargo_cli() {
     local tool=$1 install_root=$2
     local crate_name version expected binary
@@ -279,7 +290,7 @@ install_pinned_cargo_cli() {
 }
 
 self_test() {
-    local test_dir test_file good_cli bad_cli
+    local test_dir test_file good_cli bad_cli good_rg bad_rg
     test_dir=$(mktemp -d)
     test_file=$test_dir/payload
     printf test > "$test_file"
@@ -300,12 +311,21 @@ self_test() {
     fi
     good_cli=$test_dir/good-cargo-bundle
     bad_cli=$test_dir/bad-cargo-bundle
+    good_rg=$test_dir/good-rg
+    bad_rg=$test_dir/bad-rg
     printf '#!/bin/sh\nprintf "cargo-bundle v0.10.0\\n"\n' > "$good_cli"
     printf '#!/bin/sh\nprintf "cargo-bundle 0.10.0\\n"\n' > "$bad_cli"
-    chmod 0755 "$good_cli" "$bad_cli"
+    printf '#!/bin/sh\nprintf "ripgrep 15.2.0\\nfeatures:+pcre2\\n"\n' > "$good_rg"
+    printf '#!/bin/sh\nprintf "ripgrep 15.1.0\\nfeatures:+pcre2\\n"\n' > "$bad_rg"
+    chmod 0755 "$good_cli" "$bad_cli" "$good_rg" "$bad_rg"
     verify_pinned_cargo_cli_binary cargo-bundle "$good_cli"
     if verify_pinned_cargo_cli_binary cargo-bundle "$bad_cli" >/dev/null 2>&1; then
         printf 'error: cargo-bundle version output without v was accepted\n' >&2
+        exit 1
+    fi
+    verify_pinned_ripgrep_binary "$good_rg"
+    if verify_pinned_ripgrep_binary "$bad_rg" >/dev/null 2>&1; then
+        printf 'error: an unexpected ripgrep version was accepted\n' >&2
         exit 1
     fi
     rm -rf "$test_dir"
@@ -434,6 +454,72 @@ install_bun() {
     fi
 }
 
+install_ripgrep() {
+    local install_root=$1 version=15.2.0
+    local expected=33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c
+    local asset=ripgrep-$version-x86_64-unknown-linux-musl
+    local temporary archive source_dir binary member listing
+    [[ ! -e $install_root && ! -L $install_root ]] || {
+        printf 'error: refusing to replace existing ripgrep directory: %s\n' \
+            "$install_root" >&2
+        exit 1
+    }
+    [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || {
+        printf 'error: the pinned ripgrep asset is only for Linux x86_64\n' >&2
+        exit 1
+    }
+    temporary=$(mktemp -d)
+    archive=$temporary/ripgrep.tar.gz
+    source_dir=$temporary/$asset
+    download_verified \
+        "https://github.com/BurntSushi/ripgrep/releases/download/$version/$asset.tar.gz" \
+        "$expected" "$archive"
+    while IFS= read -r member; do
+        [[ $member == "$asset/"* && $member != *'../'* \
+            && $member != /* && $member != *"\\"* ]] || {
+            printf 'error: unsafe ripgrep archive member: %s\n' "$member" >&2
+            rm -rf "$temporary"
+            exit 1
+        }
+    done < <(tar -tzf "$archive")
+    while IFS= read -r listing; do
+        case ${listing:0:1} in
+            -|d) ;;
+            *)
+                printf 'error: ripgrep archive contains a non-regular member\n' >&2
+                rm -rf "$temporary"
+                exit 1
+                ;;
+        esac
+    done < <(tar -tvzf "$archive")
+    tar -xzf "$archive" -C "$temporary"
+    binary=$source_dir/rg
+    [[ -f $binary && ! -L $binary && -x $binary ]] || {
+        printf 'error: verified ripgrep archive lacks a regular rg binary\n' >&2
+        rm -rf "$temporary"
+        exit 1
+    }
+    verify_pinned_ripgrep_binary "$binary" || {
+        rm -rf "$temporary"
+        exit 1
+    }
+    if ! printf 'version 0.8.5\n' \
+        | "$binary" --pcre2 --quiet '(?<=version )[0-9]+\.[0-9]+\.[0-9]+'; then
+        printf 'error: pinned ripgrep lacks required PCRE2 support\n' >&2
+        rm -rf "$temporary"
+        exit 1
+    fi
+    mkdir -p "$install_root"
+    cp "$binary" "$install_root/rg"
+    chmod 0755 "$install_root/rg"
+    rm -rf "$temporary"
+    if [[ -n ${GITHUB_PATH:-} ]]; then
+        printf '%s\n' "$install_root" >> "$GITHUB_PATH"
+    else
+        printf '%s\n' "$install_root"
+    fi
+}
+
 install_node() {
     local install_root=$1
     local expected=cc47fc6eb872f905f48c85397856e8a097b2020bb65b394e728af606bfb6e1a9
@@ -528,6 +614,10 @@ case ${1-} in
         [[ $# -eq 2 ]] || { printf 'usage: %s bun INSTALL_ROOT\n' "$0" >&2; exit 2; }
         install_bun "$2"
         ;;
+    ripgrep)
+        [[ $# -eq 2 ]] || { printf 'usage: %s ripgrep INSTALL_ROOT\n' "$0" >&2; exit 2; }
+        install_ripgrep "$2"
+        ;;
     node)
         [[ $# -eq 2 ]] || { printf 'usage: %s node INSTALL_ROOT\n' "$0" >&2; exit 2; }
         install_node "$2"
@@ -551,7 +641,7 @@ case ${1-} in
         verify_staged_desktop_skia_archive "$2" "$3" "$4"
         ;;
     *)
-        printf 'usage: %s {--self-test|binaryen|appimage|buildx|bun|node|cargo-cli|skia|verify-skia} ...\n' "$0" >&2
+        printf 'usage: %s {--self-test|binaryen|appimage|buildx|bun|ripgrep|node|cargo-cli|skia|verify-skia} ...\n' "$0" >&2
         exit 2
         ;;
 esac

@@ -42,6 +42,11 @@ if "$tool" cargo-cli unreviewed-cli "$temporary/unreviewed-cli" >/dev/null 2>&1;
     printf 'error: an unreviewed Cargo CLI was accepted\n' >&2
     exit 1
 fi
+mkdir "$temporary/existing-ripgrep"
+if "$tool" ripgrep "$temporary/existing-ripgrep" >/dev/null 2>&1; then
+    printf 'error: an existing ripgrep destination was accepted\n' >&2
+    exit 1
+fi
 
 skia_cache=$temporary/skia-cache
 skia_url="file://$skia_cache/skia-binaries-{key}.tar.gz"
@@ -183,6 +188,7 @@ for digest in \
     00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444 \
     41058f8f2967385b2799764c2c281fd143392ef82221d5ffde0481a1cdbfc40e \
     bb3601b2899d4887512bdcaad115074750be7c212b122fa7ed4faed6c919229e \
+    33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c \
     c4c5d5059ab9226aaf3d5337a8fd42ef0e42e9fe3cbc3c8da4310b4a3a1e4254 \
     fe92e66916947a4d666a24d0580434f42585853d221d2af006a52a72b55b283b \
     2587dcaf11aab680ef8637d4192fc77a507c91e3a88bebb79d7993a4fefa1d1b \

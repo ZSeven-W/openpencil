@@ -22,7 +22,7 @@ sdk_wasm_builder=$repo_root/crates/op-web-sdk/tools/build-wasm.sh
 dockerfile=${OPENPENCIL_WEB_DOCKERFILE:-$repo_root/Dockerfile.web-rust}
 vscode_package=$repo_root/packages/op-vscode/package.json
 bun_lock=$repo_root/packages/bun.lock
-version_sync_workflow=$repo_root/.github/workflows/version-sync.yml
+version_sync_workflow=${OPENPENCIL_VERSION_SYNC_WORKFLOW:-$repo_root/.github/workflows/version-sync.yml}
 
 for file in \
     "$workflow" "$artifact_gate" "$release_builder" "$pinned_tools" \
@@ -356,7 +356,9 @@ require_literal 'contents: read' "$version_sync_workflow"
 require_literal 'actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955' "$version_sync_workflow"
 require_literal 'dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c' "$version_sync_workflow"
 require_literal "toolchain: '1.94'" "$version_sync_workflow"
+require_literal 'tools/pinned-release-tools.test.sh' "$version_sync_workflow"
 require_literal 'tools/pinned-release-tools.sh bun "$RUNNER_TEMP/bun-1.3.14"' "$version_sync_workflow"
+require_literal 'tools/pinned-release-tools.sh ripgrep "$RUNNER_TEMP/ripgrep-15.2.0"' "$version_sync_workflow"
 reject_literal 'setup-bun@' "$version_sync_workflow"
 reject_literal 'apt-get' "$version_sync_workflow"
 while IFS= read -r action; do
@@ -374,6 +376,7 @@ require_literal '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260
 require_literal '00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444' "$pinned_tools"
 require_literal '41058f8f2967385b2799764c2c281fd143392ef82221d5ffde0481a1cdbfc40e' "$pinned_tools"
 require_literal 'bb3601b2899d4887512bdcaad115074750be7c212b122fa7ed4faed6c919229e' "$pinned_tools"
+require_literal '33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c' "$pinned_tools"
 require_literal "cargo-bundle) printf 'cargo-bundle v0.10.0" "$pinned_tools"
 require_literal 'https://static.crates.io/crates/$crate_name/$crate_name-$version.crate' "$pinned_tools"
 require_literal "cargo install \\" "$pinned_tools"

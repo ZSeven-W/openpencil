@@ -46,6 +46,12 @@ elif str(mode) == "direct-cargo-cli":
 elif str(mode) == "cargo-cli-digest":
     old = "bb3601b2899d4887512bdcaad115074750be7c212b122fa7ed4faed6c919229e"
     new = "0" * 64
+elif str(mode) == "ripgrep-digest":
+    old = "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
+    new = "0" * 64
+elif str(mode) == "version-sync-direct-ripgrep":
+    old = 'tools/pinned-release-tools.sh ripgrep "$RUNNER_TEMP/ripgrep-15.2.0"'
+    new = "sudo apt-get install --yes ripgrep"
 elif str(mode) == "docker-direct-cargo-cli":
     old = "tools/pinned-release-tools.sh cargo-cli wasm-bindgen-cli " + "\\"
     new = 'cargo install wasm-bindgen-cli --version "$version" --locked #'
@@ -89,6 +95,15 @@ case ${1-} in
         fixture=$temporary/pinned-release-tools.sh
         mutate "$repo_root/tools/pinned-release-tools.sh" "$fixture" cargo-cli-digest
         expect_rejected cargo-cli-digest OPENPENCIL_PINNED_RELEASE_TOOLS \
+            "$repo_root/tools/check-rust-release-auth-workflow.sh" "$fixture"
+        fixture=$temporary/pinned-release-tools-ripgrep.sh
+        mutate "$repo_root/tools/pinned-release-tools.sh" "$fixture" ripgrep-digest
+        expect_rejected ripgrep-digest OPENPENCIL_PINNED_RELEASE_TOOLS \
+            "$repo_root/tools/check-rust-release-auth-workflow.sh" "$fixture"
+        fixture=$temporary/version-sync-direct-ripgrep.yml
+        mutate "$repo_root/.github/workflows/version-sync.yml" "$fixture" \
+            version-sync-direct-ripgrep
+        expect_rejected version-sync-direct-ripgrep OPENPENCIL_VERSION_SYNC_WORKFLOW \
             "$repo_root/tools/check-rust-release-auth-workflow.sh" "$fixture"
         fixture=$temporary/Dockerfile.web-rust
         mutate "$repo_root/Dockerfile.web-rust" "$fixture" docker-direct-cargo-cli
