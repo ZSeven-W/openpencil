@@ -61,9 +61,43 @@ elif str(mode) == "ios-skia-profile":
 elif str(mode) == "ios-skia-digest":
     old = "4abbaea5e4e8934a6f19c5de44eaba9bf9238af4abbe57dbac5f2dc03923b182"
     new = "0" * 64
+elif str(mode) == "ios-encryption-yes":
+    old = '"INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=NO"'
+    new = '"INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=YES"'
+elif str(mode) == "ios-encryption-code":
+    old = '"INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=NO"'
+    new = old + '\n    "INFOPLIST_KEY_ITSEncryptionExportComplianceCode=forbidden"'
+elif str(mode) == "ios-encryption-env-override":
+    old = "          IOS_MARKETING_VERSION: ${{ needs.verify.outputs.version }}"
+    new = old + "\n          IOS_USES_NON_EXEMPT_ENCRYPTION: ${{ vars.IOS_USES_NON_EXEMPT_ENCRYPTION }}"
 elif str(mode) == "rust-skia-force":
     old = "[[ -z ${FORCE_SKIA_BINARIES_DOWNLOAD:-} && ${SKIA_BINARIES_URL:-} == file://* ]]"
     new = "[[ ${FORCE_SKIA_BINARIES_DOWNLOAD:-} == 1 && ${SKIA_BINARIES_URL:-} == file://* ]]"
+elif str(mode) == "ios-only-input-default":
+    old = """      ios_app_store_only:
+        description: Run only the iOS App Store / TestFlight lane
+        required: false
+        default: false
+        type: boolean"""
+    new = old.replace("default: false", "default: true")
+elif str(mode) == "ios-only-ios-gate":
+    old = "if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == true)"
+    new = "if: startsWith(github.ref, 'refs/tags/v')"
+elif str(mode) == "ios-only-build-bypass":
+    old = "if: (github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == false) || (startsWith(github.ref, 'refs/tags/v') && github.event_name != 'workflow_dispatch')"
+    new = "if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')"
+elif str(mode) == "ios-only-release-bypass":
+    marker = "  web-docker:\n"
+    start = text.index(marker)
+    end = text.index("\n  sdk-packages:\n", start)
+    section = text[start:end]
+    old = "if: startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'workflow_dispatch' || inputs.ios_app_store_only == false)"
+    new = "if: startsWith(github.ref, 'refs/tags/v')"
+    if old not in section:
+        raise SystemExit("mutation marker missing: web-docker if")
+    text = text[:start] + section.replace(old, new, 1) + text[end:]
+    destination.write_text(text)
+    raise SystemExit(0)
 else:
     raise SystemExit(f"unknown mutation: {mode}")
 if old not in text:
@@ -82,7 +116,10 @@ expect_rejected() {
 
 case ${1-} in
     rust)
-        for mutation in mutable-action broad-permission job-secret mutable-package-assets mutable-apt-source direct-cargo-cli; do
+        for mutation in \
+            mutable-action broad-permission job-secret mutable-package-assets \
+            mutable-apt-source direct-cargo-cli ios-only-input-default \
+            ios-only-ios-gate ios-only-build-bypass ios-only-release-bypass; do
             fixture=$temporary/rust-$mutation.yml
             mutate "$repo_root/.github/workflows/rust-release.yml" "$fixture" "$mutation"
             expect_rejected "$mutation" OPENPENCIL_RUST_RELEASE_WORKFLOW \
@@ -118,6 +155,17 @@ case ${1-} in
         fixture=$temporary/publish-ios-testflight.sh
         mutate "$repo_root/scripts/publish-ios-testflight.sh" "$fixture" ios-skia-digest
         expect_rejected ios-skia-digest OPENPENCIL_IOS_TESTFLIGHT_PUBLISHER \
+            "$repo_root/tools/check-ios-app-store-workflow.sh" "$fixture"
+        for mutation in ios-encryption-yes ios-encryption-code; do
+            fixture=$temporary/$mutation-publisher.sh
+            mutate "$repo_root/scripts/publish-ios-testflight.sh" "$fixture" "$mutation"
+            expect_rejected "$mutation" OPENPENCIL_IOS_TESTFLIGHT_PUBLISHER \
+                "$repo_root/tools/check-ios-app-store-workflow.sh" "$fixture"
+        done
+        fixture=$temporary/ios-encryption-env-override.yml
+        mutate "$repo_root/.github/workflows/ios-app-store.yml" "$fixture" \
+            ios-encryption-env-override
+        expect_rejected ios-encryption-env-override OPENPENCIL_IOS_APP_STORE_WORKFLOW \
             "$repo_root/tools/check-ios-app-store-workflow.sh" "$fixture"
         ;;
     *)

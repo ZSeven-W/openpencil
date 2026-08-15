@@ -68,13 +68,12 @@ repository's default branch.
 
 The protected `testflight` environment owns the Apple Distribution
 certificate, App Store provisioning profile, and App Store Connect API key.
-This product is classified as using non-exempt encryption, so configure these
-environment variables without committing their values:
-
-```text
-IOS_USES_NON_EXEMPT_ENCRYPTION=YES
-IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE=<Apple-issued compliance code>
-```
+The reviewed App Store encryption questionnaire concluded that no export
+compliance documents are required. `project.yml` therefore source-controls
+`ITSAppUsesNonExemptEncryption=NO`; the app and release workflow deliberately
+do not carry an `ITSEncryptionExportComplianceCode`. Keep this declaration in
+sync with the shipping cryptography and storefront availability before
+changing algorithms or distribution regions.
 
 Every upload derives a monotonically increasing three-component build number
 from UTC epoch minutes. The workflow validates the exact remote ref, signed

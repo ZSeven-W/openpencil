@@ -25,9 +25,9 @@ name: iOS App Store / TestFlight
 # - OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN
 # - OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL
 #
-# `testflight` environment variables:
-# - IOS_USES_NON_EXEMPT_ENCRYPTION (must be YES for the reviewed product decision)
-# - IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE (required; keep its value out of the repository)
+# The App Store encryption questionnaire concluded that this build needs no
+# export-compliance documents. The Xcode project therefore source-controls
+# ITSAppUsesNonExemptEncryption=NO and deliberately carries no compliance code.
 
 on:
   workflow_call:
@@ -241,8 +241,6 @@ jobs:
         env:
           RELAY_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
           RELAY_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
-          USES_NON_EXEMPT_ENCRYPTION: ${{ vars.IOS_USES_NON_EXEMPT_ENCRYPTION }}
-          EXPORT_COMPLIANCE_CODE: ${{ vars.IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE }}
         run: |
           set -euo pipefail
           relay_cn=$RELAY_CN
@@ -250,14 +248,6 @@ jobs:
           unset RELAY_CN RELAY_GLOBAL
           printf '%s\0%s\0' "$relay_cn" "$relay_global" \
             | python3 tools/check-collab-bootstrap-urls.py
-          [[ "$USES_NON_EXEMPT_ENCRYPTION" == YES ]] || {
-            echo "::error::IOS_USES_NON_EXEMPT_ENCRYPTION must remain YES for this release"
-            exit 2
-          }
-          [[ "$EXPORT_COMPLIANCE_CODE" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || {
-            echo "::error::non-exempt encryption requires IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE"
-            exit 2
-          }
           echo "Validated the protected production release configuration."
 
       - name: Publish the collaboration-enabled build to TestFlight
@@ -272,8 +262,6 @@ jobs:
           IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
           IOS_MARKETING_VERSION: ${{ needs.verify.outputs.version }}
           IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
-          IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE: ${{ vars.IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE }}
-          IOS_USES_NON_EXEMPT_ENCRYPTION: ${{ vars.IOS_USES_NON_EXEMPT_ENCRYPTION }}
           OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
           OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
           OP_AUTH_ARTIFACT_ROOT: ${{ github.workspace }}/crates/op-auth-bridge/prebuilt

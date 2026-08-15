@@ -58,6 +58,8 @@ settings = target.fetch("settings").fetch("base")
 raise "bundle identifier must be tech.zseven.openpencil" unless settings.fetch("PRODUCT_BUNDLE_IDENTIFIER") == "tech.zseven.openpencil"
 raise "deployment target must be iOS 15+" unless settings.fetch("IPHONEOS_DEPLOYMENT_TARGET").to_f >= 15.0
 raise "display name must be OpenPencil" unless settings.fetch("INFOPLIST_KEY_CFBundleDisplayName") == "OpenPencil"
+raise "export-compliance exemption must stay source-controlled" unless settings.fetch("INFOPLIST_KEY_ITSAppUsesNonExemptEncryption") == "NO"
+raise "exempt builds must not carry an export-compliance code" if settings.key?("INFOPLIST_KEY_ITSEncryptionExportComplianceCode")
 local_network_usage = settings.fetch("INFOPLIST_KEY_NSLocalNetworkUsageDescription")
 raise "manual LAN collaboration requires a local-network usage description" unless local_network_usage.include?("collaboration")
 raise "relay-only mobile builds must not declare Bonjour discovery" if settings.key?("INFOPLIST_KEY_NSBonjourServices")
@@ -93,6 +95,9 @@ if [[ -f "$pbxproj" ]]; then
 project = File.read(ARGV.fetch(0))
 display_names = project.scan(/^\s*INFOPLIST_KEY_CFBundleDisplayName = (?:"([^"]+)"|([^;]+));$/).map { |quoted, plain| quoted || plain }
 raise "generated project has stale display-name settings" unless display_names == ["OpenPencil", "OpenPencil"]
+encryption_declarations = project.scan(/^\s*INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = (?:"([^"]+)"|([^;]+));$/).map { |quoted, plain| quoted || plain }
+raise "generated project has stale export-compliance settings" unless encryption_declarations == ["NO", "NO"]
+raise "generated project must not contain an export-compliance code" if project.include?("INFOPLIST_KEY_ITSEncryptionExportComplianceCode")
 RUBY
 fi
 

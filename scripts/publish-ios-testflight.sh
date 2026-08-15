@@ -55,8 +55,6 @@ usage() {
         'Required environment:' \
         '  OP_AUTH_ARTIFACT_ROOT' \
         '  IOS_MARKETING_VERSION, IOS_BUILD_NUMBER, APPLE_TEAM_ID' \
-        '  IOS_USES_NON_EXEMPT_ENCRYPTION (must be YES)' \
-        '  IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE' \
         '  OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN' \
         '  OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL' \
         '  IOS_DISTRIBUTION_CERTIFICATE_BASE64' \
@@ -114,7 +112,6 @@ required_env=(
     OP_AUTH_ARTIFACT_ROOT
     IOS_MARKETING_VERSION
     IOS_BUILD_NUMBER
-    IOS_USES_NON_EXEMPT_ENCRYPTION
     SKIA_BINARIES_URL
     XCODEGEN_BIN
 )
@@ -171,17 +168,6 @@ workspace_version=$("$repo_root/scripts/workspace-version.sh")
 [[ "$api_key_issuer_id" \
     =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || {
     printf 'error: APP_STORE_CONNECT_ISSUER_ID is malformed\n' >&2
-    exit 2
-}
-[[ "$IOS_USES_NON_EXEMPT_ENCRYPTION" == YES ]] || {
-    printf 'error: IOS_USES_NON_EXEMPT_ENCRYPTION must remain YES for this release\n' >&2
-    exit 2
-}
-encryption_export_code=${IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE:-}
-[[ "$encryption_export_code" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || {
-    printf '%s\n' \
-        'error: non-exempt encryption requires IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE' \
-        >&2
     exit 2
 }
 printf '%s\0%s\0' "$relay_bootstrap_cn" "$relay_bootstrap_global" \
@@ -514,8 +500,7 @@ security find-identity -v -p codesigning "$keychain_path" \
 archive_path=$temp_dir/OpenPencilPlayer.xcarchive
 derived_data=$temp_dir/DerivedData
 encryption_build_settings=(
-    "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=$IOS_USES_NON_EXEMPT_ENCRYPTION"
-    "INFOPLIST_KEY_ITSEncryptionExportComplianceCode=$encryption_export_code"
+    "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=NO"
 )
 xcodebuild \
     -project "$player_dir/OpenPencilPlayer.xcodeproj" \
@@ -549,16 +534,16 @@ require_regular_file "$app_info"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_info")" \
     == "$IOS_BUILD_NUMBER" ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :ITSAppUsesNonExemptEncryption' "$app_info")" \
-    == true ]] || {
-    printf 'error: export-compliance declaration is missing from the archived app\n' >&2
+    == false ]] || {
+    printf 'error: archived app must declare only exempt encryption\n' >&2
     exit 1
 }
-[[ "$(/usr/libexec/PlistBuddy \
-    -c 'Print :ITSEncryptionExportComplianceCode' "$app_info")" \
-    == "$encryption_export_code" ]] || {
-    printf 'error: encryption export compliance code is missing from the archived app\n' >&2
+if /usr/libexec/PlistBuddy \
+    -c 'Print :ITSEncryptionExportComplianceCode' "$app_info" \
+    >/dev/null 2>&1; then
+    printf 'error: exempt build must not contain an export compliance code\n' >&2
     exit 1
-}
+fi
 local_network_usage=$(
     /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$app_info" \
         2>/dev/null || true

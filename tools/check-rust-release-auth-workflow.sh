@@ -61,8 +61,17 @@ require "yaml"
 document = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)
 trigger = document["on"] || document[true]
 manual = trigger.fetch("workflow_dispatch")
-unless manual.nil? || manual == {}
-  raise "manual release must build the selected ref without a separate Auth SHA input"
+unless manual == {
+    "inputs" => {
+      "ios_app_store_only" => {
+        "description" => "Run only the iOS App Store / TestFlight lane",
+        "required" => false,
+        "default" => false,
+        "type" => "boolean",
+      },
+    },
+  }
+  raise "manual release must expose only the default-off iOS App Store lane selector"
 end
 raise "workflow permissions must default to contents:read" unless document.fetch("permissions") == {"contents" => "read"}
 
@@ -276,7 +285,7 @@ end
 
 ios = jobs.fetch("ios-app-store")
 unless ios.fetch("uses") == "./.github/workflows/ios-app-store.yml" &&
-    ios.fetch("if") == "startsWith(github.ref, 'refs/tags/v')" &&
+    ios.fetch("if") == "startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == true)" &&
     ios.fetch("needs") == "version" &&
     ios.fetch("with") == {
       "release_sha" => '${{ github.sha }}',
@@ -289,12 +298,12 @@ unless ios.fetch("uses") == "./.github/workflows/ios-app-store.yml" &&
       "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL" =>
         '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}',
     }
-  raise "formal release must call the exact reusable iOS App Store lane"
+  raise "tag releases and explicit iOS-only dispatches must call the exact reusable App Store lane"
 end
 
 android = jobs.fetch("android-release")
 unless android.fetch("uses") == "./.github/workflows/android-release.yml" &&
-    android.fetch("if") == "startsWith(github.ref, 'refs/tags/v')" &&
+    android.fetch("if") == "startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'workflow_dispatch' || inputs.ios_app_store_only == false)" &&
     android.fetch("needs") == "version" &&
     android.fetch("secrets") == {
       "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN" =>
@@ -303,6 +312,13 @@ unless android.fetch("uses") == "./.github/workflows/android-release.yml" &&
         '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}',
     } && !android.key?("with")
   raise "formal release must call the exact reusable Android asset lane"
+end
+
+tag_only_condition = "startsWith(github.ref, 'refs/tags/v') && (github.event_name != 'workflow_dispatch' || inputs.ios_app_store_only == false)"
+%w[android-release web-docker sdk-packages vsix release-draft package-managers].each do |name|
+  unless jobs.fetch(name).fetch("if") == tag_only_condition
+    raise "#{name} must stay disabled on a version-branch iOS-only dispatch"
+  end
 end
 
 release = jobs.fetch("release-draft")
@@ -347,6 +363,9 @@ unless handoff_verify.fetch("run") ==
 end
 
 build = jobs.fetch("build")
+unless build.fetch("if") == "(github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == false) || (startsWith(github.ref, 'refs/tags/v') && github.event_name != 'workflow_dispatch')"
+  raise "desktop builds must be disabled when manual iOS-only publication is selected"
+end
 job_env = build.fetch("env", {})
 if job_env.key?("OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN") ||
     job_env.key?("OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL")

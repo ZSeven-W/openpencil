@@ -513,18 +513,17 @@ fn ios_app_store_workflow_is_reusable_and_supports_exact_source_retries() {
         "the protected App Store job should reuse the existing testflight environment and publisher"
     );
     assert!(
-        workflow.contains("IOS_USES_NON_EXEMPT_ENCRYPTION (must be YES")
-            && workflow.contains(
-                "IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE (required; keep its value out of the repository)",
-            )
-            && workflow.contains("[[ \"$USES_NON_EXEMPT_ENCRYPTION\" == YES ]]")
-            && !workflow.contains("\"$USES_NON_EXEMPT_ENCRYPTION\" == NO")
-            && publisher.contains("[[ \"$IOS_USES_NON_EXEMPT_ENCRYPTION\" == YES ]]")
-            && publisher.contains(
-                "INFOPLIST_KEY_ITSEncryptionExportComplianceCode=$encryption_export_code",
-            )
-            && !publisher.contains("\"$IOS_USES_NON_EXEMPT_ENCRYPTION\" == NO"),
-        "the reviewed non-exempt encryption decision must stay YES and require an environment-only compliance code"
+        workflow.contains("ITSAppUsesNonExemptEncryption=NO")
+            && workflow.contains("deliberately carries no compliance code")
+            && !workflow.contains("IOS_USES_NON_EXEMPT_ENCRYPTION")
+            && !workflow.contains("IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE")
+            && publisher.contains("INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=NO")
+            && publisher.contains("== false ]]")
+            && publisher.contains("Print :ITSEncryptionExportComplianceCode")
+            && !publisher.contains("INFOPLIST_KEY_ITSEncryptionExportComplianceCode")
+            && !publisher.contains("IOS_USES_NON_EXEMPT_ENCRYPTION")
+            && !publisher.contains("IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE"),
+        "the reviewed exempt-encryption decision must stay source-controlled and omit a compliance code"
     );
 }
 
