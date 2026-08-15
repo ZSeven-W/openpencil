@@ -3663,7 +3663,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "op-acp"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "futures-util",
  "op-ai",
@@ -3678,11 +3678,11 @@ dependencies = [
 
 [[package]]
 name = "op-ai"
-version = "0.8.4"
+version = "0.8.5"
 
 [[package]]
 name = "op-ai-skills"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "include_dir",
  "jian-ops-schema",
@@ -3692,7 +3692,7 @@ dependencies = [
 
 [[package]]
 name = "op-auth-bridge"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3705,7 +3705,7 @@ dependencies = [
 
 [[package]]
 name = "op-builtin-model-discovery"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "futures",
  "op-editor-core",
@@ -3716,7 +3716,7 @@ dependencies = [
 
 [[package]]
 name = "op-chrome-extension-core"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jian-ops-schema",
  "op-html",
@@ -3727,7 +3727,7 @@ dependencies = [
 
 [[package]]
 name = "op-cli"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "jian-ops-schema",
@@ -3745,7 +3745,7 @@ dependencies = [
 
 [[package]]
 name = "op-codegen"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "jian-ops-schema",
@@ -3759,7 +3759,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "blake3",
  "jian-ops-schema",
@@ -3773,7 +3773,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-host"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3804,7 +3804,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-policy-file"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "blake3",
@@ -3820,7 +3820,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-client"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "futures-util",
  "op-collab-relay-protocol",
@@ -3833,7 +3833,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-control-plane"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -3848,7 +3848,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-locator-hsm"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "cryptoki",
@@ -3866,7 +3866,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-locator-server"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "axum",
  "base64",
@@ -3895,7 +3895,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-protocol"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "blake3",
@@ -3909,7 +3909,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-server"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "blake3",
@@ -3935,7 +3935,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-smoke"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -3948,9 +3948,11 @@ dependencies = [
 
 [[package]]
 name = "op-collab-transport"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
+ "core-foundation 0.9.4",
+ "core-foundation-sys",
  "getrandom 0.3.4",
  "jian-ops-schema",
  "keyring",
@@ -3959,6 +3961,7 @@ dependencies = [
  "op-collab",
  "polling",
  "secret-service",
+ "security-framework-sys",
  "serde_json",
  "snow",
  "socket2 0.6.3",
@@ -3971,7 +3974,7 @@ dependencies = [
 
 [[package]]
 name = "op-config-store"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -3979,7 +3982,7 @@ dependencies = [
 
 [[package]]
 name = "op-design-lint"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jian-ops-schema",
  "op-util",
@@ -3989,7 +3992,7 @@ dependencies = [
 
 [[package]]
 name = "op-editor-core"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "glam",
@@ -4006,7 +4009,7 @@ dependencies = [
 
 [[package]]
 name = "op-editor-host-core"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jian-ops-schema",
  "op-ai",
@@ -4023,7 +4026,7 @@ dependencies = [
 
 [[package]]
 name = "op-editor-ui"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "accesskit",
  "base64",
@@ -4044,12 +4047,15 @@ dependencies = [
 
 [[package]]
 name = "op-engine-ffi"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jian-core",
  "jian-ops-schema",
  "jian-skia",
  "op-builtin-model-discovery",
+ "op-collab-host",
+ "op-collab-transport",
+ "op-config-store",
  "op-editor-core",
  "op-editor-ui",
  "op-host-native",
@@ -4057,20 +4063,22 @@ dependencies = [
  "serde_json",
  "skia-safe",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
 name = "op-engine-jni"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jni 0.21.1",
  "ndk-sys",
  "op-engine-ffi",
+ "zeroize",
 ]
 
 [[package]]
 name = "op-figma"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "flate2",
@@ -4085,7 +4093,7 @@ dependencies = [
 
 [[package]]
 name = "op-git"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "git2",
  "op-config-store",
@@ -4096,7 +4104,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-desktop"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -4169,7 +4177,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-native"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "accesskit",
  "casement",
@@ -4202,7 +4210,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-services"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "agent",
  "anthropic-agent-sdk",
@@ -4248,7 +4256,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-web"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "accesskit",
  "base64",
@@ -4276,7 +4284,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-web-server"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "op-host-services",
  "serde_json",
@@ -4284,7 +4292,7 @@ dependencies = [
 
 [[package]]
 name = "op-html"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "base64",
  "encoding_rs",
@@ -4299,14 +4307,14 @@ dependencies = [
 
 [[package]]
 name = "op-i18n"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "op-html",
 ]
 
 [[package]]
 name = "op-mcp"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jian-ops-schema",
  "jian-scene",
@@ -4326,7 +4334,7 @@ dependencies = [
 
 [[package]]
 name = "op-opmerge"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jian-ops-schema",
  "serde_json",
@@ -4335,7 +4343,7 @@ dependencies = [
 
 [[package]]
 name = "op-orchestrator"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "futures",
  "jian-ops-schema",
@@ -4355,7 +4363,7 @@ dependencies = [
 
 [[package]]
 name = "op-pen-loader"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "jian-core",
  "jian-ops-schema",
@@ -4371,14 +4379,14 @@ dependencies = [
 
 [[package]]
 name = "op-process-io"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
 name = "op-rpc-transport"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -4386,7 +4394,7 @@ dependencies = [
 
 [[package]]
 name = "op-smoke"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "agent",
  "futures",
@@ -4406,11 +4414,11 @@ dependencies = [
 
 [[package]]
 name = "op-util"
-version = "0.8.4"
+version = "0.8.5"
 
 [[package]]
 name = "op-web-sdk"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "console_error_panic_hook",
  "jian-ops-schema",
