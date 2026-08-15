@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
+# Workflow fixtures intentionally preserve unexpanded shell variables.
+# shellcheck disable=SC2016
+
 set -euo pipefail
 
-script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
-repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
+script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
+repo_root=$(CDPATH='' cd "$script_dir/.." && pwd)
 sync_source="$script_dir/sync-version.sh"
 reader_source="$script_dir/workspace-version.sh"
+android_reader_source="$script_dir/android-version.sh"
 tmp_base=${TMPDIR:-/tmp}
 tmp_dir=$(mktemp -d "${tmp_base%/}/sync-version.XXXXXX")
 trap 'rm -rf "$tmp_dir"' 0 HUP INT TERM
@@ -76,7 +80,7 @@ cargo() {
 
 bun() {
     printf 'bun:%s:%s\n' "$PWD" "$*" >> "$SYNC_TEST_LOG"
-    repo_root=$(CDPATH= cd "$(dirname "$PWD")" && pwd)
+    repo_root=$(CDPATH='' cd "$(dirname "$PWD")" && pwd)
     if [ -e "$repo_root/.fail-bun" ]; then
         printf 'fake bun failure\n' >&2
         return 32
@@ -93,6 +97,7 @@ new_repo() {
     mkdir -p "$repo/scripts" "$repo/tools" "$repo/packages" "$repo/outside"
     ln -s "$sync_source" "$repo/scripts/sync-version.sh"
     ln -s "$reader_source" "$repo/scripts/workspace-version.sh"
+    ln -s "$android_reader_source" "$repo/scripts/android-version.sh"
     printf '%s\n' \
         '[workspace]' \
         'members = []' \
@@ -150,10 +155,14 @@ pass 'canonical reader failures stop before Cargo, Bun, and the version guard'
 repo=$(new_repo external_cwd)
 run_sync "$repo"
 assert_status 0 'external cwd'
-assert_file_contains "$repo/calls.log" "cargo:$repo:metadata --no-deps --format-version 1" \
+assert_file_contains "$repo/calls.log" "cargo:$repo:update --workspace --offline" \
+    'external cwd'
+assert_file_contains "$repo/calls.log" "cargo:$repo:metadata --locked --no-deps --format-version 1" \
     'external cwd'
 assert_file_contains "$repo/calls.log" "bun:$repo/packages:run sync-version" 'external cwd'
 assert_file_contains "$repo/calls.log" "guard:$repo" 'external cwd'
+assert_contains 'sync-version: Android package version is 2.3.4 (versionCode 2003004)' \
+    'external cwd'
 assert_file_contains "$repo/Cargo.lock" 'lock-version=2.3.4' 'external cwd'
 assert_file_contains "$repo/packages/package.json" '"version":"2.3.4"' 'external cwd'
 pass 'sync entrypoint locates the repository and runs every stage from an external cwd'
@@ -173,6 +182,19 @@ run_sync "$repo"
 assert_status 1 'Cargo stage failure'
 assert_contains 'sync-version: Cargo lock refresh failed' 'Cargo stage failure'
 pass 'Cargo refresh failures identify the failing synchronization stage'
+
+repo=$(new_repo android_version_failure)
+sed -i.bak 's/version = "2.3.4"/version = "0.0.0"/' "$repo/Cargo.toml"
+rm "$repo/Cargo.toml.bak"
+run_sync "$repo"
+assert_status 1 'Android version stage failure'
+assert_contains 'sync-version: Android version metadata validation failed' \
+    'Android version stage failure'
+if [[ -f "$repo/calls.log" ]] && rg --quiet '^bun:|^guard:' "$repo/calls.log"; then
+    printf '%s\n' "$(cat "$repo/calls.log")" >&2
+    fail 'Android version stage failure continued into Bun or the version guard'
+fi
+pass 'invalid Android version metadata stops synchronization before later stages'
 
 repo=$(new_repo bun_failure)
 touch "$repo/.fail-bun"
@@ -203,12 +225,26 @@ workflow="$repo_root/.github/workflows/version-sync.yml"
 assert_file_contains "$workflow" 'pull_request:' 'version sync workflow trigger'
 assert_file_contains "$workflow" 'push:' 'version sync workflow trigger'
 assert_file_contains "$workflow" 'submodules: recursive' 'version sync checkout'
-assert_file_contains "$workflow" 'dtolnay/rust-toolchain@stable' 'version sync Rust setup'
-assert_file_contains "$workflow" 'oven-sh/setup-bun@v2' 'version sync Bun setup'
-assert_file_contains "$workflow" 'sudo apt-get install --yes ripgrep' 'version sync ripgrep setup'
+assert_file_contains "$workflow" \
+    'actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955' \
+    'version sync immutable checkout'
+assert_file_contains "$workflow" \
+    'dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c' \
+    'version sync immutable Rust setup'
+assert_file_contains "$workflow" "toolchain: '1.94'" 'version sync exact Rust toolchain'
+assert_file_contains "$workflow" \
+    'tools/pinned-release-tools.sh bun "$RUNNER_TEMP/bun-1.3.14"' \
+    'version sync digest-pinned Bun setup'
+assert_file_contains "$workflow" 'run: rg --version' 'version sync runner ripgrep gate'
+assert_file_not_matches "$workflow" \
+    'uses:[[:space:]]+[^@[:space:]]+@(v[0-9]+|stable|main|master|latest)|setup-bun|apt-get' \
+    'version sync immutable tools policy'
 assert_file_contains "$workflow" 'bun install --frozen-lockfile' 'version sync dependency install'
 assert_file_contains "$workflow" 'packages/bun.lock' 'version sync managed paths'
 assert_file_contains "$workflow" 'packages/scripts/sync-version.mjs' 'version sync implementation paths'
+assert_file_contains "$workflow" 'scripts/android-version.sh' 'Android version implementation paths'
+assert_file_contains "$workflow" 'packaging/android-player/app/build.gradle.kts' \
+    'Android Gradle version consumer paths'
 assert_file_not_matches "$workflow" 'packages/\*\*' 'version sync focused path filters'
 for trigger in pull_request push; do
     trigger_block=$(awk -v trigger="$trigger" '
@@ -222,6 +258,7 @@ for trigger in pull_request push; do
     fi
 done
 assert_file_contains "$workflow" 'scripts/workspace-version.test.sh' 'version reader tests'
+assert_file_contains "$workflow" 'scripts/android-version.test.sh' 'Android version policy tests'
 assert_file_contains "$workflow" 'scripts/sync-version.test.sh' 'version sync tests'
 assert_file_contains "$workflow" 'tools/check-version-sync.test.sh' 'version guard tests'
 assert_file_contains "$workflow" 'tools/check-version-sync.sh' 'version guard'

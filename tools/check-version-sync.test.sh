@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
+# Test fixtures intentionally contain unexpanded shell expressions.
+# shellcheck disable=SC2016
+
 set -euo pipefail
 
-script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
+script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
 guard_source="$script_dir/check-version-sync.sh"
 reader_source="$script_dir/../scripts/workspace-version.sh"
+android_reader_source="$script_dir/../scripts/android-version.sh"
 temp_root=$(mktemp -d "${TMPDIR:-/tmp}/check-version-sync.XXXXXX")
 trap 'rm -rf "$temp_root"' EXIT HUP INT TERM
 
@@ -84,7 +88,7 @@ cargo() {
 }
 
 bun() {
-    repo_root=$(CDPATH= cd "$PWD/.." && pwd)
+    repo_root=$(CDPATH='' cd "$PWD/.." && pwd)
     if [[ "$PWD" != "$repo_root/packages" || "$*" != 'run sync-version:check' ]]; then
         printf 'unexpected bun invocation: cwd=%s args=%s\n' "$PWD" "$*" >&2
         return 42
@@ -110,18 +114,14 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
       - id: version
         shell: bash
+        env:
+          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
         run: |
-          cargo_version="$(scripts/workspace-version.sh)"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            tag_version="${GITHUB_REF_NAME#v}"
-            if [[ "$tag_version" != "$cargo_version" ]]; then
-              exit 1
-            fi
-          fi
-          echo "version=$cargo_version" >> "$GITHUB_OUTPUT"
+          OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
+            tools/check-op-auth-artifact-commit.sh
   build:
     needs: version
     runs-on: ubuntu-latest
@@ -191,12 +191,12 @@ new_repo() {
     name=$1
     version=$2
     repo="$temp_root/$name"
-
     mkdir -p \
         "$repo/.github/workflows" \
         "$repo/packages" \
         "$repo/tools" \
         "$repo/scripts" \
+        "$repo/packaging/android-player/app" \
         "$repo/crates/op-cli/assets" \
         "$repo/crates/op-cli/src" \
         "$repo/crates/op-editor-core/src" \
@@ -206,7 +206,9 @@ new_repo() {
     git -C "$repo" init -q
     cp "$guard_source" "$repo/tools/check-version-sync.sh"
     cp "$reader_source" "$repo/scripts/workspace-version.sh"
-    chmod +x "$repo/tools/check-version-sync.sh" "$repo/scripts/workspace-version.sh"
+    cp "$android_reader_source" "$repo/scripts/android-version.sh"
+    chmod +x "$repo/tools/check-version-sync.sh" "$repo/scripts/workspace-version.sh" \
+        "$repo/scripts/android-version.sh"
     printf '%s\n' \
         '[workspace]' \
         'members = []' \
@@ -219,7 +221,26 @@ new_repo() {
     mkdir -p "$repo/packages/op-chrome-extension"
     printf '{"manifest_version":3,"name":"fixture-extension","version":"%s"}\n' "$version" \
         > "$repo/packages/op-chrome-extension/manifest.json"
-
+    cat > "$repo/packaging/android-player/app/build.gradle.kts" <<'KOTLIN'
+val repositoryRoot = rootProject.layout.projectDirectory.dir("../..")
+val androidVersionOutput = providers.exec {
+    commandLine(
+        repositoryRoot.file("scripts/android-version.sh").asFile.absolutePath,
+        repositoryRoot.file("Cargo.toml").asFile.absolutePath,
+    )
+}.standardOutput.asText.get().trim()
+val androidVersionLines = androidVersionOutput.lines()
+val canonicalVersionName = Regex("""versionName=""")
+    .matchEntire(androidVersionLines[0])
+val canonicalVersionCode = Regex("""versionCode=""")
+    .matchEntire(androidVersionLines[1])
+android {
+    defaultConfig {
+        versionCode = canonicalVersionCode
+        versionName = canonicalVersionName
+    }
+}
+KOTLIN
     cat > "$repo/crates/op-cli/assets/skill-bundle.json" <<'JSON'
 {"one":"__OPENPENCIL_VERSION__","two":"__OPENPENCIL_VERSION__","three":"__OPENPENCIL_VERSION__","four":"__OPENPENCIL_VERSION__","five":"__OPENPENCIL_VERSION__"}
 JSON
@@ -467,22 +488,22 @@ pass 'macOS packaging must invoke the reader and use the resolved version'
 
 repo=$(new_repo release_missing_tag_equality 0.8.1)
 cat > "$repo/.github/workflows/rust-release.yml" <<'SCRIPT'
-- name: Compute release version
-  shell: bash
-  run: |
-    cargo_version="$(scripts/workspace-version.sh)"
-    if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-      tag_version="${GITHUB_REF_NAME#v}"
-    fi
-    echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
+jobs:
+  version:
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      - id: version
+        run: echo "version=0.8.1" >> "$GITHUB_OUTPUT"
 SCRIPT
 run_guard "$repo"
 assert_status 1 'release missing tag equality'
 assert_contains '.github/workflows/rust-release.yml:1:' 'release missing tag equality'
-assert_contains 'error: release tags must be compared with the Cargo workspace version' \
+assert_contains 'error: release version computation must use the production auth artifact gate' \
     'release missing tag equality'
 assert_no_success_output 'release missing tag equality'
-pass 'release workflow must reject tags that differ from Cargo'
+pass 'release workflow must obtain its version through the production auth gate'
 
 repo=$(new_repo macos_readers_commented_out 0.8.1)
 cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
@@ -518,29 +539,27 @@ pass 'commented macOS reader assignments do not satisfy the guard'
 
 repo=$(new_repo release_checks_commented_out 0.8.1)
 cat > "$repo/.github/workflows/rust-release.yml" <<'SCRIPT'
-- name: Compute release version
-  shell: bash
-  run: |
-    cargo_version="0.0.0"
-    # cargo_version="$(scripts/workspace-version.sh)"
-    if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-      tag_version="${GITHUB_REF_NAME#v}"
-      if [[ "$tag_version" == "$cargo_version" ]]; then
-        :
-      fi
-      # if [[ "$tag_version" != "$cargo_version" ]]; then
-    fi
-    echo "OP_VERSION=$cargo_version" >> "$GITHUB_ENV"
+jobs:
+  version:
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+      - id: version
+        env:
+          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
+        run: |
+          # OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
+          #   tools/check-op-auth-artifact-commit.sh
+          echo "version=0.8.1" >> "$GITHUB_OUTPUT"
 SCRIPT
 run_guard "$repo"
 assert_status 1 'commented release checks'
 assert_contains '.github/workflows/rust-release.yml:1:' 'commented release checks'
-assert_contains 'error: release version computation must invoke scripts/workspace-version.sh' \
-    'commented release checks'
-assert_contains 'error: release tags must be compared with the Cargo workspace version' \
+assert_contains 'error: release version computation must use the production auth artifact gate' \
     'commented release checks'
 assert_no_success_output 'commented release checks'
-pass 'commented release derivation and comparison do not satisfy the guard'
+pass 'commented production auth gate calls do not satisfy the guard'
 
 repo=$(new_repo macos_noop_mismatch_and_reassignment 0.8.1)
 cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
@@ -734,6 +753,24 @@ assert_contains 'crates/op-editor-core/src/state.rs:1: error: empty documents mu
 assert_no_success_output 'hardcoded Rust product version'
 pass 'Rust product-version producers remain derived from Cargo metadata'
 
+repo=$(new_repo android_gradle_version_drift 0.8.1)
+sed -i.bak \
+    -e 's/versionName = canonicalVersionName/versionName = "0.8.1"/' \
+    -e 's/versionCode = canonicalVersionCode/versionCode = 8001/' \
+    -e 's#scripts/android-version[.]sh#scripts/other-version.sh#' \
+    "$repo/packaging/android-player/app/build.gradle.kts"
+rm "$repo/packaging/android-player/app/build.gradle.kts.bak"
+run_guard "$repo"
+assert_status 1 'Android Gradle version drift'
+assert_contains 'error: Android versionName must not be hard-coded' \
+    'Android Gradle version drift'
+assert_contains 'error: Android versionCode must not be hard-coded' \
+    'Android Gradle version drift'
+assert_contains 'packaging/android-player/app/build.gradle.kts:1: error: Android Gradle configuration must invoke scripts/android-version.sh' \
+    'Android Gradle version drift'
+assert_no_success_output 'Android Gradle version drift'
+pass 'Android Gradle cannot hard-code versions or bypass the canonical resolver'
+
 repo=$(new_repo versioned_local_product_dependency 0.8.1)
 printf '%s\n' \
     'op-host-native = { path = "../op-host-native", version = "0.8.1", features = ["gl-host"] }' \
@@ -745,6 +782,7 @@ assert_contains 'crates/op-host-desktop/Cargo.toml:1: error: local op-host-nativ
 assert_no_success_output 'versioned local product dependency'
 pass 'local product dependencies do not repeat the workspace version'
 
+# shellcheck disable=SC1091
 . "$script_dir/check-version-sync-policy.test-cases.sh"
 
 repo=$(new_repo guard_is_read_only 0.8.1)

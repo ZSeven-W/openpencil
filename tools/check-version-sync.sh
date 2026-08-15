@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 
+# The policy expressions below intentionally quote shell syntax as literal
+# regular expressions; they must not expand in this guard process.
+# shellcheck disable=SC2016
+
 set -euo pipefail
 
-script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
-repo_root=$(CDPATH= cd "$script_dir/.." && pwd -P)
+script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd -P)
+repo_root=$(CDPATH='' cd "$script_dir/.." && pwd -P)
 fixture_version=1.0.0
 
 for required_command in cargo jq bun rg; do
@@ -358,6 +362,81 @@ validate_chrome_extension_manifest_version() {
     fi
 }
 
+validate_android_version_metadata() {
+    android_script=scripts/android-version.sh
+    android_gradle=packaging/android-player/app/build.gradle.kts
+
+    if [[ ! -x "$android_script" ]]; then
+        report_missing "$android_script" \
+            'Android version resolver must exist and be executable'
+        return
+    fi
+
+    android_status=0
+    android_output=$("$android_script" "$repo_root/Cargo.toml" 2>&1) || android_status=$?
+    if [[ "$android_status" -ne 0 ]]; then
+        printf '%s\n' "$android_output" >&2
+        report_missing "$android_script" \
+            'failed to derive Android version metadata from the Cargo workspace version'
+        return
+    fi
+
+    android_name=$(printf '%s\n' "$android_output" | sed -n 's/^versionName=//p')
+    android_code=$(printf '%s\n' "$android_output" | sed -n 's/^versionCode=//p')
+    IFS=. read -r android_major android_minor android_patch <<< "$current_version"
+    expected_android_code=$((android_major * 1000000 + android_minor * 1000 + android_patch))
+    expected_android_output=$(printf 'versionName=%s\nversionCode=%s' \
+        "$current_version" "$expected_android_code")
+    if [[ "$android_name" != "$current_version" || \
+            "$android_code" != "$expected_android_code" || \
+            "$android_output" != "$expected_android_output" || \
+            ! "$android_code" =~ ^[1-9][0-9]*$ || \
+            "${#android_code}" -gt 10 || \
+            "$android_code" -gt 2100000000 ]]; then
+        report_missing "$android_script" \
+            'Android version resolver must emit exactly the canonical versionName and one valid versionCode'
+    fi
+
+    require_single_assignment "$android_gradle" versionName
+    require_single_assignment "$android_gradle" versionCode
+    require_statement "$android_gradle" \
+        'versionName[[:space:]]*=[[:space:]]*canonicalVersionName' \
+        'Android versionName must use canonicalVersionName'
+    require_statement "$android_gradle" \
+        'versionCode[[:space:]]*=[[:space:]]*canonicalVersionCode' \
+        'Android versionCode must use canonicalVersionCode'
+    require_regex "$android_gradle" \
+        '^[[:space:]]*val[[:space:]]+androidVersionOutput[[:space:]]*=[[:space:]]*providers[.]exec[[:space:]]*\{' \
+        'Android Gradle configuration must execute the canonical version resolver'
+    require_statement "$android_gradle" \
+        'repositoryRoot[.]file\(\"scripts/android-version[.]sh\"\)[.]asFile[.]absolutePath,' \
+        'Android Gradle configuration must invoke scripts/android-version.sh'
+    require_statement "$android_gradle" \
+        'repositoryRoot[.]file\(\"Cargo[.]toml\"\)[.]asFile[.]absolutePath,' \
+        'Android Gradle configuration must pass the root Cargo.toml explicitly'
+    require_regex "$android_gradle" \
+        '^[[:space:]]*val[[:space:]]+canonicalVersionName[[:space:]]*=[[:space:]]*Regex\(\"\"\"versionName=' \
+        'canonicalVersionName must be parsed from strict resolver metadata'
+    require_regex "$android_gradle" \
+        '^[[:space:]]*[.]matchEntire\(androidVersionLines\[0\]\)' \
+        'canonicalVersionName must consume the resolver versionName line'
+    require_regex "$android_gradle" \
+        '^[[:space:]]*val[[:space:]]+canonicalVersionCode[[:space:]]*=[[:space:]]*Regex\(\"\"\"versionCode=' \
+        'canonicalVersionCode must be parsed from strict resolver metadata'
+    require_regex "$android_gradle" \
+        '^[[:space:]]*[.]matchEntire\(androidVersionLines\[1\]\)' \
+        'canonicalVersionCode must consume the resolver versionCode line'
+    reject_matches regex "$android_gradle" \
+        '^[[:space:]]*val[[:space:]]+canonicalVersion(Name|Code)[[:space:]]*=[[:space:]]*[\"0-9]' \
+        'canonical Android version values must not be hard-coded'
+    reject_matches regex "$android_gradle" \
+        '^[[:space:]]*versionName[[:space:]]*=[[:space:]]*\"[0-9]' \
+        'Android versionName must not be hard-coded'
+    reject_matches regex "$android_gradle" \
+        '^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*[0-9]' \
+        'Android versionCode must not be hard-coded'
+}
+
 validate_release_tag() {
     tag_name=
     if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
@@ -426,6 +505,7 @@ validate_rust_product_version_producers() {
 validate_workspace_package_versions
 validate_package_versions
 validate_chrome_extension_manifest_version
+validate_android_version_metadata
 validate_release_tag
 validate_cli_bundle_version_template
 validate_rust_product_version_producers
@@ -517,8 +597,8 @@ reject_example_semver_tokens scripts/install-op.sh
 
 release_workflow=.github/workflows/rust-release.yml
 require_workflow_job_regex version \
-    '^[[:space:]]*-[[:space:]]+uses:[[:space:]]+actions/checkout@v4[[:space:]]*$' \
-    'version preflight must check out the repository'
+    '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+actions/checkout@[0-9a-f]{40}([[:space:]]*#.*)?$' \
+    'version preflight must use an immutable repository checkout'
 require_workflow_job_regex version \
     '^[[:space:]]*version:[[:space:]]*\$\{\{[[:space:]]*steps[.]version[.]outputs[.]version[[:space:]]*\}\}[[:space:]]*$' \
     'version preflight must expose the canonical version as a job output'
@@ -526,19 +606,14 @@ require_workflow_job_regex version \
     '^[[:space:]]*(-[[:space:]]+)?id:[[:space:]]+version[[:space:]]*$' \
     'version preflight must identify the canonical version step'
 require_workflow_job_regex version \
-    '^[[:space:]]*cargo_version[[:space:]]*=[[:space:]]*"\$\(scripts/workspace-version[.]sh\)"[[:space:]]*$' \
-    'release version computation must invoke scripts/workspace-version.sh'
+    '^[[:space:]]*tools/check-op-auth-artifact-commit[.]sh[[:space:]]*$' \
+    'release version computation must use the production auth artifact gate'
 require_workflow_job_regex version \
-    '^[[:space:]]*tag_version[[:space:]]*=[[:space:]]*"\$\{GITHUB_REF_NAME#v\}"[[:space:]]*$' \
-    'release version computation must derive the version from v* tags'
+    '^[[:space:]]*OP_AUTH_ARTIFACT_OUTPUT=\$GITHUB_OUTPUT[[:space:]]*\\[[:space:]]*$' \
+    'production auth gate must write the canonical version to GITHUB_OUTPUT'
 require_workflow_job_regex version \
-    '^[[:space:]]*if[[:space:]]+\[\[[[:space:]]*"\$tag_version"[[:space:]]*!=[[:space:]]*"\$cargo_version"[[:space:]]*\]\][[:space:]]*;[[:space:]]*then[[:space:]]*$' \
-    'release tags must be compared with the Cargo workspace version'
-require_workflow_job_regex version \
-    '^[[:space:]]*echo[[:space:]]+"version=\$cargo_version"[[:space:]]*>>[[:space:]]*"\$GITHUB_OUTPUT"[[:space:]]*$' \
-    'version preflight must write the canonical version to GITHUB_OUTPUT'
-require_single_assignment "$release_workflow" cargo_version
-require_single_assignment "$release_workflow" tag_version
+    'OP_AUTH_ARTIFACT_REF:[[:space:]]*\$\{\{[[:space:]]*github[.]ref[[:space:]]*\}\}' \
+    'production auth gate must validate the exact branch or tag ref'
 require_workflow_job_regex build \
     '^[[:space:]]*needs:[[:space:]]*version[[:space:]]*$' \
     'build must depend on the version preflight job'
