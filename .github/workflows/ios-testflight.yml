@@ -1,0 +1,240 @@
+name: iOS TestFlight
+
+# The `testflight` environment must require a reviewer and allow only protected
+# release tags/branches. Store signing and App Store Connect credentials as its
+# secrets. The repository's existing team and relay values remain secrets and
+# are referenced only by the protected publish job.
+#
+# Environment secrets:
+# - IOS_DISTRIBUTION_CERTIFICATE_BASE64
+# - IOS_DISTRIBUTION_CERTIFICATE_PASSWORD
+# - IOS_PROVISIONING_PROFILE_BASE64
+# - APP_STORE_CONNECT_API_KEY_BASE64
+# - APP_STORE_CONNECT_API_KEY_ID
+# - APP_STORE_CONNECT_ISSUER_ID
+#
+# Existing repository secrets (used only after environment approval):
+# - APPLE_TEAM_ID
+# - OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN
+# - OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL
+#
+# `testflight` environment variables:
+# - IOS_USES_NON_EXEMPT_ENCRYPTION (explicit product/legal decision: YES or NO)
+# - IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE (required only when the above is YES)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      auth_artifact_ref:
+        description: Full SHA of the reviewed auth-matrix-only commit selected as this run's ref
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify immutable source and auth matrix
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    outputs:
+      artifact_sha: ${{ steps.release.outputs.artifact_sha }}
+      base_sha: ${{ steps.release.outputs.base_sha }}
+      build_number: ${{ steps.release.outputs.build_number }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Checkout candidate artifact commit without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Require one auth-only commit and derive its trusted parent
+        id: release
+        shell: bash
+        env:
+          OP_AUTH_ARTIFACT_COMMIT: ${{ github.sha }}
+          OP_AUTH_ARTIFACT_SELECTED_COMMIT: ${{ inputs.auth_artifact_ref || github.sha }}
+          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          build_number="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
+          [[ "$build_number" =~ ^[1-9][0-9]*\.[1-9][0-9]*$ ]]
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+          OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
+            tools/check-op-auth-artifact-commit.sh
+
+      - name: Verify signed ABI 3 release matrix and hardened symbol surface
+        shell: bash
+        env:
+          OP_AUTH_PREBUILT_ROOT: ${{ github.workspace }}/crates/op-auth-bridge/prebuilt
+          OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION: ${{ steps.release.outputs.base_sha }}
+          OP_AUTH_RELEASE_WORKSPACE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          tools/check-ios-testflight-workflow.sh
+          tools/check-release-workflow-policy.test.sh ios
+          tools/check-op-auth-artifact-commit.test.sh
+          tools/check-op-auth-release-matrix.test.sh
+          CONFIGURATION=Release \
+          OP_AUTH_ARCHIVE="$OP_AUTH_PREBUILT_ROOT/aarch64-apple-ios/libop_auth.a" \
+          OP_AUTH_TARGET=aarch64-apple-ios \
+            tools/check-mobile-auth-link-input.sh
+
+  publish:
+    name: Archive, sign, and upload
+    needs: verify
+    runs-on: macos-26
+    timeout-minutes: 120
+    environment: testflight
+    steps:
+      - name: Checkout trusted source parent without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.verify.outputs.base_sha }}
+          submodules: recursive
+
+      - name: Checkout only signed auth data from the artifact commit
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 1
+          path: .op-auth-artifact
+          persist-credentials: false
+          ref: ${{ needs.verify.outputs.artifact_sha }}
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST
+            /crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST.sig
+            /crates/op-auth-bridge/prebuilt/aarch64-apple-darwin/
+            /crates/op-auth-bridge/prebuilt/aarch64-apple-ios/
+            /crates/op-auth-bridge/prebuilt/aarch64-apple-ios-sim/
+            /crates/op-auth-bridge/prebuilt/aarch64-linux-android/
+            /crates/op-auth-bridge/prebuilt/aarch64-pc-windows-msvc/
+            /crates/op-auth-bridge/prebuilt/aarch64-unknown-linux-gnu/
+            /crates/op-auth-bridge/prebuilt/x86_64-apple-darwin/
+            /crates/op-auth-bridge/prebuilt/x86_64-linux-android/
+            /crates/op-auth-bridge/prebuilt/x86_64-pc-windows-msvc/
+            /crates/op-auth-bridge/prebuilt/x86_64-unknown-linux-gnu/
+
+      - name: Install pinned Rust toolchain and iOS target
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.94 --profile minimal
+          rustup target add --toolchain 1.94 aarch64-apple-ios
+
+      - name: Install digest-pinned XcodeGen
+        id: xcodegen
+        shell: bash
+        env:
+          XCODEGEN_SHA256: 090ec29491aad50aec10631bf6e62253fed733c50f3aab0f5ffc86bc170bdbef
+          XCODEGEN_URL: https://github.com/yonaskolb/XcodeGen/releases/download/2.45.4/xcodegen.zip
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/xcodegen-2.45.4.zip"
+          install_root="$RUNNER_TEMP/xcodegen-2.45.4"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --silent --show-error "$XCODEGEN_URL" --output "$archive"
+          actual=$(shasum -a 256 "$archive" | awk '{ print $1 }')
+          [[ "$actual" == "$XCODEGEN_SHA256" ]] || {
+            echo "::error::XcodeGen archive digest mismatch"
+            exit 1
+          }
+          ditto -x -k "$archive" "$install_root"
+          binary="$install_root/xcodegen/bin/xcodegen"
+          [[ -x "$binary" && ! -L "$binary" ]]
+          [[ "$($binary --version)" == 'Version: 2.45.4' ]]
+          echo "binary=$binary" >> "$GITHUB_OUTPUT"
+
+      - name: Stage digest-pinned iOS Skia binary cache
+        shell: bash
+        run: >-
+          tools/pinned-release-tools.sh skia ios aarch64-apple-ios
+          "$RUNNER_TEMP/openpencil-skia-aarch64-apple-ios"
+
+      - name: Validate Xcode 26, iOS 26 SDK, and source before credentials are exposed
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode_version=$(xcodebuild -version)
+          printf '%s\n' "$xcode_version"
+          xcode_header=${xcode_version%%$'\n'*}
+          if [[ ! $xcode_header =~ ^Xcode[[:space:]]+([0-9]+)([.][0-9]+)*$ ]]; then
+            echo "::error::could not parse the selected Xcode version"
+            exit 1
+          fi
+          xcode_major=${BASH_REMATCH[1]}
+          if (( xcode_major < 26 )); then
+            echo "::error::App Store Connect requires Xcode 26 or newer"
+            exit 1
+          fi
+          iphoneos_sdk_version=$(xcrun --sdk iphoneos --show-sdk-version)
+          if [[ ! $iphoneos_sdk_version =~ ^([0-9]+)([.][0-9]+)*$ ]]; then
+            echo "::error::could not parse the selected iPhoneOS SDK version"
+            exit 1
+          fi
+          iphoneos_sdk_major=${BASH_REMATCH[1]}
+          if (( iphoneos_sdk_major < 26 )); then
+            echo "::error::App Store Connect requires the iOS 26 SDK or newer"
+            exit 1
+          fi
+          printf 'iPhoneOS SDK %s\n' "$iphoneos_sdk_version"
+          packaging/ios-player/Tests/validate_sources.sh
+
+      - name: Validate protected production release configuration
+        shell: bash
+        env:
+          RELAY_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          RELAY_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+          USES_NON_EXEMPT_ENCRYPTION: ${{ vars.IOS_USES_NON_EXEMPT_ENCRYPTION }}
+          EXPORT_COMPLIANCE_CODE: ${{ vars.IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE }}
+        run: |
+          set -euo pipefail
+          relay_cn=$RELAY_CN
+          relay_global=$RELAY_GLOBAL
+          unset RELAY_CN RELAY_GLOBAL
+          printf '%s\0%s\0' "$relay_cn" "$relay_global" \
+            | python3 tools/check-collab-bootstrap-urls.py
+          [[ "$USES_NON_EXEMPT_ENCRYPTION" == YES \
+              || "$USES_NON_EXEMPT_ENCRYPTION" == NO ]] || {
+            echo "::error::IOS_USES_NON_EXEMPT_ENCRYPTION must be explicitly set to YES or NO"
+            exit 2
+          }
+          if [[ "$USES_NON_EXEMPT_ENCRYPTION" == YES ]]; then
+            [[ "$EXPORT_COMPLIANCE_CODE" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || {
+              echo "::error::non-exempt encryption requires IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE"
+              exit 2
+            }
+          fi
+          echo "Validated the protected production release configuration."
+
+      - name: Publish the collaboration-enabled build to TestFlight
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          IOS_BUILD_NUMBER: ${{ needs.verify.outputs.build_number }}
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          IOS_MARKETING_VERSION: ${{ needs.verify.outputs.version }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE: ${{ vars.IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE }}
+          IOS_USES_NON_EXEMPT_ENCRYPTION: ${{ vars.IOS_USES_NON_EXEMPT_ENCRYPTION }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+          OP_AUTH_ARTIFACT_ROOT: ${{ github.workspace }}/.op-auth-artifact/crates/op-auth-bridge/prebuilt
+          OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION: ${{ needs.verify.outputs.base_sha }}
+          XCODEGEN_BIN: ${{ steps.xcodegen.outputs.binary }}
+        run: scripts/publish-ios-testflight.sh
