@@ -555,7 +555,7 @@ fn parse_args_maps_read_nodes_to_ts_tool_shape() {
         Command::ToolCall {
             tool: "read_nodes".to_string(),
             args: vec![
-                ("nodeIds".to_string(), "n10,n11".to_string()),
+                ("nodeIds".to_string(), r#"["n10","n11"]"#.to_string()),
                 ("depth".to_string(), "0".to_string()),
                 ("pageId".to_string(), "p1".to_string()),
                 ("includeVariables".to_string(), "true".to_string()),
@@ -577,7 +577,26 @@ fn parse_args_keeps_each_read_nodes_positional_id() {
         p.command,
         Command::ToolCall {
             tool: "read_nodes".to_string(),
-            args: vec![("nodeIds".to_string(), "n10,n11".to_string())],
+            args: vec![("nodeIds".to_string(), r#"["n10","n11"]"#.to_string())],
+        }
+    );
+}
+
+#[test]
+fn parse_args_splits_comma_joined_read_nodes_ids_into_json_array() {
+    let p = parse_args(&[
+        "read-nodes".to_string(),
+        "n10,n11".to_string(),
+        "n12".to_string(),
+        "".to_string(),
+    ])
+    .expect("parse");
+
+    assert_eq!(
+        p.command,
+        Command::ToolCall {
+            tool: "read_nodes".to_string(),
+            args: vec![("nodeIds".to_string(), r#"["n10","n11","n12"]"#.to_string())],
         }
     );
 }

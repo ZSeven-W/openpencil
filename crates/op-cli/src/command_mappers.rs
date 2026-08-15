@@ -112,7 +112,24 @@ pub(crate) fn map_delete(positionals: &[String], flags: &Flags) -> Result<Comman
 pub(crate) fn map_read_nodes(positionals: &[String], flags: &Flags) -> Result<Command, CliError> {
     let mut pairs = Vec::new();
     if positionals.len() > 1 {
-        pairs.push(pair("nodeIds", positionals[1..].join(",")));
+        // Canonical nodeIds shape matches map_get / batch_get: a JSON string
+        // array. Comma-joined positionals (`op read-nodes "n10,n11"`) are
+        // split client-side so they resolve to the same array.
+        let ids: Vec<String> = positionals[1..]
+            .iter()
+            .flat_map(|raw| raw.split(','))
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .collect();
+        if !ids.is_empty() {
+            let json = ids
+                .iter()
+                .map(|id| format!("\"{}\"", json_escape(id)))
+                .collect::<Vec<_>>()
+                .join(",");
+            pairs.push(pair("nodeIds", format!("[{json}]")));
+        }
     }
     if let Some(depth) = flag_value(flags, "depth") {
         pairs.push(pair("depth", depth));
