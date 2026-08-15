@@ -551,6 +551,7 @@ fn drop_reason_display(reason: &op_ai_skills::DropReason) -> &'static str {
         ReducedComplexity => "reduced",
         Deduped => "dedup",
         ContentMismatch => "mismatch",
+        ModelFamilyMiss => "family",
     }
 }
 

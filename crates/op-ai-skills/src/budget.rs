@@ -307,6 +307,7 @@ mod tests {
                 priority: 50,
                 budget,
                 category,
+                model_families: Vec::new(),
             },
             content: content.into(),
         }

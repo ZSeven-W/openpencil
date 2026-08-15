@@ -48,8 +48,9 @@ fn collect_materialize_patches(node: &PenNode, patches: &mut Vec<(NodeId, String
     }
 }
 
-/// Mirror of the desktop crate's `has_empty_image_fill` slot predicate
-/// (`op-host-desktop/src/image_search_session/targets.rs`), plus the
+/// Mirror of the shared `op-image-enrich` crate's `has_empty_image_fill`
+/// slot predicate (lifted there from
+/// `op-host-desktop/src/image_search_session/targets.rs`), plus the
 /// childless requirement this pass needs. Kept local because op-orchestrator
 /// must not depend on the desktop crate; keep the two in sync if the slot
 /// shape ever grows.

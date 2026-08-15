@@ -158,6 +158,17 @@ pub struct SkillMeta {
     pub priority: i32,
     pub budget: u32,
     pub category: SkillCategory,
+    /// Optional model-family gate (DS P2-a overlay mechanism). A skill whose
+    /// frontmatter lists `model_families` only enters the candidate set when
+    /// the request's model id (normalized lowercase, `provider/` prefix
+    /// stripped) contains one of the families as a substring. Empty = the
+    /// historical ungated behaviour every existing skill keeps.
+    ///
+    /// Strategic line: output contracts belong in the public corpus, model
+    /// behaviour adaptation belongs in the DS experiment field —
+    /// `skills/overlays/` is the test bed; overlay teaching migrates into
+    /// the public skills only after ab validation graduates it.
+    pub model_families: Vec<String>,
 }
 
 /// A skill after resolution — content possibly truncated to fit its
@@ -190,6 +201,13 @@ pub struct ResolveOptions {
     /// component library is loaded). Empty on every default path, so a
     /// no-library generation is byte-for-byte unchanged.
     pub pinned_skills: Vec<String>,
+    /// Model id of the requesting model, normalized at match time (lowercase,
+    /// `provider/` prefix stripped). Drives the `model_families` overlay gate
+    /// (DS P2-a): a family-gated skill only enters the candidate set when
+    /// this id contains one of its families. Empty (the default) never
+    /// admits a gated skill, so every path that does not know its model
+    /// keeps the historical behaviour.
+    pub model_id: String,
 }
 
 /// Design memory bundle (`ResolveOptions.memory` in the TS).
@@ -299,6 +317,9 @@ pub enum DropReason {
     Deduped,
     /// Removed because its content mismatched the request.
     ContentMismatch,
+    /// Excluded because the skill's `model_families` gate did not admit
+    /// the request's model id (overlay skills only — DS P2-a).
+    ModelFamilyMiss,
 }
 
 /// One skill that was excluded, with the reason it was dropped.

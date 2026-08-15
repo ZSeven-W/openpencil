@@ -6,7 +6,7 @@
 use crate::budget::trim_by_budget_pinned;
 use crate::loader::{get_skills_by_phase, SkillEntry};
 use crate::memory::generation_history::get_recent_entries;
-use crate::resolver::{filter_by_intent, inject_dynamic_content};
+use crate::resolver::{filter_by_intent, filter_by_model_family, inject_dynamic_content};
 use crate::types::{
     AgentContext, DropReason, DroppedSkill, Phase, ResolveMemory, ResolveOptions, SkillLoadEntry,
     SkillLoadReport,
@@ -53,19 +53,34 @@ pub fn resolve_skills(phase: Phase, user_message: &str, options: &ResolveOptions
         .budget_override
         .unwrap_or_else(|| phase.default_budget());
 
-    // Steps 1 + 2 — phase filter, then intent / flag match.
+    // Steps 1 + 2 — phase filter, then intent / flag match. Step 1.5 (DS
+    // P2-a overlays) sits between them: the `model_families` gate removes
+    // family-gated skills from the candidate set unless `options.model_id`
+    // admits them. Empty gates pass unchanged (the historical behaviour) and
+    // an empty model id admits nothing gated, so callers without a known
+    // model resolve byte-for-byte as before.
     let phase_skills: Vec<SkillEntry> = get_skills_by_phase(phase).into_iter().cloned().collect();
+    let (phase_skills, gated_out) = filter_by_model_family(&phase_skills, &options.model_id);
     let matched = filter_by_intent(&phase_skills, user_message, &options.flags);
 
-    // Diagnostics — phase skills that failed the intent/flag match.
-    let mut dropped: Vec<DroppedSkill> = phase_skills
+    // Diagnostics — skills gated out by the family filter, then phase skills
+    // that failed the intent/flag match.
+    let mut dropped: Vec<DroppedSkill> = gated_out
         .iter()
-        .filter(|p| !matched.iter().any(|m| m.meta.name == p.meta.name))
-        .map(|p| DroppedSkill {
-            name: p.meta.name.clone(),
-            reason: DropReason::IntentMiss,
+        .map(|g| DroppedSkill {
+            name: g.meta.name.clone(),
+            reason: DropReason::ModelFamilyMiss,
         })
         .collect();
+    dropped.extend(
+        phase_skills
+            .iter()
+            .filter(|p| !matched.iter().any(|m| m.meta.name == p.meta.name))
+            .map(|p| DroppedSkill {
+                name: p.meta.name.clone(),
+                reason: DropReason::IntentMiss,
+            }),
+    );
 
     // Per-phase memory loading (done before injection so history is
     // available for the `{{recentHistory}}` placeholder).

@@ -45,23 +45,32 @@ mod cleanup_bottom_nav_repairs;
 mod cleanup_clip_row_stroke;
 #[path = "cleanup_container_geometry.rs"]
 mod cleanup_container_geometry;
+#[path = "cleanup_equalize_siblings.rs"]
+mod cleanup_equalize_siblings;
 #[path = "cleanup_image_slots.rs"]
 mod cleanup_image_slots;
 #[path = "cleanup_root_and_nav.rs"]
 mod cleanup_root_and_nav;
 #[path = "cleanup_root_transform.rs"]
 mod cleanup_root_transform;
+#[path = "cleanup_section_margins.rs"]
+mod cleanup_section_margins;
 #[path = "cleanup_section_sizing.rs"]
 mod cleanup_section_sizing;
+#[path = "cleanup_slide_padding.rs"]
+mod cleanup_slide_padding;
 
 use cleanup_bottom_nav_repairs::*;
 use cleanup_clip_row_stroke::*;
 use cleanup_container_geometry::*;
+use cleanup_equalize_siblings::*;
 use cleanup_image_slots::*;
 use cleanup_root_and_nav::*;
 use cleanup_root_patches::*;
 use cleanup_root_transform::*;
+use cleanup_section_margins::*;
 use cleanup_section_sizing::*;
+use cleanup_slide_padding::*;
 
 /// 递归统计 `node` 下的后代数(不含自身)。
 ///
@@ -343,37 +352,6 @@ pub(crate) fn finalize_design_with_summary_and_policy(
     run_cleanup_passes_with_summary_and_policy(sink, plan, root_ids, summary, policy);
 }
 
-/// Env-gated (`OPENPENCIL_DEBUG_CLEANUP=1`) probe: log the named child's
-/// current height under `root_id`, tagged with the pass that just ran.
-fn debug_probe_child_height(sink: &dyn DocSink, root_id: &str, tag: &str) {
-    if std::env::var("OPENPENCIL_DEBUG_CLEANUP").is_err() {
-        return;
-    }
-    let Some(root) = sink
-        .state()
-        .active_children()
-        .iter()
-        .find(|n| n.id_str() == root_id)
-    else {
-        eprintln!("[CLEANUP-PROBE] {tag}: root {root_id} NOT FOUND");
-        return;
-    };
-    let Ok(v) = serde_json::to_value(root) else {
-        return;
-    };
-    for c in v
-        .get("children")
-        .and_then(|c| c.as_array())
-        .into_iter()
-        .flatten()
-    {
-        let name = c.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-        if name.to_lowercase().contains("sidebar") {
-            eprintln!("[CLEANUP-PROBE] {tag}: {name} height={:?}", c.get("height"));
-        }
-    }
-}
-
 pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_ids: &[&str]) {
     let mut summary = RepairSummary::default();
     run_cleanup_passes_with_summary(sink, plan, root_ids, &mut summary);
@@ -510,11 +488,15 @@ fn run_cleanup_passes_with_summary_and_policy(
         rid = apply_root_transform(sink, &rid, crate::ring_repair::wrap_ring_fragments);
         debug_probe_child_height(sink, &rid, "table_flush");
         counter.checkpoint(summary, CheckCategory::Structure, "chip+ring-extract");
+        // Chip/badge text contrast (DS P1-a): the specific, provable chip
+        // branch runs BEFORE the generic contrast repair so the chip-scoped
+        // proof (solid chip fill, chip shape) wins the repair and the generic
+        // pass then sees the fixed text as already readable.
+        crate::text_contrast_repair::repair_chip_text_contrast(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Layout, "chip-text-contrast");
         // Inter-section gap the planner would have set. Runs BEFORE the
-        // wrapper-inset pass below, which keys off whether the parent column
-        // gaps (`>= 12`): repairing the gap first lets that pass see the
-        // column the orchestrator path would have handed it, so both paths
-        // reach it in the same state.
+        // wrapper-inset pass below, which keys off the parent column's gaps
+        // (`>= 12`) — repairing the gap first hands both paths the same column.
         patch_root_section_gap(sink, &rid);
         debug_probe_child_height(sink, &rid, "root_gap");
         if policy.is_deck || (policy.roots_are_run_output && root_is_deck_board(sink, &rid)) {
@@ -526,6 +508,11 @@ fn run_cleanup_passes_with_summary_and_policy(
         // detectors, so it only ever fired for a user running
         // `lint_document` by hand.
         crate::text_contrast_repair::repair_text_contrast(sink, &rid);
+        // Section-margin ownership (DS P1.5) runs BEFORE the wrapper-double-inset
+        // stripper below: unifying first hands the stripper the group already
+        // normalized, and the floor afterwards then sees no flush content left.
+        unify_transparent_section_margins(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Layout, "unify-section-margins");
         // Transparent wrapper padding inside an already-padded/gapped column →
         // double inset: misaligned section edges + starved children (a padded
         // "Key Metrics" strip squeezed its KPI cards until label touched icon).
@@ -621,6 +608,12 @@ fn run_cleanup_passes_with_summary_and_policy(
         // passes below, so the slot resolves and validates like any other.
         materialize_empty_image_fill_slots(sink, rid);
         counter.checkpoint(summary, CheckCategory::Structure, "materialize-image-slots");
+        // Sibling-item scalar alignment (DS P1-a) runs AFTER slot
+        // materialization: an empty image-slot rect becomes an Image node
+        // above, so the structure comparison below sees the FINAL tree shape
+        // instead of treating the not-yet-materialized slot as drift.
+        equalize_sibling_items(sink, rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "equalize-sibling-items");
         // No-nav mobile screens share one deterministic closing contract:
         // 24-32px of bottom room. The repair reads the same resolved geometry
         // as the diagnostic and grows only root padding, never business nodes.
@@ -661,10 +654,19 @@ fn run_cleanup_passes_with_summary_and_policy(
         }
         debug_probe_child_height(sink, rid, "geometry");
         counter.checkpoint(summary, CheckCategory::Overflow, "geometry-validation");
-        // Geometry validation can change a repaired radial wrapper from its
-        // authored numeric width to `fill_container`. Re-run the centering pass
-        // against the final resolved bounds so absolute arc/label coordinates
-        // do not retain the pre-validation width and leave the ring off-centre.
+        // Deck/card safe-margin floor (P1-a pass 3 + P1.5 card gate, and the
+        // P2-b card vertical floor): AFTER geometry, evidence re-parsed from
+        // the current tree, so it stands down once section margins pulled
+        // content off the edge. The hook also runs the board text wrap
+        // (P2-c B) on the settled margins, checkpointed under Overflow.
+        enforce_slide_padding_floor_and_board_text_wrap(sink, rid, summary, &mut counter);
+        // Card trailing-void centre (DS P2-b B): after the floor, on settled
+        // margins; deck centring stays mounted earlier.
+        centre_card_board_content(sink, rid);
+        counter.checkpoint(summary, CheckCategory::Layout, "card-board-centre");
+        // Geometry validation can flip a repaired radial wrapper to
+        // `fill_container`; re-centre against the final resolved bounds so
+        // arc/label coordinates do not drift off-centre.
         crate::radial_repair::repair_radial_stacks(sink, rid);
         adjust_root_height_to_content(sink, rid, preserve_root_height);
         debug_probe_child_height(sink, rid, "adjust_root_height");

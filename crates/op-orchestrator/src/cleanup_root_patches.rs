@@ -13,6 +13,40 @@ use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 
 use crate::types::DocSink;
 
+/// Env-gated (`OPENPENCIL_DEBUG_CLEANUP=1`) probe: log the named child's
+/// current height under `root_id`, tagged with the pass that just ran.
+/// Lives here (not in the `cleanup.rs` spine) to keep the spine under the
+/// 800-line cap; the driver calls it through the existing
+/// `use cleanup_root_patches::*` glob.
+pub(super) fn debug_probe_child_height(sink: &dyn DocSink, root_id: &str, tag: &str) {
+    if std::env::var("OPENPENCIL_DEBUG_CLEANUP").is_err() {
+        return;
+    }
+    let Some(root) = sink
+        .state()
+        .active_children()
+        .iter()
+        .find(|n| n.id_str() == root_id)
+    else {
+        eprintln!("[CLEANUP-PROBE] {tag}: root {root_id} NOT FOUND");
+        return;
+    };
+    let Ok(v) = serde_json::to_value(root) else {
+        return;
+    };
+    for c in v
+        .get("children")
+        .and_then(|c| c.as_array())
+        .into_iter()
+        .flatten()
+    {
+        let name = c.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+        if name.to_lowercase().contains("sidebar") {
+            eprintln!("[CLEANUP-PROBE] {tag}: {name} height={:?}", c.get("height"));
+        }
+    }
+}
+
 /// The geometric half of the deck judgement, per root.
 ///
 /// [`crate::cleanup::CleanupPolicy::is_deck`] answers "the REQUEST asked for a
@@ -64,6 +98,60 @@ pub(super) fn centre_deck_board_content(sink: &mut dyn DocSink, root_id: &str) {
     });
 }
 
+/// Centre a card board's content on its fixed portrait surface (DS P2-b B).
+///
+/// The deck precedent centres on form alone; a card is a small independent
+/// board where an authored top stack can be the whole composition, so the
+/// card version fires only when the REAL layout proves a trailing void of at
+/// least [`CARD_VOID_CENTRE_FLOOR`] of the board height — that void is the
+/// same "content stacked from the top on a fixed board" defect the deck
+/// version exists for, measured instead of assumed. The repair is the same
+/// one-line `justifyContent:"center"` patch: it splits the void in half, it
+/// never restructures or rescales. Mounted in the driver AFTER the padding
+/// floor so the void is measured on settled margins; deck boards never fall
+/// into this gate (their centre sits earlier).
+pub(super) fn centre_card_board_content(sink: &mut dyn DocSink, root_id: &str) {
+    // Deck boards belong to the deck centre mounted earlier in the driver.
+    if !crate::geometry_validation::root_design_form(sink.state(), root_id).is_card_board() {
+        return;
+    }
+    let Some(root) = sink
+        .state()
+        .active_children()
+        .iter()
+        .find(|node| node.id_str() == root_id)
+    else {
+        return;
+    };
+    // Fixed board only: a hug-height root resolves to its content, where
+    // there is no void to centre away.
+    if root.height_px().is_none() {
+        return;
+    }
+    let value = serde_json::to_value(root).unwrap_or(serde_json::Value::Null);
+    // Respect an explicit distribution (deck precedent): a board that
+    // deliberately pushes content apart or pins it low is a composition.
+    if value
+        .get("justifyContent")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|mode| !mode.is_empty())
+    {
+        return;
+    }
+    let Some(void) = crate::board_trailing_void::root_trailing_void_ratio(sink.state(), root_id)
+    else {
+        return;
+    };
+    if void < crate::board_trailing_void::CARD_VOID_CENTRE_FLOOR {
+        return;
+    }
+    sink.apply(EditorCommand::PatchNodeData {
+        node_id: NodeId::new(root.id_str()),
+        patch_json: r#"{"justifyContent":"center"}"#.to_string(),
+        page_id: None,
+    });
+}
+
 /// Write the repaired root gap as a property patch.
 ///
 /// Deliberately NOT an `apply_root_transform`: that rebuilds the subtree and
@@ -96,3 +184,7 @@ pub(super) fn patch_root_section_gap(sink: &mut dyn DocSink, root_id: &str) {
         page_id: None,
     });
 }
+
+#[cfg(test)]
+#[path = "cleanup_card_board_tests.rs"]
+mod tests;

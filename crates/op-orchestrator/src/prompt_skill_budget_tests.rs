@@ -21,6 +21,7 @@ use op_ai_skills::budget::estimate_tokens;
 use op_ai_skills::resolver::inject_dynamic_content;
 
 use super::*;
+use crate::plan::{Region, RootFrameSpec};
 
 /// Every placeholder the orchestrator substitutes into a PLANNING skill.
 /// Adding a runtime-augmented planning key without adding it here is what
@@ -224,4 +225,334 @@ fn no_planning_skill_is_dropped_or_truncated_by_the_phase_budget() {
         ctx.report.budget_used,
         ctx.report.budget_max
     );
+}
+
+// ── Generation-phase hard-rule delivery guards (2026-08-14 DS corpus pass) ──
+//
+// Three corpus rules landed on 2026-08-14: SIBLING ISOMORPHISM (layout.md),
+// MARGIN FLOOR (slides.md / deck-contract.md, plus one generic sentence in
+// layout.md), and NODE NAMING + IMAGE SLOT CONTRACT (schema.md). These guards
+// exist because the 0814 run proved the "corpus was edited, model never saw
+// it" failure mode is alive on the generation path: a Basic non-mobile
+// subtask resolved schema/layout/text-rules/overflow/icon-catalog against
+// budget 5200 with `cjk-typography` squeezed into a 69-token truncated tail.
+// A rule sitting in a file on disk says nothing about what reached the model,
+// so each guard below reads the FINAL assembled subtask system_prompt on the
+// 0814 tier/intent shapes and asserts the rule's marker phrase verbatim.
+
+/// Rule 1 — same-list siblings are structurally isomorphic. `layout` is a
+/// Base skill (always kept regardless of budget), so the failure this guard
+/// exists for is its own per-skill cap silently cutting the tail —
+/// `no_skill_silently_exceeds_its_own_budget` catches that at the corpus
+/// level, this one catches it in the assembled prompt.
+#[test]
+fn basic_tier_subtask_prompt_carries_the_sibling_isomorphism_rule() {
+    let (call, report) = bsp(
+        &subtask(),
+        &plan(),
+        &DesignRequest {
+            model: Some("glm-4.6".into()), // Basic arm — the 0814 budget fixture tier
+            ..req()
+        },
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert_eq!(
+        report.budget_max, 5200,
+        "fixture must reproduce the 0814 Basic non-mobile budget arm"
+    );
+    assert!(
+        call.system_prompt.contains("SIBLING ISOMORPHISM"),
+        "the layout sibling-isomorphism rule never reached the subtask prompt — \
+         `layout` was dropped or truncated ({}/{} tokens; included {:?})",
+        report.budget_used,
+        report.budget_max,
+        report
+            .included
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect::<Vec<_>>(),
+    );
+}
+
+/// Rule 2 — the margin floor. The two deck carriers are verified with deck
+/// INTENT so the deck budget arm is what loads them, and each carrier has its
+/// own marker so one file delivering while the other was dropped still fails.
+#[test]
+fn deck_intent_prompt_carries_the_margin_floor_rule() {
+    let (call, report) = bsp(
+        &deck_subtask(),
+        &deck_plan(),
+        &deck_request("glm-4.6"),
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert_eq!(
+        report.budget_max,
+        op_ai_skills::Phase::Generation.default_budget(),
+        "deck fixture must exercise the deck budget arm, got {}",
+        report.budget_max
+    );
+    for marker in [
+        "MARGIN FLOOR",
+        "1080-wide card roots ≥48px",  // slides.md carrier
+        "the safe margin Law 3 locks", // deck-contract.md carrier
+    ] {
+        assert!(
+            call.system_prompt.contains(marker),
+            "deck prompt is missing {marker:?} — the margin-floor rule was dropped \
+             or truncated ({}/{} tokens; included {:?})",
+            report.budget_used,
+            report.budget_max,
+            report
+                .included
+                .iter()
+                .map(|e| e.name.as_str())
+                .collect::<Vec<_>>(),
+        );
+    }
+}
+
+/// Rule 2's generic one-liner lives in `layout` (a Base skill), so it must
+/// reach every subtask prompt — verified on the plain 0814 Basic 5200 path,
+/// where `slides` / `deck-contract` are keyword-gated OFF and `layout` is the
+/// only skill that can carry the phrase.
+#[test]
+fn basic_tier_subtask_prompt_carries_the_layout_margin_floor_sentence() {
+    let (call, report) = bsp(
+        &subtask(),
+        &plan(),
+        &DesignRequest {
+            model: Some("glm-4.6".into()),
+            ..req()
+        },
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert!(
+        call.system_prompt.contains("MARGIN FLOOR"),
+        "the generic margin-floor sentence in `layout` never reached the plain \
+         subtask prompt ({}/{} tokens)",
+        report.budget_used,
+        report.budget_max,
+    );
+}
+
+/// Rule 3 — every node named, image slots are `image` nodes. `schema` is a
+/// Base skill on the 0814 Basic 5200 path; assert both contract markers reach
+/// the assembled prompt.
+#[test]
+fn basic_tier_subtask_prompt_carries_the_node_name_and_image_slot_contract() {
+    let (call, report) = bsp(
+        &subtask(),
+        &plan(),
+        &DesignRequest {
+            model: Some("glm-4.6".into()),
+            ..req()
+        },
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    for marker in ["NODE NAMING", "IMAGE SLOT CONTRACT"] {
+        assert!(
+            call.system_prompt.contains(marker),
+            "the schema {marker:?} rule never reached the subtask prompt — \
+             `schema` was dropped or truncated ({}/{} tokens; included {:?})",
+            report.budget_used,
+            report.budget_max,
+            report
+                .included
+                .iter()
+                .map(|e| e.name.as_str())
+                .collect::<Vec<_>>(),
+        );
+    }
+}
+
+// ── DS P1.5: card domain corpus delivery guards ─────────────────────────────
+//
+// The card corpus (`domains/cards.md`) is the FIRST domain skill a card
+// board has ever had — the 0815 fixture proved "the file does not exist" and
+// "the file exists but the model never saw it" are the same failure on the
+// generation path. The two guards below assert the FINAL assembled subtask
+// system_prompt: the card rules reach a card intent, and do NOT reach a
+// non-card intent — keyword routing is a gate, not a resident.
+
+/// A card request ("知识卡片") resolves `cards` and its three hard rules
+/// reach the model verbatim. Deliberately the Basic tier: the card budget
+/// arm (the same Generation default the deck arm reads) is what makes the
+/// rules survivable there — the plain 5200 arm's always-kept Base skills
+/// alone resolve ~5440 tokens.
+#[test]
+fn card_intent_prompt_carries_the_card_contract_rules() {
+    let (call, report) = bsp(
+        &card_subtask(),
+        &card_plan(),
+        &card_request("glm-4.6"),
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert_eq!(
+        report.budget_max,
+        op_ai_skills::Phase::Generation.default_budget(),
+        "card fixture must exercise the card budget arm, got {}",
+        report.budget_max
+    );
+    for marker in [
+        "MARGIN OWNERSHIP",
+        "ITEM TEMPLATE",
+        "ORNAMENT DISCIPLINE",
+        "VERTICAL RHYTHM", // DS P2-b D: the card vertical-rhythm rule
+    ] {
+        assert!(
+            call.system_prompt.contains(marker),
+            "card prompt is missing {marker:?} — `cards` was dropped or truncated \
+             ({}/{} tokens; included {:?})",
+            report.budget_used,
+            report.budget_max,
+            report
+                .included
+                .iter()
+                .map(|e| e.name.as_str())
+                .collect::<Vec<_>>(),
+        );
+    }
+}
+
+/// The card budget arm keys off the PORTRAIT artboard, never the wording —
+/// same single-classifier routing as the deck arm.
+#[test]
+fn the_card_budget_arm_keys_off_the_portrait_artboard() {
+    assert!(is_card_board(&card_plan()));
+    // A square (1080x1080) is not a card board and keeps the page budget.
+    let mut square = card_plan();
+    square.root_frame.height = 1080.0;
+    assert!(!is_card_board(&square));
+    // A phone screen is its own contract, not a card.
+    let mut mobile = card_plan();
+    mobile.root_frame.width = 390.0;
+    mobile.root_frame.height = 844.0;
+    assert!(!is_card_board(&mobile));
+}
+
+/// The gate direction that matters: a NON-card intent (a deck subtask whose
+/// label/screen are not covers) must not carry the card rules — they are
+/// keyword-gated, not always-on budget residents.
+#[test]
+fn a_non_card_intent_prompt_omits_the_card_contract_rules() {
+    let mut deck_subtask = deck_subtask();
+    deck_subtask.label = "正文页".into();
+    deck_subtask.screen = Some("正文页".into());
+    let (call, _report) = bsp(
+        &deck_subtask,
+        &deck_plan(),
+        &deck_request("glm-4.6"),
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    for marker in ["MARGIN OWNERSHIP", "ITEM TEMPLATE"] {
+        assert!(
+            !call.system_prompt.contains(marker),
+            "deck prompt must not carry the card rule {marker:?} — the keyword \
+             gate is not routing"
+        );
+    }
+}
+
+/// Card fixtures: a 1080x1440 portrait board plan plus a "法则" subtask, and
+/// the card-series request the routing test needs (知识卡片 is a keyword the
+/// card domain skill must fire on).
+fn card_plan() -> OrchestratorPlan {
+    OrchestratorPlan {
+        root_frame: RootFrameSpec {
+            id: "card".into(),
+            name: "知识卡片".into(),
+            width: 1080.0,
+            height: 1440.0,
+            layout: None,
+            gap: None,
+            padding: None,
+            fill: None,
+        },
+        subtasks: vec![],
+        style_guide_name: None,
+    }
+}
+
+fn card_subtask() -> crate::plan::Subtask {
+    crate::plan::Subtask {
+        id: "rule-01".into(),
+        label: "法则 01".into(),
+        region: crate::plan::Region {
+            width: 1080.0,
+            height: 600.0,
+        },
+        id_prefix: "rule-01".into(),
+        parent_frame_id: None,
+        elements: None,
+        screen: None,
+        generated_root_id: None,
+        existing_section_labels: None,
+        retry_feedback: None,
+    }
+}
+
+fn card_request(model: &str) -> DesignRequest {
+    DesignRequest {
+        prompt: "帮我做一套知识卡片：如何早起".into(),
+        model: Some(model.into()),
+        ..req()
+    }
+}
+
+/// Deck fixtures (mirror `prompt_deck_skill_tests`) — the fixed 1920×1080
+/// projector artboard that routes the deck budget arm and loads the deck
+/// keyword-gated skills.
+fn deck_plan() -> OrchestratorPlan {
+    OrchestratorPlan {
+        root_frame: RootFrameSpec {
+            id: "deck".into(),
+            name: "Deck".into(),
+            width: 1920.0,
+            height: 1080.0,
+            layout: None,
+            gap: None,
+            padding: None,
+            fill: None,
+        },
+        subtasks: vec![],
+        style_guide_name: None,
+    }
+}
+
+fn deck_subtask() -> crate::plan::Subtask {
+    crate::plan::Subtask {
+        id: "cover".into(),
+        label: "封面".into(),
+        region: Region {
+            width: 1920.0,
+            height: 1080.0,
+        },
+        id_prefix: "cover".into(),
+        parent_frame_id: None,
+        elements: None,
+        screen: Some("封面".into()),
+        generated_root_id: None,
+        existing_section_labels: None,
+        retry_feedback: None,
+    }
+}
+
+fn deck_request(model: &str) -> DesignRequest {
+    DesignRequest {
+        prompt: "帮我做一个 8 页的融资路演 PPT，深色科技感".into(),
+        model: Some(model.into()),
+        ..req()
+    }
 }

@@ -20,6 +20,9 @@ use plan_normalize_nav::{ensure_requested_bottom_nav_subtask, is_bottom_nav_subt
 #[path = "plan_normalize_dimensions.rs"]
 mod plan_normalize_dimensions;
 
+#[path = "plan_normalize_items.rs"]
+mod plan_normalize_items;
+
 #[path = "plan_continuation_contract.rs"]
 mod plan_continuation_contract;
 
@@ -36,6 +39,10 @@ mod tests_nav;
 #[cfg(test)]
 #[path = "plan_normalize_dimensions_tests.rs"]
 mod tests_dimensions;
+
+#[cfg(test)]
+#[path = "plan_normalize_items_tests.rs"]
+mod tests_items;
 
 /// 规范化产出的派生信息。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,6 +220,16 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
             }
         }
     }
+
+    // DS P2-a experiment (item ②): repeated item-family bundling, gated to
+    // the deepseek model family. Runs LAST so the merged subtask inherits
+    // the first member's fully-normalized fields (id_prefix / parent_frame_id
+    // / inferred dashboard region). The model travels inside `req.model`
+    // (the call sites already pass the whole request), so no signature
+    // change; an absent model never enables the gate. See
+    // `plan_normalize_items` for the experiment semantics + graduation
+    // condition (ab-validate glm/kimi before removing the gate).
+    plan_normalize_items::bundle_repeated_item_families(plan, req.model.as_deref().unwrap_or(""));
 
     NormInfo {
         is_mobile,

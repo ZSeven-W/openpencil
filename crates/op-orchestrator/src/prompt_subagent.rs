@@ -209,6 +209,12 @@ pub(super) fn build_subagent_prompt_core(
     // grew under it: the deck skills were then silently dropped/tail-cut,
     // which `prompt_deck_skill_tests` now asserts against.
     //
+    // Cards (DS P1.5) join the same arm for the same reason: the plain
+    // Basic 5200 arm's always-kept Base skills alone resolve ~5440 tokens
+    // (0815 measurement), so the card contract would otherwise be dropped
+    // for BudgetExhausted on EVERY card prompt a weak model sees — the
+    // 2026-08-04 `slides` failure, in a card jacket.
+    //
     // Measured 2026-08-09 on that file's fixtures, every resolved skill
     // untruncated: Basic 11529/13200, Standard and Full both 12548/13200.
     // Standard lands on Full's exact skill set here — at an unbounded budget
@@ -218,13 +224,14 @@ pub(super) fn build_subagent_prompt_core(
     // load simply fills the phase. Buying it back means raising the phase
     // default, which belongs to the corpus owner, not to this override.
     let is_deck = is_deck_board(plan);
+    let is_card = is_card_board(plan);
     let deck_budget = Phase::Generation.default_budget();
     let budget_override = match tier {
         ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(9200),
-        ModelTier::Basic if is_deck => Some(deck_budget),
+        ModelTier::Basic if is_deck || is_card => Some(deck_budget),
         ModelTier::Basic => Some(5200),
         ModelTier::Standard if is_mobile_layout => Some(9500),
-        ModelTier::Standard if is_deck => Some(deck_budget),
+        ModelTier::Standard if is_deck || is_card => Some(deck_budget),
         ModelTier::Standard => Some(6500),
         ModelTier::Full => None,
     };
@@ -265,6 +272,7 @@ pub(super) fn build_subagent_prompt_core(
     let (mut filtered, resolve_report, filter_drops) =
         resolve_generation_skills_after_prompt_filter(
             &intent,
+            model_id,
             &opts,
             tier,
             is_mobile_screen,
