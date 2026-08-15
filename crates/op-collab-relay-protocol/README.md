@@ -29,6 +29,44 @@ before pairing.
 They do not constrain where a peer runs: an overseas peer may connect to a
 China relay when policy and network reachability permit it.
 
+## Pairing sealed invite v2
+
+Short pairing codes store an opaque sealed invite in the control plane. The
+storage handle deliberately retains the v0.8.4 derivation: the first 16 bytes
+of BLAKE3 `derive_key("openpencil/op-collab-relay-protocol/pairing-code-id/v1",
+canonical_code)`. It remains separate from the HKDF sealing key.
+
+The sealed binary format has its own version, independent from the locator
+protocol version:
+
+```text
+[sealed_version=2][nonce:12][ChaCha20 ciphertext][Poly1305 tag:16]
+```
+
+The 32-byte AEAD key is HKDF-SHA256 with the canonical pairing-code bytes as
+IKM, the 12-byte nonce as salt, and
+`"openpencil/op-collab-relay-protocol/sealed-pairing-invite/chacha20poly1305-key/v2\0"`
+as info. The AAD is
+`"openpencil/op-collab-relay-protocol/sealed-pairing-invite/chacha20poly1305-aad/v2\0" || sealed_version || nonce`.
+The nonce must be nonzero and unique for a pairing code; production sealing
+uses a fresh CSPRNG value. The full 16-byte RFC 8439 tag is always carried.
+The v2 parser ceiling is 541 bytes. The public opaque transport/storage ceiling
+remains the v0.8.4 value of 569 bytes so a rolling control-plane upgrade can
+continue storing and forwarding legacy blobs without understanding them.
+
+Version 2 intentionally does not open the BLAKE3-XOF/XOR/MAC sealed v1
+envelope published in OpenPencil v0.8.4. The outer opaque transport media type remains
+`application/vnd.openpencil.relay-sealed-invite-v1`; its schema is only a
+bounded byte string, while the first byte inside that string selects this
+independently versioned cryptographic envelope. Existing control planes and
+edges can forward v2 without learning or deploying its cipher, but that does
+not make mixed clients compatible: a v0.8.4 short code opens only on a v0.8.4
+peer, and a sealed v2 short code opens only on a sealed-v2 peer. Same-version
+pairing is required; the LAN/manual endpoint path remains an alternative where
+the product exposes it. The current host collapses an unsupported sealed
+version to the generic invalid-invite UI error rather than surfacing a
+version-specific message.
+
 ## Challenge-bound proof v2
 
 Authentication mode `2` replaces the reusable v1 possession attestation with a

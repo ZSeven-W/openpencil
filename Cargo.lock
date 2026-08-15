@@ -3899,6 +3899,7 @@ version = "0.8.5"
 dependencies = [
  "base64",
  "blake3",
+ "chacha20poly1305",
  "getrandom 0.3.4",
  "hkdf",
  "hmac",
