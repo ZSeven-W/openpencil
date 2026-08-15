@@ -1,9 +1,9 @@
 format=1
 target=x86_64-unknown-linux-gnu
 artifact=libop_auth.a
-version=0.8.4
+version=0.8.5
 abi=3
 sha256=2d8b3eefe60baf84b6637a06cbc0b09603b41c21fbabe83faa9b17f5162243ca
 hardening=op-auth-hardened-v1
-source_revision=74e9f3d5dda851fcb5795c35dc3a506404a2d602
-build_id=op-auth-firstparty-v1-20260811d.a2.06cf0f3747dae90afa53bb478e2abac9ab12201ae60dd6329e8baee568eca5c4
+source_revision=204956f0e15dfd02af49759bdb2f435dae96fae3
+build_id=openpencil-0.8.5-5a7b834d498b.a3.b9db7bad56f72cb43e8eda700a81a248aa920c36452c90e1b55eef389b25ac4d

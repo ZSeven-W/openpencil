@@ -1,0 +1,9 @@
+format=1
+target=aarch64-apple-ios-sim
+artifact=libop_auth.a
+version=0.8.5
+abi=3
+sha256=a01d9e92aa9598d97e6ad06361b30100d5247dd8a69c16871ea1ae5c857c4110
+hardening=op-auth-hardened-v1
+source_revision=204956f0e15dfd02af49759bdb2f435dae96fae3
+build_id=openpencil-0.8.5-5a7b834d498b.a3.ad0b4b9c79a48f557389372d5901ec609015b01849a2bb75f3739469e4ded02d

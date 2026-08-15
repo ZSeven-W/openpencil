@@ -1,9 +1,9 @@
 format=1
 target=x86_64-pc-windows-msvc
 artifact=op_auth.lib
-version=0.8.4
+version=0.8.5
 abi=3
 sha256=c0bcdf5b71f2efb357631f43aaca41b13b98c7142bceffa6f524d0fc43851a20
 hardening=op-auth-signed-unobfuscated-v1
-source_revision=74e9f3d5dda851fcb5795c35dc3a506404a2d602
-build_id=op-auth-firstparty-v1-20260811d.a2.a1923ae4a9da44f877cdd09304f6155bd299e66d8d83e7113506b0479c42b928
+source_revision=204956f0e15dfd02af49759bdb2f435dae96fae3
+build_id=openpencil-0.8.5-5a7b834d498b.a3.d0f6109e92dabf4a31ea4caf81bc28ebd2af1b3eefaa1269eb3cd49eddd1af1e
