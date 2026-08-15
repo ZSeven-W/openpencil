@@ -148,9 +148,9 @@ fn design_launch_preparation_captures_builtin_model_before_detaching_chat() {
             display_name: "MiniMax".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "sk-test".into(),
-            // The persisted model is only a fallback. The active tab selects
-            // a different discovered row below and must win for this turn.
-            model: "MiniMax-M2.7".into(),
+            // Both rows are explicitly saved; the active tab selects the
+            // second one and must win for this turn.
+            models: vec!["MiniMax-M2.7".into(), "MiniMax-M3".into()],
             base_url: "http://localhost:9".into(),
             enabled: true,
         });
@@ -185,7 +185,7 @@ fn design_launch_preparation_captures_builtin_model_before_detaching_chat() {
 }
 
 #[test]
-fn selected_builtin_config_overrides_persisted_fallback_model() {
+fn selected_builtin_config_is_narrowed_to_the_saved_tab_model() {
     let mut state = EditorState::new();
     state
         .editor_ui
@@ -197,7 +197,7 @@ fn selected_builtin_config_overrides_persisted_fallback_model() {
             display_name: "MiniMax".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "sk-test".into(),
-            model: "persisted-fallback".into(),
+            models: vec!["persisted-fallback".into(), "active-tab-model".into()],
             base_url: "http://localhost:9".into(),
             enabled: true,
         });
@@ -208,37 +208,6 @@ fn selected_builtin_config_overrides_persisted_fallback_model() {
         "Active tab model",
     )];
     state.chat.selected_model = 0;
-    let request = state
-        .editor_ui
-        .agent_settings
-        .begin_builtin_model_catalog_refresh(
-            op_editor_core::BuiltinModelCatalogTarget::Agent("builtin-1".into()),
-            1,
-        )
-        .expect("catalog request");
-    state
-        .editor_ui
-        .agent_settings
-        .take_pending_builtin_model_catalog_refresh();
-    let expected = state
-        .editor_ui
-        .agent_settings
-        .builtin_model_catalog_config_for_request(&request)
-        .expect("provider snapshot");
-    assert!(state
-        .editor_ui
-        .agent_settings
-        .apply_builtin_model_catalog_refresh_outcome_if_current(
-            &expected,
-            &request,
-            op_editor_core::BuiltinModelCatalogRefreshOutcome::Success {
-                models: vec![op_editor_core::BuiltinModelOption::new(
-                    "active-tab-model",
-                    "Active tab model",
-                )],
-            },
-        ));
-
     let entry = state
         .chat
         .selected_model_entry()
@@ -246,10 +215,11 @@ fn selected_builtin_config_overrides_persisted_fallback_model() {
     let config = providers::selected_builtin_agent_config(&state, entry)
         .expect("selected builtin resolves a provider config");
 
-    assert_eq!(config.model, "active-tab-model");
+    assert_eq!(config.models, ["active-tab-model"]);
     assert_eq!(
-        state.editor_ui.agent_settings.builtin_agents[0].model, "persisted-fallback",
-        "routing must override a clone, never mutate persisted settings"
+        state.editor_ui.agent_settings.builtin_agents[0].models,
+        ["persisted-fallback", "active-tab-model"],
+        "routing must narrow a clone, never mutate persisted settings"
     );
 }
 
@@ -266,7 +236,7 @@ fn stale_builtin_row_cannot_override_current_provider_credentials() {
             display_name: "Provider".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "sk-new".into(),
-            model: "current-model".into(),
+            models: vec!["current-model".into()],
             base_url: "http://localhost:9".into(),
             enabled: true,
         });

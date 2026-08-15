@@ -165,17 +165,12 @@ pub(super) fn selected_builtin_agent_config(
         .iter()
         .find(|agent| agent.id == id && agent.ready())?
         .clone();
-    let model_is_current = config.model.trim() == selected_model
-        || state
-            .editor_ui
-            .agent_settings
-            .builtin_model_catalog_options(id)
-            .iter()
-            .any(|option| option.id.trim() == selected_model);
-    if !model_is_current {
+    if !config.has_model(selected_model) {
         return None;
     }
-    config.model = selected_model.to_string();
+    // Downstream provider construction remains single-model. Narrow the
+    // cloned request config without mutating the persisted provider.
+    config.models = vec![selected_model.to_string()];
     config.ready().then_some(config)
 }
 

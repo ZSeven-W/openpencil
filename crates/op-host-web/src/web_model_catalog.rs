@@ -13,6 +13,7 @@ use wasm_bindgen::JsCast;
 use crate::repaint_ctx::RepaintContext;
 
 const DAEMON_BUILTIN_PREFIX: &str = "daemon-builtin:";
+const DAEMON_BROWSER_BUILTIN_PREFIX: &str = "web-credential:builtin:";
 
 /// Fetch the daemon catalog once and populate the browser model picker.
 pub(crate) fn fetch_models<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
@@ -73,7 +74,18 @@ fn parse_model_entry(value: &serde_json::Value) -> Option<ModelEntry> {
         .and_then(serde_json::Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())?;
-    let (builtin_id, _) = parse_builtin_model_key(value)?;
+    let explicit_builtin_id = object
+        .get("builtinProviderId")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let builtin_id = if let Some(id) = explicit_builtin_id {
+        let structured = value.strip_prefix("builtin:")?;
+        let model = structured.strip_prefix(id)?.strip_prefix(':')?;
+        (!model.trim().is_empty()).then_some(id)?
+    } else {
+        parse_builtin_model_key(value)?.0
+    };
     let display_name = object
         .get("displayName")
         .and_then(serde_json::Value::as_str)
@@ -103,6 +115,22 @@ fn parse_builtin_model_key(value: &str) -> Option<(&str, &str)> {
     let id = parts.next()?.trim();
     let model = parts.next()?.trim();
     (!id.is_empty() && !model.is_empty()).then_some((id, model))
+}
+
+fn daemon_builtin_id(entry: &ModelEntry) -> Option<&str> {
+    entry
+        .builtin_provider_id
+        .as_deref()?
+        .strip_prefix(DAEMON_BUILTIN_PREFIX)
+}
+
+fn daemon_model_id(entry: &ModelEntry) -> Option<&str> {
+    let builtin_id = daemon_builtin_id(entry)?;
+    let structured = entry.value.trim().strip_prefix("builtin:")?;
+    structured
+        .strip_prefix(builtin_id)?
+        .strip_prefix(':')
+        .filter(|model| !model.trim().is_empty())
 }
 
 /// Heuristic provider tag for a legacy daemon built-in model id.
@@ -161,50 +189,44 @@ pub(crate) fn reconcile_models(state: &mut EditorState) {
         .agent_settings
         .builtin_agents
         .iter()
-        .filter(|agent| agent.discovery_ready())
+        .filter(|agent| agent.ready())
         .collect::<Vec<_>>();
     let local_model_ids = local_agents
         .iter()
-        .flat_map(|agent| {
-            std::iter::once(agent.model.trim()).chain(
-                state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_model_catalog_options(&agent.id)
-                    .iter()
-                    .map(|option| option.id.trim()),
-            )
-        })
+        .flat_map(|agent| agent.models.iter().map(|model| model.trim()))
         .collect::<std::collections::HashSet<_>>();
     let mut available_models = state
         .chat
         .discovered_models
         .iter()
         .filter(|entry| {
-            entry
-                .builtin_provider_id
-                .as_deref()
-                .is_some_and(|id| id.starts_with(DAEMON_BUILTIN_PREFIX))
-                && !local_model_ids.contains(
-                    parse_builtin_model_key(&entry.value)
-                        .map(|(_, model)| model)
-                        .unwrap_or_else(|| entry.value.trim()),
-                )
+            let Some(daemon_id) = daemon_builtin_id(entry) else {
+                return false;
+            };
+            // Browser-owned daemon rows are persistence mirrors of the local
+            // credential store. The local row is authoritative; keeping a
+            // cached mirror would resurrect disabled/deleted models until a
+            // later catalog fetch.
+            if daemon_id.starts_with(DAEMON_BROWSER_BUILTIN_PREFIX) {
+                return false;
+            }
+            if daemon_model_id(entry).is_some() {
+                return true;
+            }
+            // Older daemons exposed bare ids without provider identity. Keep
+            // their historical model-name dedupe while structured rows use
+            // the exact browser-owned mirror identity above.
+            !local_model_ids.contains(
+                parse_builtin_model_key(&entry.value)
+                    .map(|(_, model)| model)
+                    .unwrap_or_else(|| entry.value.trim()),
+            )
         })
         .cloned()
         .collect::<Vec<_>>();
     for agent in local_agents {
         let mut seen = std::collections::HashSet::new();
-        for (model, display_name) in std::iter::once((agent.model.as_str(), agent.model.as_str()))
-            .chain(
-                state
-                    .editor_ui
-                    .agent_settings
-                    .builtin_model_catalog_options(&agent.id)
-                    .iter()
-                    .map(|option| (option.id.as_str(), option.display_name.as_str())),
-            )
-        {
+        for model in &agent.models {
             let model = model.trim();
             if model.is_empty() || !seen.insert(model) {
                 continue;
@@ -214,7 +236,7 @@ pub(crate) fn reconcile_models(state: &mut EditorState) {
                 agent.id.clone(),
                 agent.display_name.clone(),
                 format!("builtin:{}:{model}", agent.id),
-                display_name,
+                model,
             ));
         }
     }

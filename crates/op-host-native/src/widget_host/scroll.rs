@@ -7,6 +7,20 @@ use op_editor_ui::widgets::scroll_flow;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
 impl WidgetHostNative {
+    pub(in crate::widget_host) fn refresh_agent_settings_hover_after_scroll(
+        &mut self,
+        x: f32,
+        y: f32,
+    ) {
+        if self.editor_state.editor_ui.touch_chrome() {
+            let settings = &mut self.editor_state.editor_ui.agent_settings;
+            settings.builtin_model_menu_hover = None;
+            settings.builtin_preset_menu_hover = None;
+        } else {
+            self.update_agent_settings_hover(x, y);
+        }
+    }
+
     /// Scroll the chat transcript message list when a wheel / trackpad
     /// pan lands over the panel body. The body swallows the event so a
     /// wheel over a long reply never zooms the canvas beneath. Mirrors
@@ -99,6 +113,36 @@ impl WidgetHostNative {
         true
     }
 
+    fn try_scroll_agent_model_menu(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        self.refresh_layout_scene();
+        let (panel, panel_rect) = self.agent_settings_geometry(viewport_width, viewport_height);
+        let point = Point2D::new(x, y);
+        let Some(max) = panel.builtin_model_scroll_max_at(panel_rect, point) else {
+            return false;
+        };
+        let changed = scroll_by_max(
+            &mut self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_model_menu_scroll,
+            -delta,
+            max,
+        );
+        if changed {
+            self.refresh_agent_settings_hover_after_scroll(x, y);
+            self.mark_dirty();
+        }
+        changed || !self.editor_state.editor_ui.touch_chrome()
+    }
+
     fn try_scroll_agent_preset_menu(
         &mut self,
         x: f32,
@@ -113,17 +157,23 @@ impl WidgetHostNative {
         let Some(max) = panel.builtin_preset_scroll_max_at(panel_rect, point) else {
             return false;
         };
-        let settings = &mut self.editor_state.editor_ui.agent_settings;
-        if scroll_by_max(&mut settings.builtin_preset_menu_scroll, -delta, max) {
+        let changed = scroll_by_max(
+            &mut self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_preset_menu_scroll,
+            -delta,
+            max,
+        );
+        if changed {
+            self.refresh_agent_settings_hover_after_scroll(x, y);
             self.mark_dirty();
         }
         true
     }
 
-    /// Route a vertical delta to the responsive Agent Settings surface.
-    /// The surface swallows deltas over its chrome, but only the resolved body
-    /// scrolls. This keeps touch, wheel, and trackpad paths on one geometry and
-    /// prevents a modal gesture from reaching the canvas below.
+    /// Route a vertical delta to Agent Settings without leaking to the canvas.
     pub(in crate::widget_host) fn scroll_agent_settings_at(
         &mut self,
         x: f32,
@@ -142,6 +192,9 @@ impl WidgetHostNative {
             return false;
         }
         drop(panel);
+        if self.try_scroll_agent_model_menu(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         if self.try_scroll_agent_preset_menu(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
@@ -159,8 +212,17 @@ impl WidgetHostNative {
             .scroll_by(-delta_y, max_scroll, 0.0);
         let changed = (self.editor_state.editor_ui.agent_settings.scroll_y.offset - before).abs()
             > f32::EPSILON;
+        let menu_open = self
+            .editor_state
+            .editor_ui
+            .agent_settings
+            .builtin_model_menu_open
+            .is_some();
+        let menu_revealed = menu_open
+            && self.ensure_focused_agent_settings_visible(viewport_width, viewport_height);
+        let changed = changed || menu_revealed;
         if changed {
-            self.update_agent_settings_hover(x, y);
+            self.refresh_agent_settings_hover_after_scroll(x, y);
             self.mark_dirty();
         }
         true

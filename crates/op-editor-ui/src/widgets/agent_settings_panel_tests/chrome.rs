@@ -288,7 +288,7 @@ fn touch_saved_provider_actions_are_visible_and_have_44_point_targets() {
             display_name: "OpenAI compatible".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "sk-test".into(),
-            model: "model".into(),
+            models: vec!["model".into()],
             base_url: "https://example.test/v1".into(),
             enabled: true,
         });

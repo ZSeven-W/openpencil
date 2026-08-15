@@ -44,9 +44,12 @@ impl WidgetHostNative {
         (panel, panel_rect)
     }
 
-    /// Scroll the active settings field into the keyboard-safe content body.
-    /// The field rect is document-space; paint and hit-testing apply the same
-    /// scroll offset later, so this updates only the canonical scroll state.
+    /// Scroll the active settings interaction into the keyboard-safe content
+    /// body. Ordinary fields reveal themselves; an open built-in model menu
+    /// uses as much of the safe body as possible and keeps a stable slice while
+    /// its checkbox rows are selected. Geometry is document-space; paint and
+    /// hit-testing apply the same scroll offset later, so this updates only the
+    /// canonical scroll state.
     pub(in crate::widget_host) fn ensure_focused_agent_settings_visible(
         &mut self,
         viewport_w: f32,
@@ -69,16 +72,20 @@ impl WidgetHostNative {
                 _ => return false,
             };
             let current = panel.effective_scroll(panel_rect);
-            let field_top = field.origin.y - current;
-            let field_bottom = field_top + field.size.y;
             let visible_top = content.origin.y + FOCUSED_FIELD_GAP;
             let visible_bottom = content.origin.y + content.size.y - FOCUSED_FIELD_GAP;
-            let desired = if field_bottom > visible_bottom {
-                current + field_bottom - visible_bottom
-            } else if field_top < visible_top {
-                current - (visible_top - field_top)
+            let desired = if let Some(menu) = panel.focused_model_menu_rect(panel_rect) {
+                reveal_menu_scroll(current, menu, visible_top, visible_bottom)
             } else {
-                current
+                let field_top = field.origin.y - current;
+                let field_bottom = field_top + field.size.y;
+                if field_bottom > visible_bottom {
+                    current + field_bottom - visible_bottom
+                } else if field_top < visible_top {
+                    current - (visible_top - field_top)
+                } else {
+                    current
+                }
             };
             desired.clamp(0.0, panel.max_scroll(panel_rect))
         };
@@ -92,11 +99,39 @@ impl WidgetHostNative {
     }
 }
 
+/// Pick the nearest outer-scroll offset that exposes as much of `menu` as the
+/// keyboard-safe viewport can hold. When the menu is shorter than the viewport,
+/// the valid interval fully contains it; when it is taller, the interval keeps
+/// the viewport fully covered by it. Clamping the current offset into that
+/// interval is deliberately stable across checkbox presses, so selecting one
+/// model cannot snap the outer surface back to the text field.
+fn reveal_menu_scroll(current: f32, menu: Rect, visible_top: f32, visible_bottom: f32) -> f32 {
+    let visible_h = (visible_bottom - visible_top).max(0.0);
+    if visible_h <= f32::EPSILON {
+        return current;
+    }
+    let menu_bottom = menu.origin.y + menu.size.y;
+    let (min_scroll, max_scroll) = if menu.size.y <= visible_h {
+        // Fully contain the menu in the visible band.
+        (menu_bottom - visible_bottom, menu.origin.y - visible_top)
+    } else {
+        // The menu cannot fit; cover the whole visible band with the nearest
+        // slice of it, maximizing the usable option area.
+        (menu.origin.y - visible_top, menu_bottom - visible_bottom)
+    };
+    current.clamp(min_scroll, max_scroll)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
+    use op_editor_core::agent_settings::{
+        BuiltinAgentField, BuiltinAgentKind, BuiltinModelMenuTarget, SettingsFocus,
+    };
     use op_editor_core::size_class::EditorSizeClass;
+    use op_editor_core::{
+        BuiltinModelCatalogRefreshOutcome, BuiltinModelCatalogTarget, BuiltinModelOption,
+    };
     use op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit;
     use op_editor_ui::Point2D;
 
@@ -114,6 +149,49 @@ mod tests {
             .editor_ui
             .agent_settings
             .add_builtin_agent_with_defaults("Provider", "sk-test", "model");
+    }
+
+    fn add_catalog_agent_with_open_model_menu(host: &mut WidgetHostNative) {
+        let settings = &mut host.editor_state_mut().editor_ui.agent_settings;
+        let id = settings.add_builtin_agent_config(
+            "Provider",
+            "sk-test",
+            "model-0",
+            BuiltinAgentKind::OpenAiCompat,
+            "https://api.example.com/v1",
+        );
+        let request = settings
+            .begin_builtin_model_catalog_refresh(BuiltinModelCatalogTarget::Agent(id), 1)
+            .expect("configured provider starts discovery");
+        let expected = settings
+            .builtin_model_catalog_config_for_request(&request)
+            .expect("current discovery config");
+        settings.take_pending_builtin_model_catalog_refresh();
+        assert!(
+            settings.apply_builtin_model_catalog_refresh_outcome_if_current(
+                &expected,
+                &request,
+                BuiltinModelCatalogRefreshOutcome::Success {
+                    models: (0..8)
+                        .map(|index| {
+                            BuiltinModelOption::new(
+                                format!("model-{index}"),
+                                format!("Model {index}"),
+                            )
+                        })
+                        .collect(),
+                },
+            )
+        );
+        settings.focus = Some(SettingsFocus::BuiltinAgent {
+            index: 0,
+            field: BuiltinAgentField::Model,
+        });
+        settings.builtin_model_menu_open = Some(BuiltinModelMenuTarget::Agent(0));
+        host.editor_state_mut()
+            .editor_ui
+            .settings_input
+            .set_text("model-0");
     }
 
     fn find_edit(host: &WidgetHostNative, viewport_w: f32, viewport_h: f32) -> Point2D {
@@ -218,6 +296,68 @@ mod tests {
                 "{viewport_w}pt focused field must clear keyboard: {field_bottom} > {visible_bottom}"
             );
             assert!(scroll > 0.0, "{viewport_w}pt focus press must reveal");
+        }
+    }
+
+    #[test]
+    fn open_model_menu_maximizes_keyboard_safe_area_and_multi_select_keeps_scroll() {
+        for (viewport_w, viewport_h, size_class, keyboard_h) in [
+            (390.0, 844.0, EditorSizeClass::Compact, 500.0),
+            (834.0, 1112.0, EditorSizeClass::Medium, 700.0),
+        ] {
+            let mut host = touch_host(size_class);
+            add_catalog_agent_with_open_model_menu(&mut host);
+            host.last_viewport_w = viewport_w;
+            host.last_viewport_h = viewport_h;
+
+            assert!(host.set_keyboard_occlusion(keyboard_h));
+
+            let (point, before_scroll) = {
+                let (panel, panel_rect) = host.agent_settings_geometry(viewport_w, viewport_h);
+                let content = panel.resolved_content_viewport(panel_rect);
+                let menu = panel
+                    .focused_model_menu_rect(panel_rect)
+                    .expect("focused model menu");
+                let scroll = panel.effective_scroll(panel_rect);
+                let visible_top = content.origin.y + FOCUSED_FIELD_GAP;
+                let visible_bottom = content.origin.y + content.size.y - FOCUSED_FIELD_GAP;
+                let menu_top = menu.origin.y - scroll;
+                let menu_bottom = menu_top + menu.size.y;
+                let overlap =
+                    (menu_bottom.min(visible_bottom) - menu_top.max(visible_top)).max(0.0);
+                let maximum = menu.size.y.min((visible_bottom - visible_top).max(0.0));
+                assert!(
+                    (overlap - maximum).abs() <= 0.01,
+                    "{viewport_w}pt menu should use the maximum keyboard-safe area: {overlap} != {maximum}"
+                );
+
+                // Touch row 1 rather than the already-saved first row. The
+                // reveal policy keeps at least the top portion of an oversized
+                // menu visible on both phone and tablet keyboard geometries.
+                let point = Point2D::new(menu.origin.x + menu.size.x / 2.0, menu_top + 6.0 + 66.0);
+                assert_eq!(
+                    panel.hit_test(panel_rect, point),
+                    AgentSettingsHit::SelectBuiltinModel {
+                        index: Some(0),
+                        row: 1,
+                    },
+                    "{viewport_w}pt second touch row must remain hittable"
+                );
+                (point, scroll)
+            };
+
+            assert!(host.dispatch_agent_settings_press(point.x, point.y, viewport_w, viewport_h,));
+
+            let settings = &host.editor_state().editor_ui.agent_settings;
+            assert!(settings.builtin_agents[0].has_model("model-1"));
+            assert_eq!(
+                settings.builtin_model_menu_open,
+                Some(BuiltinModelMenuTarget::Agent(0))
+            );
+            assert!(
+                (settings.scroll_y.offset - before_scroll).abs() <= 0.01,
+                "{viewport_w}pt multi-select must not snap the outer body back to the field"
+            );
         }
     }
 }

@@ -84,7 +84,7 @@ pub fn commit_settings_focus(
                         _ => None,
                     });
             if let Some(agent) = settings.builtin_agents.get_mut(index) {
-                write_builtin_field(agent, field, trimmed);
+                write_builtin_field(agent, field, &draft);
                 let credential_changed =
                     previous_credential_field
                         .as_deref()
@@ -111,18 +111,23 @@ pub fn commit_settings_focus(
         }
         SettingsFocus::BuiltinAgentDraft(field) => {
             if let Some(agent) = state.editor_ui.agent_settings.builtin_agent_draft.as_mut() {
-                write_builtin_field(agent, field, trimmed);
+                write_builtin_field(agent, field, &draft);
             }
             if matches!(
                 field,
                 BuiltinAgentField::ApiKey | BuiltinAgentField::BaseUrl
             ) {
-                state
-                    .editor_ui
-                    .agent_settings
-                    .invalidate_builtin_model_catalog(
-                        &crate::agent_settings_builtin_models::BuiltinModelCatalogTarget::Draft,
-                    );
+                let settings = &mut state.editor_ui.agent_settings;
+                settings.invalidate_builtin_model_catalog(
+                    &crate::agent_settings_builtin_models::BuiltinModelCatalogTarget::Draft,
+                );
+                // Credentials landing in the add-provider form start the
+                // model fetch immediately, so the Model dropdown is
+                // already warm when the user reaches it.
+                let _ = settings.begin_builtin_model_catalog_refresh_if_due(
+                    crate::agent_settings_builtin_models::BuiltinModelCatalogTarget::Draft,
+                    now_ms,
+                );
             }
         }
         SettingsFocus::ImageGenProfile { index, field } => {
@@ -199,8 +204,9 @@ fn commit_image_search(
 fn write_builtin_field(
     agent: &mut crate::agent_settings::BuiltinAgentConfig,
     field: BuiltinAgentField,
-    trimmed: &str,
+    draft: &str,
 ) {
+    let trimmed = draft.trim();
     match field {
         BuiltinAgentField::DisplayName => {
             if !trimmed.is_empty() {
@@ -208,7 +214,7 @@ fn write_builtin_field(
             }
         }
         BuiltinAgentField::ApiKey => agent.api_key = trimmed.to_string(),
-        BuiltinAgentField::Model => agent.model = trimmed.to_string(),
+        BuiltinAgentField::Model => agent.set_models(draft.lines()),
         BuiltinAgentField::BaseUrl => {
             if agent.base_url_editable() {
                 agent.base_url = if trimmed.is_empty() {
@@ -346,6 +352,37 @@ mod tests {
     }
 
     #[test]
+    fn committing_model_lines_trims_blanks_and_deduplicates_in_order() {
+        let mut state = EditorState::new();
+        state.editor_ui.agent_settings.add_builtin_agent_config(
+            "Provider",
+            "sk-test",
+            "old-model",
+            crate::BuiltinAgentKind::OpenAiCompat,
+            "https://example.test/v1",
+        );
+        state.editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+            index: 0,
+            field: BuiltinAgentField::Model,
+        });
+        state
+            .editor_ui
+            .settings_input
+            .set_text(" model-b \n\nmodel-a\nmodel-b\n  ");
+
+        assert!(commit_settings_focus(
+            &mut state,
+            SettingsCommitScope::Operator,
+            123,
+        ));
+
+        assert_eq!(
+            state.editor_ui.agent_settings.builtin_agents[0].models,
+            ["model-b", "model-a"]
+        );
+    }
+
+    #[test]
     fn clearing_builtin_base_url_restores_the_selected_provider_endpoint() {
         let mut state = EditorState::new();
         state.editor_ui.agent_settings.add_builtin_agent_config(
@@ -437,5 +474,51 @@ mod tests {
             AcpAgentConnectPhase::Idle
         );
         assert_eq!(settings.acp_agent_connection_for(&id).info, None);
+    }
+
+    #[test]
+    fn committing_draft_credentials_queues_draft_model_discovery() {
+        let mut state = EditorState::new();
+        state.editor_ui.agent_settings.begin_builtin_agent_draft();
+        state.editor_ui.agent_settings.focus =
+            Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
+        state.editor_ui.settings_input.set_text("sk-new");
+
+        assert!(commit_settings_focus(
+            &mut state,
+            SettingsCommitScope::Operator,
+            7,
+        ));
+
+        let request = state
+            .editor_ui
+            .agent_settings
+            .take_pending_builtin_model_catalog_refresh()
+            .expect("a credentialed draft fetches models without opening the menu");
+        assert_eq!(request.target, crate::BuiltinModelCatalogTarget::Draft);
+    }
+
+    #[test]
+    fn clearing_draft_credentials_does_not_probe() {
+        let mut state = EditorState::new();
+        state.editor_ui.agent_settings.begin_builtin_agent_draft();
+        state.editor_ui.agent_settings.focus =
+            Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
+        state.editor_ui.settings_input.set_text("");
+
+        assert!(commit_settings_focus(
+            &mut state,
+            SettingsCommitScope::Operator,
+            8,
+        ));
+
+        assert_eq!(
+            state
+                .editor_ui
+                .agent_settings
+                .take_pending_builtin_model_catalog_refresh(),
+            None,
+            "discovery needs a credential; an empty key falls back to typing"
+        );
     }
 }

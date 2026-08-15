@@ -31,7 +31,9 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use op_editor_core::agent_settings::{
     AgentSettings, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentPresetMenuTarget,
+    BuiltinModelMenuTarget,
 };
+use op_editor_core::agent_settings_builtin_models::BuiltinModelCatalogTarget;
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::{AgentSettingsButton, BuiltinAgentPresetKey, ButtonPressTarget};
 
@@ -49,6 +51,13 @@ pub enum BuiltinHit {
     SelectPreset {
         index: Option<usize>,
         preset: BuiltinAgentPresetKey,
+    },
+    ToggleModelMenu(Option<usize>),
+    /// Row index into the card's runtime model catalog — resolved to
+    /// the model id by the press arm, so this enum stays `Copy`.
+    SelectModel {
+        index: Option<usize>,
+        row: usize,
     },
     SaveDraft,
     CancelDraft,
@@ -147,6 +156,26 @@ fn hit_test_with_touch(
                     };
                 }
             }
+            if settings.builtin_model_menu_open == Some(BuiltinModelMenuTarget::Agent(index)) {
+                if let Some(row) = crate::widgets::agent_settings_builtin_model_menu::model_row_at(
+                    settings,
+                    card,
+                    Some(index),
+                    point,
+                    touch,
+                ) {
+                    if settings
+                        .builtin_model_catalog_options(&agent.id)
+                        .get(row)
+                        .is_some()
+                    {
+                        return BuiltinHit::SelectModel {
+                            index: Some(index),
+                            row,
+                        };
+                    }
+                }
+            }
             if agent_settings_builtin_parts::kind_toggle_target(agent, card, point, touch).is_some()
             {
                 return BuiltinHit::ToggleKind(index);
@@ -163,11 +192,20 @@ fn hit_test_with_touch(
                 if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
                     continue;
                 }
-                if (field_input_rect_for_ui(settings, card, Some(index), row, touch))
-                    .contains(point)
-                {
-                    return BuiltinHit::Focus { index, field };
+                let input = field_input_rect_for_ui(settings, card, Some(index), row, touch);
+                if !input.contains(point) {
+                    continue;
                 }
+                if field == BuiltinAgentField::Model {
+                    // The right edge is the dropdown trigger; the rest of
+                    // the field stays a plain focus target (which opens
+                    // the menu as well — see the press arms).
+                    let chevron_w = if touch { 44.0 } else { 24.0 };
+                    if point.x >= input.origin.x + input.size.x - chevron_w {
+                        return BuiltinHit::ToggleModelMenu(Some(index));
+                    }
+                }
+                return BuiltinHit::Focus { index, field };
             }
         } else if touch && compact_touch_switch_target(card).contains(point) {
             return BuiltinHit::ToggleEnabled(index);
@@ -210,6 +248,19 @@ fn hit_test_with_touch(
                 };
             }
         }
+        if settings.builtin_model_menu_open == Some(BuiltinModelMenuTarget::Draft) {
+            if let Some(row) = crate::widgets::agent_settings_builtin_model_menu::model_row_at(
+                settings, card, None, point, touch,
+            ) {
+                if settings
+                    .builtin_model_catalog_options_for(&BuiltinModelCatalogTarget::Draft)
+                    .get(row)
+                    .is_some()
+                {
+                    return BuiltinHit::SelectModel { index: None, row };
+                }
+            }
+        }
         if agent_settings_builtin_parts::kind_toggle_target(agent, card, point, touch).is_some() {
             return BuiltinHit::ToggleDraftKind;
         }
@@ -225,9 +276,17 @@ fn hit_test_with_touch(
             if field == BuiltinAgentField::BaseUrl && !agent.base_url_editable() {
                 continue;
             }
-            if (field_input_rect_for_ui(settings, card, None, row, touch)).contains(point) {
-                return BuiltinHit::FocusDraft(field);
+            let input = field_input_rect_for_ui(settings, card, None, row, touch);
+            if !input.contains(point) {
+                continue;
             }
+            if field == BuiltinAgentField::Model {
+                let chevron_w = if touch { 44.0 } else { 24.0 };
+                if point.x >= input.origin.x + input.size.x - chevron_w {
+                    return BuiltinHit::ToggleModelMenu(None);
+                }
+            }
+            return BuiltinHit::FocusDraft(field);
         }
         let form_h = expanded_card_height_for_ui(settings, None, touch);
         if (save_button_rect_for_ui(card, form_h, touch)).contains(point) {
@@ -337,6 +396,90 @@ fn open_preset_menu_card(
         }
     }
     None
+}
+
+/// Card whose model dropdown is open AND contains `point` — the same
+/// y-walk the preset version uses, so hover and scroll routing agree
+/// with paint on where the open menu actually is.
+fn open_model_menu_card(
+    content: Rect,
+    settings: &AgentSettings,
+    point: Point2D,
+    touch: bool,
+) -> Option<Rect> {
+    let mut card_y =
+        agents_body_top(content) + HEADER_HEIGHT + SUBTITLE_HEIGHT + sync_error_height(settings);
+    for (index, _) in settings.builtin_agents.iter().enumerate() {
+        let card = card_rect(
+            content.origin.x,
+            card_y,
+            content.size.x,
+            card_height_for_ui(settings, index, touch),
+        );
+        if crate::widgets::agent_settings_builtin_model_menu::model_menu_contains(
+            settings,
+            card,
+            Some(index),
+            point,
+            touch,
+        ) {
+            return Some(card);
+        }
+        card_y += card.size.y + CARD_GAP;
+    }
+    if settings.builtin_agent_draft.is_some() {
+        let card = card_rect(
+            content.origin.x,
+            card_y,
+            content.size.x,
+            draft_card_height_for_ui(settings, touch),
+        );
+        if crate::widgets::agent_settings_builtin_model_menu::model_menu_contains(
+            settings, card, None, point, touch,
+        ) {
+            return Some(card);
+        }
+    }
+    None
+}
+
+/// Hovered model-menu row under the cursor — `None` outside the menu.
+pub fn model_hover_at_for_ui(
+    content: Rect,
+    settings: &AgentSettings,
+    point: Point2D,
+    touch: bool,
+) -> Option<usize> {
+    let card = open_model_menu_card(content, settings, point, touch)?;
+    let index = settings
+        .builtin_model_menu_open
+        .map(|target| match target {
+            BuiltinModelMenuTarget::Agent(index) => Some(index),
+            BuiltinModelMenuTarget::Draft => None,
+        })?;
+    crate::widgets::agent_settings_builtin_model_menu::model_row_at(
+        settings, card, index, point, touch,
+    )
+}
+
+/// Scroll cap for the model menu under the cursor — `None` when the
+/// cursor is not over an open menu, so wheel routing can fall through.
+pub fn model_scroll_max_at_for_ui(
+    content: Rect,
+    settings: &AgentSettings,
+    point: Point2D,
+    touch: bool,
+) -> Option<f32> {
+    let _card = open_model_menu_card(content, settings, point, touch)?;
+    let index = settings
+        .builtin_model_menu_open
+        .map(|target| match target {
+            BuiltinModelMenuTarget::Agent(index) => Some(index),
+            BuiltinModelMenuTarget::Draft => None,
+        })?;
+    Some(
+        crate::widgets::agent_settings_builtin_model_menu::model_scroll_max(settings, index, touch),
+    )
 }
 
 pub fn paint_builtin_section(
@@ -563,11 +706,16 @@ fn paint_compact_builtin_agent_card(
     } else {
         mask_key(&agent.api_key)
     };
+    let model_summary = match (agent.first_model(), agent.models.len()) {
+        (Some(model), count) if count > 1 => format!("{model}  +{}", count - 1),
+        (Some(model), _) => model.to_string(),
+        (None, _) => t_settings(ui, "builtin.modelsOnePerLine").to_string(),
+    };
     paint_row_status_line_at_fitted(
         cx,
         card,
         text_x,
-        &format!("{}  ·  {api_key}", agent.model),
+        &format!("{model_summary}  ·  {api_key}"),
         if ready {
             theme.status_success
         } else {

@@ -270,10 +270,21 @@ pub(super) fn apply_stored_snapshots(
                 sanitized_credential_json: None,
             };
         }
-        let sanitized_credential_json = strip_legacy_acp_credentials(&mut value);
+        let stripped_credential_json = strip_legacy_acp_credentials(&mut value);
+        let sanitized_credential_json;
         let source = match validation::credential_payload(&value) {
-            Ok(payload) => {
-                apply_credential_payload(state, payload);
+            Ok(validated) => {
+                let migrated = validated.migrated_legacy_single_model_cards;
+                apply_credential_payload(state, validated.payload);
+                // A known v2 one-card-per-model snapshot is safe to migrate,
+                // but it must be made durable immediately. Prefer the fully
+                // canonical writer over the raw ACP-only scrub when both
+                // migrations apply to the same snapshot.
+                let canonical_credential_json = migrated
+                    .then(|| credentials_json(state))
+                    .flatten()
+                    .or(stripped_credential_json);
+                sanitized_credential_json = canonical_credential_json;
                 if sanitized_credential_json.is_some() {
                     StoredCredentialSource::SanitizedSeparate
                 } else {
@@ -282,6 +293,7 @@ pub(super) fn apply_stored_snapshots(
             }
             Err(_) => {
                 clear_local_credentials(state);
+                sanitized_credential_json = stripped_credential_json;
                 if sanitized_credential_json.is_some() {
                     StoredCredentialSource::UnsupportedSanitizedSeparate
                 } else {

@@ -1,5 +1,9 @@
 use super::WidgetHost;
-use op_editor_core::Tool;
+use op_editor_core::agent_settings::BuiltinModelMenuTarget;
+use op_editor_core::{
+    BuiltinAgentField, BuiltinAgentKind, BuiltinModelCatalogRefreshOutcome,
+    BuiltinModelCatalogTarget, BuiltinModelOption, SettingsFocus, Tool,
+};
 use op_editor_ui::Point2D;
 
 const VIEWPORT_W: f32 = 1200.0;
@@ -52,6 +56,138 @@ fn horizontal_trackpad_pan_moves_canvas_viewport() {
     assert!(host.apply_pan_gesture(point.x, point.y, -120.0, 0.0, VIEWPORT_W, VIEWPORT_H));
 
     assert_eq!(host.editor_state.viewport.pan_x, -120.0);
+    assert_eq!(host.editor_state.viewport.pan_y, 0.0);
+}
+
+fn seed_scrollable_agent_settings(host: &mut WidgetHost) {
+    host.editor_state.editor_ui.agent_settings_open = true;
+    for index in 0..12 {
+        host.editor_state
+            .editor_ui
+            .agent_settings
+            .add_builtin_agent_config(
+                format!("Provider {index}"),
+                format!("sk-test-{index}"),
+                format!("model-{index}"),
+                BuiltinAgentKind::OpenAiCompat,
+                "https://api.example.com/v1",
+            );
+    }
+}
+
+fn settings_content_point(host: &WidgetHost) -> Point2D {
+    let panel = op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel::for_web_editor(
+        &host.editor_state,
+    );
+    let rect = panel.rect(VIEWPORT_W, VIEWPORT_H);
+    let content = panel.resolved_content_viewport(rect);
+    Point2D::new(
+        content.origin.x + content.size.x / 2.0,
+        content.origin.y + 12.0,
+    )
+}
+
+#[test]
+fn trackpad_pan_scrolls_agent_settings_body_without_moving_canvas() {
+    let mut host = WidgetHost::new();
+    seed_scrollable_agent_settings(&mut host);
+    let point = settings_content_point(&host);
+
+    // Real macOS trackpad events often carry a tiny horizontal component,
+    // which classifies the browser wheel as Pan instead of Wheel/Zoom.
+    assert!(host.apply_pan_gesture(point.x, point.y, -0.5, -80.0, VIEWPORT_W, VIEWPORT_H,));
+
+    assert!(host.editor_state.editor_ui.agent_settings.scroll_y.offset > 0.0);
+    assert_eq!(host.editor_state.viewport.pan_x, 0.0);
+    assert_eq!(host.editor_state.viewport.pan_y, 0.0);
+
+    // A horizontal-only gesture over the opaque modal is still owned by the
+    // modal and must not leak through to canvas pan.
+    let body_offset = host.editor_state.editor_ui.agent_settings.scroll_y.offset;
+    assert!(host.apply_pan_gesture(point.x, point.y, -90.0, 0.0, VIEWPORT_W, VIEWPORT_H,));
+    assert_eq!(
+        host.editor_state.editor_ui.agent_settings.scroll_y.offset,
+        body_offset
+    );
+    assert_eq!(host.editor_state.viewport.pan_x, 0.0);
+    assert_eq!(host.editor_state.viewport.pan_y, 0.0);
+}
+
+#[test]
+fn trackpad_pan_over_model_menu_scrolls_menu_before_settings_body() {
+    let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.agent_settings_open = true;
+    let id = host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_config(
+            "Provider",
+            "sk-test",
+            "model-0",
+            BuiltinAgentKind::OpenAiCompat,
+            "https://api.example.com/v1",
+        );
+    let target = BuiltinModelCatalogTarget::Agent(id);
+    let request = host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .begin_builtin_model_catalog_refresh(target, 0)
+        .expect("configured provider starts discovery");
+    let expected = host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_config_for_request(&request)
+        .expect("current discovery config");
+    assert!(host
+        .editor_state
+        .editor_ui
+        .agent_settings
+        .apply_builtin_model_catalog_refresh_outcome_if_current(
+            &expected,
+            &request,
+            BuiltinModelCatalogRefreshOutcome::Success {
+                models: (0..12)
+                    .map(|index| {
+                        BuiltinModelOption::new(format!("model-{index}"), format!("Model {index}"))
+                    })
+                    .collect(),
+            },
+        ));
+    host.editor_state.editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::Model,
+    });
+    host.editor_state
+        .editor_ui
+        .agent_settings
+        .builtin_model_menu_open = Some(BuiltinModelMenuTarget::Agent(0));
+
+    let point = {
+        let panel = op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel::for_web_editor(
+            &host.editor_state,
+        );
+        let rect = panel.rect(VIEWPORT_W, VIEWPORT_H);
+        let content = panel.resolved_content_viewport(rect);
+        let x = content.origin.x + content.size.x * 0.65;
+        (0..content.size.y.ceil() as usize)
+            .map(|row| Point2D::new(x, content.origin.y + row as f32 + 0.5))
+            .find(|point| {
+                panel
+                    .builtin_model_scroll_max_at(rect, *point)
+                    .is_some_and(|max| max > 0.0)
+            })
+            .expect("open model menu is inside settings viewport")
+    };
+
+    assert!(host.apply_pan_gesture(point.x, point.y, -0.5, -48.0, VIEWPORT_W, VIEWPORT_H,));
+
+    let settings = &host.editor_state.editor_ui.agent_settings;
+    assert!(settings.builtin_model_menu_scroll.offset > 0.0);
+    assert_eq!(settings.scroll_y.offset, 0.0);
+    assert_eq!(host.editor_state.viewport.pan_x, 0.0);
     assert_eq!(host.editor_state.viewport.pan_y, 0.0);
 }
 

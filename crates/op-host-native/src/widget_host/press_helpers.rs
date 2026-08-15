@@ -98,7 +98,23 @@ impl WidgetHostNative {
     ) -> bool {
         self.refresh_layout_scene();
         let (panel, panel_rect) = self.agent_settings_geometry(vw, vh);
-        let hit = panel.hit_test(panel_rect, Point2D::new(x, y));
+        let point = Point2D::new(x, y);
+        let hit = panel.hit_test(panel_rect, point);
+        let model_focus_press = matches!(
+            hit,
+            AgentSettingsHit::FocusBuiltinAgent {
+                field: op_editor_core::BuiltinAgentField::Model,
+                ..
+            } | AgentSettingsHit::FocusBuiltinAgentDraft(op_editor_core::BuiltinAgentField::Model,)
+        );
+        // When an already-focused model editor is clicked, its visible line
+        // window depends on the pre-click caret. Capture that mapping before
+        // the shared focus transition reseeds the draft at the end.
+        let model_caret_before = if model_focus_press {
+            panel.focused_model_text_byte_offset_at(panel_rect, point)
+        } else {
+            None
+        };
         drop(panel);
         if matches!(hit, AgentSettingsHit::Fonts(FontsHit::SelectFont(_)))
             && !self.collab_allows_document_mutation(
@@ -118,6 +134,18 @@ impl WidgetHostNative {
             SettingsCommitScope::Operator,
             self.now_ms,
         );
+        if model_focus_press {
+            let offset = model_caret_before.or_else(|| {
+                let (panel, panel_rect) = self.agent_settings_geometry(vw, vh);
+                panel.focused_model_text_byte_offset_at(panel_rect, point)
+            });
+            if let Some(offset) = offset {
+                self.editor_state
+                    .editor_ui
+                    .settings_input
+                    .set_caret(offset, self.now_ms);
+            }
+        }
         self.finish_agent_settings_press(outcome);
         self.ensure_focused_agent_settings_visible(vw, vh);
         if !self.editor_state.editor_ui.agent_settings_open {

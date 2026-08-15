@@ -30,6 +30,7 @@ impl WidgetHost {
             image_profile_test_hover,
             image_provider_option_hover,
             new_hover,
+            new_model_hover,
             acp_preset_hover,
         ) = {
             let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
@@ -100,6 +101,7 @@ impl WidgetHost {
                 None
             };
             let new_hover = panel.builtin_preset_hover_at(panel_rect, point);
+            let new_model_hover = panel.builtin_model_hover_at(panel_rect, point);
             // The whole quick-add row is one hit target, so the press hit
             // already names the hovered row — no second geometry walk.
             let acp_preset_hover = match hit {
@@ -121,6 +123,7 @@ impl WidgetHost {
                 image_profile_test_hover,
                 image_provider_option_hover,
                 new_hover,
+                new_model_hover,
                 acp_preset_hover,
             )
         };
@@ -179,6 +182,19 @@ impl WidgetHost {
                 .editor_ui
                 .agent_settings
                 .builtin_preset_menu_hover = new_hover;
+            changed = true;
+        }
+        if new_model_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_model_menu_hover
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_model_menu_hover = new_model_hover;
             changed = true;
         }
         if add_provider_hover

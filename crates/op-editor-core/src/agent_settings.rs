@@ -29,8 +29,9 @@ mod config_types;
 mod mutators;
 
 pub use config_types::{
-    AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, ImageGenProfile,
-    ImageGenProvider, OPENVERSE_AUTH_DOCS_URL,
+    normalize_builtin_models, AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig,
+    BuiltinAgentKind, ImageGenProfile, ImageGenProvider, MAX_BUILTIN_AGENT_MODELS,
+    MAX_BUILTIN_MODEL_CHARS, OPENVERSE_AUTH_DOCS_URL,
 };
 
 /// Which section of the settings modal is active.
@@ -204,6 +205,15 @@ pub enum BuiltinAgentPresetMenuTarget {
     Draft,
 }
 
+/// Which built-in provider form has its model dropdown open. The menu
+/// targets the same cards as `BuiltinAgentPresetMenuTarget`, but it is
+/// keyed on the Model field instead of the provider preset select.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinModelMenuTarget {
+    Agent(usize),
+    Draft,
+}
+
 /// State for the floating agent-settings modal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentSettings {
@@ -227,9 +237,15 @@ pub struct AgentSettings {
     pub builtin_preset_menu_open: Option<BuiltinAgentPresetMenuTarget>,
     pub builtin_preset_menu_scroll: jian_core::scroll::ScrollState,
     pub builtin_preset_menu_hover: Option<BuiltinAgentPresetKey>,
+    /// Dropdown of discovered models anchored to the built-in form's
+    /// Model field. Runtime-only — never persisted.
+    pub builtin_model_menu_open: Option<BuiltinModelMenuTarget>,
+    pub builtin_model_menu_scroll: jian_core::scroll::ScrollState,
+    /// Hovered row index into the visible model options.
+    pub builtin_model_menu_hover: Option<usize>,
     pub next_builtin_agent_id: u64,
     /// Runtime-only provider model catalogs. Persisted settings retain only the
-    /// explicitly selected `BuiltinAgentConfig::model`.
+    /// explicitly selected `BuiltinAgentConfig::models`.
     pub builtin_model_catalogs: BTreeMap<BuiltinModelCatalogTarget, BuiltinModelCatalog>,
     pub pending_builtin_model_catalog_refreshes: VecDeque<BuiltinModelCatalogRefreshRequest>,
     pub builtin_model_catalog_generation: u64,
@@ -319,6 +335,9 @@ impl Default for AgentSettings {
             builtin_preset_menu_open: None,
             builtin_preset_menu_scroll: Default::default(),
             builtin_preset_menu_hover: None,
+            builtin_model_menu_open: None,
+            builtin_model_menu_scroll: Default::default(),
+            builtin_model_menu_hover: None,
             next_builtin_agent_id: 1,
             builtin_model_catalogs: BTreeMap::new(),
             pending_builtin_model_catalog_refreshes: VecDeque::new(),

@@ -201,20 +201,20 @@ jobs:
           - label: ios-aarch64
             runner: macos-latest
             target: aarch64-apple-ios
-            features: metal
+            features: metal,editor
           - label: ios-aarch64-sim
             runner: macos-latest
             target: aarch64-apple-ios-sim
-            features: metal
+            features: metal,editor
           # Android targets via NDK — Linux runner.
           - label: android-aarch64
             runner: ubuntu-latest
             target: aarch64-linux-android
-            features: gl
+            features: gl,editor
           - label: android-x86_64
             runner: ubuntu-latest
             target: x86_64-linux-android
-            features: gl
+            features: gl,editor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -273,7 +273,8 @@ jobs:
       #   linking and iOS/Android runtime is Step 1f.
       # - op-engine-ffi (the player C ABI) + op-engine-jni (Android JNI
       #   marshalling) compile on every mobile target with the platform GPU
-      #   feature (metal on iOS, gl on Android).
+      #   feature plus the full editor integration exercised by the mobile
+      #   shells (metal,editor on iOS; gl,editor on Android).
       - run: cargo check -p op-editor-ui --target ${{ matrix.target }}
       - run: cargo check -p op-host-native --target ${{ matrix.target }}
       - run: cargo check -p op-engine-ffi --target ${{ matrix.target }} --features ${{ matrix.features }}

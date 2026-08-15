@@ -47,7 +47,7 @@ fn prepare_turn_attaches_only_the_selected_builtin_credential() {
 }
 
 #[test]
-fn prepare_turn_uses_the_selected_runtime_model_not_the_config_fallback() {
+fn prepare_turn_uses_the_selected_saved_model_and_ignores_runtime_discovery() {
     let mut state = state_with_queued_send("hello");
     let id = state.editor_ui.agent_settings.add_builtin_agent_config(
         "Private",
@@ -56,6 +56,7 @@ fn prepare_turn_uses_the_selected_runtime_model_not_the_config_fallback() {
         op_editor_core::BuiltinAgentKind::OpenAiCompat,
         "https://example.test/v1",
     );
+    state.editor_ui.agent_settings.builtin_agents[0].set_models(["fallback-b", "saved-a"]);
     let settings = &mut state.editor_ui.agent_settings;
     settings.request_ready_builtin_model_catalog_refreshes(1);
     let request = settings
@@ -77,12 +78,17 @@ fn prepare_turn_uses_the_selected_runtime_model_not_the_config_fallback() {
         )
     );
     reconcile_models(&mut state);
+    assert!(!state
+        .chat
+        .available_models
+        .iter()
+        .any(|entry| entry.value == format!("builtin:{id}:runtime-a")));
     state.chat.selected_model = state
         .chat
         .available_models
         .iter()
-        .position(|entry| entry.value == format!("builtin:{id}:runtime-a"))
-        .expect("runtime model is selectable");
+        .position(|entry| entry.value == format!("builtin:{id}:saved-a"))
+        .expect("second saved model is selectable");
 
     let body: serde_json::Value = serde_json::from_str(
         &prepare_turn(&mut state)
@@ -91,8 +97,8 @@ fn prepare_turn_uses_the_selected_runtime_model_not_the_config_fallback() {
     )
     .expect("body is JSON");
 
-    assert_eq!(body["model"], "runtime-a");
-    assert_eq!(body["credential"]["model"], "runtime-a");
+    assert_eq!(body["model"], "saved-a");
+    assert_eq!(body["credential"]["model"], "saved-a");
     assert_ne!(body["model"], "fallback-b");
 }
 
@@ -114,6 +120,32 @@ fn prepare_turn_uses_null_credential_for_a_daemon_builtin_model() {
     )
     .expect("body is JSON");
 
+    assert!(body
+        .get("credential")
+        .is_some_and(serde_json::Value::is_null));
+}
+
+#[test]
+fn prepare_turn_preserves_the_daemon_structured_model_identity() {
+    let mut state = state_with_queued_send("hello");
+    state.chat.available_models = vec![ModelEntry::builtin_with_display_name(
+        AgentProvider::CodexCli,
+        "daemon-builtin:account:secondary",
+        "Second",
+        "builtin:account:secondary:shared:model",
+        "shared:model",
+    )];
+
+    let body: serde_json::Value = serde_json::from_str(
+        &prepare_turn(&mut state)
+            .expect("send was pending")
+            .body_json,
+    )
+    .expect("body is JSON");
+
+    assert_eq!(body["model"], "builtin:account:secondary:shared:model");
+    assert_eq!(body["provider"], "codex-cli");
+    assert_eq!(body["builtinProviderId"], "account:secondary");
     assert!(body
         .get("credential")
         .is_some_and(serde_json::Value::is_null));
@@ -143,6 +175,90 @@ fn daemon_model_refresh_preserves_browser_local_builtin_models() {
         .available_models
         .iter()
         .any(|entry| { entry.builtin_provider_id.as_deref() == Some(local_id.as_str()) }));
+}
+
+#[test]
+fn reconcile_models_keeps_distinct_daemon_and_local_providers_with_equal_models() {
+    let mut state = EditorState::new();
+    let local_id = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Browser",
+        "sk-local",
+        "shared-model",
+        op_editor_core::BuiltinAgentKind::OpenAiCompat,
+        "https://example.test/v1",
+    );
+    state.chat.discovered_models = parse_models_json(
+        r#"[{
+            "provider":"codex-cli",
+            "value":"builtin:operator:shared-model",
+            "displayName":"shared-model",
+            "providerDisplayName":"Operator",
+            "builtinProviderId":"operator"
+        }]"#,
+    );
+
+    reconcile_models(&mut state);
+
+    assert_eq!(state.chat.available_models.len(), 2);
+    assert!(state
+        .chat
+        .available_models
+        .iter()
+        .any(|entry| { entry.builtin_provider_id.as_deref() == Some("daemon-builtin:operator") }));
+    assert!(state
+        .chat
+        .available_models
+        .iter()
+        .any(|entry| { entry.builtin_provider_id.as_deref() == Some(local_id.as_str()) }));
+}
+
+#[test]
+fn reconcile_models_hides_the_server_mirror_of_a_local_provider() {
+    let mut state = EditorState::new();
+    let local_id = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Browser",
+        "sk-local",
+        "shared-model",
+        op_editor_core::BuiltinAgentKind::OpenAiCompat,
+        "https://example.test/v1",
+    );
+    state.chat.discovered_models = parse_models_json(&format!(
+        r#"[{{
+            "provider":"codex-cli",
+            "value":"builtin:web-credential:builtin:{local_id}:shared-model",
+            "displayName":"shared-model",
+            "providerDisplayName":"Browser mirror",
+            "builtinProviderId":"web-credential:builtin:{local_id}"
+        }}]"#
+    ));
+
+    reconcile_models(&mut state);
+
+    assert_eq!(state.chat.available_models.len(), 1);
+    assert_eq!(
+        state.chat.available_models[0]
+            .builtin_provider_id
+            .as_deref(),
+        Some(local_id.as_str())
+    );
+}
+
+#[test]
+fn reconcile_models_never_resurrects_a_stale_browser_owned_daemon_mirror() {
+    let mut state = EditorState::new();
+    state.chat.discovered_models = parse_models_json(
+        r#"[{
+            "provider":"codex-cli",
+            "value":"builtin:web-credential:builtin:deleted:old-model",
+            "displayName":"old-model",
+            "providerDisplayName":"Deleted browser provider",
+            "builtinProviderId":"web-credential:builtin:deleted"
+        }]"#,
+    );
+
+    reconcile_models(&mut state);
+
+    assert!(state.chat.available_models.is_empty());
 }
 
 #[test]

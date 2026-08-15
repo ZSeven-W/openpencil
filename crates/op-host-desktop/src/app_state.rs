@@ -163,7 +163,6 @@ impl DesktopApp {
             pending_figma_paste: None,
             pending_html_paste: None,
             model_probe,
-            model_catalog_refresh: Default::default(),
             builtin_model_refresh: Default::default(),
             image_search: image_search_session::ImageSearchSession::new(),
             image_panel: image_panel_host::ImagePanelJobs::new(),

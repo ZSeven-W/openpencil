@@ -6,6 +6,7 @@
 use super::paint::agents_content_height;
 use super::*;
 use crate::widgets::agent_settings_panel_geometry::SECONDARY_HEADING_HAS_DESC;
+use op_editor_core::agent_settings::SettingsFocus;
 
 fn secondary_hero_height(touch: bool) -> f32 {
     crate::widgets::agent_settings_rows::tab_intro_height_for_ui(SECONDARY_HEADING_HAS_DESC, touch)
@@ -20,6 +21,42 @@ impl AgentSettingsPanel<'_> {
             self.resolved_content_viewport(panel),
             &self.settings,
             self.active_tab(),
+            self.ui.touch_chrome(),
+        )
+    }
+
+    /// Unscrolled document-space rect for the model dropdown owned by the
+    /// focused built-in Model field. Native touch hosts use this alongside the
+    /// focused input rect so the software keyboard does not hide the menu that
+    /// became the active interaction surface.
+    pub fn focused_model_menu_rect(&self, panel: Rect) -> Option<Rect> {
+        crate::widgets::agent_settings_focus_geometry::focused_model_menu_rect(
+            self.resolved_content_viewport(panel),
+            &self.settings,
+            self.active_tab(),
+            self.ui.touch_chrome(),
+        )
+    }
+
+    /// Resolve a click/tap in the currently focused multiline provider Model
+    /// field to its UTF-8 byte offset. The screen-space input rect applies the
+    /// same outer body scroll as paint and hit-testing.
+    pub fn focused_model_text_byte_offset_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
+        if !matches!(
+            self.settings.focus,
+            Some(SettingsFocus::BuiltinAgent {
+                field: BuiltinAgentField::Model,
+                ..
+            }) | Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model))
+        ) {
+            return None;
+        }
+        let mut input = self.focused_input_rect(panel)?;
+        input.origin.y -= self.effective_scroll(panel);
+        crate::widgets::agent_settings_caret::model_text_byte_offset_at(
+            self.ui,
+            input,
+            point,
             self.ui.touch_chrome(),
         )
     }
@@ -89,6 +126,12 @@ impl AgentSettingsPanel<'_> {
                     }
                     BuiltinHit::SelectPreset { index, preset } => {
                         return AgentSettingsHit::SelectBuiltinAgentPreset { index, preset };
+                    }
+                    BuiltinHit::ToggleModelMenu(index) => {
+                        return AgentSettingsHit::ToggleBuiltinModelMenu(index);
+                    }
+                    BuiltinHit::SelectModel { index, row } => {
+                        return AgentSettingsHit::SelectBuiltinModel { index, row };
                     }
                     BuiltinHit::SaveDraft => return AgentSettingsHit::SaveBuiltinAgentDraft,
                     BuiltinHit::CancelDraft => return AgentSettingsHit::CancelBuiltinAgentDraft,
@@ -318,6 +361,39 @@ impl AgentSettingsPanel<'_> {
         }
         let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
         agent_settings_builtin::preset_scroll_max_at_for_ui(
+            content,
+            &self.settings,
+            scrolled,
+            self.ui.touch_chrome(),
+        )
+    }
+
+    /// Hovered model-dropdown row under `point`, mirroring
+    /// [`Self::builtin_preset_hover_at`] for the built-in form's Model
+    /// combobox menu.
+    pub fn builtin_model_hover_at(&self, panel: Rect, point: Point2D) -> Option<usize> {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
+            return None;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
+        agent_settings_builtin::model_hover_at_for_ui(
+            content,
+            &self.settings,
+            scrolled,
+            self.ui.touch_chrome(),
+        )
+    }
+
+    /// Wheel-scroll cap for the model dropdown under `point`; `None`
+    /// when the cursor is not over an open model menu.
+    pub fn builtin_model_scroll_max_at(&self, panel: Rect, point: Point2D) -> Option<f32> {
+        let content = self.resolved_content_viewport(panel);
+        if !content.contains(point) {
+            return None;
+        }
+        let scrolled = Point2D::new(point.x, point.y + self.effective_scroll(panel));
+        agent_settings_builtin::model_scroll_max_at_for_ui(
             content,
             &self.settings,
             scrolled,

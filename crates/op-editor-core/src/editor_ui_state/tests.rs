@@ -147,7 +147,7 @@ fn builtin_agent_draft_ready_reads_focused_settings_input() {
         .as_mut()
         .expect("draft exists");
     draft.api_key = "sk-test".into();
-    draft.model.clear();
+    draft.models.clear();
     assert!(ui.builtin_agent_draft_ready());
 }
 
@@ -284,23 +284,6 @@ fn chat_model_picker_helpers_reset_select_interaction_state_and_search() {
     assert_eq!(ui.chat_model_picker.hover, None);
     assert_eq!(ui.chat_model_picker.pressed, None);
     assert_eq!(ui.chat_model_picker.scroll.offset, 0.0);
-}
-
-#[test]
-fn opening_the_chat_model_picker_requests_one_catalog_refresh() {
-    let mut ui = EditorUiState::new();
-    assert!(!ui.pending_model_catalog_refresh);
-
-    assert!(ui.toggle_chat_model_picker());
-    assert!(ui.take_pending_model_catalog_refresh());
-    assert!(
-        !ui.take_pending_model_catalog_refresh(),
-        "one open must not queue two probes"
-    );
-
-    // Closing asks for nothing.
-    assert!(!ui.toggle_chat_model_picker());
-    assert!(!ui.pending_model_catalog_refresh);
 }
 
 #[test]

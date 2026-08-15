@@ -23,7 +23,6 @@ fn open_panel_with_models(count: usize) -> EditorState {
 #[derive(Default)]
 struct RoundFillBackend {
     fills: Vec<(Rect, f32, Color)>,
-    stroked_paths: Vec<Point2D>,
 }
 
 impl RenderBackend for RoundFillBackend {
@@ -38,9 +37,7 @@ impl RenderBackend for RoundFillBackend {
         self.fills.push((rect, radius, color));
     }
     fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
-    fn stroke_svg_path(&mut self, _: &str, origin: Point2D, _: f32, _: Color, _: f32) {
-        self.stroked_paths.push(origin);
-    }
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
     fn save(&mut self) {}
     fn restore(&mut self) {}
     fn translate(&mut self, _: Point2D) {}
@@ -94,19 +91,12 @@ fn model_at_resolves_row_and_skips_headers() {
     };
     let first_row_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
     assert_eq!(
-        model_at(
-            rect,
-            Point2D::new(100.0, first_row_y),
-            &models,
-            0.0,
-            "",
-            false,
-        ),
+        model_at(rect, Point2D::new(100.0, first_row_y), &models, 0.0, "",),
         Some(0)
     );
     let header_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H / 2.0;
     assert_eq!(
-        model_at(rect, Point2D::new(100.0, header_y), &models, 0.0, "", false,),
+        model_at(rect, Point2D::new(100.0, header_y), &models, 0.0, ""),
         None
     );
 }
@@ -124,8 +114,8 @@ fn model_at_honors_scroll_offset() {
         100.0,
         MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0,
     );
-    let unscrolled = model_at(rect, probe, &models, 0.0, "", false);
-    let scrolled = model_at(rect, probe, &models, MODEL_ROW_H * 3.0, "", false);
+    let unscrolled = model_at(rect, probe, &models, 0.0, "");
+    let scrolled = model_at(rect, probe, &models, MODEL_ROW_H * 3.0, "");
     assert_eq!(unscrolled, Some(0));
     assert_eq!(scrolled, Some(3));
     assert!(max_picker_scroll(&models, "") > 0.0);
@@ -162,7 +152,6 @@ fn model_at_filters_by_search_and_returns_original_index() {
             &models,
             0.0,
             "5.5",
-            false,
         ),
         Some(1)
     );
@@ -185,116 +174,33 @@ fn model_picker_hit_uses_shared_select_state_protocol() {
     let first_row_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
 
     assert_eq!(
-        model_picker_hit(
-            &state,
-            rect,
-            Point2D::new(100.0, first_row_y),
-            &models,
-            "",
-            false,
-        ),
+        model_picker_hit(&state, rect, Point2D::new(100.0, first_row_y), &models, "",),
         SelectHit::Row(0)
     );
     assert_eq!(
-        model_picker_hit(&state, rect, Point2D::new(100.0, 12.0), &models, "", false,),
+        model_picker_hit(&state, rect, Point2D::new(100.0, 12.0), &models, ""),
         SelectHit::Inside
     );
     assert_eq!(
-        model_picker_hit(&state, rect, Point2D::new(-1.0, 12.0), &models, "", false,),
+        model_picker_hit(&state, rect, Point2D::new(-1.0, 12.0), &models, ""),
         SelectHit::Outside
     );
 }
 
 #[test]
-fn builtin_refresh_hit_is_distinct_from_search_clear_and_model_rows() {
-    use super::{AIChatHit, AIChatPlaceholder};
-
-    let mut state = EditorState::new();
-    state.editor_ui.agent_settings.add_builtin_agent_config(
-        "Provider",
-        "sk-test",
-        "fallback",
-        op_editor_core::BuiltinAgentKind::OpenAiCompat,
-        "https://example.test/v1",
-    );
-    state.chat.available_models = vec![ModelEntry::builtin(
-        AgentProvider::CodexCli,
-        "builtin-provider",
-        "builtin:builtin-provider:fallback",
-        "Fallback",
-    )];
-    state.editor_ui.chat_model_picker.open = true;
-    state.editor_ui.chat_model_picker_input.set_text("fall");
-    let chat = Rect::xywh(100.0, 300.0, 320.0, 250.0);
-    let panel = AIChatPlaceholder::from_editor(&state);
-    let picker = panel.model_picker_bounds(chat).expect("open picker bounds");
-    let refresh = refresh_button_rect(picker);
-    let refresh_point = Point2D::new(
-        refresh.origin.x + refresh.size.x / 2.0,
-        refresh.origin.y + refresh.size.y / 2.0,
-    );
-    let clear_point = Point2D::new(
-        picker.origin.x + picker.size.x - 58.0,
-        picker.origin.y + 19.0,
-    );
-
-    assert_eq!(
-        model_picker_hit(
-            &state.editor_ui.chat_model_picker,
-            picker,
-            refresh_point,
-            &state.chat.available_models,
-            state.editor_ui.chat_model_picker_input.text(),
-            true,
-        ),
-        SelectHit::Row(MODEL_REFRESH_TARGET)
-    );
-    assert_eq!(
-        model_at(
-            picker,
-            refresh_point,
-            &state.chat.available_models,
-            0.0,
-            "fall",
-            true,
-        ),
-        None
-    );
-    assert!(!search_clear_hit(picker, refresh_point, "fall", true));
-    assert!(search_clear_hit(picker, clear_point, "fall", true));
-    assert_eq!(
-        panel.hit_test(chat, refresh_point),
-        Some(AIChatHit::RefreshModelCatalogs)
-    );
-    assert_eq!(
-        panel.hit_test(chat, clear_point),
-        Some(AIChatHit::ClearModelSearch)
-    );
-}
-
-#[test]
-fn cli_only_picker_hides_refresh_and_restores_search_width() {
+fn model_picker_search_uses_the_full_header_width() {
     let models = vec![entry(AgentProvider::CodexCli, "gpt-5")];
     let rect = Rect::xywh(10.0, 20.0, 240.0, picker_view_height(&models, ""));
     let state = SelectState {
         open: true,
         ..Default::default()
     };
-    let refresh = refresh_button_rect(rect);
-    let refresh_point = Point2D::new(
-        refresh.origin.x + refresh.size.x / 2.0,
-        refresh.origin.y + refresh.size.y / 2.0,
-    );
-
-    assert_eq!(
-        model_picker_hit(&state, rect, refresh_point, &models, "", false),
-        SelectHit::Inside,
-    );
     let clear_point = Point2D::new(rect.origin.x + rect.size.x - 22.0, rect.origin.y + 19.0);
-    assert!(search_clear_hit(rect, clear_point, "gpt", false));
+    assert!(search_clear_hit(rect, clear_point, "gpt"));
 
     let theme = Theme::dark();
-    let input = TextInputState::default();
+    let mut input = TextInputState::default();
+    input.set_text("gpt");
     let mut backend = RoundFillBackend::default();
     let mut cx = PaintCx {
         backend: &mut backend,
@@ -306,44 +212,14 @@ fn cli_only_picker_hides_refresh_and_restores_search_width() {
         &models,
         0,
         &state,
-        false,
-        false,
         &input,
         0,
         op_editor_core::Locale::EnUs,
     );
-    let refresh_icon_origin = Point2D::new(refresh.origin.x + 5.0, refresh.origin.y + 5.0);
-    assert!(!backend.stroked_paths.contains(&refresh_icon_origin));
-}
-
-#[test]
-fn discovery_ready_builtin_without_model_still_exposes_refresh() {
-    use super::{AIChatHit, AIChatPlaceholder};
-
-    let mut state = EditorState::new();
-    state.editor_ui.agent_settings.add_builtin_agent_config(
-        "Provider",
-        "sk-test",
-        "",
-        op_editor_core::BuiltinAgentKind::OpenAiCompat,
-        "https://example.test/v1",
-    );
-    state.rebuild_chat_models();
-    assert!(state.chat.available_models.is_empty());
-    state.editor_ui.chat_model_picker.open = true;
-    let chat = Rect::xywh(100.0, 300.0, 320.0, 250.0);
-    let panel = AIChatPlaceholder::from_editor(&state);
-    assert!(panel.model_refresh_available);
-    let picker = panel.model_picker_bounds(chat).expect("open picker bounds");
-    let refresh = refresh_button_rect(picker);
-    let point = Point2D::new(
-        refresh.origin.x + refresh.size.x / 2.0,
-        refresh.origin.y + refresh.size.y / 2.0,
-    );
-
     assert_eq!(
-        panel.hit_test(chat, point),
-        Some(AIChatHit::RefreshModelCatalogs)
+        model_picker_hit(&state, rect, clear_point, &models, "gpt"),
+        SelectHit::Inside,
+        "the search clear target stays header chrome, never a model row"
     );
 }
 
@@ -427,8 +303,6 @@ fn pressed_model_row_uses_shared_select_feedback() {
         &models,
         usize::MAX,
         &state,
-        false,
-        false,
         &input,
         0,
         op_editor_core::Locale::EnUs,
@@ -440,52 +314,6 @@ fn pressed_model_row_uses_shared_select_feedback() {
         }),
         "pressed model row should paint the shared pressed feedback token"
     );
-}
-
-#[test]
-fn builtin_refresh_paints_icon_and_shared_hover_feedback() {
-    let models = vec![ModelEntry::builtin(
-        AgentProvider::CodexCli,
-        "builtin-provider",
-        "builtin:builtin-provider:fallback",
-        "Fallback",
-    )];
-    let rect = Rect {
-        origin: Point2D::new(10.0, 20.0),
-        size: Point2D::new(240.0, picker_view_height(&models, "")),
-    };
-    let state = SelectState {
-        open: true,
-        ..Default::default()
-    };
-    let theme = Theme::dark();
-    let input = TextInputState::default();
-    let mut backend = RoundFillBackend::default();
-    let mut cx = PaintCx {
-        backend: &mut backend,
-    };
-    let button = refresh_button_rect(rect);
-    let expected_icon_origin = Point2D::new(button.origin.x + 5.0, button.origin.y + 5.0);
-
-    paint_model_picker(
-        &mut cx,
-        &theme,
-        rect,
-        &models,
-        0,
-        &state,
-        true,
-        true,
-        &input,
-        0,
-        op_editor_core::Locale::EnUs,
-    );
-
-    let pressed = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
-    assert!(backend.fills.iter().any(|(fill, radius, color)| {
-        *fill == button && (*radius - 6.0).abs() < 0.01 && color_close(*color, pressed)
-    }));
-    assert!(backend.stroked_paths.contains(&expected_icon_origin));
 }
 
 #[test]

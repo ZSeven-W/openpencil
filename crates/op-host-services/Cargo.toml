@@ -31,6 +31,7 @@ dev-op-auth-abi-v2 = [
 op-figma = { path = "../op-figma" }
 op-html = { path = "../op-html" }
 op-editor-core = { path = "../op-editor-core" }
+op-builtin-model-discovery = { path = "../op-builtin-model-discovery" }
 # Device-login proxy for the web editor (prebuilt library or inert stub).
 op-auth-bridge = { path = "../op-auth-bridge" }
 op-config-store = { path = "../op-config-store" }

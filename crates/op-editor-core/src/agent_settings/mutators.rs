@@ -6,8 +6,8 @@
 use std::collections::BTreeMap;
 
 use super::{
-    AcpAgentConfig, AcpConnectionType, AgentSettings, BuiltinAgentConfig, BuiltinAgentKind,
-    ImageGenProfile, ImageGenProvider, ImageTestStatus,
+    normalize_builtin_models, AcpAgentConfig, AcpConnectionType, AgentSettings, BuiltinAgentConfig,
+    BuiltinAgentKind, ImageGenProfile, ImageGenProvider, ImageTestStatus,
 };
 use crate::acp_agent_presets::{
     acp_agent_preset, matches_preset_transport, AcpAgentPreset, AcpPresetAvailability,
@@ -16,6 +16,8 @@ use crate::acp_agent_presets::{
 use crate::agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, BuiltinAgentPresetKey, BUILTIN_AGENT_PRESETS,
 };
+
+const WEB_CREDENTIAL_BUILTIN_PREFIX: &str = "web-credential:builtin:";
 
 impl AgentSettings {
     /// Turn a browser-snapshot built-in into a daemon/operator-owned entry
@@ -26,7 +28,7 @@ impl AgentSettings {
             .builtin_agents
             .get(index)
             .map(|agent| agent.id.clone())
-            .filter(|id| id.starts_with("web-credential:builtin:"))
+            .filter(|id| id.starts_with(WEB_CREDENTIAL_BUILTIN_PREFIX))
         else {
             return false;
         };
@@ -107,7 +109,7 @@ impl AgentSettings {
             display_name: preset.display_name.into(),
             kind: preset.kind,
             api_key: String::new(),
-            model: preset.model.into(),
+            models: vec![preset.model.into()],
             base_url: preset.base_url.into(),
             enabled: true,
         });
@@ -150,12 +152,13 @@ impl AgentSettings {
         self.invalidate_builtin_model_catalog(
             &crate::agent_settings_builtin_models::BuiltinModelCatalogTarget::Draft,
         );
-        Some(self.add_builtin_agent_config(
+        Some(self.add_builtin_agent_configs_with_preset(
             draft.display_name,
             draft.api_key,
-            draft.model,
+            draft.models,
             draft.kind,
             draft.base_url,
+            Some(draft.preset),
         ))
     }
 
@@ -199,24 +202,81 @@ impl AgentSettings {
         kind: BuiltinAgentKind,
         base_url: impl Into<String>,
     ) -> String {
+        self.add_builtin_agent_configs(display_name, api_key, [model.into()], kind, base_url)
+    }
+
+    /// Add one provider with an ordered set of explicitly saved models.
+    ///
+    /// A matching backend is one provider, not one `(provider, model)` pair:
+    /// adding it again merges new models into the existing card while keeping
+    /// the existing id and display metadata stable. The preset is part of that
+    /// identity because two presets may share a transport URL while exposing
+    /// different model-discovery endpoints.
+    pub fn add_builtin_agent_configs<I, S>(
+        &mut self,
+        display_name: impl Into<String>,
+        api_key: impl Into<String>,
+        models: I,
+        kind: BuiltinAgentKind,
+        base_url: impl Into<String>,
+    ) -> String
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.add_builtin_agent_configs_with_preset(
+            display_name,
+            api_key,
+            models,
+            kind,
+            base_url,
+            None,
+        )
+    }
+
+    pub fn add_builtin_agent_configs_with_preset<I, S>(
+        &mut self,
+        display_name: impl Into<String>,
+        api_key: impl Into<String>,
+        models: I,
+        kind: BuiltinAgentKind,
+        base_url: impl Into<String>,
+        preset: Option<BuiltinAgentPresetKey>,
+    ) -> String
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
         let display_name = display_name.into();
         let api_key = api_key.into();
-        let model = model.into();
+        let models = normalize_builtin_models(models);
         let base_url = base_url.into();
-        if let Some(existing) = self.builtin_agents.iter().find(|agent| {
-            agent.matches_add_candidate(&display_name, &api_key, &model, kind, &base_url)
+        let inference_model = models.first().map(String::as_str).unwrap_or("");
+        let preset =
+            preset.unwrap_or_else(|| infer_builtin_agent_preset(kind, &base_url, inference_model));
+        if let Some(existing) = self.builtin_agents.iter_mut().find(|agent| {
+            !agent.id.starts_with(WEB_CREDENTIAL_BUILTIN_PREFIX)
+                && agent.matches_add_candidate(&display_name, &api_key, kind, &base_url, preset)
         }) {
+            // A user adding the same backend again is explicitly restoring
+            // that provider. Reuse its stable identity and make it usable
+            // instead of creating a strict-persistence duplicate beside a
+            // disabled card.
+            existing.enabled = true;
+            for model in models {
+                existing.add_model(model);
+            }
             return existing.id.clone();
         }
         let id = format!("builtin-{}", self.next_builtin_agent_id.max(1));
         self.next_builtin_agent_id = self.next_builtin_agent_id.max(1).saturating_add(1);
         self.builtin_agents.push(BuiltinAgentConfig {
             id: id.clone(),
-            preset: infer_builtin_agent_preset(kind, &base_url, &model),
+            preset,
             display_name,
             kind,
             api_key,
-            model,
+            models,
             base_url,
             enabled: true,
         });

@@ -173,7 +173,6 @@ impl DesktopApp {
 
         self.builtin_model_refresh = refresh;
         if changed {
-            self.host.editor_state_mut().rebuild_chat_models();
             self.host.mark_editor_state_dirty();
         }
         changed
@@ -303,8 +302,10 @@ mod tests {
     }
 
     #[test]
-    fn successful_refresh_rebuilds_picker_with_runtime_models() {
-        let (mut app, _) = app_with_builtin("sk-test");
+    fn successful_refresh_updates_settings_catalog_without_changing_chat_picker() {
+        let (mut app, id) = app_with_builtin("sk-test");
+        app.host.editor_state_mut().rebuild_chat_models();
+        let chat_before = app.host.editor_state().chat.available_models.clone();
         let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
         settings.request_ready_builtin_model_catalog_refreshes(1);
         let request = settings
@@ -325,20 +326,33 @@ mod tests {
         .expect("host owns receiver");
 
         assert!(app.drain_builtin_model_refresh());
-        let entry = app
+        assert_eq!(
+            app.host.editor_state().chat.available_models,
+            chat_before,
+            "runtime discovery is settings-only"
+        );
+        assert!(!app
             .host
             .editor_state()
             .chat
             .available_models
             .iter()
-            .find(|model| model.display_name == "Remote Model")
-            .expect("successful runtime model enters picker");
-        assert_eq!(entry.builtin_model_id(), Some("remote-model"));
+            .any(|model| model.display_name == "Remote Model"));
+        assert_eq!(
+            app.host
+                .editor_state()
+                .editor_ui
+                .agent_settings
+                .builtin_model_catalog_options(&id),
+            &[BuiltinModelOption::new("remote-model", "Remote Model")]
+        );
     }
 
     #[test]
-    fn failed_refresh_keeps_configured_fallback() {
+    fn failed_refresh_does_not_change_saved_chat_models() {
         let (mut app, _) = app_with_builtin("sk-test");
+        app.host.editor_state_mut().rebuild_chat_models();
+        let chat_before = app.host.editor_state().chat.available_models.clone();
         let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
         settings.request_ready_builtin_model_catalog_refreshes(1);
         let request = settings
@@ -356,12 +370,6 @@ mod tests {
         .expect("host owns receiver");
 
         assert!(app.drain_builtin_model_refresh());
-        assert!(app
-            .host
-            .editor_state()
-            .chat
-            .available_models
-            .iter()
-            .any(|model| model.display_name == "fallback-model"));
+        assert_eq!(app.host.editor_state().chat.available_models, chat_before);
     }
 }

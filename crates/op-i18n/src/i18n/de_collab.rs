@@ -140,6 +140,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "Der Agent wurde beendet, bevor für diesen Abschnitt ein Ergebnis vorlag.",
         "ai.designProgress.detail.connectionClosed" => "Die Agent-Verbindung wurde geschlossen, bevor dieser Abschnitt ein Ergebnis lieferte.",
         "ai.designProgress.detail.stoppedByUser" => "Vom Benutzer beendet, bevor dieser Abschnitt abgeschlossen war.",
+        "builtin.modelsOnePerLine" => "Modell-IDs, eine pro Zeile",
+        "builtin.typeModelManually" => "Modellliste konnte nicht abgerufen werden. IDs manuell eingeben, eine pro Zeile.",
         _ => return None,
     })
 }

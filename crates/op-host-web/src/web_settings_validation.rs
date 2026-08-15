@@ -56,6 +56,11 @@ pub(super) enum SettingsValidationError {
     UnknownAgentPreset,
     /// A built-in agent's stored preset differs from the reparsed one.
     AgentPresetNormalized,
+    /// A built-in agent id contains surrounding whitespace or is empty.
+    AgentIdNormalized,
+    /// A built-in agent's saved model list would be trimmed, truncated, or
+    /// otherwise rewritten by the canonical multi-model representation.
+    AgentModelsNormalized,
     /// Two built-in agents would collapse into one.
     DuplicateAgents,
     /// An image profile declares an unsupported `provider`.
@@ -119,6 +124,12 @@ impl std::fmt::Display for SettingsValidationError {
             SettingsValidationError::AgentPresetNormalized => {
                 write!(f, "built-in agent preset would be normalized")
             }
+            SettingsValidationError::AgentIdNormalized => {
+                write!(f, "built-in agent id would be normalized")
+            }
+            SettingsValidationError::AgentModelsNormalized => {
+                write!(f, "built-in agent models would be normalized")
+            }
             SettingsValidationError::DuplicateAgents => {
                 write!(f, "duplicate built-in agents would be removed")
             }
@@ -149,6 +160,32 @@ impl From<SettingsValidationError> for String {
 pub(super) fn settings_payload(
     value: &serde_json::Value,
 ) -> Result<SettingsPayload, SettingsValidationError> {
+    settings_payload_with_legacy_model_card_migration(value, false)
+}
+
+/// Validate a v1 browser-settings snapshot while accepting the one legacy
+/// representation that this version can upgrade without losing information:
+/// one canonical single-model card per model for the same provider backend.
+///
+/// This stays separate from [`settings_payload`] so ordinary strict validation
+/// does not silently start accepting duplicate provider records. Raw field and
+/// schema checks still run before the migration, which keeps unknown or mixed
+/// representations read-only.
+pub(super) fn legacy_settings_payload(
+    value: &serde_json::Value,
+) -> Result<SettingsPayload, SettingsValidationError> {
+    match settings_payload(value) {
+        Ok(payload) => return Ok(payload),
+        Err(SettingsValidationError::DuplicateAgents) => {}
+        Err(error) => return Err(error),
+    }
+    settings_payload_with_legacy_model_card_migration(value, true)
+}
+
+fn settings_payload_with_legacy_model_card_migration(
+    value: &serde_json::Value,
+    migrate_legacy_model_cards: bool,
+) -> Result<SettingsPayload, SettingsValidationError> {
     let object = value
         .as_object()
         .ok_or(SettingsValidationError::SettingsNotObject)?;
@@ -172,12 +209,17 @@ pub(super) fn settings_payload(
         "browser settings",
     )?;
     validate_nested_fields(object)?;
-    let payload: SettingsPayload = serde_json::from_value(value.clone())
+    let mut payload: SettingsPayload = serde_json::from_value(value.clone())
         .map_err(|_| SettingsValidationError::SettingsSchema)?;
     if payload.version != SETTINGS_VERSION {
         return Err(SettingsValidationError::SettingsVersion);
     }
     validate_general_semantics(&payload)?;
+    if migrate_legacy_model_cards {
+        if let Some(agents) = payload.builtin_agents.as_mut() {
+            migrate_legacy_single_model_provider_cards(agents);
+        }
+    }
     validate_credential_semantics(
         payload.builtin_agents.as_deref().unwrap_or_default(),
         payload.image_gen_profiles.as_deref().unwrap_or_default(),
@@ -187,9 +229,18 @@ pub(super) fn settings_payload(
     Ok(payload)
 }
 
+pub(super) struct ValidatedCredentialPayload {
+    pub(super) payload: CredentialPayload,
+    /// Older v2 writers represented one provider with multiple cards, one
+    /// `model` per card. The current schema represents that same provider as
+    /// one card with `models`, so a successful migration must be written back
+    /// immediately instead of waiting for an unrelated settings edit.
+    pub(super) migrated_legacy_single_model_cards: bool,
+}
+
 pub(super) fn credential_payload(
     value: &serde_json::Value,
-) -> Result<CredentialPayload, SettingsValidationError> {
+) -> Result<ValidatedCredentialPayload, SettingsValidationError> {
     let object = value
         .as_object()
         .ok_or(SettingsValidationError::CredentialsNotObject)?;
@@ -205,18 +256,108 @@ pub(super) fn credential_payload(
         "browser credentials",
     )?;
     validate_nested_fields(object)?;
-    let payload: CredentialPayload = serde_json::from_value(value.clone())
+    let mut payload: CredentialPayload = serde_json::from_value(value.clone())
         .map_err(|_| SettingsValidationError::CredentialSchema)?;
     if payload.version != CREDENTIAL_PAYLOAD_VERSION {
         return Err(SettingsValidationError::CredentialVersion);
     }
+    let migrated_legacy_single_model_cards =
+        migrate_legacy_single_model_provider_cards(&mut payload.builtin_agents);
     validate_credential_semantics(
         &payload.builtin_agents,
         &payload.image_gen_profiles,
         payload.active_image_gen_profile_id.as_deref(),
         payload.openverse_oauth.as_ref(),
     )?;
-    Ok(payload)
+    Ok(ValidatedCredentialPayload {
+        payload,
+        migrated_legacy_single_model_cards,
+    })
+}
+
+/// Upgrade representations written before built-in providers owned a model
+/// list. A migration is deliberately narrow: every colliding card must carry
+/// the same raw preset, be a canonical legacy single-model card, and name a
+/// distinct model. Same-model duplicates, different presets, and mixed
+/// legacy/current representations are left untouched so the ordinary duplicate
+/// check keeps the raw snapshot read-only.
+fn migrate_legacy_single_model_provider_cards(agents: &mut Vec<BuiltinAgentPayload>) -> bool {
+    let mut consumed = vec![false; agents.len()];
+    let mut migrated = false;
+    let mut output = Vec::with_capacity(agents.len());
+
+    for index in 0..agents.len() {
+        if consumed[index] {
+            continue;
+        }
+        let group = (index..agents.len())
+            .filter(|candidate| {
+                !consumed[*candidate]
+                    && same_builtin_provider_backend(&agents[index], &agents[*candidate])
+            })
+            .collect::<Vec<_>>();
+        for candidate in &group {
+            consumed[*candidate] = true;
+        }
+
+        if group.len() <= 1 {
+            output.push(agents[index].clone());
+            continue;
+        }
+
+        let mut seen_ids = std::collections::BTreeSet::new();
+        let ids_are_canonical_and_distinct = group.iter().all(|candidate| {
+            let id = agents[*candidate].id.as_str();
+            !id.is_empty() && id == id.trim() && seen_ids.insert(id)
+        });
+        let mut seen_models = std::collections::BTreeSet::new();
+        let legacy_models = group
+            .iter()
+            .map(|candidate| legacy_single_model(&agents[*candidate]))
+            .collect::<Option<Vec<_>>>();
+        let can_migrate = ids_are_canonical_and_distinct
+            && group
+                .iter()
+                .all(|candidate| agents[*candidate].enabled == agents[index].enabled)
+            && legacy_models
+                .as_ref()
+                .is_some_and(|models| models.iter().all(|model| seen_models.insert(*model)));
+
+        if can_migrate {
+            let models = legacy_models
+                .expect("migration eligibility established above")
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            let mut merged = agents[index].clone();
+            merged.models = Some(models);
+            output.push(merged);
+            migrated = true;
+        } else {
+            output.extend(group.into_iter().map(|candidate| agents[candidate].clone()));
+        }
+    }
+
+    if migrated {
+        *agents = output;
+    }
+    migrated
+}
+
+fn legacy_single_model(payload: &BuiltinAgentPayload) -> Option<&str> {
+    (payload.models.is_none()
+        && !payload.model.is_empty()
+        && op_editor_host_core::settings_payload::builtin_agent_payload_models_are_canonical(
+            payload,
+        ))
+    .then_some(payload.model.as_str())
+}
+
+fn same_builtin_provider_backend(a: &BuiltinAgentPayload, b: &BuiltinAgentPayload) -> bool {
+    a.preset == b.preset
+        && a.kind == b.kind
+        && a.api_key.trim() == b.api_key.trim()
+        && a.base_url.trim().trim_end_matches('/') == b.base_url.trim().trim_end_matches('/')
 }
 
 fn validate_nested_fields(
@@ -236,6 +377,7 @@ fn validate_nested_fields(
             "kind",
             "api_key",
             "model",
+            "models",
             "base_url",
             "enabled",
         ],
@@ -347,7 +489,19 @@ fn validate_credential_semantics(
     openverse: Option<&OpenverseOAuthPayload>,
 ) -> Result<(), SettingsValidationError> {
     let mut parsed_agents = Vec::with_capacity(builtin_agents.len());
+    let mut agent_ids = std::collections::HashSet::with_capacity(builtin_agents.len());
     for payload in builtin_agents {
+        if payload.id.is_empty() || payload.id != payload.id.trim() {
+            return Err(SettingsValidationError::AgentIdNormalized);
+        }
+        if !agent_ids.insert(payload.id.as_str()) {
+            return Err(SettingsValidationError::DuplicateAgents);
+        }
+        if !op_editor_host_core::settings_payload::builtin_agent_payload_models_are_canonical(
+            payload,
+        ) {
+            return Err(SettingsValidationError::AgentModelsNormalized);
+        }
         if !matches!(payload.kind.as_str(), "anthropic" | "openai-compat") {
             return Err(SettingsValidationError::UnknownAgentKind);
         }
@@ -362,6 +516,14 @@ fn validate_credential_semantics(
             return Err(SettingsValidationError::AgentPresetNormalized);
         }
         parsed_agents.push(parsed);
+    }
+    for index in 0..builtin_agents.len() {
+        if builtin_agents[index + 1..]
+            .iter()
+            .any(|candidate| same_builtin_provider_backend(&builtin_agents[index], candidate))
+        {
+            return Err(SettingsValidationError::DuplicateAgents);
+        }
     }
     if dedupe_builtin_agents(parsed_agents.clone()).len() != parsed_agents.len() {
         return Err(SettingsValidationError::DuplicateAgents);

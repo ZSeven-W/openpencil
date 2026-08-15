@@ -170,6 +170,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "Агент остановился до получения результата для этого раздела.",
         "ai.designProgress.detail.connectionClosed" => "Соединение с агентом закрылось до получения результата для этого раздела.",
         "ai.designProgress.detail.stoppedByUser" => "Остановлено пользователем до завершения этого раздела.",
+        "builtin.modelsOnePerLine" => "ID моделей, по одному в строке",
+        "builtin.typeModelManually" => "Не удалось получить список моделей. Введите ID вручную, по одному в строке.",
         _ => return None,
     })
 }

@@ -334,13 +334,6 @@ pub struct EditorUiState {
     /// Text filter, caret, selection, and blink state for the chat
     /// model-picker search box.
     pub chat_model_picker_input: jian_core::text_input::TextInputState,
-    /// Request seam raised every time the model picker OPENS: a host
-    /// with local CLI access re-discovers the external providers'
-    /// catalogs so a CLI that shipped new models mid-session is listed
-    /// without an app restart. Drained by the desktop pump
-    /// (`drain_model_catalog_refresh`), which applies its own TTL
-    /// debounce; hosts without subprocess access simply clear it.
-    pub pending_model_catalog_refresh: bool,
     /// Hovered chat design JSON card `(message_index, block_index)`;
     /// drives the TS-style hover reveal of the card's copy affordance.
     pub chat_design_block_hover: Option<(usize, usize)>,

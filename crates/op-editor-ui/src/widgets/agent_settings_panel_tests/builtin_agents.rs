@@ -223,7 +223,7 @@ fn builtin_agent_cards_use_ts_compact_height_when_not_editing() {
     state
         .editor_ui
         .agent_settings
-        .add_builtin_agent_with_defaults("DeepSeek", "sk-test", "deepseek-v4-pro");
+        .add_builtin_agent_with_defaults("DeepSeek", "sk-other", "deepseek-v4-pro");
     let panel = AgentSettingsPanel::for_editor(&state);
 
     // Header + subtitle + two compact ROWS, flush against each other —

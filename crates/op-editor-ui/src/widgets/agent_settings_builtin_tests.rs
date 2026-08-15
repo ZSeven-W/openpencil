@@ -268,6 +268,39 @@ fn desktop_builtin_draft_geometry_remains_compact() {
 }
 
 #[test]
+fn focused_model_list_expands_without_overlapping_following_fields_on_touch_and_desktop() {
+    for touch in [false, true] {
+        let mut state = touch_draft_state(EditorSizeClass::Compact);
+        let settings = &mut state.editor_ui.agent_settings;
+        let collapsed = crate::widgets::agent_settings_builtin_layout::expanded_card_height_for_ui(
+            settings, None, touch,
+        );
+        settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        let expanded = crate::widgets::agent_settings_builtin_layout::expanded_card_height_for_ui(
+            settings, None, touch,
+        );
+        let extra = if touch { 60.0 } else { 44.0 };
+        assert_eq!(expanded, collapsed + extra);
+
+        let card = Rect::xywh(20.0, 40.0, 520.0, expanded + 80.0);
+        let model = crate::widgets::agent_settings_builtin_layout::field_input_rect_for_ui(
+            settings, card, None, 2, touch,
+        );
+        let base_url = crate::widgets::agent_settings_builtin_layout::field_input_rect_for_ui(
+            settings, card, None, 3, touch,
+        );
+        assert_eq!(model.size.y, if touch { 104.0 } else { 68.0 });
+        assert!(
+            base_url.origin.y >= model.origin.y + model.size.y + if touch { 8.0 } else { 4.0 },
+            "the Base URL row must remain below the multiline editor: {model:?} vs {base_url:?}"
+        );
+        if touch {
+            assert!(model.size.y >= 44.0 && base_url.size.y >= 44.0);
+        }
+    }
+}
+
+#[test]
 fn pure_builtin_provider_base_url_is_read_only_hit_target() {
     let mut state = EditorState::default();
     state.editor_ui.agent_settings.add_builtin_agent();
@@ -306,5 +339,128 @@ fn credential_sync_error_reserves_a_status_row_in_the_layout() {
     assert!(
         with > without,
         "sync error must reserve extra height (with={with}, without={without})"
+    );
+}
+
+#[test]
+fn model_field_chevron_toggles_and_catalog_rows_select() {
+    let mut state = EditorState::default();
+    let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "MiniMax",
+        "sk-test",
+        "MiniMax-M3",
+        op_editor_core::BuiltinAgentKind::Anthropic,
+        "https://api.minimaxi.com/anthropic",
+    );
+    let request = state
+        .editor_ui
+        .agent_settings
+        .begin_builtin_model_catalog_refresh(
+            op_editor_core::BuiltinModelCatalogTarget::Agent(id),
+            0,
+        )
+        .expect("discovery request");
+    let expected = state
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_config_for_request(&request)
+        .expect("resolvable");
+    state
+        .editor_ui
+        .agent_settings
+        .apply_builtin_model_catalog_refresh_outcome_if_current(
+            &expected,
+            &request,
+            op_editor_core::BuiltinModelCatalogRefreshOutcome::Success {
+                models: vec![
+                    op_editor_core::BuiltinModelOption::new("m1", "Model One"),
+                    op_editor_core::BuiltinModelOption::new("m2", "Model Two"),
+                ],
+            },
+        );
+    state.editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+        index: 0,
+        field: BuiltinAgentField::Model,
+    });
+
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content = panel.resolved_content_viewport(rect);
+    let y = crate::widgets::agent_settings_panel_geometry::agents_body_top(content)
+        + crate::widgets::agent_settings_builtin_layout::HEADER_HEIGHT
+        + crate::widgets::agent_settings_builtin_layout::SUBTITLE_HEIGHT
+        + crate::widgets::agent_settings_builtin_layout::sync_error_height(
+            &state.editor_ui.agent_settings,
+        );
+    let card = Rect::xywh(
+        content.origin.x,
+        y,
+        content.size.x,
+        crate::widgets::agent_settings_builtin_layout::card_height_for_ui(
+            &state.editor_ui.agent_settings,
+            0,
+            false,
+        ),
+    );
+    let settings = &state.editor_ui.agent_settings;
+    let model_input = crate::widgets::agent_settings_builtin_layout::field_input_rect_for_ui(
+        settings,
+        card,
+        Some(0),
+        2,
+        false,
+    );
+
+    // The right edge of the Model input is the dropdown trigger.
+    let chevron = Point2D::new(
+        model_input.origin.x + model_input.size.x - 8.0,
+        rect_center(model_input).y,
+    );
+    assert_eq!(
+        crate::widgets::agent_settings_builtin::hit_test_for_ui(
+            content,
+            settings,
+            &state.editor_ui,
+            chevron,
+        ),
+        crate::widgets::agent_settings_builtin::BuiltinHit::ToggleModelMenu(Some(0))
+    );
+
+    // The rest of the field is a plain focus target.
+    assert_eq!(
+        crate::widgets::agent_settings_builtin::hit_test_for_ui(
+            content,
+            settings,
+            &state.editor_ui,
+            Point2D::new(model_input.origin.x + 30.0, rect_center(model_input).y),
+        ),
+        crate::widgets::agent_settings_builtin::BuiltinHit::Focus {
+            index: 0,
+            field: BuiltinAgentField::Model,
+        }
+    );
+
+    // With the menu open, a click on the second catalog row selects it.
+    state.editor_ui.agent_settings.builtin_model_menu_open =
+        Some(op_editor_core::agent_settings::BuiltinModelMenuTarget::Agent(0));
+    let settings = &state.editor_ui.agent_settings;
+    let menu = crate::widgets::agent_settings_builtin_model_menu::model_menu_rect(
+        settings,
+        card,
+        Some(0),
+        false,
+    );
+    let row_1 = Point2D::new(menu.origin.x + 40.0, menu.origin.y + 4.0 + 24.0 + 12.0);
+    assert_eq!(
+        crate::widgets::agent_settings_builtin::hit_test_for_ui(
+            content,
+            settings,
+            &state.editor_ui,
+            row_1,
+        ),
+        crate::widgets::agent_settings_builtin::BuiltinHit::SelectModel {
+            index: Some(0),
+            row: 1,
+        }
     );
 }

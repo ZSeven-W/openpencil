@@ -24,12 +24,12 @@ fn builtin_field_row(field: BuiltinAgentField) -> usize {
     }
 }
 
-fn builtin_input_rect(
+fn builtin_card_and_field(
     content: Rect,
     settings: &AgentSettings,
     focus: SettingsFocus,
     touch: bool,
-) -> Option<Rect> {
+) -> Option<(Rect, Option<usize>, BuiltinAgentField)> {
     let mut card_y =
         agents_body_top(content) + HEADER_HEIGHT + SUBTITLE_HEIGHT + sync_error_height(settings);
     match focus {
@@ -44,13 +44,7 @@ fn builtin_input_rect(
                 content.size.x,
                 card_height_for_ui(settings, index, touch),
             );
-            Some(field_input_rect_for_ui(
-                settings,
-                card,
-                Some(index),
-                builtin_field_row(field),
-                touch,
-            ))
+            Some((card, Some(index), field))
         }
         SettingsFocus::BuiltinAgentDraft(field) => {
             for index in 0..settings.builtin_agents.len() {
@@ -63,16 +57,45 @@ fn builtin_input_rect(
                 content.size.x,
                 draft_card_height_for_ui(settings, touch),
             );
-            Some(field_input_rect_for_ui(
-                settings,
-                card,
-                None,
-                builtin_field_row(field),
-                touch,
-            ))
+            Some((card, None, field))
         }
         _ => None,
     }
+}
+
+fn builtin_input_rect(
+    content: Rect,
+    settings: &AgentSettings,
+    focus: SettingsFocus,
+    touch: bool,
+) -> Option<Rect> {
+    let (card, index, field) = builtin_card_and_field(content, settings, focus, touch)?;
+    Some(field_input_rect_for_ui(
+        settings,
+        card,
+        index,
+        builtin_field_row(field),
+        touch,
+    ))
+}
+
+fn builtin_model_menu_rect(
+    content: Rect,
+    settings: &AgentSettings,
+    focus: SettingsFocus,
+    touch: bool,
+) -> Option<Rect> {
+    let (card, index, field) = builtin_card_and_field(content, settings, focus, touch)?;
+    if field != BuiltinAgentField::Model
+        || !crate::widgets::agent_settings_builtin_model_menu::model_menu_visible(settings)
+    {
+        return None;
+    }
+    Some(
+        crate::widgets::agent_settings_builtin_model_menu::model_menu_rect(
+            settings, card, index, touch,
+        ),
+    )
 }
 
 fn image_input_rect(
@@ -101,4 +124,16 @@ pub(super) fn focused_input_rect(
         AgentSettingsTab::Fonts | AgentSettingsTab::System | AgentSettingsTab::Account => None,
         AgentSettingsTab::Mcp => None,
     }
+}
+
+pub(super) fn focused_model_menu_rect(
+    content: Rect,
+    settings: &AgentSettings,
+    active_tab: AgentSettingsTab,
+    touch: bool,
+) -> Option<Rect> {
+    if active_tab != AgentSettingsTab::Agents {
+        return None;
+    }
+    builtin_model_menu_rect(content, settings, settings.focus?, touch)
 }

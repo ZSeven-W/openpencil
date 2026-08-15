@@ -646,7 +646,7 @@ fn agent_chip_counts_ready_builtin_agents() {
         display_name: "MiniMax M3".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key: "sk-test".into(),
-        model: "MiniMax-M3".into(),
+        models: vec!["MiniMax-M3".into()],
         base_url: "https://api.minimaxi.com/v1".into(),
         enabled: true,
     });
@@ -657,7 +657,7 @@ fn agent_chip_counts_ready_builtin_agents() {
         display_name: "Unconfigured".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key: "".into(),
-        model: "x".into(),
+        models: vec!["x".into()],
         base_url: "".into(),
         enabled: true,
     });

@@ -267,13 +267,14 @@ pub use acp_agent_presets::{
     ACP_AGENT_PRESETS,
 };
 pub use agent_settings::{
-    AcpAgentConfig, AcpAgentConnectOutcome, AcpAgentConnectPhase, AcpAgentConnectRequest,
-    AcpAgentConnection, AcpAgentField, AcpConnectionType, AgentSettings, AgentSettingsDrag,
-    AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, BuiltinModelCatalog,
-    BuiltinModelCatalogPhase, BuiltinModelCatalogRefreshOutcome, BuiltinModelCatalogRefreshRequest,
-    BuiltinModelCatalogTarget, BuiltinModelOption, ImageGenField, ImageGenProfile,
-    ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli, McpServer, ProviderConnectOutcome,
-    ProviderConnectPhase, ProviderConnection, SettingsFocus,
+    normalize_builtin_models, AcpAgentConfig, AcpAgentConnectOutcome, AcpAgentConnectPhase,
+    AcpAgentConnectRequest, AcpAgentConnection, AcpAgentField, AcpConnectionType, AgentSettings,
+    AgentSettingsDrag, AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind,
+    BuiltinModelCatalog, BuiltinModelCatalogPhase, BuiltinModelCatalogRefreshOutcome,
+    BuiltinModelCatalogRefreshRequest, BuiltinModelCatalogTarget, BuiltinModelOption,
+    ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli,
+    McpServer, ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection, SettingsFocus,
+    MAX_BUILTIN_AGENT_MODELS, MAX_BUILTIN_MODEL_CHARS,
 };
 pub use agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,

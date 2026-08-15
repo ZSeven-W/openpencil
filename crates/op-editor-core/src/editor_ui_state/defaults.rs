@@ -88,7 +88,6 @@ impl Default for EditorUiState {
             icon_picker_load_more_request: None,
             chat_model_picker: jian_widgets::components::select::SelectState::default(),
             chat_model_picker_input: jian_core::text_input::TextInputState::default(),
-            pending_model_catalog_refresh: false,
             chat_design_block_hover: None,
             chat_example_hover: None,
             chat_header_hover: None,

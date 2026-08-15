@@ -140,6 +140,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "Agent 在该区块返回结果前已停止。",
         "ai.designProgress.detail.connectionClosed" => "Agent 连接在该区块返回结果前已断开。",
         "ai.designProgress.detail.stoppedByUser" => "用户已停止，该区块尚未完成。",
+        "builtin.modelsOnePerLine" => "模型 ID，每行一个",
+        "builtin.typeModelManually" => "获取模型列表失败，请手动输入模型 ID，每行一个",
         _ => return None,
     })
 }

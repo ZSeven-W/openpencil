@@ -43,9 +43,6 @@ pub enum AIChatHit {
     FocusModelSearch,
     /// Click on the clear affordance inside the model-picker search.
     ClearModelSearch,
-    /// Click on the model-picker refresh affordance. Forces discovery for
-    /// every ready built-in API provider while keeping the picker open.
-    RefreshModelCatalogs,
     /// Click on the thinking-mode chip — host cycles
     /// `ChatState::thinking_mode`.
     CycleThinking,

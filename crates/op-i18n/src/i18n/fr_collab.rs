@@ -140,6 +140,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "L’agent s’est arrêté avant de renvoyer un résultat pour cette section.",
         "ai.designProgress.detail.connectionClosed" => "La connexion de l’agent s’est interrompue avant le résultat de cette section.",
         "ai.designProgress.detail.stoppedByUser" => "Arrêté par l’utilisateur avant la fin de cette section.",
+        "builtin.modelsOnePerLine" => "ID de modèle, un par ligne",
+        "builtin.typeModelManually" => "Échec de la récupération des modèles. Saisissez les ID manuellement, un par ligne.",
         _ => return None,
     })
 }

@@ -12,7 +12,6 @@ pub enum ButtonPressTarget {
     StatusBar(crate::statusbar_state::StatusBarButton),
     ChatHeader(crate::chat_button_state::ChatHeaderButton),
     ChatFooter(crate::chat_button_state::ChatFooterButton),
-    ChatModelRefresh,
     ChatExample(usize),
     PromptCenter(usize),
     SceneTemplate(usize),

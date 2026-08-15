@@ -310,8 +310,8 @@ fn apply_credential_json(
 ) -> Result<(), validation::SettingsValidationError> {
     let value: serde_json::Value = serde_json::from_str(raw)
         .map_err(|error| validation::SettingsValidationError::Json(error.to_string()))?;
-    let payload = validation::credential_payload(&value)?;
-    apply_credential_payload(state, payload);
+    let validated = validation::credential_payload(&value)?;
+    apply_credential_payload(state, validated.payload);
     Ok(())
 }
 
@@ -533,3 +533,7 @@ mod acp_scrub_tests;
 #[cfg(test)]
 #[path = "web_settings_lossless_tests.rs"]
 mod lossless_tests;
+
+#[cfg(test)]
+#[path = "web_settings_disabled_provider_tests.rs"]
+mod disabled_provider_tests;

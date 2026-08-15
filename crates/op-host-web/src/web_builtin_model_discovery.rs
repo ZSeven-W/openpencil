@@ -219,14 +219,10 @@ fn apply_outcome(
     request: &BuiltinModelCatalogRefreshRequest,
     outcome: BuiltinModelCatalogRefreshOutcome,
 ) -> bool {
-    let applied = state
+    state
         .editor_ui
         .agent_settings
-        .apply_builtin_model_catalog_refresh_outcome_if_current(expected, request, outcome);
-    if applied {
-        state.rebuild_chat_models();
-    }
-    applied
+        .apply_builtin_model_catalog_refresh_outcome_if_current(expected, request, outcome)
 }
 
 #[cfg(test)]
@@ -279,6 +275,8 @@ mod tests {
     #[test]
     fn successful_response_lands_runtime_options_and_display_names() {
         let (mut state, expected, request) = pending_state();
+        state.rebuild_chat_models();
+        let chat_before = state.chat.available_models.clone();
         let body = serde_json::json!({
             "ok": true,
             "id": &expected.id,
@@ -301,6 +299,12 @@ mod tests {
                 op_editor_core::BuiltinModelOption::new("remote-b", "Remote B"),
             ]
         );
+        assert_eq!(state.chat.available_models, chat_before);
+        assert!(!state
+            .chat
+            .available_models
+            .iter()
+            .any(|entry| entry.builtin_model_id() == Some("remote-a")));
     }
 
     #[test]

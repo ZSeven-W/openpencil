@@ -144,6 +144,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "इस सेक्शन का परिणाम लौटाने से पहले एजेंट रुक गया।",
         "ai.designProgress.detail.connectionClosed" => "इस सेक्शन का परिणाम मिलने से पहले एजेंट कनेक्शन बंद हो गया।",
         "ai.designProgress.detail.stoppedByUser" => "उपयोगकर्ता ने इस सेक्शन के पूरा होने से पहले रोक दिया।",
+        "builtin.modelsOnePerLine" => "मॉडल आईडी, प्रति पंक्ति एक",
+        "builtin.typeModelManually" => "मॉडल सूची प्राप्त नहीं हुई। मॉडल आईडी मैन्युअल रूप से दर्ज करें, प्रति पंक्ति एक।",
         _ => return None,
     })
 }

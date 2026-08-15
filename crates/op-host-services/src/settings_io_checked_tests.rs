@@ -65,6 +65,48 @@ fn checked_settings_load_rejects_an_unsupported_settings_version() {
 }
 
 #[test]
+fn checked_settings_load_accepts_canonical_multi_model_agents() {
+    let root = checked_settings_test_path("multi-model");
+    let path = root.join("settings.json");
+    std::fs::create_dir_all(&root).expect("create settings test directory");
+    std::fs::write(
+        &path,
+        br#"{"version":1,"builtin_agents":[{"id":"builtin-1","preset":"custom","display_name":"Private","kind":"openai-compat","api_key":"key","model":"model-a","models":["model-a","model-b"],"base_url":"https://example.com/v1","enabled":true}]}"#,
+    )
+    .expect("write multi-model settings");
+    let mut state = EditorState::new();
+
+    load_checked_from_path(&mut state, &path).expect("canonical models must load losslessly");
+
+    assert_eq!(
+        state.editor_ui.agent_settings.builtin_agents[0].models,
+        ["model-a", "model-b"]
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn checked_settings_load_preserves_an_explicit_preset_for_multi_model_agents() {
+    let root = checked_settings_test_path("explicit-preset");
+    let path = root.join("settings.json");
+    std::fs::create_dir_all(&root).expect("create settings test directory");
+    std::fs::write(
+        &path,
+        br#"{"version":1,"builtin_agents":[{"id":"builtin-1","preset":"ark-coding","display_name":"Ark","kind":"anthropic","api_key":"key","model":"doubao-seed-2-0-pro-260215","models":["doubao-seed-2-0-pro-260215","ark-code-latest"],"base_url":"https://ark.cn-beijing.volces.com/api/coding","enabled":true}]}"#,
+    )
+    .expect("write multi-model settings");
+    let mut state = EditorState::new();
+
+    load_checked_from_path(&mut state, &path).expect("explicit preset must load losslessly");
+
+    assert_eq!(
+        state.editor_ui.agent_settings.builtin_agents[0].preset,
+        BuiltinAgentPresetKey::ArkCoding
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn checked_settings_load_migrates_retired_gemini_cli_slots() {
     let root = checked_settings_test_path("retired-gemini-cli");
     let path = root.join("settings.json");
@@ -212,6 +254,30 @@ fn checked_settings_load_rejects_values_that_would_be_silently_normalized() {
             }),
         ),
         (
+            "builtin-models-normalized",
+            serde_json::json!({
+                "version":1,
+                "builtin_agents":[{
+                    "id":"builtin-1","preset":"custom","display_name":"Built-in",
+                    "kind":"openai-compat","api_key":"key","model":"model-a",
+                    "models":["model-a"," model-b ","model-a"],
+                    "base_url":"https://example.com/v1","enabled":true
+                }]
+            }),
+        ),
+        (
+            "builtin-models-conflict",
+            serde_json::json!({
+                "version":1,
+                "builtin_agents":[{
+                    "id":"builtin-1","preset":"custom","display_name":"Built-in",
+                    "kind":"openai-compat","api_key":"key","model":"legacy-other",
+                    "models":["model-a","model-b"],
+                    "base_url":"https://example.com/v1","enabled":true
+                }]
+            }),
+        ),
+        (
             "builtin-preset",
             serde_json::json!({
                 "version":1,
@@ -230,18 +296,6 @@ fn checked_settings_load_rejects_values_that_would_be_silently_normalized() {
                     "id":"builtin-1","display_name":"Built-in",
                     "kind":"openai-compat","api_key":"key","model":"model",
                     "base_url":"https://api.openai.com/v1","enabled":true
-                }]
-            }),
-        ),
-        (
-            "builtin-mismatched-preset",
-            serde_json::json!({
-                "version":1,
-                "builtin_agents":[{
-                    "id":"builtin-1","preset":"doubao","display_name":"Built-in",
-                    "kind":"openai-compat","api_key":"key","model":"ark-code-latest",
-                    "base_url":"https://ark.cn-beijing.volces.com/api/coding",
-                    "enabled":true
                 }]
             }),
         ),
@@ -410,6 +464,70 @@ fn checked_settings_load_preserves_app_generated_operator_and_browser_duplicates
         &mut loaded
     ));
     assert_eq!(loaded.editor_ui.agent_settings.builtin_agents.len(), 1);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn checked_settings_load_rejects_duplicate_builtin_provider_ids() {
+    let root = checked_settings_test_path("duplicate-built-in-id");
+    let path = root.join("settings.json");
+    std::fs::create_dir_all(&root).expect("create settings test directory");
+    let mut persisted = EditorState::new();
+    persisted.editor_ui.agent_settings.add_builtin_agent_config(
+        "First",
+        "sk-first",
+        "first-model",
+        BuiltinAgentKind::OpenAiCompat,
+        "https://api.openai.com/v1",
+    );
+    persisted.editor_ui.agent_settings.add_builtin_agent_config(
+        "Second",
+        "sk-second",
+        "second-model",
+        BuiltinAgentKind::OpenAiCompat,
+        "https://openrouter.ai/api/v1",
+    );
+    let duplicate_id = persisted.editor_ui.agent_settings.builtin_agents[0]
+        .id
+        .clone();
+    persisted.editor_ui.agent_settings.builtin_agents[1].id = duplicate_id;
+    let body = serde_json::to_vec(&to_payload(&persisted)).expect("encode settings");
+    std::fs::write(&path, body).expect("write settings");
+    let mut loaded = EditorState::new();
+    let before = fingerprint(&loaded);
+
+    let error = load_checked_from_path(&mut loaded, &path)
+        .expect_err("duplicate provider ids are not lossless");
+
+    assert!(error.to_string().contains("losslessly"), "{error}");
+    assert_eq!(fingerprint(&loaded), before);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn checked_settings_load_rejects_noncanonical_builtin_provider_ids() {
+    let root = checked_settings_test_path("noncanonical-built-in-id");
+    let path = root.join("settings.json");
+    std::fs::create_dir_all(&root).expect("create settings test directory");
+    let mut persisted = EditorState::new();
+    persisted.editor_ui.agent_settings.add_builtin_agent_config(
+        "Provider",
+        "sk-provider",
+        "model",
+        BuiltinAgentKind::OpenAiCompat,
+        "https://api.openai.com/v1",
+    );
+    persisted.editor_ui.agent_settings.builtin_agents[0].id = " provider-id ".into();
+    let body = serde_json::to_vec(&to_payload(&persisted)).expect("encode settings");
+    std::fs::write(&path, body).expect("write settings");
+    let mut loaded = EditorState::new();
+    let before = fingerprint(&loaded);
+
+    let error = load_checked_from_path(&mut loaded, &path)
+        .expect_err("provider ids with surrounding whitespace are not lossless");
+
+    assert!(error.to_string().contains("losslessly"), "{error}");
+    assert_eq!(fingerprint(&loaded), before);
     let _ = std::fs::remove_dir_all(root);
 }
 

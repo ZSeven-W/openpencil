@@ -79,7 +79,6 @@ mod mcp_serve;
 mod menu;
 mod menu_action;
 mod message_dialog;
-mod model_refresh_host;
 mod persistence;
 mod persistence_error;
 mod persistence_export_batch;
@@ -306,11 +305,6 @@ struct DesktopApp {
     /// on a worker thread; its result is drained into
     /// `chat.available_models` on a later frame.
     model_probe: op_host_services::model_discovery::ModelProbe,
-    /// TTL-debounced re-discovery of the connected CLI providers'
-    /// catalogs, requested whenever the chat model picker opens
-    /// (`editor_ui.pending_model_catalog_refresh`) and drained by
-    /// `drain_model_catalog_refresh`.
-    model_catalog_refresh: op_host_services::model_catalog_refresh::ModelCatalogRefresh,
     /// Per-agent HTTP model catalogs requested by the built-in model picker.
     /// Jobs stay host-side because discovery uses native networking; only
     /// successful, current results are installed into editor-core runtime state.

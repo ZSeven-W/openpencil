@@ -105,7 +105,7 @@ fn add_builtin_agent_prefills_ts_provider_presets_first() {
             (
                 agent.display_name.as_str(),
                 agent.kind,
-                agent.model.as_str(),
+                agent.first_model().unwrap_or(""),
                 agent.base_url.as_str(),
                 agent.api_key.as_str(),
             )
@@ -188,7 +188,7 @@ fn pure_builtin_presets_do_not_toggle_api_format() {
         display_name: "Anthropic".into(),
         kind: BuiltinAgentKind::Anthropic,
         api_key: String::new(),
-        model: "claude-sonnet-4-6-20250916".into(),
+        models: vec!["claude-sonnet-4-6-20250916".into()],
         base_url: "https://api.anthropic.com".into(),
         enabled: true,
     };
@@ -202,7 +202,7 @@ fn pure_builtin_presets_do_not_toggle_api_format() {
         display_name: "OpenAI".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key: String::new(),
-        model: "gpt-5.6".into(),
+        models: vec!["gpt-5.6".into()],
         base_url: "https://api.openai.com/v1".into(),
         enabled: true,
     };

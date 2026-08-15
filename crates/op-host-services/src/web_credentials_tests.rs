@@ -53,7 +53,7 @@ fn state_with_operator_agent() -> EditorState {
             display_name: "Operator".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "operator-secret".into(),
-            model: "operator-model".into(),
+            models: vec!["operator-model".into()],
             base_url: "https://operator.example/v1".into(),
             enabled: true,
         });
@@ -75,6 +75,44 @@ fn discovery_accepts_a_credential_before_its_first_model_is_selected() {
 
     assert!(parse_transient_builtin(&credential).is_none());
     assert!(parse_transient_builtin_for_discovery(&credential).is_some());
+}
+
+#[test]
+fn transient_credential_preserves_an_explicit_preset_across_model_order() {
+    let credential = serde_json::json!({
+        "id": "builtin-web-1",
+        "preset": "ark-coding",
+        "display_name": "Ark Coding",
+        "kind": "anthropic",
+        "api_key": "sk-browser-only",
+        "model": "doubao-seed-2-0-pro-260215",
+        "models": ["doubao-seed-2-0-pro-260215", "ark-code-latest"],
+        "base_url": "https://ark.cn-beijing.volces.com/api/coding",
+        "enabled": true,
+    });
+
+    let agent = parse_transient_builtin(&credential).expect("credential parses");
+
+    assert_eq!(agent.preset, BuiltinAgentPresetKey::ArkCoding);
+}
+
+#[test]
+fn credential_snapshot_accepts_multiple_saved_models() {
+    let mut body: serde_json::Value = serde_json::from_str(VALID_BODY).expect("fixture JSON");
+    body["builtin_agents"][0]["models"] =
+        serde_json::json!(["private-model", "private-model-fast"]);
+    let mut state = EditorState::new();
+
+    apply_json(&mut state, &body.to_string()).expect("multi-model snapshot merges");
+
+    let agent = state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter()
+        .find(|agent| agent.api_key == "sk-browser-only")
+        .expect("browser credential");
+    assert_eq!(agent.models, ["private-model", "private-model-fast"]);
 }
 
 #[test]
@@ -252,7 +290,7 @@ fn aggregate_entry_limit_is_atomic() {
                 display_name: format!("Operator {index}"),
                 kind: BuiltinAgentKind::OpenAiCompat,
                 api_key: format!("operator-secret-{index}"),
-                model: "operator-model".into(),
+                models: vec!["operator-model".into()],
                 base_url: "https://operator.example/v1".into(),
                 enabled: true,
             });

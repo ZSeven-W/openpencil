@@ -239,7 +239,7 @@ mod tests {
                 display_name: "MiniMax".into(),
                 kind: BuiltinAgentKind::OpenAiCompat,
                 api_key: "sk-test".into(),
-                model: "MiniMax-M2.7".into(),
+                models: vec!["MiniMax-M2.7".into(), "MiniMax-M3".into()],
                 base_url: "http://localhost:9".into(),
                 enabled: true,
             });

@@ -294,12 +294,13 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         return None;
     }
     let user_text = state.chat.pending_send.take()?;
-    let (model, credential) = crate::web_ai_credentials::selected_target(state);
+    let (model, credential, builtin_provider_id) =
+        crate::web_ai_credentials::selected_target(state);
     let provider = selected.as_ref().and_then(|entry| {
         // Legacy string catalogs use an unqualified model id and must stay on
         // the daemon's ambiguity-safe built-in resolver. Structured built-ins
         // and request-scoped browser credentials can carry exact identity.
-        (model.starts_with("builtin:") || credential.is_some()).then(|| entry.provider.wire_id())
+        (builtin_provider_id.is_some() || credential.is_some()).then(|| entry.provider.wire_id())
     });
     let thinking = state.chat.thinking_mode.as_str();
     let effort = state.chat.effort_level.as_str();
@@ -340,6 +341,7 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         .map(|page| page.id.as_str());
     let body = serde_json::json!({
         "provider": provider,
+        "builtinProviderId": builtin_provider_id,
         "model": model,
         "credential": credential,
         // Standard turns route through the daemon classifier + design
@@ -602,7 +604,7 @@ mod tests {
     fn structured_catalog_keeps_builtin_identity_and_drops_cli_rows() {
         let models = parse_models_json(
             r#"[
-                {"provider":"codex-cli","value":"builtin:server-1:gpt-5.4","displayName":"GPT-5.4","providerDisplayName":"Server OpenAI"},
+                {"provider":"codex-cli","value":"builtin:server-1:gpt-5.4","displayName":"GPT-5.4","providerDisplayName":"Server OpenAI","builtinProviderId":"server-1"},
                 {"provider":"grok-build","value":"default","displayName":"Default"}
             ]"#,
         );
@@ -612,6 +614,28 @@ mod tests {
         assert_eq!(
             models[0].builtin_provider_id.as_deref(),
             Some("daemon-builtin:server-1")
+        );
+    }
+
+    #[test]
+    fn structured_catalog_keeps_equal_models_and_colon_provider_ids_distinct() {
+        let models = parse_models_json(
+            r#"[
+                {"provider":"codex-cli","value":"builtin:account:one:shared:model","displayName":"shared:model","providerDisplayName":"First","builtinProviderId":"account:one"},
+                {"provider":"codex-cli","value":"builtin:account:two:shared:model","displayName":"shared:model","providerDisplayName":"Second","builtinProviderId":"account:two"}
+            ]"#,
+        );
+
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].value, "builtin:account:one:shared:model");
+        assert_eq!(models[1].value, "builtin:account:two:shared:model");
+        assert_eq!(
+            models[0].builtin_provider_id.as_deref(),
+            Some("daemon-builtin:account:one")
+        );
+        assert_eq!(
+            models[1].builtin_provider_id.as_deref(),
+            Some("daemon-builtin:account:two")
         );
     }
 

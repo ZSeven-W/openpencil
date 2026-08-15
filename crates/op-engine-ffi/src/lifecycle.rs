@@ -61,6 +61,10 @@ pub(crate) struct Session {
     /// Mobile auth/WebView payload and exactly-once shell action state.
     #[cfg(feature = "editor")]
     pub(crate) auth_shell: crate::editor_auth::EditorAuthShellState,
+    /// Background provider-catalog jobs. Workers never own or call back into
+    /// this session; results land from the engine-thread frame pump only.
+    #[cfg(feature = "editor")]
+    pub(crate) model_discovery: crate::editor_model_discovery::MobileModelDiscoveryHost,
     /// Shell-provided media root (APK-extracted assets / bundle
     /// resources). Reserved for future local-media resolution.
     #[allow(dead_code)]
@@ -138,6 +142,8 @@ impl Session {
             editor,
             #[cfg(feature = "editor")]
             auth_shell: Default::default(),
+            #[cfg(feature = "editor")]
+            model_discovery: Default::default(),
         };
         session.fit_content_to_viewports();
         Ok(session)
@@ -230,17 +236,6 @@ impl Session {
     /// Caret rect in logical viewport points (see `crate::text::caret_rect`).
     pub(crate) fn caret_rect(&mut self) -> Option<(f32, f32, f32, f32)> {
         crate::text::caret_rect(self)
-    }
-
-    /// Editor mode: honor the host's next animation deadline (caret blink,
-    /// chat streaming, reveal animations).
-    #[cfg(feature = "editor")]
-    pub(crate) fn schedule_editor_animation(&self) {
-        if let Some(host) = self.editor.as_ref() {
-            if let Some(deadline) = host.next_animation_deadline_ms() {
-                self.request_wake(Some(deadline));
-            }
-        }
     }
 
     /// When the caret is blinking, schedule the next flip wake.
@@ -462,6 +457,17 @@ impl Session {
         crate::editor_template::drain_pending_scene_template(self)?;
         #[cfg(feature = "editor")]
         let auth_wake = crate::editor_auth::pump(self);
+        #[cfg(feature = "editor")]
+        let model_discovery_wake = {
+            let Session {
+                editor,
+                model_discovery,
+                ..
+            } = self;
+            editor
+                .as_mut()
+                .and_then(|host| model_discovery.pump(host, now_ms))
+        };
         let slot = std::mem::replace(&mut self.surface, SurfaceSlot::None);
         let (restored, outcome) = match slot {
             SurfaceSlot::None => (
@@ -498,9 +504,12 @@ impl Session {
             Ok(true) => {
                 crate::media::drain_remote_image_requests(self);
                 #[cfg(feature = "editor")]
-                self.schedule_editor_animation();
-                #[cfg(feature = "editor")]
-                if let Some(deadline) = auth_wake {
+                if let Some(deadline) = earliest_wake(
+                    earliest_wake(auth_wake, model_discovery_wake),
+                    self.editor
+                        .as_ref()
+                        .and_then(|host| host.next_animation_deadline_ms()),
+                ) {
                     self.request_wake(Some(deadline));
                 }
                 #[cfg(not(feature = "editor"))]
@@ -540,6 +549,17 @@ impl Session {
         crate::editor_template::drain_pending_scene_template(self)?;
         #[cfg(feature = "editor")]
         let auth_wake = crate::editor_auth::pump(self);
+        #[cfg(feature = "editor")]
+        let model_discovery_wake = {
+            let Session {
+                editor,
+                model_discovery,
+                ..
+            } = self;
+            editor
+                .as_mut()
+                .and_then(|host| model_discovery.pump(host, now_ms))
+        };
         let width = ((self.logical.0 * self.dpr).round() as i32).max(1);
         let height = ((self.logical.1 * self.dpr).round() as i32).max(1);
         let row_bytes = width as usize * 4;
@@ -566,8 +586,12 @@ impl Session {
         }
         #[cfg(feature = "editor")]
         {
-            self.schedule_editor_animation();
-            if let Some(deadline) = auth_wake {
+            if let Some(deadline) = earliest_wake(
+                earliest_wake(auth_wake, model_discovery_wake),
+                self.editor
+                    .as_ref()
+                    .and_then(|host| host.next_animation_deadline_ms()),
+            ) {
                 self.request_wake(Some(deadline));
             }
         }
@@ -582,6 +606,15 @@ impl Session {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(feature = "editor")]
+fn earliest_wake(left: Option<u64>, right: Option<u64>) -> Option<u64> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (Some(value), None) | (None, Some(value)) => Some(value),
+        (None, None) => None,
     }
 }
 

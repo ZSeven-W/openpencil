@@ -1,3 +1,4 @@
+use crate::widgets::agent_settings_builtin_model_menu;
 use crate::widgets::agent_settings_builtin_parts;
 use crate::widgets::agent_settings_header_action::header_action_rect;
 use crate::widgets::agent_settings_switch::{SETTINGS_SWITCH_H, SETTINGS_SWITCH_W};
@@ -38,8 +39,10 @@ const TOUCH_DRAFT_ACTION_HEIGHT: f32 = 60.0;
 pub(super) const CARD_GAP: f32 = 0.0;
 const FIELD_LABEL_W: f32 = 68.0;
 const FIELD_H: f32 = 24.0;
+const MODEL_EDITOR_H: f32 = 68.0;
 const TOUCH_FIELD_LABEL_W: f32 = 84.0;
 const TOUCH_FIELD_H: f32 = 44.0;
+const TOUCH_MODEL_EDITOR_H: f32 = 104.0;
 const TOUCH_FIELD_START_Y: f32 = 160.0;
 const TOUCH_FIELD_ROW_H: f32 = 52.0;
 const ACTION_W: f32 = 24.0;
@@ -72,7 +75,38 @@ pub(super) fn expanded_card_height_for_ui(
     } else {
         EXPANDED_CARD_HEIGHT
     };
-    base + agent_settings_builtin_parts::preset_menu_height(settings, index, touch)
+    base + model_editor_extra_height(settings, index, touch)
+        + agent_settings_builtin_parts::preset_menu_height(settings, index, touch)
+        + agent_settings_builtin_model_menu::model_menu_height(settings, index, touch)
+}
+
+fn model_editor_expanded(settings: &AgentSettings, index: Option<usize>) -> bool {
+    match index {
+        Some(index) => matches!(
+            settings.focus,
+            Some(SettingsFocus::BuiltinAgent {
+                index: focused,
+                field: op_editor_core::agent_settings::BuiltinAgentField::Model,
+            }) if focused == index
+        ),
+        None => matches!(
+            settings.focus,
+            Some(SettingsFocus::BuiltinAgentDraft(
+                op_editor_core::agent_settings::BuiltinAgentField::Model,
+            ))
+        ),
+    }
+}
+
+fn model_editor_extra_height(settings: &AgentSettings, index: Option<usize>, touch: bool) -> f32 {
+    if !model_editor_expanded(settings, index) {
+        return 0.0;
+    }
+    if touch {
+        TOUCH_MODEL_EDITOR_H - TOUCH_FIELD_H
+    } else {
+        MODEL_EDITOR_H - FIELD_H
+    }
 }
 
 pub(super) fn draft_card_height_for_ui(settings: &AgentSettings, touch: bool) -> f32 {
@@ -214,7 +248,20 @@ pub(super) fn field_input_rect_for_ui(
     row: usize,
     touch: bool,
 ) -> Rect {
-    let menu_h = agent_settings_builtin_parts::preset_menu_height(settings, index, touch);
+    // The provider-preset menu pushes every field down; the model menu
+    // only pushes the rows below the Model field it is anchored to.
+    let preset_menu_h = agent_settings_builtin_parts::preset_menu_height(settings, index, touch);
+    let below_model = row > agent_settings_builtin_model_menu::MODEL_FIELD_ROW;
+    let model_editor_h = if below_model {
+        model_editor_extra_height(settings, index, touch)
+    } else {
+        0.0
+    };
+    let model_menu_h = if below_model {
+        agent_settings_builtin_model_menu::model_menu_height(settings, index, touch)
+    } else {
+        0.0
+    };
     let (pad_x, label_w, start_y, row_h, field_h) = if touch {
         (
             16.0,
@@ -226,10 +273,26 @@ pub(super) fn field_input_rect_for_ui(
     } else {
         (12.0, FIELD_LABEL_W, 76.0, 28.0, FIELD_H)
     };
+    let field_h = if row == agent_settings_builtin_model_menu::MODEL_FIELD_ROW
+        && model_editor_expanded(settings, index)
+    {
+        if touch {
+            TOUCH_MODEL_EDITOR_H
+        } else {
+            MODEL_EDITOR_H
+        }
+    } else {
+        field_h
+    };
     Rect {
         origin: Point2D::new(
             card.origin.x + pad_x + label_w,
-            card.origin.y + start_y + menu_h + row as f32 * row_h,
+            card.origin.y
+                + start_y
+                + preset_menu_h
+                + model_editor_h
+                + model_menu_h
+                + row as f32 * row_h,
         ),
         size: Point2D::new(card.size.x - pad_x * 2.0 - label_w, field_h),
     }

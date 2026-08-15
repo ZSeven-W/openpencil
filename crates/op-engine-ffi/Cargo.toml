@@ -24,7 +24,11 @@ gl = ["jian-skia/gl"]
 # Full editor mode: drives op-host-native's widget host (the complete
 # desktop chrome — top bar, layers, toolbar, property panel, chat,
 # settings, canvas editing) on iOS / Android.
-editor = ["op-host-native/widget-host"]
+editor = [
+  "op-host-native/widget-host",
+  "dep:op-builtin-model-discovery",
+  "dep:tokio",
+]
 # Local-only authentication for the iOS / Android editor shells. This forwards
 # the explicit debug-only archive lane without enabling it in shipping builds.
 mobile-auth-dev = ["op-host-native/mobile-auth-dev"]
@@ -45,6 +49,10 @@ op-pen-loader = { path = "../op-pen-loader" }
 # adapter that paints OP widget calls onto a skia canvas. Raster-only
 # by default (no `gl-host`), so the crate stays mobile-safe.
 op-host-native = { path = "../op-host-native" }
+# Mobile editor model discovery is split from op-host-services so iOS and
+# Android do not pull the daemon's rquickjs / process / export dependency
+# closure. The service host reuses this exact provider/auth/parser crate.
+op-builtin-model-discovery = { path = "../op-builtin-model-discovery", optional = true }
 # Canonical `.op` schema — `PenDocument` parse targets.
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # `TextInputState` (IME composition/selection model) + UTF-16 ↔ UTF-8
@@ -60,6 +68,10 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "textlayout",
 ] }
 serde_json = { workspace = true }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "time",
+], optional = true }
 
 [dev-dependencies]
 # Host-side tests render through the raster CPU path only.

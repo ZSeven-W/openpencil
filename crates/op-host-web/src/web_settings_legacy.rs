@@ -53,7 +53,7 @@ pub(super) fn prepare(raw: &str) -> PreparedSettings {
         removed_forbidden |= object.remove(key).is_some();
     }
 
-    let payload = match super::validation::settings_payload(&value) {
+    let payload = match super::validation::legacy_settings_payload(&value) {
         Ok(payload) => payload,
         Err(_) => {
             let sanitized_raw = removed_forbidden

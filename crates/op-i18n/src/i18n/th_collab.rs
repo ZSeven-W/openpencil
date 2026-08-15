@@ -142,6 +142,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "เอเจนต์หยุดก่อนส่งผลลัพธ์ของส่วนนี้กลับมา",
         "ai.designProgress.detail.connectionClosed" => "การเชื่อมต่อเอเจนต์ปิดก่อนส่วนนี้ส่งผลลัพธ์กลับมา",
         "ai.designProgress.detail.stoppedByUser" => "ผู้ใช้หยุดก่อนที่ส่วนนี้จะเสร็จสมบูรณ์",
+        "builtin.modelsOnePerLine" => "รหัสโมเดล หนึ่งรายการต่อบรรทัด",
+        "builtin.typeModelManually" => "ดึงรายการโมเดลไม่สำเร็จ โปรดกรอกรหัสโมเดลด้วยตนเอง หนึ่งรายการต่อบรรทัด",
         _ => return None,
     })
 }

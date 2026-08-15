@@ -11,6 +11,43 @@ use super::ImageTestStatus;
 use crate::agent_settings_builtin_presets::{builtin_agent_preset, BuiltinAgentPresetKey};
 use crate::chat::AgentProvider;
 
+/// Maximum number of explicitly saved models for one built-in provider.
+pub const MAX_BUILTIN_AGENT_MODELS: usize = 64;
+/// Maximum Unicode scalar count of one saved model id.
+pub const MAX_BUILTIN_MODEL_CHARS: usize = 256;
+
+/// Canonicalize saved model ids without changing their first-seen order.
+///
+/// Each input string may contain newline-separated ids (the settings field's
+/// manual-entry format). Empty, overlong, and duplicate ids are discarded.
+/// Model ids are never truncated: a truncated id could silently route a
+/// request to a different model.
+pub fn normalize_builtin_models<I, S>(models: I) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    let mut seen = std::collections::BTreeSet::new();
+    let mut normalized = Vec::new();
+    for value in models {
+        let value = value.into();
+        for model in value.lines() {
+            let model = model.trim();
+            if model.is_empty()
+                || model.chars().count() > MAX_BUILTIN_MODEL_CHARS
+                || !seen.insert(model.to_string())
+            {
+                continue;
+            }
+            normalized.push(model.to_string());
+            if normalized.len() == MAX_BUILTIN_AGENT_MODELS {
+                return normalized;
+            }
+        }
+    }
+    normalized
+}
+
 /// Built-in provider backend configured directly in OpenPencil.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuiltinAgentKind {
@@ -42,7 +79,9 @@ pub struct BuiltinAgentConfig {
     pub display_name: String,
     pub kind: BuiltinAgentKind,
     pub api_key: String,
-    pub model: String,
+    /// Explicitly saved model ids. Runtime discovery catalogs are kept in
+    /// `AgentSettings` and never become chat choices until copied here.
+    pub models: Vec<String>,
     pub base_url: String,
     pub enabled: bool,
 }
@@ -63,7 +102,7 @@ impl std::fmt::Debug for BuiltinAgentConfig {
                     "[redacted]"
                 },
             )
-            .field("model", &self.model)
+            .field("models", &self.models)
             .field("base_url", &self.base_url)
             .field("enabled", &self.enabled)
             .finish()
@@ -79,7 +118,9 @@ impl BuiltinAgentConfig {
     }
 
     pub fn ready(&self) -> bool {
-        self.enabled && !self.api_key.trim().is_empty() && !self.model.trim().is_empty()
+        self.enabled
+            && !self.api_key.trim().is_empty()
+            && self.models.iter().any(|model| !model.trim().is_empty())
     }
 
     /// Model discovery needs credentials and an endpoint, but deliberately
@@ -93,14 +134,14 @@ impl BuiltinAgentConfig {
         &self,
         display_name: &str,
         api_key: &str,
-        model: &str,
+        models: &[String],
         kind: BuiltinAgentKind,
         base_url: &str,
     ) -> bool {
         self.kind == kind
             && self.display_name.trim() == display_name.trim()
             && self.api_key.trim() == api_key.trim()
-            && self.model.trim() == model.trim()
+            && self.models == normalize_builtin_models(models.iter().cloned())
             && self.base_url.trim().trim_end_matches('/') == base_url.trim().trim_end_matches('/')
     }
 
@@ -108,24 +149,75 @@ impl BuiltinAgentConfig {
         &self,
         _display_name: &str,
         api_key: &str,
-        model: &str,
         kind: BuiltinAgentKind,
         base_url: &str,
+        preset: BuiltinAgentPresetKey,
     ) -> bool {
-        self.matches_backend(api_key, model, kind, base_url)
+        self.preset == preset && self.matches_backend(api_key, kind, base_url)
     }
 
-    fn matches_backend(
-        &self,
-        api_key: &str,
-        model: &str,
-        kind: BuiltinAgentKind,
-        base_url: &str,
-    ) -> bool {
+    fn matches_backend(&self, api_key: &str, kind: BuiltinAgentKind, base_url: &str) -> bool {
         self.kind == kind
             && self.api_key.trim() == api_key.trim()
-            && self.model.trim() == model.trim()
             && self.base_url.trim().trim_end_matches('/') == base_url.trim().trim_end_matches('/')
+    }
+
+    /// First saved model, used only as a deterministic fallback when no chat
+    /// tab has an explicit selection (and for the legacy payload mirror).
+    pub fn first_model(&self) -> Option<&str> {
+        self.models
+            .iter()
+            .map(String::as_str)
+            .find(|model| !model.trim().is_empty())
+    }
+
+    /// Alias spelling for call sites that treat the first saved model as the
+    /// provider's compatibility/default model.
+    pub fn primary_model(&self) -> Option<&str> {
+        self.first_model()
+    }
+
+    pub fn has_model(&self, model: &str) -> bool {
+        let model = model.trim();
+        !model.is_empty() && self.models.iter().any(|saved| saved == model)
+    }
+
+    pub fn set_models<I, S>(&mut self, models: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.models = normalize_builtin_models(models);
+    }
+
+    pub fn add_model(&mut self, model: impl Into<String>) -> bool {
+        let before = self.models.clone();
+        self.set_models(before.iter().cloned().chain(std::iter::once(model.into())));
+        self.models != before
+    }
+
+    pub fn remove_model(&mut self, model: &str) -> bool {
+        let model = model.trim();
+        let before = self.models.len();
+        self.models.retain(|saved| saved != model);
+        self.models.len() != before
+    }
+
+    /// Toggle one saved model and return whether it is selected afterwards.
+    pub fn toggle_model(&mut self, model: impl Into<String>) -> bool {
+        let model = model.into();
+        let model = model.trim();
+        if self.has_model(model) {
+            self.remove_model(model);
+            false
+        } else {
+            self.add_model(model.to_string())
+        }
+    }
+
+    /// Newline-separated representation used by the settings text input.
+    pub fn models_text(&self) -> String {
+        self.models.join("\n")
     }
 
     pub fn apply_preset(&mut self, key: BuiltinAgentPresetKey) {
@@ -133,7 +225,7 @@ impl BuiltinAgentConfig {
         self.preset = preset.key;
         self.display_name = preset.display_name.into();
         self.kind = preset.kind;
-        self.model = preset.model.into();
+        self.set_models([preset.model]);
         self.base_url = preset.base_url.into();
     }
 
@@ -144,11 +236,16 @@ impl BuiltinAgentConfig {
         } else if self.preset != BuiltinAgentPresetKey::Custom {
             self.base_url = kind.default_base_url().into();
         }
-        if kind == BuiltinAgentKind::OpenAiCompat && self.model.starts_with("claude-") {
-            self.model = "gpt-5.6".into();
-        } else if kind == BuiltinAgentKind::Anthropic && self.model.starts_with("gpt-") {
-            self.model = crate::agent_settings_builtin_presets::DEFAULT_ANTHROPIC_MODEL.into();
-        }
+        let models = std::mem::take(&mut self.models).into_iter().map(|model| {
+            if kind == BuiltinAgentKind::OpenAiCompat && model.starts_with("claude-") {
+                "gpt-5.6".into()
+            } else if kind == BuiltinAgentKind::Anthropic && model.starts_with("gpt-") {
+                crate::agent_settings_builtin_presets::DEFAULT_ANTHROPIC_MODEL.into()
+            } else {
+                model
+            }
+        });
+        self.set_models(models);
     }
 
     pub fn toggle_kind_for_preset(&mut self) {

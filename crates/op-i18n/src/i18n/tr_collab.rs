@@ -140,6 +140,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "Agent bu bölüm için sonuç döndürmeden durdu.",
         "ai.designProgress.detail.connectionClosed" => "Bu bölümün sonucu dönmeden agent bağlantısı kapandı.",
         "ai.designProgress.detail.stoppedByUser" => "Bu bölüm tamamlanmadan kullanıcı tarafından durduruldu.",
+        "builtin.modelsOnePerLine" => "Model kimlikleri, her satıra bir tane",
+        "builtin.typeModelManually" => "Model listesi alınamadı. Kimlikleri elle, her satıra bir tane girin.",
         _ => return None,
     })
 }

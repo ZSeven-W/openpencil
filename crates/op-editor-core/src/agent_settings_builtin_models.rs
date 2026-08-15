@@ -1,6 +1,6 @@
 //! Runtime model catalogs for configured built-in API providers.
 //!
-//! The configured model remains the persisted source of truth. Catalogs are
+//! The configured model list remains the persisted source of truth. Catalogs are
 //! process-local discovery results: hosts drain target-only requests, clone the
 //! current credential, and land an outcome only while the request still owns
 //! the same configuration generation.
@@ -71,7 +71,7 @@ pub enum BuiltinModelCatalogRefreshOutcome {
 }
 
 impl AgentSettings {
-    /// Whether the shared model picker should expose built-in discovery.
+    /// Whether provider settings contain any entry ready for discovery.
     /// Discovery deliberately does not require an already selected model.
     pub fn has_discovery_ready_builtin_agent(&self) -> bool {
         self.builtin_agents
@@ -135,7 +135,8 @@ impl AgentSettings {
         Some(request)
     }
 
-    /// Request all ready saved built-ins when the global chat picker opens.
+    /// Queue all ready saved built-ins for an explicit settings-side refresh.
+    /// The chat picker must not call this: chat exposes only saved models.
     pub fn request_ready_builtin_model_catalog_refreshes(&mut self, now_ms: u64) -> usize {
         let targets = self
             .builtin_agents
@@ -178,8 +179,8 @@ impl AgentSettings {
         self.begin_builtin_model_catalog_refresh(target, now_ms)
     }
 
-    /// Force-refresh every ready saved built-in provider. This is the manual
-    /// picker retry path; draft credentials remain scoped to settings.
+    /// Force-refresh every ready saved built-in provider for an explicit
+    /// settings action; draft credentials remain scoped to their own form.
     pub fn force_ready_builtin_model_catalog_refreshes(&mut self, now_ms: u64) -> usize {
         let targets = self
             .builtin_agents
@@ -273,10 +274,60 @@ impl AgentSettings {
     }
 
     pub fn builtin_model_catalog_options(&self, id: &str) -> &[BuiltinModelOption] {
+        self.builtin_model_catalog_options_for(&BuiltinModelCatalogTarget::Agent(id.to_string()))
+    }
+
+    /// Catalog options keyed by catalog target — agents by id, and the
+    /// unsaved add-provider draft by [`BuiltinModelCatalogTarget::Draft`].
+    pub fn builtin_model_catalog_options_for(
+        &self,
+        target: &BuiltinModelCatalogTarget,
+    ) -> &[BuiltinModelOption] {
         self.builtin_model_catalogs
-            .get(&BuiltinModelCatalogTarget::Agent(id.to_string()))
+            .get(target)
             .map(|catalog| catalog.models.as_slice())
             .unwrap_or(&[])
+    }
+
+    /// The full runtime catalog for `target`, if one exists.
+    pub fn builtin_model_catalog(
+        &self,
+        target: &BuiltinModelCatalogTarget,
+    ) -> Option<&BuiltinModelCatalog> {
+        self.builtin_model_catalogs.get(target)
+    }
+
+    /// Queue a discovery refresh for `target` only when the runtime
+    /// catalog is due: absent, keyed to a different credential, or older
+    /// than the TTL. Error and Unsupported states obey the same cooldown;
+    /// an explicit retry uses the force path. The settings-form
+    /// model dropdown opens through this — a menu the user just closed
+    /// must not re-hit the provider on every reopen inside the TTL.
+    pub fn begin_builtin_model_catalog_refresh_if_due(
+        &mut self,
+        target: BuiltinModelCatalogTarget,
+        now_ms: u64,
+    ) -> Option<BuiltinModelCatalogRefreshRequest> {
+        let due = self
+            .builtin_model_catalogs
+            .get(&target)
+            .is_none_or(|catalog| {
+                self.builtin_model_catalog_config(&target)
+                    .is_some_and(|config| {
+                        catalog.credential_fingerprint
+                            != builtin_model_credential_fingerprint(config)
+                            || (catalog.phase != BuiltinModelCatalogPhase::Loading
+                                && catalog.last_attempt_ms.is_none_or(|last_attempt_ms| {
+                                    now_ms.saturating_sub(last_attempt_ms)
+                                        >= BUILTIN_MODEL_CATALOG_TTL_MS
+                                }))
+                    })
+            });
+        if due {
+            self.begin_builtin_model_catalog_refresh(target, now_ms)
+        } else {
+            None
+        }
     }
 
     pub fn invalidate_builtin_model_catalog(&mut self, target: &BuiltinModelCatalogTarget) -> bool {
@@ -380,4 +431,135 @@ fn builtin_model_credential_fingerprint(config: &BuiltinAgentConfig) -> u64 {
         .hash(&mut hasher);
     config.api_key.trim().hash(&mut hasher);
     hasher.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent_settings::BuiltinAgentKind;
+    use crate::agent_settings_builtin_presets::BuiltinAgentPresetKey;
+
+    fn ready_agent(id: &str) -> BuiltinAgentConfig {
+        BuiltinAgentConfig {
+            id: id.into(),
+            preset: BuiltinAgentPresetKey::Anthropic,
+            display_name: "Anthropic".into(),
+            kind: BuiltinAgentKind::Anthropic,
+            api_key: "sk-test".into(),
+            models: vec!["claude-sonnet-4-6-20250916".into()],
+            base_url: "https://api.anthropic.com".into(),
+            enabled: true,
+        }
+    }
+
+    fn land_success(settings: &mut AgentSettings, target: &BuiltinModelCatalogTarget) {
+        let request = settings
+            .take_pending_builtin_model_catalog_refresh()
+            .expect("pending request");
+        let expected = settings
+            .builtin_model_catalog_config_for_request(&request)
+            .expect("resolvable request");
+        assert!(
+            settings.apply_builtin_model_catalog_refresh_outcome_if_current(
+                &expected,
+                &request,
+                BuiltinModelCatalogRefreshOutcome::Success {
+                    models: vec![BuiltinModelOption::new(
+                        "claude-sonnet-4-6-20250916",
+                        "Claude Sonnet 4.6",
+                    )],
+                },
+            )
+        );
+        let _ = target;
+    }
+
+    #[test]
+    fn refresh_if_due_runs_once_inside_the_ttl() {
+        let mut settings = AgentSettings::default();
+        settings.builtin_agents.push(ready_agent("a1"));
+        let target = BuiltinModelCatalogTarget::Agent("a1".into());
+
+        let first = settings.begin_builtin_model_catalog_refresh_if_due(target.clone(), 0);
+        assert!(first.is_some(), "a missing catalog is always due");
+        assert_eq!(
+            settings.begin_builtin_model_catalog_refresh_if_due(target.clone(), 10),
+            None,
+            "an in-flight request must not be duplicated"
+        );
+
+        land_success(&mut settings, &target);
+        assert_eq!(
+            settings.begin_builtin_model_catalog_refresh_if_due(target.clone(), 1_000),
+            None,
+            "a fresh Ready catalog stays cached inside the TTL"
+        );
+        assert!(
+            settings
+                .begin_builtin_model_catalog_refresh_if_due(
+                    target.clone(),
+                    1_000 + BUILTIN_MODEL_CATALOG_TTL_MS
+                )
+                .is_some(),
+            "a Ready catalog past the TTL is due again"
+        );
+    }
+
+    #[test]
+    fn refresh_if_due_throttles_failed_catalogs_but_force_can_retry() {
+        let mut settings = AgentSettings::default();
+        settings.builtin_agents.push(ready_agent("a1"));
+        let target = BuiltinModelCatalogTarget::Agent("a1".into());
+        settings
+            .begin_builtin_model_catalog_refresh_if_due(target.clone(), 0)
+            .expect("first request");
+        let request = settings
+            .take_pending_builtin_model_catalog_refresh()
+            .expect("pending");
+        let expected = settings
+            .builtin_model_catalog_config_for_request(&request)
+            .expect("resolvable");
+        settings.apply_builtin_model_catalog_refresh_outcome_if_current(
+            &expected,
+            &request,
+            BuiltinModelCatalogRefreshOutcome::Error {
+                error: "offline".into(),
+            },
+        );
+        assert_eq!(
+            settings.begin_builtin_model_catalog_refresh_if_due(target.clone(), 10),
+            None,
+            "reopening an errored catalog inside the TTL must not hammer the provider"
+        );
+        assert!(
+            settings
+                .force_builtin_model_catalog_refresh(target, 10)
+                .is_some(),
+            "an explicit retry bypasses the cooldown"
+        );
+    }
+
+    #[test]
+    fn refresh_if_due_refuses_unconfigured_targets_and_supports_the_draft() {
+        let mut settings = AgentSettings::default();
+        settings.builtin_agents.push(ready_agent("a1"));
+        settings.builtin_agents[0].api_key.clear();
+        assert_eq!(
+            settings.begin_builtin_model_catalog_refresh_if_due(
+                BuiltinModelCatalogTarget::Agent("a1".into()),
+                0,
+            ),
+            None,
+            "discovery needs a credential; the form falls back to typing"
+        );
+
+        settings.builtin_agent_draft = Some(ready_agent(""));
+        let draft = BuiltinModelCatalogTarget::Draft;
+        let request = settings
+            .begin_builtin_model_catalog_refresh_if_due(draft.clone(), 0)
+            .expect("a credentialed draft is discovery-ready");
+        assert_eq!(request.target, draft);
+        land_success(&mut settings, &draft);
+        assert_eq!(settings.builtin_model_catalog_options_for(&draft).len(), 1);
+    }
 }

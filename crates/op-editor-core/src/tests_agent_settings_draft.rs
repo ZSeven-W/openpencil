@@ -38,6 +38,59 @@ fn duplicate_builtin_agent_backend_reuses_existing_provider_across_display_alias
 }
 
 #[test]
+fn duplicate_builtin_agent_backend_merges_distinct_models_in_order() {
+    let mut s = AgentSettings::default();
+
+    let first = s.add_builtin_agent_configs(
+        "Private",
+        "sk-test",
+        [" model-a ", "model-b", "model-a"],
+        BuiltinAgentKind::OpenAiCompat,
+        "https://example.com/v1/",
+    );
+    let second = s.add_builtin_agent_configs(
+        "Alias",
+        "sk-test",
+        ["model-b", "model-c"],
+        BuiltinAgentKind::OpenAiCompat,
+        "https://example.com/v1",
+    );
+
+    assert_eq!(second, first);
+    assert_eq!(s.builtin_agents.len(), 1);
+    assert_eq!(
+        s.builtin_agents[0].models,
+        ["model-a", "model-b", "model-c"]
+    );
+}
+
+#[test]
+fn adding_a_disabled_builtin_backend_reuses_and_reenables_it() {
+    let mut s = AgentSettings::default();
+
+    let first = s.add_builtin_agent_configs(
+        "Private",
+        "sk-test",
+        ["model-a"],
+        BuiltinAgentKind::OpenAiCompat,
+        "https://example.com/v1",
+    );
+    s.builtin_agents[0].enabled = false;
+    let second = s.add_builtin_agent_configs(
+        "Alias",
+        "sk-test",
+        ["model-b"],
+        BuiltinAgentKind::OpenAiCompat,
+        "https://example.com/v1",
+    );
+
+    assert_eq!(second, first);
+    assert_eq!(s.builtin_agents.len(), 1);
+    assert!(s.builtin_agents[0].enabled);
+    assert_eq!(s.builtin_agents[0].models, ["model-a", "model-b"]);
+}
+
+#[test]
 fn duplicate_auto_named_builtin_agent_config_reuses_existing_provider() {
     let mut s = AgentSettings::default();
 
@@ -76,12 +129,12 @@ fn builtin_agent_draft_can_save_before_a_model_is_selected() {
     s.begin_builtin_agent_draft();
     let draft = s.builtin_agent_draft.as_mut().expect("draft exists");
     draft.api_key = "sk-test".into();
-    draft.model.clear();
+    draft.models.clear();
 
     let id = s.save_builtin_agent_draft();
 
     assert_eq!(id.as_deref(), Some("builtin-1"));
-    assert!(s.builtin_agents[0].model.is_empty());
+    assert!(s.builtin_agents[0].models.is_empty());
     assert!(s.builtin_agents[0].discovery_ready());
     assert!(!s.builtin_agents[0].ready());
 }
@@ -110,7 +163,7 @@ fn builtin_agent_draft_can_select_ts_builtin_provider_preset() {
     assert_eq!(draft.display_name, "MiniMax");
     assert_eq!(draft.kind, BuiltinAgentKind::Anthropic);
     assert_eq!(draft.base_url, "https://api.minimaxi.com/anthropic");
-    assert_eq!(draft.model, "MiniMax-M3");
+    assert_eq!(draft.models, ["MiniMax-M3"]);
     assert_eq!(draft.api_key, "sk-test");
 }
 
@@ -128,6 +181,54 @@ fn builtin_agent_format_toggle_uses_selected_provider_alt_base_url() {
     let draft = s.builtin_agent_draft.as_ref().expect("draft exists");
     assert_eq!(draft.kind, BuiltinAgentKind::OpenAiCompat);
     assert_eq!(draft.base_url, "https://api.minimaxi.com/v1");
+}
+
+#[test]
+fn saving_a_draft_preserves_the_explicit_preset_when_models_share_a_base_url() {
+    let mut settings = AgentSettings::default();
+    settings.begin_builtin_agent_draft();
+    settings.set_builtin_agent_draft_preset(BuiltinAgentPresetKey::ArkCoding);
+    let draft = settings.builtin_agent_draft.as_mut().expect("draft exists");
+    draft.toggle_kind_for_preset();
+    draft.api_key = "sk-test".into();
+    draft.set_models(["doubao-seed-2-0-pro-260215", "ark-code-latest"]);
+
+    settings.save_builtin_agent_draft().expect("draft saves");
+
+    assert_eq!(
+        settings.builtin_agents[0].preset,
+        BuiltinAgentPresetKey::ArkCoding
+    );
+}
+
+#[test]
+fn saving_distinct_presets_with_the_same_transport_keeps_separate_providers() {
+    let mut settings = AgentSettings::default();
+    for preset in [
+        BuiltinAgentPresetKey::Doubao,
+        BuiltinAgentPresetKey::ArkCoding,
+    ] {
+        settings.begin_builtin_agent_draft();
+        settings.set_builtin_agent_draft_preset(preset);
+        let draft = settings.builtin_agent_draft.as_mut().expect("draft exists");
+        draft.toggle_kind_for_preset();
+        draft.api_key = "shared-key".into();
+        settings.save_builtin_agent_draft().expect("draft saves");
+    }
+
+    assert_eq!(settings.builtin_agents.len(), 2);
+    assert_eq!(
+        settings.builtin_agents[0].preset,
+        BuiltinAgentPresetKey::Doubao
+    );
+    assert_eq!(
+        settings.builtin_agents[1].preset,
+        BuiltinAgentPresetKey::ArkCoding
+    );
+    assert_eq!(
+        settings.builtin_agents[0].base_url, settings.builtin_agents[1].base_url,
+        "the regression requires the two Anthropic presets to share a transport URL"
+    );
 }
 
 #[test]

@@ -21,6 +21,7 @@ const MAX_URL_BYTES: usize = 4 * 1024;
 const MAX_CREDENTIAL_BYTES: usize = 16 * 1024;
 const MAX_LOCAL_ID_BYTES: usize = 128;
 const MAX_ENTRIES: usize = 64;
+const MAX_MODELS_PER_BUILTIN: usize = 64;
 const MAX_TOTAL_ENTRIES: usize = 256;
 const PAYLOAD_VERSION: u32 = 2;
 const WEB_CREDENTIAL_PREFIX: &str = "web-credential:";
@@ -49,7 +50,10 @@ struct BuiltinAgentPayload {
     kind: String,
     #[serde(default)]
     api_key: String,
+    #[serde(default)]
     model: String,
+    #[serde(default)]
+    models: Option<Vec<String>>,
     base_url: String,
     enabled: bool,
 }
@@ -102,7 +106,7 @@ pub(crate) fn parse_transient_builtin(value: &serde_json::Value) -> Option<Built
     let agent = parse_builtin_agent(payload).ok()?;
     if !agent.enabled
         || agent.api_key.trim().is_empty()
-        || agent.model.trim().is_empty()
+        || agent.first_model().is_none()
         || agent.base_url.trim().is_empty()
     {
         return None;
@@ -467,6 +471,18 @@ fn parse_builtin_agent(payload: BuiltinAgentPayload) -> Result<BuiltinAgentConfi
         "built-in display name",
     )?;
     validate_len(&payload.model, MAX_TEXT_BYTES, "built-in model")?;
+    if payload
+        .models
+        .as_ref()
+        .is_some_and(|models| models.len() > MAX_MODELS_PER_BUILTIN)
+    {
+        return Err(WebCredentialError::TooManyEntries);
+    }
+    if let Some(models) = payload.models.as_ref() {
+        for model in models {
+            validate_len(model, MAX_TEXT_BYTES, "built-in model")?;
+        }
+    }
     validate_len(&payload.base_url, MAX_URL_BYTES, "built-in base URL")?;
     validate_len(&payload.api_key, MAX_CREDENTIAL_BYTES, "built-in API key")?;
     if let Some(preset) = payload.preset.as_deref() {
@@ -478,20 +494,19 @@ fn parse_builtin_agent(payload: BuiltinAgentPayload) -> Result<BuiltinAgentConfi
         "openai" | "openai-compat" | "openai_compat" => BuiltinAgentKind::OpenAiCompat,
         _ => return Err(WebCredentialError::UnsupportedBuiltinAgentKind),
     };
+    let models = op_editor_core::normalize_builtin_models(
+        payload
+            .models
+            .clone()
+            .unwrap_or_else(|| vec![payload.model.clone()]),
+    );
+    let preset_model = models.first().map(String::as_str).unwrap_or_default();
     let preset = payload
         .preset
         .as_deref()
         .and_then(BuiltinAgentPresetKey::from_str)
-        .map(|saved| {
-            op_editor_core::normalize_builtin_agent_preset(
-                saved,
-                kind,
-                &payload.base_url,
-                &payload.model,
-            )
-        })
         .unwrap_or_else(|| {
-            op_editor_core::infer_builtin_agent_preset(kind, &payload.base_url, &payload.model)
+            op_editor_core::infer_builtin_agent_preset(kind, &payload.base_url, preset_model)
         });
 
     Ok(BuiltinAgentConfig {
@@ -500,7 +515,7 @@ fn parse_builtin_agent(payload: BuiltinAgentPayload) -> Result<BuiltinAgentConfi
         display_name: payload.display_name,
         kind,
         api_key: payload.api_key,
-        model: payload.model,
+        models,
         base_url: payload.base_url,
         enabled: payload.enabled,
     })

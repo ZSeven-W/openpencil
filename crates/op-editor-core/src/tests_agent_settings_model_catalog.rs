@@ -285,7 +285,7 @@ fn model_change_does_not_invalidate_an_in_flight_catalog() {
     let expected = settings
         .builtin_model_catalog_config_for_request(&request)
         .expect("snapshot");
-    settings.builtin_agents[0].model = "fallback-b".into();
+    settings.builtin_agents[0].set_models(["fallback-b"]);
 
     assert!(
         settings.apply_builtin_model_catalog_refresh_outcome_if_current(

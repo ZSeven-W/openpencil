@@ -528,7 +528,7 @@ mod tests {
             display_name: "Anthropic".into(),
             kind: BuiltinAgentKind::Anthropic,
             api_key: String::new(),
-            model: "claude-sonnet-4-6-20250916".into(),
+            models: vec!["claude-sonnet-4-6-20250916".into()],
             base_url: "https://api.anthropic.com".into(),
             enabled: true,
         };
@@ -558,7 +558,7 @@ mod tests {
             display_name: "OpenAI".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: String::new(),
-            model: "gpt-5.1".into(),
+            models: vec!["gpt-5.1".into()],
             base_url: "https://api.openai.com/v1".into(),
             enabled: true,
         };

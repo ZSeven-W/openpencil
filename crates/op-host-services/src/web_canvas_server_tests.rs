@@ -175,7 +175,7 @@ fn browser_only_restart_does_not_load_previously_persisted_browser_credentials()
     assert!(settings
         .builtin_agents
         .iter()
-        .any(|agent| agent.model == "operator-model"));
+        .any(|agent| agent.has_model("operator-model")));
     assert!(settings.image_gen_profiles.is_empty());
     assert!(settings.openverse_client_secret.is_empty());
     assert_eq!(settings.openverse_credential_owner, None);
@@ -208,7 +208,7 @@ fn browser_only_startup_removes_browser_credentials_and_saves_once() {
             assert!(settings
                 .builtin_agents
                 .iter()
-                .any(|agent| agent.model == "operator-model"));
+                .any(|agent| agent.has_model("operator-model")));
             assert!(settings.image_gen_profiles.is_empty());
             assert!(settings.openverse_client_secret.is_empty());
             Ok(())
@@ -741,10 +741,12 @@ fn get_ai_models_returns_json_array() {
 
     let r = handle_web_canvas_request("GET", "/api/ai/models", "", &mut state);
     assert!(r.status.starts_with("200"));
-    assert_eq!(
-        serde_json::from_str::<Vec<String>>(&r.body).expect("models body is valid JSON"),
-        vec!["built-in-model"]
-    );
+    let models =
+        serde_json::from_str::<Vec<serde_json::Value>>(&r.body).expect("models body is valid JSON");
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0]["displayName"], "built-in-model");
+    assert_eq!(models[0]["providerDisplayName"], "Built-in");
+    assert!(models[0]["builtinProviderId"].as_str().is_some());
 }
 
 #[path = "web_canvas_server_export_tests.rs"]

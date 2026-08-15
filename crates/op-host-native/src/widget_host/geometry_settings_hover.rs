@@ -20,6 +20,7 @@ impl WidgetHostNative {
             new_acp,
             new_acp_preset,
             new_preset_hover,
+            new_model_hover,
             new_close_hover,
             new_server_hover,
             new_copy_hover,
@@ -64,6 +65,11 @@ impl WidgetHostNative {
             };
             let preset_hover = if is_agents {
                 panel.builtin_preset_hover_at(panel_rect, point)
+            } else {
+                None
+            };
+            let model_hover = if is_agents {
+                panel.builtin_model_hover_at(panel_rect, point)
             } else {
                 None
             };
@@ -154,6 +160,7 @@ impl WidgetHostNative {
                 acp,
                 acp_preset,
                 preset_hover,
+                model_hover,
                 close_hover,
                 server_hover,
                 copy_hover,
@@ -210,6 +217,19 @@ impl WidgetHostNative {
                 .editor_ui
                 .agent_settings
                 .builtin_preset_menu_hover = new_preset_hover;
+            changed = true;
+        }
+        if new_model_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_model_menu_hover
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_model_menu_hover = new_model_hover;
             changed = true;
         }
         if new_close_hover

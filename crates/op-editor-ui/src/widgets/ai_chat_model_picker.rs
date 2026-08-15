@@ -1,5 +1,5 @@
 //! Model-picker dropdown for the AI chat panel — the upward
-//! popover that lists discovered models grouped by provider.
+//! popover that lists saved models grouped by provider.
 //! Mirrors the TS `ai-chat-model-selector.tsx` `ModelDropdown`
 //! (search row + grouped rows + per-provider brand icon + selected
 //! check / badges).
@@ -25,9 +25,6 @@ pub const MODEL_ROW_H: f32 = 28.0;
 pub const MODEL_PICKER_PAD_Y: f32 = 6.0;
 /// Fixed search strip at the top of the dropdown.
 pub const MODEL_SEARCH_H: f32 = 40.0;
-/// Reserved select-state index for the built-in catalog refresh affordance.
-/// Real rows always index the finite `available_models` slice.
-pub const MODEL_REFRESH_TARGET: usize = usize::MAX;
 /// Hard cap on the dropdown's painted height. A connected catalog
 /// taller than this (e.g. OpenCode's 75+ models) scrolls inside the
 /// card instead of growing off the top of the screen.
@@ -190,17 +187,15 @@ pub fn model_at(
     models: &[ModelEntry],
     scroll: f32,
     search: &str,
-    show_refresh: bool,
 ) -> Option<usize> {
     let state = SelectState {
         open: true,
         scroll: jian_core::scroll::ScrollState { offset: scroll },
         ..Default::default()
     };
-    match model_picker_hit(&state, rect, point, models, search, show_refresh) {
-        SelectHit::Row(index) if index != MODEL_REFRESH_TARGET => Some(index),
+    match model_picker_hit(&state, rect, point, models, search) {
+        SelectHit::Row(index) => Some(index),
         SelectHit::Inside | SelectHit::Outside => None,
-        SelectHit::Row(_) => None,
     }
 }
 
@@ -213,7 +208,6 @@ pub fn model_picker_hit(
     point: Point2D,
     models: &[ModelEntry],
     search: &str,
-    show_refresh: bool,
 ) -> SelectHit {
     if !state.open {
         return SelectHit::Outside;
@@ -224,9 +218,6 @@ pub fn model_picker_hit(
         || point.y > rect.origin.y + rect.size.y
     {
         return SelectHit::Outside;
-    }
-    if show_refresh && refresh_button_rect(rect).contains(point) {
-        return SelectHit::Row(MODEL_REFRESH_TARGET);
     }
     let list_rect = model_list_rect(rect);
     if point.y < list_rect.origin.y {
@@ -256,8 +247,8 @@ pub fn model_picker_hit(
     hit
 }
 
-pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str, show_refresh: bool) -> bool {
-    !search.is_empty() && search_clear_rect(rect, show_refresh).contains(point)
+pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str) -> bool {
+    !search.is_empty() && search_clear_rect(rect).contains(point)
 }
 
 fn model_list_rect(rect: Rect) -> Rect {
@@ -267,26 +258,18 @@ fn model_list_rect(rect: Rect) -> Rect {
     }
 }
 
-fn search_field_rect(rect: Rect, show_refresh: bool) -> Rect {
-    let right_margin = if show_refresh { 52.0 } else { 16.0 };
+fn search_field_rect(rect: Rect) -> Rect {
     Rect {
         origin: Point2D::new(rect.origin.x + 8.0, rect.origin.y + 7.0),
-        size: Point2D::new((rect.size.x - right_margin).max(0.0), 24.0),
+        size: Point2D::new((rect.size.x - 16.0).max(0.0), 24.0),
     }
 }
 
-fn search_clear_rect(rect: Rect, show_refresh: bool) -> Rect {
-    let search = search_field_rect(rect, show_refresh);
+fn search_clear_rect(rect: Rect) -> Rect {
+    let search = search_field_rect(rect);
     Rect {
         origin: Point2D::new(search.origin.x + search.size.x - 28.0, search.origin.y),
         size: Point2D::new(28.0, search.size.y),
-    }
-}
-
-pub(super) fn refresh_button_rect(rect: Rect) -> Rect {
-    Rect {
-        origin: Point2D::new(rect.origin.x + rect.size.x - 32.0, rect.origin.y + 7.0),
-        size: Point2D::new(24.0, 24.0),
     }
 }
 
@@ -303,8 +286,6 @@ pub fn paint_model_picker(
     models: &[ModelEntry],
     selected: usize,
     state: &SelectState,
-    show_refresh: bool,
-    refresh_pressed: bool,
     input: &TextInputState,
     now_ms: u64,
     locale: op_editor_core::Locale,
@@ -318,17 +299,7 @@ pub fn paint_model_picker(
     cx.backend.fill_round_rect(rect, 10.0, theme.card);
     cx.backend.stroke_round_rect(rect, 10.0, theme.border, 1.0);
     let row_left = rect.origin.x + 12.0;
-    paint_search_row(
-        cx,
-        theme,
-        rect,
-        state,
-        show_refresh,
-        refresh_pressed,
-        input,
-        now_ms,
-        locale,
-    );
+    paint_search_row(cx, theme, rect, input, now_ms, locale);
     let list_rect = model_list_rect(rect);
     if visible_model_indices(models, search).is_empty() {
         let empty = op_i18n::translate(locale, "ai.noModelsFound");
@@ -499,9 +470,6 @@ fn paint_search_row(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     rect: Rect,
-    state: &SelectState,
-    show_refresh: bool,
-    refresh_pressed: bool,
     input: &TextInputState,
     now_ms: u64,
     locale: op_editor_core::Locale,
@@ -515,7 +483,7 @@ fn paint_search_row(
         },
         theme.border,
     );
-    let search_rect = search_field_rect(rect, show_refresh);
+    let search_rect = search_field_rect(rect);
     cx.backend
         .fill_round_rect(search_rect, 6.0, (theme.muted).with_alpha(0.5));
     draw_icon(
@@ -562,21 +530,6 @@ fn paint_search_row(
                 search_rect.origin.y + 7.0,
             ),
             10.0,
-            theme.muted_foreground,
-            1.4,
-        );
-    }
-    if show_refresh {
-        let button = refresh_button_rect(rect);
-        let hovered = state.hover == Some(MODEL_REFRESH_TARGET);
-        if hovered || refresh_pressed {
-            paint_button_feedback_wash(cx.backend, theme, button, 6.0, hovered, refresh_pressed);
-        }
-        draw_icon(
-            cx.backend,
-            Icon::RefreshCw,
-            Point2D::new(button.origin.x + 5.0, button.origin.y + 5.0),
-            14.0,
             theme.muted_foreground,
             1.4,
         );

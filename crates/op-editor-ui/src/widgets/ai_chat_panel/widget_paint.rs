@@ -235,8 +235,6 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 &self.state.available_models,
                 self.state.selected_model,
                 self.model_picker,
-                self.model_refresh_available,
-                self.model_refresh_pressed,
                 self.model_picker_input,
                 self.now_ms,
                 self.locale,

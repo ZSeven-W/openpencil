@@ -152,6 +152,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "Agent đã dừng trước khi trả về kết quả cho phần này.",
         "ai.designProgress.detail.connectionClosed" => "Kết nối agent đã đóng trước khi phần này trả về kết quả.",
         "ai.designProgress.detail.stoppedByUser" => "Người dùng đã dừng trước khi phần này hoàn tất.",
+        "builtin.modelsOnePerLine" => "ID model, mỗi dòng một mã",
+        "builtin.typeModelManually" => "Không lấy được danh sách model. Nhập ID thủ công, mỗi dòng một mã.",
         _ => return None,
     })
 }

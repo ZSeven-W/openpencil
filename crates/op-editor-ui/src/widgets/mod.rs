@@ -250,6 +250,7 @@ pub mod agent_settings_builtin;
 mod agent_settings_builtin_empty;
 mod agent_settings_builtin_form;
 mod agent_settings_builtin_layout;
+mod agent_settings_builtin_model_menu;
 mod agent_settings_builtin_parts;
 #[cfg(test)]
 mod agent_settings_builtin_tests;
@@ -281,6 +282,8 @@ mod agent_settings_panel_geometry;
 #[cfg(test)]
 mod agent_settings_panel_tests;
 pub mod agent_settings_press_entries;
+#[cfg(test)]
+mod agent_settings_press_entries_model_menu_tests;
 pub mod agent_settings_press_flow;
 pub mod agent_settings_press_focus;
 #[cfg(test)]

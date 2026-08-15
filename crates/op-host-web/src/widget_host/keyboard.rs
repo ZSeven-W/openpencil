@@ -276,6 +276,13 @@ impl WidgetHost {
             return true;
         }
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            if op_editor_core::host_ui_transitions::settings_model_newline(
+                &mut self.editor_state.editor_ui,
+                self.now_ms,
+            ) {
+                self.mark_dirty();
+                return true;
+            }
             self.commit_settings_focus();
             return true;
         }

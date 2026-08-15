@@ -119,6 +119,112 @@ fn locale_picker_wheel_scrolls_select_state_without_zooming_canvas() {
 }
 
 #[test]
+fn model_menu_wheel_recomputes_the_stationary_pointer_hover() {
+    use op_editor_core::agent_settings::BuiltinModelMenuTarget;
+    use op_editor_core::{
+        BuiltinAgentField, BuiltinAgentKind, BuiltinModelCatalogRefreshOutcome,
+        BuiltinModelCatalogTarget, BuiltinModelOption, SettingsFocus,
+    };
+
+    const VIEWPORT_W: f32 = 1200.0;
+    const VIEWPORT_H: f32 = 800.0;
+    let mut host = WidgetHostNative::new();
+    host.publish_viewport_geometry(VIEWPORT_W, VIEWPORT_H);
+    host.editor_state_mut().editor_ui.agent_settings_open = true;
+    let id = host
+        .editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .add_builtin_agent_config(
+            "Provider",
+            "sk-test",
+            "model-0",
+            BuiltinAgentKind::OpenAiCompat,
+            "https://api.example.com/v1",
+        );
+    let request = host
+        .editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .begin_builtin_model_catalog_refresh(BuiltinModelCatalogTarget::Agent(id), 0)
+        .expect("configured provider starts discovery");
+    let expected = host
+        .editor_state()
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_config_for_request(&request)
+        .expect("current discovery config");
+    assert!(host
+        .editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .apply_builtin_model_catalog_refresh_outcome_if_current(
+            &expected,
+            &request,
+            BuiltinModelCatalogRefreshOutcome::Success {
+                models: (0..12)
+                    .map(|index| {
+                        BuiltinModelOption::new(format!("model-{index}"), format!("Model {index}"))
+                    })
+                    .collect(),
+            },
+        ));
+    {
+        let settings = &mut host.editor_state_mut().editor_ui.agent_settings;
+        settings.focus = Some(SettingsFocus::BuiltinAgent {
+            index: 0,
+            field: BuiltinAgentField::Model,
+        });
+        settings.builtin_model_menu_open = Some(BuiltinModelMenuTarget::Agent(0));
+    }
+
+    let point = {
+        let panel = op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel::for_editor(
+            host.editor_state(),
+        );
+        let rect = panel.rect(VIEWPORT_W, VIEWPORT_H);
+        let content = panel.resolved_content_viewport(rect);
+        let x = content.origin.x + content.size.x * 0.65;
+        (0..content.size.y.ceil() as usize)
+            .map(|row| op_editor_ui::Point2D::new(x, content.origin.y + row as f32 + 0.5))
+            .find(|point| panel.builtin_model_hover_at(rect, *point) == Some(0))
+            .expect("first model row is visible")
+    };
+    host.editor_state_mut()
+        .editor_ui
+        .agent_settings
+        .builtin_model_menu_hover = Some(0);
+
+    let outer_before = host.editor_state().editor_ui.agent_settings.scroll_y.offset;
+    let zoom_before = host.editor_state().viewport.zoom;
+    assert!(host.apply_wheel(point.x, point.y, 48.0, VIEWPORT_W, VIEWPORT_H));
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.builtin_model_menu_scroll.offset, 0.0);
+    assert_eq!(settings.scroll_y.offset, outer_before);
+    assert_eq!(host.editor_state().viewport.zoom, zoom_before);
+
+    assert!(host.apply_wheel(point.x, point.y, -48.0, VIEWPORT_W, VIEWPORT_H));
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    assert_eq!(settings.builtin_model_menu_scroll.offset, 48.0);
+    assert_eq!(
+        settings.builtin_model_menu_hover,
+        Some(2),
+        "the same screen point now covers the third model row"
+    );
+
+    host.editor_state_mut().editor_ui.touch = true;
+    host.refresh_agent_settings_hover_after_scroll(point.x, point.y);
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .builtin_model_menu_hover,
+        None,
+        "touch scrolling must not leave a persistent hover wash"
+    );
+}
+
+#[test]
 fn canvas_pan_gesture_opens_and_closes_the_interactive_degrade_window() {
     let mut host = WidgetHostNative::new();
     host.set_now_ms(1_000);

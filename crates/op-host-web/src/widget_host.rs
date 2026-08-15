@@ -49,6 +49,8 @@ mod agent_settings_compact_press_tests;
 mod agent_settings_form_press_tests;
 mod agent_settings_hover;
 mod agent_settings_mcp_server;
+#[cfg(test)]
+mod agent_settings_model_input_tests;
 mod agent_settings_press;
 #[cfg(test)]
 mod agent_settings_press_tests;

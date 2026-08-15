@@ -2,11 +2,13 @@
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_builtin_layout::field_input_rect_for_ui;
+use crate::widgets::agent_settings_builtin_model_menu as model_menu;
 use crate::widgets::agent_settings_builtin_parts;
-use crate::widgets::agent_settings_caret::settings_input_text;
+use crate::widgets::agent_settings_caret;
 use crate::widgets::agent_settings_i18n::t as t_settings;
 use crate::widgets::brand_icons::{paint_brand_logo, BrandLogo};
 use crate::widgets::button::tokens_from_theme;
+use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::settings_form::{self, draw_text, ellipsize};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect};
@@ -15,6 +17,7 @@ use op_editor_core::agent_settings::{
     AgentSettings, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, SettingsFocus,
 };
 use op_editor_core::editor_ui_state::EditorUiState;
+use std::borrow::Cow;
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn paint_builtin_agent_form(
@@ -65,6 +68,7 @@ pub(super) fn paint_builtin_agent_form(
         );
     }
     agent_settings_builtin_parts::paint_preset_menu(cx, theme, settings, agent, index, card, touch);
+    model_menu::paint_model_menu(cx, theme, settings, ui, agent, index, card, touch);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -164,14 +168,17 @@ fn paint_field(
         None => SettingsFocus::BuiltinAgentDraft(field),
     };
     let focused = settings.focus == Some(focus);
-    let fallback = match field {
-        BuiltinAgentField::DisplayName => agent.display_name.as_str(),
-        BuiltinAgentField::ApiKey if !agent.api_key.is_empty() => "********",
-        BuiltinAgentField::ApiKey => "",
-        BuiltinAgentField::Model => agent.model.as_str(),
-        BuiltinAgentField::BaseUrl => agent.base_url.as_str(),
+    let value = if focused {
+        Cow::Borrowed(ui.settings_input.text())
+    } else {
+        match field {
+            BuiltinAgentField::DisplayName => Cow::Borrowed(agent.display_name.as_str()),
+            BuiltinAgentField::ApiKey if !agent.api_key.is_empty() => Cow::Borrowed("********"),
+            BuiltinAgentField::ApiKey => Cow::Borrowed(""),
+            BuiltinAgentField::Model => Cow::Owned(agent.models.join(", ")),
+            BuiltinAgentField::BaseUrl => Cow::Borrowed(agent.base_url.as_str()),
+        }
     };
-    let value = settings_input_text(settings, ui, focus, fallback);
     let label = match field {
         BuiltinAgentField::DisplayName => t_settings(ui, "builtin.displayName"),
         BuiltinAgentField::ApiKey => t_settings(ui, "builtin.apiKey"),
@@ -183,26 +190,83 @@ fn paint_field(
     let editable = field != BuiltinAgentField::BaseUrl || agent.base_url_editable();
     let value_size = if touch { 15.0 } else { 11.0 };
     let text_x = input.origin.x + if touch { 12.0 } else { 6.0 };
-    let painted_focused = settings_form::paint_field_frame_for_ui(
-        cx,
-        theme,
-        ui,
-        label,
-        card.origin.x + if touch { 16.0 } else { 12.0 },
-        input.origin.y + 16.0,
-        input,
-        focused,
-        "",
-        now_ms,
-        touch,
-    );
+    let trailing = if touch { 44.0 } else { 24.0 };
+    let painted_focused = if field == BuiltinAgentField::Model && focused {
+        settings_form::paint_field_chrome_for_ui(
+            cx,
+            theme,
+            label,
+            card.origin.x + if touch { 16.0 } else { 12.0 },
+            input.origin.y + 16.0,
+            input,
+            true,
+            touch,
+        );
+        let text_rect = agent_settings_caret::model_text_area_rect(input, touch);
+        agent_settings_caret::paint_settings_text_area(
+            cx,
+            theme,
+            ui,
+            text_rect,
+            agent_settings_caret::model_text_font_size(touch),
+            agent_settings_caret::model_text_pad_x(touch),
+            now_ms,
+            t_settings(ui, "builtin.modelsOnePerLine"),
+            agent_settings_caret::model_text_max_visible_lines(touch),
+        );
+        true
+    } else {
+        settings_form::paint_field_frame_for_ui(
+            cx,
+            theme,
+            ui,
+            label,
+            card.origin.x + if touch { 16.0 } else { 12.0 },
+            input.origin.y + 16.0,
+            input,
+            focused,
+            "",
+            now_ms,
+            touch,
+        )
+    };
+    if field == BuiltinAgentField::Model {
+        // Chevron affordance — the Model input is a combobox: the field
+        // stays free-text, the dropdown lists discovered models.
+        let menu_open = settings.builtin_model_menu_open == Some(model_menu::menu_target(index))
+            && model_menu::model_menu_visible(settings);
+        let icon_size = if touch { 18.0 } else { 12.0 };
+        let pad = if touch { 12.0 } else { 6.0 };
+        draw_icon(
+            cx.backend,
+            if menu_open {
+                Icon::ChevronUp
+            } else {
+                Icon::ChevronDown
+            },
+            Point2D::new(
+                input.origin.x + input.size.x - pad - icon_size,
+                input.origin.y + (input.size.y - icon_size) / 2.0,
+            ),
+            icon_size,
+            theme.muted_foreground,
+            1.7,
+        );
+    }
     if painted_focused {
         return;
     }
     let clipped = ellipsize(
         cx,
-        value,
-        input.size.x - if touch { 24.0 } else { 12.0 },
+        value.as_ref(),
+        input.size.x
+            - if field == BuiltinAgentField::Model {
+                trailing + if touch { 12.0 } else { 6.0 }
+            } else if touch {
+                24.0
+            } else {
+                12.0
+            },
         value_size,
     );
     draw_text(
@@ -229,16 +293,18 @@ fn effective_field_text<'a>(
     agent: &'a BuiltinAgentConfig,
     index: Option<usize>,
     field: BuiltinAgentField,
-) -> &'a str {
+) -> Cow<'a, str> {
     let focus = match index {
         Some(index) => SettingsFocus::BuiltinAgent { index, field },
         None => SettingsFocus::BuiltinAgentDraft(field),
     };
-    let fallback = match field {
-        BuiltinAgentField::DisplayName => agent.display_name.as_str(),
-        BuiltinAgentField::ApiKey => agent.api_key.as_str(),
-        BuiltinAgentField::Model => agent.model.as_str(),
-        BuiltinAgentField::BaseUrl => agent.base_url.as_str(),
-    };
-    settings_input_text(settings, ui, focus, fallback)
+    if settings.focus == Some(focus) {
+        return Cow::Borrowed(ui.settings_input.text());
+    }
+    match field {
+        BuiltinAgentField::DisplayName => Cow::Borrowed(agent.display_name.as_str()),
+        BuiltinAgentField::ApiKey => Cow::Borrowed(agent.api_key.as_str()),
+        BuiltinAgentField::Model => Cow::Owned(agent.models_text()),
+        BuiltinAgentField::BaseUrl => Cow::Borrowed(agent.base_url.as_str()),
+    }
 }

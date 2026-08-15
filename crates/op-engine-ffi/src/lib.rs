@@ -36,6 +36,8 @@ mod editor;
 #[cfg(feature = "editor")]
 mod editor_auth;
 #[cfg(feature = "editor")]
+mod editor_model_discovery;
+#[cfg(feature = "editor")]
 mod editor_pointer_release;
 #[cfg(feature = "editor")]
 mod editor_template;

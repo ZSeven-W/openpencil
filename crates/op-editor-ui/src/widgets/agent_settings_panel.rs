@@ -263,6 +263,14 @@ pub enum AgentSettingsHit {
         index: Option<usize>,
         preset: BuiltinAgentPresetKey,
     },
+    ToggleBuiltinModelMenu(Option<usize>),
+    /// Model-dropdown row pressed — positional index into the card's
+    /// runtime catalog, resolved to the model id by the press arm so
+    /// this enum stays `Copy`.
+    SelectBuiltinModel {
+        index: Option<usize>,
+        row: usize,
+    },
     SaveBuiltinAgentDraft,
     CancelBuiltinAgentDraft,
     ToggleBuiltinAgentEnabled(usize),

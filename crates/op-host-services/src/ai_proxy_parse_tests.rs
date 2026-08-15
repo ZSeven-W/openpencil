@@ -29,9 +29,10 @@ impl ChatProvider for CaptureModelProvider {
 
 #[test]
 fn parse_ai_stream_body_maps_full_body() {
-    let body = r#"{"provider":"grok-build","model":"m","skills":["codegen-planning"],"user":"hi","max_output_tokens":2000,"thinking":"adaptive","effort":"low"}"#;
+    let body = r#"{"provider":"grok-build","builtinProviderId":"account:7","model":"m","skills":["codegen-planning"],"user":"hi","max_output_tokens":2000,"thinking":"adaptive","effort":"low"}"#;
     let req = parse_ai_stream_body(body).expect("body parses");
     assert_eq!(req.provider, Some(AgentProvider::GrokBuild));
+    assert_eq!(req.builtin_provider_id.as_deref(), Some("account:7"));
     assert_eq!(req.model, "m");
     assert_eq!(req.skills, vec!["codegen-planning".to_string()]);
     assert_eq!(req.user, "hi");
@@ -71,6 +72,7 @@ fn parse_ai_stream_body_rejects_non_object() {
     assert!(parse_ai_stream_body("[]").is_none());
     assert!(parse_ai_stream_body("not json").is_none());
     assert!(parse_ai_stream_body(r#"{"provider":"unknown"}"#).is_none());
+    assert!(parse_ai_stream_body(r#"{"builtinProviderId":7}"#).is_none());
 }
 
 #[test]
@@ -201,6 +203,7 @@ fn delta_to_sse_frames_error() {
 fn stream_ai_response_writes_headers_and_deltas() {
     let req = AiStreamRequest {
         provider: None,
+        builtin_provider_id: None,
         model: "m".into(),
         // Real corpus loads server-side; the EchoProvider ignores
         // the system prompt but the expansion must not error.
@@ -231,6 +234,7 @@ fn stream_ai_response_writes_headers_and_deltas() {
 fn stream_ai_response_forwards_requested_model_to_provider() {
     let req = AiStreamRequest {
         provider: None,
+        builtin_provider_id: None,
         model: "claude-sonnet-4-6".into(),
         skills: vec![],
         user: "hi".into(),
@@ -259,6 +263,7 @@ fn stream_ai_response_stops_after_error() {
     // the script has trailing deltas.
     let req = AiStreamRequest {
         provider: None,
+        builtin_provider_id: None,
         model: "m".into(),
         skills: vec![],
         user: "x".into(),
@@ -328,8 +333,13 @@ fn models_json_lists_ready_agent_models() {
         .agent_settings
         .add_builtin_agent_with_defaults("Built-in Claude", "sk-test", "claude-sonnet-4-5");
     let json = models_json(&editor);
-    let parsed: Vec<String> = serde_json::from_str(&json).expect("valid model array");
-    assert_eq!(parsed, vec!["claude-sonnet-4-5"]);
+    let parsed: Vec<Value> = serde_json::from_str(&json).expect("valid model array");
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(parsed[0]["displayName"], "claude-sonnet-4-5");
+    assert_eq!(parsed[0]["providerDisplayName"], "Built-in Claude");
+    assert!(parsed[0]["value"]
+        .as_str()
+        .is_some_and(|value| value.ends_with(":claude-sonnet-4-5")));
 }
 
 #[test]

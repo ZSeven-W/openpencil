@@ -156,6 +156,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "このセクションの結果を返す前にエージェントが停止しました。",
         "ai.designProgress.detail.connectionClosed" => "このセクションの結果が返る前にエージェント接続が切れました。",
         "ai.designProgress.detail.stoppedByUser" => "ユーザーが停止したため、このセクションは完了していません。",
+        "builtin.modelsOnePerLine" => "モデル ID（1 行に 1 つ）",
+        "builtin.typeModelManually" => "モデル一覧の取得に失敗しました。モデル ID を 1 行に 1 つ入力してください",
         _ => return None,
     })
 }

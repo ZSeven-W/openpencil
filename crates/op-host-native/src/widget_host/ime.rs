@@ -8,8 +8,9 @@
 //! - Other inputs still consume preedit updates without painting a
 //!   floating overlay. `Ime::Commit` is where text enters OpenPencil.
 //! - `apply_ime_commit` clears the preedit and lands the committed
-//!   string through `apply_text` char-by-char, so every focus branch
-//!   + per-field filter (numeric / hex drafts) applies unchanged.
+//!   string through each focus branch's text transition. The multiline
+//!   provider Model field preserves normalized newlines; numeric / hex /
+//!   other single-line drafts keep their existing filters.
 //! - `ime_anchor_rect` resolves the focused input's caret rect for
 //!   `set_ime_cursor_area`. Chat and image-popover inputs expose precise
 //!   carets; the desktop shell supplies a cursor-position fallback for older
@@ -140,6 +141,9 @@ impl WidgetHostNative {
                 }
             }
             return consumed;
+        }
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_text_payload(text);
         }
         if self.editor_state.ui.text_editing.is_some() {
             if !text.is_empty()

@@ -96,10 +96,6 @@ pub struct AIChatPlaceholder<'a> {
     pub model_picker: &'a SelectState,
     /// Text state for the model-picker search query.
     pub model_picker_input: &'a TextInputState,
-    /// A configured API provider can discover models before one is selected,
-    /// so the picker remains reachable as a manual retry surface.
-    pub(crate) model_refresh_available: bool,
-    pub(crate) model_refresh_pressed: bool,
     pub design_hover: Option<(usize, usize)>,
     /// Empty-state quick action card under the cursor.
     pub example_hover: Option<usize>,
@@ -192,9 +188,6 @@ impl<'a> AIChatPlaceholder<'a> {
             style_card: crate::widgets::ai_chat_style_card::StyleCard::for_state(state, now_ms),
             model_picker: &ui.chat_model_picker,
             model_picker_input: &ui.chat_model_picker_input,
-            model_refresh_available: ui.agent_settings.has_discovery_ready_builtin_agent(),
-            model_refresh_pressed: ui.pressed_button
-                == Some(op_editor_core::ButtonPressTarget::ChatModelRefresh),
             design_hover: ui.chat_design_block_hover,
             example_hover: ui.chat_example_hover,
             example_pressed: match ui.pressed_button {

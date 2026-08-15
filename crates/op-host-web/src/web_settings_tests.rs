@@ -136,6 +136,7 @@ fn separate_settings_and_credential_payloads_round_trip_their_own_fields() {
         BuiltinAgentKind::Anthropic,
         "https://api.minimaxi.com/anthropic",
     );
+    assert!(src.editor_ui.agent_settings.builtin_agents[0].add_model("MiniMax-M3"));
     let image_profile_id = src.editor_ui.agent_settings.add_image_gen_profile();
     let profile = &mut src.editor_ui.agent_settings.image_gen_profiles[0];
     profile.name = "Gemini Image".into();
@@ -163,6 +164,10 @@ fn separate_settings_and_credential_payloads_round_trip_their_own_fields() {
     assert_eq!(
         dst.editor_ui.agent_settings.builtin_agents[0].preset,
         BuiltinAgentPresetKey::MiniMax
+    );
+    assert_eq!(
+        dst.editor_ui.agent_settings.builtin_agents[0].models,
+        ["MiniMax-M2.7", "MiniMax-M3"]
     );
     assert!(dst.editor_ui.agent_settings.acp_agents.is_empty());
     assert_eq!(dst.editor_ui.agent_settings.image_gen_profiles.len(), 1);

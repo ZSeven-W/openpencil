@@ -64,7 +64,7 @@ fn capture_classic_openai_body(model: &str, thinking: ThinkingMode) -> Value {
     });
 
     let mut config = builtin_config(BuiltinAgentKind::OpenAiCompat, format!("http://{addr}/v1"));
-    config.model = model.to_string();
+    config.set_models([model]);
     let mut provider =
         ConfiguredBuiltinProvider::from_builtin_agent(&config).expect("ready capture provider");
     provider.max_retries = 0;
@@ -93,10 +93,24 @@ fn builtin_config(kind: BuiltinAgentKind, base_url: impl Into<String>) -> Builti
         display_name: "Test provider".into(),
         kind,
         api_key: "sk-test".into(),
-        model: "test-model".into(),
+        models: vec!["test-model".into()],
         base_url: base_url.into(),
         enabled: true,
     }
+}
+
+#[test]
+fn explicit_saved_model_constructor_routes_one_member_only() {
+    let mut config = builtin_config(BuiltinAgentKind::OpenAiCompat, "https://api.example.com/v1");
+    config.set_models(["model-a", "model-b"]);
+
+    let provider = ConfiguredBuiltinProvider::from_builtin_agent_with_model(&config, "model-b")
+        .expect("saved model builds");
+
+    assert_eq!(provider.model, "model-b");
+    assert!(
+        ConfiguredBuiltinProvider::from_builtin_agent_with_model(&config, "runtime-only").is_none()
+    );
 }
 
 #[test]
@@ -690,7 +704,7 @@ fn openai_sse_error_finishes_aborted() {
         display_name: "Mock OpenAI".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key: "sk-test".into(),
-        model: "gpt-test".into(),
+        models: vec!["gpt-test".into()],
         base_url: format!("http://{addr}"),
         enabled: true,
     })

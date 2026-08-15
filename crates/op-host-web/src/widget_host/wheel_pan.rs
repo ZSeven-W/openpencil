@@ -96,6 +96,57 @@ impl WidgetHost {
         true
     }
 
+    /// Route a vertical scroll delta inside Agent Settings. The open model
+    /// and provider menus own the gesture before the settings body, matching
+    /// their visual stacking order. Returning `true` for any point inside the
+    /// modal also prevents a horizontal-only trackpad gesture from panning the
+    /// canvas through the opaque settings surface.
+    fn try_scroll_agent_settings(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.agent_settings_open {
+            return false;
+        }
+        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+        let point = Point2D::new(x, y);
+        let (model_max, preset_max, body_max) = {
+            let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
+            let panel_rect = panel.rect(viewport_width, viewport_height);
+            if !panel_rect.contains(point) {
+                return false;
+            }
+            (
+                panel.builtin_model_scroll_max_at(panel_rect, point),
+                panel.builtin_preset_scroll_max_at(panel_rect, point),
+                panel.max_scroll(panel_rect),
+            )
+        };
+
+        let settings = &mut self.editor_state.editor_ui.agent_settings;
+        if let Some(max) = model_max {
+            settings
+                .builtin_model_menu_scroll
+                .scroll_by(-delta_y, max, 0.0);
+        } else if let Some(max) = preset_max {
+            settings
+                .builtin_preset_menu_scroll
+                .scroll_by(-delta_y, max, 0.0);
+        } else {
+            settings.scroll_y.scroll_by(-delta_y, body_max, 0.0);
+        }
+        // Content moved under a stationary cursor. Re-derive the hover state
+        // for both dropdown rows and settings controls so no stale wash stays
+        // behind after wheel or trackpad scrolling.
+        self.update_agent_settings_hover(x, y);
+        self.mark_dirty();
+        true
+    }
+
     /// Wheel zoom centered on the cursor when over the canvas.
     #[cfg(test)]
     pub fn apply_wheel(
@@ -135,38 +186,8 @@ impl WidgetHost {
         if self.try_scroll_settings_font_picker(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
-        if self.editor_state.editor_ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel_rect = AgentSettingsPanel::for_web_editor(&self.editor_state)
-                .rect(viewport_width, viewport_height);
-            let point = Point2D::new(x, y);
-            if (panel_rect).contains(point) {
-                if let Some(max) = AgentSettingsPanel::for_web_editor(&self.editor_state)
-                    .builtin_preset_scroll_max_at(panel_rect, point)
-                {
-                    let settings = &mut self.editor_state.editor_ui.agent_settings;
-                    settings
-                        .builtin_preset_menu_scroll
-                        .scroll_by(-delta_y, max, 0.0);
-                    self.mark_dirty();
-                    return true;
-                }
-                let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
-                let total = panel.content_total_height();
-                let viewport_h_inner = panel_rect.size.y
-                    - op_editor_ui::widgets::agent_settings_panel::CONTENT_VERTICAL_INSET;
-                let max_scroll = (total - viewport_h_inner).max(0.0);
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .scroll_y
-                    .scroll_by(-delta_y, max_scroll, 0.0);
-                // Content moved under a stationary cursor — re-derive
-                // the hover state so buttons don't keep a stale wash.
-                self.update_agent_settings_hover(x, y);
-                self.mark_dirty();
-                return true;
-            }
+        if self.try_scroll_agent_settings(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
         }
         if self.try_scroll_design_md_panel(x, y, delta_y, viewport_width, viewport_height) {
             return true;
@@ -239,6 +260,9 @@ impl WidgetHost {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
         if self.try_scroll_settings_font_picker(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
+        if self.try_scroll_agent_settings(x, y, dy, viewport_width, viewport_height) {
             return true;
         }
         if self.try_scroll_variables_panel(x, y, dy, viewport_width, viewport_height) {

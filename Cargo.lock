@@ -3704,6 +3704,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-builtin-model-discovery"
+version = "0.8.4"
+dependencies = [
+ "futures",
+ "op-editor-core",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "op-chrome-extension-core"
 version = "0.8.4"
 dependencies = [
@@ -4038,12 +4049,14 @@ dependencies = [
  "jian-core",
  "jian-ops-schema",
  "jian-skia",
+ "op-builtin-model-discovery",
  "op-editor-core",
  "op-editor-ui",
  "op-host-native",
  "op-pen-loader",
  "serde_json",
  "skia-safe",
+ "tokio",
 ]
 
 [[package]]
@@ -4208,6 +4221,7 @@ dependencies = [
  "op-ai",
  "op-ai-skills",
  "op-auth-bridge",
+ "op-builtin-model-discovery",
  "op-collab-host",
  "op-config-store",
  "op-design-lint",

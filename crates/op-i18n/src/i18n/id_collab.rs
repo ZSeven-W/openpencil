@@ -140,6 +140,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.designProgress.detail.noResult" => "Agen berhenti sebelum mengembalikan hasil untuk bagian ini.",
         "ai.designProgress.detail.connectionClosed" => "Koneksi agen ditutup sebelum bagian ini mengembalikan hasil.",
         "ai.designProgress.detail.stoppedByUser" => "Dihentikan oleh pengguna sebelum bagian ini selesai.",
+        "builtin.modelsOnePerLine" => "ID model, satu per baris",
+        "builtin.typeModelManually" => "Gagal mengambil daftar model. Masukkan ID secara manual, satu per baris.",
         _ => return None,
     })
 }

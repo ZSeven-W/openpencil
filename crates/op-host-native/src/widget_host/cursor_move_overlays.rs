@@ -446,10 +446,6 @@ impl WidgetHostNative {
                 Point2D::new(x, y),
                 &self.editor_state.chat.available_models,
                 self.editor_state.editor_ui.chat_model_picker_input.text(),
-                self.editor_state
-                    .editor_ui
-                    .agent_settings
-                    .has_discovery_ready_builtin_agent(),
             ) {
                 SelectHit::Row(index) => Some(index),
                 SelectHit::Inside | SelectHit::Outside => None,

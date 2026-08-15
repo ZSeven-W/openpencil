@@ -457,17 +457,8 @@ impl EditorUiState {
         self.close_chat_model_picker();
         if opening {
             self.chat_model_picker.open = true;
-            // Raised here rather than in the click flow so every path that
-            // opens the picker can ask its host to refresh CLI catalogs.
-            self.pending_model_catalog_refresh = true;
         }
         opening
-    }
-
-    /// Consume the model-catalog refresh request raised by the last
-    /// picker open. Returns true exactly once per open.
-    pub fn take_pending_model_catalog_refresh(&mut self) -> bool {
-        std::mem::take(&mut self.pending_model_catalog_refresh)
     }
 
     pub fn close_chat_model_picker(&mut self) -> bool {
@@ -551,18 +542,20 @@ impl EditorUiState {
     pub fn builtin_agent_draft_field_text(
         &self,
         field: crate::agent_settings::BuiltinAgentField,
-    ) -> Option<&str> {
+    ) -> Option<std::borrow::Cow<'_, str>> {
         use crate::agent_settings::{BuiltinAgentField, SettingsFocus};
 
         let draft = self.agent_settings.builtin_agent_draft.as_ref()?;
         if self.agent_settings.focus == Some(SettingsFocus::BuiltinAgentDraft(field)) {
-            return Some(self.settings_input.text());
+            return Some(std::borrow::Cow::Borrowed(self.settings_input.text()));
         }
         Some(match field {
-            BuiltinAgentField::DisplayName => draft.display_name.as_str(),
-            BuiltinAgentField::ApiKey => draft.api_key.as_str(),
-            BuiltinAgentField::Model => draft.model.as_str(),
-            BuiltinAgentField::BaseUrl => draft.base_url.as_str(),
+            BuiltinAgentField::DisplayName => {
+                std::borrow::Cow::Borrowed(draft.display_name.as_str())
+            }
+            BuiltinAgentField::ApiKey => std::borrow::Cow::Borrowed(draft.api_key.as_str()),
+            BuiltinAgentField::Model => std::borrow::Cow::Owned(draft.models_text()),
+            BuiltinAgentField::BaseUrl => std::borrow::Cow::Borrowed(draft.base_url.as_str()),
         })
     }
 

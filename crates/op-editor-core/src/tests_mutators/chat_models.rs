@@ -140,7 +140,7 @@ fn rebuild_chat_models_retains_builtin_agent_display_name_as_group_label() {
 }
 
 #[test]
-fn rebuild_chat_models_pins_configured_builtin_then_merges_live_options() {
+fn rebuild_chat_models_flattens_saved_models_and_ignores_runtime_options() {
     let mut state = sample();
     let id = state.editor_ui.agent_settings.add_builtin_agent_config(
         "Provider",
@@ -150,6 +150,14 @@ fn rebuild_chat_models_pins_configured_builtin_then_merges_live_options() {
         "https://example.test/v1",
     );
     let target = crate::BuiltinModelCatalogTarget::Agent(id.clone());
+    state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter_mut()
+        .find(|agent| agent.id == id)
+        .expect("configured agent")
+        .set_models(["configured", "saved-b"]);
     let request = state
         .editor_ui
         .agent_settings
@@ -192,16 +200,16 @@ fn rebuild_chat_models_pins_configured_builtin_then_merges_live_options() {
             .iter()
             .filter_map(|entry| entry.builtin_model_id())
             .collect::<Vec<_>>(),
-        vec!["configured", "live-b", "live-c"]
+        vec!["configured", "saved-b"]
     );
-    assert_eq!(entries[1].display_name, "Live B");
+    assert_eq!(entries[1].display_name, "saved-b");
     assert!(entries
         .iter()
         .all(|entry| { entry.builtin_provider_display_name.as_deref() == Some("Provider") }));
 }
 
 #[test]
-fn discovered_model_can_be_the_first_model_for_a_builtin_provider() {
+fn discovered_model_is_not_a_chat_choice_until_it_is_saved() {
     let mut state = sample();
     let id = state.editor_ui.agent_settings.add_builtin_agent_config(
         "Provider",
@@ -237,17 +245,15 @@ fn discovered_model_can_be_the_first_model_for_a_builtin_provider() {
 
     state.rebuild_chat_models();
 
-    let entry = state
+    assert!(state
         .chat
         .available_models
         .iter()
-        .find(|entry| entry.builtin_provider_id.as_deref() == Some(id.as_str()))
-        .expect("live row enters picker without a static model");
-    assert_eq!(entry.builtin_model_id(), Some("first-live"));
+        .all(|entry| entry.builtin_provider_id.as_deref() != Some(id.as_str())));
 }
 
 #[test]
-fn selecting_dynamic_builtin_updates_only_its_config_and_survives_rebuild() {
+fn selecting_saved_builtin_is_tab_local_and_does_not_mutate_provider_models() {
     let mut state = sample();
     let first = state.editor_ui.agent_settings.add_builtin_agent_config(
         "First",
@@ -263,45 +269,26 @@ fn selecting_dynamic_builtin_updates_only_its_config_and_survives_rebuild() {
         crate::BuiltinAgentKind::OpenAiCompat,
         "https://second.example/v1",
     );
-    let request = state
-        .editor_ui
-        .agent_settings
-        .begin_builtin_model_catalog_refresh(
-            crate::BuiltinModelCatalogTarget::Agent(first.clone()),
-            1,
-        )
-        .expect("request");
     state
         .editor_ui
         .agent_settings
-        .take_pending_builtin_model_catalog_refresh();
-    let expected = state
-        .editor_ui
-        .agent_settings
-        .builtin_model_catalog_config_for_request(&request)
-        .expect("snapshot");
-    assert!(state
-        .editor_ui
-        .agent_settings
-        .apply_builtin_model_catalog_refresh_outcome_if_current(
-            &expected,
-            &request,
-            crate::BuiltinModelCatalogRefreshOutcome::Success {
-                models: vec![crate::BuiltinModelOption::new("dynamic:model", "Dynamic")],
-            },
-        ));
+        .builtin_agents
+        .iter_mut()
+        .find(|agent| agent.id == first)
+        .expect("first provider")
+        .set_models(["first-default", "second-saved"]);
     state.rebuild_chat_models();
-    let dynamic = state
+    let selected = state
         .chat
         .available_models
         .iter()
         .position(|entry| {
             entry.builtin_provider_id.as_deref() == Some(first.as_str())
-                && entry.builtin_model_id() == Some("dynamic:model")
+                && entry.builtin_model_id() == Some("second-saved")
         })
-        .expect("dynamic row");
+        .expect("second saved row");
 
-    state.select_chat_model(dynamic);
+    state.select_chat_model(selected);
 
     assert_eq!(
         state
@@ -310,8 +297,11 @@ fn selecting_dynamic_builtin_updates_only_its_config_and_survives_rebuild() {
             .builtin_agents
             .iter()
             .find(|agent| agent.id == first)
-            .map(|agent| agent.model.as_str()),
-        Some("dynamic:model")
+            .map(|agent| agent.models.clone()),
+        Some(vec![
+            "first-default".to_string(),
+            "second-saved".to_string()
+        ])
     );
     assert_eq!(
         state
@@ -320,8 +310,8 @@ fn selecting_dynamic_builtin_updates_only_its_config_and_survives_rebuild() {
             .builtin_agents
             .iter()
             .find(|agent| agent.id == second)
-            .map(|agent| agent.model.as_str()),
-        Some("second-default")
+            .map(|agent| agent.models.clone()),
+        Some(vec!["second-default".to_string()])
     );
     state.rebuild_chat_models();
     assert_eq!(
@@ -329,7 +319,7 @@ fn selecting_dynamic_builtin_updates_only_its_config_and_survives_rebuild() {
             .chat
             .selected_model_entry()
             .and_then(|entry| entry.builtin_model_id()),
-        Some("dynamic:model")
+        Some("second-saved")
     );
 }
 
