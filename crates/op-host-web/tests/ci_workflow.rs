@@ -218,17 +218,27 @@ fn release_workflow_installs_nsis_on_windows_runner() {
     ))
     .expect("rust-release workflow is readable");
 
+    let install_step_start = workflow
+        .find("- name: Install NSIS (windows)")
+        .expect("release workflow should install NSIS before invoking makensis");
+    let following_step_offset = workflow[install_step_start..]
+        .find("- name: Validate Windows signing input policy")
+        .expect("NSIS installation should remain a dedicated release step");
+    let install_step = &workflow[install_step_start..install_step_start + following_step_offset];
+    let self_test = install_step
+        .find("& tools/install-pinned-nsis.ps1 -SelfTest")
+        .expect("the digest-pinned NSIS installer should reject checksum mismatches first");
+    let install = install_step
+        .find("\n          & tools/install-pinned-nsis.ps1\n")
+        .expect("the verified NSIS installer should run after its self-test");
+
     assert!(
-        workflow.contains("Install NSIS (windows)"),
-        "release workflow should install NSIS before invoking makensis"
+        self_test < install,
+        "the checksum self-test must pass before the digest-pinned NSIS install"
     );
     assert!(
-        workflow.contains("choco install nsis"),
-        "release workflow should not assume makensis is preinstalled on windows-latest"
-    );
-    assert!(
-        workflow.contains("GITHUB_PATH") && workflow.contains("makensis.exe"),
-        "release workflow should add makensis.exe to PATH after installing NSIS"
+        !workflow.contains("choco install"),
+        "release workflow must not regress to an unpinned Chocolatey install"
     );
 }
 
