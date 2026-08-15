@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-root = File.expand_path("../app/src/main/kotlin/dev/openpencil/player", __dir__)
+root = File.expand_path("../app/src/main/kotlin/tech/zseven/openpencil", __dir__)
 overlay = File.read(File.join(root, "LoginWebViewOverlay.kt"))
 policy = File.read(File.join(root, "LoginWebViewPolicy.kt"))
 activity = File.read(File.join(root, "MainActivity.kt"))

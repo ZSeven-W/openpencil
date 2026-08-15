@@ -53,11 +53,31 @@ mod system_chrome_tests {
 
 #[cfg(test)]
 mod binding_contract_tests {
+    const CANONICAL_JNI_PREFIX: &str = "Java_tech_zseven_openpencil_OpNative_";
+
+    #[test]
+    fn every_native_export_uses_the_canonical_android_package() {
+        for source in [
+            include_str!("bindings.rs"),
+            include_str!("bindings_editor.rs"),
+            include_str!("bindings_media.rs"),
+            include_str!("bindings_text.rs"),
+        ] {
+            assert!(!source.contains("Java_dev_openpencil_player_"));
+            for line in source.lines().filter(|line| line.contains("fn Java_")) {
+                assert!(
+                    line.contains(CANONICAL_JNI_PREFIX),
+                    "stale JNI export: {line}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn atomic_resize_native_forwards_the_complete_tuple_once() {
         let source = include_str!("bindings.rs");
         let start = source
-            .find("Java_dev_openpencil_player_OpNative_nativeResizeWithSafeArea")
+            .find("Java_tech_zseven_openpencil_OpNative_nativeResizeWithSafeArea")
             .expect("atomic resize JNI export");
         let tail = &source[start..];
         let end = tail[1..]
@@ -74,9 +94,47 @@ mod binding_contract_tests {
     fn editor_transform_begin_native_forwards_the_down_midpoint() {
         let source = include_str!("bindings_editor.rs");
         let start = source
-            .find("Java_dev_openpencil_player_OpNative_nativeEditorBeginTransform")
+            .find("Java_tech_zseven_openpencil_OpNative_nativeEditorBeginTransform")
             .expect("editor transform begin JNI export");
         let function = &source[start..];
         assert!(function.contains("op_engine_ffi::op_editor_begin_transform(e, x, y)"));
+    }
+
+    #[test]
+    fn credential_callbacks_attach_workers_bound_lengths_and_wipe_arrays() {
+        let source = include_str!("callbacks.rs");
+        let secure = &source[source.find("extern \"C\" fn credential_load").unwrap()
+            ..source.find("fn clear_pending_exception").unwrap()];
+        assert!(source.contains("ctx.vm.attach_current_thread()"));
+        assert!(source.contains("length == COLLAB_CREDENTIAL_BYTES"));
+        assert!(source.contains("value_len != COLLAB_CREDENTIAL_BYTES"));
+        assert!(source.contains("struct WipedCredential"));
+        assert!(source.contains("self.0.zeroize()"));
+        assert!(source.contains("wipe_java_byte_array"));
+        assert!(source.matches("wipe_java_byte_array(").count() >= 3);
+        assert!(source.contains(".set_byte_array_region(array"));
+        assert!(source.contains("clear_pending_exception"));
+        assert!(secure.matches("with_local_frame(").count() >= 2);
+        assert!(!secure.contains("Vec<"));
+        assert!(!secure.contains("value_len as i32"));
+    }
+
+    #[test]
+    fn native_create_forwards_the_precreate_storage_root() {
+        let source = include_str!("bindings.rs");
+        assert!(source.contains("storage_root: JString<'local>"));
+        assert!(source.contains("storage_root_ptr: storage_root.as_ptr()"));
+        assert!(source.contains("storage_root_len: storage_root.len()"));
+    }
+
+    #[test]
+    fn callback_context_is_freed_only_after_clean_worker_shutdown() {
+        let source = include_str!("bindings.rs");
+        let start = source.find("let status = unsafe { op_destroy").unwrap();
+        let teardown = &source[start..source[start..].find("};\n    if thread").unwrap() + start];
+        assert!(teardown.contains("if matches!(status, OpStatus::Ok)"));
+        let ok_block = &teardown[teardown.find("if matches!").unwrap()..];
+        assert!(ok_block.contains("release_all_windows"));
+        assert!(ok_block.contains("drop_ctx(ctx.get())"));
     }
 }

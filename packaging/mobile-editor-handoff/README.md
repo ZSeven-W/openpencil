@@ -236,7 +236,7 @@ Important source areas:
 - `crates/op-engine-ffi/src/viewport.rs`
 - `crates/op-engine-ffi/src/render.rs`
 - `packaging/ios-player/Sources/OpPlayerView.swift`
-- `packaging/android-player/app/src/main/kotlin/dev/openpencil/player/MainActivity.kt`
+- `packaging/android-player/app/src/main/kotlin/tech/zseven/openpencil/MainActivity.kt`
 
 Keep every source file at or below 800 lines. Current mobile work already pushes `editor_ui_state.rs`, `widget_host/paint.rs`, and `op-engine-jni/src/bindings.rs` above that limit; split cohesive siblings rather than adding more code to them.
 

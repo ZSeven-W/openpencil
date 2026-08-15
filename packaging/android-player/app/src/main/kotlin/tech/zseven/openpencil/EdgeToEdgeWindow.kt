@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 import android.graphics.Color
 import android.os.Build

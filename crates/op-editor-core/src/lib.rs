@@ -42,6 +42,7 @@ pub mod collab_owner_confirm_ui;
 pub mod collab_panel_hover;
 pub mod collab_public_ui;
 pub mod collab_routes;
+mod collab_transport_capabilities;
 mod collab_ui_debug;
 pub mod collab_ui_state;
 pub mod collab_wire;
@@ -311,6 +312,7 @@ pub use collab_public_ui::{
     CollabConnectErrorUi, CollabConnectionPathUi, CollabInviteCode, CollabPublicSessionUi,
     CollabRelayRegion, MAX_COLLAB_INVITE_CODE_CHARS,
 };
+pub use collab_transport_capabilities::CollabTransportCapabilities;
 pub use collab_ui_state::{
     AuthenticatedCollabSession, CollabAvailability, CollabCanvasPoint, CollabConnectionPhase,
     CollabDiscardedEditUi, CollabNotice, CollabNoticeKind, CollabPanelState, CollabPanelView,

@@ -103,6 +103,37 @@ fn open_join_is_navigation_only_and_nearby_search_is_explicit() {
 }
 
 #[test]
+fn relay_only_capabilities_hide_multicast_paths_but_keep_manual_join() {
+    let mut ui = EditorUiState::default();
+    ui.collab.availability = CollabAvailability::Ready;
+    ui.collab.transport_capabilities =
+        op_editor_core::CollabTransportCapabilities::RELAY_AND_MANUAL_JOIN;
+    ui.collab.panel.view = CollabPanelView::Create;
+
+    let create = CollabPanelModel::for_editor_ui(&ui);
+    assert_eq!(
+        create
+            .actions
+            .iter()
+            .map(|action| action.action.clone())
+            .collect::<Vec<_>>(),
+        vec![CollabUiAction::Start, CollabUiAction::Cancel]
+    );
+
+    ui.collab.panel.view = CollabPanelView::Join;
+    ui.collab.panel.join_input.set_text("192.168.1.8:43120");
+    let join = CollabPanelModel::for_editor_ui(&ui);
+    assert!(join
+        .actions
+        .iter()
+        .any(|action| { matches!(action.action, CollabUiAction::JoinAddress { .. }) }));
+    assert!(join
+        .actions
+        .iter()
+        .all(|action| action.action != CollabUiAction::BeginDiscovery));
+}
+
+#[test]
 fn invite_or_address_input_is_bounded_and_queues_one_join() {
     for target in ["opc1_Ab-9", "192.168.1.8:43120"] {
         let mut ui = EditorUiState::default();

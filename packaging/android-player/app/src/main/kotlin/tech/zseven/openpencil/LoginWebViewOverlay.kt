@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 import android.annotation.SuppressLint
 import android.annotation.TargetApi

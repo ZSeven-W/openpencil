@@ -161,12 +161,22 @@ pub unsafe extern "C" fn op_editor_open_document(
 pub unsafe extern "C" fn op_editor_press(engine: *mut crate::OpEngine, x: f32, y: f32) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
-            if !session.begin_editor_pointer_capture(x, y) {
+            if !session.safe_area_contains_surface_point(x, y) {
                 return Ok(());
             }
             let (w, h) = session.editor_viewport();
-            let (x, y) = session.editor_point(x, y);
-            let changed = session.editor_mut()?.apply_press(x, y, w, h);
+            let (editor_x, editor_y) = session.editor_point(x, y);
+            if let Some(action) = session.collab_history_at(editor_x, editor_y, w, h) {
+                if session.request_collab_history(action)? {
+                    session.request_redraw();
+                }
+                return Ok(());
+            }
+            if !session.begin_editor_pointer_capture(x, y) {
+                return Ok(());
+            }
+            session.begin_collab_pointer_edit();
+            let changed = session.editor_mut()?.apply_press(editor_x, editor_y, w, h);
             if changed {
                 session.request_redraw();
             }
@@ -221,11 +231,17 @@ pub unsafe extern "C" fn op_editor_release(
                 return Ok(());
             }
             let (x, y) = session.editor_point(x, y);
-            let changed = crate::editor_pointer_release::release(session, x, y)?;
+            let release = crate::editor_pointer_release::release(session, x, y);
+            let template = if release.is_ok() {
+                crate::editor_template::drain_pending_scene_template(session)
+            } else {
+                Ok(false)
+            };
+            let collab_changed = session.finish_collab_pointer_edit();
+            let changed = release? | template? | collab_changed;
             if changed {
                 session.request_redraw();
             }
-            crate::editor_template::drain_pending_scene_template(session)?;
             Ok(())
         })
     }
@@ -240,8 +256,9 @@ pub unsafe extern "C" fn op_editor_release(
 pub unsafe extern "C" fn op_editor_cancel_gesture(engine: *mut crate::OpEngine) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            let changed = session.cancel_editor_collab_gesture()?;
             session.reset_editor_pointer_capture();
-            if session.editor_mut()?.cancel_native_touch_gestures() {
+            if changed {
                 session.request_redraw();
             }
             Ok(())
@@ -261,13 +278,23 @@ pub unsafe extern "C" fn op_editor_right_press(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
-            if !session.safe_area_contains_surface_point(x, y) {
-                return Ok(());
-            }
-            let (w, h) = session.editor_viewport();
-            let (x, y) = session.editor_point(x, y);
-            let host = session.editor_mut()?;
-            if host.apply_right_press(x, y, w, h) {
+            let right_press = if session.safe_area_contains_surface_point(x, y) {
+                let (w, h) = session.editor_viewport();
+                let (x, y) = session.editor_point(x, y);
+                session
+                    .editor_mut()
+                    .map(|host| host.apply_right_press(x, y, w, h))
+            } else {
+                Ok(false)
+            };
+
+            // Mobile shells intentionally suppress the terminal Up after a
+            // long press. Close the Down-owned collaboration transaction and
+            // pointer gate here, including safe-area misses and host errors,
+            // so the runtime cannot remain busy forever.
+            let collab_changed = session.finish_collab_pointer_edit();
+            session.reset_editor_pointer_capture();
+            if right_press? | collab_changed {
                 session.request_redraw();
             }
             Ok(())
@@ -362,14 +389,14 @@ pub unsafe extern "C" fn op_editor_text(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
-            let host = session.editor_mut()?;
             let text = crate::error::read_utf8(text_ptr, text_len, STRING_CAP, "editor text")?;
-            let mut changed = false;
-            for c in text.chars() {
-                if host.apply_text(c) {
-                    changed = true;
+            let changed = session.with_collab_local_edit(|host| {
+                let mut changed = false;
+                for c in text.chars() {
+                    changed |= host.apply_text(c);
                 }
-            }
+                changed
+            })?;
             if changed {
                 session.request_redraw();
             }
@@ -387,23 +414,7 @@ pub unsafe extern "C" fn op_editor_text(
 pub unsafe extern "C" fn op_editor_key(engine: *mut crate::OpEngine, key: i32) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
-            let host = session.editor_mut()?;
-            let changed = match key {
-                KEY_BACKSPACE => host.apply_backspace(),
-                KEY_DELETE => host.apply_delete(),
-                KEY_ENTER => host.apply_send(),
-                KEY_ESCAPE => host.apply_escape(),
-                KEY_DUPLICATE => host.apply_duplicate(),
-                KEY_UNDO => host.apply_undo(),
-                KEY_REDO => host.apply_redo(),
-                KEY_ARROW_UP => host.apply_nudge(0.0, -1.0),
-                KEY_ARROW_DOWN => host.apply_nudge(0.0, 1.0),
-                KEY_ARROW_LEFT => host.apply_nudge(-1.0, 0.0),
-                KEY_ARROW_RIGHT => host.apply_nudge(1.0, 0.0),
-                other => {
-                    return Err(FfiError::invalid(format!("unknown editor key {other}")));
-                }
-            };
+            let changed = session.apply_collab_key(key)?;
             if changed {
                 session.request_redraw();
             }
@@ -428,9 +439,14 @@ pub unsafe extern "C" fn op_editor_ime_preedit(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
-            let host = session.editor_mut()?;
             let text = crate::error::read_utf8(text_ptr, text_len, STRING_CAP, "preedit text")?;
-            if host.apply_ime_preedit(&text, Some((sel_start, sel_end))) {
+            // The first composition update can replace an active canvas-text
+            // selection and synchronise that deletion into the document.
+            // Treat every update as an owned transaction; UI-only updates
+            // naturally finish as NoChange.
+            if session.with_collab_local_edit(|host| {
+                host.apply_ime_preedit(&text, Some((sel_start, sel_end)))
+            })? {
                 session.request_redraw();
             }
             Ok(())
@@ -451,9 +467,8 @@ pub unsafe extern "C" fn op_editor_ime_commit(
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
-            let host = session.editor_mut()?;
             let text = crate::error::read_utf8(text_ptr, text_len, STRING_CAP, "ime text")?;
-            if host.apply_ime_commit(&text) {
+            if session.with_collab_local_edit(|host| host.apply_ime_commit(&text))? {
                 session.request_redraw();
             }
             Ok(())

@@ -80,6 +80,12 @@ typedef void (*OpNeedsRedraw)(void *user_data, bool has_next_wake, uint64_t next
 typedef void (*OpRuntimeErrorCallback)(void *user_data, const OpRuntimeError *error);
 typedef void (*OpInputFocusChanged)(void *user_data, bool focused, int32_t input_kind, int32_t return_key_hint);
 typedef void (*OpRemoteImageRequest)(void *user_data, uint64_t request_id, const uint8_t *url_ptr, size_t url_len);
+/* Platform secure-store callbacks may run on a collaboration worker thread.
+ * The shell must make them thread-safe and keep user_data alive until
+ * op_destroy returns. Credentials are exactly 32 bytes. Load: 0=found,
+ * 1=missing, negative=failure. */
+typedef int32_t (*OpCredentialLoad)(void *user_data, uint8_t *out, size_t capacity, size_t *out_len);
+typedef int32_t (*OpCredentialStoreIfAbsent)(void *user_data, const uint8_t *value, size_t value_len);
 
 /* Callback table. Future callbacks grow only at the tail. */
 typedef struct OpCallbacks {
@@ -89,10 +95,14 @@ typedef struct OpCallbacks {
     OpRuntimeErrorCallback runtime_error;
     OpInputFocusChanged input_focus_changed;
     OpRemoteImageRequest remote_image_request;
+    OpCredentialLoad credential_load;
+    OpCredentialStoreIfAbsent credential_store_if_absent;
 } OpCallbacks;
 
 /* Engine construction descriptor. asset_base is the v1 tail; mode is the
- * v2 tail (0 = viewer, 1 = full editor). */
+ * v2 tail (0 = viewer, 1 = full editor); storage_root is the v3 tail. Mobile
+ * editor shells must pass a private app-sandbox directory before any runtime
+ * config is resolved. */
 typedef struct OpCreateDesc {
     size_t size;
     const uint8_t *doc_ptr;
@@ -104,6 +114,8 @@ typedef struct OpCreateDesc {
     const uint8_t *asset_base_ptr;
     size_t asset_base_len;
     int32_t mode;
+    const uint8_t *storage_root_ptr;
+    size_t storage_root_len;
 } OpCreateDesc;
 
 /* Platform surface descriptor. iOS: borrowed CAMetalLayer*. Android:

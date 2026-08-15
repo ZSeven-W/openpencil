@@ -3,16 +3,35 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val repositoryRoot = rootProject.layout.projectDirectory.dir("../..")
+val androidVersionOutput = providers.exec {
+    workingDir(repositoryRoot.asFile)
+    commandLine(
+        repositoryRoot.file("scripts/android-version.sh").asFile.absolutePath,
+        repositoryRoot.file("Cargo.toml").asFile.absolutePath,
+    )
+}.standardOutput.asText.get().trim()
+val androidVersionLines = androidVersionOutput.lines()
+check(androidVersionLines.size == 2) {
+    "scripts/android-version.sh returned invalid version metadata"
+}
+val canonicalVersionName = Regex("""versionName=([0-9]+\.[0-9]+\.[0-9]+)""")
+    .matchEntire(androidVersionLines[0])?.groupValues?.get(1)
+    ?: error("scripts/android-version.sh returned an invalid versionName")
+val canonicalVersionCode = Regex("""versionCode=([1-9][0-9]*)""")
+    .matchEntire(androidVersionLines[1])?.groupValues?.get(1)?.toIntOrNull()
+    ?: error("scripts/android-version.sh returned a non-numeric versionCode")
+
 android {
-    namespace = "dev.openpencil.player"
+    namespace = "tech.zseven.openpencil"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.openpencil.player"
+        applicationId = "tech.zseven.openpencil"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = canonicalVersionCode
+        versionName = canonicalVersionName
         ndk {
             // The op-engine-jni cdylib is built by cargo-ndk into jniLibs;
             // ship only the ABIs it produces.
@@ -58,4 +77,13 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     testImplementation("junit:junit:4.13.2")
+}
+
+tasks.register("printOpenPencilVersion") {
+    group = "verification"
+    description = "Print the canonical Android version metadata"
+    doLast {
+        println("versionName=$canonicalVersionName")
+        println("versionCode=$canonicalVersionCode")
+    }
 }

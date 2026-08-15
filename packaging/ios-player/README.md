@@ -66,7 +66,7 @@ xcodebuild \
   build
 
 xcrun simctl install <sim-id> "$PWD/.derived-data/Build/Products/Release-iphonesimulator/OpenPencilPlayer.app"
-xcrun simctl launch <sim-id> dev.openpencil.player
+xcrun simctl launch <sim-id> tech.zseven.openpencil
 ```
 
 ## Real-device build

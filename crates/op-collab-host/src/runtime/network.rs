@@ -376,6 +376,7 @@ pub(super) fn spawn_owner(
     session_id: SessionId,
     epoch: Epoch,
     relay: Option<RelayOwnerRequest>,
+    advertise_lan: bool,
 ) -> SessionNetwork {
     let (commands, receiver) = mpsc::sync_channel(GUI_COMMAND_CAPACITY);
     let (shutdown, shutdown_receiver) = mpsc::sync_channel(TERMINAL_COMMAND_CAPACITY);
@@ -390,6 +391,7 @@ pub(super) fn spawn_owner(
                     session_id,
                     epoch,
                     relay,
+                    advertise_lan,
                 },
                 receiver,
                 shutdown_receiver,

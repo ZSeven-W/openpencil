@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 import android.content.res.Configuration
 import android.net.Uri

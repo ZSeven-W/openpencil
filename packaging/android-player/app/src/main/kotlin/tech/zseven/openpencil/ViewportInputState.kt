@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 /**
  * Keeps touch conversion on the same DPR as the last committed native

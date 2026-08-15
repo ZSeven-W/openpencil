@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

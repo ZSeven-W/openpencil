@@ -58,6 +58,9 @@ pub(crate) struct Session {
     /// editor mode (`OpCreateDesc.mode == 1`).
     #[cfg(feature = "editor")]
     pub editor: Option<op_host_native::WidgetHostNative>,
+    /// Collaboration actor/runtime bound to the full editor host.
+    #[cfg(feature = "editor")]
+    pub(crate) editor_collab: Option<crate::editor_collab::EditorCollabState>,
     /// Mobile auth/WebView payload and exactly-once shell action state.
     #[cfg(feature = "editor")]
     pub(crate) auth_shell: crate::editor_auth::EditorAuthShellState,
@@ -96,7 +99,7 @@ impl Session {
         }
         let backend = NativeBackend::with_dpi(options.dpr);
         #[cfg(feature = "editor")]
-        let editor = if options.editor_mode {
+        let mut editor = if options.editor_mode {
             // The host seeds an empty starter doc; replace it with the
             // loaded one (resets the document epoch + scene cache).
             let mut host = op_host_native::WidgetHostNative::new();
@@ -119,6 +122,22 @@ impl Session {
         } else {
             None
         };
+        #[cfg(feature = "editor")]
+        let editor_collab = if editor.is_some() {
+            Some(crate::editor_collab::EditorCollabState::new(
+                options.callbacks,
+            )?)
+        } else {
+            None
+        };
+        #[cfg(feature = "editor")]
+        if let Some(host) = editor.as_mut() {
+            host.editor_state_mut()
+                .editor_ui
+                .collab
+                .transport_capabilities =
+                op_editor_core::CollabTransportCapabilities::RELAY_AND_MANUAL_JOIN;
+        }
         let mut session = Session {
             state,
             scene,
@@ -140,6 +159,8 @@ impl Session {
             asset_base: options.asset_base,
             #[cfg(feature = "editor")]
             editor,
+            #[cfg(feature = "editor")]
+            editor_collab,
             #[cfg(feature = "editor")]
             auth_shell: Default::default(),
             #[cfg(feature = "editor")]
@@ -284,6 +305,10 @@ impl Session {
     }
 
     pub(crate) fn suspend(&mut self) {
+        #[cfg(feature = "editor")]
+        if self.editor.is_some() {
+            let _ = self.cancel_editor_collab_gesture();
+        }
         self.surface = SurfaceSlot::None;
         self.suspended = true;
         self.gesture.reset();
@@ -458,16 +483,9 @@ impl Session {
         #[cfg(feature = "editor")]
         let auth_wake = crate::editor_auth::pump(self);
         #[cfg(feature = "editor")]
-        let model_discovery_wake = {
-            let Session {
-                editor,
-                model_discovery,
-                ..
-            } = self;
-            editor
-                .as_mut()
-                .and_then(|host| model_discovery.pump(host, now_ms))
-        };
+        let model_discovery_wake = self.pump_editor_model_discovery(now_ms);
+        #[cfg(feature = "editor")]
+        let collab_wake = self.pump_editor_collab();
         let slot = std::mem::replace(&mut self.surface, SurfaceSlot::None);
         let (restored, outcome) = match slot {
             SurfaceSlot::None => (
@@ -506,9 +524,12 @@ impl Session {
                 #[cfg(feature = "editor")]
                 if let Some(deadline) = earliest_wake(
                     earliest_wake(auth_wake, model_discovery_wake),
-                    self.editor
-                        .as_ref()
-                        .and_then(|host| host.next_animation_deadline_ms()),
+                    earliest_wake(
+                        collab_wake,
+                        self.editor
+                            .as_ref()
+                            .and_then(|host| host.next_animation_deadline_ms()),
+                    ),
                 ) {
                     self.request_wake(Some(deadline));
                 }
@@ -550,16 +571,9 @@ impl Session {
         #[cfg(feature = "editor")]
         let auth_wake = crate::editor_auth::pump(self);
         #[cfg(feature = "editor")]
-        let model_discovery_wake = {
-            let Session {
-                editor,
-                model_discovery,
-                ..
-            } = self;
-            editor
-                .as_mut()
-                .and_then(|host| model_discovery.pump(host, now_ms))
-        };
+        let model_discovery_wake = self.pump_editor_model_discovery(now_ms);
+        #[cfg(feature = "editor")]
+        let collab_wake = self.pump_editor_collab();
         let width = ((self.logical.0 * self.dpr).round() as i32).max(1);
         let height = ((self.logical.1 * self.dpr).round() as i32).max(1);
         let row_bytes = width as usize * 4;
@@ -588,9 +602,12 @@ impl Session {
         {
             if let Some(deadline) = earliest_wake(
                 earliest_wake(auth_wake, model_discovery_wake),
-                self.editor
-                    .as_ref()
-                    .and_then(|host| host.next_animation_deadline_ms()),
+                earliest_wake(
+                    collab_wake,
+                    self.editor
+                        .as_ref()
+                        .and_then(|host| host.next_animation_deadline_ms()),
+                ),
             ) {
                 self.request_wake(Some(deadline));
             }
@@ -747,6 +764,8 @@ pub(crate) unsafe fn destroy_engine(pointer: *mut OpEngine) -> OpStatus {
     }
     engine.in_call.set(true);
     let outcome = catch_unwind(AssertUnwindSafe(|| unsafe {
+        #[cfg(feature = "editor")]
+        (&mut *engine.session.get()).shutdown_editor_collab();
         #[cfg(feature = "editor")]
         crate::editor_auth::shutdown(&mut *engine.session.get());
         drop(Box::from_raw(pointer));

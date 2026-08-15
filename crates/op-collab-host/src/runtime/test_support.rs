@@ -59,6 +59,16 @@ pub struct OwnerLaneGuard {
     _commands: Receiver<OwnerNetworkCommand>,
 }
 
+impl OwnerLaneGuard {
+    /// Drain and count commands emitted since the previous observation.
+    ///
+    /// This exists only for downstream runtime-wiring tests that must prove a
+    /// UI gesture closes into exactly one collaboration commit.
+    pub fn drain_command_count(&self) -> usize {
+        self._commands.try_iter().count()
+    }
+}
+
 /// Build an owner runtime with one admitted editor peer, ready for
 /// `begin_local_edit`.
 ///

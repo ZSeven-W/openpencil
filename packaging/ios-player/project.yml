@@ -1,7 +1,7 @@
 name: OpenPencilPlayer
 
 options:
-  bundleIdPrefix: dev.openpencil
+  bundleIdPrefix: tech.zseven
   deploymentTarget:
     iOS: "15.0"
   xcodeVersion: "26.4"
@@ -23,13 +23,14 @@ targets:
       - path: Assets.xcassets
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.openpencil.player
+        PRODUCT_BUNDLE_IDENTIFIER: tech.zseven.openpencil
         PRODUCT_NAME: OpenPencilPlayer
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         IPHONEOS_DEPLOYMENT_TARGET: "15.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: OpenPencil
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Connect to an OpenPencil collaboration session on your local network when you enter its address."
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"

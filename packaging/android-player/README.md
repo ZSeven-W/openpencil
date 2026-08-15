@@ -1,7 +1,7 @@
 # OpenPencilPlayer (Android)
 
 A thin Android host for the OpenPencil engine, consuming `crates/op-engine-jni`'s
-`dev.openpencil.player.OpNative` C-ABI surface. The engine renders through
+`tech.zseven.openpencil.OpNative` C-ABI surface. The engine renders through
 EGL/GLES onto a `SurfaceView`; the shell owns lifecycle, insets, touch, and
 the frame pump. Gestures are interpreted by the engine: single-finger tap
 selects the topmost node under the finger, single-finger drag pans, two-finger
@@ -48,10 +48,31 @@ version-matched, SHA-pinned, Ed25519-signed production archive under
 committed, so authenticated Release builds remain unavailable rather than
 silently consuming unsigned bytes.
 
+## Versioning
+
+Gradle resolves `versionName` during configuration by running the repository's
+`scripts/android-version.sh` against the root `Cargo.toml`; Android therefore
+uses the same canonical workspace version as the Rust crates. The corresponding
+`versionCode` is `major * 1,000,000 + minor * 1,000 + patch`. Minor and patch
+are each limited to three digits, so every supported SemVer increase is also a
+strictly increasing Android version code; on the current `0.x` line this
+reduces to `minor * 1,000 + patch`. Android builds reject pre-release/build
+suffixes, zero, component overflow, and values above Android's version-code
+ceiling instead of publishing colliding codes.
+
+Run `scripts/sync-version.sh` after changing the workspace version. The
+repository guard and `scripts/android-version.test.sh` verify the Gradle wiring
+and the monotonic mapping. To inspect the resolved values directly:
+
+```bash
+cd packaging/android-player
+./gradlew -q :app:printOpenPencilVersion
+```
+
 ## Run
 
 ```bash
-adb shell am start -n dev.openpencil.player/.MainActivity
+adb shell am start -n tech.zseven.openpencil/.MainActivity
 adb logcat -s OpenPencilPlayer:V OpJni:V AndroidRuntime:E libEGL:W
 ```
 
@@ -63,7 +84,7 @@ suffix in the existing `doc` intent extra to load another bundled document, for
 example:
 
 ```bash
-adb shell am start -n dev.openpencil.player/.MainActivity --es doc sample
+adb shell am start -n tech.zseven.openpencil/.MainActivity --es doc sample
 ```
 
 ## What the shell does / does not own

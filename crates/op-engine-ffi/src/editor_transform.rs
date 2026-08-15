@@ -20,6 +20,10 @@ pub unsafe extern "C" fn op_editor_begin_transform(
     unsafe {
         call_session(engine, |session| {
             let _ = session.editor_mut()?;
+            if session.cancel_editor_collab_gesture()? {
+                session.request_redraw();
+            }
+            session.reset_editor_pointer_capture();
             session.begin_editor_transform(x, y);
             Ok(())
         })

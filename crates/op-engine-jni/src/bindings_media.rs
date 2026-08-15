@@ -2,24 +2,17 @@
 
 //! Media/font/page natives — split out of `bindings.rs`.
 
-use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use jni::objects::{JByteArray, JClass};
 use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 
-use op_engine_ffi::{
-    op_get_page_count, op_register_font, op_remote_image_result, op_set_active_page, OpEngine,
-    OpStatus,
-};
-
-use crate::bindings::{call_status, jstring_bytes, with_engine};
+use crate::bindings::{call_status, with_engine};
 use crate::engine_thread::STATUS_CLOSING;
-use crate::registry::HANDLE_FAILURE;
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeRemoteImageResult<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeRemoteImageResult<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -40,7 +33,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeRemoteImageResu
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeRegisterFont<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeRegisterFont<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -56,7 +49,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeRegisterFont<'l
 
 /// `OpNative.nativeGetPageCount` — the page count, or `STATUS_CLOSING`.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeGetPageCount<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeGetPageCount<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -74,7 +67,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeGetPageCount<'l
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSetActivePage<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeSetActivePage<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,

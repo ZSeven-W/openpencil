@@ -3,7 +3,7 @@
 require "rexml/document"
 
 player_dir = File.expand_path("..", __dir__)
-source_dir = File.join(player_dir, "app/src/main/kotlin/dev/openpencil/player")
+source_dir = File.join(player_dir, "app/src/main/kotlin/tech/zseven/openpencil")
 activity = File.read(File.join(source_dir, "MainActivity.kt"))
 edge_to_edge = File.read(File.join(source_dir, "EdgeToEdgeWindow.kt"))
 surface = File.read(File.join(source_dir, "OpSurfaceView.kt"))

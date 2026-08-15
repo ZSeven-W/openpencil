@@ -15,6 +15,8 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
 default = []
+# Production mobile release lane: require the verified prebuilt Skia archive.
+pinned-skia-binaries = ["skia-safe/no-compile"]
 # Metal rendering on iOS / macOS — enables jian-skia's `surface/metal`
 # (skia-safe Metal backend over a shell-owned CAMetalLayer).
 metal = ["jian-skia/metal"]
@@ -26,8 +28,12 @@ gl = ["jian-skia/gl"]
 # settings, canvas editing) on iOS / Android.
 editor = [
   "op-host-native/widget-host",
+  "op-host-native/collab-host",
   "dep:op-builtin-model-discovery",
+  "dep:op-collab-host",
+  "dep:op-collab-transport",
   "dep:tokio",
+  "dep:zeroize",
 ]
 # Local-only authentication for the iOS / Android editor shells. This forwards
 # the explicit debug-only archive lane without enabling it in shipping builds.
@@ -53,6 +59,9 @@ op-host-native = { path = "../op-host-native" }
 # Android do not pull the daemon's rquickjs / process / export dependency
 # closure. The service host reuses this exact provider/auth/parser crate.
 op-builtin-model-discovery = { path = "../op-builtin-model-discovery", optional = true }
+op-collab-host = { path = "../op-collab-host", optional = true }
+op-collab-transport = { path = "../op-collab-transport", optional = true }
+op-config-store = { path = "../op-config-store" }
 # Canonical `.op` schema — `PenDocument` parse targets.
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # `TextInputState` (IME composition/selection model) + UTF-16 ↔ UTF-8
@@ -72,7 +81,9 @@ tokio = { version = "1", default-features = false, features = [
   "rt-multi-thread",
   "time",
 ], optional = true }
+zeroize = { version = "1", optional = true }
 
 [dev-dependencies]
 # Host-side tests render through the raster CPU path only.
 serde_json = { workspace = true }
+op-collab-host = { path = "../op-collab-host", features = ["test-support"] }

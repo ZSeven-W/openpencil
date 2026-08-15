@@ -32,6 +32,11 @@ keyring = { version = "3.6.3", default-features = false, features = [
   "apple-native",
 ], optional = true }
 
+[target.'cfg(target_os = "ios")'.dependencies]
+core-foundation = "0.9.4"
+core-foundation-sys = "0.8.7"
+security-framework-sys = "2.17.0"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [
   "Win32_Foundation",

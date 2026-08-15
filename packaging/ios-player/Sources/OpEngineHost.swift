@@ -140,31 +140,41 @@ final class OpEngineHost: NSObject {
         }()
         guard
             let documentURL = Bundle.main.url(forResource: docName, withExtension: "op"),
-            let document = try? Data(contentsOf: documentURL)
+            let document = try? Data(contentsOf: documentURL),
+            let storageURL = AuthStorage.prepare()
         else {
-            NSLog("OpenPencil Player could not load bundled %@.op", docName)
+            NSLog("OpenPencil Player could not prepare its document or private storage")
             return
         }
 
         let assetBase = Data((Bundle.main.resourceURL?.path ?? "").utf8)
+        let storageRoot = Data(storageURL.path.utf8)
+        guard !storageRoot.isEmpty else {
+            NSLog("OpenPencil Player resolved an empty private storage path")
+            return
+        }
         var callbacks = makeCallbacks()
         var created: OpaquePointer?
 
         let status = document.withUnsafeBytes { documentBytes in
             assetBase.withUnsafeBytes { assetBytes in
-                withUnsafePointer(to: &callbacks) { callbacksPointer in
-                    var desc = OpCreateDesc()
-                    desc.size = MemoryLayout<OpCreateDesc>.size
-                    desc.doc_ptr = documentBytes.bindMemory(to: UInt8.self).baseAddress
-                    desc.doc_len = documentBytes.count
-                    desc.width = Float(logicalSize.width)
-                    desc.height = Float(logicalSize.height)
-                    desc.dpr = Float(scale)
-                    desc.callbacks = callbacksPointer
-                    desc.asset_base_ptr = assetBytes.bindMemory(to: UInt8.self).baseAddress
-                    desc.asset_base_len = assetBytes.count
-                    desc.mode = editorMode ? 1 : 0
-                    return op_create(&desc, &created)
+                storageRoot.withUnsafeBytes { storageBytes in
+                    withUnsafePointer(to: &callbacks) { callbacksPointer in
+                        var desc = OpCreateDesc()
+                        desc.size = MemoryLayout<OpCreateDesc>.size
+                        desc.doc_ptr = documentBytes.bindMemory(to: UInt8.self).baseAddress
+                        desc.doc_len = documentBytes.count
+                        desc.width = Float(logicalSize.width)
+                        desc.height = Float(logicalSize.height)
+                        desc.dpr = Float(scale)
+                        desc.callbacks = callbacksPointer
+                        desc.asset_base_ptr = assetBytes.bindMemory(to: UInt8.self).baseAddress
+                        desc.asset_base_len = assetBytes.count
+                        desc.mode = editorMode ? 1 : 0
+                        desc.storage_root_ptr = storageBytes.bindMemory(to: UInt8.self).baseAddress
+                        desc.storage_root_len = storageBytes.count
+                        return op_create(&desc, &created)
+                    }
                 }
             }
         }
@@ -186,15 +196,14 @@ final class OpEngineHost: NSObject {
             return
         }
         isSuspended = false
-        configureMobileAuth(engine: created)
+        configureMobileAuth(engine: created, storageURL: storageURL)
         syncSystemChromeStyle()
     }
 
     /// Installs the mobile auth runtime only when secure local storage can be
     /// prepared. `NotReady` means this build has no compatible auth archive;
     /// the Rust UI remains in its honest unavailable/stub state.
-    private func configureMobileAuth(engine: OpaquePointer) {
-        guard let storageURL = AuthStorage.prepare() else { return }
+    private func configureMobileAuth(engine: OpaquePointer, storageURL: URL) {
         let deviceName = UIDevice.current.name
         let appVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
@@ -509,6 +518,10 @@ final class OpEngineHost: NSObject {
         callbacks.runtime_error = opPlayerRuntimeError
         callbacks.input_focus_changed = opPlayerInputFocusChanged
         callbacks.remote_image_request = opPlayerRemoteImageRequest
+        // iOS uses the transport's Security.framework Keychain backend
+        // directly. The shell-provided credential bridge is Android-only.
+        callbacks.credential_load = nil
+        callbacks.credential_store_if_absent = nil
         return callbacks
     }
 

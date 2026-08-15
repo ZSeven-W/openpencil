@@ -36,6 +36,8 @@ mod editor;
 #[cfg(feature = "editor")]
 mod editor_auth;
 #[cfg(feature = "editor")]
+mod editor_collab;
+#[cfg(feature = "editor")]
 mod editor_model_discovery;
 #[cfg(feature = "editor")]
 mod editor_pointer_release;
@@ -56,7 +58,8 @@ mod text;
 mod viewport;
 
 pub use desc::{
-    OpCallbacks, OpCreateDesc, OpPointerPhase, OpRuntimeError, OpSurfaceDesc, OpTextState,
+    OpCallbacks, OpCreateDesc, OpCredentialLoad, OpCredentialStoreIfAbsent, OpPointerPhase,
+    OpRuntimeError, OpSurfaceDesc, OpTextState,
 };
 #[cfg(feature = "editor")]
 pub use editor::{
@@ -366,6 +369,24 @@ pub unsafe extern "C" fn op_pointer(
             #[cfg(feature = "editor")]
             if session.editor.is_some() {
                 let (w, h) = session.editor_viewport();
+                if phase != OpPointerPhase::Down
+                    && session.take_suppressed_collab_pointer(
+                        id,
+                        matches!(phase, OpPointerPhase::Up | OpPointerPhase::Cancel),
+                    )
+                {
+                    return Ok(());
+                }
+                if phase == OpPointerPhase::Down {
+                    if let Some(action) = session.collab_history_at(x, y, w, h) {
+                        if session.request_collab_history(action)? {
+                            session.request_redraw();
+                        }
+                        session.suppress_collab_pointer(id);
+                        return Ok(());
+                    }
+                    session.begin_collab_pointer_edit();
+                }
                 let (changed, camera_changed) = match phase {
                     OpPointerPhase::Down => (session.editor_mut()?.apply_press(x, y, w, h), false),
                     OpPointerPhase::Move => {
@@ -374,19 +395,26 @@ pub unsafe extern "C" fn op_pointer(
                         let changed = host.apply_cursor_move(x, y);
                         (changed, host.editor_state().viewport != before)
                     }
-                    OpPointerPhase::Up => (
-                        crate::editor_pointer_release::release(session, x, y)?,
-                        false,
-                    ),
-                    OpPointerPhase::Cancel => {
-                        (session.editor_mut()?.cancel_native_touch_gestures(), false)
+                    OpPointerPhase::Up => {
+                        let release = crate::editor_pointer_release::release(session, x, y);
+                        let template = if release.is_ok() {
+                            crate::editor_template::drain_pending_scene_template(session)
+                        } else {
+                            Ok(false)
+                        };
+                        let collab_changed = session.finish_collab_pointer_edit();
+                        (release? | template? | collab_changed, false)
                     }
+                    OpPointerPhase::Cancel => (session.cancel_editor_collab_gesture()?, false),
                 };
                 if camera_changed {
                     session.user_interacted = true;
                 }
-                let template_changed =
-                    crate::editor_template::drain_pending_scene_template(session)?;
+                let template_changed = if phase == OpPointerPhase::Up {
+                    false
+                } else {
+                    crate::editor_template::drain_pending_scene_template(session)?
+                };
                 if changed || template_changed {
                     session.request_redraw();
                 }
@@ -424,5 +452,24 @@ mod tests {
         assert_eq!(OpPointerPhase::Move as i32, 1);
         assert_eq!(OpPointerPhase::Up as i32, 2);
         assert_eq!(OpPointerPhase::Cancel as i32, 3);
+    }
+
+    #[test]
+    fn private_storage_root_is_configured_before_session_construction() {
+        let create = include_str!("lib.rs");
+        let parse = create
+            .find("let options = unsafe { parse_create(desc) }")
+            .unwrap();
+        let session = create.find("let session = Session::new(options)").unwrap();
+        assert!(parse < session);
+
+        let descriptor = include_str!("desc.rs");
+        let storage = descriptor
+            .find("let storage_root = if storage_root_len")
+            .unwrap();
+        let configure = descriptor
+            .find("op_config_store::configure_user_root(path)")
+            .unwrap();
+        assert!(storage < configure);
     }
 }

@@ -35,22 +35,25 @@ default = []
 # through the same `NativeFrameBackend` the desktop uses. Enabled on iOS /
 # Android by the player engine (`op-engine-ffi`).
 widget-host = ["dep:accesskit"]
+# Collaboration/editor actor seam shared by desktop and mobile embedders.
+# This deliberately does not enable winit, glutin, or desktop GL: the mobile
+# engine owns the event loop and GPU surface while `WidgetHostNative` only
+# implements the host trait consumed by `op-collab-host`.
+collab-host = ["widget-host", "dep:op-collab-host"]
 # Local mobile-shell authentication against an unsigned external ABI-v2/v3
 # archive. The bridge accepts it only in Cargo's debug profile.
 mobile-auth-dev = ["op-auth-bridge/dev-prebuilt"]
 # Desktop GUI host stack (winit + glutin + skia-safe GL + jian-host-desktop
-# glue) on top of the widget host. The orchestrator (AI preview wiring) and
-# the collab session runtime stay desktop-only: they pull tokio/QuickJS
-# stacks the mobile builds do not need.
+# glue) on top of the widget host. The orchestrator (AI preview wiring) stays
+# desktop-only; collaboration is exposed separately through `collab-host`.
 gl-host = [
-  "widget-host",
+  "collab-host",
   "skia-safe/gl",
   "dep:glutin",
   "dep:winit",
   "dep:scopeguard",
   "dep:jian-host-desktop",
   "dep:op-orchestrator",
-  "dep:op-collab-host",
 ]
 
 # The basic_window demo needs the GL host stack (SharedSkiaContext + winit);
@@ -92,8 +95,9 @@ op-auth-bridge = { path = "../op-auth-bridge" }
 op-i18n = { path = "../op-i18n" }
 # Collaboration runtime — this crate only supplies the `CollabHost` impl for
 # `WidgetHostNative` (the orphan rule requires it to live in one of the two
-# defining crates). Optional + behind `gl-host` so the raster-only build used
-# by `op-host-services` pulls none of the collaboration transport stack.
+# defining crates). Optional + behind `collab-host`; desktop's `gl-host` and
+# the mobile engine opt in explicitly, while raster-only service builds do not
+# pull the transport stack.
 op-collab-host = { path = "../op-collab-host", optional = true }
 
 # Native-only deps cfg-gated outside wasm32. This is critical (resolves codex round 2 B1 BLOCK):

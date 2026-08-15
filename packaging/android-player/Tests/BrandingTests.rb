@@ -7,6 +7,23 @@ require "rexml/document"
 player_dir = File.expand_path("..", __dir__)
 repo_dir = File.expand_path("../..", player_dir)
 res_dir = File.join(player_dir, "app/src/main/res")
+canonical_package = "tech.zseven.openpencil"
+
+gradle = File.read(File.join(player_dir, "app/build.gradle.kts"))
+raise "Android namespace must be #{canonical_package}" unless gradle.include?(%(namespace = "#{canonical_package}"))
+raise "Android applicationId must be #{canonical_package}" unless gradle.include?(%(applicationId = "#{canonical_package}"))
+raise "legacy Android package must not remain active" if gradle.include?("dev.openpencil.player")
+
+kotlin_roots = %w[main test].map do |source_set|
+  File.join(player_dir, "app/src/#{source_set}/kotlin/tech/zseven/openpencil")
+end
+kotlin_sources = kotlin_roots.flat_map { |root| Dir.glob(File.join(root, "*.kt")) }
+raise "canonical Android package sources are missing" if kotlin_sources.empty?
+kotlin_sources.each do |source|
+  raise "#{source} must declare package #{canonical_package}" unless File.read(source).start_with?("package #{canonical_package}\n")
+end
+legacy_sources = Dir.glob(File.join(player_dir, "app/src/{main,test}/kotlin/dev/openpencil/player/*.kt"))
+raise "legacy Android package source paths remain: #{legacy_sources.join(', ')}" unless legacy_sources.empty?
 
 expected_icons = {
   "mdpi" => [48, "e52e9f5745b538c0939f6a4ff60c73f527d75ab8e9135e3b7182ca2258f27906"],

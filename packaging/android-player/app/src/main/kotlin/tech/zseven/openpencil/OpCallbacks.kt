@@ -1,6 +1,6 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
-/** Engine-thread upcalls (forward-only). Every method runs ON the engine thread. */
+/** Native upcalls. Credential methods may run on collaboration workers. */
 interface OpCallbacks {
     /** A mutation (pointer / resize / attach / resume / text edit / caret
      *  blink) requested a redraw. `hasNextWake` schedules a timed frame
@@ -16,4 +16,10 @@ interface OpCallbacks {
     /** A paint pass recorded a remote image miss; fetch the URL and push
      *  the bytes back via `OpNative.nativeRemoteImageResult`. */
     fun onRemoteImageRequest(requestId: Long, url: String)
+
+    /** Returns the decrypted device key, null only when it does not exist. */
+    fun onCredentialLoad(): ByteArray?
+
+    /** Atomically stores the first device key; an existing value wins. */
+    fun onCredentialStoreIfAbsent(value: ByteArray): Boolean
 }

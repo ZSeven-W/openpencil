@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 /** Result of evaluating a handled configuration change at pre-draw time. */
 internal enum class ViewportGateDecision {

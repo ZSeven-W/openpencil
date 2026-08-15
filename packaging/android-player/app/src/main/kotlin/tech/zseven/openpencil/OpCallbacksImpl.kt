@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 import android.os.SystemClock
 import android.util.Log
@@ -6,11 +6,12 @@ import android.util.Log
 private const val TAG = "OpenPencilPlayer"
 
 /**
- * Engine → shell upcalls. All methods run ON the engine thread; anything
- * touching the view / Choreographer is posted to the main thread by the
- * view.
+ * Engine → shell upcalls. UI methods run on the engine thread and post view /
+ * Choreographer work to the main thread. Credential methods may run on
+ * collaboration workers and touch only the thread-safe platform store.
  */
 class OpCallbacksImpl(private val view: OpSurfaceView) : OpCallbacks {
+    private val credentialStore = AndroidCollaborationCredentialStore(view.context)
 
     override fun onNeedsRedraw(hasNextWake: Boolean, nextWakeMs: Long) {
         // The viewer engine only fires this from mutations (pointer /
@@ -36,5 +37,14 @@ class OpCallbacksImpl(private val view: OpSurfaceView) : OpCallbacks {
 
     override fun onRemoteImageRequest(requestId: Long, url: String) {
         view.fetchRemoteImage(requestId, url)
+    }
+
+    override fun onCredentialLoad(): ByteArray? = credentialStore.load()
+
+    override fun onCredentialStoreIfAbsent(value: ByteArray): Boolean = try {
+        credentialStore.storeIfAbsent(value)
+        true
+    } finally {
+        value.fill(0)
     }
 }

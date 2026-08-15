@@ -171,6 +171,8 @@ impl Harness {
             runtime_error: None,
             input_focus_changed: Some(input_focus_changed_cb),
             remote_image_request: Some(remote_image_request_cb),
+            credential_load: None,
+            credential_store_if_absent: None,
         };
         let mut callbacks_slot = callbacks;
         let doc_bytes = doc.as_bytes();
@@ -185,6 +187,8 @@ impl Harness {
             asset_base_ptr: ptr::null(),
             asset_base_len: 0,
             mode: 0,
+            storage_root_ptr: ptr::null(),
+            storage_root_len: 0,
         };
         let mut engine: *mut OpEngine = ptr::null_mut();
         let status = unsafe { op_create(&desc, &mut engine) };

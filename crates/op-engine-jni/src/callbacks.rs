@@ -1,12 +1,9 @@
 //! Engine → Java upcall trampolines.
 //!
-//! The C ABI invokes these callbacks synchronously ON the engine thread
-//! (inside `op_pointer`, `op_attach_surface`, …). Each trampoline copies
-//! its borrowed C payload into owned Java values, calls the one
-//! `OpCallbacks` receiver, then clears any pending exception. Every body is
-//! bracketed by a JNI local frame so per-upcall Strings never accumulate in
-//! the engine thread's local-reference table (the thread stays attached for
-//! its whole life).
+//! Ordinary UI callbacks run synchronously on the engine thread (inside
+//! `op_pointer`, `op_attach_surface`, …). Credential callbacks are the sole
+//! worker-thread exception and attach only for their call. Every trampoline
+//! uses a JNI local frame and clears pending Java exceptions before returning.
 //!
 //! `user_data` for the C callback table is a `*const EngineCtx` owned by the
 //! engine record; it outlives every callback and is freed only in the
@@ -21,8 +18,19 @@ use jni::objects::{GlobalRef, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
 
 use op_engine_ffi::{OpCallbacks, OpRuntimeError};
+use zeroize::Zeroize;
 
 use crate::engine_thread::{enter_callback_frame, exit_callback_frame};
+
+const COLLAB_CREDENTIAL_BYTES: usize = 32;
+
+struct WipedCredential([i8; COLLAB_CREDENTIAL_BYTES]);
+
+impl Drop for WipedCredential {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 
 /// Per-engine upcall context; the `user_data` behind the C callback table.
 pub struct EngineCtx {
@@ -57,6 +65,8 @@ pub fn build_callbacks(ctx: Box<EngineCtx>) -> (OpCallbacks, *mut EngineCtx) {
         runtime_error: Some(runtime_error),
         input_focus_changed: Some(input_focus_changed),
         remote_image_request: Some(remote_image_request),
+        credential_load: Some(credential_load),
+        credential_store_if_absent: Some(credential_store_if_absent),
     };
     (table, raw)
 }
@@ -244,6 +254,155 @@ extern "C" fn remote_image_request(
             );
         });
     });
+}
+
+/// Secure-store callbacks are the only upcalls allowed off the engine thread.
+/// Collaboration workers attach for the duration of the call; ordinary UI
+/// callbacks intentionally keep using `get_env` above.
+extern "C" fn credential_load(
+    user_data: *mut c_void,
+    out: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> i32 {
+    if out.is_null() || out_len.is_null() {
+        return -1;
+    }
+    // SAFETY: `out_len` was checked and is writable by the callback contract.
+    unsafe { out_len.write(0) };
+    catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: EngineCtx outlives every collaboration worker; op_destroy
+        // joins those workers before the context is freed.
+        let Some(ctx) = (unsafe { ctx(user_data) }) else {
+            return -1;
+        };
+        let Ok(mut env) = ctx.vm.attach_current_thread() else {
+            return -1;
+        };
+        let receiver = ctx.receiver.clone();
+        let mut status = -1;
+        let framed = env.with_local_frame(4, |env| -> Result<(), jni::errors::Error> {
+            let value = env.call_method(receiver.as_obj(), "onCredentialLoad", "()[B", &[]);
+            if clear_pending_exception(env) {
+                return Ok(());
+            }
+            let object = value?.l()?;
+            if object.is_null() {
+                status = 1;
+                return Ok(());
+            }
+            let array = jni::objects::JByteArray::from(object);
+            let length = env.get_array_length(&array)? as usize;
+            let mut temporary = WipedCredential([0_i8; COLLAB_CREDENTIAL_BYTES]);
+            let valid = length == COLLAB_CREDENTIAL_BYTES && capacity >= COLLAB_CREDENTIAL_BYTES;
+            let read = valid
+                && env
+                    .get_byte_array_region(&array, 0, &mut temporary.0)
+                    .is_ok();
+            let cleared = wipe_java_byte_array(env, &array, length);
+            if valid && read && cleared {
+                // SAFETY: the caller supplied `capacity` writable bytes and
+                // the fixed credential length fits that range.
+                unsafe {
+                    for (index, byte) in temporary.0.iter().enumerate() {
+                        out.add(index).write(*byte as u8);
+                    }
+                    out_len.write(COLLAB_CREDENTIAL_BYTES);
+                }
+                status = 0;
+            }
+            Ok(())
+        });
+        if framed.is_err() || clear_pending_exception(&mut env) {
+            -1
+        } else {
+            status
+        }
+    }))
+    .unwrap_or(-1)
+}
+
+extern "C" fn credential_store_if_absent(
+    user_data: *mut c_void,
+    value: *const u8,
+    value_len: usize,
+) -> i32 {
+    if value.is_null() || value_len != COLLAB_CREDENTIAL_BYTES {
+        return -1;
+    }
+    catch_unwind(AssertUnwindSafe(|| {
+        // SAFETY: see `credential_load`; the input is borrowed for this call.
+        let Some(ctx) = (unsafe { ctx(user_data) }) else {
+            return -1;
+        };
+        let Ok(mut env) = ctx.vm.attach_current_thread() else {
+            return -1;
+        };
+        let receiver = ctx.receiver.clone();
+        let mut status = -1;
+        let framed = env.with_local_frame(4, |env| -> Result<(), jni::errors::Error> {
+            // SAFETY: the C callback contract guarantees this readable range.
+            let source = unsafe { std::slice::from_raw_parts(value, COLLAB_CREDENTIAL_BYTES) };
+            let mut temporary = WipedCredential([0_i8; COLLAB_CREDENTIAL_BYTES]);
+            for (destination, source) in temporary.0.iter_mut().zip(source) {
+                *destination = *source as i8;
+            }
+            let array = env.new_byte_array(COLLAB_CREDENTIAL_BYTES as i32)?;
+            if env.set_byte_array_region(&array, 0, &temporary.0).is_err() {
+                return Ok(());
+            }
+
+            let result = env.call_method(
+                receiver.as_obj(),
+                "onCredentialStoreIfAbsent",
+                "([B)Z",
+                &[JValue::Object(array.as_ref())],
+            );
+            let had_exception = clear_pending_exception(env);
+            let cleared = wipe_java_byte_array(env, &array, COLLAB_CREDENTIAL_BYTES);
+            if !had_exception && cleared && result?.z()? {
+                status = 0;
+            }
+            Ok(())
+        });
+        if framed.is_err() || clear_pending_exception(&mut env) {
+            -1
+        } else {
+            status
+        }
+    }))
+    .unwrap_or(-1)
+}
+
+fn clear_pending_exception(env: &mut JNIEnv<'_>) -> bool {
+    match env.exception_check() {
+        Ok(true) => {
+            let _ = env.exception_clear();
+            true
+        }
+        Ok(false) => false,
+        Err(_) => true,
+    }
+}
+
+fn wipe_java_byte_array(
+    env: &mut JNIEnv<'_>,
+    array: &jni::objects::JByteArray<'_>,
+    length: usize,
+) -> bool {
+    let zeros = [0_i8; COLLAB_CREDENTIAL_BYTES];
+    let mut offset = 0_usize;
+    while offset < length {
+        let count = (length - offset).min(zeros.len());
+        if env
+            .set_byte_array_region(array, offset as i32, &zeros[..count])
+            .is_err()
+        {
+            return false;
+        }
+        offset += count;
+    }
+    true
 }
 
 /// Copies a borrowed C byte range into an owned `String` (the payload is

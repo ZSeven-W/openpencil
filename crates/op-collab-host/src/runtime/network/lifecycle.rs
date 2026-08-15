@@ -90,6 +90,28 @@ impl Retirement {
 }
 
 impl CollabRuntime {
+    /// Whether a host without a worker-thread event-loop wake primitive should
+    /// keep scheduling short polling ticks.
+    pub fn needs_poll(&self) -> bool {
+        self.network.is_some()
+            || self.discovery.is_some()
+            || self.retirement.is_some()
+            || self.pending_network_launch.is_some()
+    }
+
+    /// Leave the session and synchronously join every network worker.
+    ///
+    /// Embedders must call this before releasing platform callback state.
+    pub fn shutdown(&mut self, host: &mut impl crate::host::CollabHost) {
+        self.leave(host);
+        while self.retirement.is_some() {
+            self.reap_retirement();
+            if self.retirement.is_some() {
+                std::thread::yield_now();
+            }
+        }
+    }
+
     pub(in crate::runtime) fn reap_retirement(&mut self) -> bool {
         let complete = self
             .retirement
@@ -215,6 +237,7 @@ impl CollabRuntime {
                     session_id,
                     epoch,
                     relay,
+                    self.transport_capabilities.lan_hosting,
                 ));
             }
             PendingNetworkLaunchKind::Guest { route, intent } => {
@@ -366,5 +389,22 @@ mod tests {
         assert_ne!(runtime.generation, retired_generation);
         assert!(runtime.pending_network_launch.is_none());
         assert!(runtime.take_ready_network_launch().is_none());
+    }
+
+    #[test]
+    fn shutdown_reaps_workers_before_returning() {
+        let worker = std::thread::spawn(|| {});
+        let mut runtime = CollabRuntime::new();
+        runtime.retirement = Some(Retirement::start(vec![worker], Arc::new(|| {})));
+        assert!(runtime.needs_poll());
+
+        let mut host = crate::HeadlessCollabHost::new();
+        runtime.shutdown(&mut host);
+
+        assert!(!runtime.needs_poll());
+        assert_eq!(
+            host.editor_state().editor_ui.collab.phase,
+            op_editor_core::CollabConnectionPhase::Idle
+        );
     }
 }

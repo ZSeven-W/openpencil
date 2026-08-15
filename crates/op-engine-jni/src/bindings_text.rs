@@ -2,26 +2,16 @@
 
 //! Text + IME natives — split out of `bindings.rs`.
 
-use std::ffi::c_void;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-
 use jni::objects::{JClass, JObject, JString};
-use jni::sys::{jboolean, jint, jlong};
+use jni::sys::{jint, jlong};
 use jni::JNIEnv;
-
-use op_engine_ffi::{
-    op_ime_cancel_composition, op_ime_commit_composition, op_ime_set_composing_text,
-    op_text_backspace, op_text_begin, op_text_caret_rect, op_text_delete_forward, op_text_end,
-    op_text_get_state, op_text_insert, op_text_select_range, op_text_set_caret, OpEngine, OpStatus,
-};
 
 use crate::bindings::{call_status, jstring_bytes, with_engine, VM};
 use crate::bindings_media::guard_jint;
-use crate::registry::HANDLE_FAILURE;
 use crate::STATUS_CLOSING;
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextBegin<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextBegin<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -36,7 +26,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextBegin<'loca
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextEnd<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextEnd<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -45,7 +35,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextEnd<'local>
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextInsert<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextInsert<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -60,7 +50,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextInsert<'loc
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextBackspace<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextBackspace<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -71,7 +61,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextBackspace<'
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextDeleteForward<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextDeleteForward<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -82,7 +72,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextDeleteForwa
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextSetCaret<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextSetCaret<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -95,7 +85,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextSetCaret<'l
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextSelectRange<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextSelectRange<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -108,7 +98,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextSelectRange
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeImeSetComposingText<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeImeSetComposingText<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -131,7 +121,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeImeSetComposing
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeImeCommitComposition<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeImeCommitComposition<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -142,7 +132,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeImeCommitCompos
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeImeCancelComposition<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeImeCancelComposition<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -166,7 +156,7 @@ struct OwnedTextState {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextGetState<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextGetState<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -263,7 +253,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextGetState<'l
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeTextCaretRect<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeTextCaretRect<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,

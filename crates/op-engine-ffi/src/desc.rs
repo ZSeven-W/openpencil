@@ -6,6 +6,7 @@
 //! stable while shells and engine evolve independently.
 
 use crate::error::{read_utf8, FfiError, FfiResult, DOCUMENT_CAP, STRING_CAP};
+use crate::OpStatus;
 use std::ffi::c_void;
 use std::mem::{offset_of, size_of};
 use std::ptr;
@@ -40,6 +41,22 @@ pub type OpRemoteImageRequest = Option<
     ),
 >;
 
+/// Load the platform-protected collaboration credential into `out`.
+/// Returns 0 when found, 1 when absent, and a negative value on failure.
+pub type OpCredentialLoad = Option<
+    unsafe extern "C" fn(
+        user_data: *mut c_void,
+        out: *mut u8,
+        capacity: usize,
+        out_len: *mut usize,
+    ) -> i32,
+>;
+
+/// Atomically store a collaboration credential unless one already exists.
+/// Returns 0 for success/already-present and a negative value on failure.
+pub type OpCredentialStoreIfAbsent =
+    Option<unsafe extern "C" fn(user_data: *mut c_void, value: *const u8, value_len: usize) -> i32>;
+
 /// Runtime diagnostic payload copied synchronously into the callback;
 /// the shell owns the copy and may react asynchronously.
 #[repr(C)]
@@ -62,13 +79,14 @@ pub struct OpCallbacks {
     pub runtime_error: OpRuntimeErrorCallback,
     pub input_focus_changed: OpInputFocusChanged,
     pub remote_image_request: OpRemoteImageRequest,
+    pub credential_load: OpCredentialLoad,
+    pub credential_store_if_absent: OpCredentialStoreIfAbsent,
 }
 
-/// Engine construction descriptor. `asset_base` is the v1 tail — the
-/// filesystem root for doc-referenced media assets (Android players
-/// extract APK assets there; iOS players pass the bundle resource
-/// directory). The viewer accepts and stores it; remote/doc-embedded
-/// images resolve independently.
+/// Engine construction descriptor. `asset_base` is the filesystem root for
+/// doc-referenced media. Mobile editor shells must also provide
+/// `storage_root`, their private sandbox root, before any runtime/config
+/// service is constructed.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct OpCreateDesc {
@@ -83,6 +101,9 @@ pub struct OpCreateDesc {
     pub asset_base_len: usize,
     /// 0 = viewer (default), 1 = full editor (widget-host chrome).
     pub mode: i32,
+    /// Private application-sandbox root for process-level config.
+    pub storage_root_ptr: *const u8,
+    pub storage_root_len: usize,
 }
 
 /// Platform surface descriptor. On iOS `handle` is a borrowed
@@ -128,6 +149,10 @@ pub(crate) struct Callbacks {
     pub runtime_error: OpRuntimeErrorCallback,
     pub input_focus_changed: OpInputFocusChanged,
     pub remote_image_request: OpRemoteImageRequest,
+    #[cfg(feature = "editor")]
+    pub credential_load: OpCredentialLoad,
+    #[cfg(feature = "editor")]
+    pub credential_store_if_absent: OpCredentialStoreIfAbsent,
 }
 
 pub(crate) struct CreateOptions {
@@ -178,6 +203,19 @@ unsafe fn parse_callbacks(pointer: *const OpCallbacks) -> FfiResult<Callbacks> {
         },
         remote_image_request: unsafe {
             read_covered(base, size, offset_of!(OpCallbacks, remote_image_request)).unwrap_or(None)
+        },
+        #[cfg(feature = "editor")]
+        credential_load: unsafe {
+            read_covered(base, size, offset_of!(OpCallbacks, credential_load)).unwrap_or(None)
+        },
+        #[cfg(feature = "editor")]
+        credential_store_if_absent: unsafe {
+            read_covered(
+                base,
+                size,
+                offset_of!(OpCallbacks, credential_store_if_absent),
+            )
+            .unwrap_or(None)
         },
     })
 }
@@ -267,6 +305,42 @@ pub(crate) unsafe fn parse_create(pointer: *const OpCreateDesc) -> FfiResult<Cre
         if other != 0 && other != 1 {
             return Err(FfiError::invalid(format!("unknown mode {other}")));
         }
+    }
+    let storage_root_ptr = unsafe {
+        read_covered::<*const u8>(base, size, offset_of!(OpCreateDesc, storage_root_ptr))
+    };
+    let storage_root_len =
+        unsafe { read_covered::<usize>(base, size, offset_of!(OpCreateDesc, storage_root_len)) }
+            .unwrap_or(0);
+    let storage_root = if storage_root_len == 0 {
+        None
+    } else {
+        Some(unsafe {
+            read_utf8(
+                storage_root_ptr.unwrap_or(ptr::null()),
+                storage_root_len,
+                STRING_CAP,
+                "storage root",
+            )?
+        })
+    };
+    #[cfg(all(feature = "editor", any(target_os = "ios", target_os = "android")))]
+    if editor_mode && storage_root.is_none() {
+        return Err(FfiError::invalid(
+            "mobile editor mode requires a private storage root",
+        ));
+    }
+    if let Some(storage_root) = storage_root {
+        let path = std::path::PathBuf::from(storage_root);
+        if !path.is_absolute() {
+            return Err(FfiError::invalid("storage root must be an absolute path"));
+        }
+        op_config_store::configure_user_root(path).map_err(|error| {
+            FfiError::new(
+                OpStatus::NotReady,
+                format!("could not configure the private storage root: {error}"),
+            )
+        })?;
     }
     Ok(CreateOptions {
         document,

@@ -17,7 +17,7 @@ use crate::engine_thread::STATUS_CLOSING;
 /// `OpNative.nativeEditorConfigureAuth` — initialize the real mobile auth
 /// backend with a private shell-owned storage directory.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorConfigureAuth<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorConfigureAuth<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -50,8 +50,8 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorConfigure
 /// `OpNative.nativeEditorTakeLoginUrl` — atomically copies and consumes the
 /// pending UTF-8 verification URL, or returns null when none is ready.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorTakeLoginUrl<'local>(
-    mut env: JNIEnv<'local>,
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorTakeLoginUrl<'local>(
+    env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
 ) -> jstring {
@@ -80,7 +80,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorTakeLogin
 
 /// `OpNative.nativeEditorCancelLogin` — user-dismissed WebView cancellation.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorCancelLogin<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorCancelLogin<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -92,7 +92,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorCancelLog
 /// Engine failures are negative so they cannot alias a valid action; an
 /// unknown/closing handle uses the existing `STATUS_CLOSING` sentinel.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorTakeShellAction<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorTakeShellAction<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -112,7 +112,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorTakeShell
 /// `OpNative.nativeEditorOpenDocument` — install platform-picked bytes and an
 /// optional display name, returning the stable `OpStatus` integer.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorOpenDocument<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorOpenDocument<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -147,7 +147,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorOpenDocum
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorPress<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorPress<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -160,7 +160,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorPress<'lo
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorMove<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorMove<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -173,7 +173,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorMove<'loc
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorRelease<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorRelease<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -186,7 +186,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorRelease<'
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorCancelGesture<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorCancelGesture<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -197,7 +197,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorCancelGes
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorRightPress<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorRightPress<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -210,7 +210,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorRightPres
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorBeginTransform<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorBeginTransform<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -223,7 +223,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorBeginTran
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorPan<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorPan<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -238,7 +238,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorPan<'loca
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorPinch<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorPinch<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -252,7 +252,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorPinch<'lo
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorText<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorText<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -267,7 +267,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorText<'loc
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorKey<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorKey<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -279,7 +279,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorKey<'loca
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorImePreedit<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorImePreedit<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -302,7 +302,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorImePreedi
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorImeCommit<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorImeCommit<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -319,7 +319,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorImeCommit
 /// `OpNative.nativeEditorImeFocused` — whether the editor host currently
 /// holds the IME (show/hide the system keyboard).
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeEditorImeFocused<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorImeFocused<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,

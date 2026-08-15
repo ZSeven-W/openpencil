@@ -43,7 +43,7 @@ unless ios_source.include?('return "ppt-demo"') &&
 end
 
 android_source = File.read(
-  File.join(repo_dir, "packaging/android-player/app/src/main/kotlin/dev/openpencil/player/MainActivity.kt")
+  File.join(repo_dir, "packaging/android-player/app/src/main/kotlin/tech/zseven/openpencil/MainActivity.kt")
 )
 unless android_source.include?('intent.getStringExtra("doc") ?: "ppt-demo"') &&
        android_source.include?('readAsset("$docName.op")')

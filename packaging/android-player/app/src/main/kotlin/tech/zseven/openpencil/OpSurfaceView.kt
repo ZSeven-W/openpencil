@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 import android.content.Context
 import android.text.InputType
@@ -12,6 +12,7 @@ import android.view.ViewTreeObserver
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import java.io.File
 
 private const val TAG = "OpenPencilPlayer"
 
@@ -51,6 +52,8 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     private var editorMode = false
     private var fontBytes: List<ByteArray> = emptyList()
     private val authRuntime = AndroidAuthRuntime(context)
+    private val privateStorageRoot =
+        File(context.applicationContext.noBackupFilesDir, "config").absolutePath
 
     // ---- editor-mode touch tracking --------------------------------------
     private var primaryPointerId = -1
@@ -239,6 +242,7 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
                 hLogical,
                 viewportDensity,
                 callbacks,
+                privateStorageRoot,
                 if (editorMode) 1 else 0,
             )
             if (engine == 0L) {

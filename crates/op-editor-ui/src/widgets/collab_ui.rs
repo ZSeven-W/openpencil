@@ -361,7 +361,9 @@ fn panel_session_or_pre_auth(
                         primary: true,
                     });
                 }
-                if collab.phase == CollabConnectionPhase::Idle {
+                if collab.phase == CollabConnectionPhase::Idle
+                    && collab.transport_capabilities.nearby_discovery
+                {
                     actions.push(action_model(
                         ui,
                         CollabUiAction::BeginDiscovery,
@@ -377,14 +379,12 @@ fn panel_session_or_pre_auth(
                     actions,
                 )
             } else if collab.panel.view == op_editor_core::CollabPanelView::Create {
-                (
-                    CollabPanelScreen::Create,
-                    vec![
-                        action_model(ui, CollabUiAction::Start, true),
-                        action_model(ui, CollabUiAction::StartLan, false),
-                        action_model(ui, CollabUiAction::Cancel, false),
-                    ],
-                )
+                let mut actions = vec![action_model(ui, CollabUiAction::Start, true)];
+                if collab.transport_capabilities.lan_hosting {
+                    actions.push(action_model(ui, CollabUiAction::StartLan, false));
+                }
+                actions.push(action_model(ui, CollabUiAction::Cancel, false));
+                (CollabPanelScreen::Create, actions)
             } else {
                 (
                     CollabPanelScreen::Home,

@@ -17,6 +17,8 @@ use op_host_native::WidgetHostNative;
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::AbortHandle;
 
+use crate::lifecycle::Session;
+
 /// The shell already supports timed redraw wakes for caret animation. Reusing
 /// that channel keeps every callback on the engine thread while a network job
 /// is outstanding, instead of calling platform UI from a Tokio worker.
@@ -183,6 +185,19 @@ impl MobileModelDiscoveryHost {
             abort: None,
         });
         request
+    }
+}
+
+impl Session {
+    pub(crate) fn pump_editor_model_discovery(&mut self, now_ms: u64) -> Option<u64> {
+        let Session {
+            editor,
+            model_discovery,
+            ..
+        } = self;
+        editor
+            .as_mut()
+            .and_then(|host| model_discovery.pump(host, now_ms))
     }
 }
 

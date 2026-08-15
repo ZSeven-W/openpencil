@@ -1,4 +1,4 @@
-package dev.openpencil.player
+package tech.zseven.openpencil
 
 import android.view.Surface
 
@@ -25,6 +25,7 @@ object OpNative {
         h: Float,
         dpr: Float,
         receiver: OpCallbacks,
+        storageRoot: String,
         mode: Int, // 0 = viewer, 1 = full editor
     ): Long // 0 = failure
 

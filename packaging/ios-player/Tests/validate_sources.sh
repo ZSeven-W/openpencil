@@ -14,9 +14,12 @@ required=(
   "$player_dir/Assets.xcassets/AppIcon.appiconset/Contents.json"
   "$player_dir/Resources/ppt-demo.op"
   "$player_dir/Resources/sample.op"
+  "$player_dir/Resources/en.lproj/InfoPlist.strings"
+  "$player_dir/Resources/zh-Hans.lproj/InfoPlist.strings"
   "$player_dir/Sources/OpPlayerApp.swift"
   "$player_dir/Sources/OpPlayerView.swift"
   "$player_dir/Sources/OpEngineHost.swift"
+  "$player_dir/Sources/AuthStorage.swift"
   "$player_dir/Sources/EmbeddedLoginRequest.swift"
   "$player_dir/Sources/EmbeddedLoginWebViewController.swift"
   "$player_dir/Sources/PinchZoomDelta.swift"
@@ -28,6 +31,12 @@ for path in "${required[@]}"; do
     exit 1
   fi
 done
+
+plutil -lint \
+  "$player_dir/Resources/en.lproj/InfoPlist.strings" \
+  "$player_dir/Resources/zh-Hans.lproj/InfoPlist.strings" >/dev/null
+grep -Fq '"NSLocalNetworkUsageDescription"' "$player_dir/Resources/en.lproj/InfoPlist.strings"
+grep -Fq '"NSLocalNetworkUsageDescription"' "$player_dir/Resources/zh-Hans.lproj/InfoPlist.strings"
 
 cmp "$fixture" "$player_dir/Resources/sample.op"
 
@@ -44,9 +53,14 @@ require "yaml"
 project = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)
 target = project.fetch("targets").fetch("OpenPencilPlayer")
 raise "OpenPencilPlayer must be an iOS application" unless target["platform"] == "iOS" && target["type"] == "application"
+raise "bundle-id prefix must be tech.zseven" unless project.fetch("options").fetch("bundleIdPrefix") == "tech.zseven"
 settings = target.fetch("settings").fetch("base")
+raise "bundle identifier must be tech.zseven.openpencil" unless settings.fetch("PRODUCT_BUNDLE_IDENTIFIER") == "tech.zseven.openpencil"
 raise "deployment target must be iOS 15+" unless settings.fetch("IPHONEOS_DEPLOYMENT_TARGET").to_f >= 15.0
 raise "display name must be OpenPencil" unless settings.fetch("INFOPLIST_KEY_CFBundleDisplayName") == "OpenPencil"
+local_network_usage = settings.fetch("INFOPLIST_KEY_NSLocalNetworkUsageDescription")
+raise "manual LAN collaboration requires a local-network usage description" unless local_network_usage.include?("collaboration")
+raise "relay-only mobile builds must not declare Bonjour discovery" if settings.key?("INFOPLIST_KEY_NSBonjourServices")
 raise "system appearance must remain runtime-controlled" if settings.key?("INFOPLIST_KEY_UIUserInterfaceStyle")
 raise "AppIcon catalog setting missing" unless settings.fetch("ASSETCATALOG_COMPILER_APPICON_NAME") == "AppIcon"
 raise "bridging header setting missing" unless settings.key?("SWIFT_OBJC_BRIDGING_HEADER")
@@ -54,7 +68,7 @@ raise "op_engine.h search path missing" unless settings.fetch("HEADER_SEARCH_PAT
 raise "device staticlib search path missing" unless settings.fetch("LIBRARY_SEARCH_PATHS[sdk=iphoneos*]").include?("aarch64-apple-ios/release")
 raise "simulator staticlib search path missing" unless settings.fetch("LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]").include?("aarch64-apple-ios-sim/release")
 frameworks = target.fetch("dependencies").map { |entry| entry["sdk"] }.compact
-%w[Metal.framework QuartzCore.framework WebKit.framework Security.framework UIKit.framework].each do |framework|
+%w[CoreFoundation.framework Metal.framework QuartzCore.framework WebKit.framework Security.framework UIKit.framework].each do |framework|
   raise "#{framework} dependency missing" unless frameworks.include?(framework)
 end
 raise "optional auth archive must be empty by default" unless settings.fetch("OP_AUTH_ARCHIVE") == ""
@@ -105,12 +119,19 @@ grep -Fq -- "-destination 'platform=iOS Simulator,id=<sim-id>'" "$player_dir/REA
 grep -Fq -- "aarch64-apple-ios-sim/release/libop_engine_ffi.a -lc++" "$player_dir/README.md"
 grep -Fq -- "aarch64-apple-ios/release/libop_engine_ffi.a -lc++" "$player_dir/README.md"
 grep -Fq -- "-framework Metal" "$player_dir/README.md"
+grep -Fq -- "-framework CoreFoundation" "$player_dir/README.md"
 grep -Fq -- "-framework Security" "$player_dir/README.md"
 grep -Fq -- "UIDocumentPickerViewController" "$player_dir/Sources/OpPlayerView.swift"
 grep -Fq -- "BoundedDocumentReader.read" "$player_dir/Sources/OpPlayerView.swift"
 grep -Fq -- "maximumBytes = 32 * 1024 * 1024" "$player_dir/Sources/BoundedDocumentReader.swift"
 grep -Fq -- "op_editor_take_shell_action" "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- "op_editor_open_document" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "desc.storage_root_ptr" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "desc.storage_root_len" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "callbacks.credential_load = nil" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "callbacks.credential_store_if_absent = nil" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "FileProtectionType.completeUntilFirstUserAuthentication" "$player_dir/Sources/AuthStorage.swift"
+grep -Fq -- "isExcludedFromBackup = true" "$player_dir/Sources/AuthStorage.swift"
 grep -Fq -- 'return "ppt-demo"' "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- '.ignoresSafeArea(.all, edges: .all)' "$player_dir/Sources/OpPlayerApp.swift"
 grep -Fq -- 'viewportConvergence.signal' "$player_dir/Sources/OpPlayerView.swift"
@@ -146,12 +167,23 @@ finish = touches_ended.index("suppressedTouches.finish([key])")
 raise "same-batch terminal touch must clear suppression" unless route && finish && route < finish
 RUBY
 
+ruby - "$player_dir/Sources/OpEngineHost.swift" <<'RUBY'
+source = File.read(ARGV.fetch(0))
+create = source[/private func createAndAttach\b.*?(?=\n    \/\/\/ Installs the mobile auth runtime)/m]
+raise "iOS engine create path missing" unless create
+prepare = create.index("let storageURL = AuthStorage.prepare()")
+root = create.index("desc.storage_root_ptr")
+call = create.index("return op_create(&desc, &created)")
+raise "private storage must be prepared and bound before op_create" unless prepare && root && call && prepare < root && root < call
+raise "auth must reuse the create-time storage root" unless create.include?("configureMobileAuth(engine: created, storageURL: storageURL)")
+RUBY
+
 ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/TouchCancelRoutingTests.rb" \
   "$player_dir/Sources/OpPlayerView.swift" \
-  "$repo_dir/packaging/android-player/app/src/main/kotlin/dev/openpencil/player/OpSurfaceView.kt"
+  "$repo_dir/packaging/android-player/app/src/main/kotlin/tech/zseven/openpencil/OpSurfaceView.kt"
 ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/PinchZoomRoutingTests.rb" \
   "$player_dir/Sources/OpPlayerView.swift" \
-  "$repo_dir/packaging/android-player/app/src/main/kotlin/dev/openpencil/player/OpSurfaceView.kt"
+  "$repo_dir/packaging/android-player/app/src/main/kotlin/tech/zseven/openpencil/OpSurfaceView.kt"
 ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/BundledPptDemoTests.rb"
 
 sdk="$(xcrun --sdk iphonesimulator --show-sdk-path)"

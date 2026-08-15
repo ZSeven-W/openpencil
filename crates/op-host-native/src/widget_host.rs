@@ -72,7 +72,8 @@ mod chat_style_card_tests;
 mod click;
 #[cfg(test)]
 mod codegen_framework_tests;
-#[cfg(feature = "gl-host")]
+pub mod collab_history_hit;
+#[cfg(feature = "collab-host")]
 mod collab_host_impl;
 #[cfg(test)]
 mod collab_input_tests;

@@ -30,3 +30,4 @@ op-engine-ffi = { path = "../op-engine-ffi" }
 [target.'cfg(target_os = "android")'.dependencies]
 jni     = "0.21"
 ndk-sys = "0.6"
+zeroize = "1"

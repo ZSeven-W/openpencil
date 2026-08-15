@@ -1,4 +1,4 @@
-//! JNI natives for `dev.openpencil.player.OpNative`.
+//! JNI natives for `tech.zseven.openpencil.OpNative`.
 //!
 //! Every native validates its `jlong` handle against the tombstoning
 //! [`registry`](crate::registry) first (a closed/unknown handle returns
@@ -101,7 +101,7 @@ pub extern "system" fn JNI_OnLoad(vm: *mut jni::sys::JavaVM, _reserved: *mut c_v
 /// is guarded: `EngineThread::spawn` can panic (OS refuses the thread), and
 /// that panic must never cross the non-unwinding `extern "system"` boundary.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeCreate<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeCreate<'local>(
     env: JNIEnv<'local>,
     class: JClass<'local>,
     doc: JByteArray<'local>,
@@ -109,10 +109,11 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeCreate<'local>(
     h: jfloat,
     dpr: jfloat,
     receiver: JObject<'local>,
+    storage_root: JString<'local>,
     mode: jint,
 ) -> jlong {
     match catch_unwind(AssertUnwindSafe(|| {
-        create_impl(env, class, doc, w, h, dpr, receiver, mode)
+        create_impl(env, class, doc, w, h, dpr, receiver, storage_root, mode)
     })) {
         Ok(handle) => handle,
         Err(payload) => {
@@ -125,13 +126,14 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeCreate<'local>(
 
 #[allow(clippy::too_many_arguments)]
 fn create_impl<'local>(
-    env: JNIEnv<'local>,
+    mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     doc: JByteArray<'local>,
     w: jfloat,
     h: jfloat,
     dpr: jfloat,
     receiver: JObject<'local>,
+    storage_root: JString<'local>,
     mode: jint,
 ) -> jlong {
     let Some(vm) = VM.get() else {
@@ -143,6 +145,13 @@ fn create_impl<'local>(
         Ok(bytes) => bytes,
         Err(_) => {
             registry().set_create_error("could not read document bytes");
+            return HANDLE_FAILURE;
+        }
+    };
+    let storage_root: String = match env.get_string(&storage_root) {
+        Ok(value) => value.into(),
+        Err(_) => {
+            registry().set_create_error("could not read private storage root");
             return HANDLE_FAILURE;
         }
     };
@@ -191,6 +200,8 @@ fn create_impl<'local>(
             asset_base_ptr: ptr::null(),
             asset_base_len: 0,
             mode,
+            storage_root_ptr: storage_root.as_ptr(),
+            storage_root_len: storage_root.len(),
         };
         let status = unsafe { op_create(&desc, &mut engine) };
         // `callbacks`/`doc_bytes` stay alive until here.
@@ -224,7 +235,7 @@ fn create_impl<'local>(
 /// `OpNative.nativeLastError` — the last error text for a handle (or the
 /// create-failure text for handle `0`); empty for an unknown handle.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeLastError<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeLastError<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -245,7 +256,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeLastError<'loca
 /// callback frame) DEFERS via `close_deferred` per the no-re-entry rule;
 /// otherwise it blocks on `close`.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeDestroy<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeDestroy<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -267,13 +278,15 @@ fn destroy_impl(engine: jlong) {
         // EGL surface borrowing an owned window) live: releasing would dangle,
         // so the owned windows are released ONLY after an Ok destroy that
         // guarantees teardown (otherwise they leak — better than a UAF). The
-        // context is freed regardless — the thread is exiting, so no further
-        // callback can read it.
+        // callback context follows the same rule: a collaboration worker may
+        // still hold its credential callbacks after a failed shutdown, so it
+        // is freed only after Ok proves every worker was joined. On failure
+        // both engine and context intentionally leak rather than risking UAF.
         let status = unsafe { op_destroy(engine_ptr.get()) };
         if matches!(status, OpStatus::Ok) {
             crate::window::release_all_windows();
+            unsafe { drop_ctx(ctx.get()) };
         }
-        unsafe { drop_ctx(ctx.get()) };
     };
     if thread.is_engine_thread() && crate::engine_thread::in_callback_frame() {
         thread.close_deferred(final_job);
@@ -348,7 +361,7 @@ fn guard_jstring(f: impl FnOnce() -> jni::sys::jstring) -> jni::sys::jstring {
 // ---- Lifecycle natives ---------------------------------------------------
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeAttachSurface<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeAttachSurface<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -358,7 +371,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeAttachSurface<'
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeResume<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeResume<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -419,7 +432,7 @@ fn attach_or_resume(env: &mut JNIEnv, engine: jlong, surface: JObject, resume: b
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSuspend<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeSuspend<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -438,7 +451,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSuspend<'local>
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeResize<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeResize<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -450,7 +463,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeResize<'local>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeResizeWithSafeArea<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeResizeWithSafeArea<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -468,7 +481,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeResizeWithSafeA
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSetSafeArea<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeSetSafeArea<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -481,7 +494,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSetSafeArea<'lo
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSetKeyboard<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeSetKeyboard<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -493,7 +506,9 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeSetKeyboard<'lo
 /// `OpNative.nativePrefersLightSystemIcons` — whether platform bars should
 /// use light-colored icons. Any invalid/closing/failed engine returns false.
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativePrefersLightSystemIcons<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativePrefersLightSystemIcons<
+    'local,
+>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -508,7 +523,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativePrefersLightSys
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeFrame<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeFrame<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,
@@ -519,7 +534,7 @@ pub extern "system" fn Java_dev_openpencil_player_OpNative_nativeFrame<'local>(
 
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
-pub extern "system" fn Java_dev_openpencil_player_OpNative_nativePointer<'local>(
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativePointer<'local>(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
     engine: jlong,

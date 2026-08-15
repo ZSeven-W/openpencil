@@ -10,7 +10,8 @@ use op_collab::{
 use op_collab_transport::{encode_frame_transfer, m1_wire_limits, SharedQueueBudget};
 use op_editor_core::{
     CollabAvailability, CollabConnectionPhase, CollabNoticeKind, CollabPanelHover,
-    CollabPendingEditUi, CollabRejectUiCode, PenDocument,
+    CollabPendingEditUi, CollabRejectUiCode, CollabTransportCapabilities, CollabUiAction,
+    PenDocument,
 };
 
 use super::actor::{set_owner_ui, EditorActor, OwnerActor, PendingGuestAdmission};
@@ -67,6 +68,30 @@ fn availability_refresh_clears_hover_from_the_previous_screen() {
 
     assert!(runtime.refresh_availability(&mut host));
     assert_eq!(host.editor_state().editor_ui.collab.panel.hover, None);
+}
+
+#[test]
+fn relay_only_capability_is_projected_and_rejects_injected_lan_actions() {
+    let mut runtime = CollabRuntime::new();
+    runtime.set_transport_capabilities(CollabTransportCapabilities::RELAY_AND_MANUAL_JOIN);
+    let mut host = HeadlessCollabHost::new();
+
+    assert!(runtime.refresh_availability(&mut host));
+    assert_eq!(
+        host.editor_state().editor_ui.collab.transport_capabilities,
+        CollabTransportCapabilities::RELAY_AND_MANUAL_JOIN
+    );
+
+    host.editor_state_mut().editor_ui.collab.pending_action = Some(CollabUiAction::StartLan);
+    assert!(runtime.drain_ui_action(&mut host));
+    assert!(runtime.pending_network_launch.is_none());
+    assert!(matches!(
+        host.editor_state().editor_ui.collab.notice,
+        Some(op_editor_core::CollabNotice {
+            kind: CollabNoticeKind::Reject(CollabRejectUiCode::Unsupported),
+            ..
+        })
+    ));
 }
 
 #[test]
