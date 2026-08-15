@@ -90,7 +90,7 @@ trap cleanup EXIT
 } | LC_ALL=C sort > "$allowed_changes"
 git -C "$repo_root" diff-tree --no-commit-id --name-only --no-renames -r \
     "$parent" "$artifact_commit" | LC_ALL=C sort > "$actual_changes"
-unexpected=$(comm -23 "$actual_changes" "$allowed_changes")
+unexpected=$(LC_ALL=C comm -23 "$actual_changes" "$allowed_changes")
 [[ -z "$unexpected" ]] || {
     printf 'error: artifact commit changed a path outside the auth matrix allowlist\n' >&2
     printf '%s\n' "$unexpected" >&2

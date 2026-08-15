@@ -17,6 +17,9 @@ mkdir -p \
     "$fixture/tools" "$fixture/scripts" \
     "$fixture/crates/op-auth-bridge/prebuilt/aarch64-apple-ios"
 cp "$script_dir/check-op-auth-artifact-commit.sh" "$fixture/tools/"
+grep -Fq \
+    'unexpected=$(LC_ALL=C comm -23 "$actual_changes" "$allowed_changes")' \
+    "$fixture/tools/check-op-auth-artifact-commit.sh"
 printf '#!/usr/bin/env bash\nprintf "1.2.3\\n"\n' \
     > "$fixture/scripts/workspace-version.sh"
 printf '%s\n' \
@@ -57,6 +60,7 @@ output=$temp_root/output
 : > "$output"
 (
     cd "$fixture"
+    LC_ALL=C \
     EXPECTED_FIXTURE_PARENT=$source_sha \
     OP_AUTH_ARTIFACT_COMMIT=$artifact_sha \
     OP_AUTH_ARTIFACT_SELECTED_COMMIT=$artifact_sha \
@@ -67,6 +71,36 @@ output=$temp_root/output
 grep -Fxq "artifact_sha=$artifact_sha" "$output"
 grep -Fxq "base_sha=$source_sha" "$output"
 grep -Fxq 'version=1.2.3' "$output"
+
+# A valid iOS archive used to be reported as unexpected when the caller's
+# collation differed from the C locale used to sort the comm inputs.
+non_c_locale=
+for candidate in \
+    en_US.UTF-8 en_US.utf8 \
+    de_DE.UTF-8 de_DE.utf8 \
+    fr_FR.UTF-8 fr_FR.utf8; do
+    if LC_ALL="$candidate" locale charmap >/dev/null 2>&1; then
+        non_c_locale=$candidate
+        break
+    fi
+done
+if [[ -n "$non_c_locale" ]]; then
+    locale_output=$temp_root/locale-output
+    : > "$locale_output"
+    (
+        cd "$fixture"
+        LC_ALL="$non_c_locale" \
+        EXPECTED_FIXTURE_PARENT=$source_sha \
+        OP_AUTH_ARTIFACT_COMMIT=$artifact_sha \
+        OP_AUTH_ARTIFACT_SELECTED_COMMIT=$artifact_sha \
+        OP_AUTH_ARTIFACT_REF=refs/tags/v1.2.3 \
+        OP_AUTH_ARTIFACT_OUTPUT=$locale_output \
+            tools/check-op-auth-artifact-commit.sh >/dev/null
+    )
+    grep -Fxq "artifact_sha=$artifact_sha" "$locale_output"
+    grep -Fxq "base_sha=$source_sha" "$locale_output"
+    grep -Fxq 'version=1.2.3' "$locale_output"
+fi
 
 if (
     cd "$fixture"
