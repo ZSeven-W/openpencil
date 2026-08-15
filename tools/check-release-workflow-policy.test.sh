@@ -112,13 +112,13 @@ case ${1-} in
         ;;
     ios)
         fixture=$temporary/ios-skia-profile.yml
-        mutate "$repo_root/.github/workflows/ios-testflight.yml" "$fixture" ios-skia-profile
-        expect_rejected ios-skia-profile OPENPENCIL_IOS_TESTFLIGHT_WORKFLOW \
-            "$repo_root/tools/check-ios-testflight-workflow.sh" "$fixture"
+        mutate "$repo_root/.github/workflows/ios-app-store.yml" "$fixture" ios-skia-profile
+        expect_rejected ios-skia-profile OPENPENCIL_IOS_APP_STORE_WORKFLOW \
+            "$repo_root/tools/check-ios-app-store-workflow.sh" "$fixture"
         fixture=$temporary/publish-ios-testflight.sh
         mutate "$repo_root/scripts/publish-ios-testflight.sh" "$fixture" ios-skia-digest
         expect_rejected ios-skia-digest OPENPENCIL_IOS_TESTFLIGHT_PUBLISHER \
-            "$repo_root/tools/check-ios-testflight-workflow.sh" "$fixture"
+            "$repo_root/tools/check-ios-app-store-workflow.sh" "$fixture"
         ;;
     *)
         printf 'usage: %s {rust|ios}\n' "$0" >&2

@@ -15,10 +15,11 @@ if [[ "$#" -ne 0 ]]; then
     exit 2
 fi
 case "$target" in
-    aarch64-apple-darwin | aarch64-pc-windows-msvc | aarch64-unknown-linux-gnu | \
-        x86_64-apple-darwin | x86_64-pc-windows-msvc | x86_64-unknown-linux-gnu) ;;
+    aarch64-apple-darwin | aarch64-apple-ios | aarch64-linux-android | aarch64-pc-windows-msvc | \
+        aarch64-unknown-linux-gnu | x86_64-apple-darwin | x86_64-linux-android | \
+        x86_64-pc-windows-msvc | x86_64-unknown-linux-gnu) ;;
     *)
-        printf 'error: unsupported desktop auth release target: %s\n' "$target" >&2
+        printf 'error: unsupported auth release target: %s\n' "$target" >&2
         exit 2
         ;;
 esac

@@ -46,44 +46,39 @@ if [[ -n "${OPENPENCIL_DEV_OP_AUTH_ABI_VERSION:-}" ]]; then
     exit 1
 fi
 case "$target" in
-    aarch64-apple-ios|aarch64-apple-ios-sim) ;;
+    aarch64-apple-ios|aarch64-apple-ios-sim|\
+        aarch64-linux-android|x86_64-linux-android) ;;
     *)
         printf 'error: Release auth linking requires an explicit supported OP_AUTH_TARGET\n' >&2
         exit 1
         ;;
 esac
 
-prebuilt_root=$repo_root/crates/op-auth-bridge/prebuilt
+prebuilt_root=$(cd "$repo_root/crates/op-auth-bridge/prebuilt" && pwd -P)
 target_dir=$prebuilt_root/$target
 expected_archive=$target_dir/libop_auth.a
+if [[ "$archive" != "$expected_archive" ]]; then
+    printf 'error: Release may link only the repository signed archive for %s\n' "$target" >&2
+    exit 1
+fi
 if [[ ! -f "$expected_archive" ]]; then
     printf 'error: no signed production auth archive is committed for %s\n' "$target" >&2
     exit 1
 fi
 expected_archive=$(cd "$target_dir" && pwd -P)/libop_auth.a
-if [[ "$archive" != "$expected_archive" ]]; then
-    printf 'error: Release may link only the repository signed archive for %s\n' "$target" >&2
-    exit 1
-fi
 
-workspace_version=$(
-    sed -n '/^\[workspace\.package\]$/,/^\[/s/^version = "\([^"]*\)"$/\1/p' \
-        "$repo_root/Cargo.toml" | head -n 1
-)
 artifact_version=$(tr -d '[:space:]' < "$target_dir/VERSION")
-if [[ -z "$workspace_version" || "$artifact_version" != "$workspace_version" ]]; then
-    printf 'error: Release auth archive version does not match OpenPencil\n' >&2
+if [[ ! "$artifact_version" \
+    =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+    printf 'error: Release auth archive has an invalid signed version\n' >&2
     exit 1
 fi
 
 abi=$(tr -d '[:space:]' < "$target_dir/ABI_VERSION")
-case "$abi" in
-    2|3) ;;
-    *)
-        printf 'error: Release auth archive must use signed ABI 2 or 3\n' >&2
-        exit 1
-        ;;
-esac
+[[ "$abi" == 3 ]] || {
+    printf 'error: Release auth archive must use signed ABI 3\n' >&2
+    exit 1
+}
 
 if command -v sha256sum >/dev/null 2>&1; then
     actual_sha256=$(sha256sum "$archive" | awk '{ print $1 }')
@@ -108,7 +103,7 @@ done
 for field in \
     "target=$target" \
     'artifact=libop_auth.a' \
-    "version=$workspace_version" \
+    "version=$artifact_version" \
     "abi=$abi" \
     "sha256=$actual_sha256"; do
     grep -Fxq "$field" "$manifest" || {

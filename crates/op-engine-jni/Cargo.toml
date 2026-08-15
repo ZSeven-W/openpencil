@@ -20,6 +20,9 @@ gl = ["op-engine-ffi/gl"]
 metal = ["op-engine-ffi/metal"]
 # Full-editor mode (forwards to the engine's editor feature).
 editor = ["op-engine-ffi/editor"]
+# Production Android release lane: require the digest-pinned Skia archive
+# staged by the reviewed workflow instead of downloading or compiling one.
+pinned-skia-binaries = ["op-engine-ffi/pinned-skia-binaries"]
 # Local-only authentication for Android editor builds. The underlying bridge
 # rejects unsigned archives outside Cargo's debug profile.
 mobile-auth-dev = ["op-engine-ffi/mobile-auth-dev"]

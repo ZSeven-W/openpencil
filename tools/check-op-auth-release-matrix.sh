@@ -16,14 +16,25 @@ if [[ "$#" -ne 0 ]]; then
     exit 2
 fi
 
-if [[ -z "$expected_version" ]]; then
-    expected_version=$("$repo_root/scripts/workspace-version.sh")
+if [[ -n "$expected_version" && -z "$expected_openpencil_revision" \
+    || -z "$expected_version" && -n "$expected_openpencil_revision" ]]; then
+    printf '%s\n' \
+        'error: strict promotion requires both expected version and OpenPencil revision' \
+        >&2
+    exit 2
 fi
-if [[ ! "$expected_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+strict_promotion=0
+if [[ -n "$expected_version" ]]; then
+    strict_promotion=1
+fi
+
+if [[ -n "$expected_version" \
+    && ! "$expected_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
     printf 'error: invalid expected OpenPencil version\n' >&2
     exit 2
 fi
-if [[ ! "$expected_openpencil_revision" =~ ^[0-9a-f]{40}$ ]]; then
+if [[ -n "$expected_openpencil_revision" \
+    && ! "$expected_openpencil_revision" =~ ^[0-9a-f]{40}$ ]]; then
     printf '%s\n' \
         'error: OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION must be 40 lowercase hex characters' \
         >&2
@@ -93,10 +104,56 @@ verify_ed25519_hex_signature() {
 
 manifest=$prebuilt_root/RELEASE-MANIFEST
 manifest_signature=$prebuilt_root/RELEASE-MANIFEST.sig
+policy=$repo_root/crates/op-auth-bridge/AUTH-RELEASE-POLICY
 # The artifact root is untrusted until verification succeeds. Its copy of the
 # key, if any, is deliberately ignored: only the key in the current reviewed
 # source checkout may authenticate a release matrix.
 public_key=$repo_root/crates/op-auth-bridge/prebuilt/PROVENANCE_PUBKEY
+require_regular_file "$policy"
+require_regular_file "$public_key"
+require_regular_file "$manifest"
+require_regular_file "$manifest_signature"
+
+policy_line_count=$(wc -l < "$policy" | tr -d '[:space:]')
+if [[ "$policy_line_count" -ne 6 ]] || LC_ALL=C grep -q $'\r' "$policy"; then
+    printf 'error: auth release adoption policy must contain exactly 6 LF-terminated lines\n' >&2
+    exit 1
+fi
+policy_format=$(sed -n '1p' "$policy")
+policy_abi=$(sed -n '2p' "$policy")
+policy_public_key_line=$(sed -n '3p' "$policy")
+policy_manifest_sha_line=$(sed -n '4p' "$policy")
+policy_source_revision_line=$(sed -n '5p' "$policy")
+policy_build_id_line=$(sed -n '6p' "$policy")
+policy_public_key=${policy_public_key_line#public_key=}
+policy_manifest_sha=${policy_manifest_sha_line#release_manifest_sha256=}
+policy_source_revision=${policy_source_revision_line#source_revision=}
+policy_build_id=${policy_build_id_line#build_id=}
+[[ "$policy_format" == 'format=op-auth-release-policy-v1' \
+    && "$policy_abi" == 'abi=3' \
+    && "$policy_public_key_line" == "public_key=$policy_public_key" \
+    && "$policy_public_key" =~ ^[0-9a-f]{64}$ \
+    && "$policy_manifest_sha_line" == "release_manifest_sha256=$policy_manifest_sha" \
+    && "$policy_manifest_sha" =~ ^[0-9a-f]{64}$ \
+    && "$policy_source_revision_line" == "source_revision=$policy_source_revision" \
+    && "$policy_source_revision" =~ ^[0-9a-f]{40}$ \
+    && "$policy_build_id_line" == "build_id=$policy_build_id" \
+    && "$policy_build_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,58}$ \
+    && "$policy_build_id" != *..* \
+    && "$policy_build_id" != *.lock ]] || {
+    printf 'error: malformed auth release adoption policy\n' >&2
+    exit 1
+}
+[[ "$(tr -d '[:space:]' < "$public_key")" == "$policy_public_key" ]] || {
+    printf 'error: release public key is not adopted by source policy\n' >&2
+    exit 1
+}
+if [[ "$strict_promotion" -eq 0 ]]; then
+    [[ "$(sha256_file "$manifest")" == "$policy_manifest_sha" ]] || {
+        printf 'error: release matrix is not adopted by source policy\n' >&2
+        exit 1
+    }
+fi
 verify_ed25519_hex_signature \
     "$manifest" "$manifest_signature" "$public_key" 'release matrix'
 
@@ -118,10 +175,16 @@ count_line=$(sed -n '7p' "$manifest")
     printf 'error: unsupported op-auth release matrix format\n' >&2
     exit 1
 }
-[[ "$version_line" == "version=$expected_version" ]] || {
-    printf 'error: op-auth release matrix version does not match OpenPencil\n' >&2
+matrix_version=${version_line#version=}
+[[ "$version_line" == "version=$matrix_version" \
+    && "$matrix_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] || {
+    printf 'error: op-auth release matrix has an invalid artifact version\n' >&2
     exit 1
 }
+if [[ -n "$expected_version" && "$matrix_version" != "$expected_version" ]]; then
+    printf 'error: op-auth release matrix version does not match the strict expected version\n' >&2
+    exit 1
+fi
 [[ "$abi_line" == 'abi=3' ]] || {
     printf 'error: op-auth release matrix must be ABI 3\n' >&2
     exit 1
@@ -151,7 +214,15 @@ build_id=${build_line#build_id=}
     printf 'error: invalid immutable build id in release matrix\n' >&2
     exit 1
 }
-if [[ "$openpencil_revision" != "$expected_openpencil_revision" ]]; then
+if [[ "$strict_promotion" -eq 0 ]]; then
+    [[ "$source_revision" == "$policy_source_revision" \
+        && "$build_id" == "$policy_build_id" ]] || {
+        printf 'error: release matrix identity does not match source policy\n' >&2
+        exit 1
+    }
+fi
+if [[ -n "$expected_openpencil_revision" \
+    && "$openpencil_revision" != "$expected_openpencil_revision" ]]; then
     printf 'error: release matrix is not bound to the expected public base revision\n' >&2
     exit 1
 fi
@@ -219,8 +290,8 @@ for target in "${targets[@]}"; do
         require_regular_file "$file"
     done
 
-    [[ "$(tr -d '[:space:]' < "$target_dir/VERSION")" == "$expected_version" ]] || {
-        printf 'error: %s VERSION does not match OpenPencil\n' "$target" >&2
+    [[ "$(tr -d '[:space:]' < "$target_dir/VERSION")" == "$matrix_version" ]] || {
+        printf 'error: %s VERSION does not match the signed release matrix\n' "$target" >&2
         exit 1
     }
     [[ "$(tr -d '[:space:]' < "$target_dir/ABI_VERSION")" == 3 ]] || {
@@ -245,7 +316,7 @@ for target in "${targets[@]}"; do
         "$provenance" "$target_dir/PROVENANCE.sig" "$public_key" "$target provenance"
     require_exact_line "target=$target" "$provenance"
     require_exact_line "artifact=$artifact_name" "$provenance"
-    require_exact_line "version=$expected_version" "$provenance"
+    require_exact_line "version=$matrix_version" "$provenance"
     require_exact_line 'abi=3' "$provenance"
     require_exact_line "sha256=$artifact_sha" "$provenance"
     require_exact_line "source_revision=$source_revision" "$provenance"
@@ -265,4 +336,4 @@ for target in "${targets[@]}"; do
 done
 
 printf 'check-op-auth-release-matrix.sh: verified signed ABI 3 matrix for %s (%s).\n' \
-    "$expected_version" "$build_id"
+    "$matrix_version" "$build_id"

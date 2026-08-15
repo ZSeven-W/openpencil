@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Require the staged child A to be an exact, complete auth-only replacement.
+# Require the staged child A to be an exact, complete auth-matrix replacement
+# plus the source-owned adoption policy for that new matrix.
 
 set -euo pipefail
 
@@ -10,6 +11,7 @@ source "$script_dir/op-auth-candidate-targets.sh"
 repo=
 expected_parent=
 prefix=crates/op-auth-bridge/prebuilt
+policy=crates/op-auth-bridge/AUTH-RELEASE-POLICY
 
 usage() {
     printf '%s\n' \
@@ -59,6 +61,20 @@ changed=$(git -C "$repo" diff --cached --name-only --no-renames)
     printf 'error: complete Auth Release rebuild produced no staged changes\n' >&2
     exit 1
 }
+grep -Fxq "$policy" <<< "$changed" || {
+    printf 'error: auth promotion is missing the staged release adoption policy\n' >&2
+    exit 1
+}
+policy_change=$(git -C "$repo" diff --cached --name-status --no-renames -- "$policy")
+[[ "$policy_change" == $'A\t'"$policy" \
+    || "$policy_change" == $'M\t'"$policy" ]] || {
+    printf 'error: auth release adoption policy must be added or modified\n' >&2
+    exit 1
+}
+[[ -f "$repo/$policy" && ! -L "$repo/$policy" ]] || {
+    printf 'error: auth release adoption policy is missing or symlinked\n' >&2
+    exit 1
+}
 for root_file in RELEASE-MANIFEST RELEASE-MANIFEST.sig; do
     grep -Fxq "$prefix/$root_file" <<< "$changed" || {
         printf 'error: auth-only child is missing staged %s\n' "$root_file" >&2
@@ -78,6 +94,8 @@ while IFS=$'\t' read -r status path extra; do
         exit 1
     }
     case "$path" in
+        "$policy")
+            ;;
         "$prefix/RELEASE-MANIFEST"|"$prefix/RELEASE-MANIFEST.sig")
             ;;
         "$prefix/"*)
@@ -145,5 +163,11 @@ while IFS= read -r target; do
     }
 done < <(op_auth_candidate_targets)
 
-printf 'verify-op-auth-promotion-diff: exact auth-only child staged on %s\n' \
+# Generic consumer mode validates the exact six-line source policy against the
+# newly staged key, manifest digest, private source revision, build id, ABI 3,
+# signatures, hardening digests, and canonical ten-target matrix.
+OP_AUTH_PREBUILT_ROOT=$repo/$prefix \
+    bash "$repo/tools/check-op-auth-release-matrix.sh" >/dev/null
+
+printf 'verify-op-auth-promotion-diff: exact auth adoption child staged on %s\n' \
     "$expected_parent"

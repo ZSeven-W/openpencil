@@ -1,0 +1,6 @@
+format=op-auth-release-policy-v1
+abi=3
+public_key=07e073b30d6de0df7343f8a11c4dccaf69aa87518d94917375eda6e63cc506e1
+release_manifest_sha256=8157166341da516a7a5df3994517ba277605d4d881638b42071c79946c50be32
+source_revision=204956f0e15dfd02af49759bdb2f435dae96fae3
+build_id=openpencil-0.8.5-5a7b834d498b

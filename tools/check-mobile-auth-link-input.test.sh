@@ -13,9 +13,22 @@ trap cleanup EXIT
 archive=$test_dir/libop_auth.a
 printf '!<arch>\n' > "$archive"
 
+if grep -Fq 'workspace_version' "$checker" \
+    || ! grep -Fq '"version=$artifact_version"' "$checker" \
+    || ! grep -Fq '[[ "$abi" == 3 ]]' "$checker"; then
+    printf 'not ok - Release link gate must trust signed version metadata and require ABI 3\n' >&2
+    exit 1
+fi
+
 CONFIGURATION=Debug \
 OP_AUTH_ARCHIVE="$archive" \
 OPENPENCIL_DEV_OP_AUTH_ABI_VERSION=3 \
+    bash "$checker" >/dev/null
+
+signed_archive=$script_dir/../crates/op-auth-bridge/prebuilt/aarch64-apple-ios-sim/libop_auth.a
+CONFIGURATION=Release \
+OP_AUTH_ARCHIVE="$(cd "$(dirname "$signed_archive")" && pwd -P)/libop_auth.a" \
+OP_AUTH_TARGET=aarch64-apple-ios-sim \
     bash "$checker" >/dev/null
 
 expect_failure() {
@@ -41,9 +54,15 @@ expect_failure \
 
 expect_failure \
     "Release rejects an unsigned external archive" \
-    "no signed production auth archive is committed" \
+    "Release may link only the repository signed archive" \
     env CONFIGURATION=Release OP_AUTH_ARCHIVE="$archive" \
         OP_AUTH_TARGET=aarch64-apple-ios-sim bash "$checker"
+
+expect_failure \
+    "Android Release rejects an unsigned external archive" \
+    "Release may link only the repository signed archive" \
+    env CONFIGURATION=Release OP_AUTH_ARCHIVE="$archive" \
+        OP_AUTH_TARGET=aarch64-linux-android bash "$checker"
 
 expect_failure \
     "Release rejects the development ABI selector" \
@@ -51,5 +70,11 @@ expect_failure \
     env CONFIGURATION=Release OP_AUTH_ARCHIVE="$archive" \
         OP_AUTH_TARGET=aarch64-apple-ios-sim \
         OPENPENCIL_DEV_OP_AUTH_ABI_VERSION=3 bash "$checker"
+
+expect_failure \
+    "Release rejects an unsupported mobile target" \
+    "requires an explicit supported OP_AUTH_TARGET" \
+    env CONFIGURATION=Release OP_AUTH_ARCHIVE="$archive" \
+        OP_AUTH_TARGET=armv7-linux-androideabi bash "$checker"
 
 printf 'mobile auth link-input contract tests pass\n'

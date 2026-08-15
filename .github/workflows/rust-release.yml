@@ -31,6 +31,12 @@ name: Rust release artifacts
 #                                                bundles usr/bin/op
 #           openpencil-desktop-<label>.tar.gz    raw binary (kept)
 #           op-cli-<label>.tar.gz                standalone CLI
+#   Android OpenPencil-<v>-android.apk            signed universal installer
+#           OpenPencil-<v>-android.aab            signed App Bundle retained as
+#                                                a GitHub Release asset (this
+#                                                workflow does not upload Play)
+#   iOS     Uploads the signed build to App Store Connect / TestFlight through
+#           the reusable protected workflow; no iOS binary is attached here
 #   all     openpencil-vscode-<v>-<t>.vsix       VS Code extension, one per
 #                                                vsce target (darwin/linux/
 #                                                win32 × x64/arm64), each
@@ -63,11 +69,6 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      auth_artifact_ref:
-        description: Full SHA of the auth-matrix-only commit selected as this run's ref
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -80,30 +81,66 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      source_sha: ${{ steps.version.outputs.source_sha }}
     steps:
-      - name: Checkout the candidate auth artifact commit without credentials
+      - name: Checkout the exact release source without credentials
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
           ref: ${{ github.sha }}
-      - name: Validate Cargo version and the signed auth-only parent transition
+      - name: Validate Cargo version and the signed Auth matrix in this source
         id: version
         shell: bash
-        env:
-          OP_AUTH_ARTIFACT_COMMIT: ${{ github.sha }}
-          OP_AUTH_ARTIFACT_SELECTED_COMMIT: ${{ inputs.auth_artifact_ref || github.sha }}
-          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || {
+            echo "::error::checkout does not match the release source SHA"
+            exit 1
+          }
+          version=$(scripts/workspace-version.sh)
+          case "$GITHUB_REF" in
+            "refs/heads/v$version"|"refs/tags/v$version") ;;
+            *)
+              echo "::error::release ref must exactly match workspace version v$version"
+              exit 2
+              ;;
+          esac
           tools/check-rust-release-auth-workflow.sh
           tools/check-release-workflow-policy.test.sh rust
-          tools/check-op-auth-artifact-commit.test.sh
           tools/check-op-auth-release-matrix.test.sh
           tools/check-op-auth-cargo-build.test.sh
           tools/pinned-release-tools.test.sh
-          OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
-            tools/check-op-auth-artifact-commit.sh
+          tools/check-op-auth-release-matrix.sh
+          tools/check-op-auth-prebuilt.sh --require-hardened
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  ios-app-store:
+    name: iOS App Store / TestFlight
+    needs: version
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-app-store.yml
+    with:
+      release_sha: ${{ github.sha }}
+      release_ref: ${{ github.ref }}
+    secrets:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+
+  android-release:
+    name: Android APK / AAB
+    needs: version
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/android-release.yml
+    secrets:
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
 
   build:
     name: ${{ matrix.label }}
@@ -843,7 +880,7 @@ jobs:
 
   release-draft:
     name: Create / update GitHub prerelease
-    needs: [version, build, web-docker, sdk-packages, vsix]
+    needs: [version, android-release, build, web-docker, sdk-packages, vsix]
     environment: release-production
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
@@ -872,44 +909,7 @@ jobs:
           pattern: openpencil-*
       - name: Flatten artifacts
         shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release-files
-          find dist -type f \
-            \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.dmg" \
-               -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" \
-               -o -name "*.tgz" -o -name "*.vsix" \) \
-            -exec cp {} release-files/ \;
-          ls -la release-files
-          shopt -s nullglob
-          native=(release-files/OpenPencil-* release-files/openpencil-desktop-*)
-          cli=(release-files/op-cli-*)
-          sdk=(release-files/*.tgz)
-          vsix=(release-files/*.vsix)
-          if [ "${#native[@]}" -eq 0 ]; then
-            echo "::error::missing native desktop artifacts"
-            exit 1
-          fi
-          if [ "${#cli[@]}" -eq 0 ]; then
-            echo "::error::missing op-cli artifacts"
-            exit 1
-          fi
-          for file in \
-            release-files/openpencil-desktop-linux-x86_64.tar.gz \
-            release-files/op-cli-linux-x86_64.tar.gz; do
-            if [ ! -f "$file" ]; then
-              echo "::error::missing Linux x86_64 Nix manifest asset: $file"
-              exit 1
-            fi
-          done
-          if [ "${#sdk[@]}" -ne 3 ]; then
-            echo "::error::expected 3 SDK tarballs, found ${#sdk[@]}"
-            exit 1
-          fi
-          if [ "${#vsix[@]}" -ne 6 ]; then
-            echo "::error::expected 6 platform VS Code extension .vsix, found ${#vsix[@]}"
-            exit 1
-          fi
+        run: tools/flatten-release-artifacts.sh dist release-files "$OP_VERSION"
       - name: Generate CLI install scripts
         shell: bash
         run: |

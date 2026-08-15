@@ -36,22 +36,52 @@ scripts/build-mobile-auth-dev.sh \
 Then pass that exact archive to Xcode as `OP_AUTH_ARCHIVE` and repeat the ABI
 with `OPENPENCIL_DEV_OP_AUTH_ABI_VERSION`. The project pre-build gate accepts
 an unsigned archive only for `CONFIGURATION=Debug`. Release linking accepts
-only a version-matched, SHA-pinned and Ed25519-signed archive under
-`crates/op-auth-bridge/prebuilt/<target>/`. The `0.8.5` source commit S contains
-neither iOS target; its inherited signed desktop archives are for `0.8.4` and
-are ignored. S can build with the public stub, but it cannot silently become a
-collaboration-enabled Release. Never copy a local private archive into this
-source tree or into an Xcode resource phase.
+only the adopted ABI-v3 matrix under `crates/op-auth-bridge/prebuilt/`: every
+target is SHA-pinned and Ed25519-signed, while the source-owned
+`AUTH-RELEASE-POLICY` pins the exact complete matrix and private build identity.
+The matrix's signed `VERSION` and `openpencil_revision` record its own release
+provenance; they do not have to equal the consuming OpenPencil version or
+commit. Never copy a local private archive into this source tree or into an
+Xcode resource phase.
 
-The protected production flow rebuilds ten immutable ABI-v3 candidates, then
-signs and promotes the complete matrix in one auth-only child A of S. A adds
-`aarch64-apple-ios` and `aarch64-apple-ios-sim` together with both Android and
-all six refreshed desktop targets. The TestFlight workflow accepts only a
-verified A whose sole parent is S. Its publisher checks out trusted source S,
-copies only the signed artifacts from A, verifies the entire ten-target matrix,
-and stages the exact device archive for the final link. A missing target,
-version/digest/signature mismatch, incomplete matrix, or non-auth change stops
-the release before upload; an unsigned candidate is never a Release input.
+The protected production flow rebuilds, audits, and signs all ten immutable
+ABI-v3 candidates together, including `aarch64-apple-ios`,
+`aarch64-apple-ios-sim`, both Android targets, and all six desktop targets.
+App Store/TestFlight builds verify the adopted policy, the complete signed
+matrix, and Cargo's actual ABI-v3 link selection before staging the exact
+device archive for the final Xcode link. A missing target, policy, digest,
+signature, or hardening mismatch, incomplete matrix, ABI downgrade, or stub
+fallback stops the release before upload. OpenPencil-only source changes and
+version bumps may reuse the adopted matrix; an op-platform, ABI, toolchain, or
+hardening change requires a newly signed matrix and reviewed policy adoption.
+
+## App Store / TestFlight release
+
+The formal `v*` Rust release calls `.github/workflows/ios-app-store.yml` with
+the exact release ref and source commit. The iOS upload is intentionally
+independent of the GitHub Release asset job: an App Store Connect or review
+failure does not prevent the desktop and Android artifacts from being
+published. The same workflow also has a manual entry point for uploading a
+replacement build from an explicitly selected source SHA/ref pair. GitHub exposes that
+manual entry point only after the workflow path has been registered on the
+repository's default branch.
+
+The protected `testflight` environment owns the Apple Distribution
+certificate, App Store provisioning profile, and App Store Connect API key.
+This product is classified as using non-exempt encryption, so configure these
+environment variables without committing their values:
+
+```text
+IOS_USES_NON_EXEMPT_ENCRYPTION=YES
+IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE=<Apple-issued compliance code>
+```
+
+Every upload derives a monotonically increasing three-component build number
+from UTC epoch minutes. The workflow validates the exact remote ref, signed
+ten-target Auth matrix, Xcode/iOS SDK floor, archived bundle identifier, signing
+entitlements, encryption declarations, and final upload result before it can
+report success. It uploads the build to App Store Connect/TestFlight but does
+not automatically submit a store review.
 
 Generate the project (do this again after changing `project.yml`):
 

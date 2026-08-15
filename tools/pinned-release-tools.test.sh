@@ -33,6 +33,10 @@ if "$tool" skia ios aarch64-apple-ios-sim "$temporary/ios" >/dev/null 2>&1; then
     printf 'error: the device-only iOS Skia profile accepted a simulator\n' >&2
     exit 1
 fi
+if "$tool" skia android armv7-linux-androideabi "$temporary/android" >/dev/null 2>&1; then
+    printf 'error: the Android Skia profile accepted an unreviewed ABI\n' >&2
+    exit 1
+fi
 mkdir "$temporary/existing-cargo-cli"
 if "$tool" cargo-cli cargo-bundle "$temporary/existing-cargo-cli" >/dev/null 2>&1; then
     printf 'error: an existing Cargo CLI destination was accepted\n' >&2
@@ -40,6 +44,17 @@ if "$tool" cargo-cli cargo-bundle "$temporary/existing-cargo-cli" >/dev/null 2>&
 fi
 if "$tool" cargo-cli unreviewed-cli "$temporary/unreviewed-cli" >/dev/null 2>&1; then
     printf 'error: an unreviewed Cargo CLI was accepted\n' >&2
+    exit 1
+fi
+mkdir "$temporary/existing-bundletool"
+if "$tool" bundletool "$temporary/existing-bundletool" >/dev/null 2>&1; then
+    printf 'error: an existing bundletool destination was accepted\n' >&2
+    exit 1
+fi
+mkdir "$temporary/existing-android-signing-tools"
+if "$tool" android-signing-tools \
+    "$temporary/existing-android-signing-tools" >/dev/null 2>&1; then
+    printf 'error: an existing Android signing-tools destination was accepted\n' >&2
     exit 1
 fi
 mkdir "$temporary/existing-ripgrep"
@@ -88,10 +103,28 @@ if "$tool" verify-skia web x86_64-unknown-linux-gnu "$skia_url" \
     printf 'error: staged Skia verification accepted a non-desktop profile\n' >&2
     exit 1
 fi
-grep -Fq 'requires the desktop Skia profile' "$temporary/wrong-profile.log" || {
+grep -Fq 'requires the desktop or Android Skia profile' "$temporary/wrong-profile.log" || {
     printf 'error: the wrong-profile test did not reach the desktop profile gate\n' >&2
     exit 1
 }
+
+for android_target in aarch64-linux-android x86_64-linux-android; do
+    android_key=da8fc6731fc439bc3b6a-$android_target-gl-jpegd-jpege-pdf-textlayout
+    android_archive=$skia_cache/skia-binaries-$android_key.tar.gz
+    printf 'tampered Android archive for %s\n' "$android_target" > "$android_archive"
+    if "$tool" verify-skia android "$android_target" "$skia_url" \
+        >"$temporary/tampered-$android_target.log" 2>&1; then
+        printf 'error: a tampered staged Android Skia archive was accepted: %s\n' \
+            "$android_target" >&2
+        exit 1
+    fi
+    grep -Fq 'SHA-256 mismatch' "$temporary/tampered-$android_target.log" || {
+        printf 'error: %s did not resolve its exact reviewed Android Skia digest\n' \
+            "$android_target" >&2
+        exit 1
+    }
+    rm "$android_archive"
+done
 if env FORCE_SKIA_BINARIES_DOWNLOAD='' "$tool" verify-skia \
     desktop x86_64-unknown-linux-gnu "$skia_url" \
     >"$temporary/forced.log" 2>&1; then
@@ -196,11 +229,20 @@ for digest in \
     20ba7acf5e306b6d875863c838cb9d3c4a39a05792fb6256a3f03ddcbc1077a1 \
     6b61061c32fb7a72944e3dae63d97241271b1ac7bcaf3752cfa0c79ed37ee8b6 \
     c066658b13e257d418f647447d06eb8a83cb060b037228da838589dd863bf053 \
-    4abbaea5e4e8934a6f19c5de44eaba9bf9238af4abbe57dbac5f2dc03923b182; do
+    4abbaea5e4e8934a6f19c5de44eaba9bf9238af4abbe57dbac5f2dc03923b182 \
+    82ca6dd1720bbe8b105c12c4d0c78786d2c792e9d2a7f2102ab66bb24dafa9d0 \
+    ca217df6ffced17381cbea4df044969a493a46bddc757ee844e2fbaf54fa1257 \
+    5d9ac77fb6ff43d9da518a337b4fcf8f9097113df531d99ccefe80ef7ce8250b \
+    f2dc5418092c43003db8f9005c4a286e1c0104fea96ccdd49e8ebd037cac9219; do
     [[ $(grep -Fc "$digest" "$tool") -eq 1 ]] || {
         printf 'error: pinned release digest is missing or duplicated: %s\n' "$digest" >&2
         exit 1
     }
 done
+
+[[ $(grep -Fc a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29 "$tool") -eq 2 ]] || {
+    printf 'error: the reviewed bundletool digest is missing or duplicated\n' >&2
+    exit 1
+}
 
 printf 'pinned-release-tools.test.sh: immutable tool contracts passed.\n'

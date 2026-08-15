@@ -117,11 +117,15 @@ jobs:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
       - id: version
         shell: bash
-        env:
-          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
         run: |
-          OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
-            tools/check-op-auth-artifact-commit.sh
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]
+          version=$(scripts/workspace-version.sh)
+          case "$GITHUB_REF" in
+            "refs/heads/v$version"|"refs/tags/v$version") ;;
+          esac
+          tools/check-op-auth-release-matrix.sh
+          tools/check-op-auth-prebuilt.sh --require-hardened
+          echo "version=$version" >> "$GITHUB_OUTPUT"
   build:
     needs: version
     runs-on: ubuntu-latest
@@ -149,7 +153,7 @@ __SDK_NEEDS__
           version="__PUBLISH_VERSION__"
           echo "$version"
   release-draft:
-    needs: [version, build, web-docker, sdk-packages, vsix]
+    needs: [version, android-release, build, web-docker, sdk-packages, vsix]
     runs-on: ubuntu-latest
     env:
       OP_VERSION: ${{ needs.version.outputs.version }}
@@ -500,10 +504,10 @@ SCRIPT
 run_guard "$repo"
 assert_status 1 'release missing tag equality'
 assert_contains '.github/workflows/rust-release.yml:1:' 'release missing tag equality'
-assert_contains 'error: release version computation must use the production auth artifact gate' \
+assert_contains 'error: release version computation must use the canonical workspace reader' \
     'release missing tag equality'
 assert_no_success_output 'release missing tag equality'
-pass 'release workflow must obtain its version through the production auth gate'
+pass 'release workflow must obtain its version through the canonical source gate'
 
 repo=$(new_repo macos_readers_commented_out 0.8.1)
 cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
@@ -546,20 +550,19 @@ jobs:
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
       - id: version
-        env:
-          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
         run: |
-          # OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
-          #   tools/check-op-auth-artifact-commit.sh
+          # version=$(scripts/workspace-version.sh)
+          # tools/check-op-auth-release-matrix.sh
+          # tools/check-op-auth-prebuilt.sh --require-hardened
           echo "version=0.8.1" >> "$GITHUB_OUTPUT"
 SCRIPT
 run_guard "$repo"
 assert_status 1 'commented release checks'
 assert_contains '.github/workflows/rust-release.yml:1:' 'commented release checks'
-assert_contains 'error: release version computation must use the production auth artifact gate' \
+assert_contains 'error: release version computation must use the canonical workspace reader' \
     'commented release checks'
 assert_no_success_output 'commented release checks'
-pass 'commented production auth gate calls do not satisfy the guard'
+pass 'commented source and matrix gate calls do not satisfy the guard'
 
 repo=$(new_repo macos_noop_mismatch_and_reassignment 0.8.1)
 cat > "$repo/scripts/bundle-macos.sh" <<'SCRIPT'
@@ -784,7 +787,6 @@ pass 'local product dependencies do not repeat the workspace version'
 
 # shellcheck disable=SC1091
 . "$script_dir/check-version-sync-policy.test-cases.sh"
-
 repo=$(new_repo guard_is_read_only 0.8.1)
 before_snapshot=$(repo_snapshot "$repo")
 run_guard "$repo"

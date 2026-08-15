@@ -14,24 +14,26 @@ crate's Cargo source package and this crate is not published to a registry.
 Their licensing and provenance are managed by their independent source rather
 than by this crate's notice.
 
-The `0.8.5` source commit S does not itself carry the matching production
-authentication matrix. Its six inherited desktop archives are signed ABI-v3
-`0.8.4` inputs, but the version gate ignores them for `0.8.5`; S also contains
-no iOS or Android archive. Run `tools/check-op-auth-prebuilt.sh` for the current
-measured audit. A source-only build therefore uses the public stub, and mobile
-authentication remains unavailable in Release rather than silently accepting
-a stale, mismatched, or unsigned binary.
+The committed production input is a complete ten-target ABI-v3 matrix covering
+desktop, iOS device and simulator, and Android arm64 and x86_64. Its signed
+`VERSION` and `openpencil_revision` values identify the artifact release and
+record its original public build context; neither value is a compatibility lock
+to the consuming OpenPencil checkout. Compatibility is instead gated by the
+signed ABI and runtime handshake.
 
-Private release CI rebuilds an immutable unsigned candidate for every supported
-target. The protected public promotion then verifies that candidate, signs each
-artifact and the complete release manifest, and creates the single-parent
-auth-only child A of S. A atomically replaces the six stale desktop directories
-and adds iOS device, iOS simulator, Android arm64, and Android x86_64, producing
-the complete ten-target `0.8.5` ABI-v3 signed matrix. Candidates are never linked
-directly into production. Rust releases and TestFlight require both the signed
-matrix and the exact S -> A transition; see
-[`prebuilt/README.md`](prebuilt/README.md) for the target list and promotion
-boundary.
+Private release CI rebuilds an immutable candidate for every supported target,
+audits its hardening, and signs each artifact plus the complete release
+manifest. Candidates are never linked directly into production. Normal Rust,
+Android, and App Store builds accept only a self-consistent matrix rooted in
+the repository Ed25519 public key, with exact archive hashes, ABI v3, all ten
+canonical targets, signed private provenance, and signed hardening digests.
+The source-owned `AUTH-RELEASE-POLICY` additionally pins the exact adopted
+matrix digest and private identity, so another older matrix signed by the same
+key cannot be replayed.
+OpenPencil-only changes and package version bumps reuse that matrix without a
+private rebuild; op-platform implementation, ABI, toolchain, or hardening
+changes require a new private matrix. See [`prebuilt/README.md`](prebuilt/README.md)
+for the target list and promotion boundary.
 
 The Linux and MSVC artifacts were built as C-facing Rust `staticlib` archives,
 so they also contain the producing toolchain's Rust runtime. Before a Rust host

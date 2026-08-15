@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Validate the immutable public transition used by every production release:
-# source commit S -> one auth-matrix-only child A. The signed matrix binds S,
-# while the release/tag/workflow must run from exact A.
+# Validate a private-production promotion commit: one parent, the complete auth
+# matrix, and the source-owned policy that adopts exactly that matrix.
 
 set -euo pipefail
 
@@ -66,6 +65,7 @@ trap cleanup EXIT
 
 {
     printf '%s\n' \
+        crates/op-auth-bridge/AUTH-RELEASE-POLICY \
         crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST \
         crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST.sig
     for target in \
@@ -97,6 +97,7 @@ unexpected=$(LC_ALL=C comm -23 "$actual_changes" "$allowed_changes")
     exit 1
 }
 for required_change in \
+    crates/op-auth-bridge/AUTH-RELEASE-POLICY \
     crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST \
     crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST.sig \
     crates/op-auth-bridge/prebuilt/aarch64-apple-ios/libop_auth.a; do
@@ -105,6 +106,19 @@ for required_change in \
         exit 1
     }
 done
+policy_change=$(git -C "$repo_root" diff-tree --no-commit-id --name-status \
+    --no-renames -r "$parent" "$artifact_commit" -- \
+    crates/op-auth-bridge/AUTH-RELEASE-POLICY)
+[[ "$policy_change" == $'A\tcrates/op-auth-bridge/AUTH-RELEASE-POLICY' \
+    || "$policy_change" == $'M\tcrates/op-auth-bridge/AUTH-RELEASE-POLICY' ]] || {
+    printf 'error: artifact commit must add or modify the auth release adoption policy\n' >&2
+    exit 1
+}
+[[ -f "$repo_root/crates/op-auth-bridge/AUTH-RELEASE-POLICY" \
+    && ! -L "$repo_root/crates/op-auth-bridge/AUTH-RELEASE-POLICY" ]] || {
+    printf 'error: auth release adoption policy is missing or symlinked\n' >&2
+    exit 1
+}
 
 version=$("$repo_root/scripts/workspace-version.sh")
 if [[ -n "$ref_version" && "$ref_version" != "$version" ]]; then
@@ -114,6 +128,11 @@ fi
 OP_AUTH_PREBUILT_ROOT=$repo_root/crates/op-auth-bridge/prebuilt \
 OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=$parent \
 OP_AUTH_RELEASE_WORKSPACE_VERSION=$version \
+    "$repo_root/tools/check-op-auth-release-matrix.sh"
+# Strict promotion verifies a newly produced matrix before adoption. The same
+# checkout must then pass consumer mode, proving the committed policy precisely
+# adopts the key, manifest digest, private source, build id, ABI, and hardening.
+OP_AUTH_PREBUILT_ROOT=$repo_root/crates/op-auth-bridge/prebuilt \
     "$repo_root/tools/check-op-auth-release-matrix.sh"
 OP_AUTH_PREBUILT_ROOT=$repo_root/crates/op-auth-bridge/prebuilt \
     "$repo_root/tools/check-op-auth-prebuilt.sh" --require-hardened
@@ -137,5 +156,5 @@ if [[ -n "$output_file" ]]; then
     } >> "$output_file"
 fi
 
-printf 'check-op-auth-artifact-commit.sh: verified %s as auth-only child of %s.\n' \
+printf 'check-op-auth-artifact-commit.sh: verified %s as auth-adoption child of %s.\n' \
     "$artifact_commit" "$parent"

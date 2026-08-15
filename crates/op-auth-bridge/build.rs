@@ -24,6 +24,7 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(op_auth_collab_relay_token_prebuilt)");
     println!("cargo:rustc-check-cfg=cfg(op_auth_development_prebuilt)");
     println!("cargo:rerun-if-changed=prebuilt");
+    println!("cargo:rerun-if-changed=AUTH-RELEASE-POLICY");
     println!("cargo:rerun-if-changed=prebuilt_link_compat.rs");
     println!("cargo:rerun-if-env-changed={DEV_ARCHIVE_ENV}");
     println!("cargo:rerun-if-env-changed={DEV_ABI_VERSION_ENV}");
@@ -54,11 +55,11 @@ fn main() {
                 return;
             }
             let validated = match prebuilt_provenance::validate_prebuilt(
+                &manifest_dir.join("AUTH-RELEASE-POLICY"),
                 &manifest_dir.join("prebuilt"),
                 &prebuilt_dir,
                 &target,
                 artifact,
-                &env::var("CARGO_PKG_VERSION").unwrap_or_default(),
             ) {
                 Ok(validated) => validated,
                 Err(error) => {

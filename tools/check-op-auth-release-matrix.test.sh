@@ -35,6 +35,23 @@ sign_hex() {
         | xxd -p -c 256 > "$output"
 }
 
+write_policy() {
+    local repo=$1
+    local public_key_file=$2
+    local release_manifest=$3
+    local public_key manifest_sha
+    public_key=$(tr -d '[:space:]' < "$public_key_file")
+    manifest_sha=$(sha256_file "$release_manifest")
+    {
+        printf 'format=op-auth-release-policy-v1\n'
+        printf 'abi=3\n'
+        printf 'public_key=%s\n' "$public_key"
+        printf 'release_manifest_sha256=%s\n' "$manifest_sha"
+        printf 'source_revision=%s\n' "$source_revision"
+        printf 'build_id=%s\n' "$build_id"
+    } > "$repo/crates/op-auth-bridge/AUTH-RELEASE-POLICY"
+}
+
 mkdir -p \
     "$fixture_repo/tools" "$fixture_repo/scripts" \
     "$attacker_repo/tools" "$attacker_repo/scripts" \
@@ -42,7 +59,7 @@ mkdir -p \
     "$trusted_prebuilt" "$prebuilt"
 cp "$script_dir/check-op-auth-release-matrix.sh" "$fixture_repo/tools/"
 cp "$script_dir/check-op-auth-release-matrix.sh" "$attacker_repo/tools/"
-printf '#!/usr/bin/env bash\nprintf "%s\\n"\n' "$version" \
+printf '#!/usr/bin/env bash\nprintf "0.0.1\\n"\n' \
     > "$fixture_repo/scripts/workspace-version.sh"
 cp "$fixture_repo/scripts/workspace-version.sh" \
     "$attacker_repo/scripts/workspace-version.sh"
@@ -129,20 +146,28 @@ done
 } > "$prebuilt/RELEASE-MANIFEST"
 sign_hex "$private_key" \
     "$prebuilt/RELEASE-MANIFEST" "$prebuilt/RELEASE-MANIFEST.sig"
+write_policy "$fixture_repo" \
+    "$trusted_prebuilt/PROVENANCE_PUBKEY" "$prebuilt/RELEASE-MANIFEST"
 valid_manifest=$temp_root/valid-release-manifest
 valid_signature=$temp_root/valid-release-signature
+valid_prebuilt=$temp_root/valid-prebuilt
 cp "$prebuilt/RELEASE-MANIFEST" "$valid_manifest"
 cp "$prebuilt/RELEASE-MANIFEST.sig" "$valid_signature"
+mkdir -p "$valid_prebuilt"
+cp -R "$prebuilt/." "$valid_prebuilt/"
 
 OP_AUTH_PREBUILT_ROOT=$prebuilt \
-OP_AUTH_RELEASE_WORKSPACE_VERSION=$version \
-OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=$openpencil_revision \
+    "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null
+
+OP_AUTH_PREBUILT_ROOT=$prebuilt \
+    OP_AUTH_RELEASE_WORKSPACE_VERSION=$version \
+    OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=$openpencil_revision \
     "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null
 
 if OP_AUTH_PREBUILT_ROOT=$prebuilt \
     OP_AUTH_RELEASE_WORKSPACE_VERSION=$version \
     "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null 2>&1; then
-    printf 'error: missing expected public revision was accepted\n' >&2
+    printf 'error: partial strict promotion identity was accepted\n' >&2
     exit 1
 fi
 
@@ -151,6 +176,59 @@ if OP_AUTH_PREBUILT_ROOT=$prebuilt \
     OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=3333333333333333333333333333333333333333 \
     "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null 2>&1; then
     printf 'error: mismatched expected public revision was accepted\n' >&2
+    exit 1
+fi
+
+# Strict promotion may validate a newly generated, self-consistent signed
+# matrix before the public source policy adopts its exact manifest digest.
+new_version=9.8.8
+new_matrix_lines=$temp_root/new-matrix-lines
+: > "$new_matrix_lines"
+for target in "${targets[@]}"; do
+    target_dir=$prebuilt/$target
+    artifact=libop_auth.a
+    [[ "$target" == *-pc-windows-msvc ]] && artifact=op_auth.lib
+    printf '%s\n' "$new_version" > "$target_dir/VERSION"
+    sed "s/^version=$version$/version=$new_version/" \
+        "$target_dir/PROVENANCE" > "$target_dir/PROVENANCE.next"
+    mv "$target_dir/PROVENANCE.next" "$target_dir/PROVENANCE"
+    sign_hex "$private_key" \
+        "$target_dir/PROVENANCE" "$target_dir/PROVENANCE.sig"
+    artifact_sha=$(sha256_file "$target_dir/$artifact")
+    provenance_sha=$(sha256_file "$target_dir/PROVENANCE")
+    hardening_sha=$(sha256_file "$target_dir/HARDENING-ATTESTATION")
+    printf 'target=%s|artifact=%s|sha256=%s|provenance_sha256=%s|hardening_sha256=%s\n' \
+        "$target" "$artifact" "$artifact_sha" "$provenance_sha" "$hardening_sha" \
+        >> "$new_matrix_lines"
+done
+{
+    printf 'format=op-auth-release-matrix-v1\n'
+    printf 'version=%s\n' "$new_version"
+    printf 'abi=3\n'
+    printf 'source_revision=%s\n' "$source_revision"
+    printf 'openpencil_revision=%s\n' "$openpencil_revision"
+    printf 'build_id=%s\n' "$build_id"
+    printf 'target_count=10\n'
+    cat "$new_matrix_lines"
+} > "$prebuilt/RELEASE-MANIFEST"
+sign_hex "$private_key" \
+    "$prebuilt/RELEASE-MANIFEST" "$prebuilt/RELEASE-MANIFEST.sig"
+OP_AUTH_PREBUILT_ROOT=$prebuilt \
+OP_AUTH_RELEASE_WORKSPACE_VERSION=$new_version \
+OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=$openpencil_revision \
+    "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null
+if OP_AUTH_PREBUILT_ROOT=$prebuilt \
+    "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null 2>&1; then
+    printf 'error: generic consumer accepted an unadopted signed matrix\n' >&2
+    exit 1
+fi
+cp -R "$valid_prebuilt/." "$prebuilt/"
+
+if OP_AUTH_PREBUILT_ROOT=$prebuilt \
+    OP_AUTH_RELEASE_WORKSPACE_VERSION=9.8.6 \
+    OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=$openpencil_revision \
+    "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null 2>&1; then
+    printf 'error: mismatched strict expected matrix version was accepted\n' >&2
     exit 1
 fi
 
@@ -163,11 +241,29 @@ awk '
 ' "$valid_manifest" > "$prebuilt/RELEASE-MANIFEST"
 sign_hex "$private_key" \
     "$prebuilt/RELEASE-MANIFEST" "$prebuilt/RELEASE-MANIFEST.sig"
+write_policy "$fixture_repo" \
+    "$trusted_prebuilt/PROVENANCE_PUBKEY" "$prebuilt/RELEASE-MANIFEST"
 if OP_AUTH_PREBUILT_ROOT=$prebuilt \
     OP_AUTH_RELEASE_WORKSPACE_VERSION=$version \
     OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=$openpencil_revision \
     "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null 2>&1; then
     printf 'error: non-canonical target order was accepted\n' >&2
+    exit 1
+fi
+cp "$valid_manifest" "$prebuilt/RELEASE-MANIFEST"
+cp "$valid_signature" "$prebuilt/RELEASE-MANIFEST.sig"
+write_policy "$fixture_repo" \
+    "$trusted_prebuilt/PROVENANCE_PUBKEY" "$prebuilt/RELEASE-MANIFEST"
+
+# A different matrix signed by the same trusted private key remains a rollback
+# or substitution until reviewed source explicitly adopts its exact digest.
+sed 's/^version=9\.8\.7$/version=9.8.6/' \
+    "$valid_manifest" > "$prebuilt/RELEASE-MANIFEST"
+sign_hex "$private_key" \
+    "$prebuilt/RELEASE-MANIFEST" "$prebuilt/RELEASE-MANIFEST.sig"
+if OP_AUTH_PREBUILT_ROOT=$prebuilt \
+    "$fixture_repo/tools/check-op-auth-release-matrix.sh" >/dev/null 2>&1; then
+    printf 'error: same-key unadopted release matrix was accepted\n' >&2
     exit 1
 fi
 cp "$valid_manifest" "$prebuilt/RELEASE-MANIFEST"
@@ -181,6 +277,9 @@ openssl pkey -in "$forged_key" -pubout -outform DER \
     | tail -c 32 | xxd -p -c 256 > "$prebuilt/PROVENANCE_PUBKEY"
 cp "$prebuilt/PROVENANCE_PUBKEY" \
     "$attacker_repo/crates/op-auth-bridge/prebuilt/PROVENANCE_PUBKEY"
+write_policy "$attacker_repo" \
+    "$attacker_repo/crates/op-auth-bridge/prebuilt/PROVENANCE_PUBKEY" \
+    "$prebuilt/RELEASE-MANIFEST"
 for target in "${targets[@]}"; do
     sign_hex "$forged_key" \
         "$prebuilt/$target/PROVENANCE" "$prebuilt/$target/PROVENANCE.sig"
@@ -236,4 +335,4 @@ if OP_AUTH_PREBUILT_ROOT=$prebuilt \
 fi
 
 printf '%s\n' \
-    'check-op-auth-release-matrix.test.sh: trust-root, revision, order, completeness, and tamper gates passed.'
+    'check-op-auth-release-matrix.test.sh: reusable identity, source adoption, rollback, trust-root, completeness, and tamper gates passed.'

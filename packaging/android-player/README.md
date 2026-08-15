@@ -42,24 +42,68 @@ The bridge accepts that override only in Cargo's `debug` profile. The archive
 is linked into `libop_engine_jni.so`; it is never packaged as an Android asset
 or standalone `.a`. Both the archive and generated `.so` stay ignored by Git.
 The Gradle Release variant reads only `app/src/release/jniLibs`, so a local
-Debug auth library cannot leak into Release. The `0.8.5` source commit S has no
-Android auth directory; its six inherited signed desktop archives are for
-`0.8.4` and are ignored by the version gate. A build from S can therefore use
-only the public stub. It cannot silently turn a missing, stale, mismatched, or
-unsigned archive into authenticated Release code.
+Debug auth library cannot leak into Release. Production consumes the adopted
+ten-target ABI-v3 matrix under `crates/op-auth-bridge/prebuilt/`. Its signatures
+and source-owned `AUTH-RELEASE-POLICY` pin the exact matrix and private build
+identity; the matrix's signed version and public revision are provenance, not
+requirements that every consuming OpenPencil commit must match.
 
-Private release CI builds ten immutable ABI-v3 candidates. Protected promotion
-signs the complete release manifest and creates exactly one auth-only child A
-of S, atomically replacing all six desktop directories and adding
-`aarch64-linux-android`, `x86_64-linux-android`, both iOS targets, and the other
-refreshed targets. The candidate artifacts are never production link inputs.
-An authenticated Android Release must be built from verified A: first verify
-the whole signed `0.8.5` matrix and the exact S -> A transition, then build both
-JNI ABIs in Cargo's release profile into `app/src/release/jniLibs`. Only the
-resulting `libop_engine_jni.so` files enter the APK; the `.a` archives are never
-packaged as assets. If any matrix, provenance, ABI, version, or digest check
-fails, the authenticated Release must stop instead of falling back to unsigned
-code.
+Private release CI rebuilds, audits, and signs all ten immutable ABI-v3
+candidates together: both Android targets, both iOS targets, and all six
+desktop targets. The candidate artifacts are never production link inputs. An
+authenticated Android Release first verifies the adopted policy and complete
+signed matrix, then builds both JNI ABIs in Cargo's release profile into
+`app/src/release/jniLibs` and proves Cargo actually selected signed ABI 3. Only
+the resulting `libop_engine_jni.so` files enter the APK; the `.a` archives are
+never packaged as assets. Any policy, matrix, provenance, ABI, hardening,
+signature, or digest failure stops the release instead of falling back to
+unsigned code. OpenPencil-only commits and version bumps reuse the adopted
+matrix; private implementation or ABI changes require a new signed matrix and
+reviewed policy adoption.
+
+## Production GitHub release
+
+The canonical `Rust release artifacts` workflow calls the reusable
+`.github/workflows/android-release.yml` lane for stable `vX.Y.Z` tags. Android
+does not have a separate dispatch trigger and CI does not upload to Google Play.
+The lane publishes these formally signed files into the same GitHub Release as
+the desktop artifacts:
+
+- `OpenPencil-<version>-android.apk` for direct installation and testing;
+- `OpenPencil-<version>-android.aab` for a later manual Play Console upload;
+- `SHA256SUMS.android.txt`, which is also covered by the release's unified
+  checksums and provenance.
+
+The unsigned build runner receives only the two collaboration bootstrap
+secrets. It verifies the complete signed Auth matrix, builds both Android JNI
+ABIs, and hands off an unsigned APK/AAB pair by immutable Actions artifact ID.
+It never receives the Android keystore. A fresh runner in the protected
+`release-production` environment downloads that exact handoff and receives the
+signing values only for one sign-and-verify step. That runner does not invoke
+Cargo or Gradle.
+
+Configure these `release-production` environment secrets:
+
+- `ANDROID_RELEASE_KEYSTORE_BASE64` — the complete stable JKS or PKCS#12
+  keystore encoded as one-line base64;
+- `ANDROID_RELEASE_KEYSTORE_PASSWORD`;
+- `ANDROID_RELEASE_KEY_ALIAS`;
+- `ANDROID_RELEASE_KEY_PASSWORD`.
+
+Also configure the non-secret environment variable
+`ANDROID_RELEASE_CERT_SHA256` as exactly 64 lowercase hexadecimal characters.
+It is the SHA-256 digest of the signing certificate's DER bytes. The workflow
+checks the keystore certificate, APK signer, and AAB signer against this value,
+so replacing the release key cannot silently create an update-incompatible
+release. Keep this keystore stable and backed up; the runtime Android Keystore
+used for user credentials and the macOS/iOS login keychain are unrelated.
+
+The build installs Android SDK Platform 36 revision 2, Build-Tools 36.0.0, and
+NDK r28c (28.2.13676358) from repository-owned SHA-256 pins instead of
+`sdkmanager`. Gradle 8.14.3, Android Gradle Plugin 8.13.2, Maven artifacts,
+Android Skia archives, bundletool 1.18.3, and the signing JDK are pinned too.
+Release checks require target API 36, 16 KB ELF LOAD alignment, APK zip
+alignment, and bundletool's `PAGE_ALIGNMENT_16K` declaration.
 
 ## Versioning
 

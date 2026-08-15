@@ -1,5 +1,12 @@
-name: iOS TestFlight
+name: iOS App Store / TestFlight
 
+# The formal Rust release calls this workflow once for every v* release tag.
+# A rejected or otherwise replaced build can be uploaded independently with
+# workflow_dispatch from the default branch by supplying the exact version
+# tag/branch ref and its full source commit SHA. The secret-free verify job
+# resolves the canonical remote ref, requires it to select that source, and
+# verifies the signed Auth matrix already committed in the same source tree.
+#
 # The `testflight` environment must require a reviewer and allow only protected
 # release tags/branches. Store signing and App Store Connect credentials as its
 # secrets. The repository's existing team and relay values remain secrets and
@@ -19,24 +26,49 @@ name: iOS TestFlight
 # - OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL
 #
 # `testflight` environment variables:
-# - IOS_USES_NON_EXEMPT_ENCRYPTION (explicit product/legal decision: YES or NO)
-# - IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE (required only when the above is YES)
+# - IOS_USES_NON_EXEMPT_ENCRYPTION (must be YES for the reviewed product decision)
+# - IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE (required; keep its value out of the repository)
 
 on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      auth_artifact_ref:
-        description: Full SHA of the reviewed auth-matrix-only commit selected as this run's ref
+      release_sha:
+        description: Full SHA of the exact source commit to build
         required: true
         type: string
+      release_ref:
+        description: Exact refs/tags/vX.Y.Z or refs/heads/vX.Y.Z for the source
+        required: true
+        type: string
+    secrets:
+      APPLE_TEAM_ID:
+        description: Apple Developer team identifier
+        required: true
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN:
+        description: Reviewed China collaboration bootstrap URL
+        required: true
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL:
+        description: Reviewed global collaboration bootstrap URL
+        required: true
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Full SHA of the exact source commit to build
+        required: true
+        type: string
+      release_ref:
+        description: Exact refs/tags/vX.Y.Z or refs/heads/vX.Y.Z for the source
+        required: true
+        type: string
+
+run-name: >-
+  App Store / TestFlight ${{ inputs.release_ref }} @ ${{ inputs.release_sha }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: ios-testflight-${{ github.ref }}
+  group: ios-app-store-tech-zseven-openpencil
   cancel-in-progress: false
 
 jobs:
@@ -45,47 +77,82 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     outputs:
-      artifact_sha: ${{ steps.release.outputs.artifact_sha }}
-      base_sha: ${{ steps.release.outputs.base_sha }}
+      source_sha: ${{ steps.release.outputs.source_sha }}
       build_number: ${{ steps.release.outputs.build_number }}
       version: ${{ steps.release.outputs.version }}
     steps:
-      - name: Checkout candidate artifact commit without credentials
+      - name: Bind requested source to the trusted trigger ref before checkout
+        shell: bash
+        env:
+          REQUESTED_RELEASE_SHA: ${{ inputs.release_sha }}
+          REQUESTED_RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUESTED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::release_sha must be a full lowercase commit SHA"
+            exit 2
+          }
+          [[ "$REQUESTED_RELEASE_SHA" == "$GITHUB_SHA" ]] || {
+            echo "::error::release_sha must equal the workflow trigger SHA"
+            exit 2
+          }
+          [[ "$REQUESTED_RELEASE_REF" == "$GITHUB_REF" ]] || {
+            echo "::error::release_ref must equal the workflow trigger ref"
+            exit 2
+          }
+          [[ "$GITHUB_REF" =~ ^refs/(heads|tags)/v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::App Store publication requires an exact stable vX.Y.Z ref"
+            exit 2
+          }
+
+      - name: Checkout the exact release source without credentials
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release_sha }}
 
-      - name: Require one auth-only commit and derive its trusted parent
+      - name: Validate the exact canonical source and release version
         id: release
         shell: bash
         env:
-          OP_AUTH_ARTIFACT_COMMIT: ${{ github.sha }}
-          OP_AUTH_ARTIFACT_SELECTED_COMMIT: ${{ inputs.auth_artifact_ref || github.sha }}
-          OP_AUTH_ARTIFACT_REF: ${{ github.ref }}
+          OPENPENCIL_RELEASE_SHA: ${{ inputs.release_sha }}
+          OPENPENCIL_RELEASE_REF: ${{ inputs.release_ref }}
+          OPENPENCIL_CANONICAL_REMOTE: https://github.com/ZSeven-W/openpencil.git
         run: |
           set -euo pipefail
-          build_number="$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"
-          [[ "$build_number" =~ ^[1-9][0-9]*\.[1-9][0-9]*$ ]]
+          [[ "$(git rev-parse HEAD)" == "$OPENPENCIL_RELEASE_SHA" ]] || {
+            echo "::error::checkout does not match the requested release source"
+            exit 1
+          }
+          tools/check-op-auth-remote-ref.sh --self-test
+          tools/check-op-auth-remote-ref.sh
+          tools/ios-build-number.sh --self-test
+          version=$(scripts/workspace-version.sh)
+          case "$OPENPENCIL_RELEASE_REF" in
+            "refs/heads/v$version"|"refs/tags/v$version") ;;
+            *)
+              echo "::error::release ref must exactly match workspace version v$version"
+              exit 2
+              ;;
+          esac
+          build_number=$(tools/ios-build-number.sh)
+          [[ "$build_number" =~ ^[1-9][0-9]{0,3}\.([0-9]|[1-9][0-9])\.([0-9]|[1-9][0-9])$ ]]
+          echo "source_sha=$OPENPENCIL_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
-          OP_AUTH_ARTIFACT_OUTPUT=$GITHUB_OUTPUT \
-            tools/check-op-auth-artifact-commit.sh
 
       - name: Verify signed ABI 3 release matrix and hardened symbol surface
         shell: bash
-        env:
-          OP_AUTH_PREBUILT_ROOT: ${{ github.workspace }}/crates/op-auth-bridge/prebuilt
-          OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION: ${{ steps.release.outputs.base_sha }}
-          OP_AUTH_RELEASE_WORKSPACE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          tools/check-ios-testflight-workflow.sh
+          tools/check-ios-app-store-workflow.sh
           tools/check-release-workflow-policy.test.sh ios
-          tools/check-op-auth-artifact-commit.test.sh
           tools/check-op-auth-release-matrix.test.sh
+          tools/check-op-auth-release-matrix.sh
+          tools/check-op-auth-prebuilt.sh --require-hardened
           CONFIGURATION=Release \
-          OP_AUTH_ARCHIVE="$OP_AUTH_PREBUILT_ROOT/aarch64-apple-ios/libop_auth.a" \
+          OP_AUTH_ARCHIVE="$GITHUB_WORKSPACE/crates/op-auth-bridge/prebuilt/aarch64-apple-ios/libop_auth.a" \
           OP_AUTH_TARGET=aarch64-apple-ios \
             tools/check-mobile-auth-link-input.sh
 
@@ -96,35 +163,13 @@ jobs:
     timeout-minutes: 120
     environment: testflight
     steps:
-      - name: Checkout trusted source parent without credentials
+      - name: Checkout the exact release source without credentials
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           fetch-depth: 1
           persist-credentials: false
-          ref: ${{ needs.verify.outputs.base_sha }}
+          ref: ${{ needs.verify.outputs.source_sha }}
           submodules: recursive
-
-      - name: Checkout only signed auth data from the artifact commit
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-        with:
-          fetch-depth: 1
-          path: .op-auth-artifact
-          persist-credentials: false
-          ref: ${{ needs.verify.outputs.artifact_sha }}
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST
-            /crates/op-auth-bridge/prebuilt/RELEASE-MANIFEST.sig
-            /crates/op-auth-bridge/prebuilt/aarch64-apple-darwin/
-            /crates/op-auth-bridge/prebuilt/aarch64-apple-ios/
-            /crates/op-auth-bridge/prebuilt/aarch64-apple-ios-sim/
-            /crates/op-auth-bridge/prebuilt/aarch64-linux-android/
-            /crates/op-auth-bridge/prebuilt/aarch64-pc-windows-msvc/
-            /crates/op-auth-bridge/prebuilt/aarch64-unknown-linux-gnu/
-            /crates/op-auth-bridge/prebuilt/x86_64-apple-darwin/
-            /crates/op-auth-bridge/prebuilt/x86_64-linux-android/
-            /crates/op-auth-bridge/prebuilt/x86_64-pc-windows-msvc/
-            /crates/op-auth-bridge/prebuilt/x86_64-unknown-linux-gnu/
 
       - name: Install pinned Rust toolchain and iOS target
         shell: bash
@@ -205,17 +250,14 @@ jobs:
           unset RELAY_CN RELAY_GLOBAL
           printf '%s\0%s\0' "$relay_cn" "$relay_global" \
             | python3 tools/check-collab-bootstrap-urls.py
-          [[ "$USES_NON_EXEMPT_ENCRYPTION" == YES \
-              || "$USES_NON_EXEMPT_ENCRYPTION" == NO ]] || {
-            echo "::error::IOS_USES_NON_EXEMPT_ENCRYPTION must be explicitly set to YES or NO"
+          [[ "$USES_NON_EXEMPT_ENCRYPTION" == YES ]] || {
+            echo "::error::IOS_USES_NON_EXEMPT_ENCRYPTION must remain YES for this release"
             exit 2
           }
-          if [[ "$USES_NON_EXEMPT_ENCRYPTION" == YES ]]; then
-            [[ "$EXPORT_COMPLIANCE_CODE" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || {
-              echo "::error::non-exempt encryption requires IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE"
-              exit 2
-            }
-          fi
+          [[ "$EXPORT_COMPLIANCE_CODE" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || {
+            echo "::error::non-exempt encryption requires IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE"
+            exit 2
+          }
           echo "Validated the protected production release configuration."
 
       - name: Publish the collaboration-enabled build to TestFlight
@@ -234,7 +276,6 @@ jobs:
           IOS_USES_NON_EXEMPT_ENCRYPTION: ${{ vars.IOS_USES_NON_EXEMPT_ENCRYPTION }}
           OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
           OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
-          OP_AUTH_ARTIFACT_ROOT: ${{ github.workspace }}/.op-auth-artifact/crates/op-auth-bridge/prebuilt
-          OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION: ${{ needs.verify.outputs.base_sha }}
+          OP_AUTH_ARTIFACT_ROOT: ${{ github.workspace }}/crates/op-auth-bridge/prebuilt
           XCODEGEN_BIN: ${{ steps.xcodegen.outputs.binary }}
         run: scripts/publish-ios-testflight.sh

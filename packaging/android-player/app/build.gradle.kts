@@ -24,12 +24,14 @@ val canonicalVersionCode = Regex("""versionCode=([1-9][0-9]*)""")
 
 android {
     namespace = "tech.zseven.openpencil"
-    compileSdk = 35
+    compileSdk = 36
+    buildToolsVersion = "36.0.0"
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "tech.zseven.openpencil"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = canonicalVersionCode
         versionName = canonicalVersionName
         ndk {
@@ -68,7 +70,8 @@ android {
     sourceSets["release"].jniLibs.srcDirs("src/release/jniLibs")
 
     lint {
-        abortOnError = false
+        abortOnError = true
+        checkReleaseBuilds = true
     }
 }
 

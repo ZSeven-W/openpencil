@@ -5,23 +5,35 @@ final application link. Client-side secrecy is defense in depth, not the trust
 root. Ticket signing keys, token exchange, and authorization policy stay on the
 server.
 
-## Source S and production A
+## Reusable signed production matrix
 
-The `0.8.5` source commit S deliberately does **not** contain its production
-authentication matrix. The six archives inherited from `0.8.4` cover desktop
-targets only. Although those older archives are signed ABI-v3 artifacts, their
-`VERSION` does not match the `0.8.5` workspace, so `build.rs` ignores them and
-uses the public stub. There are no mobile archives in S. Consequently, S alone
-cannot produce a collaboration-enabled production build.
+The committed matrix is a reusable, signed private-component release. Its
+compatibility boundary is the validated op-auth ABI, not the OpenPencil
+workspace version or Git topology. A normal OpenPencil source change or version
+bump therefore does not require rebuilding unchanged private op-platform code.
 
-The older desktop artifacts remain independently inspectable:
+`VERSION` identifies the private artifact release. It must be valid and match
+the signed release manifest, all ten target `VERSION` files, and all ten signed
+`PROVENANCE` manifests, but it need not equal the consuming OpenPencil package
+version. Likewise, signed `openpencil_revision` values record the reviewed
+public source context used when the private matrix was produced; they are
+provenance, not an allowlist for later public commits.
+
+`../AUTH-RELEASE-POLICY` is the source-reviewed adoption lock. It pins the
+trusted Ed25519 public key, exact complete release-manifest SHA-256, ABI 3,
+private source revision, and immutable build id. This prevents rollback to a
+different older matrix that is still validly signed by the same historical
+key. The policy is deliberately outside the artifact root and has no
+OpenPencil workspace version field.
+
+The reusable artifacts remain independently inspectable:
 
 - Their bytes are pinned by the adjacent `SHA256` and signed `PROVENANCE`.
-- Their target, app version, ABI, private revision, build id, and hardening
-  declaration are covered by the repository release public key.
+- Their target, artifact release version, ABI, private revision, build id, and
+  hardening declaration are covered by the repository release public key.
 - Their exposed `op_auth_*` names match the ABI-v3 allowlist.
-- Mach-O and ELF use the hardened profile. The signed Windows pass-through
-  declares the lower `op-auth-signed-unobfuscated-v1` anti-reversing profile.
+- Mach-O and ELF use the hardened profile. A signed Windows pass-through may
+  declare the lower `op-auth-signed-unobfuscated-v1` anti-reversing profile.
 
 `tools/check-op-auth-prebuilt.sh` reports the measured leakage without changing
 archive bytes. `--require-hardened` requires signed provenance for every ABI-v2+
@@ -38,9 +50,7 @@ host toolchain's own personality routine. The transformation happens only
 after provenance validation, preserves archive layout, and rejects ambiguous
 input; it never weakens the linker's duplicate-symbol checks.
 
-Production promotion creates exactly one auth-only child A of S. A atomically
-replaces the six stale desktop directories and adds four mobile directories,
-yielding this complete signed `0.8.5` ABI-v3 matrix:
+Every production matrix is an atomic, complete ten-target ABI-v3 set:
 
 ```text
 aarch64-apple-darwin       aarch64-apple-ios
@@ -50,22 +60,21 @@ x86_64-apple-darwin        x86_64-linux-android
 x86_64-pc-windows-msvc     x86_64-unknown-linux-gnu
 ```
 
-The signed release manifest binds all ten targets to the same application
-version, public source S, private source revision, and immutable build id.
-Release and TestFlight workflows accept A only after verifying both the whole
-matrix and the S -> A auth-only transition. Until A exists, mobile production
-authentication stays fail-closed: an authenticated Release cannot silently use
-a missing, stale, mismatched, or unsigned archive. Unsigned local mobile
-archives belong only in the explicit Debug override and must never be copied
-into this directory.
+The signed release manifest binds all ten targets to the same artifact release
+version, recorded public build context, private source revision, and immutable
+build id. Release and TestFlight verify the complete matrix in the source they
+build. They fail closed on a missing target, invalid signature, mismatched
+digest, ABI other than 3, inconsistent metadata, or unrecognized hardening
+profile. Unsigned local mobile archives belong only in the explicit Debug
+override and must never be copied into this directory.
 
 ## ABI-v2 / ABI-v3 signed provenance
 
 Every production target directory must contain:
 
 ```text
-ABI_VERSION       exactly 2 or 3
-VERSION           application package version
+ABI_VERSION       exactly 3 for production
+VERSION           private artifact release identifier
 SHA256            lowercase digest of the archive
 PROVENANCE        signed key/value manifest
 PROVENANCE.sig    raw Ed25519 signature, lowercase hex
@@ -127,23 +136,29 @@ candidate.
 
 ## Production promotion boundary
 
-Production uses the established private-repository release path:
+Production matrix rebuilds use the established private-repository release path:
 
-1. The private `ZSeven-W/op-platform` `prebuilt-production` workflow resolves
-   exact public source S, rebuilds and audits all ten ABI-v3 targets, and binds
-   every candidate to S, the private source revision, and one immutable build
-   id.
+1. The private `ZSeven-W/op-platform` `prebuilt-production` workflow rebuilds
+   and audits all ten ABI-v3 targets, and binds every candidate to the private
+   source revision, recorded public build context, and one immutable build id.
 2. That protected private workflow uses its existing
    `OP_AUTH_PROVENANCE_SIGNING_KEY_PEM` secret to sign every target and the
    complete release matrix, then independently verifies the signed result
-   against the public trust root in S.
-3. The workflow stages only the verified matrix onto a clean checkout at exact
-   S, proves that the staged diff is the complete auth-only transition, creates
-   the single-parent child A, and uses its existing
-   `OPENPENCIL_PUSH_TOKEN` secret to push A with an exact S lease.
-4. Rust releases and TestFlight accept A only after independently verifying the
-   complete signed matrix and the S -> A auth-only transition. The public
-   repository does not hold or run an Auth production promotion workflow.
+   against the public trust root.
+3. Promotion stages only the independently verified complete matrix. The
+   strict verification mode receives both the expected artifact version and
+   recorded public revision. It verifies the new signed matrix before its
+   digest is present in the current source policy; supplying only one expected
+   value is invalid.
+4. Normal Rust, Android, and App Store builds verify the matrix self-consistently
+   with neither strict-promotion input. They require the exact source-policy
+   digest but do not require the matrix's historical version or recorded public
+   revision to equal the consuming checkout.
+
+Rebuild this private matrix when op-platform implementation, ABI, toolchain, or
+hardening inputs change. An OpenPencil-only source change or package version
+bump does not by itself consume a private production build. Adopting a newly
+built private matrix requires a reviewed update to `AUTH-RELEASE-POLICY`.
 
 `tools/package-op-auth-prebuilt.sh` remains a low-level local packaging utility;
 it is not the production promotion path and must not receive the production

@@ -7,7 +7,8 @@ set -euo pipefail
 script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
 repo_root=$(CDPATH='' cd "$script_dir/.." && pwd)
 workflow=${OPENPENCIL_RUST_RELEASE_WORKFLOW:-$repo_root/.github/workflows/rust-release.yml}
-artifact_gate=$repo_root/tools/check-op-auth-artifact-commit.sh
+matrix_verifier=$repo_root/tools/check-op-auth-release-matrix.sh
+prebuilt_verifier=$repo_root/tools/check-op-auth-prebuilt.sh
 release_builder=${OPENPENCIL_RUST_RELEASE_BUILDER:-$repo_root/scripts/build-rust-release-host.sh}
 pinned_tools=${OPENPENCIL_PINNED_RELEASE_TOOLS:-$repo_root/tools/pinned-release-tools.sh}
 pinned_tools_test=$repo_root/tools/pinned-release-tools.test.sh
@@ -15,6 +16,8 @@ angle_stager=$repo_root/tools/stage-pinned-angle.ps1
 nsis_installer=$repo_root/tools/install-pinned-nsis.ps1
 windows_signer=$repo_root/tools/sign-windows-release.ps1
 package_handoff=$repo_root/tools/package-manager-handoff.sh
+release_flattener=$repo_root/tools/flatten-release-artifacts.sh
+release_flattener_test=$repo_root/tools/flatten-release-artifacts.test.sh
 appimage_packager=$repo_root/scripts/package-appimage.sh
 macos_bundler=$repo_root/scripts/bundle-macos.sh
 wasm_builder=$repo_root/tools/check-wasm-bundle.sh
@@ -23,10 +26,15 @@ dockerfile=${OPENPENCIL_WEB_DOCKERFILE:-$repo_root/Dockerfile.web-rust}
 vscode_package=$repo_root/packages/op-vscode/package.json
 bun_lock=$repo_root/packages/bun.lock
 version_sync_workflow=${OPENPENCIL_VERSION_SYNC_WORKFLOW:-$repo_root/.github/workflows/version-sync.yml}
+ios_workflow=$repo_root/.github/workflows/ios-app-store.yml
+android_workflow=$repo_root/.github/workflows/android-release.yml
+ios_workflow_checker=$repo_root/tools/check-ios-app-store-workflow.sh
+android_workflow_checker=$repo_root/tools/check-android-release-workflow.sh
 
 for file in \
-    "$workflow" "$artifact_gate" "$release_builder" "$pinned_tools" \
+    "$workflow" "$matrix_verifier" "$prebuilt_verifier" "$release_builder" "$pinned_tools" \
     "$pinned_tools_test" "$angle_stager" "$nsis_installer" "$windows_signer" "$package_handoff" \
+    "$release_flattener" "$release_flattener_test" \
     "$appimage_packager" "$macos_bundler" "$wasm_builder" "$sdk_wasm_builder" \
     "$dockerfile" "$vscode_package" "$bun_lock" "$version_sync_workflow"; do
     [[ -f "$file" && ! -L "$file" ]] || {
@@ -34,28 +42,62 @@ for file in \
         exit 1
     }
 done
+for file in \
+    "$ios_workflow" "$android_workflow" \
+    "$ios_workflow_checker" "$android_workflow_checker"; do
+    [[ -f "$file" && ! -L "$file" ]] || {
+        printf 'error: missing mobile release contract file: %s\n' "$file" >&2
+        exit 1
+    }
+done
 bash -n \
-    "$artifact_gate" "$release_builder" "$pinned_tools" "$pinned_tools_test" "$package_handoff" \
+    "$matrix_verifier" "$prebuilt_verifier" "$release_builder" "$pinned_tools" "$pinned_tools_test" "$package_handoff" \
+    "$release_flattener" "$release_flattener_test" \
     "$appimage_packager" "$macos_bundler" "$wasm_builder" "$sdk_wasm_builder"
+"$release_flattener_test"
 ruby - "$workflow" <<'RUBY'
 require "yaml"
 
 document = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)
 trigger = document["on"] || document[true]
 manual = trigger.fetch("workflow_dispatch")
-input = manual.fetch("inputs").fetch("auth_artifact_ref")
-raise "manual auth SHA must be required" unless input.fetch("required") == true
+unless manual.nil? || manual == {}
+  raise "manual release must build the selected ref without a separate Auth SHA input"
+end
 raise "workflow permissions must default to contents:read" unless document.fetch("permissions") == {"contents" => "read"}
 
 jobs = document.fetch("jobs")
 version = jobs.fetch("version")
 raise "auth gate must not access secrets or variables" if version.inspect.match?(/(?:secrets|vars)\./)
 checkout = version.fetch("steps").find { |step| step["uses"] }
-raise "auth-gate checkout must fetch the parent" unless checkout.fetch("with").fetch("fetch-depth") == 0
-raise "auth-gate checkout must discard credentials" unless checkout.fetch("with").fetch("persist-credentials") == false
+unless checkout.fetch("with") == {
+    "fetch-depth" => 1,
+    "persist-credentials" => false,
+    "ref" => '${{ github.sha }}',
+  }
+  raise "release gate must check out the exact source without credentials"
+end
+unless version.fetch("outputs") == {
+    "version" => '${{ steps.version.outputs.version }}',
+    "source_sha" => '${{ steps.version.outputs.source_sha }}',
+  }
+  raise "release gate must expose only current source identity"
+end
+version_gate = version.fetch("steps").find { |step| step["id"] == "version" }
+version_script = version_gate.fetch("run")
+unless version_script.include?('"$(git rev-parse HEAD)" == "$GITHUB_SHA"') &&
+    version_script.include?('"refs/heads/v$version"|"refs/tags/v$version"') &&
+    version_script.include?("tools/check-op-auth-release-matrix.sh") &&
+    version_script.include?("tools/check-op-auth-prebuilt.sh --require-hardened") &&
+    !version_script.include?("OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION") &&
+    !version_script.include?("OP_AUTH_RELEASE_WORKSPACE_VERSION")
+  raise "version gate must validate the source ref and adopted Auth matrix without A/S binding"
+end
 
 expected_permissions = {
   "version" => {"contents" => "read"},
+  "ios-app-store" => {"contents" => "read"},
+  "android-release" => {"contents" => "read"},
   "build" => {"contents" => "read"},
   "web-docker" => {"contents" => "read", "packages" => "write"},
   "sdk-packages" => {"contents" => "read"},
@@ -73,7 +115,11 @@ expected_permissions.each do |name, permissions|
   raise "#{name} permissions exceed the reviewed minimum" unless jobs.fetch(name).fetch("permissions") == permissions
 end
 raise "secret-free version gate must not request the release environment" if version.key?("environment")
-(jobs.keys - ["version"]).each do |name|
+reusable_jobs = %w[ios-app-store android-release]
+reusable_jobs.each do |name|
+  raise "#{name} must not set a caller-side environment" if jobs.fetch(name).key?("environment")
+end
+(jobs.keys - ["version"] - reusable_jobs).each do |name|
   raise "#{name} must be protected by release-production" unless jobs.fetch(name).fetch("environment") == "release-production"
 end
 
@@ -91,7 +137,7 @@ approved_actions = {
   "peter-evans/create-pull-request" => "5f6978faf089d4d20b00c7766989d076bb2fc7f1",
 }
 jobs.each do |job_name, job|
-  job.fetch("steps").each do |step|
+  job.fetch("steps", []).each do |step|
     next unless step["uses"]
     action, revision = step.fetch("uses").split("@", 2)
     unless revision&.match?(/\A[0-9a-f]{40}\z/)
@@ -162,7 +208,7 @@ buildx_run = buildx.fetch("run")
 unless buildx_run.include?("moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8")
   raise "BuildKit image must be immutable"
 end
-bun_steps = jobs.values.flat_map { |job| job.fetch("steps") }.select do |step|
+bun_steps = jobs.values.flat_map { |job| job.fetch("steps", []) }.select do |step|
   step["name"] == "Install digest-pinned Bun"
 end
 unless bun_steps.length == 2 && bun_steps.all? do |step|
@@ -170,7 +216,7 @@ unless bun_steps.length == 2 && bun_steps.all? do |step|
   end
   raise "every Bun setup must use the digest-pinned repository installer"
 end
-node_steps = jobs.values.flat_map { |job| job.fetch("steps") }.select do |step|
+node_steps = jobs.values.flat_map { |job| job.fetch("steps", []) }.select do |step|
   step["name"] == "Install digest-pinned Node"
 end
 unless node_steps.length == 2 && node_steps.all? do |step|
@@ -228,7 +274,41 @@ end
   raise "#{name} can bypass the version/auth gate" unless depends_on?(jobs, name, "version")
 end
 
+ios = jobs.fetch("ios-app-store")
+unless ios.fetch("uses") == "./.github/workflows/ios-app-store.yml" &&
+    ios.fetch("if") == "startsWith(github.ref, 'refs/tags/v')" &&
+    ios.fetch("needs") == "version" &&
+    ios.fetch("with") == {
+      "release_sha" => '${{ github.sha }}',
+      "release_ref" => '${{ github.ref }}',
+    } &&
+    ios.fetch("secrets") == {
+      "APPLE_TEAM_ID" => '${{ secrets.APPLE_TEAM_ID }}',
+      "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN" =>
+        '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}',
+      "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL" =>
+        '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}',
+    }
+  raise "formal release must call the exact reusable iOS App Store lane"
+end
+
+android = jobs.fetch("android-release")
+unless android.fetch("uses") == "./.github/workflows/android-release.yml" &&
+    android.fetch("if") == "startsWith(github.ref, 'refs/tags/v')" &&
+    android.fetch("needs") == "version" &&
+    android.fetch("secrets") == {
+      "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN" =>
+        '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}',
+      "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL" =>
+        '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}',
+    } && !android.key?("with")
+  raise "formal release must call the exact reusable Android asset lane"
+end
+
 release = jobs.fetch("release-draft")
+release_needs = Array(release.fetch("needs"))
+raise "GitHub Release must wait for signed Android assets" unless release_needs.include?("android-release")
+raise "App Store failure must not block GitHub Release assets" if release_needs.include?("ios-app-store")
 expected_handoff_outputs = {
   "package_manager_artifact_id" => '${{ steps.package_manager_handoff.outputs.artifact-id }}',
   "package_manager_artifact_digest" => '${{ steps.package_manager_handoff.outputs.artifact-digest }}',
@@ -238,6 +318,11 @@ raise "package-manager handoff outputs changed" unless release.fetch("outputs") 
 handoff_upload = release.fetch("steps").find { |step| step["id"] == "package_manager_handoff" }
 raise "missing immutable package-manager handoff upload" unless handoff_upload
 raise "package-manager handoff must fail closed" unless handoff_upload.fetch("with").fetch("if-no-files-found") == "error"
+flatten = release.fetch("steps").find { |step| step["name"] == "Flatten artifacts" }
+raise "missing release asset flatten gate" unless flatten
+unless flatten.fetch("run") == 'tools/flatten-release-artifacts.sh dist release-files "$OP_VERSION"'
+  raise "release assets must pass the repository-owned flatten gate"
+end
 
 package_steps = jobs.fetch("package-managers").fetch("steps")
 handoff_download = package_steps.find { |step| step["name"] == "Download immutable same-run package-manager handoff" }
@@ -304,15 +389,16 @@ require_count() {
     }
 }
 
-require_literal 'tools/check-op-auth-artifact-commit.sh' "$workflow"
-require_literal 'tools/check-op-auth-artifact-commit.test.sh' "$workflow"
 require_literal 'tools/check-op-auth-release-matrix.test.sh' "$workflow"
+require_literal 'tools/check-op-auth-release-matrix.sh' "$workflow"
+require_literal 'tools/check-op-auth-prebuilt.sh --require-hardened' "$workflow"
 require_literal 'tools/check-op-auth-cargo-build.test.sh' "$workflow"
 require_literal 'tools/pinned-release-tools.test.sh' "$workflow"
-require_literal 'git -C "$repo_root" rev-list --parents -n 1' "$artifact_gate"
-require_literal 'git -C "$repo_root" diff-tree --no-commit-id --name-only --no-renames -r' "$artifact_gate"
-require_literal 'tools/check-op-auth-release-matrix.sh' "$artifact_gate"
-require_literal 'tools/check-op-auth-prebuilt.sh" --require-hardened' "$artifact_gate"
+reject_literal 'auth_artifact_ref:' "$workflow"
+reject_literal 'tools/check-op-auth-artifact-commit.sh' "$workflow"
+reject_literal 'tools/check-op-auth-artifact-commit.test.sh' "$workflow"
+reject_literal 'OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION:' "$workflow"
+reject_literal 'OP_AUTH_RELEASE_WORKSPACE_VERSION:' "$workflow"
 require_literal 'tools/check-collab-bootstrap-urls.py' "$release_builder"
 require_literal 'cargo clean -p op-auth-bridge' "$release_builder"
 require_literal 'tools/check-op-auth-cargo-build.sh' "$release_builder"

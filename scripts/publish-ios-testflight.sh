@@ -54,9 +54,9 @@ usage() {
         '' \
         'Required environment:' \
         '  OP_AUTH_ARTIFACT_ROOT' \
-        '  OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION' \
         '  IOS_MARKETING_VERSION, IOS_BUILD_NUMBER, APPLE_TEAM_ID' \
-        '  IOS_USES_NON_EXEMPT_ENCRYPTION (YES or NO)' \
+        '  IOS_USES_NON_EXEMPT_ENCRYPTION (must be YES)' \
+        '  IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE' \
         '  OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN' \
         '  OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL' \
         '  IOS_DISTRIBUTION_CERTIFICATE_BASE64' \
@@ -112,7 +112,6 @@ sha256_file() {
 
 required_env=(
     OP_AUTH_ARTIFACT_ROOT
-    OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION
     IOS_MARKETING_VERSION
     IOS_BUILD_NUMBER
     IOS_USES_NON_EXEMPT_ENCRYPTION
@@ -156,8 +155,9 @@ workspace_version=$("$repo_root/scripts/workspace-version.sh")
     printf 'error: iOS marketing version must match the OpenPencil workspace\n' >&2
     exit 2
 }
-[[ "$IOS_BUILD_NUMBER" =~ ^[1-9][0-9]*(\.[1-9][0-9]*){1,2}$ ]] || {
-    printf 'error: iOS build number must contain two or three positive numeric components\n' >&2
+[[ "$IOS_BUILD_NUMBER" \
+    =~ ^[1-9][0-9]{0,3}\.([0-9]|[1-9][0-9])\.([0-9]|[1-9][0-9])$ ]] || {
+    printf 'error: iOS build number must use conservative 4.2.2 numeric components\n' >&2
     exit 2
 }
 [[ "$apple_team_id" =~ ^[A-Z0-9]{10}$ ]] || {
@@ -173,22 +173,15 @@ workspace_version=$("$repo_root/scripts/workspace-version.sh")
     printf 'error: APP_STORE_CONNECT_ISSUER_ID is malformed\n' >&2
     exit 2
 }
-[[ "$IOS_USES_NON_EXEMPT_ENCRYPTION" == YES \
-    || "$IOS_USES_NON_EXEMPT_ENCRYPTION" == NO ]] || {
-    printf 'error: IOS_USES_NON_EXEMPT_ENCRYPTION must be explicitly set to YES or NO\n' >&2
+[[ "$IOS_USES_NON_EXEMPT_ENCRYPTION" == YES ]] || {
+    printf 'error: IOS_USES_NON_EXEMPT_ENCRYPTION must remain YES for this release\n' >&2
     exit 2
 }
 encryption_export_code=${IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE:-}
-if [[ "$IOS_USES_NON_EXEMPT_ENCRYPTION" == YES ]]; then
-    [[ "$encryption_export_code" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || {
-        printf '%s\n' \
-            'error: non-exempt encryption requires IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE' \
-            >&2
-        exit 2
-    }
-fi
-[[ "$OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION" =~ ^[0-9a-f]{40}$ ]] || {
-    printf 'error: expected OpenPencil auth revision must be a full commit SHA\n' >&2
+[[ "$encryption_export_code" =~ ^[A-Za-z0-9._-]{1,128}$ ]] || {
+    printf '%s\n' \
+        'error: non-exempt encryption requires IOS_ENCRYPTION_EXPORT_COMPLIANCE_CODE' \
+        >&2
     exit 2
 }
 printf '%s\0%s\0' "$relay_bootstrap_cn" "$relay_bootstrap_global" \
@@ -314,8 +307,6 @@ trusted_public_key_sha=$(sha256_file "$trusted_public_key")
 cp -p "$trusted_public_key" "$staged_prebuilt/PROVENANCE_PUBKEY"
 
 OP_AUTH_PREBUILT_ROOT=$staged_prebuilt \
-OP_AUTH_RELEASE_WORKSPACE_VERSION=$workspace_version \
-OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION=$OP_AUTH_RELEASE_EXPECTED_OPENPENCIL_REVISION \
     "$repo_root/tools/check-op-auth-release-matrix.sh"
 OP_AUTH_PREBUILT_ROOT=$staged_prebuilt \
     "$repo_root/tools/check-op-auth-prebuilt.sh" --require-hardened
@@ -357,6 +348,8 @@ OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN=$relay_bootstrap_cn \
 OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL=$relay_bootstrap_global \
     cargo build --locked --release -p op-engine-ffi \
         --target aarch64-apple-ios --features metal,editor,pinned-skia-binaries
+OP_AUTH_CARGO_TARGET=aarch64-apple-ios \
+    "$repo_root/tools/check-op-auth-cargo-build.sh"
 engine_archive=$repo_root/target/aarch64-apple-ios/release/libop_engine_ffi.a
 require_regular_file "$engine_archive"
 undefined_symbols=$temp_dir/engine-undefined-symbols
@@ -522,12 +515,8 @@ archive_path=$temp_dir/OpenPencilPlayer.xcarchive
 derived_data=$temp_dir/DerivedData
 encryption_build_settings=(
     "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=$IOS_USES_NON_EXEMPT_ENCRYPTION"
+    "INFOPLIST_KEY_ITSEncryptionExportComplianceCode=$encryption_export_code"
 )
-if [[ "$IOS_USES_NON_EXEMPT_ENCRYPTION" == YES ]]; then
-    encryption_build_settings+=(
-        "INFOPLIST_KEY_ITSEncryptionExportComplianceCode=$encryption_export_code"
-    )
-fi
 xcodebuild \
     -project "$player_dir/OpenPencilPlayer.xcodeproj" \
     -scheme OpenPencilPlayer \
@@ -559,25 +548,17 @@ require_regular_file "$app_info"
     == "$IOS_MARKETING_VERSION" ]]
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_info")" \
     == "$IOS_BUILD_NUMBER" ]]
-expected_encryption_plist=false
-[[ "$IOS_USES_NON_EXEMPT_ENCRYPTION" == YES ]] && expected_encryption_plist=true
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :ITSAppUsesNonExemptEncryption' "$app_info")" \
-    == "$expected_encryption_plist" ]] || {
+    == true ]] || {
     printf 'error: export-compliance declaration is missing from the archived app\n' >&2
     exit 1
 }
-if [[ "$IOS_USES_NON_EXEMPT_ENCRYPTION" == YES ]]; then
-    [[ "$(/usr/libexec/PlistBuddy \
-        -c 'Print :ITSEncryptionExportComplianceCode' "$app_info")" \
-        == "$encryption_export_code" ]] || {
-        printf 'error: encryption export compliance code is missing from the archived app\n' >&2
-        exit 1
-    }
-elif /usr/libexec/PlistBuddy -c 'Print :ITSEncryptionExportComplianceCode' \
-    "$app_info" >/dev/null 2>&1; then
-    printf 'error: exempt-encryption builds must not include an export compliance code\n' >&2
+[[ "$(/usr/libexec/PlistBuddy \
+    -c 'Print :ITSEncryptionExportComplianceCode' "$app_info")" \
+    == "$encryption_export_code" ]] || {
+    printf 'error: encryption export compliance code is missing from the archived app\n' >&2
     exit 1
-fi
+}
 local_network_usage=$(
     /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$app_info" \
         2>/dev/null || true

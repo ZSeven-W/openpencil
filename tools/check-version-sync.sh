@@ -606,14 +606,23 @@ require_workflow_job_regex version \
     '^[[:space:]]*(-[[:space:]]+)?id:[[:space:]]+version[[:space:]]*$' \
     'version preflight must identify the canonical version step'
 require_workflow_job_regex version \
-    '^[[:space:]]*tools/check-op-auth-artifact-commit[.]sh[[:space:]]*$' \
-    'release version computation must use the production auth artifact gate'
+    '^[[:space:]]*version=\$\(scripts/workspace-version[.]sh\)[[:space:]]*$' \
+    'release version computation must use the canonical workspace reader'
 require_workflow_job_regex version \
-    '^[[:space:]]*OP_AUTH_ARTIFACT_OUTPUT=\$GITHUB_OUTPUT[[:space:]]*\\[[:space:]]*$' \
-    'production auth gate must write the canonical version to GITHUB_OUTPUT'
+    '^[[:space:]]*tools/check-op-auth-release-matrix[.]sh[[:space:]]*$' \
+    'release preflight must validate the adopted signed Auth matrix'
 require_workflow_job_regex version \
-    'OP_AUTH_ARTIFACT_REF:[[:space:]]*\$\{\{[[:space:]]*github[.]ref[[:space:]]*\}\}' \
-    'production auth gate must validate the exact branch or tag ref'
+    '^[[:space:]]*tools/check-op-auth-prebuilt[.]sh[[:space:]]+--require-hardened[[:space:]]*$' \
+    'release preflight must reject an incomplete or development Auth matrix'
+require_workflow_job_regex version \
+    'refs/heads/v\$version.*refs/tags/v\$version' \
+    'release preflight must validate the exact version branch or tag ref'
+require_workflow_job_regex version \
+    'git rev-parse HEAD.*GITHUB_SHA' \
+    'release preflight must bind the checkout to the event source SHA'
+require_workflow_job_regex version \
+    '^[[:space:]]*echo[[:space:]]+"version=\$version"[[:space:]]+>>[[:space:]]+"\$GITHUB_OUTPUT"[[:space:]]*$' \
+    'release preflight must write the canonical version to GITHUB_OUTPUT'
 require_workflow_job_regex build \
     '^[[:space:]]*needs:[[:space:]]*version[[:space:]]*$' \
     'build must depend on the version preflight job'
@@ -624,7 +633,7 @@ require_workflow_job_regex sdk-packages \
     '^[[:space:]]*needs:[[:space:]]*version[[:space:]]*$' \
     'sdk-packages must depend on the version preflight job'
 require_workflow_job_regex release-draft \
-    '^[[:space:]]*needs:[[:space:]]*\[version,[[:space:]]*build,[[:space:]]*web-docker,[[:space:]]*sdk-packages,[[:space:]]*vsix\][[:space:]]*$' \
+    '^[[:space:]]*needs:[[:space:]]*\[version,[[:space:]]*android-release,[[:space:]]*build,[[:space:]]*web-docker,[[:space:]]*sdk-packages,[[:space:]]*vsix\][[:space:]]*$' \
     'release-draft must preserve artifact dependencies and depend on version preflight'
 require_workflow_job_regex package-managers \
     '^[[:space:]]*needs:[[:space:]]*\[version,[[:space:]]*release-draft\][[:space:]]*$' \

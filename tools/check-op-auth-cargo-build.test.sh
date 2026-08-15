@@ -29,6 +29,22 @@ CARGO_TARGET_DIR=$temp_root \
 OP_AUTH_CARGO_TARGET=$target \
     "$script_dir/check-op-auth-cargo-build.sh" >/dev/null
 
+android_target=aarch64-linux-android
+android_output_dir=$temp_root/$android_target/release/build/op-auth-bridge-fixture
+mkdir -p "$android_output_dir"
+cp "$output" "$android_output_dir/output"
+CARGO_TARGET_DIR=$temp_root \
+OP_AUTH_CARGO_TARGET=$android_target \
+    "$script_dir/check-op-auth-cargo-build.sh" >/dev/null
+
+ios_target=aarch64-apple-ios
+ios_output_dir=$temp_root/$ios_target/release/build/op-auth-bridge-fixture
+mkdir -p "$ios_output_dir"
+cp "$output" "$ios_output_dir/output"
+CARGO_TARGET_DIR=$temp_root \
+OP_AUTH_CARGO_TARGET=$ios_target \
+    "$script_dir/check-op-auth-cargo-build.sh" >/dev/null
+
 printf '%s\n' \
     cargo:rustc-cfg=op_auth_prebuilt \
     cargo:rustc-cfg=op_auth_collab_ticket_prebuilt \

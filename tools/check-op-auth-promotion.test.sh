@@ -281,18 +281,62 @@ python3 "$script_dir/digest-op-auth-tree.py" \
 
 promotion_repo=$temp_dir/promotion-repo
 prebuilt=$promotion_repo/crates/op-auth-bridge/prebuilt
-mkdir -p "$prebuilt"
+policy=$promotion_repo/crates/op-auth-bridge/AUTH-RELEASE-POLICY
+mkdir -p "$prebuilt" "$promotion_repo/tools"
 git -C "$temp_dir" init -q -b main promotion-repo
 git -C "$promotion_repo" config user.name fixture
 git -C "$promotion_repo" config user.email fixture@example.invalid
+cp "$script_dir/check-op-auth-release-matrix.sh" "$promotion_repo/tools/"
+chmod +x "$promotion_repo/tools/check-op-auth-release-matrix.sh"
 cp "$trusted_public_key" "$prebuilt/PROVENANCE_PUBKEY"
-git -C "$promotion_repo" add crates/op-auth-bridge/prebuilt/PROVENANCE_PUBKEY
+printf 'previous source adoption policy\n' > "$policy"
+git -C "$promotion_repo" add \
+    tools/check-op-auth-release-matrix.sh \
+    crates/op-auth-bridge/prebuilt/PROVENANCE_PUBKEY \
+    crates/op-auth-bridge/AUTH-RELEASE-POLICY
 git -C "$promotion_repo" commit -q -m 'test: base trust root'
 parent=$(git -C "$promotion_repo" rev-parse HEAD)
 cp -R "$signed_root"/. "$prebuilt"/
-git -C "$promotion_repo" add -A crates/op-auth-bridge/prebuilt
+manifest_sha=$(sha256_file "$prebuilt/RELEASE-MANIFEST")
+public_key=$(tr -d '[:space:]' < "$prebuilt/PROVENANCE_PUBKEY")
+cat > "$policy" <<EOF
+format=op-auth-release-policy-v1
+abi=3
+public_key=$public_key
+release_manifest_sha256=$manifest_sha
+source_revision=$private_head_sha
+build_id=$build_id
+EOF
+valid_policy=$temp_dir/valid-auth-release-policy
+cp "$policy" "$valid_policy"
+git -C "$promotion_repo" add -A \
+    crates/op-auth-bridge/prebuilt \
+    crates/op-auth-bridge/AUTH-RELEASE-POLICY
 bash "$script_dir/verify-op-auth-promotion-diff.sh" \
     --repo "$promotion_repo" --expected-parent "$parent" >/dev/null
+
+expect_policy_rejection() {
+    local field=$1
+    local value=$2
+    sed "s#^$field=.*#$field=$value#" "$valid_policy" > "$policy"
+    git -C "$promotion_repo" add crates/op-auth-bridge/AUTH-RELEASE-POLICY
+    if bash "$script_dir/verify-op-auth-promotion-diff.sh" \
+        --repo "$promotion_repo" --expected-parent "$parent" >/dev/null 2>&1; then
+        printf 'error: promotion policy with wrong %s was accepted\n' "$field" >&2
+        exit 1
+    fi
+}
+expect_policy_rejection abi 2
+expect_policy_rejection public_key \
+    9999999999999999999999999999999999999999999999999999999999999999
+expect_policy_rejection release_manifest_sha256 \
+    0000000000000000000000000000000000000000000000000000000000000000
+expect_policy_rejection source_revision \
+    9999999999999999999999999999999999999999
+expect_policy_rejection build_id wrong-build
+cp "$valid_policy" "$policy"
+git -C "$promotion_repo" add crates/op-auth-bridge/AUTH-RELEASE-POLICY
+
 printf 'outside auth matrix\n' > "$promotion_repo/OUTSIDE"
 git -C "$promotion_repo" add OUTSIDE
 if bash "$script_dir/verify-op-auth-promotion-diff.sh" \

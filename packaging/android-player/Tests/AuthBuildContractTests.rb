@@ -17,5 +17,9 @@ raise "auth build script must never request Cargo release" if script.include?("-
 raise "auth build script must use the explicit feature" unless script.include?("mobile-auth-dev")
 raise "README must document Release source isolation" unless readme.include?("app/src/release/jniLibs")
 raise "README must state that no unsigned auth ships" unless readme.include?("cannot leak into Release")
+raise "README must document GitHub Release-only Android publishing" unless readme.include?("does not upload to Google Play")
+raise "README must document the stable signing keystore" unless readme.include?("ANDROID_RELEASE_KEYSTORE_BASE64")
+raise "README must document the pinned signer certificate" unless readme.include?("ANDROID_RELEASE_CERT_SHA256")
+raise "README must document API 36 and 16 KB gates" unless readme.include?("target API 36") && readme.include?("PAGE_ALIGNMENT_16K")
 
 puts "Android auth build contract validates"
