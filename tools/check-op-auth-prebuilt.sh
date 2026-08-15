@@ -23,11 +23,22 @@ if [[ "$#" -ne 0 ]]; then
 fi
 
 prebuilt_root=${OP_AUTH_PREBUILT_ROOT:-crates/op-auth-bridge/prebuilt}
+trusted_public_key=$repo_root/crates/op-auth-bridge/prebuilt/PROVENANCE_PUBKEY
 failures=()
 artifact_count=0
+signature_verification_error=
+verification_dir=
 
 record_failure() {
     failures+=("$1")
+}
+
+has_exact_manifest_line() {
+    local expected=$1
+    local manifest=$2
+    local count
+    count=$(LC_ALL=C grep -Fxc -- "$expected" "$manifest" || true)
+    [[ "$count" -eq 1 ]]
 }
 
 sha256_file() {
@@ -37,6 +48,73 @@ sha256_file() {
         shasum -a 256 "$1" | awk '{ print $1 }'
     else
         return 127
+    fi
+}
+
+prepare_verification_dir() {
+    if [[ -n "$verification_dir" ]]; then
+        return 0
+    fi
+    verification_dir=$(mktemp -d "${TMPDIR:-/tmp}/op-auth-prebuilt-verify.XXXXXX") \
+        || {
+            signature_verification_error="could not create a provenance verification directory"
+            return 1
+        }
+    if ! chmod 700 "$verification_dir"; then
+        signature_verification_error="could not secure the provenance verification directory"
+        return 1
+    fi
+}
+
+verify_ed25519_hex_signature() {
+    local payload=$1
+    local signature_file=$2
+    local public_key_hex signature_hex
+
+    signature_verification_error=
+    if ! command -v openssl >/dev/null 2>&1; then
+        signature_verification_error="openssl is required for provenance verification"
+        return 1
+    fi
+    if ! command -v xxd >/dev/null 2>&1; then
+        signature_verification_error="xxd is required for provenance verification"
+        return 1
+    fi
+
+    public_key_hex=$(tr -d '[:space:]' < "$trusted_public_key")
+    signature_hex=$(tr -d '[:space:]' < "$signature_file")
+    if [[ ! "$public_key_hex" =~ ^[0-9a-f]{64}$ ]]; then
+        signature_verification_error="release provenance public key encoding is invalid"
+        return 1
+    fi
+    if [[ ! "$signature_hex" =~ ^[0-9a-f]{128}$ ]]; then
+        signature_verification_error="provenance signature encoding is invalid"
+        return 1
+    fi
+
+    prepare_verification_dir || return 1
+    if ! printf '302a300506032b6570032100%s' "$public_key_hex" \
+        | xxd -r -p > "$verification_dir/public.der"; then
+        signature_verification_error="release provenance public key decoding failed"
+        return 1
+    fi
+    if ! printf '%s' "$signature_hex" \
+        | xxd -r -p > "$verification_dir/signature.bin"; then
+        signature_verification_error="provenance signature decoding failed"
+        return 1
+    fi
+    if ! openssl pkey -pubin -inform DER \
+        -in "$verification_dir/public.der" \
+        -out "$verification_dir/public.pem" >/dev/null 2>&1; then
+        signature_verification_error="release provenance public key is invalid"
+        return 1
+    fi
+    if ! openssl pkeyutl -verify -rawin -pubin \
+        -inkey "$verification_dir/public.pem" \
+        -in "$payload" \
+        -sigfile "$verification_dir/signature.bin" >/dev/null 2>&1; then
+        signature_verification_error="provenance signature verification failed"
+        return 1
     fi
 }
 
@@ -96,6 +174,16 @@ if [[ ! -d "$prebuilt_root" ]]; then
     exit 0
 fi
 
+cleanup() {
+    if [[ -n "$verification_dir" ]]; then
+        rm -rf "$verification_dir"
+    fi
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 while IFS= read -r artifact; do
     artifact_count=$((artifact_count + 1))
     target_dir=$(dirname "$artifact")
@@ -110,6 +198,8 @@ while IFS= read -r artifact; do
     fi
 
     checksum_path=$target_dir/SHA256
+    expected_sha256=
+    actual_sha256=
     if [[ ! -f "$checksum_path" ]]; then
         record_failure "$target: SHA256 is missing"
     else
@@ -127,8 +217,11 @@ while IFS= read -r artifact; do
     fi
 
     version_path=$target_dir/VERSION
+    artifact_version=
     if [[ ! -s "$version_path" ]]; then
         record_failure "$target: VERSION is missing"
+    else
+        artifact_version=$(tr -d '[:space:]' < "$version_path")
     fi
 
     abi_version=1
@@ -166,19 +259,69 @@ while IFS= read -r artifact; do
     obfuscated=1
     if [[ "$abi_version" -ge 2 ]]; then
         hardened=1
-        for signed_file in PROVENANCE PROVENANCE.sig; do
-            if [[ ! -s "$target_dir/$signed_file" ]]; then
-                record_failure "$target: signed ABI-v2+ $signed_file is missing"
+        provenance_path=$target_dir/PROVENANCE
+        signature_path=$target_dir/PROVENANCE.sig
+        signed_files_ready=1
+        for signed_file in "$provenance_path" "$signature_path"; do
+            if [[ -L "$signed_file" \
+                || ! -f "$signed_file" \
+                || ! -s "$signed_file" ]]; then
+                signed_name=$(basename "$signed_file")
+                record_failure "$target: signed ABI-v2+ $signed_name is missing"
+                signed_files_ready=0
             fi
         done
-        if [[ ! -s "$prebuilt_root/PROVENANCE_PUBKEY" ]]; then
+        trusted_key_ready=1
+        if [[ -L "$trusted_public_key" \
+            || ! -f "$trusted_public_key" \
+            || ! -s "$trusted_public_key" ]]; then
             record_failure "$target: release provenance public key is missing"
+            trusted_key_ready=0
         fi
-        if [[ -f "$target_dir/PROVENANCE" ]]; then
-            if grep -Fxq 'hardening=op-auth-hardened-v1' "$target_dir/PROVENANCE"; then
+        manifest_for_checks=
+        signature_for_checks=
+        if [[ "$signed_files_ready" -eq 1 ]]; then
+            signature_verification_error=
+            if prepare_verification_dir; then
+                manifest_for_checks=$verification_dir/$artifact_count.PROVENANCE
+                signature_for_checks=$verification_dir/$artifact_count.PROVENANCE.sig
+                if ! cp "$provenance_path" "$manifest_for_checks" \
+                    || ! cp "$signature_path" "$signature_for_checks"; then
+                    record_failure "$target: signed provenance could not be snapshotted"
+                    manifest_for_checks=
+                    signature_for_checks=
+                fi
+            else
+                record_failure "$target: $signature_verification_error"
+            fi
+        fi
+        if [[ -n "$manifest_for_checks" && "$trusted_key_ready" -eq 1 ]] \
+            && ! verify_ed25519_hex_signature \
+                "$manifest_for_checks" "$signature_for_checks"; then
+            record_failure "$target: $signature_verification_error"
+        fi
+        if [[ -n "$manifest_for_checks" ]]; then
+            for signed_field in \
+                'format=1' \
+                "target=$target" \
+                "artifact=$artifact_name" \
+                "version=$artifact_version" \
+                "abi=$abi_version" \
+                "sha256=$actual_sha256"; do
+                has_exact_manifest_line "$signed_field" "$manifest_for_checks" \
+                    || record_failure \
+                        "$target: signed provenance does not match $signed_field"
+            done
+            hardened_profile_count=$(LC_ALL=C grep -Fxc -- \
+                'hardening=op-auth-hardened-v1' "$manifest_for_checks" || true)
+            unobfuscated_profile_count=$(LC_ALL=C grep -Fxc -- \
+                'hardening=op-auth-signed-unobfuscated-v1' \
+                "$manifest_for_checks" || true)
+            if [[ "$hardened_profile_count" -eq 1 \
+                && "$unobfuscated_profile_count" -eq 0 ]]; then
                 obfuscated=1
-            elif grep -Fxq 'hardening=op-auth-signed-unobfuscated-v1' \
-                "$target_dir/PROVENANCE"; then
+            elif [[ "$hardened_profile_count" -eq 0 \
+                && "$unobfuscated_profile_count" -eq 1 ]]; then
                 obfuscated=0
             else
                 record_failure "$target: signed hardening profile is missing or unrecognized"
