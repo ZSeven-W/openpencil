@@ -405,6 +405,14 @@ pub const TOOL_PROFILES: &[ToolProfile] = &[
     ToolProfile::new("design_content", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("design_refine", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("design_skeleton", ToolAccess::Write, ToolSurface::InMemory),
+    ToolProfile::new(
+        "enrich_images",
+        ToolAccess::Write,
+        // Stock-photo search dials the product-constant Openverse / Wikimedia
+        // hosts from the daemon — outbound network, like import_html_url.
+        ToolSurface::OutboundNetwork,
+    ),
+    ToolProfile::new("finalize_design", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("duplicate_page", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new(
         "duplicate_selected",

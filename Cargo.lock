@@ -4153,6 +4153,7 @@ dependencies = [
  "op-host-services",
  "op-html",
  "op-i18n",
+ "op-image-enrich",
  "op-mcp",
  "op-opmerge",
  "op-orchestrator",
@@ -4241,6 +4242,7 @@ dependencies = [
  "op-host-native",
  "op-html",
  "op-i18n",
+ "op-image-enrich",
  "op-mcp",
  "op-orchestrator",
  "op-pen-loader",
@@ -4311,6 +4313,16 @@ name = "op-i18n"
 version = "0.8.5"
 dependencies = [
  "op-html",
+]
+
+[[package]]
+name = "op-image-enrich"
+version = "0.8.5"
+dependencies = [
+ "jian-ops-schema",
+ "op-editor-core",
+ "op-editor-ui",
+ "op-pen-loader",
 ]
 
 [[package]]

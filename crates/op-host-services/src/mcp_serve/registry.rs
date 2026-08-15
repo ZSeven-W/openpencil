@@ -172,6 +172,8 @@ pub(super) fn rebuild_registry(
     register_tool!("design_skeleton", design_skeleton_snapshot());
     register_tool!("design_content", design_content_snapshot());
     register_tool!("design_refine", design_refine_snapshot(doc));
+    register_tool!("finalize_design", finalize_design_snapshot(doc));
+    register_tool!("enrich_images", enrich_images_snapshot(doc));
     register_tool!("set_variable_number", set_variable_number_snapshot(doc));
     register_tool!("set_variable_string", set_variable_string_snapshot(doc));
     register_tool!("set_variable_boolean", set_variable_boolean_snapshot(doc));

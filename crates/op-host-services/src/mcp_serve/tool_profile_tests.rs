@@ -63,6 +63,10 @@ fn the_denied_set_is_exactly_the_reviewed_list() {
             "debug_logs_tail",
             "debug_screenshot",
             "debug_validation_report",
+            // Stock-photo search dials public providers from the daemon host —
+            // outbound network, denied online for the same reason
+            // import_html_url is.
+            "enrich_images",
             // Writes a deck file at a caller-chosen path — denied online for the
             // same reason save_document is.
             "export_deck",

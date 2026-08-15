@@ -1,64 +1,70 @@
 //! Image-slot detection: which nodes in the document want an image, what
-//! query describes them, and how a turn's intent is fingerprinted. Carved
-//! out of the `image_search_session.rs` spine to keep it under the
-//! 800-line cap; pure code motion.
+//! query describes them, and which acquisition mode the slot is bound to.
+//!
+//! Moved here from `op-host-desktop/src/image_search_session/targets.rs`
+//! (pure code motion) so the headless MCP `enrich_images` tool and the
+//! desktop image-search session share one predicate vocabulary.
+//!
+//! The desktop session's intent fingerprints
+//! (`intent_fingerprint` / `current_intent_fingerprints`) depend on
+//! desktop-only plumbing (`image_panel_host`'s active gen profile) and stay
+//! in the desktop crate (`image_search_session/intent.rs`).
 
 use std::collections::{HashMap, HashSet};
 
 use jian_ops_schema::node::{PenNode, TextContent};
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::PenFill;
-use op_editor_core::agent_settings::ImageGenProfile;
 use op_editor_core::{EditorState, NodeId, PenNodeExt as _};
 
-use super::{search_intent_key, ImageAspectRatio, ImageRequestMode, ImageSearchTarget};
+/// One unresolved image slot plus everything a search or generation request
+/// needs to resolve it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageSearchTarget {
+    pub node_id: NodeId,
+    /// Stock-search keyword (`image_search_query` ?? name ?? …).
+    pub query: String,
+    pub aspect_ratio: Option<ImageAspectRatio>,
+    /// AI-generation prompt bound to the node (`image_prompt`), if any. Used when
+    /// an image-gen model is configured; falls back to `query`.
+    pub prompt: Option<String>,
+    /// Explicit `G()` acquisition mode, or Auto for legacy/heuristic slots.
+    pub mode: ImageRequestMode,
+    /// Resolved numeric dimensions (for the gen provider's aspect mapping).
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+}
 
-pub(super) fn intent_fingerprint(
-    target: &ImageSearchTarget,
-    profile: Option<&ImageGenProfile>,
-) -> String {
-    let generate = target.mode == ImageRequestMode::Generate
-        || (target.mode == ImageRequestMode::Auto && profile.is_some());
-    if generate {
-        let (profile_id, model) = profile
-            .map(|profile| (profile.id.as_str(), profile.model.as_str()))
-            .unwrap_or(("unconfigured", "unconfigured"));
-        format!(
-            "generate|{profile_id}|{model}|{}|{:?}|{:?}",
-            target
-                .prompt
-                .as_deref()
-                .filter(|prompt| !prompt.trim().is_empty())
-                .unwrap_or(target.query.as_str())
-                .trim(),
-            target.width.map(f64::to_bits),
-            target.height.map(f64::to_bits)
-        )
-    } else {
-        let key = search_intent_key(&target.query, target.aspect_ratio);
-        format!("search|{}|{:?}", key.query, key.aspect_ratio)
+/// How a slot wants its image: stock search, AI generation, or the legacy
+/// "configured generation first, otherwise stock search" heuristic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageRequestMode {
+    Auto,
+    Search,
+    Generate,
+}
+
+/// Openverse aspect-ratio filter bucket, inferred from resolved slot size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ImageAspectRatio {
+    Wide,
+    Tall,
+    Square,
+}
+
+impl ImageAspectRatio {
+    /// Openverse `aspect_ratio` query parameter for this bucket. Public so the
+    /// desktop crate's provider fetch can build its search URL.
+    pub fn as_openverse_param(self) -> &'static str {
+        match self {
+            Self::Wide => "wide",
+            Self::Tall => "tall",
+            Self::Square => "square",
+        }
     }
 }
 
-pub(super) fn current_intent_fingerprints(
-    state: &EditorState,
-    scene: Option<&op_editor_ui::layout_scene::LayoutScene>,
-) -> HashMap<String, String> {
-    let profile = crate::image_panel_host::active_image_gen_profile(state);
-    let targets = match scene {
-        Some(scene) => collect_targets_with_scene(state, &HashSet::new(), scene),
-        None => collect_targets(state, &HashSet::new()),
-    };
-    targets
-        .into_iter()
-        .map(|target| {
-            let fingerprint = intent_fingerprint(&target, profile);
-            (target.node_id.as_str().to_string(), fingerprint)
-        })
-        .collect()
-}
-
-pub(crate) fn collect_targets(
+pub fn collect_targets(
     state: &EditorState,
     known_node_ids: &HashSet<String>,
 ) -> Vec<ImageSearchTarget> {
@@ -66,7 +72,7 @@ pub(crate) fn collect_targets(
     collect_targets_with_scene(state, known_node_ids, &scene)
 }
 
-pub(super) fn collect_targets_with_scene(
+pub fn collect_targets_with_scene(
     state: &EditorState,
     known_node_ids: &HashSet<String>,
     scene: &op_editor_ui::layout_scene::LayoutScene,
@@ -262,7 +268,7 @@ fn image_search_target_for(
     })
 }
 
-pub(crate) fn image_request_mode(node: &PenNode) -> ImageRequestMode {
+pub fn image_request_mode(node: &PenNode) -> ImageRequestMode {
     match node {
         // Legacy / script-generated Image nodes intentionally carry both
         // fields: generation uses the richer prompt when a profile exists,
@@ -314,7 +320,7 @@ fn is_placeholder_src(src: &str) -> bool {
 
 /// A single image fill whose url is still the placeholder/empty value —
 /// the author asked for an image here but none has landed yet.
-pub(super) fn has_empty_image_fill(node: &PenNode) -> bool {
+pub fn has_empty_image_fill(node: &PenNode) -> bool {
     let container = match node {
         PenNode::Frame(frame) => &frame.container,
         PenNode::Rectangle(rect) => &rect.container,
@@ -330,7 +336,7 @@ fn is_image_placeholder_frame(node: &PenNode) -> bool {
     matches!(node, PenNode::Frame(_)) && node.base().role.as_deref() == Some("image-placeholder")
 }
 
-pub(super) fn is_frame_placeholder_still_unfilled(node: &PenNode) -> bool {
+pub fn is_frame_placeholder_still_unfilled(node: &PenNode) -> bool {
     is_unfilled_image_placeholder_frame(node) || is_image_area_frame_by_heuristic(node)
 }
 
@@ -500,7 +506,7 @@ fn has_non_media_context(parent_names: &[String]) -> bool {
     })
 }
 
-pub(super) fn is_image_area_rectangle_by_heuristic(node: &PenNode) -> bool {
+pub fn is_image_area_rectangle_by_heuristic(node: &PenNode) -> bool {
     let PenNode::Rectangle(rect) = node else {
         return false;
     };

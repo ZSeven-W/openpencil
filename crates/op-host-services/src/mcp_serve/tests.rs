@@ -24,7 +24,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        129,
+        131,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -197,6 +197,8 @@ fn tools_list_response_includes_all_registered_tools() {
         "design_skeleton",
         "design_content",
         "design_refine",
+        "finalize_design",
+        "enrich_images",
     ] {
         assert!(r.contains(name), "tools/list must include {name}: {r}");
     }

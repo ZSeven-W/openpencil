@@ -148,6 +148,10 @@ op-acp = { path = "../op-acp" }
 # `persistence.rs` keeps only the desktop-only `rfd` Save/Open + error
 # dialogs.
 op-pen-loader = { path = "../op-pen-loader" }
+# Shared image-slot detection + result write-back (lifted out of this
+# crate's image_search_session so op-host-services can reuse it without
+# depending on the desktop host).
+op-image-enrich = { path = "../op-image-enrich" }
 # Binary `.fig` importer — `persistence.rs` runs `parse_fig_binary`
 # to turn a Figma file into a canonical `PenDocument`.
 op-figma = { path = "../op-figma" }

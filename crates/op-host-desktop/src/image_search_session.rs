@@ -5,13 +5,8 @@ use std::hash::Hash;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 
-use jian_ops_schema::node::PenNode;
-use jian_ops_schema::style::{ImageFillBody, ImageFillMode, PenFill};
 use op_editor_core::agent_settings::ImageGenProfile;
-use op_editor_core::{
-    walkers, CollabDocumentMutation, CollabEditSource, CollabGateAction, CollabGateReason,
-    CollabUnsupportedFeature, EditorState, NodeId,
-};
+use op_editor_core::{EditorState, NodeId};
 // Provider plumbing shared with the web daemon (single-sourced in
 // op-host-services): keyword simplification, Openverse token exchange, and
 // image mime handling. The desktop keeps its own `fetch_image_data_url`
@@ -26,51 +21,16 @@ pub(crate) use op_host_services::web_image_search::sniff_image_mime;
 
 const MAX_EMBEDDED_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 
-/// Sentinel `src` written when EVERY search avenue failed (junk-only
-/// results, network error, empty corpus). The canvas paints it as the
-/// theme-adaptive dashed placeholder (see `canvas_viewport_image`), so a
-/// failed slot reads as "image goes here" instead of a bare grey box. The
-/// bound query stays on the node for manual re-search.
-pub(crate) const SEARCH_FAILED_PLACEHOLDER_SRC: &str = "placeholder://image-search-failed";
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ImageSearchTarget {
-    pub node_id: NodeId,
-    /// Stock-search keyword (`image_search_query` ?? name ?? …).
-    pub query: String,
-    pub aspect_ratio: Option<ImageAspectRatio>,
-    /// AI-generation prompt bound to the node (`image_prompt`), if any. Used when
-    /// an image-gen model is configured; falls back to `query`.
-    pub prompt: Option<String>,
-    /// Explicit `G()` acquisition mode, or Auto for legacy/heuristic slots.
-    pub mode: ImageRequestMode,
-    /// Resolved numeric dimensions (for the gen provider's aspect mapping).
-    pub width: Option<f64>,
-    pub height: Option<f64>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ImageRequestMode {
-    Auto,
-    Search,
-    Generate,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum ImageAspectRatio {
-    Wide,
-    Tall,
-    Square,
-}
-
-impl ImageAspectRatio {
-    fn as_openverse_param(self) -> &'static str {
-        match self {
-            Self::Wide => "wide",
-            Self::Tall => "tall",
-            Self::Square => "square",
-        }
-    }
-}
+// Slot detection + result write-back moved to the shared `op-image-enrich`
+// crate (pure code motion) so the headless MCP `enrich_images` tool and this
+// desktop session share one predicate vocabulary; the desktop keeps its own
+// provider fetches, memoization, and job bookkeeping. The old paths are
+// re-exported so every existing importer and test stays stable.
+pub(crate) use op_image_enrich::{
+    apply_result, collaboration_image_result_gate, collect_targets, collect_targets_with_scene,
+    image_request_mode, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
+    SEARCH_FAILED_PLACEHOLDER_SRC,
+};
 
 /// Desktop wrapper over the shared credential pair — adds the
 /// `EditorState` snapshot constructor the daemon side has no use for.
@@ -101,7 +61,7 @@ struct ImageSearchJob {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct SearchIntentKey {
+pub(crate) struct SearchIntentKey {
     query: String,
     aspect_ratio: Option<ImageAspectRatio>,
 }
@@ -171,43 +131,9 @@ pub(crate) struct ImageSearchSession {
     next_search_request_id: u64,
 }
 
-/// Memo key for the authored stock-search intent.
-///
-/// This deliberately does NOT use `simplify_search_query`: that function is a
-/// lossy provider adapter (it drops words such as `album` / `cover` and caps
-/// the request at four keywords). Those transformations are useful for a
-/// photo corpus, but they must not make two distinct authored subjects share a
-/// cached image or make the stale-result guard treat a changed intent as the
-/// same intent. Case, punctuation, and repeated whitespace are canonicalized;
-/// every authored word remains part of identity. Aspect remains part of intent
-/// so a square cover never reuses a wide hero.
-fn search_intent_key(query: &str, aspect_ratio: Option<ImageAspectRatio>) -> SearchIntentKey {
-    SearchIntentKey {
-        query: canonical_search_intent_query(query),
-        aspect_ratio,
-    }
-}
-
-fn canonical_search_intent_query(query: &str) -> String {
-    let mut canonical = String::with_capacity(query.len());
-    let mut pending_separator = false;
-    for character in query.trim().to_lowercase().chars() {
-        if character.is_alphanumeric() {
-            if pending_separator && !canonical.is_empty() {
-                canonical.push(' ');
-            }
-            canonical.push(character);
-            pending_separator = false;
-        } else {
-            pending_separator = true;
-        }
-    }
-    if canonical.is_empty() {
-        query.trim().to_lowercase()
-    } else {
-        canonical
-    }
-}
+// Memo key for the authored stock-search intent — see
+// `intent::search_intent_key` (moved there with the other intent
+// fingerprints as pure code motion).
 
 impl ImageSearchSession {
     pub(crate) fn new() -> Self {
@@ -594,120 +520,15 @@ fn spawn_unavailable_gen_job(target: ImageSearchTarget) -> ImageSearchJob {
     }
 }
 mod fetch;
-mod targets;
+mod intent;
 
 use fetch::fetch_first_image_url_blocking;
 pub(crate) use fetch::fetch_image_data_url;
-pub(crate) use targets::{collect_targets, image_request_mode};
-use targets::{
-    collect_targets_with_scene, current_intent_fingerprints, has_empty_image_fill,
-    intent_fingerprint, is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic,
-};
+pub(crate) use intent::{current_intent_fingerprints, intent_fingerprint, search_intent_key};
 
-fn collaboration_image_result_gate(state: &EditorState) -> Result<(), CollabGateReason> {
-    state.editor_ui.collab.gate(
-        CollabGateAction::Document(CollabDocumentMutation::Unsupported(
-            CollabUnsupportedFeature::ExternalAssets,
-        )),
-        CollabEditSource::ExternalSync,
-    )
-}
-
-pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str) -> bool {
-    if let Err(reason) = collaboration_image_result_gate(state) {
-        state.editor_ui.collab.set_notice(reason.notice_kind(), 0);
-        return false;
-    }
-    let url = url.trim();
-    if url.is_empty() {
-        return false;
-    }
-    let Some(node) = walkers::find_node_mut(state.active_children_mut(), node_id) else {
-        return false;
-    };
-    let is_unfilled_placeholder_frame = is_frame_placeholder_still_unfilled(node);
-    let is_unfilled_placeholder_rectangle = is_image_area_rectangle_by_heuristic(node);
-    let has_empty_image_fill = has_empty_image_fill(node);
-    let changed = match node {
-        PenNode::Image(image) => {
-            if image.src == url {
-                return false;
-            }
-            image.src = url.into();
-            true
-        }
-        PenNode::Frame(frame) if is_unfilled_placeholder_frame || has_empty_image_fill => {
-            match frame.container.fill.as_deref_mut() {
-                // A slot already authored as a single image fill keeps its
-                // body — only the still-empty url lands.
-                Some([PenFill::Image(body)]) => {
-                    body.url = url.into();
-                }
-                _ => {
-                    frame.container.fill = Some(vec![PenFill::Image(ImageFillBody {
-                        url: url.into(),
-                        mode: Some(ImageFillMode::Crop),
-                        original_size: None,
-                        transform: None,
-                        tile_scale: None,
-                        explain: None,
-                        opacity: None,
-                        blend_mode: None,
-                        exposure: None,
-                        contrast: None,
-                        saturation: None,
-                        temperature: None,
-                        tint: None,
-                        highlights: None,
-                        shadows: None,
-                    })]);
-                    frame.children = Some(Vec::new());
-                }
-            }
-            true
-        }
-        PenNode::Rectangle(rect) if is_unfilled_placeholder_rectangle || has_empty_image_fill => {
-            match rect.container.fill.as_deref_mut() {
-                // Same in-place url overwrite as the frame branch: the authored
-                // image-fill body (mode, crop, adjustments) survives.
-                Some([PenFill::Image(body)]) => {
-                    body.url = url.into();
-                }
-                _ => {
-                    rect.container.fill = Some(vec![PenFill::Image(ImageFillBody {
-                        url: url.into(),
-                        mode: Some(ImageFillMode::Crop),
-                        original_size: None,
-                        transform: None,
-                        tile_scale: None,
-                        explain: None,
-                        opacity: None,
-                        blend_mode: None,
-                        exposure: None,
-                        contrast: None,
-                        saturation: None,
-                        temperature: None,
-                        tint: None,
-                        highlights: None,
-                        shadows: None,
-                    })]);
-                    rect.children = Some(Vec::new());
-                }
-            }
-            true
-        }
-        _ => false,
-    };
-    if changed {
-        // This writes document content through raw `active_children_mut()`
-        // outside the command/history path, so bump the revision. The
-        // layer-panel row cache + save-dirty tracking key on
-        // `document_revision()`; the placeholder-frame/rectangle branches
-        // also clear `children`, which changes the visible layer rows.
-        state.mark_document_changed();
-    }
-    changed
-}
+// `apply_result` + the slot predicates + the target/mode/aspect types live in
+// the shared `op-image-enrich` crate now (see the re-export block at the top
+// of this file); the imports here cover only the desktop-local helpers.
 
 #[cfg(test)]
 #[path = "image_search_session_tests.rs"]

@@ -627,10 +627,19 @@ use export_frames_tool::{export_frames_snapshot, get_deck_boards_snapshot};
 pub(crate) mod scene_template_tools;
 use scene_template_tools::{list_scene_templates_snapshot, use_scene_template_snapshot};
 
+pub(crate) mod finalize_tool;
+use finalize_tool::finalize_design_snapshot;
+pub(crate) mod enrich_images_tool;
+use enrich_images_tool::enrich_images_snapshot;
+
 #[cfg(test)]
 mod codegen_wire_tests;
 #[cfg(test)]
 mod conversion_flow_tests;
+#[cfg(test)]
+mod enrich_images_tool_tests;
+#[cfg(test)]
+mod finalize_tool_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
