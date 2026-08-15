@@ -74,11 +74,9 @@ op_auth.lib       MSVC targets
 ```
 
 The shared `prebuilt/PROVENANCE_PUBKEY` contains the 32-byte Ed25519 release
-public key as lowercase hex. The private signing key exists only in the public
-repository's reviewer-protected `auth-production` environment; it is exposed
-to one isolated GitHub-hosted signer job and deleted before that runner exits.
-The later push credential is available only on a different fresh runner.
-`build.rs` verifies the signature over the exact
+public key as lowercase hex. The private signing key exists only in the private
+`ZSeven-W/op-platform` production workflow. `build.rs` verifies the signature
+over the exact
 `PROVENANCE` bytes and rejects a mismatched target, filename, version, ABI,
 archive digest, hardening profile, source revision, or build id.
 
@@ -129,32 +127,23 @@ candidate.
 
 ## Production promotion boundary
 
-Production is deliberately split across repositories:
+Production uses the established private-repository release path:
 
-1. The private `prebuilt-production` workflow resolves exact public source S,
-   rebuilds and audits all ten ABI-v3 targets, and uploads exactly ten unsigned,
-   immutable candidate artifacts. A candidate is build evidence, not a
-   production input: it has neither provenance signatures nor authority to
-   replace the artifacts in S. The private workflow has no provenance root and
-   no OpenPencil write credential.
-2. A reviewer dispatches `.github/workflows/auth-production.yml` from the exact
-   target branch with the private workflow run ID, private head SHA, public S,
-   and that same target branch. The workflow commit, branch head, and S must be
-   identical. A narrowly scoped Actions-read credential authenticates the
-   private run, workflow path, ten artifact IDs, artifact ZIP digests, and
-   canonical candidate metadata on an acquisition-only runner.
-3. The acquisition job uploads one immutable, one-day candidate handoff whose
-   artifact ID, archive digest, and canonical tree digest are passed forward.
-   A fresh signer runner downloads that exact artifact ID, independently
-   re-verifies it, receives only the provenance root, signs every target and the
-   complete release matrix, deletes the root, and uploads a second immutable
-   one-day handoff with its own ID and digests.
-4. A third fresh runner receives only the public write credential, downloads
-   the exact signed artifact ID, independently verifies its tree digest,
-   signatures, trusted public key, and matrix, atomically replaces the stale
-   directories and adds the missing mobile directories, creates the
-   single-parent auth-only child A, and pushes A with an exact S lease. Rust
-   releases and TestFlight accept only a verified A whose parent is S.
+1. The private `ZSeven-W/op-platform` `prebuilt-production` workflow resolves
+   exact public source S, rebuilds and audits all ten ABI-v3 targets, and binds
+   every candidate to S, the private source revision, and one immutable build
+   id.
+2. That protected private workflow uses its existing
+   `OP_AUTH_PROVENANCE_SIGNING_KEY_PEM` secret to sign every target and the
+   complete release matrix, then independently verifies the signed result
+   against the public trust root in S.
+3. The workflow stages only the verified matrix onto a clean checkout at exact
+   S, proves that the staged diff is the complete auth-only transition, creates
+   the single-parent child A, and uses its existing
+   `OPENPENCIL_PUSH_TOKEN` secret to push A with an exact S lease.
+4. Rust releases and TestFlight accept A only after independently verifying the
+   complete signed matrix and the S -> A auth-only transition. The public
+   repository does not hold or run an Auth production promotion workflow.
 
 `tools/package-op-auth-prebuilt.sh` remains a low-level local packaging utility;
 it is not the production promotion path and must not receive the production

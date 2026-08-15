@@ -4,7 +4,6 @@
 set -euo pipefail
 
 script_dir=$(CDPATH='' cd "$(dirname "$0")" && pwd)
-repo_root=$(CDPATH='' cd "$script_dir/.." && pwd)
 # shellcheck source=op-auth-candidate-targets.sh
 source "$script_dir/op-auth-candidate-targets.sh"
 
@@ -326,80 +325,5 @@ if bash "$script_dir/verify-signed-op-auth-matrix.sh" \
     exit 1
 fi
 
-identity_source=$temp_dir/identity-source
-identity_remote=$temp_dir/identity-remote.git
-git init -q -b main "$identity_source"
-git -C "$identity_source" config user.name fixture
-git -C "$identity_source" config user.email fixture@example.invalid
-printf 'identity fixture\n' > "$identity_source/README"
-git -C "$identity_source" add README
-git -C "$identity_source" commit -q -m 'test: identity source S'
-identity_sha=$(git -C "$identity_source" rev-parse HEAD)
-git -C "$identity_source" branch "v$version"
-git clone -q --bare "$identity_source" "$identity_remote"
-bash "$script_dir/validate-auth-promotion-identity.sh" \
-    --private-run-id "$private_run_id" \
-    --private-head-sha "$private_head_sha" \
-    --openpencil-sha "$identity_sha" \
-    --target-branch "v$version" \
-    --workflow-sha "$identity_sha" \
-    --workflow-ref "refs/heads/v$version" \
-    --remote-url "$identity_remote" >/dev/null
-if bash "$script_dir/validate-auth-promotion-identity.sh" \
-    --private-run-id "$private_run_id" \
-    --private-head-sha "$private_head_sha" \
-    --openpencil-sha "$identity_sha" \
-    --target-branch "v$version" \
-    --workflow-sha "$identity_sha" \
-    --workflow-ref refs/heads/main \
-    --remote-url "$identity_remote" >/dev/null 2>&1; then
-    printf 'error: cross-branch workflow/target dispatch was accepted\n' >&2
-    exit 1
-fi
-wrong_workflow_sha=4444444444444444444444444444444444444444
-if bash "$script_dir/validate-auth-promotion-identity.sh" \
-    --private-run-id "$private_run_id" \
-    --private-head-sha "$private_head_sha" \
-    --openpencil-sha "$identity_sha" \
-    --target-branch "v$version" \
-    --workflow-sha "$wrong_workflow_sha" \
-    --workflow-ref "refs/heads/v$version" \
-    --remote-url "$identity_remote" >/dev/null 2>&1; then
-    printf 'error: workflow SHA different from public S was accepted\n' >&2
-    exit 1
-fi
-
-co_resident_workflow=$temp_dir/co-resident-auth-production.yml
-python3 - \
-    "$repo_root/.github/workflows/auth-production.yml" \
-    "$co_resident_workflow" <<'PY'
-import pathlib
-import sys
-
-source = pathlib.Path(sys.argv[1]).read_text()
-push_line = "          GH_TOKEN: ${{ secrets.OPENPENCIL_AUTH_PUSH_TOKEN }}\n"
-root_line = (
-    "          ROOT_SIGNING_KEY_PEM: "
-    "${{ secrets.OP_AUTH_PROVENANCE_SIGNING_KEY_PEM }}\n"
-)
-if source.count(push_line) != 1 or source.count(root_line) != 1:
-    raise SystemExit("workflow secret fixture did not match exactly")
-source = source.replace(push_line, "", 1)
-source = source.replace(root_line, root_line + push_line, 1)
-pathlib.Path(sys.argv[2]).write_text(source)
-PY
-if AUTH_PRODUCTION_WORKFLOW=$co_resident_workflow \
-    bash "$script_dir/check-auth-production-workflow.sh" \
-    >"$temp_dir/co-resident.log" 2>&1; then
-    printf 'error: signer and push credentials were accepted in one job\n' >&2
-    exit 1
-fi
-grep -Eq \
-    'must exist in exactly one expected job|co-resides with multiple production credentials' \
-    "$temp_dir/co-resident.log" || {
-    printf 'error: co-resident secret negative failed for an unrelated reason\n' >&2
-    exit 1
-}
-
 printf '%s\n' \
-    'check-op-auth-promotion.test: job isolation, identity, digest, trust-root, and tamper gates passed.'
+    'check-op-auth-promotion.test: candidate, digest, trust-root, and tamper gates passed.'
