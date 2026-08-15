@@ -357,6 +357,15 @@ fn browser_smoke_script_and_ci_cover_canvas_and_daemon_paths() {
         "browser smoke should assert the DOM success marker written after mount"
     );
     assert!(
+        script.contains("local status=$?")
+            && script.contains("set +e")
+            && script.contains("kill -9 \"$SERVER_PID\"")
+            && script.matches("kill -9 \"$chrome_pid\"").count() >= 3
+            && script.contains("for _ in $(seq 1 20)")
+            && script.contains("return \"$status\""),
+        "cleanup should preserve the smoke result instead of replacing it with a profile deletion race"
+    );
+    assert!(
         workflow.contains("tools/check-web-browser-smoke.sh"),
         "bundle workflow should run the browser smoke after building the bundle"
     );
