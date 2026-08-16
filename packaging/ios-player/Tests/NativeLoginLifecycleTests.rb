@@ -40,10 +40,17 @@ raise "approval success must wait for the engine close action" unless login_sour
 finish = login_source[/func finishFromHost\b.*?\n    \}/m]
 raise "host-driven dismissal missing" unless finish&.include?("dismiss(animated: animated)")
 
-# Third-party providers and recovery hand off to the system browser at the
-# engine-provided verification URL / regional web pages — never a WebView.
+# Third-party providers stay inside the app: an in-app Safari sheet opens the
+# engine-provided verification URL deep-linked to the tapped provider — never
+# an embedded WebView, never an external-browser bounce.
 raise "provider hand-off must reuse verification_uri" unless login_source.include?(
-  "UIApplication.shared.open(verificationURL"
+  "var url = verificationURL"
+)
+raise "provider tap must deep-link the tapped provider" unless login_source.include?(
+  'URLQueryItem(name: "provider", value: providerID)'
+)
+raise "provider sign-in must stay in-app" unless login_source.include?(
+  "present(SFSafariViewController(url: url), animated: true)"
 )
 raise "WebKit must stay out of the login path" if login_source.include?("import WebKit")
 

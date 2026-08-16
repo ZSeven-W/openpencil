@@ -15,7 +15,7 @@
     <string name="native_login_forgot_password">Forgot password</string>
     <string name="native_login_region">Region: %1$s · Switch</string>
     <string name="native_login_completing">Finishing sign-in…</string>
-    <string name="native_login_browser_hint">Finish signing in in the browser, then return to OpenPencil.</string>
+    <string name="native_login_browser_hint">Finish signing in, and you will return automatically.</string>
     <string name="native_login_load_failed">Couldn\'t start sign-in.</string>
     <string name="native_login_error_missing_fields">Enter your email and password.</string>
     <string name="native_login_error_invalid_credentials">Incorrect email or password.</string>

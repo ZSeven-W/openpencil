@@ -48,9 +48,13 @@ raise "login WebView overlay must stay deleted" if File.exist?(
   File.join(root, "LoginWebViewOverlay.kt"),
 )
 
-# Third-party providers hand off to the system browser at the engine URL.
-raise "provider hand-off must reuse the verification URL" unless overlay.include?(
-  "openExternal(request?.verificationUrl)",
+# Third-party providers stay inside the app: a Custom Tab opens the engine
+# URL deep-linked to the tapped provider, with a plain-browser fallback.
+raise "provider tap must deep-link the tapped provider" unless overlay.include?(
+  'appendQueryParameter("provider", providerId)',
+)
+raise "provider sign-in must stay in-app" unless overlay.include?(
+  '"android.support.customtabs.extra.SESSION"',
 )
 
 # Region codes are pinned to the C header; probing consults the ZSeven

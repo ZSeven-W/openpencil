@@ -14,7 +14,7 @@
     <string name="native_login_forgot_password">忘记密码</string>
     <string name="native_login_region">区域：%1$s · 切换</string>
     <string name="native_login_completing">正在完成登录…</string>
-    <string name="native_login_browser_hint">请在浏览器中完成登录，然后返回 OpenPencil。</string>
+    <string name="native_login_browser_hint">完成第三方登录后将自动返回。</string>
     <string name="native_login_load_failed">无法启动登录。</string>
     <string name="native_login_error_missing_fields">请输入邮箱和密码。</string>
     <string name="native_login_error_invalid_credentials">邮箱或密码不正确。</string>

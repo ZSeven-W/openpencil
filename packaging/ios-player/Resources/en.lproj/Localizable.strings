@@ -11,7 +11,7 @@
 "nativeLogin.forgotPassword" = "Forgot password?";
 "nativeLogin.region" = "Region: %@ · Switch";
 "nativeLogin.completing" = "Finishing sign-in…";
-"nativeLogin.browserHint" = "Finish signing in in the browser, then return to OpenPencil.";
+"nativeLogin.browserHint" = "Finish signing in, and you will return automatically.";
 "nativeLogin.error.missingFields" = "Enter your email and password.";
 "nativeLogin.error.invalidCredentials" = "Incorrect email or password.";
 "nativeLogin.error.rateLimited" = "Too many attempts. Try again in a moment.";

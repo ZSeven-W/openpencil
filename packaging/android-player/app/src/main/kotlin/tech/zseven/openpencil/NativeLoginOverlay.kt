@@ -342,7 +342,7 @@ internal class NativeLoginOverlay(
         if (providers.isEmpty()) return
         providerRow.removeAllViews()
         for ((position, provider) in providers.withIndex()) {
-            val card = AuthUi.providerCard(activity, provider.id) { openProvidersInBrowser() }
+            val card = AuthUi.providerCard(activity, provider.id) { openProviderLogin(provider.id) }
             card.contentDescription = provider.displayName
             val params = LinearLayout.LayoutParams(
                 AuthUi.dp(activity, 56),
@@ -405,10 +405,46 @@ internal class NativeLoginOverlay(
         }
     }
 
-    private fun openProvidersInBrowser() {
+    /**
+     * Third-party sign-in stays inside the app: a Custom Tab opens the
+     * pairing login page deep-linked to the tapped provider (`provider`
+     * query). The pairing is approved in that tab and the engine's poll
+     * observes it, closing this overlay.
+     */
+    private fun openProviderLogin(providerId: String) {
         statusLabel.text = activity.getString(R.string.native_login_browser_hint)
         statusLabel.visibility = View.VISIBLE
-        openExternal(request?.verificationUrl)
+        val base = request?.verificationUrl ?: return
+        val uri = try {
+            Uri.parse(base)
+                .buildUpon()
+                .appendQueryParameter("provider", providerId)
+                .build()
+        } catch (_: Exception) {
+            return
+        }
+        launchInAppTab(uri)
+    }
+
+    /**
+     * Launches a Chrome Custom Tab through the raw extras protocol (no
+     * androidx.browser dependency); browsers without Custom Tab support fall
+     * back to a plain view intent.
+     */
+    private fun launchInAppTab(uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        val extras = android.os.Bundle()
+        extras.putBinder("android.support.customtabs.extra.SESSION", null)
+        intent.putExtras(extras)
+        intent.putExtra(
+            "android.support.customtabs.extra.TOOLBAR_COLOR",
+            AuthUi.backgroundColor(activity),
+        )
+        try {
+            activity.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            openExternal(uri.toString())
+        }
     }
 
     private fun openExternal(url: String?) {

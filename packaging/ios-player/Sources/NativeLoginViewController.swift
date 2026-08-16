@@ -1,3 +1,4 @@
+import SafariServices
 import UIKit
 
 /// Platform-native sign-in for one engine device-login flow, styled after
@@ -333,9 +334,10 @@ final class NativeLoginViewController: UIViewController {
             let card = AuthTheme.makeProviderCard(
                 assetName: "Provider-\(provider.id)",
                 target: self,
-                action: #selector(openProvidersInBrowser)
+                action: #selector(providerCardTapped(_:))
             )
             card.accessibilityLabel = provider.displayName
+            card.accessibilityIdentifier = provider.id
             providerRow.addArrangedSubview(card)
         }
         contentStack.viewWithTag(Self.dividerTag)?.isHidden = false
@@ -418,14 +420,30 @@ final class NativeLoginViewController: UIViewController {
         }
     }
 
-    @objc private func openProvidersInBrowser() {
+    @objc private func providerCardTapped(_ sender: UIButton) {
+        openProviderLogin(providerID: sender.accessibilityIdentifier)
+    }
+
+    /// Third-party sign-in stays inside the app: an in-app Safari sheet opens
+    /// the pairing login page deep-linked to the tapped provider (`provider`
+    /// query). The pairing is approved in that sheet and Rust's poll observes
+    /// it, dismissing this whole stack — the sheet included.
+    private func openProviderLogin(providerID: String?) {
+        var url = verificationURL
+        if let providerID, !providerID.isEmpty,
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            var items = components.queryItems ?? []
+            items.append(URLQueryItem(name: "provider", value: providerID))
+            components.queryItems = items
+            url = components.url ?? url
+        }
         statusLabel.text = NSLocalizedString(
             "nativeLogin.browserHint",
-            value: "Finish signing in in the browser, then return to OpenPencil.",
-            comment: "External browser hand-off hint"
+            value: "Finish signing in, and you will return automatically.",
+            comment: "In-app provider sign-in hint"
         )
         statusLabel.isHidden = false
-        UIApplication.shared.open(verificationURL, options: [:])
+        present(SFSafariViewController(url: url), animated: true)
     }
 
     @objc private func openRegister() {
