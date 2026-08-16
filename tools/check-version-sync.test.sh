@@ -200,7 +200,7 @@ new_repo() {
         "$repo/packages" \
         "$repo/tools" \
         "$repo/scripts" \
-        "$repo/packaging/android-player/app" \
+        "$repo/packaging/android/app" \
         "$repo/crates/op-cli/assets" \
         "$repo/crates/op-cli/src" \
         "$repo/crates/op-editor-core/src" \
@@ -225,7 +225,7 @@ new_repo() {
     mkdir -p "$repo/packages/op-chrome-extension"
     printf '{"manifest_version":3,"name":"fixture-extension","version":"%s"}\n' "$version" \
         > "$repo/packages/op-chrome-extension/manifest.json"
-    cat > "$repo/packaging/android-player/app/build.gradle.kts" <<'KOTLIN'
+    cat > "$repo/packaging/android/app/build.gradle.kts" <<'KOTLIN'
 val repositoryRoot = rootProject.layout.projectDirectory.dir("../..")
 val androidVersionOutput = providers.exec {
     commandLine(
@@ -761,15 +761,15 @@ sed -i.bak \
     -e 's/versionName = canonicalVersionName/versionName = "0.8.1"/' \
     -e 's/versionCode = canonicalVersionCode/versionCode = 8001/' \
     -e 's#scripts/android-version[.]sh#scripts/other-version.sh#' \
-    "$repo/packaging/android-player/app/build.gradle.kts"
-rm "$repo/packaging/android-player/app/build.gradle.kts.bak"
+    "$repo/packaging/android/app/build.gradle.kts"
+rm "$repo/packaging/android/app/build.gradle.kts.bak"
 run_guard "$repo"
 assert_status 1 'Android Gradle version drift'
 assert_contains 'error: Android versionName must not be hard-coded' \
     'Android Gradle version drift'
 assert_contains 'error: Android versionCode must not be hard-coded' \
     'Android Gradle version drift'
-assert_contains 'packaging/android-player/app/build.gradle.kts:1: error: Android Gradle configuration must invoke scripts/android-version.sh' \
+assert_contains 'packaging/android/app/build.gradle.kts:1: error: Android Gradle configuration must invoke scripts/android-version.sh' \
     'Android Gradle version drift'
 assert_no_success_output 'Android Gradle version drift'
 pass 'Android Gradle cannot hard-code versions or bypass the canonical resolver'

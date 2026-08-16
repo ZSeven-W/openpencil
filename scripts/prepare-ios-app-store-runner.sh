@@ -57,7 +57,7 @@ if [[ ! $iphoneos_sdk_version =~ ^([0-9]+)([.][0-9]+)*$ ]] ||
     exit 1
 fi
 printf 'iPhoneOS SDK %s\n' "$iphoneos_sdk_version"
-packaging/ios-player/Tests/validate_sources.sh
+packaging/ios/Tests/validate_sources.sh
 
 printf 'build_number=%s\n' "$build_number" >> "$GITHUB_OUTPUT"
 printf 'version=%s\n' "$OPENPENCIL_RELEASE_VERSION" >> "$GITHUB_OUTPUT"

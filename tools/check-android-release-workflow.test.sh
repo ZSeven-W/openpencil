@@ -32,9 +32,9 @@ RUBY
 
 workflow=$repo_root/.github/workflows/android-release.yml
 signer=$repo_root/scripts/sign-android-release.sh
-app_gradle=$repo_root/packaging/android-player/app/build.gradle.kts
+app_gradle=$repo_root/packaging/android/app/build.gradle.kts
 sdk_installer=$repo_root/tools/install-pinned-android-sdk.sh
-verification=$repo_root/packaging/android-player/gradle/verification-metadata.xml
+verification=$repo_root/packaging/android/gradle/verification-metadata.xml
 
 expect_rejected \
     'independent dispatch trigger' OPENPENCIL_ANDROID_RELEASE_WORKFLOW "$workflow" \

@@ -12,7 +12,7 @@ matrix_verifier=$repo_root/tools/check-op-auth-release-matrix.sh
 remote_ref_gate=$repo_root/tools/check-op-auth-remote-ref.sh
 ios_build_number=$repo_root/tools/ios-build-number.sh
 relay_verifier=$repo_root/tools/check-collab-bootstrap-urls.py
-project=$repo_root/packaging/ios-player/project.yml
+project=$repo_root/packaging/ios/project.yml
 pinned_tools=$repo_root/tools/pinned-release-tools.sh
 engine_manifest=$repo_root/crates/op-engine-ffi/Cargo.toml
 

@@ -358,7 +358,7 @@ LC_ALL=C grep -aFq "$relay_bootstrap_global" "$engine_archive" || {
     printf 'error: the global relay bootstrap URL was not embedded in the engine\n' >&2
     exit 1
 }
-player_dir=$repo_root/packaging/ios-player
+player_dir=$repo_root/packaging/ios
 (cd "$player_dir" && "$XCODEGEN_BIN" generate --spec project.yml)
 ruby - "$player_dir/project.yml" \
     "$player_dir/OpenPencilPlayer.xcodeproj/project.pbxproj" <<'RUBY'

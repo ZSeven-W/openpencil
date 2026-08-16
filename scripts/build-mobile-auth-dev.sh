@@ -17,7 +17,7 @@ usage: scripts/build-mobile-auth-dev.sh \
   --archive /absolute/path/to/libop_auth.a --abi 2|3
 
 Builds a Cargo debug artifact only. Android output is isolated under
-packaging/android-player/app/src/debug/jniLibs; iOS keeps libop_auth.a as an
+packaging/android/app/src/debug/jniLibs; iOS keeps libop_auth.a as an
 explicit final Xcode link input.
 EOF
 }
@@ -89,7 +89,7 @@ case "$platform" in
             exit 1
         }
         cargo ndk -t arm64-v8a \
-            -o packaging/android-player/app/src/debug/jniLibs \
+            -o packaging/android/app/src/debug/jniLibs \
             build --locked -p op-engine-jni --features gl,editor,mobile-auth-dev
         ;;
     android-x86_64)
@@ -98,7 +98,7 @@ case "$platform" in
             exit 1
         }
         cargo ndk -t x86_64 \
-            -o packaging/android-player/app/src/debug/jniLibs \
+            -o packaging/android/app/src/debug/jniLibs \
             build --locked -p op-engine-jni --features gl,editor,mobile-auth-dev
         ;;
     *)

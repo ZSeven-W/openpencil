@@ -248,7 +248,7 @@ assert_file_contains "$workflow" 'bun install --frozen-lockfile' 'version sync d
 assert_file_contains "$workflow" 'packages/bun.lock' 'version sync managed paths'
 assert_file_contains "$workflow" 'packages/scripts/sync-version.mjs' 'version sync implementation paths'
 assert_file_contains "$workflow" 'scripts/android-version.sh' 'Android version implementation paths'
-assert_file_contains "$workflow" 'packaging/android-player/app/build.gradle.kts' \
+assert_file_contains "$workflow" 'packaging/android/app/build.gradle.kts' \
     'Android Gradle version consumer paths'
 assert_file_not_matches "$workflow" 'packages/\*\*' 'version sync focused path filters'
 for trigger in pull_request push; do

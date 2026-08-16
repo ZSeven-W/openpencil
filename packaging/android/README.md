@@ -21,9 +21,9 @@ export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/<version>"
 # Build the cdylib into the Debug-only jniLibs source set (arm64-v8a + x86_64),
 # then install. Release has a separate empty source set by default:
 # `editor` forwards to op-engine-ffi/editor (full desktop chrome).
-cargo ndk -t arm64-v8a -t x86_64 -o packaging/android-player/app/src/debug/jniLibs \
+cargo ndk -t arm64-v8a -t x86_64 -o packaging/android/app/src/debug/jniLibs \
   build -p op-engine-jni --features gl,editor
-cd packaging/android-player && ./gradlew installDebug && cd -
+cd packaging/android && ./gradlew installDebug && cd -
 ```
 
 For local embedded-login work, link an external ABI-v2 or ABI-v3 archive into
@@ -35,7 +35,7 @@ scripts/build-mobile-auth-dev.sh \
   --archive /absolute/path/to/libop_auth.a \
   --abi 3
 
-cd packaging/android-player && ./gradlew installDebug && cd -
+cd packaging/android && ./gradlew installDebug && cd -
 ```
 
 The bridge accepts that override only in Cargo's `debug` profile. The archive
@@ -122,7 +122,7 @@ repository guard and `scripts/android-version.test.sh` verify the Gradle wiring
 and the monotonic mapping. To inspect the resolved values directly:
 
 ```bash
-cd packaging/android-player
+cd packaging/android
 ./gradlew -q :app:printOpenPencilVersion
 ```
 

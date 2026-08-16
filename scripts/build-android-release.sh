@@ -170,7 +170,7 @@ done
     x86_64-linux-android "$ANDROID_SKIA_X86_64_BINARIES_URL"
 
 canonical_prebuilt=$repo_root/crates/op-auth-bridge/prebuilt
-release_jni=$repo_root/packaging/android-player/app/src/release/jniLibs
+release_jni=$repo_root/packaging/android/app/src/release/jniLibs
 [[ ! -e "$release_jni" && ! -L "$release_jni" ]] || {
     printf 'error: refusing to replace an existing Android Release jniLibs directory\n' >&2
     exit 1
@@ -327,18 +327,18 @@ build_target \
     "$ANDROID_SKIA_X86_64_BINARIES_URL" x86_64-linux-android
 
 cd "$repo_root"
-for test_file in packaging/android-player/Tests/*.rb; do
+for test_file in packaging/android/Tests/*.rb; do
     ruby "$test_file"
 done
 (
-    cd packaging/android-player
+    cd packaging/android
     ./gradlew --no-daemon --console=plain --dependency-verification strict \
         :app:testDebugUnitTest :app:lintRelease \
         :app:assembleRelease :app:bundleRelease
 )
 
-unsigned_apk=$repo_root/packaging/android-player/app/build/outputs/apk/release/app-release-unsigned.apk
-unsigned_aab=$repo_root/packaging/android-player/app/build/outputs/bundle/release/app-release.aab
+unsigned_apk=$repo_root/packaging/android/app/build/outputs/apk/release/app-release-unsigned.apk
+unsigned_aab=$repo_root/packaging/android/app/build/outputs/bundle/release/app-release.aab
 require_regular_file "$unsigned_apk"
 require_regular_file "$unsigned_aab"
 if "$apksigner_bin" verify "$unsigned_apk" >/dev/null 2>&1; then

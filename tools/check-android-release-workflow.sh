@@ -9,10 +9,10 @@ repo_root=$(CDPATH='' cd "$script_dir/.." && pwd)
 workflow=${OPENPENCIL_ANDROID_RELEASE_WORKFLOW:-$repo_root/.github/workflows/android-release.yml}
 builder=${OPENPENCIL_ANDROID_RELEASE_BUILDER:-$repo_root/scripts/build-android-release.sh}
 signer=${OPENPENCIL_ANDROID_RELEASE_SIGNER:-$repo_root/scripts/sign-android-release.sh}
-app_gradle=${OPENPENCIL_ANDROID_APP_GRADLE:-$repo_root/packaging/android-player/app/build.gradle.kts}
-root_gradle=${OPENPENCIL_ANDROID_ROOT_GRADLE:-$repo_root/packaging/android-player/build.gradle.kts}
-wrapper=${OPENPENCIL_ANDROID_GRADLE_WRAPPER:-$repo_root/packaging/android-player/gradle/wrapper/gradle-wrapper.properties}
-verification=${OPENPENCIL_ANDROID_VERIFICATION_METADATA:-$repo_root/packaging/android-player/gradle/verification-metadata.xml}
+app_gradle=${OPENPENCIL_ANDROID_APP_GRADLE:-$repo_root/packaging/android/app/build.gradle.kts}
+root_gradle=${OPENPENCIL_ANDROID_ROOT_GRADLE:-$repo_root/packaging/android/build.gradle.kts}
+wrapper=${OPENPENCIL_ANDROID_GRADLE_WRAPPER:-$repo_root/packaging/android/gradle/wrapper/gradle-wrapper.properties}
+verification=${OPENPENCIL_ANDROID_VERIFICATION_METADATA:-$repo_root/packaging/android/gradle/verification-metadata.xml}
 jni_manifest=${OPENPENCIL_ANDROID_JNI_MANIFEST:-$repo_root/crates/op-engine-jni/Cargo.toml}
 pinned_tools=${OPENPENCIL_ANDROID_PINNED_TOOLS:-$repo_root/tools/pinned-release-tools.sh}
 sdk_installer=${OPENPENCIL_ANDROID_SDK_INSTALLER:-$repo_root/tools/install-pinned-android-sdk.sh}

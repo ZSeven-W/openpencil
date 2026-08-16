@@ -87,7 +87,7 @@ not automatically submit a store review.
 Generate the project (do this again after changing `project.yml`):
 
 ```bash
-cd packaging/ios-player
+cd packaging/ios
 xcodegen generate --spec project.yml
 ```
 
@@ -96,7 +96,7 @@ xcodegen generate --spec project.yml
 On this host, pass the SDK, destination, Rust archive, and linker flags explicitly. Link the archive by path: `-lop_engine_ffi` can select the adjacent simulator dylib and leave the app with a non-redistributable local dependency. Replace `<sim-id>` with an installed iOS simulator UUID:
 
 ```bash
-cd packaging/ios-player
+cd packaging/ios
 xcodebuild \
   -project OpenPencilPlayer.xcodeproj \
   -scheme OpenPencilPlayer \
@@ -117,7 +117,7 @@ xcrun simctl launch <sim-id> tech.zseven.openpencil
 Use the device archive and replace `<device-id>` with the attached phone's destination identifier. Signing values may be supplied by the orchestrator or selected in Xcode:
 
 ```bash
-cd packaging/ios-player
+cd packaging/ios
 xcodebuild \
   -project OpenPencilPlayer.xcodeproj \
   -scheme OpenPencilPlayer \
@@ -156,5 +156,5 @@ CADisplayLink is paused before every frame. A redraw callback caused by a mutati
 This does not generate a project or link an app. It checks the YAML/resource contract, compiles the bridging header, and type-checks every Swift source against the iOS simulator SDK and the checked-in `op_engine.h`:
 
 ```bash
-bash packaging/ios-player/Tests/validate_sources.sh
+bash packaging/ios/Tests/validate_sources.sh
 ```

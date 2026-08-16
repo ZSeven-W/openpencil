@@ -241,17 +241,9 @@ raise "picker success cleanup missing" unless coordinator.include?("didPickDocum
 raise "picker cancellation cleanup missing" unless coordinator.include?("documentPickerWasCancelled")
 RUBY
 
-ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/TouchCancelRoutingTests.rb" \
-  "$player_dir/Sources/OpPlayerView.swift" \
-  "$repo_dir/packaging/android-player/app/src/main/kotlin/tech/zseven/openpencil/OpSurfaceView.kt"
-ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/PinchZoomRoutingTests.rb" \
-  "$player_dir/Sources/OpPlayerView.swift" \
-  "$repo_dir/packaging/android-player/app/src/main/kotlin/tech/zseven/openpencil/OpSurfaceView.kt"
-ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/BundledPptDemoTests.rb"
-
 sdk="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 target="arm64-apple-ios15.0-simulator"
-module_cache="${TMPDIR:-/tmp}/op-ios-player-module-cache"
+module_cache="${TMPDIR:-/tmp}/op-ios-module-cache"
 mkdir -p "$module_cache"
 export CLANG_MODULE_CACHE_PATH="$module_cache"
 

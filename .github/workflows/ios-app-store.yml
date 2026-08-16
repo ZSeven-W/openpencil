@@ -252,7 +252,7 @@ jobs:
             exit 1
           fi
           printf 'iPhoneOS SDK %s\n' "$iphoneos_sdk_version"
-          packaging/ios-player/Tests/validate_sources.sh
+          packaging/ios/Tests/validate_sources.sh
 
       - name: Validate protected production release configuration
         shell: bash

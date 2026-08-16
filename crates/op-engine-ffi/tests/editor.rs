@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 const SAMPLE_DOC: &str =
     include_str!("../../op-editor-core/assets/scene_templates/daily-sign-card.op");
 const TWO_PAGE_DOC: &str =
-    include_str!("../../../packaging/android-player/app/src/main/assets/two-page.op");
+    include_str!("../../../packaging/android/app/src/main/assets/two-page.op");
 
 fn with_second_page_active(source: &str) -> String {
     let end = source.rfind('}').expect("top-level object close");

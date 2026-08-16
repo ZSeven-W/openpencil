@@ -364,7 +364,7 @@ validate_chrome_extension_manifest_version() {
 
 validate_android_version_metadata() {
     android_script=scripts/android-version.sh
-    android_gradle=packaging/android-player/app/build.gradle.kts
+    android_gradle=packaging/android/app/build.gradle.kts
 
     if [[ ! -x "$android_script" ]]; then
         report_missing "$android_script" \
