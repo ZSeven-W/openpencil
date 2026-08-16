@@ -52,6 +52,43 @@ fn delete_selected_removes_every_node_in_the_set() {
 }
 
 #[test]
+fn delete_selected_removes_ancestor_of_hidden_descendant() {
+    // HTML imports map `visibility: hidden` elements to `visible: false`
+    // nodes; a hidden descendant must not make the imported frame
+    // undeletable.
+    let mut child = rect("n63", "child", 0.0, 0.0, 10.0, 10.0);
+    child.base_mut().visible = Some(false);
+    let parent = frame("n62", "parent", 0.0, 0.0, 50.0, 50.0, vec![child]);
+    let mut s = state_with(vec![parent]);
+    s.set_single_selection(NodeId::new("n62"));
+    assert!(s.delete_selected());
+    assert!(find_node(s.active_children(), &NodeId::new("n62")).is_none());
+}
+
+#[test]
+fn delete_selected_removes_hidden_root() {
+    // A hidden layer selected in the layer panel must still delete —
+    // visibility is a render state, not a protection state. This also
+    // covers HTML imports whose whole body computed `display: none`.
+    let mut node = rect("n64", "hidden", 0.0, 0.0, 10.0, 10.0);
+    node.base_mut().visible = Some(false);
+    let mut s = state_with(vec![node]);
+    s.set_single_selection(NodeId::new("n64"));
+    assert!(s.delete_selected());
+    assert!(find_node(s.active_children(), &NodeId::new("n64")).is_none());
+}
+
+#[test]
+fn delete_selected_protects_locked_root() {
+    let mut node = rect("n65", "locked", 0.0, 0.0, 10.0, 10.0);
+    node.base_mut().locked = Some(true);
+    let mut s = state_with(vec![node]);
+    s.set_single_selection(NodeId::new("n65"));
+    assert!(!s.delete_selected());
+    assert!(find_node(s.active_children(), &NodeId::new("n65")).is_some());
+}
+
+#[test]
 fn delete_selected_protects_ancestor_of_locked_descendant() {
     let mut child = rect("n61", "child", 0.0, 0.0, 10.0, 10.0);
     child.base_mut().locked = Some(true);

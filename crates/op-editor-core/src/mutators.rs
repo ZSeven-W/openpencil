@@ -105,14 +105,18 @@ impl EditorState {
             .is_some_and(node_editable)
     }
 
-    /// Stricter form of [`EditorState::is_editable`] — every
-    /// descendant must also be editable. Gates destructive ops so a
-    /// locked / hidden child protects its ancestor.
-    pub fn is_subtree_editable(&self, id: &NodeId) -> bool {
-        let Some(node) = find_node(self.active_children(), id) else {
-            return false;
-        };
-        subtree_all_editable(node)
+    /// Tree-op gate (delete / drag / reorder): nothing in the
+    /// subtree — the node itself included — may be locked, so a
+    /// locked child protects its ancestor. Visibility is irrelevant
+    /// on BOTH ends (Figma parity — a hidden layer selected in the
+    /// layer panel deletes and reorders like any other, and hidden
+    /// descendants go with their ancestor). HTML imports routinely
+    /// carry `visibility: hidden` elements mapped to
+    /// `visible: false` nodes, which under the old
+    /// every-descendant-visible rule made every imported frame
+    /// permanently undeletable and immovable.
+    pub fn is_subtree_unlocked(&self, id: &NodeId) -> bool {
+        find_node(self.active_children(), id).is_some_and(subtree_unlocked)
     }
 
     /// Largest editor-minted `n{N}` id suffix anywhere in the
@@ -384,9 +388,11 @@ impl EditorState {
 
     // --- Tree ops ----------------------------------------------------
 
-    /// Remove every editable node in the selection set from its
-    /// parent. Locked / hidden subtrees are protected. True on
-    /// success; selection collapses to the kept (protected) ids.
+    /// Remove every deletable node in the selection set from its
+    /// parent. Only locks protect (anywhere in the subtree, root
+    /// included); hidden nodes — selected roots and descendants
+    /// alike — delete normally. True on success; selection collapses
+    /// to the kept (protected) ids.
     pub fn delete_selected(&mut self) -> bool {
         if self.selection.set.is_empty() {
             return false;
@@ -396,7 +402,7 @@ impl EditorState {
             .set
             .iter()
             .cloned()
-            .partition(|id| self.is_subtree_editable(id));
+            .partition(|id| self.is_subtree_unlocked(id));
         if deletable.is_empty() {
             return false;
         }
@@ -493,7 +499,7 @@ impl EditorState {
         if source == parent || !source.is_real() || !parent.is_real() {
             return false;
         }
-        if !self.is_subtree_editable(&source) {
+        if !self.is_subtree_unlocked(&source) {
             return false;
         }
         let children = self.active_children();
@@ -519,7 +525,7 @@ impl EditorState {
         if source == anchor || !source.is_real() || !anchor.is_real() {
             return false;
         }
-        if !self.is_subtree_editable(&source) {
+        if !self.is_subtree_unlocked(&source) {
             return false;
         }
         let children = self.active_children();
@@ -620,13 +626,13 @@ fn node_editable(node: &PenNode) -> bool {
     base.visible.unwrap_or(true) && !base.locked.unwrap_or(false)
 }
 
-/// True when `node` and every descendant are editable.
-fn subtree_all_editable(node: &PenNode) -> bool {
-    if !node_editable(node) {
+/// True when neither `node` nor any descendant is locked.
+fn subtree_unlocked(node: &PenNode) -> bool {
+    if node.base().locked.unwrap_or(false) {
         return false;
     }
     match node.children() {
-        Some(children) => children.iter().all(subtree_all_editable),
+        Some(children) => children.iter().all(subtree_unlocked),
         None => true,
     }
 }
