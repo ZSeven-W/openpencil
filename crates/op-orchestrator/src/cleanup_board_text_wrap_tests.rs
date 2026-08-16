@@ -93,11 +93,11 @@ fn p2c_lesion_card() -> serde_json::Value {
                   "children": [
                     { "type": "text", "id": "headline-shadow",
                       "content": "让文字立刻高级的 5 个排版法则",
-                      "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                      "fontSize": 200, "width": "fit_content", "height": "fit_content",
                       "textGrowth": "auto", "x": 3, "y": 3 },
                     { "type": "text", "id": "headline-main",
                       "content": "让文字立刻高级的 5 个排版法则",
-                      "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                      "fontSize": 200, "width": "fit_content", "height": "fit_content",
                       "textGrowth": "auto", "x": 0, "y": 0 }
                   ]
                 },
@@ -205,11 +205,11 @@ fn a_pinned_shadow_copy_is_wrapped_along_with_its_triggering_twin() {
                   "children": [
                     { "type": "text", "id": "headline-shadow",
                       "content": "让文字立刻高级的 5 个排版法则",
-                      "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                      "fontSize": 200, "width": "fit_content", "height": "fit_content",
                       "textGrowth": "auto", "x": 3, "y": 3 },
                     { "type": "text", "id": "headline-main",
                       "content": "让文字立刻高级的 5 个排版法则",
-                      "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                      "fontSize": 200, "width": "fit_content", "height": "fit_content",
                       "textGrowth": "auto" }
                   ]
                 }
@@ -249,7 +249,7 @@ fn a_same_content_sibling_with_a_different_font_size_stays_out_of_the_group() {
                   "children": [
                     { "type": "text", "id": "headline",
                       "content": "让文字立刻高级的 5 个排版法则",
-                      "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                      "fontSize": 200, "width": "fit_content", "height": "fit_content",
                       "textGrowth": "auto" },
                     { "type": "text", "id": "caption",
                       "content": "让文字立刻高级的 5 个排版法则",
@@ -294,7 +294,7 @@ fn a_fixed_width_copy_whose_shadow_offset_still_pokes_past_the_edge_is_left_alon
                   "children": [
                     { "type": "text", "id": "headline",
                       "content": "让文字立刻高级的 5 个排版法则",
-                      "fontSize": 88, "width": "fill_container", "height": "fit_content",
+                      "fontSize": 200, "width": "fill_container", "height": "fit_content",
                       "textGrowth": "fixed-width", "x": 3, "y": 3 }
                   ]
                 }
@@ -329,14 +329,14 @@ fn floating_overlay_text_is_left_alone_even_when_it_bleeds_past_the_edge() {
             "children": [
                 { "type": "text", "id": "pinned",
                   "content": "让文字立刻高级的 5 个排版法则",
-                  "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                  "fontSize": 200, "width": "fit_content", "height": "fit_content",
                   "textGrowth": "auto", "x": 1000, "y": 100 },
                 { "type": "frame", "id": "sticker", "name": "贴纸", "layout": "none",
                   "width": "fit_content", "height": "fit_content", "x": 1000, "y": 200,
                   "children": [
                     { "type": "text", "id": "sticker-text",
                       "content": "让文字立刻高级的 5 个排版法则",
-                      "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                      "fontSize": 200, "width": "fit_content", "height": "fit_content",
                       "textGrowth": "auto", "x": 0, "y": 0 }
                   ]
                 }
@@ -367,7 +367,7 @@ fn a_short_fit_content_title_is_left_alone() {
             "padding": [0, 60],
             "children": [
                 { "type": "text", "id": "title", "content": "排版法则",
-                  "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                  "fontSize": 200, "width": "fit_content", "height": "fit_content",
                   "textGrowth": "auto" }
             ]
         }),
@@ -390,7 +390,7 @@ fn a_mobile_screen_is_not_a_board() {
             "children": [
                 { "type": "text", "id": "title",
                   "content": "让文字立刻高级的 5 个排版法则",
-                  "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                  "fontSize": 200, "width": "fit_content", "height": "fit_content",
                   "textGrowth": "auto" }
             ]
         }),
@@ -413,7 +413,7 @@ fn a_square_page_is_not_a_board() {
             "children": [
                 { "type": "text", "id": "title",
                   "content": "让文字立刻高级的 5 个排版法则",
-                  "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                  "fontSize": 200, "width": "fit_content", "height": "fit_content",
                   "textGrowth": "auto" }
             ]
         }),
@@ -445,7 +445,7 @@ fn a_deck_board_gets_the_wrap_too() {
                       "children": [
                         { "type": "text", "id": "headline-main",
                           "content": "让文字立刻高级的 5 个排版法则让文字立刻高级的 5 个排版法则让文字立刻高级的 5 个排版法则让文字立刻高级",
-                          "fontSize": 88, "width": "fit_content", "height": "fit_content",
+                          "fontSize": 200, "width": "fit_content", "height": "fit_content",
                           "textGrowth": "auto", "x": 0, "y": 0 }
                       ]
                     }
