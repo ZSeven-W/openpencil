@@ -13,9 +13,7 @@ use op_host_native::WidgetHostNative;
 
 use crate::chat_acp::AcpProvider;
 use op_host_services::chat_builtin_http::ConfiguredBuiltinProvider;
-use op_host_services::chat_canvas_tools::{
-    chat_tool_channel, chat_tool_defs_for_write_scope, ChatToolRequest,
-};
+use op_host_services::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
 use op_host_services::chat_claude::ClaudeCodeProvider;
 use op_host_services::chat_copilot::CopilotProvider;
 use op_host_services::chat_http_server::OpenCodeProvider;
@@ -114,11 +112,14 @@ pub(crate) fn builtin_provider_with_tools(
     let config = selected_builtin_agent_config(state, entry)?;
     let provider = ConfiguredBuiltinProvider::from_builtin_agent(&config)?;
     let (executor, tool_rx) = chat_tool_channel();
-    let has_frame_scope = op_host_services::chat_intent::has_selected_frame_target(state);
-    let provider = provider.with_canvas_tools(
-        chat_tool_defs_for_write_scope(has_frame_scope),
-        Arc::new(executor),
-    );
+    // Issue #209: the full CRUD set is advertised regardless of the current
+    // canvas selection. Gating write tools on a selected Frame made the
+    // agent silently lose insert/update/move/delete whenever the user
+    // chatted without a Frame selected (e.g. right after opening a file),
+    // which read as "modification tools randomly drop". Mutation safety is
+    // enforced at the execution sink (`execute_tool_requests`'s
+    // collaboration gate + per-tool validation), not by hiding definitions.
+    let provider = provider.with_canvas_tools(chat_tool_defs(), Arc::new(executor));
     Some((Box::new(provider), tool_rx))
 }
 

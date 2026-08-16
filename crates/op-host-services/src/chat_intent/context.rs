@@ -295,10 +295,6 @@ pub(super) fn selected_frame_ids(state: &EditorState) -> Option<Vec<String>> {
     Some(ids)
 }
 
-pub fn has_selected_frame_target(state: &EditorState) -> bool {
-    selected_frame_ids(state).is_some()
-}
-
 pub fn build_modify_plan(state: &EditorState, instruction: &str) -> Option<ModifyPlan> {
     let children = state.active_children();
     let target_frame_ids = selected_frame_ids(state)?;

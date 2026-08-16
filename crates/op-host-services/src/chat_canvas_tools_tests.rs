@@ -35,19 +35,6 @@ fn chat_tool_defs_match_ts_crud_subset_and_auth_levels() {
 }
 
 #[test]
-fn chat_without_a_frame_scope_only_advertises_read_tools() {
-    let read_only = chat_tool_defs_for_write_scope(false);
-    assert_eq!(
-        read_only
-            .iter()
-            .map(|tool| tool.name.as_str())
-            .collect::<Vec<_>>(),
-        vec!["batch_get", "snapshot_layout", "get_selection"]
-    );
-    assert_eq!(chat_tool_defs_for_write_scope(true), chat_tool_defs());
-}
-
-#[test]
 fn execute_rejects_tools_outside_the_chat_set() {
     let mut state = EditorState::new();
     let (result, mutated) = execute_chat_tool(&mut state, "delete_page", "{}");

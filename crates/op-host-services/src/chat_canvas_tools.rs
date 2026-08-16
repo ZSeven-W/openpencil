@@ -102,16 +102,6 @@ pub fn chat_tool_defs() -> Vec<ChatToolDef> {
     ]
 }
 
-/// Plain chat may inspect the canvas without a selection, but mutating CRUD
-/// tools are only advertised when the turn has an explicit Frame write scope.
-pub fn chat_tool_defs_for_write_scope(has_frame_scope: bool) -> Vec<ChatToolDef> {
-    let mut defs = chat_tool_defs();
-    if !has_frame_scope {
-        defs.retain(|tool| tool.level == "read");
-    }
-    defs
-}
-
 /// Execute one chat tool call against the live editor state. Returns
 /// the TS-shaped tool result (`{"success":…}`) plus whether the call
 /// mutated the document (caller marks the redraw dirty).
