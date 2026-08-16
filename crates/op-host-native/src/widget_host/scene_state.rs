@@ -250,6 +250,41 @@ impl WidgetHostNative {
         true
     }
 
+    /// Install a user-opened `.op` document while retaining app and touch
+    /// chrome owned by the live host. The caller must fully parse and validate
+    /// the payload before entering this seam; a collaboration rejection leaves
+    /// the current document and every derived cache untouched.
+    pub fn install_open_document(
+        &mut self,
+        document: jian_ops_schema::PenDocument,
+        editor_meta: Option<op_pen_loader::EditorMeta>,
+        file_name: Option<String>,
+    ) -> Result<(), Box<jian_ops_schema::PenDocument>> {
+        if !self.collab_allows_user_action(op_editor_core::CollabGateAction::ReplaceDocument) {
+            return Err(Box::new(document));
+        }
+
+        // `replace_document` deliberately preserves editor chrome and app
+        // preferences while clearing every document-scoped draft and stale id.
+        self.editor_state.replace_document(document);
+        op_pen_loader::apply_editor_meta_or_legacy_fallback(&mut self.editor_state, editor_meta);
+        self.editor_state.editor_ui.file_name_display = file_name;
+        self.editor_state.editor_ui.mobile_sheet = None;
+        self.editor_state.editor_ui.pending_file_action = None;
+        self.editor_state.editor_ui.exit_preview();
+        self.editor_state.mark_saved_revision();
+
+        self.preview = None;
+        self.layout_transition = None;
+        self.document_epoch = self.document_epoch.wrapping_add(1);
+        self.force_rotate_layer_panel_owner();
+        self.scene_cache.invalidate();
+        self.editor_state_dirty = true;
+        self.drop_pan_cache();
+        self.arm_missing_fonts_detection();
+        Ok(())
+    }
+
     /// Install a Figma-imported editor state. The worker only parses
     /// into canonical data; layout scene construction stays on the
     /// normal host path so the worker never touches Skia / FontMgr.

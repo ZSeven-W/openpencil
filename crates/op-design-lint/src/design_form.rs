@@ -37,6 +37,15 @@ pub enum DesignForm {
     Page,
     /// A fixed 16:9 projector board. Neither a viewport nor a scroll surface.
     Deck,
+    /// A fixed PORTRAIT independent board — a standalone knowledge / XHS
+    /// card designed as its own surface, not a section of a scroll page.
+    /// Evidence band (measured 0815 on the 0815 v4-pro card corpus): the XHS
+    /// 3:4 card board is 1080x1440 and the 9:16 card 1080x1920, so the band
+    /// reads authored width 900..=1280, height > width, and height/width
+    /// <= 2.0. Everything outside the band keeps its previous judgement —
+    /// cards never steal from the phone band (<=480) or the projector band
+    /// (>=1600), and a width between 480 and 900 stays `Unknown`.
+    Card,
     /// Not enough evidence to classify — an unsized root, a `fill_container`
     /// width, or a width between the phone and desktop bands. Passes MUST
     /// treat this as "no type information", never as a default form.
@@ -56,6 +65,13 @@ impl DesignForm {
     pub fn is_deck_board(self) -> bool {
         matches!(self, DesignForm::Deck)
     }
+
+    /// A fixed portrait card board — the same "independent board, not a
+    /// scroll surface" semantics as a deck, in a portrait aspect. Repair
+    /// passes that only need "fixed board" (the margin floor) accept both.
+    pub fn is_card_board(self) -> bool {
+        matches!(self, DesignForm::Card)
+    }
 }
 
 /// Widest artboard (inclusive) that reads as a phone viewport.
@@ -73,6 +89,15 @@ const DECK_MIN_WIDTH: f64 = 1600.0;
 /// 16:9 is 0.5625. The band accepts a board a model sized slightly off while
 /// still excluding any page tall enough to scroll.
 const DECK_ASPECT_RANGE: std::ops::RangeInclusive<f64> = 0.50..=0.65;
+/// Card band (inclusive) on the authored width. 900 is the small end of the
+/// portrait knowledge-card presets (1080 - one design step); 1280 stops
+/// short of the 1600 projector band so Deck can never be shadowed.
+const CARD_MIN_WIDTH: f64 = 900.0;
+const CARD_MAX_WIDTH: f64 = 1280.0;
+/// Tallest aspect that still reads as one fixed board: 9:16 is 0.5625
+/// inverted -> 1.78; 2.0 leaves room for a slightly taller card while a
+/// genuine scroll page (h/w > 2.0, e.g. 1200x2977) keeps its Page form.
+const CARD_MAX_ASPECT: f64 = 2.0;
 
 /// Classify a root frame from its artboard size. `width` / `height` are the
 /// authored numeric values; a non-numeric (`fill_container`, `fit_content`) or
@@ -88,6 +113,19 @@ pub fn classify_root_form(width: Option<f64>, height: Option<f64>) -> DesignForm
         if let Some(height) = height.filter(|h| *h > 0.0) {
             if DECK_ASPECT_RANGE.contains(&(height / width)) {
                 return DesignForm::Deck;
+            }
+        }
+    }
+    // Card runs BEFORE Page: the card band (900..=1280 portrait, h/w <= 2.0)
+    // overlaps the Page band's lower end, and a 1080x1440 card must read as
+    // Card, not as a scroll page. Every input outside the card band keeps its
+    // previous judgement: phone (<=480) and deck (>=1600) bands never overlap,
+    // a square (h <= w) or taller-than-2.0 board stays Page (when >= 1024) or
+    // Unknown, and 480..900 wide stays Unknown either way.
+    if (CARD_MIN_WIDTH..=CARD_MAX_WIDTH).contains(&width) {
+        if let Some(height) = height.filter(|h| *h > 0.0) {
+            if height > width && height / width <= CARD_MAX_ASPECT {
+                return DesignForm::Card;
             }
         }
     }
@@ -173,5 +211,93 @@ mod tests {
         assert!(DesignForm::Deck.is_deck_board());
         assert!(!DesignForm::Page.is_deck_board());
         assert!(!DesignForm::Unknown.is_deck_board());
+    }
+
+    #[test]
+    fn a_card_board_reports_itself_as_one() {
+        assert!(DesignForm::Card.is_card_board());
+        assert!(!DesignForm::Deck.is_card_board());
+        assert!(!DesignForm::Page.is_card_board());
+        assert!(!DesignForm::Unknown.is_card_board());
+        // A card is a fixed board, but never a deck board (16:9 gate).
+        assert!(!DesignForm::Card.is_deck_board());
+    }
+
+    #[test]
+    fn a_portrait_card_classifies_as_card() {
+        // The 0815 v4-pro card corpus: XHS 3:4 and the generic 9:16 card.
+        assert_eq!(
+            classify_root_form(Some(1080.0), Some(1440.0)),
+            DesignForm::Card
+        );
+        assert_eq!(
+            classify_root_form(Some(1080.0), Some(1920.0)),
+            DesignForm::Card
+        );
+        // Band edges: the exact corners stay inside.
+        assert_eq!(
+            classify_root_form(Some(900.0), Some(1000.0)),
+            DesignForm::Card
+        );
+        assert_eq!(
+            classify_root_form(Some(1280.0), Some(1600.0)),
+            DesignForm::Card
+        );
+        assert_eq!(
+            classify_root_form(Some(1280.0), Some(2560.0)),
+            DesignForm::Card
+        );
+    }
+
+    #[test]
+    fn a_square_or_landscape_board_is_not_a_card() {
+        // XHS square 1:1 — a fixed board but not portrait, so it keeps its
+        // previous Page judgement.
+        assert_eq!(
+            classify_root_form(Some(1080.0), Some(1080.0)),
+            DesignForm::Page
+        );
+        assert_eq!(
+            classify_root_form(Some(1200.0), Some(800.0)),
+            DesignForm::Page
+        );
+        // A phone inside its own band keeps MobileScreen — the card band never
+        // shadows the phone band.
+        assert_eq!(
+            classify_root_form(Some(390.0), Some(844.0)),
+            DesignForm::MobileScreen
+        );
+    }
+
+    #[test]
+    fn outside_the_card_band_the_previous_judgement_holds() {
+        // Narrower than 900 stays Unknown (the tablet band is deliberate).
+        assert_eq!(
+            classify_root_form(Some(899.0), Some(1798.0)),
+            DesignForm::Unknown
+        );
+        assert_eq!(
+            classify_root_form(Some(768.0), Some(1024.0)),
+            DesignForm::Unknown
+        );
+        // Wider than 1280 stays Page (a 1600-wide board is not a card).
+        assert_eq!(
+            classify_root_form(Some(1281.0), Some(2000.0)),
+            DesignForm::Page
+        );
+        // Taller than 2:1 is a scroll page, not one fixed board.
+        assert_eq!(
+            classify_root_form(Some(1200.0), Some(2977.0)),
+            DesignForm::Page
+        );
+        assert_eq!(
+            classify_root_form(Some(1280.0), Some(2561.0)),
+            DesignForm::Page
+        );
+        // The projector band is untouched: 1920x1080 stays Deck.
+        assert_eq!(
+            classify_root_form(Some(1920.0), Some(1080.0)),
+            DesignForm::Deck
+        );
     }
 }

@@ -18,5 +18,5 @@ use op_editor_core::editor_ui_state::EditorUiState;
 /// Translate a settings-modal `settings.*` key for the editor's
 /// active locale.
 pub fn t(ui: &EditorUiState, key: &'static str) -> &'static str {
-    op_i18n::translate(ui.locale, key)
+    op_i18n::translate(ui.effective_locale(), key)
 }

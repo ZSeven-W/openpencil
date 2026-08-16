@@ -9,8 +9,8 @@
 // error.
 //
 // Message `type` values — outbound (extension → page): `op-bridge/init`,
-// `op-bridge/open-document`, `op-bridge/snapshot`, `op-bridge/save-committed`,
-// `op-bridge/resolve-conflict`; inbound (page → extension): `op-bridge/ready`,
+// `op-bridge/theme`, `op-bridge/locale`, `op-bridge/open-document`, `op-bridge/snapshot`,
+// `op-bridge/save-committed`, `op-bridge/resolve-conflict`; inbound (page → extension): `op-bridge/ready`,
 // `op-bridge/dirty-changed`, `op-bridge/opened`, `op-bridge/snapshot-result`,
 // `op-bridge/snapshot-conflict`, `op-bridge/sync-conflict`,
 // `op-bridge/conflict-resolved`. Field names are camelCase (`requestId`,
@@ -18,6 +18,8 @@
 
 export type BridgeOutboundToPage =
   | { type: "op-bridge/init"; token: string; mcpUrl?: string }
+  | { type: "op-bridge/theme"; colorScheme: "light" | "dark" }
+  | { type: "op-bridge/locale"; locale: "zh-CN" | "en-US" }
   | { type: "op-bridge/open-document"; json: string }
   | { type: "op-bridge/snapshot"; purpose: "save" | "backup" | "conflict-backup"; requestId: string }
   | { type: "op-bridge/save-committed"; generation: number; revision: number }

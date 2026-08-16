@@ -1,6 +1,6 @@
 //! Focused paint + interaction regressions for layer-row labels.
 
-use super::layer_panel::{LayerPanel, LayerPanelHit, LAYER_PANEL_WIDTH, LAYER_ROW_HEIGHT};
+use super::layer_panel::{LayerPanel, LayerPanelHit, LAYER_PANEL_WIDTH};
 use super::layer_panel_paint::{
     approx_text_width, layer_action_gutter_left, layer_trailing_icon_xs, paint_rename_input,
     ROW_FONT,
@@ -13,6 +13,7 @@ use op_editor_core::{EditorState, NodeId};
 
 const LONG_NAME: &str = "CodexLiveCanvasSmoke-1783-Long-Layer-Name";
 const WIDE_NAME: &str = "设计系统图层名称设计系统图层名称设计系统图层名称";
+const LAYER_ROW_HEIGHT: f32 = 28.0;
 
 #[derive(Debug)]
 struct CapturedText {

@@ -18,10 +18,14 @@
 //! 2. **Placement.** Boards keep their relative layout and move as a block to
 //!    the right of whatever is already on the page.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
+use base64::Engine as _;
+use jian_ops_schema::compat::{load_str_with_preprocess, LoadOptions};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::variable::VariableDefinition;
+use jian_ops_schema::PenDocument;
 
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
@@ -42,33 +46,158 @@ pub const TEMPLATE_APPEND_GAP: f64 = 400.0;
 pub struct TemplateBoards {
     pub nodes: Vec<PenNode>,
     pub variables: BTreeMap<String, VariableDefinition>,
+    image_thumbnails: Vec<(u64, Arc<[u8]>)>,
 }
 
-/// Parse a shipped template's `.op` source into namespaced boards.
+/// Parse a template's canonical `.op` source into namespaced boards.
 ///
-/// `None` means the asset did not parse — the catalogue verifies every
-/// template has a document, so a `None` here is a corrupt or renamed asset,
-/// not a user error.
+/// Canonical saved documents may carry their boards under `pages`, their
+/// selected page under `editorMeta.activePageIndex`, and externalized image
+/// payloads under `images`. Running the schema compat loader here keeps this
+/// path aligned with normal document loads instead of maintaining a partial
+/// template-only parser.
+///
+/// `None` means the asset did not parse. No nodes, variables, or thumbnails
+/// are published until the returned value is successfully inserted.
 pub fn template_boards(source: &str, template_id: &str) -> Option<TemplateBoards> {
-    let mut document: serde_json::Value = serde_json::from_str(source).ok()?;
+    let mut active_page_index = 0;
+    let mut image_thumbnails = BTreeMap::new();
+    let mut renames = BTreeMap::new();
+    let loaded = load_str_with_preprocess(source, LoadOptions::default(), |document| {
+        active_page_index = template_active_page_index(document);
+        image_thumbnails = take_raw_template_thumbnails(document);
+        renames = variable_renames(document, template_id);
+        if let Some(children) = active_raw_children_mut(document, active_page_index) {
+            rewrite_variable_refs(children, &renames);
+        }
+    })
+    .ok()?;
 
-    let renames = variable_renames(&document, template_id);
-    if let Some(children) = document.get_mut("children") {
-        rewrite_variable_refs(children, &renames);
-    }
-
-    let nodes: Vec<PenNode> = serde_json::from_value(document.get("children")?.clone()).ok()?;
+    let mut document = loaded.value;
+    let nodes = take_active_children(&mut document, active_page_index);
+    let referenced_thumbnail_ids = referenced_thumbnail_ids(&nodes);
+    image_thumbnails.retain(|id, _| referenced_thumbnail_ids.contains(id));
     let variables = document
-        .get("variables")
-        .and_then(|v| {
-            serde_json::from_value::<BTreeMap<String, VariableDefinition>>(v.clone()).ok()
-        })
+        .variables
+        .take()
         .unwrap_or_default()
         .into_iter()
         .map(|(name, definition)| (renames.get(&name).cloned().unwrap_or(name), definition))
         .collect();
 
-    Some(TemplateBoards { nodes, variables })
+    Some(TemplateBoards {
+        nodes,
+        variables,
+        image_thumbnails: image_thumbnails.into_iter().collect(),
+    })
+}
+
+/// Saved-document page selection, matching the editor metadata loader's
+/// camel-case wire field plus its former snake-case alias.
+fn template_active_page_index(document: &serde_json::Value) -> usize {
+    document
+        .get("editorMeta")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|meta| {
+            meta.get("activePageIndex")
+                .or_else(|| meta.get("active_page_index"))
+        })
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|index| usize::try_from(index).ok())
+        .unwrap_or(0)
+}
+
+/// The raw active-page children used by the variable-reference preprocessor.
+/// Empty page lists follow the editor's root-children fallback.
+fn active_raw_children_mut(
+    document: &mut serde_json::Value,
+    active_page_index: usize,
+) -> Option<&mut serde_json::Value> {
+    let page_count = document
+        .get("pages")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    if page_count == 0 {
+        return document.get_mut("children");
+    }
+    document
+        .get_mut("pages")?
+        .as_array_mut()?
+        .get_mut(active_page_index.min(page_count - 1))?
+        .get_mut("children")
+}
+
+/// Typed counterpart to [`active_raw_children_mut`].
+fn take_active_children(document: &mut PenDocument, active_page_index: usize) -> Vec<PenNode> {
+    match document.pages.as_mut() {
+        Some(pages) if !pages.is_empty() => {
+            let index = active_page_index.min(pages.len() - 1);
+            std::mem::take(&mut pages[index].children)
+        }
+        _ => std::mem::take(&mut document.children),
+    }
+}
+
+/// Remove and decode the canonical `imageThumbs` side table before the schema
+/// loader sees it.
+///
+/// A template is parsed for extraction, not installed as the active document,
+/// so its thumbnail seed must never enter the schema loader's pending-document
+/// registry. Keeping the decoded bytes local also means parsing cannot touch
+/// the active thumbnail registry while a desktop decode worker writes to it.
+/// The bounds and validation match `jian_ops_schema::image_thumbs` exactly.
+fn take_raw_template_thumbnails(document: &mut serde_json::Value) -> BTreeMap<u64, Arc<[u8]>> {
+    let Some(serde_json::Value::Object(table)) = document
+        .as_object_mut()
+        .and_then(|root| root.remove("imageThumbs"))
+    else {
+        return BTreeMap::new();
+    };
+    let max_bytes = jian_ops_schema::image_thumbs::MAX_THUMB_BYTES;
+    let max_encoded_bytes = max_bytes.div_ceil(3) * 4;
+    table
+        .into_iter()
+        .filter_map(|(id, encoded)| {
+            let id = id.parse::<u64>().ok()?;
+            let encoded = encoded.as_str()?;
+            if encoded.len() > max_encoded_bytes {
+                return None;
+            }
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .ok()?;
+            (bytes.len() <= max_bytes).then(|| (id, Arc::from(bytes)))
+        })
+        .collect()
+}
+
+/// Paint ids actually referenced by the adopted page. A full saved document
+/// may carry thumbnails for images on every other page; those do not belong
+/// in the destination document's runtime cache.
+fn referenced_thumbnail_ids(nodes: &[PenNode]) -> BTreeSet<u64> {
+    let mut ids = BTreeSet::new();
+    jian_ops_schema::image_table::visit_legacy_node_roots(nodes, &mut |source| {
+        ids.insert(jian_ops_schema::node::image_src::paint_image_id(
+            source.as_str(),
+        ));
+    });
+    ids
+}
+
+/// The document for a template id from either half of the catalogue.
+///
+/// Bare ids resolve to the embedded shipped asset; ids carrying the `user:`
+/// prefix resolve to the runtime registry's saved document. `None` means the
+/// id names nothing — for a shipped id a corrupt or renamed asset, for a
+/// `user:` id a template that was deleted since the card was painted.
+pub fn template_document_for(template_id: &str) -> Option<String> {
+    if template_id.starts_with(crate::user_scene_templates::USER_TEMPLATE_ID_PREFIX) {
+        return crate::user_scene_templates::user_scene_templates()
+            .into_iter()
+            .find(|template| template.id == template_id)
+            .map(|template| template.document.clone());
+    }
+    crate::scene_template_catalog::scene_template_document(template_id).map(str::to_string)
 }
 
 /// The namespaced name for each variable the template declares.
@@ -187,12 +316,16 @@ impl EditorState {
     /// merge, so a rejected insert cannot leave the document carrying a
     /// palette for boards that never arrived.
     fn insert_template_boards(&mut self, boards: TemplateBoards, clear_page: bool) -> bool {
-        if boards.nodes.is_empty() {
+        let TemplateBoards {
+            mut nodes,
+            variables,
+            image_thumbnails,
+        } = boards;
+        if nodes.is_empty() {
             return false;
         }
         let snapshot = self.snapshot_for_history();
 
-        let mut nodes = boards.nodes;
         if clear_page {
             self.active_children_mut().clear();
             self.deselect_all();
@@ -219,8 +352,13 @@ impl EditorState {
         }
 
         let table = self.doc.variables.get_or_insert_with(BTreeMap::new);
-        for (name, definition) in boards.variables {
+        for (name, definition) in variables {
             table.entry(name).or_insert(definition);
+        }
+        for (paint_id, jpeg_bytes) in image_thumbnails {
+            if jian_ops_schema::image_thumbs::thumb_for(paint_id).is_none() {
+                jian_ops_schema::image_thumbs::store_thumb(paint_id, jpeg_bytes);
+            }
         }
 
         self.history_push_past(snapshot);

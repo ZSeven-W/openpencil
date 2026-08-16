@@ -6,7 +6,7 @@
 //! rasterized images up to 24 MB) and `chrome.scripting.executeScript` has to
 //! structured-clone the result across a process boundary. 4 MiB per hop stays
 //! far below any IPC limit while keeping the number of round trips small
-//! (8 for a 32 MB page).
+//! (12 for a maximum 48 MB page).
 //!
 //! # Why the snapshot text never leaves JS
 //!
@@ -42,14 +42,16 @@ pub const CHUNK_CHARS: u32 = 4 * 1024 * 1024;
 /// will not let us read a body we were not granted, so an over-cap POST would
 /// surface as an opaque network failure. Checking client-side turns it into
 /// the one message that helps: use `Download JSON` and import the file.
-pub const MAX_SNAPSHOT_MB: u32 = 32;
+pub const MAX_SNAPSHOT_MB: u32 = 48;
 
 /// Give up on an HTTP request after this long. Without it a server that
 /// accepts the connection and then never answers (a wedged editor, a socket
 /// black hole) leaves the popup spinning with its buttons disabled until the
-/// user closes it. Sized well above a large local import, which is bounded by
-/// the editor's own 15 s UI-thread ack budget.
-pub const REQUEST_TIMEOUT_MS: u32 = 15_000;
+/// user closes it. Sized ABOVE the editor's own 15 s UI-thread ack budget —
+/// they must not be equal, or a maximum-size import that uses the editor's
+/// whole budget times out on both ends at once and the client error races
+/// the server's honest one.
+pub const REQUEST_TIMEOUT_MS: u32 = 30_000;
 
 /// Whether a snapshot of `chars` UTF-16 code units is over the ingest cap.
 ///
@@ -58,6 +60,21 @@ pub const REQUEST_TIMEOUT_MS: u32 = 15_000;
 /// borderline non-ASCII one still gets the server's 413.
 pub fn snapshot_too_large(chars: f64) -> bool {
     chars > f64::from(MAX_SNAPSHOT_MB) * 1024.0 * 1024.0
+}
+
+/// The editor endpoint's whole-body cap (`mcp_serve::MAX_BODY`), in
+/// megabytes. Bounds the `/mcp` FALLBACK envelope, not the raw snapshot:
+/// `tools/call` wraps the snapshot as a JSON string, and the re-escaping of
+/// quotes/backslashes can inflate a snapshot that passed
+/// [`snapshot_too_large`] past this outer limit (worst case approaches 2×,
+/// so a 33+ MiB quote-heavy capture can exceed 64 MiB). Checked client-side
+/// after the envelope is built so the failure is the actionable `tooLarge`
+/// message instead of a post-upload refusal.
+pub const MCP_FALLBACK_BODY_MB: u32 = 64;
+
+/// Whether an `/mcp` envelope of `chars` UTF-16 code units is over that cap.
+pub fn mcp_envelope_too_large(chars: f64) -> bool {
+    chars > f64::from(MCP_FALLBACK_BODY_MB) * 1024.0 * 1024.0
 }
 
 /// Plan + verify the slice-by-slice readback of one snapshot.

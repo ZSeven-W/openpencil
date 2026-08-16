@@ -7,37 +7,75 @@
     "message": "Захватывает отрисованную страницу и импортирует её в OpenPencil как редактируемые узлы дизайна.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Захватить всю страницу" },
-  "pickButton": { "message": "Захватить элемент" },
-  "downloadButton": { "message": "Скачать .op" },
-  "pickHint": { "message": "Нажмите на элемент, чтобы захватить его" },
-  "pickCancelHint": { "message": "Esc — отмена" },
-  "endpointLabel": { "message": "Адрес OpenPencil" },
+  "captureButton": {
+    "message": "Захватить всю страницу"
+  },
+  "pickButton": {
+    "message": "Захватить элемент"
+  },
+  "downloadButton": {
+    "message": "Скачать .op"
+  },
+  "pickHint": {
+    "message": "Нажмите на элемент, чтобы захватить его"
+  },
+  "pickCancelHint": {
+    "message": "Esc — отмена"
+  },
+  "endpointLabel": {
+    "message": "Адрес OpenPencil"
+  },
   "endpointHint": {
     "message": "Настольное приложение: Настройки → MCP → запустите сервер (порт по умолчанию 3100)."
   },
-  "languageLabel": { "message": "Язык" },
-  "statusIdle": { "message": "Готово." },
-  "statusCapturing": { "message": "Захват страницы…" },
-  "statusTransferring": { "message": "Передача снимка ($1)…" },
-  "statusSending": { "message": "Отправка в OpenPencil…" },
-  "statusImported": { "message": "В OpenPencil импортировано узлов: $1." },
-  "statusSendingAccount": { "message": "Отправка в ваш аккаунт OpenPencil…" },
-  "statusSentToAccount": { "message": "Отправлено в ваш аккаунт OpenPencil: $1" },
+  "languageLabel": {
+    "message": "Язык"
+  },
+  "statusIdle": {
+    "message": "Готово."
+  },
+  "statusCapturing": {
+    "message": "Захват страницы…"
+  },
+  "statusTransferring": {
+    "message": "Передача снимка ($1)…"
+  },
+  "statusSending": {
+    "message": "Отправка в OpenPencil…"
+  },
+  "statusImported": {
+    "message": "В OpenPencil импортировано узлов: $1."
+  },
+  "statusSendingAccount": {
+    "message": "Отправка в ваш аккаунт OpenPencil…"
+  },
+  "statusSentToAccount": {
+    "message": "Отправлено в ваш аккаунт OpenPencil: $1"
+  },
   "statusSentLocalFallback": {
     "message": "Сессия аккаунта истекла, поэтому снимок ушёл в OpenPencil на этом компьютере: импортировано узлов — $1."
   },
-  "statusDownloaded": { "message": "Сохранено: $1." },
-  "statusPicked": { "message": "Захвачено: $1. $2" },
-  "statusPickCancelled": { "message": "Захват элемента отменён." },
-  "statusTruncated": {
-    "message": "Примечание: страница достигла предела экстрактора в 20 000 узлов, поэтому снимок неполный."
+  "statusDownloaded": {
+    "message": "Сохранено: $1."
   },
-  "errorNoTab": { "message": "Нет активной вкладки." },
+  "statusPicked": {
+    "message": "Захвачено: $1. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Захват элемента отменён."
+  },
+  "statusTruncated": {
+    "message": "Примечание: страница достигла предела экстрактора в 40 000 узлов, поэтому снимок неполный."
+  },
+  "errorNoTab": {
+    "message": "Нет активной вкладки."
+  },
   "errorRestrictedTab": {
     "message": "Chrome не разрешает расширениям работать на этой странице. Откройте обычную страницу http(s) и повторите попытку."
   },
-  "errorInjection": { "message": "Не удалось выполнить скрипт захвата в этой вкладке: $1" },
+  "errorInjection": {
+    "message": "Не удалось выполнить скрипт захвата в этой вкладке: $1"
+  },
   "errorNoSnapshot": {
     "message": "Экстрактор не создал снимок (возможно, на странице нет видимого body)."
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "Этот снимок больше $1 МБ, и маршрут снимков OpenPencil его отклоняет. Используйте «Скачать .op», затем откройте файл в OpenPencil"
   },
-  "errorImport": { "message": "OpenPencil отклонил снимок: $1" },
-  "errorDownload": { "message": "Не удалось скачать: $1" },
+  "errorAccountTooLarge": {
+    "message": "Этот снимок больше $1 МБ, и входящие аккаунта его отклоняют. Отправьте его вместо этого на это устройство."
+  },
+  "errorImport": {
+    "message": "OpenPencil отклонил снимок: $1"
+  },
+  "errorDownload": {
+    "message": "Не удалось скачать: $1"
+  },
   "errorCoreMissing": {
     "message": "Это расширение не собрано. Выполните packages/op-chrome-extension/scripts/build-wasm.sh, затем нажмите «Обновить» на карточке расширения. ($1)"
   },
@@ -70,14 +115,24 @@
   "errorPickUnavailable": {
     "message": "Захват элемента недоступен: фоновый worker расширения не запущен. Проверьте карточку расширения в chrome://extensions на наличие ошибки, выполните build-wasm.sh ещё раз и нажмите «Обновить». ($1)"
   },
-  "accountSignIn": { "message": "Войти" },
-  "accountSignOut": { "message": "Выйти" },
+  "accountSignIn": {
+    "message": "Войти"
+  },
+  "accountSignOut": {
+    "message": "Выйти"
+  },
   "accountSignInOpened": {
     "message": "Завершите вход на открывшейся странице, затем откройте это окно снова."
   },
-  "accountSignedOut": { "message": "Вы вышли из аккаунта OpenPencil." },
-  "accountSignOutManual": { "message": "Завершите выход на открывшейся странице аккаунта." },
-  "accountUnavailable": { "message": "Не удалось связаться с вашим аккаунтом OpenPencil: $1" },
+  "accountSignedOut": {
+    "message": "Вы вышли из аккаунта OpenPencil."
+  },
+  "accountSignOutManual": {
+    "message": "Завершите выход на открывшейся странице аккаунта."
+  },
+  "accountUnavailable": {
+    "message": "Не удалось связаться с вашим аккаунтом OpenPencil: $1"
+  },
   "errorAccountSignedOut": {
     "message": "Сессия аккаунта OpenPencil истекла. Войдите снова и повторите попытку."
   },
@@ -96,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Слишком много загрузок в аккаунт. Повторите примерно через $1 с."
   },
-  "errorAccountRejected": { "message": "Аккаунт OpenPencil отклонил снимок: $1" },
+  "errorAccountRejected": {
+    "message": "Аккаунт OpenPencil отклонил снимок: $1"
+  },
   "errorAccountUnavailable": {
     "message": "Аккаунт OpenPencil сейчас не может принять снимок ($1). Повторите позже или отправьте в OpenPencil на этом компьютере."
   },
-  "regionLabel": { "message": "Регион" },
-  "regionCn": { "message": "Китай" },
-  "regionGlobal": { "message": "Глобальный" },
-  "deliveryLabel": { "message": "Отправить в" },
-  "deliveryLocal": { "message": "OpenPencil на этом компьютере" },
-  "deliveryAccount": { "message": "Мой аккаунт OpenPencil" }
+  "regionLabel": {
+    "message": "Регион"
+  },
+  "regionCn": {
+    "message": "Китай"
+  },
+  "regionGlobal": {
+    "message": "Глобальный"
+  },
+  "deliveryLabel": {
+    "message": "Отправить в"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil на этом компьютере"
+  },
+  "deliveryAccount": {
+    "message": "Мой аккаунт OpenPencil"
+  }
 }

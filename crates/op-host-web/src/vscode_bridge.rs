@@ -27,6 +27,7 @@ use web_sys::MessageEvent;
 
 #[path = "vscode_bridge_snapshot.rs"]
 mod document_snapshot;
+mod helpers;
 
 use crate::document_json::{parse_document_json, with_borrowed_parsed_document};
 use crate::live_sync;
@@ -39,6 +40,10 @@ use op_editor_core::bridge_protocol::{
 use op_editor_core::web_sync::WebSyncClient;
 
 use document_snapshot::BridgeDocumentSnapshot;
+use helpers::{
+    acquire_push_busy, post_to_parent, read_triple, release_push_busy, schedule_once,
+    snapshot_state,
+};
 
 /// Tick cadence for the outbound-event observer. Latency only: the gate's edge
 /// latches never lose an event between ticks (a fast rise+fall is still drained
@@ -202,6 +207,8 @@ fn handle_message<C: RepaintContext + 'static>(
 
     match msg {
         BridgeInbound::Init { token, mcp_url } => handle_init(inner, token, mcp_url),
+        BridgeInbound::Theme { color_scheme } => handle_theme(inner, color_scheme),
+        BridgeInbound::Locale { locale } => handle_locale(inner, locale),
         BridgeInbound::OpenDocument { json } => handle_open_document(inner, sync, json),
         BridgeInbound::Snapshot { request_id, .. } => handle_snapshot(inner, sync, request_id),
         BridgeInbound::SaveCommitted {
@@ -212,6 +219,43 @@ fn handle_message<C: RepaintContext + 'static>(
             handle_resolve_conflict(inner, sync, mode, request_id)
         }
     }
+}
+
+/// `locale`: apply the embedding host's locale as a page-lifetime override
+/// without replacing the user's OpenPencil locale preference.
+fn handle_locale<C: RepaintContext + 'static>(
+    inner: &Rc<RefCell<C>>,
+    locale: op_editor_core::Locale,
+) {
+    let Ok(mut context) = inner.try_borrow_mut() else {
+        return;
+    };
+    context
+        .host_mut()
+        .editor_state_mut()
+        .editor_ui
+        .set_host_locale_override(Some(locale));
+    context.host_mut().mark_editor_state_dirty();
+    let _ = context.repaint();
+}
+
+/// `theme`: apply the embedding host's color scheme as a page-lifetime
+/// override and repaint immediately. `web_settings::theme` retains the user's
+/// prior OpenPencil preference underneath this override, so neither the device
+/// key nor the compatibility settings payload adopts the host scheme.
+fn handle_theme<C: RepaintContext + 'static>(
+    inner: &Rc<RefCell<C>>,
+    color_scheme: op_editor_core::ThemeMode,
+) {
+    let Ok(mut context) = inner.try_borrow_mut() else {
+        return;
+    };
+    crate::web_settings::theme::set_host_override(
+        context.host_mut().editor_state_mut(),
+        color_scheme,
+    );
+    context.host_mut().mark_editor_state_dirty();
+    let _ = context.repaint();
 }
 
 /// `init`: store the managed token and unblock `mount_ck`'s `await_init`.
@@ -228,7 +272,11 @@ fn handle_init<C: RepaintContext + 'static>(
     token: String,
     mcp_url: Option<String>,
 ) {
+    let token_changed = live_sync::bridge_token().as_deref() != Some(token.as_str());
     live_sync::set_bridge_token(token);
+    if token_changed {
+        crate::web_auth_sync::refresh_status(inner);
+    }
     if let Some(url) = mcp_url {
         // Surface the host's real MCP endpoint on the settings card (the
         // daemon-internal port would point clients at a dead endpoint).
@@ -715,62 +763,4 @@ fn observe_tick<C: RepaintContext + 'static>(
             triple.0, triple.1, triple.2,
         ));
     }
-}
-
-// ---------------------------------------------------------------------------
-// Small helpers
-// ---------------------------------------------------------------------------
-
-fn read_triple<C: RepaintContext>(inner: &Rc<RefCell<C>>) -> Option<(u64, u64, bool)> {
-    let b = inner.try_borrow().ok()?;
-    let s = b.host().editor_state();
-    Some((s.document_generation(), s.document_revision(), s.is_dirty()))
-}
-
-/// Serialize the live document and editor metadata atomically.
-fn snapshot_state<C: RepaintContext>(inner: &Rc<RefCell<C>>) -> Option<BridgeDocumentSnapshot> {
-    let b = inner.try_borrow().ok()?;
-    BridgeDocumentSnapshot::capture(b.host().editor_state())
-}
-
-/// Try to claim the shared push single-flight latch. `true` when acquired.
-fn acquire_push_busy(sync: &SharedSync) -> bool {
-    match sync.try_borrow_mut() {
-        Ok(mut s) if !s.push_busy => {
-            s.push_busy = true;
-            true
-        }
-        _ => false,
-    }
-}
-
-fn release_push_busy(sync: &SharedSync) {
-    if let Ok(mut s) = sync.try_borrow_mut() {
-        s.push_busy = false;
-    }
-}
-
-/// Post a codec string to the locked host origin (falling back to `*` only
-/// before the origin is known — by which point every real reply is sent).
-fn post_to_parent(json: &str) {
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    let Some(parent) = window.parent().ok().flatten() else {
-        return;
-    };
-    let target = BRIDGE_ORIGIN
-        .with(|o| o.borrow().clone())
-        .unwrap_or_else(|| "*".to_string());
-    let _ = parent.post_message(&JsValue::from_str(json), &target);
-}
-
-/// One-shot `setTimeout`. `once_into_js` self-frees after firing.
-fn schedule_once<F: FnOnce() + 'static>(delay_ms: i32, f: F) {
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    let cb = Closure::once_into_js(f);
-    let _ =
-        window.set_timeout_with_callback_and_timeout_and_arguments_0(cb.unchecked_ref(), delay_ms);
 }

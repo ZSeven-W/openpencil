@@ -15,7 +15,11 @@ impl WidgetHost {
     /// owner of its own snapshot, and the daemon-side merge in
     /// `op-host-services::web_credentials` is what reads those fields.
     pub(super) fn commit_settings_focus(&mut self) {
-        if commit_settings_focus(&mut self.editor_state, SettingsCommitScope::Browser) {
+        if commit_settings_focus(
+            &mut self.editor_state,
+            SettingsCommitScope::Browser,
+            self.now_ms,
+        ) {
             self.mark_dirty();
         }
     }

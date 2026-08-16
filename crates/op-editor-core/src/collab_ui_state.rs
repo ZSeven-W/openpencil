@@ -344,6 +344,7 @@ pub enum CollabUiAction {
 #[derive(Debug, Clone)]
 pub struct CollabUiState {
     pub availability: CollabAvailability,
+    pub transport_capabilities: crate::CollabTransportCapabilities,
     pub phase: CollabConnectionPhase,
     pub panel: CollabPanelState,
     pub pending_edit: CollabPendingEditUi,
@@ -366,6 +367,7 @@ impl Default for CollabUiState {
     fn default() -> Self {
         Self {
             availability: CollabAvailability::Unavailable,
+            transport_capabilities: crate::CollabTransportCapabilities::default(),
             phase: CollabConnectionPhase::Idle,
             panel: CollabPanelState::default(),
             pending_edit: CollabPendingEditUi::None,

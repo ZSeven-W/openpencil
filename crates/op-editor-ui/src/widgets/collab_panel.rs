@@ -140,8 +140,8 @@ impl Widget for CollabPanel<'_> {
             cx.backend,
             Icon::Close,
             Point2D::new(
-                self.close_rect(rect).origin.x + 7.0,
-                self.close_rect(rect).origin.y + 6.0,
+                self.close_rect(rect).origin.x + (self.close_rect(rect).size.x - 16.0) / 2.0,
+                self.close_rect(rect).origin.y + (self.close_rect(rect).size.y - 16.0) / 2.0,
             ),
             16.0,
             if close_hovered {
@@ -190,7 +190,7 @@ impl Widget for CollabPanel<'_> {
                     cx,
                     &self.theme,
                     self.sign_in_rect(rect, body_top),
-                    op_i18n::translate(self.ui.locale, "account.signInWithBrowser"),
+                    op_i18n::translate(self.ui.effective_locale(), "account.signInWithBrowser"),
                     true,
                     true,
                     self.ui.collab.panel.hover == Some(CollabPanelHover::OpenSignIn),
@@ -203,7 +203,7 @@ impl Widget for CollabPanel<'_> {
                 self.paint_message(cx, rect, body_top, "collab.create.choose");
                 paint_text(
                     cx,
-                    op_i18n::translate(self.ui.locale, "collab.session.region"),
+                    op_i18n::translate(self.ui.effective_locale(), "collab.session.region"),
                     11.0,
                     self.theme.muted_foreground,
                     Point2D::new(rect.origin.x + PAD, body_top + 56.0),
@@ -215,7 +215,7 @@ impl Widget for CollabPanel<'_> {
                         cx,
                         &self.theme,
                         button,
-                        op_i18n::translate(self.ui.locale, region.i18n_key()),
+                        op_i18n::translate(self.ui.effective_locale(), region.i18n_key()),
                         region == selected,
                         true,
                         self.ui.collab.panel.hover
@@ -250,7 +250,7 @@ impl Widget for CollabPanel<'_> {
             } => {
                 paint_text(
                     cx,
-                    op_i18n::translate(self.ui.locale, "collab.join.code"),
+                    op_i18n::translate(self.ui.effective_locale(), "collab.join.code"),
                     11.0,
                     self.theme.muted_foreground,
                     Point2D::new(rect.origin.x + PAD, body_top + 16.0),
@@ -301,7 +301,7 @@ impl Widget for CollabPanel<'_> {
                     9.0,
                     input.origin.y + 21.0,
                     self.now_ms,
-                    op_i18n::translate(self.ui.locale, "collab.join.codePlaceholder"),
+                    op_i18n::translate(self.ui.effective_locale(), "collab.join.codePlaceholder"),
                     self.ui.collab.panel.join_address_focused,
                 );
                 if let Some(clear) = clear {
@@ -324,7 +324,7 @@ impl Widget for CollabPanel<'_> {
                 }
                 paint_text(
                     cx,
-                    op_i18n::translate(self.ui.locale, "collab.join.publicHint"),
+                    op_i18n::translate(self.ui.effective_locale(), "collab.join.publicHint"),
                     10.0,
                     self.theme.muted_foreground,
                     Point2D::new(rect.origin.x + PAD, body_top + 72.0),
@@ -332,7 +332,7 @@ impl Widget for CollabPanel<'_> {
                 );
                 paint_text(
                     cx,
-                    op_i18n::translate(self.ui.locale, "collab.join.nearby"),
+                    op_i18n::translate(self.ui.effective_locale(), "collab.join.nearby"),
                     10.0,
                     self.theme.muted_foreground,
                     Point2D::new(rect.origin.x + PAD, body_top + 97.0),
@@ -373,7 +373,10 @@ impl Widget for CollabPanel<'_> {
                     if !endpoint.compatible {
                         paint_text(
                             cx,
-                            op_i18n::translate(self.ui.locale, "collab.join.incompatible"),
+                            op_i18n::translate(
+                                self.ui.effective_locale(),
+                                "collab.join.incompatible",
+                            ),
                             9.0,
                             self.theme.muted_foreground,
                             Point2D::new(rect.origin.x + rect.size.x - 130.0, y + 21.0),
@@ -391,7 +394,7 @@ impl Widget for CollabPanel<'_> {
                     };
                     paint_text(
                         cx,
-                        op_i18n::translate(self.ui.locale, key),
+                        op_i18n::translate(self.ui.effective_locale(), key),
                         11.0,
                         self.theme.muted_foreground,
                         Point2D::new(rect.origin.x + PAD, first_y + 22.0),
@@ -428,7 +431,7 @@ impl Widget for CollabPanel<'_> {
                 if *pending {
                     paint_text(
                         cx,
-                        op_i18n::translate(self.ui.locale, "collab.session.pending"),
+                        op_i18n::translate(self.ui.effective_locale(), "collab.session.pending"),
                         10.0,
                         self.theme.primary,
                         Point2D::new(rect.origin.x + 90.0, body_top + 40.0),
@@ -470,7 +473,7 @@ impl Widget for CollabPanel<'_> {
                         .fill_round_rect(card, 7.0, self.theme.primary.with_alpha(0.08));
                     paint_text(
                         cx,
-                        op_i18n::translate(self.ui.locale, "collab.session.invite"),
+                        op_i18n::translate(self.ui.effective_locale(), "collab.session.invite"),
                         9.0,
                         self.theme.muted_foreground,
                         Point2D::new(rect.origin.x + PAD + 9.0, top + 14.0),
@@ -517,8 +520,11 @@ impl Widget for CollabPanel<'_> {
                     let top = body_top + 58.0 + connection_offset + invite_offset;
                     let local_label = format!(
                         "{} · {}",
-                        op_i18n::translate(self.ui.locale, "collab.connection.lan"),
-                        op_i18n::translate(self.ui.locale, "collab.session.shareAddress")
+                        op_i18n::translate(self.ui.effective_locale(), "collab.connection.lan"),
+                        op_i18n::translate(
+                            self.ui.effective_locale(),
+                            "collab.session.shareAddress"
+                        )
                     );
                     paint_text(
                         cx,
@@ -648,3 +654,7 @@ mod tests;
 #[cfg(test)]
 #[path = "collab_panel_region_tests.rs"]
 mod region_tests;
+
+#[cfg(test)]
+#[path = "collab_panel_touch_tests.rs"]
+mod touch_tests;

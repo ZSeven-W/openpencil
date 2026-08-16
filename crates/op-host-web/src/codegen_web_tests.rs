@@ -84,12 +84,14 @@ fn codegen_proxy_body_carries_the_selected_request_scoped_credential() {
     let body: serde_json::Value = serde_json::from_str(&build_body_json(
         &req,
         Some(AgentProvider::CodexCli),
+        Some("provider-codegen"),
         "private-model",
         Some(&credential),
     ))
     .unwrap();
 
     assert_eq!(body["provider"], "codex-cli");
+    assert_eq!(body["builtinProviderId"], "provider-codegen");
     assert_eq!(body["model"], "private-model");
     assert_eq!(body["credential"]["api_key"], "sk-codegen");
 }

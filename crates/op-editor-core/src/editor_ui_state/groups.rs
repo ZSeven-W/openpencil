@@ -356,12 +356,16 @@ impl AssetCenterTab {
 
 /// Grouped state for the non-modal Scene Template Center panel.
 ///
-/// Deliberately smaller than [`PromptCenterState`]: a template is opened,
-/// never authored, so there is no save form and no user-owned entries to
-/// persist. Adding those later means adding fields here, not reshaping the
-/// panel.
+/// Deliberately smaller than [`PromptCenterState`]: the panel opens existing
+/// templates and delegates host-owned persistence through one-shot requests.
+/// There is no template authoring form in this state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneTemplateCenterState {
+    /// Whether this host can persist the open document into the user's local
+    /// template library. Unsupported hosts omit the File-menu action.
+    pub save_current_supported: bool,
+    /// Raised by File ▸ Save As Template and drained by the owning host.
+    pub pending_save_current: bool,
     /// Whether the floating panel is visible.
     pub open: bool,
     /// Search text, caret, selection, and IME state.
@@ -370,6 +374,12 @@ pub struct SceneTemplateCenterState {
     pub generate: jian_core::text_input::TextInputState,
     /// Which of the two fields the keyboard writes into.
     pub focus: SceneTemplateFocus,
+    /// Whether that field currently owns platform text input.
+    ///
+    /// Desktop opens with search active for keyboard-first workflows. Touch
+    /// opens as a gallery and activates the IME only after an explicit field
+    /// tap, so the software keyboard cannot cover the cards on entry.
+    pub input_focus_active: bool,
     /// Which asset family the panel is showing.
     pub tab: AssetCenterTab,
     /// Active catalogue filter.
@@ -400,6 +410,11 @@ pub struct SceneTemplateCenterState {
     pub generate_basis: Option<String>,
     /// The Styles tab's `DESIGN.md` import.
     pub import: StyleImportState,
+    /// Ids of saved templates removed from memory whose directories a host
+    /// with a disk should delete. Mirrors `import.pending_delete`; kept on
+    /// the centre state because a template delete is a Templates-tab action,
+    /// not a style-import one.
+    pub pending_template_delete: Vec<String>,
 }
 
 /// Importing a user's own `DESIGN.md` into the Styles tab.
@@ -433,10 +448,13 @@ pub struct StyleImportState {
 impl Default for SceneTemplateCenterState {
     fn default() -> Self {
         Self {
+            save_current_supported: false,
+            pending_save_current: false,
             open: false,
             search: Default::default(),
             generate: Default::default(),
             focus: SceneTemplateFocus::Search,
+            input_focus_active: false,
             tab: AssetCenterTab::default(),
             filter: SceneFilter::All,
             scroll: Default::default(),
@@ -445,23 +463,40 @@ impl Default for SceneTemplateCenterState {
             pending_generate: None,
             generate_basis: None,
             import: StyleImportState::default(),
+            pending_template_delete: Vec::new(),
         }
     }
 }
 
 impl SceneTemplateCenterState {
-    /// Open the panel with search focused and no stale hover/scroll.
-    pub fn open(&mut self, now_ms: u64) {
+    pub fn request_save_current(&mut self) -> bool {
+        if !self.save_current_supported || self.pending_save_current {
+            return false;
+        }
+        self.pending_save_current = true;
+        true
+    }
+
+    pub fn take_pending_save_current(&mut self) -> bool {
+        std::mem::take(&mut self.pending_save_current)
+    }
+
+    /// Open the panel with no stale hover/scroll.
+    pub fn open(&mut self, now_ms: u64, focus_search: bool) {
         self.open = true;
         self.hover = None;
         self.scroll.offset = 0.0;
         self.focus = SceneTemplateFocus::Search;
-        self.search.touch(now_ms);
+        self.input_focus_active = focus_search;
+        if focus_search {
+            self.search.touch(now_ms);
+        }
     }
 
     /// Close only this panel layer.
     pub fn close(&mut self) {
         self.open = false;
+        self.input_focus_active = false;
         self.hover = None;
         // The paste box is a layer inside this panel; leaving it armed would
         // reopen the gallery with somebody's half-finished import on top.
@@ -503,6 +538,11 @@ impl SceneTemplateCenterState {
         }
     }
 
+    /// Whether a visible Asset Center field owns keyboard and IME input.
+    pub fn input_active(&self) -> bool {
+        self.open && self.input_focus_active
+    }
+
     /// Ask the host to open a file dialog for a `DESIGN.md`.
     pub fn request_style_import_file(&mut self) {
         self.import.error_key = None;
@@ -521,6 +561,7 @@ impl SceneTemplateCenterState {
         self.import.text.set_text("");
         self.import.text.touch(now_ms);
         self.focus = SceneTemplateFocus::Import;
+        self.input_focus_active = true;
     }
 
     /// Close the paste box, handing the keyboard back to the search field.
@@ -558,6 +599,16 @@ impl SceneTemplateCenterState {
     /// Drain ids awaiting a delete.
     pub fn take_pending_style_delete(&mut self) -> Vec<String> {
         std::mem::take(&mut self.import.pending_delete)
+    }
+
+    /// Note that `id` is gone from memory and its directory should follow.
+    pub fn queue_template_delete(&mut self, id: impl Into<String>) {
+        self.pending_template_delete.push(id.into());
+    }
+
+    /// Drain ids awaiting a directory delete.
+    pub fn take_pending_template_delete(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_template_delete)
     }
 
     /// Request that the host generate a document for the typed topic.

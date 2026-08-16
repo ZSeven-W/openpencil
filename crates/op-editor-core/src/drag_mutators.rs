@@ -261,7 +261,7 @@ impl EditorState {
     /// the layout scene. TS parity: `handleDragEnd`'s
     /// `updateNode({x, y}) + moveNode(id, null, 0)`.
     pub fn reparent_to_page_root(&mut self, id: &NodeId, abs_x: f64, abs_y: f64) -> bool {
-        if !id.is_real() || !self.is_subtree_editable(id) {
+        if !id.is_real() || !self.is_subtree_unlocked(id) {
             return false;
         }
         let children = self.active_children_mut();
@@ -304,7 +304,7 @@ impl EditorState {
         abs_w: f64,
         abs_h: f64,
     ) -> bool {
-        if !id.is_real() || !self.is_subtree_editable(id) {
+        if !id.is_real() || !self.is_subtree_unlocked(id) {
             return false;
         }
 

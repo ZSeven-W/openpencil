@@ -283,3 +283,24 @@ fn export_frames_requires_a_directory_and_rejects_pdf() {
     .to_string()
     .contains("unsupported frame format"));
 }
+
+#[test]
+fn every_mcp_backed_alias_uses_running_endpoint_discovery() {
+    for argv in [
+        vec!["export-deck", "--output", "/tmp/deck.pptx"],
+        vec!["export-frames", "--output-dir", "/tmp/frames"],
+        vec!["templates"],
+        vec!["use-template", "slide-deck"],
+        vec!["styles"],
+    ] {
+        let parsed = parse_args(&args(&argv)).expect("parse MCP-backed alias");
+        assert!(
+            !parsed.port_explicit,
+            "the fixture must exercise discovery rather than an explicit port: {argv:?}"
+        );
+        assert!(
+            command_needs_server(&parsed.command),
+            "MCP-backed alias must discover the running endpoint: {argv:?}"
+        );
+    }
+}

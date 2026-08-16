@@ -195,6 +195,7 @@ pub fn parse_skill_frontmatter(raw: &str) -> Option<(SkillMeta, String)> {
     let mut priority: i32 = 50;
     let mut budget: u32 = 2000;
     let mut category = SkillCategory::Domain;
+    let mut model_families: Vec<String> = Vec::new();
 
     for e in entries(&fm) {
         if e.indent == 0 {
@@ -214,6 +215,10 @@ pub fn parse_skill_frontmatter(raw: &str) -> Option<(SkillMeta, String)> {
                 "priority" => priority = unquote(&e.value).parse().unwrap_or(50),
                 "budget" => budget = unquote(&e.value).parse().unwrap_or(2000),
                 "category" => category = SkillCategory::from_str(&unquote(&e.value)),
+                // Model-family gate for the DS P2-a overlay mechanism — an
+                // inline `[deepseek]` array or a `- item` block list, both
+                // covered by the shared `entries` / `parse_array` path.
+                "model_families" => model_families = parse_array(&e.value),
                 // `trigger:` itself carries no value worth keeping —
                 // `null` / empty both mean `Always`; the nested
                 // keywords / flags lines below set the real trigger.
@@ -243,6 +248,7 @@ pub fn parse_skill_frontmatter(raw: &str) -> Option<(SkillMeta, String)> {
             priority,
             budget,
             category,
+            model_families,
         },
         body,
     ))
@@ -408,6 +414,53 @@ b
         assert_eq!(meta.priority, 50);
         assert_eq!(meta.budget, 2000);
         assert_eq!(meta.trigger, SkillTrigger::Always);
+    }
+
+    #[test]
+    fn parses_a_model_families_gate() {
+        // DS P2-a overlay frontmatter: an inline family list parses into
+        // `SkillMeta.model_families`.
+        let raw = "---
+name: overlay
+description: d
+phase: [generation]
+model_families: [deepseek, deepseek-reasoner]
+category: domain
+---
+body
+";
+        let (meta, _) = parse_skill_frontmatter(raw).expect("parses");
+        assert_eq!(
+            meta.model_families,
+            vec!["deepseek".to_string(), "deepseek-reasoner".to_string()]
+        );
+    }
+
+    #[test]
+    fn model_families_parses_as_block_list() {
+        let raw = "---
+name: overlay
+description: d
+phase: [generation]
+model_families:
+  - deepseek
+  - kimi
+category: domain
+---
+body
+";
+        let (meta, _) = parse_skill_frontmatter(raw).expect("parses");
+        assert_eq!(
+            meta.model_families,
+            vec!["deepseek".to_string(), "kimi".to_string()]
+        );
+    }
+
+    #[test]
+    fn missing_model_families_defaults_to_ungated() {
+        // No field = empty gate = the historical behaviour for every skill.
+        let (meta, _) = parse_skill_frontmatter(KEYWORD_SKILL).expect("parses");
+        assert!(meta.model_families.is_empty());
     }
 
     #[test]

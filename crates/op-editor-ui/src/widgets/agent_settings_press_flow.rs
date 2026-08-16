@@ -17,7 +17,7 @@
 //! enumeration).
 
 use op_editor_core::agent_settings::{
-    ImageSearchField, ImageTestStatus, McpCli, SettingsFocus, OPENVERSE_AUTH_DOCS_URL,
+    ImageSearchField, ImageTestStatus, SettingsFocus, OPENVERSE_AUTH_DOCS_URL,
 };
 use op_editor_core::host_settings_commit::{commit_settings_focus, SettingsCommitScope};
 use op_editor_core::{AccountState, AgentSettingsTab, ButtonPressTarget, EditorState};
@@ -96,7 +96,7 @@ pub fn apply_agent_settings_hit(
 ) -> SettingsPressOutcome {
     record_pressed_button(state, hit);
     let commit = |state: &mut EditorState| {
-        commit_settings_focus(state, scope);
+        commit_settings_focus(state, scope, now_ms);
     };
     match hit {
         AgentSettingsHit::Close | AgentSettingsHit::Outside => {
@@ -145,11 +145,10 @@ pub fn apply_agent_settings_hit(
             SettingsPressOutcome::handled()
         }
         AgentSettingsHit::ToggleMcpCli(cli) => {
-            // `mcp_cli_enabled` is indexed by `McpCli::ALL` order.
-            let idx = McpCli::ALL
-                .iter()
-                .position(|candidate| *candidate == cli)
-                .unwrap_or(0);
+            // `mcp_cli_enabled` is indexed by `McpCli::ALL` order; the row
+            // this hit came from is `McpCli::DISPLAY` order, so resolve the
+            // storage slot through `McpCli::index`.
+            let idx = cli.index();
             let settings = &mut state.editor_ui.agent_settings;
             settings.mcp_cli_enabled[idx] ^= true;
             if settings.mcp_cli_enabled[idx] {
@@ -234,7 +233,12 @@ pub fn apply_agent_settings_hit(
             SettingsPressOutcome::handled()
         }
         AgentSettingsHit::OpenLoginModal => {
-            state.editor_ui.agent_settings_open = false;
+            // Switching modals is also a Settings dismissal: land the active
+            // draft, release keyboard ownership, and close a missing-font
+            // picker belonging to the Settings Fonts tab before login appears.
+            commit(state);
+            state.editor_ui.close_font_picker();
+            state.editor_ui.escape_agent_settings_modal();
             state.editor_ui.login_modal_open = true;
             state.editor_ui.login_modal_hover = None;
             SettingsPressOutcome::handled()

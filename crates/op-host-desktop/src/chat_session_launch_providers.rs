@@ -8,14 +8,12 @@ use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
 use op_ai::chat_provider::{ChatProvider, CliName};
-use op_editor_core::EditorState;
+use op_editor_core::{BuiltinAgentConfig, EditorState, ModelEntry};
 use op_host_native::WidgetHostNative;
 
 use crate::chat_acp::AcpProvider;
 use op_host_services::chat_builtin_http::ConfiguredBuiltinProvider;
-use op_host_services::chat_canvas_tools::{
-    chat_tool_channel, chat_tool_defs_for_write_scope, ChatToolRequest,
-};
+use op_host_services::chat_canvas_tools::{chat_tool_channel, chat_tool_defs, ChatToolRequest};
 use op_host_services::chat_claude::ClaudeCodeProvider;
 use op_host_services::chat_copilot::CopilotProvider;
 use op_host_services::chat_http_server::OpenCodeProvider;
@@ -23,10 +21,11 @@ use op_host_services::chat_subprocess::SubprocessProvider;
 
 /// Build the `ChatProvider` for an agent index (into
 /// `AgentProvider::ALL`: 0 ClaudeCode, 1 CodexCli, 2 OpenCode,
-/// 3 GithubCopilot, 4 Antigravity, 5 GrokBuild). Claude Code uses its dedicated
-/// SDK adapter; Codex uses the subprocess transport; Copilot
+/// 3 GithubCopilot, 4 Antigravity, 5 GrokBuild, 6 DeepSeekHarness). Claude Code uses its
+/// dedicated SDK adapter; Codex uses the subprocess transport; Copilot
 /// rides the official SDK; OpenCode chats over its local HTTP server
-/// (`chat_http_server.rs`).
+/// (`chat_http_server.rs`); DeepSeek Harness is a one-shot subprocess
+/// bridge (`chat_subprocess_dsh.rs`).
 ///
 /// `chat_session` opts the Claude Code and Copilot adapters into
 /// their process-wide chat resume slots (multi-turn context via
@@ -52,6 +51,7 @@ fn provider_for_agent(agent_idx: usize, chat_session: bool) -> Option<Box<dyn Ch
         })),
         4 => subprocess_provider(CliName::Antigravity, chat_session),
         5 => subprocess_provider(CliName::GrokBuild, chat_session),
+        6 => subprocess_provider(CliName::Dsh, chat_session),
         _ => None,
     }
 }
@@ -87,8 +87,8 @@ fn provider_for_selected_model_impl(
     chat_session: bool,
 ) -> Option<Box<dyn ChatProvider>> {
     if let Some(entry) = host.editor_state().chat.selected_model_entry() {
-        if let Some(id) = entry.builtin_provider_id.as_deref() {
-            return provider_for_builtin(host.editor_state(), id);
+        if entry.builtin_provider_id.is_some() {
+            return provider_for_builtin(host.editor_state(), entry);
         }
         if let Some(id) = entry.acp_agent_id() {
             return provider_for_acp(host.editor_state(), id);
@@ -109,20 +109,17 @@ pub(crate) fn builtin_provider_with_tools(
 ) -> Option<(Box<dyn ChatProvider>, Receiver<ChatToolRequest>)> {
     let state = host.editor_state();
     let entry = state.chat.selected_model_entry()?;
-    let id = entry.builtin_provider_id.as_deref()?;
-    let config = state
-        .editor_ui
-        .agent_settings
-        .builtin_agents
-        .iter()
-        .find(|agent| agent.id == id && agent.ready())?;
-    let provider = ConfiguredBuiltinProvider::from_builtin_agent(config)?;
+    let config = selected_builtin_agent_config(state, entry)?;
+    let provider = ConfiguredBuiltinProvider::from_builtin_agent(&config)?;
     let (executor, tool_rx) = chat_tool_channel();
-    let has_frame_scope = op_host_services::chat_intent::has_selected_frame_target(state);
-    let provider = provider.with_canvas_tools(
-        chat_tool_defs_for_write_scope(has_frame_scope),
-        Arc::new(executor),
-    );
+    // Issue #209: the full CRUD set is advertised regardless of the current
+    // canvas selection. Gating write tools on a selected Frame made the
+    // agent silently lose insert/update/move/delete whenever the user
+    // chatted without a Frame selected (e.g. right after opening a file),
+    // which read as "modification tools randomly drop". Mutation safety is
+    // enforced at the execution sink (`execute_tool_requests`'s
+    // collaboration gate + per-tool validation), not by hiding definitions.
+    let provider = provider.with_canvas_tools(chat_tool_defs(), Arc::new(executor));
     Some((Box::new(provider), tool_rx))
 }
 
@@ -130,9 +127,9 @@ pub(crate) fn builtin_provider_with_tools(
 /// panel's selected model entry (`chat.available_models[selected_model]`).
 ///
 /// Only CLI-backed entries qualify:
-/// - built-in entries (`builtin_provider_id`) carry their model inside
-///   `ConfiguredBuiltinProvider`'s own config (`entry.value` is the
-///   composite `builtin:<id>:<model>`, not a wire id);
+/// - built-in entries (`builtin_provider_id`) carry their model in the
+///   selected entry (`entry.value` is the composite
+///   `builtin:<id>:<model>`, not a CLI wire id);
 /// - ACP entries (`acp:<id>`) address an agent, not a model;
 /// - an entry whose provider differs from the agent actually routed by
 ///   [`provider_for_agent`] must not leak its id to a different CLI
@@ -158,14 +155,31 @@ pub(crate) fn selected_cli_model_id(host: &WidgetHostNative) -> Option<String> {
     Some(value.to_string())
 }
 
-fn provider_for_builtin(state: &EditorState, id: &str) -> Option<Box<dyn ChatProvider>> {
-    let config = state
+pub(super) fn selected_builtin_agent_config(
+    state: &EditorState,
+    entry: &ModelEntry,
+) -> Option<BuiltinAgentConfig> {
+    let id = entry.builtin_provider_id.as_deref()?;
+    let selected_model = entry.builtin_model_id()?;
+    let mut config = state
         .editor_ui
         .agent_settings
         .builtin_agents
         .iter()
-        .find(|agent| agent.id == id && agent.ready())?;
-    let provider = ConfiguredBuiltinProvider::from_builtin_agent(config)?;
+        .find(|agent| agent.id == id && agent.ready())?
+        .clone();
+    if !config.has_model(selected_model) {
+        return None;
+    }
+    // Downstream provider construction remains single-model. Narrow the
+    // cloned request config without mutating the persisted provider.
+    config.models = vec![selected_model.to_string()];
+    config.ready().then_some(config)
+}
+
+fn provider_for_builtin(state: &EditorState, entry: &ModelEntry) -> Option<Box<dyn ChatProvider>> {
+    let config = selected_builtin_agent_config(state, entry)?;
+    let provider = ConfiguredBuiltinProvider::from_builtin_agent(&config)?;
     Some(Box::new(provider))
 }
 
@@ -236,4 +250,41 @@ pub(super) fn selected_provider_label(host: &WidgetHostNative) -> String {
         .get(agent_idx)
         .map(|a| a.name().to_string())
         .unwrap_or_else(|| "This agent".into())
+}
+
+#[cfg(test)]
+mod routing_tests {
+    use super::*;
+
+    #[test]
+    fn deepseek_harness_routes_to_the_dsh_subprocess_provider() {
+        // ALL index 6 is the append-only DeepSeek Harness tail slot
+        // (its persisted `connected` flag lives there too).
+        assert_eq!(
+            op_editor_core::AgentProvider::ALL[6],
+            op_editor_core::AgentProvider::DeepSeekHarness
+        );
+        let design = provider_for_agent(6, false).expect("DSH routes to a provider");
+        assert_eq!(design.provider_label(), "DeepSeek Harness");
+        // The chat-session path routes the same CLI (single-shot
+        // subprocess — there is no session-resume slot to join).
+        let chat = provider_for_agent(6, true).expect("chat DSH routes too");
+        assert_eq!(chat.provider_label(), "DeepSeek Harness");
+        // Out-of-range agent indices stay unrouted (fail-closed).
+        assert!(provider_for_agent(7, false).is_none());
+    }
+
+    #[test]
+    fn every_all_index_has_a_provider_route() {
+        // The ALL array is append-only, so routing must stay keyed to
+        // it: a new tail entry with no route arm would silently fall
+        // through to `None` and strand the user's agent picker.
+        for index in 0..op_editor_core::AgentProvider::ALL.len() {
+            let provider = provider_for_agent(index, false);
+            assert!(
+                provider.is_some(),
+                "AgentProvider::ALL index {index} has no provider route"
+            );
+        }
+    }
 }

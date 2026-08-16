@@ -339,11 +339,33 @@ pub(crate) async fn run_subtask_with_reveal_at(
     let Some(inserted_root_ids) = apply_insert_subtree_with_reveal(
         sink,
         nodes,
-        parent_id,
+        parent_id.clone(),
         indicator_epoch,
         reveal_started_ms,
     ) else {
-        return fail("InsertSubtree rejected by document".into());
+        let state = sink.state();
+        let parent_status = if !parent_id.is_real() {
+            "page-root"
+        } else {
+            match op_editor_core::walkers::find_node(state.active_children(), &parent_id) {
+                None => "missing",
+                Some(node) if node.is_container() => "container",
+                Some(_) => "non-container",
+            }
+        };
+        let active_page = state
+            .doc
+            .pages
+            .as_ref()
+            .and_then(|pages| pages.get(state.ui.active_page_index))
+            .map(|page| format!("{} ({})", page.name, page.id))
+            .unwrap_or_else(|| "legacy page 0".into());
+        let error = format!(
+            "InsertSubtree rejected: parent_id={} status={parent_status} active_page={active_page}",
+            parent_id.as_str()
+        );
+        tracing::warn!(subtask = %subtask.id, error = %error, "subagent insert rejected");
+        return fail(error);
     };
 
     SubtaskOutcome {

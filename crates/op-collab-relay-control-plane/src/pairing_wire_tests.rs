@@ -5,6 +5,7 @@ use crate::{
     PairingClaimRequest, PairingPublishRequest, RelayLocatorIssueError, MAX_PAIRING_CODE_TTL_SECS,
     MAX_PAIRING_PUBLISH_REQUEST_BYTES, PAIRING_CLAIM_REQUEST_BYTES,
 };
+use op_collab_relay_protocol::MAX_SEALED_INVITE_BYTES;
 
 #[test]
 fn pairing_publish_round_trips_and_bounds_every_field() {
@@ -37,6 +38,14 @@ fn pairing_publish_round_trips_and_bounds_every_field() {
             .is_err()
     );
     assert!(PairingPublishRequest::new([7; 32], [9; 16], 600, Vec::new()).is_err());
+
+    let legacy_ceiling =
+        PairingPublishRequest::new([7; 32], [8; 16], 600, vec![0; MAX_SEALED_INVITE_BYTES])
+            .expect("opaque transport retains the v0.8.4 sealed-blob ceiling");
+    assert_eq!(
+        legacy_ceiling.encode_binary().len(),
+        MAX_PAIRING_PUBLISH_REQUEST_BYTES
+    );
 }
 
 #[test]

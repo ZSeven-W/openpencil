@@ -158,7 +158,7 @@ impl<'a> PromptCenterPanel<'a> {
         state.editor_ui.prompt_center.open.then(|| Self {
             state,
             theme: theme_for(&state.editor_ui),
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             now_ms,
         })
     }

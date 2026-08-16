@@ -235,7 +235,7 @@ impl LayerContextMenu {
             theme: theme_for(&state.editor_ui),
             state: menu,
             rows,
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
         }
     }
 

@@ -41,6 +41,10 @@ pub enum CliName {
     Antigravity,
     /// xAI's Grok Build coding agent CLI (subprocess IPC).
     GrokBuild,
+    /// DeepSeek Harness (`dsh`) — subprocess IPC, ONE shot per turn
+    /// (`dsh --profile headless "<prompt>"` prints the final answer
+    /// and exits; no ACP support).
+    Dsh,
 }
 
 impl CliName {
@@ -52,6 +56,7 @@ impl CliName {
             CliName::OpenCode => "OpenCode",
             CliName::Antigravity => "Antigravity",
             CliName::GrokBuild => "Grok Build",
+            CliName::Dsh => "DeepSeek Harness",
         }
     }
     /// Default binary name on PATH. Users override via
@@ -68,17 +73,20 @@ impl CliName {
             CliName::OpenCode => "opencode",
             CliName::Antigravity => "agy",
             CliName::GrokBuild => "grok",
+            CliName::Dsh => "dsh",
         }
     }
     /// Which backend transport this CLI uses. Mirrors the table in
     /// [[project_agent_runtime]] memory:
-    /// Claude/Copilot/Antigravity/Grok Build = subprocess IPC;
+    /// Claude/Copilot/Antigravity/Grok Build/DeepSeek Harness = subprocess IPC;
     /// Codex/OpenCode = HTTP server.
     pub fn backend(self) -> ChatProviderKind {
         match self {
-            CliName::ClaudeCode | CliName::Copilot | CliName::Antigravity | CliName::GrokBuild => {
-                ChatProviderKind::Subprocess(self)
-            }
+            CliName::ClaudeCode
+            | CliName::Copilot
+            | CliName::Antigravity
+            | CliName::GrokBuild
+            | CliName::Dsh => ChatProviderKind::Subprocess(self),
             CliName::Codex | CliName::OpenCode => ChatProviderKind::HttpServer(self),
         }
     }
@@ -570,7 +578,7 @@ mod tests {
     #[test]
     fn cli_name_backend_table_matches_architecture_memo() {
         // project_agent_runtime memory:
-        //  Subprocess IPC = Claude Code / Copilot / Antigravity / Grok Build
+        //  Subprocess IPC = Claude Code / Copilot / Antigravity / Grok Build / DeepSeek Harness
         //  HTTP server   = Codex / OpenCode
         assert!(matches!(
             CliName::ClaudeCode.backend(),
@@ -586,6 +594,12 @@ mod tests {
         ));
         assert!(matches!(
             CliName::GrokBuild.backend(),
+            ChatProviderKind::Subprocess(_)
+        ));
+        // DeepSeek Harness has no ACP support and no HTTP server mode:
+        // one subprocess, one prompt in, one answer out.
+        assert!(matches!(
+            CliName::Dsh.backend(),
             ChatProviderKind::Subprocess(_)
         ));
         assert!(matches!(
@@ -605,6 +619,7 @@ mod tests {
         assert_eq!(CliName::OpenCode.default_binary(), "opencode");
         assert_eq!(CliName::Antigravity.default_binary(), "agy");
         assert_eq!(CliName::GrokBuild.default_binary(), "grok");
+        assert_eq!(CliName::Dsh.default_binary(), "dsh");
     }
 
     #[test]
@@ -654,6 +669,7 @@ mod tests {
         assert_eq!(CliName::OpenCode.label(), "OpenCode");
         assert_eq!(CliName::Antigravity.label(), "Antigravity");
         assert_eq!(CliName::GrokBuild.label(), "Grok Build");
+        assert_eq!(CliName::Dsh.label(), "DeepSeek Harness");
     }
 
     #[test]

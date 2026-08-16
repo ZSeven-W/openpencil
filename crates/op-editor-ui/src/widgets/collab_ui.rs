@@ -126,7 +126,7 @@ impl CollabTopBarModel {
         Self {
             visible,
             enabled,
-            label: op_i18n::translate(ui.locale, label_key).to_string(),
+            label: op_i18n::translate(ui.effective_locale(), label_key).to_string(),
             tone,
             avatars,
             participant_overflow: participants.len().saturating_sub(TOP_BAR_AVATAR_LIMIT),
@@ -191,7 +191,7 @@ pub struct CollabPanelModel {
 impl CollabPanelModel {
     pub fn for_editor_ui(ui: &EditorUiState) -> Self {
         let collab = &ui.collab;
-        let title = op_i18n::translate(ui.locale, "collab.session.title").to_string();
+        let title = op_i18n::translate(ui.effective_locale(), "collab.session.title").to_string();
         let notice = collab.notice.map(|notice| notice_text(ui, notice.kind));
 
         let (screen, actions) = match collab.availability {
@@ -235,7 +235,7 @@ fn panel_session_or_pre_auth(
             };
             (
                 CollabPanelScreen::Progress {
-                    message: op_i18n::translate(ui.locale, key).to_string(),
+                    message: op_i18n::translate(ui.effective_locale(), key).to_string(),
                 },
                 vec![action_model(ui, CollabUiAction::Cancel, false)],
             )
@@ -249,8 +249,11 @@ fn panel_session_or_pre_auth(
                 // its verified display projection.
                 return (
                     CollabPanelScreen::Progress {
-                        message: op_i18n::translate(ui.locale, "collab.join.authenticating")
-                            .to_string(),
+                        message: op_i18n::translate(
+                            ui.effective_locale(),
+                            "collab.join.authenticating",
+                        )
+                        .to_string(),
                     },
                     vec![action_model(ui, CollabUiAction::Leave, false)],
                 );
@@ -297,7 +300,8 @@ fn panel_session_or_pre_auth(
                 ));
                 CollabAdmissionRequestModel {
                     request_key,
-                    label: op_i18n::translate(ui.locale, "collab.admission.request").to_string(),
+                    label: op_i18n::translate(ui.effective_locale(), "collab.admission.request")
+                        .to_string(),
                     actions,
                 }
             });
@@ -352,11 +356,14 @@ fn panel_session_or_pre_auth(
                         action: CollabUiAction::JoinAddress {
                             endpoint: endpoint.to_string(),
                         },
-                        label: op_i18n::translate(ui.locale, "collab.action.connect").to_string(),
+                        label: op_i18n::translate(ui.effective_locale(), "collab.action.connect")
+                            .to_string(),
                         primary: true,
                     });
                 }
-                if collab.phase == CollabConnectionPhase::Idle {
+                if collab.phase == CollabConnectionPhase::Idle
+                    && collab.transport_capabilities.nearby_discovery
+                {
                     actions.push(action_model(
                         ui,
                         CollabUiAction::BeginDiscovery,
@@ -372,14 +379,12 @@ fn panel_session_or_pre_auth(
                     actions,
                 )
             } else if collab.panel.view == op_editor_core::CollabPanelView::Create {
-                (
-                    CollabPanelScreen::Create,
-                    vec![
-                        action_model(ui, CollabUiAction::Start, true),
-                        action_model(ui, CollabUiAction::StartLan, false),
-                        action_model(ui, CollabUiAction::Cancel, false),
-                    ],
-                )
+                let mut actions = vec![action_model(ui, CollabUiAction::Start, true)];
+                if collab.transport_capabilities.lan_hosting {
+                    actions.push(action_model(ui, CollabUiAction::StartLan, false));
+                }
+                actions.push(action_model(ui, CollabUiAction::Cancel, false));
+                (CollabPanelScreen::Create, actions)
             } else {
                 (
                     CollabPanelScreen::Home,
@@ -399,31 +404,31 @@ pub fn role_label(ui: &EditorUiState, role: CollabUiRole) -> &'static str {
         CollabUiRole::Editor => "collab.session.role.editor",
         CollabUiRole::Viewer => "collab.session.role.viewer",
     };
-    op_i18n::translate(ui.locale, key)
+    op_i18n::translate(ui.effective_locale(), key)
 }
 
 pub fn connection_path_label(ui: &EditorUiState, connection: CollabConnectionPathUi) -> String {
-    let path = op_i18n::translate(ui.locale, connection.i18n_key());
+    let path = op_i18n::translate(ui.effective_locale(), connection.i18n_key());
     match connection.home_region() {
         Some(region) => format!(
             "{path} · {}",
-            op_i18n::translate(ui.locale, region.i18n_key())
+            op_i18n::translate(ui.effective_locale(), region.i18n_key())
         ),
         None => path.to_string(),
     }
 }
 
 pub fn gate_reason_text(ui: &EditorUiState, reason: CollabGateReason) -> &'static str {
-    op_i18n::translate(ui.locale, reason.i18n_key())
+    op_i18n::translate(ui.effective_locale(), reason.i18n_key())
 }
 
 pub fn notice_text(ui: &EditorUiState, kind: op_editor_core::CollabNoticeKind) -> String {
-    let message = op_i18n::translate(ui.locale, kind.i18n_key());
+    let message = op_i18n::translate(ui.effective_locale(), kind.i18n_key());
     match kind {
         op_editor_core::CollabNoticeKind::UnsupportedEdit(feature) => {
             format!(
                 "{message} {}",
-                op_i18n::translate(ui.locale, feature.i18n_key())
+                op_i18n::translate(ui.effective_locale(), feature.i18n_key())
             )
         }
         // Only the cancellation that produced the stash names it; a plain
@@ -433,7 +438,7 @@ pub fn notice_text(ui: &EditorUiState, kind: op_editor_core::CollabNoticeKind) -
             let Some(discarded) = ui.collab.discarded_edit.as_ref() else {
                 return message.to_string();
             };
-            let detail = op_i18n::translate(ui.locale, "collab.reject.conflictDetail")
+            let detail = op_i18n::translate(ui.effective_locale(), "collab.reject.conflictDetail")
                 .replace("{{fields}}", &discarded.fields.join(", "))
                 .replace("{{node}}", &discarded.node_label);
             format!("{message} {detail}")

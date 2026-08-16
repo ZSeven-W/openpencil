@@ -80,7 +80,9 @@ fn settings_content_metrics(rect: Rect) -> (f32, f32, f32) {
 }
 
 fn codex_mcp_row_rect(rect: Rect) -> Rect {
-    let codex_idx = McpCli::ALL
+    // Rows are painted in `McpCli::DISPLAY` order, so the row index is the
+    // position in DISPLAY, not in ALL.
+    let codex_idx = McpCli::DISPLAY
         .iter()
         .position(|cli| *cli == McpCli::Codex)
         .unwrap();

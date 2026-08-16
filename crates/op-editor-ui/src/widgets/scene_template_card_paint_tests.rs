@@ -114,6 +114,10 @@ fn the_palette_band_paints_one_stripe_per_declared_colour() {
 /// lines tall.
 #[test]
 fn the_summary_paints_only_while_the_card_is_hovered() {
+    // The grid is index-based and the registry is process-global: another
+    // test's saved template would claim index 0 and this shipped card's
+    // hover strip would never paint.
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
     let template = scene_template_by_id("minimal-keynote").expect("shipped");
     let card = Rect::xywh(0.0, 0.0, 420.0, 320.0);
 

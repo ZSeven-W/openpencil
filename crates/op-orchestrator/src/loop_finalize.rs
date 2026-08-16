@@ -664,7 +664,12 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
 /// Build the minimal [`OrchestratorPlan`](crate::plan::OrchestratorPlan) the
 /// cleanup passes need. Only `root_frame.name` (dashboard keyword matching) +
 /// `width`/`fill` are read by `finalize_design`; `subtasks` is left empty.
-fn synthesize_plan(forest: &[PenNode], canvas_width: f64) -> crate::plan::OrchestratorPlan {
+///
+/// Public so hosts that drive the cleanup passes over a document that has no
+/// generation plan (the agentic loop, and the MCP `finalize_design` tool in
+/// `op-host-services`) build the same minimal plan instead of each re-deriving
+/// the field contract.
+pub fn synthesize_plan(forest: &[PenNode], canvas_width: f64) -> crate::plan::OrchestratorPlan {
     let root = forest.first();
     let name = root
         .and_then(|n| n.base().name.clone())

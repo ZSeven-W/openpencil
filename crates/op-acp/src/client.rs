@@ -637,6 +637,25 @@ mod tests {
         (dir, config)
     }
 
+    /// [`connect_acp_agent`] with a bounded retry for the /tmp write→exec
+    /// race that surfaces as ETXTBSY ("Text file busy") on CI runners'
+    /// overlay filesystems. The stub script is written and spawned
+    /// back-to-back, and the exec can land while the file is still
+    /// mid-copy-up; a few short retries clear it without masking genuine
+    /// spawn or handshake failures.
+    #[cfg(unix)]
+    async fn connect_stub_retry(config: &AcpAgentConfig) -> Result<AcpConnection, AcpError> {
+        for attempt in 0..3 {
+            match connect_acp_agent(config).await {
+                Err(error) if attempt < 2 && error.to_string().contains("Text file busy") => {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+                result => return result,
+            }
+        }
+        unreachable!("the loop returns on its final attempt")
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn failed_handshake_quotes_the_agents_stderr_with_secrets_removed() {
@@ -649,7 +668,7 @@ mod tests {
              echo 'see https://agent.example.test/setup?token=fake-token-999' >&2\n\
              exit 1\n",
         );
-        let error = match connect_acp_agent(&config).await {
+        let error = match connect_stub_retry(&config).await {
             Err(error) => error,
             Ok(_) => panic!("stub never completes the handshake"),
         };
@@ -676,7 +695,7 @@ mod tests {
              awk 'BEGIN{for(i=0;i<200000;i++) print \"agent chatter line \" i > \"/dev/stderr\"}'\n\
              exit 1\n",
         );
-        let error = match connect_acp_agent(&config).await {
+        let error = match connect_stub_retry(&config).await {
             Err(error) => error,
             Ok(_) => panic!("stub never completes the handshake"),
         };
@@ -712,7 +731,7 @@ mod tests {
             for _ in 0..16 {
                 let config = config.clone();
                 pending.push(tokio::spawn(async move {
-                    match connect_acp_agent(&config).await {
+                    match connect_stub_retry(&config).await {
                         Err(error) => error.to_string(),
                         Ok(_) => "unexpectedly connected".to_string(),
                     }

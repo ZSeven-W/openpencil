@@ -142,7 +142,7 @@ impl<'a> DesignMdPanel<'a> {
         Some(DesignMdPanel {
             spec: state.doc.design_md.as_ref(),
             theme: theme_for(&state.editor_ui),
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             expanded: state.editor_ui.design_md_panel.expanded,
             scroll: state.editor_ui.design_md_panel.scroll.offset,
             generating: state.editor_ui.design_md_panel.generating,

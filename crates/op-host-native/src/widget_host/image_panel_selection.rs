@@ -66,11 +66,7 @@ impl WidgetHostNative {
             return Some(offset);
         }
         self.refresh_layout_scene();
-        let rect = op_editor_ui::widgets::press_flow::property_panel_rect(
-            &self.editor_state,
-            self.last_viewport_w,
-            self.last_viewport_h,
-        );
+        let rect = self.property_rect(self.last_viewport_w, self.last_viewport_h);
         let panel = PropertyPanel::for_selection(&self.editor_state)?;
         panel.image_popover_input_drag_offset_at(rect, kind, point)
     }

@@ -398,7 +398,7 @@ fn report_to_progress_parts_maps_entries_and_drops() {
     assert_eq!(max, 12000);
 }
 
-/// All 7 `DropReason` variants map to distinct, non-empty display strings.
+/// All 8 `DropReason` variants map to distinct, non-empty display strings.
 #[test]
 fn drop_reason_all_variants_covered() {
     use op_ai_skills::{DropReason, DroppedSkill, SkillLoadReport};
@@ -410,9 +410,10 @@ fn drop_reason_all_variants_covered() {
         DropReason::ReducedComplexity,
         DropReason::Deduped,
         DropReason::ContentMismatch,
+        DropReason::ModelFamilyMiss,
     ];
     let expected = [
-        "intent", "budget", "tier", "minimal", "reduced", "dedup", "mismatch",
+        "intent", "budget", "tier", "minimal", "reduced", "dedup", "mismatch", "family",
     ];
     for (reason, exp) in reasons.iter().zip(expected.iter()) {
         let report = SkillLoadReport {

@@ -102,7 +102,7 @@ impl EditorUiState {
         }
         // The paste box is the topmost layer inside the panel, so it is the
         // first thing Escape takes back.
-        if self.scene_template_center.close_style_import() {
+        if self.close_scene_template_style_import() {
             return true;
         }
         if self.scene_template_center.focus == crate::SceneTemplateFocus::Generate {

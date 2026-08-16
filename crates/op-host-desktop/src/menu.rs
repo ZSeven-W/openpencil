@@ -30,6 +30,8 @@ pub enum MenuAction {
     OpenRecent(usize),
     Save,
     SaveAs,
+    /// Save the open document as a reusable `user:` scene template.
+    SaveAsTemplate,
     Export,
     Undo,
     Redo,
@@ -78,6 +80,7 @@ mod backend {
     const ID_OPEN: &str = "open";
     const ID_SAVE: &str = "save";
     const ID_SAVE_AS: &str = "save-as";
+    const ID_SAVE_AS_TEMPLATE: &str = "save-as-template";
     const ID_EXPORT: &str = "export";
     const ID_UNDO: &str = "undo";
     const ID_REDO: &str = "redo";
@@ -111,6 +114,7 @@ mod backend {
             ID_OPEN => MenuAction::Open,
             ID_SAVE => MenuAction::Save,
             ID_SAVE_AS => MenuAction::SaveAs,
+            ID_SAVE_AS_TEMPLATE => MenuAction::SaveAsTemplate,
             ID_EXPORT => MenuAction::Export,
             ID_UNDO => MenuAction::Undo,
             ID_REDO => MenuAction::Redo,
@@ -212,6 +216,9 @@ mod backend {
                     tr(locale, "menu.saveAs"),
                     Some(accel_shift(Code::KeyS)),
                 ),
+                // No accelerator: saving a template is a deliberate, occasional
+                // action, not something a keystroke should risk by accident.
+                &item(ID_SAVE_AS_TEMPLATE, tr(locale, "menu.saveAsTemplate"), None),
                 &PredefinedMenuItem::separator(),
                 &item(
                     ID_EXPORT,
@@ -359,6 +366,7 @@ mod backend {
                 ID_OPEN,
                 ID_SAVE,
                 ID_SAVE_AS,
+                ID_SAVE_AS_TEMPLATE,
                 ID_EXPORT,
                 ID_UNDO,
                 ID_REDO,

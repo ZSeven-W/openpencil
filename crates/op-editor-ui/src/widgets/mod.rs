@@ -40,9 +40,12 @@ pub(crate) mod layer_panel_cache;
 mod layer_panel_hit;
 #[cfg(test)]
 mod layer_panel_label_tests;
+mod layer_panel_metrics;
 mod layer_panel_paint;
 #[cfg(test)]
 mod layer_panel_tests;
+#[cfg(test)]
+mod layer_panel_touch_tests;
 mod layer_panel_walkers;
 pub mod path_anchor_context_menu;
 pub mod prompt_center_panel;
@@ -58,6 +61,7 @@ mod asset_center_style_import_tests;
 mod asset_center_style_layout;
 #[cfg(test)]
 mod asset_center_tab_tests;
+mod asset_center_template_cards;
 mod panel_control_metrics;
 mod panel_controls;
 #[cfg(test)]
@@ -146,11 +150,16 @@ pub(crate) mod scene_template_previews;
 mod scene_template_style_geometry;
 mod scene_template_style_import;
 mod scene_template_style_paint;
+mod scene_template_touch_density;
+#[cfg(test)]
+mod scene_template_touch_tests;
+mod scene_template_user_layout;
 pub mod text_input;
 pub(crate) mod text_input_backend;
 pub mod text_metrics;
 mod text_selection;
 pub mod toolbar;
+pub mod touch_overlay_geometry;
 
 // Step 3 — center canvas that renders document nodes as actual
 // visual primitives (frame fills, rect strokes, text strings).
@@ -201,6 +210,7 @@ pub mod collab_panel;
 pub mod collab_ui;
 pub mod cursor_hover_flow;
 pub mod drag_flow;
+mod drag_flow_index;
 pub mod host_canvas_geometry;
 pub mod host_frame_bookkeeping;
 pub mod host_overlay_geometry;
@@ -237,7 +247,10 @@ pub mod agent_settings_acp;
 mod agent_settings_acp_helpers;
 mod agent_settings_acp_presets;
 pub mod agent_settings_builtin;
+mod agent_settings_builtin_empty;
+mod agent_settings_builtin_form;
 mod agent_settings_builtin_layout;
+mod agent_settings_builtin_model_menu;
 mod agent_settings_builtin_parts;
 #[cfg(test)]
 mod agent_settings_builtin_tests;
@@ -250,6 +263,7 @@ mod agent_settings_connect_tests;
 mod agent_settings_density_tests;
 #[cfg(test)]
 mod agent_settings_embed_tests;
+mod agent_settings_focus_geometry;
 pub mod agent_settings_fonts;
 #[cfg(test)]
 mod agent_settings_form_action_tests;
@@ -268,6 +282,8 @@ mod agent_settings_panel_geometry;
 #[cfg(test)]
 mod agent_settings_panel_tests;
 pub mod agent_settings_press_entries;
+#[cfg(test)]
+mod agent_settings_press_entries_model_menu_tests;
 pub mod agent_settings_press_flow;
 pub mod agent_settings_press_focus;
 #[cfg(test)]
@@ -363,6 +379,10 @@ pub mod marquee_flow;
 pub(crate) mod menu_paint;
 pub mod missing_fonts_flow;
 pub mod missing_fonts_panel;
+pub mod mobile_chrome;
+#[cfg(test)]
+mod mobile_layout_tests;
+pub mod mobile_more_panel;
 pub mod property_panel_color_variables;
 #[cfg(test)]
 mod property_panel_color_variables_tests;
@@ -446,6 +466,8 @@ pub use icon_picker_panel::{
 pub use import_menu::{ImportMenu, ImportMenuChoice, IMPORT_MENU_WIDTH};
 pub use locale_picker::{LocalePicker, LOCALE_PICKER_WIDTH};
 pub use missing_fonts_panel::{MissingFontsHit, MissingFontsPanel};
+pub use mobile_chrome::{MobileAppBar, MobileAppBarHit, MobileDock, MobileDockHit};
+pub use mobile_more_panel::MobileMoreEntry;
 pub use prompt_center_panel::{
     PromptCenterCard, PromptCenterHit, PromptCenterPanel, PROMPT_CENTER_MIN_H, PROMPT_CENTER_MIN_W,
     PROMPT_CENTER_VIEWPORT_H_RATIO, PROMPT_CENTER_VIEWPORT_W_RATIO,

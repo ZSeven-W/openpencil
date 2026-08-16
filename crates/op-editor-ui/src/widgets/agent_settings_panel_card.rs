@@ -19,7 +19,9 @@ use crate::widgets::agent_settings_rows::{
     fit_text, measure_settings_text, paint_row_hairline, ROW_LABEL_BASELINE,
     ROW_SECOND_LINE_BASELINE, SETTINGS_FONT_FAMILY,
 };
-use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
+use crate::widgets::brand_icons::{
+    paint_brand_logo, paint_deepseek_harness_logo, paint_opencode_logo, BrandLogo,
+};
 use crate::widgets::button::tokens_from_theme;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -37,9 +39,11 @@ pub(super) fn paint_agent_card(
     card: Rect,
     index: usize,
 ) {
-    // The provider list is the fixed `AgentProvider::ALL`, so the row knows
-    // whether it is the last one without being told.
-    let last = index + 1 == AgentProvider::ALL.len();
+    // The provider list paints in `AgentProvider::DISPLAY` order, so
+    // the row knows whether it is the last one by identity, not by
+    // its `AgentProvider::ALL` storage index (`index` is the ALL
+    // index — connect state lives there).
+    let last = Some(provider) == AgentProvider::DISPLAY.last().copied();
     // A hairline-separated list row, matching MCP and System — the modal
     // had been speaking two visual languages, cards here and rows there.
     // Hover still washes the whole row so the target reads the same.
@@ -100,6 +104,9 @@ pub(super) fn paint_agent_card(
             AVATAR_ICON,
             theme.foreground,
         ),
+        AgentProvider::DeepSeekHarness => {
+            paint_deepseek_harness_logo(cx.backend, icon_top_left, AVATAR_ICON, theme.foreground)
+        }
     }
     let text_x = card.origin.x + 16.0 + AVATAR_SIZE + 14.0;
     let name = TextLayout::single_run(

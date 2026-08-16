@@ -19,7 +19,7 @@ fn representative_variants_render_their_historical_text() {
         ),
         (
             ImportWarning::NodeLimitTruncated,
-            "node limit reached (20000), remaining content dropped",
+            "node limit reached (40000), remaining content dropped",
         ),
         (
             ImportWarning::DomDepthTruncated { max_depth: 512 },

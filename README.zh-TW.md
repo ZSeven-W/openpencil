@@ -389,6 +389,7 @@ OpenPencil 是 **[ZSeven-W](https://github.com/ZSeven-W)** 出品的一系列純
 
 | 專案 | 簡介 |
 | ---- | ---- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil 的 DeepSeek Harness 外掛 — 在對話中提供精確的多畫板 `.op` 預覽、可互動畫布，以及具備代理原生設計工具的託管編輯器。 |
 | **[Zode](https://github.com/ZSeven-W/zode)** | 面向終端機的開源、AI 原生程式設計助手 — 一個快速的 Rust TUI（`ratatui`），可讀取你的程式碼、執行命令、搜尋檔案並管理 git。透過 MCP 驅動 OpenPencil。 |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | 用於交付 LLM 智能體的純 Rust 非同步執行環境 — 多提供商、端到端工具能力、結構化權限、真正的 MCP、零 `unsafe`。為 OpenPencil 內建的智能體執行環境（`vendor/agent`）和 Zode 提供動力。 |
 | **[jian](https://github.com/ZSeven-W/jian)** | 純 Rust、GPU-Skia UI 框架 — widgets、版面配置、事件和熱重載集於一棧。將宣告式的 `.op` 文件變為原生、AI 可控的應用程式，無需 JS 執行環境、無 DOM、無 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |

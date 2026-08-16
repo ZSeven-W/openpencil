@@ -87,6 +87,12 @@ pub(super) fn preserve_web_canvas_preferences(previous: &EditorState, next: &mut
     next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
     next.editor_ui.locale = previous.editor_ui.locale;
     next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
+    // Authentication is a daemon/runtime capability, not document state.
+    // Managed sync-reset and recent-file loads rebuild EditorState from the
+    // document; preserve both the release gate and the display-only profile so
+    // they cannot hide the top-bar login/avatar entry after auth initialized.
+    next.editor_ui.account_ui_available = previous.editor_ui.account_ui_available;
+    next.editor_ui.account = previous.editor_ui.account.clone();
     next.ui_kits = previous.ui_kits.clone();
     next.theme_presets = previous.theme_presets.clone();
     next.theme_presets_dirty = previous.theme_presets_dirty;

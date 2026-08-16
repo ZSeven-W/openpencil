@@ -115,7 +115,7 @@ pub struct TopBar {
     pub agent_count: u32,
     /// Per-provider connect state, indexed by `AgentProvider::ALL`.
     /// The active chip paints one brand icon per connected provider.
-    pub connected: [bool; 6],
+    pub connected: [bool; 7],
     /// Number of enabled MCP CLI integrations — the `· N MCP` half
     /// of the chip status.
     pub mcp_count: u32,
@@ -181,7 +181,7 @@ impl TopBar {
             file_name: file_name.into(),
             edited: false,
             agent_count: 1,
-            connected: [false; 6],
+            connected: [false; 7],
             mcp_count: 0,
             collab: CollabTopBarModel::default(),
             theme: Theme::dark(),
@@ -250,7 +250,7 @@ impl TopBar {
             traffic_hover: ui.topbar_traffic_hover,
             show_traffic_controls: true,
             fullscreen: ui.window_fullscreen,
-            theme_mode: ui.theme_mode,
+            theme_mode: ui.effective_theme_mode(),
             git_branch: ui.git_panel.branch.clone(),
             preview_active: ui.preview.mode,
             hover: ui.topbar_button_hover,

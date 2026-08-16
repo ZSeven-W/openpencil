@@ -704,7 +704,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             "已完成——计划中的 {{count}} 个区块已全部就位，最终布局也已检查。"
         }
         "ai.designProgress.completion.issues" => {
-            "本次已结束，但仍有问题——已完成 {{completed}} 项，{{failed}} 项需要处理。"
+            "本次已结束——已完成 {{completed}} 项，失败 {{failed}} 项。下方失败区块已标明具体原因。"
         }
         "figma.importNotWired" => ".fig 文件导入尚未接入",
         "dialog.loadErrorInvalidUtf8" => "文件不是有效的 UTF-8 文本:{{detail}}",

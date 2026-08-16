@@ -494,6 +494,26 @@ fn credential_settings_request_rejects_over_256_kib_before_reading_body() {
 }
 
 #[test]
+fn model_discovery_request_rejects_over_256_kib_before_reading_body() {
+    let request = concat!(
+        "POST /api/ai/models/discover HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Content-Length: 262145\r\n",
+        "\r\n"
+    );
+    let mut cur = std::io::Cursor::new(request.as_bytes().to_vec());
+
+    let err = read_http_request(&mut cur).expect_err("oversized discovery body must be rejected");
+
+    assert!(matches!(err, McpServeError::Protocol(_)), "{err:?}");
+    assert!(
+        err.to_string()
+            .contains("model discovery body exceeds 256 KiB"),
+        "{err}"
+    );
+}
+
+#[test]
 fn http_transport_serves_initialize() {
     let rpc = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
     let request = format!(

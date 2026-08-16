@@ -120,4 +120,12 @@ pub enum RelayProtocolError {
     InvalidPairingCode,
     #[error("sealed pairing invite is malformed")]
     InvalidSealedInvite,
+    #[error("sealed pairing invite version {actual} is unsupported; expected {expected}")]
+    UnsupportedSealedInviteVersion { actual: u8, expected: u8 },
+    #[error("sealed pairing invite nonce must not be all zero")]
+    ZeroSealedInviteNonce,
+    #[error("sealed pairing invite key derivation failed")]
+    SealedInviteKeyDerivationFailed,
+    #[error("sealed pairing invite encryption failed")]
+    SealedInviteEncryptionFailed,
 }

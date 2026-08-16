@@ -390,6 +390,7 @@ OpenPencil은 **[ZSeven-W](https://github.com/ZSeven-W)**의 순수 Rust, AI 네
 
 | 프로젝트 | 내용 |
 | ------- | ---------- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil용 DeepSeek Harness 플러그인 — 대화 속에서 정확한 다중 프레임 `.op` 미리보기, 인터랙티브 캔버스, 에이전트 네이티브 디자인 도구를 갖춘 관리형 편집기를 제공합니다. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | 터미널을 위한 오픈소스 AI 네이티브 코딩 어시스턴트 — 코드를 읽고, 명령을 실행하고, 파일을 검색하고, git을 관리하는 빠른 Rust TUI(`ratatui`). MCP를 통해 OpenPencil을 구동합니다. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM 에이전트를 배포하기 위한 순수 Rust 비동기 런타임 — 멀티 프로바이더, 엔드투엔드 도구 지원, 구조화된 권한, 진짜 MCP, `unsafe` 제로. OpenPencil의 내장 에이전트 런타임(`vendor/agent`)과 Zode를 구동합니다. |
 | **[jian](https://github.com/ZSeven-W/jian)** | 순수 Rust GPU-Skia UI 프레임워크 — 위젯, 레이아웃, 이벤트, 핫 리로드를 하나의 스택에. 선언적 `.op` 문서를 JS 런타임도, DOM도, Electron도 없는 네이티브하고 AI로 제어 가능한 앱으로 바꿉니다. OpenPencil의 UI 프레임워크(`vendor/jian`). |

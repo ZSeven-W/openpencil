@@ -77,7 +77,13 @@ impl CanvasKitBackend {
         self.ck.remove_imported_font(family);
     }
 
-    pub(super) fn drain_pending_decodes(&mut self, max: usize) -> usize {
+    /// Decode a bounded batch of image bytes requested by the last paint.
+    ///
+    /// The full CanvasKit host calls this from its repaint loop, while the
+    /// standalone `op-web-sdk` owns a smaller independent pump and calls it
+    /// directly. Keeping the queue drain on the backend makes both hosts use
+    /// the same cache and failure bookkeeping.
+    pub fn drain_pending_decodes(&mut self, max: usize) -> usize {
         use crate::image_decode_queue::{finish_web_decode, take_web_decode_batch};
         let batch = take_web_decode_batch(max);
         for job in &batch {

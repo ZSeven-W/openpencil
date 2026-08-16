@@ -94,9 +94,9 @@ impl Toolbar {
     }
 
     /// Build the toolbar bound to the editor's active tool + theme.
-    /// The active highlight reads `state.tool`; theme reads
-    /// `state.editor_ui.theme_mode` so the toolbar flips with the
-    /// TopBar Sun click.
+    /// The active highlight reads `state.tool`; theme reads the editor UI's
+    /// effective mode so it follows either the user's preference or a
+    /// transient embedding-host override.
     pub fn for_editor(state: &EditorState) -> Self {
         // Form-widget tools are intentionally NOT in the toolbar: widget
         // nodes are authored via the component kit (uikit) / AI+MCP and

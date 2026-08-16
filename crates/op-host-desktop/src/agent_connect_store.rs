@@ -22,7 +22,7 @@ struct PersistedAgentConnections {
 
 /// Persist the currently-connected provider ids. Best-effort: a failed
 /// write must never break the probe flow.
-pub(crate) fn save(connected: &[bool; 6]) {
+pub(crate) fn save(connected: &[bool; 7]) {
     crate::test_config_root::guard_user_config();
     let value = PersistedAgentConnections {
         connected: AgentProvider::ALL

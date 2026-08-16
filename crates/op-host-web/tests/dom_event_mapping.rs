@@ -16,7 +16,7 @@ use op_host_web::event::{
     focus::map_focus,
     ime::{composition_end, composition_start, composition_update, utf16_selection_to_utf8},
     keyboard::map_keyboard_parts,
-    pointer::{classify_wheel_intent, map_wheel, WheelIntent},
+    pointer::{classify_wheel_intent, map_wheel, normalize_wheel_delta, WheelIntent},
 };
 
 // ---------------------------------------------------------------------
@@ -366,7 +366,7 @@ fn wheel_delta_z_passthrough() {
 #[test]
 fn horizontal_trackpad_wheel_maps_to_pan_intent() {
     assert_eq!(
-        classify_wheel_intent(120.0, 0.0, false, false, false, false),
+        classify_wheel_intent(120.0, 0.0, 0, 1200.0, 800.0, Modifiers::empty()),
         WheelIntent::Pan {
             dx: -120.0,
             dy: -0.0
@@ -377,7 +377,7 @@ fn horizontal_trackpad_wheel_maps_to_pan_intent() {
 #[test]
 fn shifted_wheel_maps_vertical_delta_to_horizontal_pan() {
     assert_eq!(
-        classify_wheel_intent(0.0, 80.0, true, false, false, false),
+        classify_wheel_intent(0.0, 80.0, 0, 1200.0, 800.0, Modifiers::SHIFT),
         WheelIntent::Pan { dx: -80.0, dy: 0.0 }
     );
 }
@@ -385,12 +385,84 @@ fn shifted_wheel_maps_vertical_delta_to_horizontal_pan() {
 #[test]
 fn regular_or_modified_vertical_wheel_stays_zoom_intent() {
     assert_eq!(
-        classify_wheel_intent(0.0, 90.0, false, false, false, false),
-        WheelIntent::Zoom { delta_y: -90.0 }
+        classify_wheel_intent(0.0, 90.0, 0, 1200.0, 800.0, Modifiers::empty()),
+        WheelIntent::Zoom {
+            scroll_delta_y: -90.0,
+            canvas_delta_y: -121.5,
+        }
     );
     assert_eq!(
-        classify_wheel_intent(20.0, 90.0, false, true, false, false),
-        WheelIntent::Zoom { delta_y: -90.0 }
+        classify_wheel_intent(20.0, 90.0, 0, 1200.0, 800.0, Modifiers::CTRL),
+        WheelIntent::Zoom {
+            scroll_delta_y: -90.0,
+            canvas_delta_y: -175.0,
+        }
+    );
+}
+
+#[test]
+fn wheel_normalizes_line_and_page_units_and_accelerates_pinch() {
+    assert_eq!(
+        classify_wheel_intent(0.0, 3.0, 1, 1200.0, 800.0, Modifiers::empty()),
+        WheelIntent::Zoom {
+            scroll_delta_y: -120.0,
+            canvas_delta_y: -162.0,
+        }
+    );
+    assert_eq!(
+        classify_wheel_intent(0.0, 5.0, 0, 1200.0, 800.0, Modifiers::CTRL),
+        WheelIntent::Zoom {
+            scroll_delta_y: -5.0,
+            canvas_delta_y: -20.0,
+        }
+    );
+    assert_eq!(
+        classify_wheel_intent(0.0, 1.0, 2, 1200.0, 800.0, Modifiers::empty()),
+        WheelIntent::Zoom {
+            scroll_delta_y: -800.0,
+            canvas_delta_y: -175.0,
+        }
+    );
+}
+
+#[test]
+fn wheel_page_units_use_each_axis_extent() {
+    assert_eq!(
+        classify_wheel_intent(1.0, 0.5, 2, 1200.0, 800.0, Modifiers::empty()),
+        WheelIntent::Pan {
+            dx: -1200.0,
+            dy: -400.0,
+        }
+    );
+    assert_eq!(
+        classify_wheel_intent(0.0, 1.0, 2, 1200.0, 800.0, Modifiers::SHIFT),
+        WheelIntent::Pan {
+            dx: -1200.0,
+            dy: 0.0,
+        }
+    );
+}
+
+#[test]
+fn wheel_normalization_rejects_non_finite_values_and_invalid_page_extents() {
+    assert_eq!(normalize_wheel_delta(f32::NAN, 0, 800.0), 0.0);
+    assert_eq!(normalize_wheel_delta(f32::INFINITY, 1, 800.0), 0.0);
+    assert_eq!(normalize_wheel_delta(f32::NEG_INFINITY, 1, 800.0), 0.0);
+    for extent in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.0] {
+        assert_eq!(normalize_wheel_delta(2.0, 2, extent), 2.0);
+    }
+    assert_eq!(normalize_wheel_delta(2.0, 99, 800.0), 2.0);
+    assert_eq!(normalize_wheel_delta(f32::MAX, 1, 800.0), 0.0);
+}
+
+#[test]
+fn wheel_line_units_are_normalized_before_pan_classification() {
+    assert_eq!(
+        classify_wheel_intent(2.0, 3.0, 1, 1200.0, 800.0, Modifiers::empty()),
+        WheelIntent::Pan {
+            dx: -80.0,
+            dy: -120.0,
+        }
     );
 }
 

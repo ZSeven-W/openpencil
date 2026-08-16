@@ -90,6 +90,143 @@ fn cursor_redraw_still_paints_when_layer_hover_changes() {
 }
 
 #[test]
+fn layer_context_menu_hover_owns_cursor_over_left_rail() {
+    use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
+    use op_editor_ui::widgets::{LayerPanel, LayerPanelHit};
+    use op_editor_ui::Point2D;
+
+    let mut app = DesktopApp::new(None);
+    let rail = op_editor_ui::widgets::host_canvas_geometry::layer_panel_rect(
+        app.host.editor_state(),
+        app.viewport_height,
+    );
+    let layers = op_editor_ui::widgets::slides_panel_flow::layers_content_rect(
+        app.host.editor_state(),
+        rail,
+    );
+    let panel = LayerPanel::from_editor(app.host.editor_state());
+    let mut row_hit = None;
+    'rows: for y_offset in (0..layers.size.y.ceil() as usize).step_by(2) {
+        for x_offset in (0..layers.size.x.ceil() as usize).step_by(2) {
+            let point = Point2D::new(
+                layers.origin.x + x_offset as f32 + 1.0,
+                layers.origin.y + y_offset as f32 + 1.0,
+            );
+            if let Some(LayerPanelHit::Layer(id)) = panel.hit_test(layers, point) {
+                row_hit = Some((point, id));
+                break 'rows;
+            }
+        }
+    }
+    let (row_point, row_id) = row_hit.expect("starter document layer row");
+    assert!(app.host.apply_right_press(
+        row_point.x,
+        row_point.y,
+        app.viewport_width,
+        app.viewport_height,
+    ));
+
+    let menu_state = app
+        .host
+        .editor_state()
+        .editor_ui
+        .layer_context_menu
+        .clone()
+        .expect("right press opens the layer context menu");
+    let menu = LayerContextMenu::for_state(app.host.editor_state(), menu_state);
+    let menu_rect = menu.rect();
+    let menu_x = menu_rect.origin.x + menu_rect.size.x / 2.0;
+    let mut menu_hit = None;
+    for y_offset in 0..menu_rect.size.y.ceil() as usize {
+        let point = Point2D::new(menu_x, menu_rect.origin.y + y_offset as f32 + 0.5);
+        if let Some(row) = menu.hovered_row_at(point) {
+            menu_hit = Some((point, row));
+            break;
+        }
+    }
+    let (menu_point, hovered_row) = menu_hit.expect("layer context menu row");
+    assert!(
+        menu_point.x < app.host.editor_state().editor_ui.layer_panel_width,
+        "fixture must exercise the menu area that overlaps the layer rail"
+    );
+    assert!(app.host.cursor_over_layer_panel(
+        menu_point.x,
+        menu_point.y,
+        app.viewport_width,
+        app.viewport_height,
+    ));
+
+    app.host.editor_state_mut().editor_ui.hovered_layer_id = Some(row_id);
+    app.host.editor_state_mut().editor_ui.hovered_page_index = Some(0);
+    app.pending_cursor_move = Some((menu_point.x, menu_point.y));
+
+    assert!(app.drain_pending_cursor_move());
+    let ui = &app.host.editor_state().editor_ui;
+    assert_eq!(
+        ui.layer_context_menu
+            .as_ref()
+            .and_then(|state| state.menu.hover),
+        Some(hovered_row),
+        "the context-menu row, not the layer underneath, must own hover"
+    );
+    assert_eq!(ui.hovered_layer_id, None);
+    assert_eq!(ui.hovered_page_index, None);
+
+    // Moving again within the same menu row must be a no-op. In particular,
+    // the layer-hover pre-pass must not transiently set the covered row only
+    // for the full cursor ladder to clear it again and force another present.
+    app.pending_cursor_move = Some((menu_point.x, menu_point.y));
+    assert!(
+        !app.drain_pending_cursor_move(),
+        "unchanged context-menu hover must not report a dirty frame"
+    );
+    let ui = &app.host.editor_state().editor_ui;
+    assert_eq!(
+        ui.layer_context_menu
+            .as_ref()
+            .and_then(|state| state.menu.hover),
+        Some(hovered_row)
+    );
+    assert_eq!(ui.hovered_layer_id, None);
+    assert_eq!(ui.hovered_page_index, None);
+
+    // The menu remains globally routed while open, even after the pointer
+    // leaves its footprint for another point in the layer rail. That move
+    // must clear the menu-owned hover instead of being swallowed by the
+    // runner's layer-panel shortcut.
+    let menu_exit_point = [
+        Point2D::new(rail.origin.x + 1.0, rail.origin.y + 1.0),
+        Point2D::new(
+            rail.origin.x + rail.size.x - 1.0,
+            rail.origin.y + rail.size.y - 1.0,
+        ),
+    ]
+    .into_iter()
+    .find(|point| {
+        !menu_rect.contains(*point)
+            && app.host.cursor_over_layer_panel(
+                point.x,
+                point.y,
+                app.viewport_width,
+                app.viewport_height,
+            )
+    })
+    .expect("layer rail point outside the context menu");
+    app.pending_cursor_move = Some((menu_exit_point.x, menu_exit_point.y));
+    assert!(app.drain_pending_cursor_move());
+    assert_eq!(
+        app.host
+            .editor_state()
+            .editor_ui
+            .layer_context_menu
+            .as_ref()
+            .and_then(|state| state.menu.hover),
+        None,
+        "leaving the menu must clear its row hover"
+    );
+}
+
+#[test]
 fn panel_resize_drag_continues_inside_left_layer_panel() {
     let mut app = DesktopApp::new(None);
     let start_width = app.host.editor_state().editor_ui.layer_panel_width;

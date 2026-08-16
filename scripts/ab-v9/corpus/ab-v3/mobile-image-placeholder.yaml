@@ -1,0 +1,16 @@
+id: mobile-image-placeholder
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY an image placeholder slot for a future cover photo:
+  a 320×200 gray box with a centered image icon (generic lucide
+  `image`) and the caption "Upload cover" below the icon. Rounded
+  corners, light gray fill (#F1F5F9 or similar). Do NOT include
+  page background, header, other form fields, or any other content —
+  just the placeholder.
+expected:
+  must_contain_roles:
+    - image-placeholder
+    - image-placeholder-icon
+    - image-placeholder-label
+expected_tool_if_any: add_image_placeholder_v0

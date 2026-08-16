@@ -26,6 +26,8 @@ mod deck_corpus_tests;
 pub mod design_systems;
 pub mod frontmatter;
 pub mod loader;
+#[cfg(test)]
+mod logo_corpus_tests;
 pub mod memory;
 pub mod resolve;
 pub mod resolve_style;

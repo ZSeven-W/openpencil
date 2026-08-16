@@ -190,6 +190,20 @@ fn compact_subagent_skills<T: SkillNamed>(
             // Standard, which is the exact 2026-08-04 `slides` failure —
             // and it is silent, because the file on disk stays correct.
             "deck-contract",
+            // Card-board teaching (DS P1.5). Keyword-gated at the resolve
+            // layer (card / 卡片 / 小红书 words only), so a no-op on every
+            // non-card prompt. Required on a card for the same reason the
+            // deck entries above are: the Basic allow-set otherwise drops
+            // the only domain contract a card generation has.
+            "cards",
+            // DS P2-a overlay (model_families-gated to deepseek at the
+            // resolve layer, keyword-gated like `cards`). Allowed on the
+            // Basic tier for the same reason `cards` is: the card board
+            // budget arm exists specifically so this teaching survives the
+            // plain 5200 arm's base-skill pileup. Deliberately NOT in the
+            // RETRY_ALLOWED set — the reduced retry keeps the smallest
+            // viable prompt, exactly like `cards` / `deck-patterns`.
+            "card-item-template",
             "icon-catalog",
             "style-defaults",
             "elements",

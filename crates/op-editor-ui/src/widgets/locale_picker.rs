@@ -33,7 +33,7 @@ impl LocalePicker {
         Self {
             id: WidgetId::new(5100),
             theme: theme_for(ui),
-            selected: ui.locale,
+            selected: ui.effective_locale(),
             state: ui.locale_picker.clone(),
         }
     }

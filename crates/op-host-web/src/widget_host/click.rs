@@ -151,14 +151,6 @@ impl WidgetHost {
                     // Clear covered hover state synchronously with opening;
                     // a repaint may happen before the next pointer event.
                     self.clear_hover_below_chat_model_picker();
-                    // The browser host cannot re-discover local CLIs (no
-                    // subprocesses in wasm) and never lists them anyway —
-                    // its catalog is the daemon's built-in set, fetched by
-                    // `web_model_catalog`. Drop the request rather than
-                    // leaving a seam raised that nothing here can serve.
-                    self.editor_state
-                        .editor_ui
-                        .take_pending_model_catalog_refresh();
                 }
                 self.mark_dirty();
                 true

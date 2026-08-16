@@ -121,10 +121,102 @@ pub(crate) fn paint_field_frame(
     placeholder: &str,
     now_ms: u64,
 ) -> bool {
-    draw_text(cx, label, 11.0, theme.muted_foreground, label_x, label_y);
+    paint_field_frame_for_ui(
+        cx,
+        theme,
+        ui,
+        label,
+        label_x,
+        label_y,
+        input,
+        focused,
+        placeholder,
+        now_ms,
+        false,
+    )
+}
+
+/// Touch-density variant of [`paint_field_frame`]. The visible field and its
+/// text scale together while the desktop wrapper above stays pixel-identical.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn paint_field_frame_for_ui(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    ui: &EditorUiState,
+    label: &str,
+    label_x: f32,
+    label_y: f32,
+    input: Rect,
+    focused: bool,
+    placeholder: &str,
+    now_ms: u64,
+    touch: bool,
+) -> bool {
+    paint_field_chrome_for_ui(cx, theme, label, label_x, label_y, input, focused, touch);
+    if focused {
+        let value_size = if touch { 15.0 } else { 11.0 };
+        let inset_x = if touch { 12.0 } else { 6.0 };
+        paint_settings_input_view(
+            cx,
+            theme,
+            ui,
+            input,
+            value_size,
+            inset_x,
+            if touch {
+                jian_widgets::centered_text_baseline_y(input, value_size)
+            } else {
+                input.origin.y + 16.0
+            },
+            now_ms,
+            placeholder,
+        );
+        return true;
+    }
+    false
+}
+
+/// Paint only the label and input frame. Multiline/specialized fields use
+/// this and render their own text view inside the shared chrome.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn paint_field_chrome_for_ui(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    label: &str,
+    label_x: f32,
+    label_y: f32,
+    input: Rect,
+    focused: bool,
+    touch: bool,
+) {
+    let label_size = if touch { 14.0 } else { 11.0 };
+    let radius = if touch { 10.0 } else { 6.0 };
+    let label_baseline = if touch {
+        jian_widgets::centered_text_baseline_y(input, label_size)
+    } else {
+        label_y
+    };
+    let shown_label = if touch {
+        ellipsize(
+            cx,
+            label,
+            (input.origin.x - label_x - 8.0).max(0.0),
+            label_size,
+        )
+    } else {
+        label.to_string()
+    };
+    draw_text(
+        cx,
+        &shown_label,
+        label_size,
+        theme.muted_foreground,
+        label_x,
+        label_baseline,
+    );
     cx.backend.fill_round_rect(
         input,
-        6.0,
+        radius,
         if focused {
             theme.background
         } else {
@@ -133,25 +225,10 @@ pub(crate) fn paint_field_frame(
     );
     cx.backend.stroke_round_rect(
         input,
-        6.0,
+        radius,
         if focused { theme.primary } else { theme.border },
         1.0,
     );
-    if focused {
-        paint_settings_input_view(
-            cx,
-            theme,
-            ui,
-            input,
-            11.0,
-            6.0,
-            input.origin.y + 16.0,
-            now_ms,
-            placeholder,
-        );
-        return true;
-    }
-    false
 }
 
 /// Walk a vertical card stack (`heights`, separated by `gap`) starting

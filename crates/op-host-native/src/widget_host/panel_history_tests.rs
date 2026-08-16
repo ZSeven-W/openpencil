@@ -202,7 +202,7 @@ fn layer_drag_reorder_is_undoable() {
         current_y: dy,
         active: true,
     };
-    assert!(host.commit_layer_drag(drag, VH));
+    assert!(host.commit_layer_drag(drag, VW, VH));
     let order: Vec<String> = host
         .editor_state()
         .active_children()
@@ -375,6 +375,7 @@ fn context_menu_group_selection_is_undoable() {
     assert_eq!(host.editor_state().active_children().len(), 2);
 }
 
+#[cfg(feature = "gl-host")]
 #[test]
 fn context_menu_boolean_union_is_undoable() {
     // TS boolean rows push history explicitly before swapping the

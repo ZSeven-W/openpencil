@@ -25,7 +25,7 @@ pub(crate) fn apply_entry_hit(
     now_ms: u64,
 ) -> SettingsPressOutcome {
     let commit = |state: &mut EditorState| {
-        commit_settings_focus(state, scope);
+        commit_settings_focus(state, scope, now_ms);
     };
     let take_over = matches!(scope, SettingsCommitScope::Operator);
     match hit {
@@ -110,11 +110,20 @@ pub(crate) fn apply_entry_hit(
         AgentSettingsHit::FocusBuiltinAgent { index, field } => {
             commit(state);
             focus_builtin_agent(state, index, field, now_ms);
+            if field == BuiltinAgentField::Model {
+                // Focusing the Model field opens its discovered-model
+                // dropdown (combobox behaviour); discovery queues only
+                // when the runtime catalog is actually due.
+                open_builtin_model_menu(state, Some(index), now_ms);
+            }
             SettingsPressOutcome::handled()
         }
         AgentSettingsHit::FocusBuiltinAgentDraft(field) => {
             commit(state);
             focus_builtin_agent_draft(state, field, now_ms);
+            if field == BuiltinAgentField::Model {
+                open_builtin_model_menu(state, None, now_ms);
+            }
             SettingsPressOutcome::handled()
         }
         AgentSettingsHit::ToggleBuiltinAgentKind(index) => {
@@ -129,12 +138,102 @@ pub(crate) fn apply_entry_hit(
                 agent.toggle_kind_for_preset();
                 state.rebuild_chat_models();
             }
+            queue_builtin_discovery(state, index, now_ms);
             SettingsPressOutcome::handled()
         }
         AgentSettingsHit::ToggleBuiltinAgentDraftKind => {
             commit(state);
             if let Some(agent) = state.editor_ui.agent_settings.builtin_agent_draft.as_mut() {
                 agent.toggle_kind_for_preset();
+            }
+            SettingsPressOutcome::handled()
+        }
+        AgentSettingsHit::ToggleBuiltinModelMenu(index) => {
+            // Decide visibility BEFORE the commit — commit moves the
+            // settings focus, which is what the visibility predicate
+            // keys on.
+            let target = crate::widgets::agent_settings_builtin_model_menu::menu_target(index);
+            let was_open = state.editor_ui.agent_settings.builtin_model_menu_open == Some(target)
+                && crate::widgets::agent_settings_builtin_model_menu::model_menu_visible(
+                    &state.editor_ui.agent_settings,
+                );
+            commit(state);
+            if was_open {
+                let settings = &mut state.editor_ui.agent_settings;
+                settings.builtin_model_menu_open = None;
+                settings.builtin_model_menu_scroll.offset = 0.0;
+                settings.builtin_model_menu_hover = None;
+                // Keep the Model field focused after closing the
+                // dropdown so typing continues from the value.
+                match index {
+                    Some(index) => {
+                        focus_builtin_agent(state, index, BuiltinAgentField::Model, now_ms)
+                    }
+                    None => focus_builtin_agent_draft(state, BuiltinAgentField::Model, now_ms),
+                }
+            } else {
+                match index {
+                    Some(index) => {
+                        focus_builtin_agent(state, index, BuiltinAgentField::Model, now_ms)
+                    }
+                    None => focus_builtin_agent_draft(state, BuiltinAgentField::Model, now_ms),
+                }
+                open_builtin_model_menu(state, index, now_ms);
+            }
+            SettingsPressOutcome::handled()
+        }
+        AgentSettingsHit::SelectBuiltinModel { index, row } => {
+            // Resolve the pressed row against the same catalog the menu
+            // painted — hit-test and press run on the same frame, so the
+            // row index is stable. Resolve before commit because an operator
+            // takeover may rotate a browser-owned provider id and invalidate
+            // its old runtime catalog.
+            let model_id = {
+                let settings = &state.editor_ui.agent_settings;
+                match index {
+                    Some(index) => settings
+                        .builtin_agents
+                        .get(index)
+                        .and_then(|agent| {
+                            settings.builtin_model_catalog_options(&agent.id).get(row)
+                        })
+                        .map(|option| option.id.clone()),
+                    None => settings
+                        .builtin_model_catalog_options_for(
+                            &op_editor_core::BuiltinModelCatalogTarget::Draft,
+                        )
+                        .get(row)
+                        .map(|option| option.id.clone()),
+                }
+            };
+            commit(state);
+            if let Some(model_id) = model_id {
+                let settings = &mut state.editor_ui.agent_settings;
+                match index {
+                    Some(index) => {
+                        if let Some(agent) = settings.builtin_agents.get_mut(index) {
+                            agent.toggle_model(&model_id);
+                        }
+                    }
+                    None => {
+                        if let Some(agent) = settings.builtin_agent_draft.as_mut() {
+                            agent.toggle_model(&model_id);
+                        }
+                    }
+                }
+                if index.is_some() {
+                    state.rebuild_chat_models();
+                }
+                // A catalog row is a checkbox, not a single-select action.
+                // Keep both the multiline Model editor and the menu open so
+                // desktop and touch users can choose several rows in one pass.
+                match index {
+                    Some(index) => {
+                        focus_builtin_agent(state, index, BuiltinAgentField::Model, now_ms)
+                    }
+                    None => focus_builtin_agent_draft(state, BuiltinAgentField::Model, now_ms),
+                }
+                open_builtin_model_menu(state, index, now_ms);
             }
             SettingsPressOutcome::handled()
         }
@@ -145,6 +244,9 @@ pub(crate) fn apply_entry_hit(
                 None => BuiltinAgentPresetMenuTarget::Draft,
             };
             let settings = &mut state.editor_ui.agent_settings;
+            settings.builtin_model_menu_open = None;
+            settings.builtin_model_menu_scroll.offset = 0.0;
+            settings.builtin_model_menu_hover = None;
             settings.builtin_preset_menu_open =
                 (settings.builtin_preset_menu_open != Some(target)).then_some(target);
             settings.builtin_preset_menu_scroll.offset = 0.0;
@@ -166,6 +268,7 @@ pub(crate) fn apply_entry_hit(
                         .agent_settings
                         .set_builtin_agent_preset(index, preset);
                     state.rebuild_chat_models();
+                    queue_builtin_discovery(state, index, now_ms);
                 }
                 None => state
                     .editor_ui
@@ -190,6 +293,7 @@ pub(crate) fn apply_entry_hit(
                 agent.enabled = !agent.enabled;
                 state.rebuild_chat_models();
             }
+            queue_builtin_discovery(state, index, now_ms);
             SettingsPressOutcome::handled()
         }
         AgentSettingsHit::EditBuiltinAgent(index) => {
@@ -199,9 +303,12 @@ pub(crate) fn apply_entry_hit(
         }
         AgentSettingsHit::RemoveBuiltinAgent(index) => {
             commit(state);
-            let agents = &mut state.editor_ui.agent_settings.builtin_agents;
-            if index < agents.len() {
-                agents.remove(index);
+            if state
+                .editor_ui
+                .agent_settings
+                .remove_builtin_agent(index)
+                .is_some()
+            {
                 clear_focus(state);
                 state.rebuild_chat_models();
             }
@@ -215,12 +322,14 @@ pub(crate) fn apply_entry_hit(
         }
         AgentSettingsHit::SaveBuiltinAgentDraft => {
             commit(state);
-            if state
-                .editor_ui
-                .agent_settings
-                .save_builtin_agent_draft()
-                .is_some()
-            {
+            if let Some(id) = state.editor_ui.agent_settings.save_builtin_agent_draft() {
+                let _ = state
+                    .editor_ui
+                    .agent_settings
+                    .begin_builtin_model_catalog_refresh(
+                        op_editor_core::BuiltinModelCatalogTarget::Agent(id),
+                        now_ms,
+                    );
                 clear_focus(state);
                 state.rebuild_chat_models();
             } else {
@@ -389,5 +498,148 @@ pub(crate) fn apply_entry_hit(
             debug_assert!(false, "handled by apply_agent_settings_hit");
             SettingsPressOutcome::handled()
         }
+    }
+}
+
+/// Open (or keep open) the model dropdown for `index` — saved agent or
+/// add-provider draft — and queue model discovery when the runtime
+/// catalog for that credential is due. Discovery deliberately needs
+/// credentials only: a not-yet-configured provider skips the fetch and
+/// the menu falls back to free-text entry.
+fn open_builtin_model_menu(state: &mut EditorState, index: Option<usize>, now_ms: u64) {
+    {
+        let settings = &mut state.editor_ui.agent_settings;
+        settings.builtin_preset_menu_open = None;
+        settings.builtin_preset_menu_scroll.offset = 0.0;
+        settings.builtin_preset_menu_hover = None;
+        let target = crate::widgets::agent_settings_builtin_model_menu::menu_target(index);
+        if settings.builtin_model_menu_open != Some(target)
+            || !crate::widgets::agent_settings_builtin_model_menu::model_menu_visible(settings)
+        {
+            settings.builtin_model_menu_open = Some(target);
+            settings.builtin_model_menu_scroll.offset = 0.0;
+            settings.builtin_model_menu_hover = None;
+        }
+    }
+    queue_builtin_model_discovery(state, index, now_ms);
+}
+
+/// Queue a gated discovery request for the card's catalog target: the
+/// saved agent's id, or the draft. Unconfigured targets are skipped by
+/// `begin_builtin_model_catalog_refresh_if_due`.
+fn queue_builtin_model_discovery(state: &mut EditorState, index: Option<usize>, now_ms: u64) {
+    let target = match index {
+        Some(index) => state
+            .editor_ui
+            .agent_settings
+            .builtin_agents
+            .get(index)
+            .map(|agent| op_editor_core::BuiltinModelCatalogTarget::Agent(agent.id.clone())),
+        None => Some(op_editor_core::BuiltinModelCatalogTarget::Draft),
+    };
+    if let Some(target) = target {
+        let _ = state
+            .editor_ui
+            .agent_settings
+            .begin_builtin_model_catalog_refresh_if_due(target, now_ms);
+    }
+}
+
+fn queue_builtin_discovery(state: &mut EditorState, index: usize, now_ms: u64) {
+    let target = state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .get(index)
+        .map(|agent| op_editor_core::BuiltinModelCatalogTarget::Agent(agent.id.clone()));
+    if let Some(target) = target {
+        let _ = state
+            .editor_ui
+            .agent_settings
+            .begin_builtin_model_catalog_refresh(target, now_ms);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saving_a_ready_builtin_draft_queues_its_first_model_discovery() {
+        let mut state = EditorState::new();
+        state.editor_ui.agent_settings.begin_builtin_agent_draft();
+        state
+            .editor_ui
+            .agent_settings
+            .builtin_agent_draft
+            .as_mut()
+            .expect("draft")
+            .api_key = "sk-new".into();
+
+        let outcome = apply_entry_hit(
+            &mut state,
+            AgentSettingsHit::SaveBuiltinAgentDraft,
+            SettingsCommitScope::Browser,
+            55,
+        );
+
+        assert_eq!(outcome, SettingsPressOutcome::handled());
+        let saved_id = state
+            .editor_ui
+            .agent_settings
+            .builtin_agents
+            .first()
+            .expect("saved provider")
+            .id
+            .clone();
+        let request = state
+            .editor_ui
+            .agent_settings
+            .take_pending_builtin_model_catalog_refresh()
+            .expect("save queues discovery");
+        assert_eq!(
+            request.target,
+            op_editor_core::BuiltinModelCatalogTarget::Agent(saved_id)
+        );
+    }
+
+    #[test]
+    fn key_commit_followed_by_kind_toggle_requeues_for_the_new_endpoint() {
+        let mut state = EditorState::new();
+        let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+            "MiniMax",
+            "",
+            "MiniMax-M3",
+            op_editor_core::BuiltinAgentKind::Anthropic,
+            "https://api.minimaxi.com/anthropic",
+        );
+        state.editor_ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgent {
+            index: 0,
+            field: BuiltinAgentField::ApiKey,
+        });
+        state.editor_ui.settings_input.set_text("sk-new");
+
+        apply_entry_hit(
+            &mut state,
+            AgentSettingsHit::ToggleBuiltinAgentKind(0),
+            SettingsCommitScope::Browser,
+            77,
+        );
+
+        let request = state
+            .editor_ui
+            .agent_settings
+            .take_pending_builtin_model_catalog_refresh()
+            .expect("new kind must retain an immediate discovery request");
+        assert_eq!(
+            request.target,
+            op_editor_core::BuiltinModelCatalogTarget::Agent(id)
+        );
+        let config = state
+            .editor_ui
+            .agent_settings
+            .builtin_model_catalog_config_for_request(&request)
+            .expect("request matches the post-toggle configuration");
+        assert_eq!(config.kind, op_editor_core::BuiltinAgentKind::OpenAiCompat);
     }
 }

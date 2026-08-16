@@ -118,7 +118,7 @@ chrome_dump() {
       return 0
     fi
     if grep -Fq 'data-op-smoke="ok"' "$out" 2>/dev/null; then
-      kill "$chrome_pid" >/dev/null 2>&1 || true
+      kill -9 "$chrome_pid" >/dev/null 2>&1 || true
       wait "$chrome_pid" >/dev/null 2>&1 || true
       return 0
     fi
@@ -157,11 +157,21 @@ fi
 TMP_DIR="$(mktemp -d)"
 SERVER_PID=""
 cleanup() {
+  local status=$?
+  set +e
   if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" >/dev/null 2>&1; then
-    kill "$SERVER_PID" >/dev/null 2>&1 || true
+    kill -9 "$SERVER_PID" >/dev/null 2>&1 || true
     wait "$SERVER_PID" >/dev/null 2>&1 || true
   fi
-  rm -rf "$TMP_DIR"
+  # Chrome renderer/GPU children can briefly keep writing their profile after
+  # the browser PID exits. Deletion is housekeeping: retry it, but never turn
+  # a successful smoke into a failure because a disposable runner profile is
+  # still being released.
+  for _ in $(seq 1 20); do
+    rm -rf "$TMP_DIR" >/dev/null 2>&1 && break
+    sleep 0.1
+  done
+  return "$status"
 }
 trap cleanup EXIT
 

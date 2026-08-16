@@ -157,11 +157,15 @@ export async function importSnapshot(endpoint, snapshot) {
 
   let outcome = await sendVia(core.ingestUrl(endpoint), snapshot, core.classifyIngestReply);
   if (outcome.outcome === 'fallback') {
-    outcome = await sendVia(
-      core.mcpUrl(endpoint),
-      buildMcpEnvelope(core, snapshot),
-      core.classifyMcpReply,
-    );
+    // The envelope JSON-escapes the snapshot, which can inflate a capture
+    // that passed the raw-size precheck past the endpoint's 64 MiB
+    // whole-body cap — check the BUILT size so the user gets the actionable
+    // message instead of uploading it all and being refused.
+    const envelope = buildMcpEnvelope(core, snapshot);
+    if (core.mcpEnvelopeTooLarge(envelope.length)) {
+      throw requestError('tooLarge', String(core.maxSnapshotMb()));
+    }
+    outcome = await sendVia(core.mcpUrl(endpoint), envelope, core.classifyMcpReply);
   }
   if (outcome.outcome === 'error') {
     throw requestError(outcome.code, outcome.detail);
@@ -269,11 +273,11 @@ export async function sendSnapshotToAccount(hubOrigin, csrfToken, snapshot, meta
     if (typeof csrfToken !== 'string' || csrfToken === '') {
       throw requestError('signedOut', 'no session');
     }
-    // The hub's cap is the local ingress's 32 MiB, less the envelope wrapped
-    // around the document — a capture that only just fits locally would
-    // otherwise be uploaded in full and then refused.
+    // The hub's cap is its own 32 MiB (smaller than the local ingress cap),
+    // less the envelope wrapped around the document — a capture that fits
+    // locally would otherwise be uploaded in full and then refused.
     if (core.hubSnapshotTooLarge(snapshot.length)) {
-      throw requestError('tooLarge', String(core.maxSnapshotMb()));
+      throw requestError('tooLarge', String(core.hubMaxSnapshotMb()));
     }
     const reply = await postHubJson(
       core.hubSnapshotsUrl(hubOrigin),

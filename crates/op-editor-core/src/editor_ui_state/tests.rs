@@ -139,6 +139,16 @@ fn builtin_agent_draft_ready_reads_focused_settings_input() {
     ui.settings_input.set_text("sk-test");
 
     assert!(ui.builtin_agent_draft_ready());
+
+    ui.agent_settings.focus = None;
+    let draft = ui
+        .agent_settings
+        .builtin_agent_draft
+        .as_mut()
+        .expect("draft exists");
+    draft.api_key = "sk-test".into();
+    draft.models.clear();
+    assert!(ui.builtin_agent_draft_ready());
 }
 
 #[test]
@@ -277,23 +287,6 @@ fn chat_model_picker_helpers_reset_select_interaction_state_and_search() {
 }
 
 #[test]
-fn opening_the_chat_model_picker_requests_one_catalog_refresh() {
-    let mut ui = EditorUiState::new();
-    assert!(!ui.pending_model_catalog_refresh);
-
-    assert!(ui.toggle_chat_model_picker());
-    assert!(ui.take_pending_model_catalog_refresh());
-    assert!(
-        !ui.take_pending_model_catalog_refresh(),
-        "one open must not queue two probes"
-    );
-
-    // Closing asks for nothing.
-    assert!(!ui.toggle_chat_model_picker());
-    assert!(!ui.pending_model_catalog_refresh);
-}
-
-#[test]
 fn icon_picker_helpers_reset_select_interaction_state_and_search() {
     let mut ui = EditorUiState::new();
     ui.icon_picker_replace_selection = true;
@@ -340,4 +333,36 @@ fn embed_host_defaults_to_none_for_unknown_or_absent() {
     assert_eq!(EmbedHost::from_query("?embed=web"), EmbedHost::None);
     assert_eq!(EmbedHost::from_query("?embedded=vscode"), EmbedHost::None);
     assert_eq!(EditorUiState::default().embed, EmbedHost::None);
+}
+
+#[test]
+fn host_theme_override_changes_only_the_effective_theme() {
+    let mut ui = EditorUiState {
+        theme_mode: ThemeMode::Dark,
+        ..EditorUiState::default()
+    };
+    assert_eq!(ui.effective_theme_mode(), ThemeMode::Dark);
+
+    ui.set_host_theme_override(Some(ThemeMode::Light));
+    assert_eq!(ui.effective_theme_mode(), ThemeMode::Light);
+    assert_eq!(ui.theme_mode, ThemeMode::Dark);
+
+    ui.set_host_theme_override(None);
+    assert_eq!(ui.effective_theme_mode(), ThemeMode::Dark);
+}
+
+#[test]
+fn host_locale_override_changes_only_the_effective_locale() {
+    let mut ui = EditorUiState {
+        locale: Locale::ZhCn,
+        ..EditorUiState::default()
+    };
+    assert_eq!(ui.effective_locale(), Locale::ZhCn);
+
+    ui.set_host_locale_override(Some(Locale::EnUs));
+    assert_eq!(ui.effective_locale(), Locale::EnUs);
+    assert_eq!(ui.locale, Locale::ZhCn);
+
+    ui.set_host_locale_override(None);
+    assert_eq!(ui.effective_locale(), Locale::ZhCn);
 }

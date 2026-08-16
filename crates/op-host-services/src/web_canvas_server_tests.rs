@@ -175,7 +175,7 @@ fn browser_only_restart_does_not_load_previously_persisted_browser_credentials()
     assert!(settings
         .builtin_agents
         .iter()
-        .any(|agent| agent.model == "operator-model"));
+        .any(|agent| agent.has_model("operator-model")));
     assert!(settings.image_gen_profiles.is_empty());
     assert!(settings.openverse_client_secret.is_empty());
     assert_eq!(settings.openverse_credential_owner, None);
@@ -208,7 +208,7 @@ fn browser_only_startup_removes_browser_credentials_and_saves_once() {
             assert!(settings
                 .builtin_agents
                 .iter()
-                .any(|agent| agent.model == "operator-model"));
+                .any(|agent| agent.has_model("operator-model")));
             assert!(settings.image_gen_profiles.is_empty());
             assert!(settings.openverse_client_secret.is_empty());
             Ok(())
@@ -323,6 +323,30 @@ fn cross_origin_browser_cannot_write_server_credentials() {
     assert!(!response.contains("sk-browser-only"));
     let guard = state.lock().unwrap();
     assert_eq!(before, crate::settings_io::fingerprint(&guard.editor));
+}
+
+#[test]
+fn cross_origin_browser_cannot_discover_models_with_a_credential() {
+    let state = Mutex::new(fresh_state());
+    let body = r#"{"id":"builtin-1","generation":1,"credential":{
+        "id":"builtin-1","preset":"openai","display_name":"Private",
+        "kind":"openai-compat","api_key":"sk-must-not-leak",
+        "model":"fallback","base_url":"https://api.openai.com/v1",
+        "enabled":true}}"#;
+    let request = format!(
+        "POST /api/ai/models/discover HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nOrigin: https://evil.example\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body,
+    );
+    let request_len = request.len();
+    let mut stream = std::io::Cursor::new(request.into_bytes());
+
+    serve_one(&mut stream, &state, &SseHub::default()).expect("request handled");
+
+    let response = String::from_utf8_lossy(&stream.get_ref()[request_len..]);
+    assert!(response.contains("403 Forbidden"), "{response}");
+    assert!(response.contains("cross-origin"), "{response}");
+    assert!(!response.contains("sk-must-not-leak"), "{response}");
 }
 
 #[test]
@@ -620,6 +644,11 @@ fn sync_reset_reloads_current_path_when_daemon_has_backing_file() {
         r#"{"version":"1.0.0","children":[{"id":"from-disk","type":"rectangle","name":"Disk Rect","x":1,"y":2,"width":80,"height":40}]}"#,
     );
     let mut s = WebCanvasState::new_with_path(EditorState::starter(), 3100, Some(path.clone()));
+    s.editor.editor_ui.account_ui_available = true;
+    s.editor.editor_ui.account = op_editor_core::AccountState::signed_in_profile(
+        "Fini".to_string(),
+        Some("fini".to_string()),
+    );
     let _ = s.replace_document(
         op_pen_loader::load_canonical(
             r#"{"version":"1.0.0","children":[{"id":"transient","type":"rectangle","name":"Transient","x":1,"y":2,"width":80,"height":40}]}"#,
@@ -638,6 +667,32 @@ fn sync_reset_reloads_current_path_when_daemon_has_backing_file() {
         Some(path.file_name().unwrap().to_str().unwrap())
     );
     assert_eq!(s.current_path.as_deref(), Some(path.as_path()));
+    assert!(s.editor.editor_ui.account_ui_available);
+    assert_eq!(
+        s.editor.editor_ui.account,
+        op_editor_core::AccountState::signed_in_profile(
+            "Fini".to_string(),
+            Some("fini".to_string()),
+        )
+    );
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn sync_reset_preserves_signed_out_account_entry_capability() {
+    let path = write_temp_op("reset-auth-gate", r#"{"version":"1.0.0","children":[]}"#);
+    let mut state = WebCanvasState::new_with_path(EditorState::starter(), 3100, Some(path.clone()));
+    state.editor.editor_ui.account_ui_available = true;
+    state.editor.editor_ui.account = op_editor_core::AccountState::Anonymous;
+
+    let reset = state.reset_document_guarded().expect("reset succeeds");
+
+    assert!(!reset.skipped);
+    assert!(state.editor.editor_ui.account_ui_available);
+    assert_eq!(
+        state.editor.editor_ui.account,
+        op_editor_core::AccountState::Anonymous
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -686,10 +741,12 @@ fn get_ai_models_returns_json_array() {
 
     let r = handle_web_canvas_request("GET", "/api/ai/models", "", &mut state);
     assert!(r.status.starts_with("200"));
-    assert_eq!(
-        serde_json::from_str::<Vec<String>>(&r.body).expect("models body is valid JSON"),
-        vec!["built-in-model"]
-    );
+    let models =
+        serde_json::from_str::<Vec<serde_json::Value>>(&r.body).expect("models body is valid JSON");
+    assert_eq!(models.len(), 1);
+    assert_eq!(models[0]["displayName"], "built-in-model");
+    assert_eq!(models[0]["providerDisplayName"], "Built-in");
+    assert!(models[0]["builtinProviderId"].as_str().is_some());
 }
 
 #[path = "web_canvas_server_export_tests.rs"]

@@ -69,7 +69,7 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
         "gpt-5.5",
         "GPT-5.5",
     )];
-    s.editor_ui.agent_settings.connected = [false, true, false, false, false, false];
+    s.editor_ui.agent_settings.connected = [false, true, false, false, false, false, false];
     s.editor_ui.agent_settings.provider_connection[1].phase =
         crate::agent_settings::ProviderConnectPhase::Connected;
     s.editor_ui.chat_selected_agent = 0;
@@ -84,7 +84,7 @@ fn rebuild_chat_models_syncs_agent_to_selected_model_provider() {
 fn rebuild_chat_models_does_not_invent_cli_models_without_discovery() {
     let mut s = sample();
     s.chat.discovered_models.clear();
-    s.editor_ui.agent_settings.connected = [false, true, false, false, false, false];
+    s.editor_ui.agent_settings.connected = [false, true, false, false, false, false, false];
 
     s.rebuild_chat_models();
 
@@ -136,6 +136,226 @@ fn rebuild_chat_models_retains_builtin_agent_display_name_as_group_label() {
     assert_eq!(
         entry.builtin_provider_display_name.as_deref(),
         Some("MiniMax")
+    );
+}
+
+#[test]
+fn rebuild_chat_models_flattens_saved_models_and_ignores_runtime_options() {
+    let mut state = sample();
+    let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Provider",
+        "sk-test",
+        "configured",
+        crate::BuiltinAgentKind::OpenAiCompat,
+        "https://example.test/v1",
+    );
+    let target = crate::BuiltinModelCatalogTarget::Agent(id.clone());
+    state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter_mut()
+        .find(|agent| agent.id == id)
+        .expect("configured agent")
+        .set_models(["configured", "saved-b"]);
+    let request = state
+        .editor_ui
+        .agent_settings
+        .begin_builtin_model_catalog_refresh(target, 1)
+        .expect("request");
+    state
+        .editor_ui
+        .agent_settings
+        .take_pending_builtin_model_catalog_refresh();
+    let expected = state
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_config_for_request(&request)
+        .expect("snapshot");
+    assert!(state
+        .editor_ui
+        .agent_settings
+        .apply_builtin_model_catalog_refresh_outcome_if_current(
+            &expected,
+            &request,
+            crate::BuiltinModelCatalogRefreshOutcome::Success {
+                models: vec![
+                    crate::BuiltinModelOption::new("live-b", "Live B"),
+                    crate::BuiltinModelOption::new("configured", "duplicate configured"),
+                    crate::BuiltinModelOption::new("live-c", "Live C"),
+                ],
+            },
+        ));
+
+    state.rebuild_chat_models();
+
+    let entries = state
+        .chat
+        .available_models
+        .iter()
+        .filter(|entry| entry.builtin_provider_id.as_deref() == Some(id.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        entries
+            .iter()
+            .filter_map(|entry| entry.builtin_model_id())
+            .collect::<Vec<_>>(),
+        vec!["configured", "saved-b"]
+    );
+    assert_eq!(entries[1].display_name, "saved-b");
+    assert!(entries
+        .iter()
+        .all(|entry| { entry.builtin_provider_display_name.as_deref() == Some("Provider") }));
+}
+
+#[test]
+fn discovered_model_is_not_a_chat_choice_until_it_is_saved() {
+    let mut state = sample();
+    let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Provider",
+        "sk-test",
+        "",
+        crate::BuiltinAgentKind::OpenAiCompat,
+        "https://example.test/v1",
+    );
+    let request = state
+        .editor_ui
+        .agent_settings
+        .begin_builtin_model_catalog_refresh(crate::BuiltinModelCatalogTarget::Agent(id.clone()), 1)
+        .expect("discovery request");
+    state
+        .editor_ui
+        .agent_settings
+        .take_pending_builtin_model_catalog_refresh();
+    let expected = state
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_config_for_request(&request)
+        .expect("snapshot");
+    assert!(state
+        .editor_ui
+        .agent_settings
+        .apply_builtin_model_catalog_refresh_outcome_if_current(
+            &expected,
+            &request,
+            crate::BuiltinModelCatalogRefreshOutcome::Success {
+                models: vec![crate::BuiltinModelOption::new("first-live", "First Live")],
+            },
+        ));
+
+    state.rebuild_chat_models();
+
+    assert!(state
+        .chat
+        .available_models
+        .iter()
+        .all(|entry| entry.builtin_provider_id.as_deref() != Some(id.as_str())));
+}
+
+#[test]
+fn selecting_saved_builtin_is_tab_local_and_does_not_mutate_provider_models() {
+    let mut state = sample();
+    let first = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "First",
+        "sk-first",
+        "first-default",
+        crate::BuiltinAgentKind::OpenAiCompat,
+        "https://first.example/v1",
+    );
+    let second = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Second",
+        "sk-second",
+        "second-default",
+        crate::BuiltinAgentKind::OpenAiCompat,
+        "https://second.example/v1",
+    );
+    state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter_mut()
+        .find(|agent| agent.id == first)
+        .expect("first provider")
+        .set_models(["first-default", "second-saved"]);
+    state.rebuild_chat_models();
+    let selected = state
+        .chat
+        .available_models
+        .iter()
+        .position(|entry| {
+            entry.builtin_provider_id.as_deref() == Some(first.as_str())
+                && entry.builtin_model_id() == Some("second-saved")
+        })
+        .expect("second saved row");
+
+    state.select_chat_model(selected);
+
+    assert_eq!(
+        state
+            .editor_ui
+            .agent_settings
+            .builtin_agents
+            .iter()
+            .find(|agent| agent.id == first)
+            .map(|agent| agent.models.clone()),
+        Some(vec![
+            "first-default".to_string(),
+            "second-saved".to_string()
+        ])
+    );
+    assert_eq!(
+        state
+            .editor_ui
+            .agent_settings
+            .builtin_agents
+            .iter()
+            .find(|agent| agent.id == second)
+            .map(|agent| agent.models.clone()),
+        Some(vec!["second-default".to_string()])
+    );
+    state.rebuild_chat_models();
+    assert_eq!(
+        state
+            .chat
+            .selected_model_entry()
+            .and_then(|entry| entry.builtin_model_id()),
+        Some("second-saved")
+    );
+}
+
+#[test]
+fn identical_model_ids_from_distinct_builtins_keep_distinct_identity() {
+    let mut state = sample();
+    let first = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "First",
+        "sk-first",
+        "shared",
+        crate::BuiltinAgentKind::OpenAiCompat,
+        "https://first.example/v1",
+    );
+    let second = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Second",
+        "sk-second",
+        "shared",
+        crate::BuiltinAgentKind::OpenAiCompat,
+        "https://second.example/v1",
+    );
+
+    state.rebuild_chat_models();
+
+    let shared = state
+        .chat
+        .available_models
+        .iter()
+        .filter(|entry| entry.builtin_model_id() == Some("shared"))
+        .collect::<Vec<_>>();
+    assert_eq!(shared.len(), 2);
+    assert_eq!(
+        shared
+            .iter()
+            .filter_map(|entry| entry.builtin_provider_id.as_deref())
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([first.as_str(), second.as_str()])
     );
 }
 

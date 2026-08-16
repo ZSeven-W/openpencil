@@ -1,6 +1,9 @@
 //! Tests for [`crate::transfer`] — chunk planning, integrity, truncation.
 
-use crate::transfer::{snapshot_too_large, ChunkPlan, CHUNK_CHARS, MAX_SNAPSHOT_MB};
+use crate::transfer::{
+    mcp_envelope_too_large, snapshot_too_large, ChunkPlan, CHUNK_CHARS, MAX_SNAPSHOT_MB,
+    MCP_FALLBACK_BODY_MB,
+};
 
 /// Feed a plan one slice whose text is irrelevant to the assertion.
 fn accept_len(plan: &mut ChunkPlan, len: u32) -> bool {
@@ -217,5 +220,19 @@ fn the_size_precheck_matches_the_servers_body_cap() {
     assert!(!snapshot_too_large(0.0));
     assert!(!snapshot_too_large(cap));
     assert!(snapshot_too_large(cap + 1.0));
-    assert_eq!(MAX_SNAPSHOT_MB, 32);
+    assert_eq!(MAX_SNAPSHOT_MB, 48);
+}
+
+#[test]
+fn the_envelope_precheck_matches_the_endpoints_whole_body_cap() {
+    // The /mcp fallback wraps the snapshot in a JSON envelope whose
+    // re-escaping can exceed the raw snapshot cap; the outer bound is the
+    // endpoint-wide 64 MiB `mcp_serve::MAX_BODY`.
+    let cap = f64::from(MCP_FALLBACK_BODY_MB) * 1024.0 * 1024.0;
+    assert!(!mcp_envelope_too_large(cap));
+    assert!(mcp_envelope_too_large(cap + 1.0));
+    assert_eq!(MCP_FALLBACK_BODY_MB, 64);
+    // The envelope cap must stay above the raw cap or the fallback could
+    // never carry a maximum-size snapshot at all.
+    const { assert!(MCP_FALLBACK_BODY_MB > MAX_SNAPSHOT_MB) }
 }

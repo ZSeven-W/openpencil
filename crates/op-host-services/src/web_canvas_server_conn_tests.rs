@@ -129,6 +129,41 @@ fn serve_one_standard_ai_route_is_sse_not_404() {
 }
 
 #[test]
+fn serve_one_builtin_model_discovery_route_is_json_not_404() {
+    let response =
+        serve_with_content_type("POST", "/api/ai/models/discover", "application/json", "{}");
+    assert!(response.contains("400 Bad Request"), "{response}");
+    assert!(
+        response.contains("invalid model discovery request"),
+        "{response}"
+    );
+    assert!(!response.contains("404 Not Found"), "{response}");
+}
+
+#[test]
+fn managed_daemon_requires_its_token_before_model_discovery() {
+    let body = r#"{"id":"builtin-1","generation":1,"credential":{}}"#;
+    let request = format!(
+        "POST /api/ai/models/discover HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body,
+    );
+    let mut stream = mock_stream(&request);
+    let mut managed = fresh_state();
+    managed.managed_token = Some("managed-secret".into());
+    let state = Mutex::new(managed);
+
+    serve_one(&mut stream, &state, &SseHub::default()).expect("serve_one");
+
+    let response = String::from_utf8_lossy(&stream.output);
+    assert!(response.contains("401 Unauthorized"), "{response}");
+    assert!(
+        !response.contains("invalid model discovery request"),
+        "{response}"
+    );
+}
+
+#[test]
 fn serve_one_browser_json_routes_reject_simple_request_content_types() {
     // Cross-origin "simple requests" (text/plain, form-encoded, or no
     // Content-Type at all) never trigger a CORS preflight, so a drive-by
@@ -137,6 +172,7 @@ fn serve_one_browser_json_routes_reject_simple_request_content_types() {
     for (method, path) in [
         ("POST", "/api/ai/standard"),
         ("POST", "/api/ai/stream"),
+        ("POST", "/api/ai/models/discover"),
         ("POST", "/api/settings/credentials"),
     ] {
         for content_type in ["text/plain", "application/x-www-form-urlencoded"] {

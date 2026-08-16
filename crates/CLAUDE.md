@@ -36,6 +36,8 @@ crates/
 ├── op-collab/            Open, transport-free collaboration protocol + canonical hash + exact document apply (wasm32-clean)
 ├── op-collab-host/       Host-agnostic collaboration session runtime (`CollabRuntime` + `CollabHost`); desktop and the serve-web daemon both drive it
 ├── op-host-native/       Native host lib: WidgetHostNative + skia-safe GL backend (desktop + mobile)
+├── op-engine-ffi/        Player C ABI: embed the canvas in iOS / Android shells (metal / gl / raster surfaces)
+├── op-engine-jni/        Android JNI marshalling layer for op-engine-ffi (engine thread, registry, callbacks)
 ├── op-host-web/          Browser bundle entry: wasm32-unknown-unknown cdylib, CanvasKit renderer
 ├── op-host-desktop/      Desktop binary `openpencil-desktop` (winit + skia-safe GL); also the `--serve-web` daemon
 ├── op-cli/               `op` command-line tool

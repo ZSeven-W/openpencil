@@ -204,8 +204,8 @@ impl<'a> AIChatPlaceholder<'a> {
                 Some(op_editor_core::ButtonPressTarget::ChatFooter(button)) => Some(button),
                 _ => None,
             },
-            examples: example_cards(ui.locale),
-            locale: ui.locale,
+            examples: example_cards(ui.effective_locale()),
+            locale: ui.effective_locale(),
             tabs_snapshot,
             active_tab_index,
             tab_hover: ui.chat_tab_hover,
@@ -549,7 +549,7 @@ fn selection_chip_label_for_state(state: &EditorState) -> Option<String> {
             )
         }
         count => Some(
-            op_i18n::translate(state.editor_ui.locale, "common.selected")
+            op_i18n::translate(state.editor_ui.effective_locale(), "common.selected")
                 .replace("{{count}}", &count.to_string()),
         ),
     }

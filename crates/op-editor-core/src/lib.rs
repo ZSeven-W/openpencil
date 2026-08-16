@@ -15,6 +15,7 @@ mod agent_provider_wire;
 pub mod agent_reveals;
 pub mod agent_settings;
 pub mod agent_settings_acp_connection;
+pub mod agent_settings_builtin_models;
 pub mod agent_settings_builtin_presets;
 pub mod agent_settings_button_state;
 pub mod agent_settings_connection;
@@ -29,6 +30,7 @@ pub mod chat;
 pub mod chat_activity;
 pub mod chat_button_state;
 mod chat_design_apply;
+mod chat_model_mutators;
 pub mod chat_sessions;
 mod chat_title;
 pub mod clipboard;
@@ -40,6 +42,7 @@ pub mod collab_owner_confirm_ui;
 pub mod collab_panel_hover;
 pub mod collab_public_ui;
 pub mod collab_routes;
+mod collab_transport_capabilities;
 mod collab_ui_debug;
 pub mod collab_ui_state;
 pub mod collab_wire;
@@ -70,6 +73,7 @@ pub mod document_install;
 pub mod drag_mutators;
 pub mod edit_transaction;
 pub mod editor_toast;
+pub mod size_class;
 // Runtime-fetched product assets for the browser bundle (native embeds them).
 pub mod editor_ui_state;
 pub mod export_batch;
@@ -146,6 +150,7 @@ pub mod svg_import;
 pub mod svg_path_bounds;
 mod svg_path_data;
 pub mod sync_gate;
+pub mod user_scene_templates;
 pub mod web_assets;
 
 /// Tight source-coordinate bounds for an SVG path-data string.
@@ -243,6 +248,8 @@ mod tests_agent_settings;
 #[cfg(test)]
 mod tests_agent_settings_draft;
 #[cfg(test)]
+mod tests_agent_settings_model_catalog;
+#[cfg(test)]
 mod tests_drag_mutators;
 #[cfg(test)]
 mod tests_geometry;
@@ -261,11 +268,14 @@ pub use acp_agent_presets::{
     ACP_AGENT_PRESETS,
 };
 pub use agent_settings::{
-    AcpAgentConfig, AcpAgentConnectOutcome, AcpAgentConnectPhase, AcpAgentConnectRequest,
-    AcpAgentConnection, AcpAgentField, AcpConnectionType, AgentSettings, AgentSettingsDrag,
-    AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind, ImageGenField,
-    ImageGenProfile, ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli, McpServer,
-    ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection, SettingsFocus,
+    normalize_builtin_models, AcpAgentConfig, AcpAgentConnectOutcome, AcpAgentConnectPhase,
+    AcpAgentConnectRequest, AcpAgentConnection, AcpAgentField, AcpConnectionType, AgentSettings,
+    AgentSettingsDrag, AgentSettingsTab, BuiltinAgentConfig, BuiltinAgentField, BuiltinAgentKind,
+    BuiltinModelCatalog, BuiltinModelCatalogPhase, BuiltinModelCatalogRefreshOutcome,
+    BuiltinModelCatalogRefreshRequest, BuiltinModelCatalogTarget, BuiltinModelOption,
+    ImageGenField, ImageGenProfile, ImageGenProvider, ImageSearchField, ImageTestStatus, McpCli,
+    McpServer, ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection, SettingsFocus,
+    MAX_BUILTIN_AGENT_MODELS, MAX_BUILTIN_MODEL_CHARS,
 };
 pub use agent_settings_builtin_presets::{
     builtin_agent_preset, infer_builtin_agent_preset, normalize_builtin_agent_preset,
@@ -302,6 +312,7 @@ pub use collab_public_ui::{
     CollabConnectErrorUi, CollabConnectionPathUi, CollabInviteCode, CollabPublicSessionUi,
     CollabRelayRegion, MAX_COLLAB_INVITE_CODE_CHARS,
 };
+pub use collab_transport_capabilities::CollabTransportCapabilities;
 pub use collab_ui_state::{
     AuthenticatedCollabSession, CollabAvailability, CollabCanvasPoint, CollabConnectionPhase,
     CollabDiscardedEditUi, CollabNotice, CollabNoticeKind, CollabPanelState, CollabPanelView,

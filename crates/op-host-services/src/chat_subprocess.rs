@@ -43,6 +43,12 @@
 //!   are silently denied; the prompt guard independently forbids them.
 //!   Its NDJSON `text`, `thought`, `end`, and `error` events parse through
 //!   [`crate::chat_grok_stream::parse_grok_stream_line`].
+//! - **DeepSeek Harness (`dsh`)** — one-shot subprocess
+//!   (`dsh --profile headless "<prompt>"`): the whole stdout is the
+//!   answer (passed through verbatim), stderr is retained as
+//!   diagnostics, and the turn rides the crate's widest wall clock.
+//!   The Dsh-specific argv / parser / timeout live in
+//!   [`crate::chat_subprocess_dsh`] (this file sits at the 800-line cap).
 //!
 //! Codex parse-misses are skipped silently (TS parity — TS
 //! drops unparsed lines); generic custom binaries degrade unparsed
@@ -93,38 +99,14 @@ pub enum PromptMode {
     FlagArg(&'static str),
     /// Append `<flag> <private-file>`; stdin gets closed.
     PromptFile(&'static str),
+    /// Append `<prompt>` itself as the final argv element — the CLI's
+    /// interface takes the prompt as a bare trailing argument
+    /// (`dsh --profile headless "<prompt>"`). Stdin gets closed so the
+    /// one-shot CLI cannot fall back into interactive mode. The prompt
+    /// stays visible in argv while the child is alive (same documented
+    /// tradeoff as Antigravity's `-p`).
+    BareArg,
 }
-
-/// TS `DEFAULT_CODEX_TIMEOUT_MS` — the reference client caps a turn
-/// at 15 minutes then SIGTERM.
-const CODEX_TURN_TIMEOUT: Duration = Duration::from_secs(15 * 60);
-
-/// Cap on the retained Codex stderr tail used for error extraction.
-const STDERR_TAIL_CAP: usize = 64 * 1024;
-
-/// Line cap paired with [`STDERR_TAIL_CAP`]. Generous: the Codex error
-/// extractor scans the whole retained blob, and a stack trace is worth
-/// keeping in full when it fits inside the byte budget.
-const STDERR_TAIL_LINES: usize = 2048;
-
-/// Cap on the retained stdout tail — read only on the failure path, for
-/// CLIs that report their diagnosis on stdout. Smaller than the stderr
-/// budget: a healthy turn's stdout is the answer, not diagnostics.
-const STDOUT_TAIL_CAP: usize = 8 * 1024;
-
-/// Line cap paired with [`STDOUT_TAIL_CAP`].
-const STDOUT_TAIL_LINES: usize = 256;
-
-/// How long a reaped turn waits for the stderr drain to reach EOF
-/// before formatting its failure message. The child is already reaped so
-/// its pipe is at EOF and the drain finishes the instant it is polled —
-/// the wait is really for the drain TASK to be scheduled, not for I/O.
-/// Under a saturated runtime (the orchestrator's parallel turns, or the
-/// concurrent stress test) that scheduling latency occasionally ran past
-/// a two-second bound and the tail read back empty, so this is generous:
-/// it only has to outlast scheduler starvation, while still capping a
-/// genuinely wedged reader (a grandchild holding the pipe open).
-const STDERR_DRAIN_GRACE: Duration = Duration::from_secs(30);
 
 /// `ChatProvider` impl that bridges to a CLI binary via stdio.
 /// Construct via [`SubprocessProvider::for_cli`] or
@@ -218,6 +200,17 @@ impl SubprocessProvider {
                 Some("-m"),
                 Vec::new(),
             ),
+            // DeepSeek Harness: one-shot subprocess, prompt as a bare
+            // trailing argv element (its only verified interface), no
+            // model selector. Args / parser / timeout live in the
+            // `chat_subprocess_dsh` sibling (this file sits at the
+            // 800-line cap).
+            CliName::Dsh => (
+                crate::chat_subprocess_dsh::dsh_args(),
+                PromptMode::BareArg,
+                None,
+                Vec::new(),
+            ),
             // Copilot's routed transport is the official SDK
             // (`chat_copilot.rs`); the old `gh-copilot suggest`
             // template was a stale dead end. OpenCode chats over its
@@ -309,32 +302,6 @@ impl SubprocessProvider {
         args.extend(self.tail_args.iter().cloned());
         args
     }
-}
-
-/// Dangerous environment variables that should never be propagated to
-/// the spawned CLI: linker preload paths can hijack execution; PATH
-/// can substitute a malicious binary; runtime-library paths
-/// (NODE_OPTIONS, PYTHONPATH, etc.) can inject code into Node-based
-/// CLIs. Mirrors bartolli/anthropic-agent-sdk's `DANGEROUS_ENV_VARS`.
-/// Used for Claude Code + custom binaries; Codex gets the stricter
-/// TS allowlist (`chat_subprocess_quirks`). Returns the
-/// env-var pairs the child will receive (parent env minus the
-/// dangerous names — preserving every safe var so node version
-/// managers like nvm / volta still pick the right Node).
-fn scrubbed_child_env() -> Vec<(String, String)> {
-    const DANGEROUS: &[&str] = &[
-        "LD_PRELOAD",
-        "LD_LIBRARY_PATH",
-        "DYLD_INSERT_LIBRARIES",
-        "DYLD_LIBRARY_PATH",
-        "NODE_OPTIONS",
-        "PYTHONPATH",
-        "PERL5LIB",
-        "RUBYLIB",
-    ];
-    std::env::vars()
-        .filter(|(k, _)| !DANGEROUS.iter().any(|d| k.eq_ignore_ascii_case(d)))
-        .collect()
 }
 
 impl ChatProvider for SubprocessProvider {
@@ -442,6 +409,13 @@ impl ChatProvider for SubprocessProvider {
                 args_with_prompt.push(flag.into());
                 args_with_prompt.push(prompt.clone());
             }
+            PromptMode::BareArg => {
+                // `dsh --profile headless "<prompt>"`: the prompt is the
+                // final argv element, no flag. Same assembly as
+                // `chat_subprocess_dsh::dsh_turn_args` (which the unit
+                // tests cover).
+                args_with_prompt.push(prompt.clone());
+            }
             PromptMode::PromptFile(flag) => {
                 args_with_prompt.push(flag.into());
                 args_with_prompt.push(
@@ -465,13 +439,14 @@ impl ChatProvider for SubprocessProvider {
             Some(CliName::Antigravity | CliName::GrokBuild) => {
                 safety::child_env(cli).unwrap_or_default()
             }
-            _ => scrubbed_child_env(),
+            _ => crate::chat_spawn::scrubbed_child_env(),
         };
         safety::append_isolated_env(&mut env_pairs, isolation.as_ref());
         let turn_timeout = match cli {
-            Some(CliName::Codex) => Some(CODEX_TURN_TIMEOUT),
+            Some(CliName::Codex) => Some(quirks::CODEX_TURN_TIMEOUT),
             Some(CliName::Antigravity) => Some(safety::ANTIGRAVITY_TIMEOUT),
             Some(CliName::GrokBuild) => Some(safety::GROK_TIMEOUT),
+            Some(CliName::Dsh) => Some(crate::chat_subprocess_dsh::DSH_TIMEOUT),
             _ => None,
         };
         let label = self.label.clone();
@@ -515,8 +490,8 @@ impl ChatProvider for SubprocessProvider {
             // `agy` writes its whole unauthenticated block to stderr
             // and leaves stdout empty). Every CLI now keeps it.
             let stderr_tail = Arc::new(std::sync::Mutex::new(op_util::cli_output::BoundedTail::new(
-                STDERR_TAIL_CAP,
-                STDERR_TAIL_LINES,
+                crate::chat_subprocess_exit::STDERR_TAIL_CAP,
+                crate::chat_subprocess_exit::STDERR_TAIL_LINES,
             )));
             let stderr_drain = child.take_stderr().map(|stderr| {
                 let capture = Arc::clone(&stderr_tail);
@@ -557,6 +532,11 @@ impl ChatProvider for SubprocessProvider {
                     // Prompt is carried in argv; closing stdin prevents a
                     // one-shot CLI from falling back into interactive mode.
                 }
+                PromptMode::BareArg => {
+                    // Prompt rides as the final argv element (dsh's only
+                    // verified one-shot interface); closing stdin keeps a
+                    // one-shot CLI from falling back into interactive mode.
+                }
                 PromptMode::PromptFile(_) => {
                     // Prompt lives in the private isolated workspace.
                 }
@@ -586,7 +566,10 @@ impl ChatProvider for SubprocessProvider {
             // that reports its failure there instead of on stderr still
             // has evidence to show when the exit status is all we get.
             let mut stdout_tail =
-                op_util::cli_output::BoundedTail::new(STDOUT_TAIL_CAP, STDOUT_TAIL_LINES);
+                op_util::cli_output::BoundedTail::new(
+                crate::chat_subprocess_exit::STDOUT_TAIL_CAP,
+                crate::chat_subprocess_exit::STDOUT_TAIL_LINES,
+            );
             loop {
                 // Race the line read against channel closure so the
                 // bridge notices an idle receiver-drop without
@@ -645,6 +628,11 @@ impl ChatProvider for SubprocessProvider {
                                 Some(CliName::Codex) => quirks::parse_codex_line(&line),
                                 Some(CliName::GrokBuild) => {
                                     crate::chat_grok_stream::parse_grok_stream_line(&line)
+                                }
+                                // dsh's whole stdout is the answer: every
+                                // line is text, never an event envelope.
+                                Some(CliName::Dsh) => {
+                                    Some(crate::chat_subprocess_dsh::parse_dsh_line(&line))
                                 }
                                 _ => Some(parse_line(&line)),
                             };
@@ -740,7 +728,7 @@ impl ChatProvider for SubprocessProvider {
             // concurrent test binaries. Bounded: the child is already
             // reaped, so its pipe is at EOF and this returns at once.
             if let Some(drain) = stderr_drain {
-                let _ = tokio::time::timeout(STDERR_DRAIN_GRACE, drain).await;
+                let _ = tokio::time::timeout(crate::chat_subprocess_exit::STDERR_DRAIN_GRACE, drain).await;
             }
             if !emitted_done && !terminal_error {
                 let nonzero = status.as_ref().map(|s| !s.success()).unwrap_or(false);

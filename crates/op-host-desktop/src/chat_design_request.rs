@@ -19,15 +19,7 @@ fn selected_orchestrator_model(state: &EditorState) -> Option<String> {
     if entry.acp_agent_id().is_some() {
         return Some(entry.value.clone());
     }
-    let id = entry.builtin_provider_id.as_deref()?;
-    state
-        .editor_ui
-        .agent_settings
-        .builtin_agents
-        .iter()
-        .find(|agent| agent.id == id)
-        .map(|agent| agent.model.trim().to_string())
-        .filter(|model| !model.is_empty())
+    entry.builtin_model_id().map(str::to_string)
 }
 
 pub(crate) fn build_design_request(
@@ -247,13 +239,16 @@ mod tests {
                 display_name: "MiniMax".into(),
                 kind: BuiltinAgentKind::OpenAiCompat,
                 api_key: "sk-test".into(),
-                model: "MiniMax-M3".into(),
+                models: vec!["MiniMax-M2.7".into(), "MiniMax-M3".into()],
                 base_url: "http://localhost:9".into(),
                 enabled: true,
             });
-        let mut entry = ModelEntry::new(AgentProvider::ClaudeCode, "MiniMax-M3", "MiniMax M3");
-        entry.builtin_provider_id = Some("builtin-1".into());
-        state.chat.available_models = vec![entry];
+        state.chat.available_models = vec![ModelEntry::builtin(
+            AgentProvider::ClaudeCode,
+            "builtin-1",
+            "builtin:builtin-1:MiniMax-M3",
+            "MiniMax M3",
+        )];
         state.chat.selected_model = 0;
 
         let req = build_design_request("draw a dashboard".into(), &state, None);

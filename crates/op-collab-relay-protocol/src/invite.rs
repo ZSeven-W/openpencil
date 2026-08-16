@@ -1,6 +1,7 @@
 use std::fmt;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use zeroize::Zeroizing;
 
 use crate::locator::require_exact;
 use crate::{
@@ -55,9 +56,10 @@ impl RelayInviteV1 {
     }
 
     pub fn to_fragment(&self) -> String {
-        let encoded = URL_SAFE_NO_PAD.encode(self.to_binary());
+        let binary = Zeroizing::new(self.to_binary());
+        let encoded = Zeroizing::new(URL_SAFE_NO_PAD.encode(binary.as_slice()));
         debug_assert!(RELAY_INVITE_PREFIX.len() + encoded.len() <= MAX_INVITE_CHARS);
-        format!("{RELAY_INVITE_PREFIX}{encoded}")
+        format!("{RELAY_INVITE_PREFIX}{}", encoded.as_str())
     }
 
     pub fn from_fragment(fragment: &str) -> Result<Self, RelayProtocolError> {
@@ -78,10 +80,13 @@ impl RelayInviteV1 {
         {
             return Err(RelayProtocolError::InvalidLocatorEncoding);
         }
-        let raw = URL_SAFE_NO_PAD
-            .decode(body)
-            .map_err(|_| RelayProtocolError::InvalidLocatorEncoding)?;
-        if URL_SAFE_NO_PAD.encode(&raw) != body {
+        let raw = Zeroizing::new(
+            URL_SAFE_NO_PAD
+                .decode(body)
+                .map_err(|_| RelayProtocolError::InvalidLocatorEncoding)?,
+        );
+        let canonical = Zeroizing::new(URL_SAFE_NO_PAD.encode(raw.as_slice()));
+        if canonical.as_str() != body {
             return Err(RelayProtocolError::InvalidLocatorEncoding);
         }
         Self::decode_binary(&raw)

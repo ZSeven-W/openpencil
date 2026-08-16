@@ -98,6 +98,24 @@ pub struct ConfiguredBuiltinProvider {
 impl ConfiguredBuiltinProvider {
     /// Build a provider from operator-owned (trusted) configuration.
     pub fn from_builtin_agent(config: &BuiltinAgentConfig) -> Option<Self> {
+        let model = config.first_model()?;
+        Self::from_builtin_agent_with_model(config, model)
+    }
+
+    /// Build a provider for one explicitly selected saved model.
+    ///
+    /// A built-in configuration may expose several models in the picker, but
+    /// every provider request still carries exactly one model id. Keeping the
+    /// membership check at construction prevents a stale or forged picker row
+    /// from borrowing this provider's credential for an unsaved model.
+    pub fn from_builtin_agent_with_model(
+        config: &BuiltinAgentConfig,
+        selected_model: &str,
+    ) -> Option<Self> {
+        let selected_model = selected_model.trim();
+        if !config.ready() || !config.has_model(selected_model) {
+            return None;
+        }
         let configured_base = if config.base_url.trim().is_empty() {
             config.kind.default_base_url()
         } else {
@@ -121,14 +139,14 @@ impl ConfiguredBuiltinProvider {
             }
         };
         let label = if config.display_name.trim().is_empty() {
-            config.model.trim()
+            selected_model
         } else {
             config.display_name.trim()
         };
-        config.ready().then(|| Self {
+        Some(Self {
             kind: config.kind,
             api_key: config.api_key.trim().to_string(),
-            model: config.model.trim().to_string(),
+            model: selected_model.to_string(),
             base_url,
             label: label.to_string(),
             tools: Vec::new(),
@@ -146,7 +164,16 @@ impl ConfiguredBuiltinProvider {
     /// dialed `PublicOnly` (connect-time DNS screening + address pinning)
     /// unless the operator explicitly allowlisted it.
     pub fn from_builtin_agent_for_web(config: &BuiltinAgentConfig) -> Option<Self> {
-        let mut provider = Self::from_builtin_agent(config)?;
+        let model = config.first_model()?;
+        Self::from_builtin_agent_for_web_with_model(config, model)
+    }
+
+    /// Browser-dial-policy variant of [`Self::from_builtin_agent_with_model`].
+    pub fn from_builtin_agent_for_web_with_model(
+        config: &BuiltinAgentConfig,
+        selected_model: &str,
+    ) -> Option<Self> {
+        let mut provider = Self::from_builtin_agent_with_model(config, selected_model)?;
         let allowlist = std::env::var(crate::web_credentials::WEB_AI_ENDPOINT_ALLOWLIST_ENV).ok();
         provider.dial_policy =
             crate::provider_dial::web_dial_policy_for(&provider.base_url, allowlist.as_deref());

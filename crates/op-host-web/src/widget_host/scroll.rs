@@ -199,6 +199,18 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        self.try_scroll_property_panel_2d(x, y, 0.0, delta_y, viewport_width, viewport_height)
+    }
+
+    pub(in crate::widget_host) fn try_scroll_property_panel_2d(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_x: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
         let Some(panel) = PropertyPanel::for_selection(&self.editor_state) else {
             return false;
         };
@@ -242,11 +254,12 @@ impl WidgetHost {
             }
             return true;
         }
-        let Some(dirty) = scroll_flow::scroll_property_panel_body(
+        let Some(dirty) = scroll_flow::scroll_property_panel_body_2d(
             &mut self.editor_state,
             &panel,
             property_rect,
             Point2D::new(x, y),
+            delta_x,
             delta_y,
         ) else {
             return false;

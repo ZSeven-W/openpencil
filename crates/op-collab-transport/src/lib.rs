@@ -10,9 +10,12 @@
 compile_error!("op-collab-transport's `native` feature is not available on wasm32");
 
 mod admission;
+#[cfg(all(feature = "native", target_os = "ios"))]
+mod apple_key_store;
 mod chunk;
 mod config;
 mod connection_limit;
+mod credential_store;
 #[cfg(feature = "mdns")]
 mod discovery;
 mod driver;
@@ -51,6 +54,7 @@ pub use connection_limit::{
     ActiveConnectionGuard, ConnectionCounts, ConnectionLimitError, ConnectionLimiter,
     PendingHandshakeGuard,
 };
+pub use credential_store::{CredentialStore, CredentialStoreKeyStore};
 #[cfg(feature = "mdns")]
 pub use discovery::{
     DiscoveredSession, DiscoveryBrowser, DiscoveryError, DiscoveryPublisher,

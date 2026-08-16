@@ -1,0 +1,21 @@
+[package]
+name = "op-image-enrich"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared image-slot enrichment primitives: target detection, request-mode classification, and result write-back. Used by the desktop image-search session and the headless MCP enrich_images tool."
+
+[lib]
+name = "op_image_enrich"
+path = "src/lib.rs"
+
+[dependencies]
+# Canonical node/schema types the slot predicates walk.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# EditorState + walkers + collab gating for the write-back half.
+op-editor-core = { path = "../op-editor-core" }
+# Layout-scene input for scene-aware target collection.
+op-editor-ui = { path = "../op-editor-ui" }
+# Active-page layout scene resolution for target dimensions.
+op-pen-loader = { path = "../op-pen-loader" }

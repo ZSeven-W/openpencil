@@ -23,6 +23,23 @@ function copyBytes(u8) {
 
 let createWebImageCaches = null;
 
+const TEXT_SCALE_STEPS_PER_OCTAVE = 4;
+
+// Round UP to quarter-octave buckets (about 19% apart). This keeps cached
+// browser-text bitmaps at or above the requested resolution while allowing
+// adjacent continuous-zoom frames to reuse the same raster.
+export function opCkQuantizeTextRasterScale(scale) {
+  const finiteScale = Number.isFinite(scale) && scale > 1 ? scale : 1;
+  const bucket = Math.ceil(
+    Math.log2(finiteScale) * TEXT_SCALE_STEPS_PER_OCTAVE - 1e-9,
+  );
+  let quantized = 2 ** (bucket / TEXT_SCALE_STEPS_PER_OCTAVE);
+  if (quantized < finiteScale) {
+    quantized *= 2 ** (1 / TEXT_SCALE_STEPS_PER_OCTAVE);
+  }
+  return quantized;
+}
+
 export function setImageCacheFactory(factory) {
   createWebImageCaches = factory;
 }
@@ -370,13 +387,17 @@ export async function opCkInit(canvasId) {
     const yScale = Math.hypot(m[1], m[4]);
     return Math.max(1, xScale, yScale);
   };
+  // Continuous zoom used to put the exact floating-point transform in every
+  // browser-text cache key. Quantization lets adjacent frames reuse bitmaps.
+  const browserTextRasterScale = () =>
+    opCkQuantizeTextRasterScale(effectiveTextScale());
   // Text uses a white coverage mask keyed without colour/alpha, then receives
   // a SrcIn tint at draw time so differently coloured runs share a bitmap.
   // Emoji retain their legacy RGBA-keyed, untinted raster path because colour
   // glyphs can ignore fillStyle. Cache-hit reinsertion keeps eviction LRU.
   const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') => {
     if (!browserTextCtx) return null;
-    const ss = effectiveTextScale();
+    const ss = browserTextRasterScale();
     // `family` participates in the key: the same string shaped in two
     // different families is two different bitmaps.
     const key = emoji

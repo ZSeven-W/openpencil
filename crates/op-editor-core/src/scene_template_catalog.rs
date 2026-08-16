@@ -133,6 +133,8 @@ pub fn scene_template_document_route(template_id: &str) -> Option<&'static str> 
         "gridpaper-graphite-deck" => route!("gridpaper-graphite-deck"),
         "dossier-linen-deck" => route!("dossier-linen-deck"),
         "ledger-tick-deck" => route!("ledger-tick-deck"),
+        "brand-concept-sheet" => route!("brand-concept-sheet"),
+        "logo-qa-board" => route!("logo-qa-board"),
         _ => None,
     }
 }
@@ -213,6 +215,8 @@ pub fn scene_template_document(template_id: &str) -> Option<&'static str> {
         "gridpaper-graphite-deck" => template_document!("gridpaper-graphite-deck"),
         "dossier-linen-deck" => template_document!("dossier-linen-deck"),
         "ledger-tick-deck" => template_document!("ledger-tick-deck"),
+        "brand-concept-sheet" => template_document!("brand-concept-sheet"),
+        "logo-qa-board" => template_document!("logo-qa-board"),
         _ => None,
     }
 }

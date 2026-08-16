@@ -30,6 +30,16 @@ const CREDENTIAL_PAYLOAD_VERSION: u32 = 2;
 const STORAGE_KEY: &str = "openpencil-rust-web-settings";
 const CREDENTIAL_STORAGE_KEY: &str = "openpencil-rust-web-credentials";
 
+/// Parse a managed embedding host's locale bootstrap hint. URL decoding uses
+/// the browser-compatible form codec; the accepted values remain the strict
+/// `zh-CN | en-US` bridge contract.
+pub(crate) fn host_locale_from_query(search: &str) -> Option<Locale> {
+    let query = search.strip_prefix('?').unwrap_or(search);
+    url::form_urlencoded::parse(query.as_bytes())
+        .find(|(key, _)| key == "locale")
+        .and_then(|(_, value)| op_editor_core::bridge_protocol::locale_from_wire(value.as_ref()))
+}
+
 /// Restore every setting the partition snapshot owns to its default.
 ///
 /// `apply_payload` only writes fields the stored blob actually carries, so an
@@ -50,6 +60,7 @@ const CREDENTIAL_STORAGE_KEY: &str = "openpencil-rust-web-credentials";
 pub(super) fn reset_account_scoped_settings(state: &mut EditorState) {
     let defaults = op_editor_core::AgentSettings::default();
     let eui = &mut state.editor_ui;
+    eui.agent_settings.clear_builtin_model_catalogs();
     eui.locale = op_editor_core::EditorUiState::default().locale;
     eui.recent_files.clear();
     eui.agent_settings.mcp_server.port = defaults.mcp_server.port;
@@ -154,7 +165,7 @@ pub(crate) struct Fingerprint {
     theme: ThemeMode,
     locale: Locale,
     port: u16,
-    cli: [bool; 12],
+    cli: [bool; 13],
     images_adv: bool,
     auto_update_enabled: bool,
     experimental_features_enabled: bool,
@@ -299,8 +310,8 @@ fn apply_credential_json(
 ) -> Result<(), validation::SettingsValidationError> {
     let value: serde_json::Value = serde_json::from_str(raw)
         .map_err(|error| validation::SettingsValidationError::Json(error.to_string()))?;
-    let payload = validation::credential_payload(&value)?;
-    apply_credential_payload(state, payload);
+    let validated = validation::credential_payload(&value)?;
+    apply_credential_payload(state, validated.payload);
     Ok(())
 }
 
@@ -376,6 +387,7 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
         eui.agent_settings.experimental_features_enabled = enabled;
     }
     if let Some(agents) = payload.builtin_agents {
+        eui.agent_settings.clear_builtin_model_catalogs();
         let agents = agents
             .into_iter()
             .filter_map(builtin_agent_from_payload)
@@ -430,6 +442,7 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
 
 fn apply_credential_payload(state: &mut EditorState, payload: CredentialPayload) {
     let settings = &mut state.editor_ui.agent_settings;
+    settings.clear_builtin_model_catalogs();
     settings.builtin_agents = dedupe_builtin_agents(
         payload
             .builtin_agents
@@ -520,3 +533,7 @@ mod acp_scrub_tests;
 #[cfg(test)]
 #[path = "web_settings_lossless_tests.rs"]
 mod lossless_tests;
+
+#[cfg(test)]
+#[path = "web_settings_disabled_provider_tests.rs"]
+mod disabled_provider_tests;

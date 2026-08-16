@@ -139,6 +139,24 @@ fn for_cli_rejects_opencode_and_copilot() {
 }
 
 #[test]
+fn for_cli_dsh_constructs_the_one_shot_headless_bridge() {
+    // Verified dsh interface: `dsh --profile headless "<prompt>"` —
+    // prompt as a bare trailing argv element, no model selector.
+    let dsh = SubprocessProvider::for_cli(CliName::Dsh).expect("dsh wired");
+    assert!(dsh.binary.ends_with("dsh"), "binary={}", dsh.binary);
+    assert_eq!(dsh.args, ["--profile", "headless"]);
+    assert_eq!(dsh.prompt_mode, PromptMode::BareArg);
+    assert_eq!(dsh.model_flag, None);
+    assert_eq!(dsh.label, "DeepSeek Harness");
+    // No stdin transport: the one-shot CLI gets a closed stdin.
+    let turn = dsh.turn_args(&ChatRequest {
+        user_message: "hi".into(),
+        ..ChatRequest::default()
+    });
+    assert_eq!(turn, vec!["--profile", "headless"]);
+}
+
+#[test]
 fn antigravity_and_grok_use_documented_one_shot_flags() {
     let antigravity = SubprocessProvider::for_cli(CliName::Antigravity).unwrap();
     assert!(antigravity.binary.ends_with("agy"));

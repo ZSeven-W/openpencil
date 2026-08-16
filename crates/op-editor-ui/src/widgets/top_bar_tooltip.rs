@@ -69,7 +69,7 @@ pub fn tooltip_for(ui: &EditorUiState, button: TopBarButton) -> TopBarTooltip {
         TopBarButton::ToggleTheme => (
             // The glyph shows the destination, so the label must too: a
             // Sun in dark mode means "go light".
-            match ui.theme_mode {
+            match ui.effective_theme_mode() {
                 op_editor_core::ThemeMode::Dark => translate(ui, "topbar.lightMode"),
                 op_editor_core::ThemeMode::Light => translate(ui, "topbar.darkMode"),
             },

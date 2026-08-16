@@ -46,6 +46,7 @@ pub(super) fn validate_payload_fields(raw: &serde_json::Value) -> Result<()> {
             "kind",
             "api_key",
             "model",
+            "models",
             "base_url",
             "enabled",
         ],
@@ -195,7 +196,19 @@ fn validate_credential_entries(payload: &SettingsPayload) -> Result<()> {
         SettingsIoError::Lossy
     }
     if let Some(agents) = payload.builtin_agents.as_ref() {
+        let mut ids = std::collections::HashSet::with_capacity(agents.len());
         for agent in agents {
+            if agent.id.trim().is_empty()
+                || agent.id.trim() != agent.id
+                || !ids.insert(agent.id.as_str())
+            {
+                return Err(lossy());
+            }
+            if !op_editor_host_core::settings_payload::builtin_agent_payload_models_are_canonical(
+                agent,
+            ) {
+                return Err(lossy());
+            }
             if !matches!(agent.kind.as_str(), "anthropic" | "openai-compat") {
                 if builtin_agent_from_payload(agent.clone()).is_some() {
                     return Err(lossy());

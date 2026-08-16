@@ -7,44 +7,105 @@
     "message": "捕获当前渲染后的网页，并作为可编辑的设计节点导入 OpenPencil。",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "捕获整页" },
-  "pickButton": { "message": "选中捕获" },
-  "downloadButton": { "message": "下载 .op" },
-  "pickHint": { "message": "点击要捕获的元素" },
-  "pickCancelHint": { "message": "按 Esc 取消" },
-  "endpointLabel": { "message": "OpenPencil 地址" },
-  "endpointHint": { "message": "桌面版：设置 → MCP → 启动服务器（默认端口 3100）。" },
-  "languageLabel": { "message": "语言" },
-  "statusIdle": { "message": "就绪。" },
-  "statusCapturing": { "message": "正在捕获页面…" },
-  "statusTransferring": { "message": "正在传输快照（$1）…" },
-  "statusSending": { "message": "正在发送到 OpenPencil…" },
-  "statusImported": { "message": "已导入 $1 个节点到 OpenPencil。" },
-  "statusSendingAccount": { "message": "正在发送到我的账号…" },
-  "statusSentToAccount": { "message": "已发送到我的账号：$1" },
-  "statusSentLocalFallback": { "message": "账号会话已过期，已改为发送到本机的 OpenPencil：导入 $1 个节点。" },
-  "statusDownloaded": { "message": "已保存 $1。" },
-  "statusPicked": { "message": "已捕获 $1。$2" },
-  "statusPickCancelled": { "message": "已取消选中捕获。" },
-  "statusTruncated": { "message": "提示：页面触发了提取器的 20000 节点上限，本次捕获不完整。" },
-  "errorNoTab": { "message": "没有活动标签页。" },
-  "errorRestrictedTab": { "message": "Chrome 不允许扩展在此页面运行。请打开普通的 http(s) 页面后重试。" },
-  "errorInjection": { "message": "无法在此标签页运行捕获脚本：$1" },
-  "errorNoSnapshot": { "message": "提取器没有产出快照（页面可能没有可见的 body）。" },
-  "errorChunkLost": { "message": "快照在传输过程中丢失（页面可能已跳转）。请重试。" },
-  "errorEndpoint": { "message": "地址必须是本机回环地址加端口——127.0.0.1:3100、localhost:3100 或 [::1]:3100。" },
+  "captureButton": {
+    "message": "捕获整页"
+  },
+  "pickButton": {
+    "message": "选中捕获"
+  },
+  "downloadButton": {
+    "message": "下载 .op"
+  },
+  "pickHint": {
+    "message": "点击要捕获的元素"
+  },
+  "pickCancelHint": {
+    "message": "按 Esc 取消"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil 地址"
+  },
+  "endpointHint": {
+    "message": "桌面版：设置 → MCP → 启动服务器（默认端口 3100）。"
+  },
+  "languageLabel": {
+    "message": "语言"
+  },
+  "statusIdle": {
+    "message": "就绪。"
+  },
+  "statusCapturing": {
+    "message": "正在捕获页面…"
+  },
+  "statusTransferring": {
+    "message": "正在传输快照（$1）…"
+  },
+  "statusSending": {
+    "message": "正在发送到 OpenPencil…"
+  },
+  "statusImported": {
+    "message": "已导入 $1 个节点到 OpenPencil。"
+  },
+  "statusSendingAccount": {
+    "message": "正在发送到我的账号…"
+  },
+  "statusSentToAccount": {
+    "message": "已发送到我的账号：$1"
+  },
+  "statusSentLocalFallback": {
+    "message": "账号会话已过期，已改为发送到本机的 OpenPencil：导入 $1 个节点。"
+  },
+  "statusDownloaded": {
+    "message": "已保存 $1。"
+  },
+  "statusPicked": {
+    "message": "已捕获 $1。$2"
+  },
+  "statusPickCancelled": {
+    "message": "已取消选中捕获。"
+  },
+  "statusTruncated": {
+    "message": "提示：页面触发了提取器的 40000 节点上限，本次捕获不完整。"
+  },
+  "errorNoTab": {
+    "message": "没有活动标签页。"
+  },
+  "errorRestrictedTab": {
+    "message": "Chrome 不允许扩展在此页面运行。请打开普通的 http(s) 页面后重试。"
+  },
+  "errorInjection": {
+    "message": "无法在此标签页运行捕获脚本：$1"
+  },
+  "errorNoSnapshot": {
+    "message": "提取器没有产出快照（页面可能没有可见的 body）。"
+  },
+  "errorChunkLost": {
+    "message": "快照在传输过程中丢失（页面可能已跳转）。请重试。"
+  },
+  "errorEndpoint": {
+    "message": "地址必须是本机回环地址加端口——127.0.0.1:3100、localhost:3100 或 [::1]:3100。"
+  },
   "errorOffline": {
     "message": "无法连接 $1。请启动 OpenPencil 桌面版并在 设置 → MCP 中启动服务器，或运行：openpencil-desktop --serve-web 3100"
   },
-  "errorTimeout": { "message": "$1 已建立连接，但 $2 秒内没有响应。应用可能正忙或已卡住，请检查后重试。" },
+  "errorTimeout": {
+    "message": "$1 已建立连接，但 $2 秒内没有响应。应用可能正忙或已卡住，请检查后重试。"
+  },
   "errorNoIngress": {
     "message": "当前 OpenPencil 版本没有扩展入口（$1）。请升级应用，或使用「下载 .op」后在 OpenPencil 中打开该文件"
   },
   "errorTooLarge": {
     "message": "本次捕获超过 $1 MB，超出 OpenPencil 快照入口的上限。请使用「下载 .op」，然后在 OpenPencil 中打开该文件"
   },
-  "errorImport": { "message": "OpenPencil 拒绝了该快照：$1" },
-  "errorDownload": { "message": "下载失败：$1" },
+  "errorAccountTooLarge": {
+    "message": "本次捕获超过 $1 MB，超出账号收件箱的上限。请改为发送到本设备。"
+  },
+  "errorImport": {
+    "message": "OpenPencil 拒绝了该快照：$1"
+  },
+  "errorDownload": {
+    "message": "下载失败：$1"
+  },
   "errorCoreMissing": {
     "message": "扩展尚未构建。请运行 packages/op-chrome-extension/scripts/build-wasm.sh，然后在扩展卡片上点击「重新加载」。（$1）"
   },
@@ -54,24 +115,64 @@
   "errorPickUnavailable": {
     "message": "无法进行选中捕获：扩展的后台 worker 未运行。请在 chrome://extensions 的扩展卡片上查看报错，重新运行 build-wasm.sh 后点击「重新加载」。（$1）"
   },
-  "accountSignIn": { "message": "登录" },
-  "accountSignOut": { "message": "退出登录" },
-  "accountSignInOpened": { "message": "请在新打开的页面中完成登录，然后重新打开此弹窗。" },
-  "accountSignedOut": { "message": "已退出 OpenPencil 账号。" },
-  "accountSignOutManual": { "message": "请在新打开的账号页面中完成退出登录。" },
-  "accountUnavailable": { "message": "无法连接到你的 OpenPencil 账号：$1" },
-  "errorAccountSignedOut": { "message": "OpenPencil 账号会话已过期。请重新登录后再试一次。" },
-  "errorAccountForbidden": { "message": "Hub 拒绝了本次上传的来源或会话令牌。请重新登录后再试一次。($1)" },
-  "errorAccountQuota": { "message": "账号收件箱已满——最多保存 $1 个快照或 $2 MB。请先在账号页面删除一些，然后重试。($3)" },
-  "errorAccountRateLimited": { "message": "上传到账号的次数过多，请稍后再试。($1)" },
-  "errorAccountRateLimitedMinutes": { "message": "上传到账号的次数过多，请约 $1 分钟后再试。" },
-  "errorAccountRateLimitedSeconds": { "message": "上传到账号的次数过多，请约 $1 秒后再试。" },
-  "errorAccountRejected": { "message": "OpenPencil 账号拒绝了这份快照：$1" },
-  "errorAccountUnavailable": { "message": "OpenPencil 账号当前无法接收捕获（$1）。请稍后再试，或改发到本机的 OpenPencil。" },
-  "regionLabel": { "message": "区域" },
-  "regionCn": { "message": "中国" },
-  "regionGlobal": { "message": "全球" },
-  "deliveryLabel": { "message": "发送到" },
-  "deliveryLocal": { "message": "本机的 OpenPencil" },
-  "deliveryAccount": { "message": "我的 OpenPencil 账号" }
+  "accountSignIn": {
+    "message": "登录"
+  },
+  "accountSignOut": {
+    "message": "退出登录"
+  },
+  "accountSignInOpened": {
+    "message": "请在新打开的页面中完成登录，然后重新打开此弹窗。"
+  },
+  "accountSignedOut": {
+    "message": "已退出 OpenPencil 账号。"
+  },
+  "accountSignOutManual": {
+    "message": "请在新打开的账号页面中完成退出登录。"
+  },
+  "accountUnavailable": {
+    "message": "无法连接到你的 OpenPencil 账号：$1"
+  },
+  "errorAccountSignedOut": {
+    "message": "OpenPencil 账号会话已过期。请重新登录后再试一次。"
+  },
+  "errorAccountForbidden": {
+    "message": "Hub 拒绝了本次上传的来源或会话令牌。请重新登录后再试一次。($1)"
+  },
+  "errorAccountQuota": {
+    "message": "账号收件箱已满——最多保存 $1 个快照或 $2 MB。请先在账号页面删除一些，然后重试。($3)"
+  },
+  "errorAccountRateLimited": {
+    "message": "上传到账号的次数过多，请稍后再试。($1)"
+  },
+  "errorAccountRateLimitedMinutes": {
+    "message": "上传到账号的次数过多，请约 $1 分钟后再试。"
+  },
+  "errorAccountRateLimitedSeconds": {
+    "message": "上传到账号的次数过多，请约 $1 秒后再试。"
+  },
+  "errorAccountRejected": {
+    "message": "OpenPencil 账号拒绝了这份快照：$1"
+  },
+  "errorAccountUnavailable": {
+    "message": "OpenPencil 账号当前无法接收捕获（$1）。请稍后再试，或改发到本机的 OpenPencil。"
+  },
+  "regionLabel": {
+    "message": "区域"
+  },
+  "regionCn": {
+    "message": "中国"
+  },
+  "regionGlobal": {
+    "message": "全球"
+  },
+  "deliveryLabel": {
+    "message": "发送到"
+  },
+  "deliveryLocal": {
+    "message": "本机的 OpenPencil"
+  },
+  "deliveryAccount": {
+    "message": "我的 OpenPencil 账号"
+  }
 }

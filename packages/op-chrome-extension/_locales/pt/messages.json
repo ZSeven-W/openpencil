@@ -7,37 +7,75 @@
     "message": "Capture a página renderizada e importe-a para o OpenPencil como nós de design editáveis.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Capturar página inteira" },
-  "pickButton": { "message": "Capturar elemento" },
-  "downloadButton": { "message": "Baixar .op" },
-  "pickHint": { "message": "Clique em um elemento para capturá-lo" },
-  "pickCancelHint": { "message": "Esc para cancelar" },
-  "endpointLabel": { "message": "Endereço do OpenPencil" },
+  "captureButton": {
+    "message": "Capturar página inteira"
+  },
+  "pickButton": {
+    "message": "Capturar elemento"
+  },
+  "downloadButton": {
+    "message": "Baixar .op"
+  },
+  "pickHint": {
+    "message": "Clique em um elemento para capturá-lo"
+  },
+  "pickCancelHint": {
+    "message": "Esc para cancelar"
+  },
+  "endpointLabel": {
+    "message": "Endereço do OpenPencil"
+  },
   "endpointHint": {
     "message": "Aplicativo de desktop: Configurações → MCP → inicie o servidor (porta padrão 3100)."
   },
-  "languageLabel": { "message": "Idioma" },
-  "statusIdle": { "message": "Pronto." },
-  "statusCapturing": { "message": "Capturando a página…" },
-  "statusTransferring": { "message": "Transferindo a captura ($1)…" },
-  "statusSending": { "message": "Enviando para o OpenPencil…" },
-  "statusImported": { "message": "$1 nós importados para o OpenPencil." },
-  "statusSendingAccount": { "message": "Enviando para a sua conta OpenPencil…" },
-  "statusSentToAccount": { "message": "Enviado para a sua conta OpenPencil: $1" },
+  "languageLabel": {
+    "message": "Idioma"
+  },
+  "statusIdle": {
+    "message": "Pronto."
+  },
+  "statusCapturing": {
+    "message": "Capturando a página…"
+  },
+  "statusTransferring": {
+    "message": "Transferindo a captura ($1)…"
+  },
+  "statusSending": {
+    "message": "Enviando para o OpenPencil…"
+  },
+  "statusImported": {
+    "message": "$1 nós importados para o OpenPencil."
+  },
+  "statusSendingAccount": {
+    "message": "Enviando para a sua conta OpenPencil…"
+  },
+  "statusSentToAccount": {
+    "message": "Enviado para a sua conta OpenPencil: $1"
+  },
   "statusSentLocalFallback": {
     "message": "A sessão da sua conta tinha expirado, então isto foi para o OpenPencil deste computador: $1 nós importados."
   },
-  "statusDownloaded": { "message": "$1 salvo." },
-  "statusPicked": { "message": "$1 capturado. $2" },
-  "statusPickCancelled": { "message": "Captura de elemento cancelada." },
-  "statusTruncated": {
-    "message": "Observação: a página atingiu o limite de 20.000 nós do extrator, então a captura está incompleta."
+  "statusDownloaded": {
+    "message": "$1 salvo."
   },
-  "errorNoTab": { "message": "Nenhuma aba ativa." },
+  "statusPicked": {
+    "message": "$1 capturado. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Captura de elemento cancelada."
+  },
+  "statusTruncated": {
+    "message": "Observação: a página atingiu o limite de 40.000 nós do extrator, então a captura está incompleta."
+  },
+  "errorNoTab": {
+    "message": "Nenhuma aba ativa."
+  },
   "errorRestrictedTab": {
     "message": "O Chrome não permite que extensões sejam executadas nesta página. Abra uma página http(s) comum e tente novamente."
   },
-  "errorInjection": { "message": "Não foi possível executar o script de captura nesta aba: $1" },
+  "errorInjection": {
+    "message": "Não foi possível executar o script de captura nesta aba: $1"
+  },
   "errorNoSnapshot": {
     "message": "O extrator não produziu nenhuma captura (a página pode não ter um body visível)."
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "Esta captura é maior que $1 MB, e a rota de capturas do OpenPencil a recusa. Use “Baixar .op” e abra o arquivo no OpenPencil"
   },
-  "errorImport": { "message": "O OpenPencil recusou a captura: $1" },
-  "errorDownload": { "message": "Falha no download: $1" },
+  "errorAccountTooLarge": {
+    "message": "Esta captura é maior que $1 MB, e a caixa de entrada da conta a recusa. Envie para este dispositivo em vez disso."
+  },
+  "errorImport": {
+    "message": "O OpenPencil recusou a captura: $1"
+  },
+  "errorDownload": {
+    "message": "Falha no download: $1"
+  },
   "errorCoreMissing": {
     "message": "Esta extensão não foi compilada. Execute packages/op-chrome-extension/scripts/build-wasm.sh e clique em Atualizar no cartão da extensão. ($1)"
   },
@@ -70,14 +115,24 @@
   "errorPickUnavailable": {
     "message": "A captura de elemento está indisponível: o service worker da extensão não está em execução. Verifique o erro no cartão da extensão em chrome://extensions, execute build-wasm.sh novamente e clique em Atualizar. ($1)"
   },
-  "accountSignIn": { "message": "Entrar" },
-  "accountSignOut": { "message": "Sair" },
+  "accountSignIn": {
+    "message": "Entrar"
+  },
+  "accountSignOut": {
+    "message": "Sair"
+  },
   "accountSignInOpened": {
     "message": "Conclua o login na página que acabou de abrir e reabra esta janela."
   },
-  "accountSignedOut": { "message": "Sessão encerrada na sua conta OpenPencil." },
-  "accountSignOutManual": { "message": "Conclua a saída na página da conta que acabou de abrir." },
-  "accountUnavailable": { "message": "Não foi possível acessar sua conta OpenPencil: $1" },
+  "accountSignedOut": {
+    "message": "Sessão encerrada na sua conta OpenPencil."
+  },
+  "accountSignOutManual": {
+    "message": "Conclua a saída na página da conta que acabou de abrir."
+  },
+  "accountUnavailable": {
+    "message": "Não foi possível acessar sua conta OpenPencil: $1"
+  },
   "errorAccountSignedOut": {
     "message": "A sessão da sua conta OpenPencil expirou. Entre novamente e tente outra vez."
   },
@@ -96,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Envios demais para a sua conta. Tente novamente em cerca de $1 segundos."
   },
-  "errorAccountRejected": { "message": "A sua conta OpenPencil recusou a captura: $1" },
+  "errorAccountRejected": {
+    "message": "A sua conta OpenPencil recusou a captura: $1"
+  },
   "errorAccountUnavailable": {
     "message": "A sua conta OpenPencil não consegue receber capturas agora ($1). Tente mais tarde ou envie para o OpenPencil deste computador."
   },
-  "regionLabel": { "message": "Região" },
-  "regionCn": { "message": "China" },
-  "regionGlobal": { "message": "Global" },
-  "deliveryLabel": { "message": "Enviar para" },
-  "deliveryLocal": { "message": "OpenPencil neste computador" },
-  "deliveryAccount": { "message": "Minha conta OpenPencil" }
+  "regionLabel": {
+    "message": "Região"
+  },
+  "regionCn": {
+    "message": "China"
+  },
+  "regionGlobal": {
+    "message": "Global"
+  },
+  "deliveryLabel": {
+    "message": "Enviar para"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil neste computador"
+  },
+  "deliveryAccount": {
+    "message": "Minha conta OpenPencil"
+  }
 }

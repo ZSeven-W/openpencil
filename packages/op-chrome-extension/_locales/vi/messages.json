@@ -7,37 +7,75 @@
     "message": "Chụp lại trang web đúng như đang hiển thị và nhập vào OpenPencil dưới dạng các nút thiết kế có thể chỉnh sửa.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Chụp toàn trang" },
-  "pickButton": { "message": "Chụp phần tử" },
-  "downloadButton": { "message": "Tải .op" },
-  "pickHint": { "message": "Nhấp vào phần tử cần chụp" },
-  "pickCancelHint": { "message": "Nhấn Esc để huỷ" },
-  "endpointLabel": { "message": "Địa chỉ OpenPencil" },
+  "captureButton": {
+    "message": "Chụp toàn trang"
+  },
+  "pickButton": {
+    "message": "Chụp phần tử"
+  },
+  "downloadButton": {
+    "message": "Tải .op"
+  },
+  "pickHint": {
+    "message": "Nhấp vào phần tử cần chụp"
+  },
+  "pickCancelHint": {
+    "message": "Nhấn Esc để huỷ"
+  },
+  "endpointLabel": {
+    "message": "Địa chỉ OpenPencil"
+  },
   "endpointHint": {
     "message": "Ứng dụng máy tính: Cài đặt → MCP → khởi động máy chủ (cổng mặc định 3100)."
   },
-  "languageLabel": { "message": "Ngôn ngữ" },
-  "statusIdle": { "message": "Sẵn sàng." },
-  "statusCapturing": { "message": "Đang chụp trang…" },
-  "statusTransferring": { "message": "Đang truyền ảnh chụp ($1)…" },
-  "statusSending": { "message": "Đang gửi tới OpenPencil…" },
-  "statusImported": { "message": "Đã nhập $1 nút vào OpenPencil." },
-  "statusSendingAccount": { "message": "Đang gửi tới tài khoản OpenPencil của bạn…" },
-  "statusSentToAccount": { "message": "Đã gửi tới tài khoản OpenPencil của bạn: $1" },
+  "languageLabel": {
+    "message": "Ngôn ngữ"
+  },
+  "statusIdle": {
+    "message": "Sẵn sàng."
+  },
+  "statusCapturing": {
+    "message": "Đang chụp trang…"
+  },
+  "statusTransferring": {
+    "message": "Đang truyền ảnh chụp ($1)…"
+  },
+  "statusSending": {
+    "message": "Đang gửi tới OpenPencil…"
+  },
+  "statusImported": {
+    "message": "Đã nhập $1 nút vào OpenPencil."
+  },
+  "statusSendingAccount": {
+    "message": "Đang gửi tới tài khoản OpenPencil của bạn…"
+  },
+  "statusSentToAccount": {
+    "message": "Đã gửi tới tài khoản OpenPencil của bạn: $1"
+  },
   "statusSentLocalFallback": {
     "message": "Phiên đăng nhập của tài khoản đã hết hạn nên ảnh chụp được gửi tới OpenPencil trên máy này: đã nhập $1 nút."
   },
-  "statusDownloaded": { "message": "Đã lưu $1." },
-  "statusPicked": { "message": "Đã chụp $1. $2" },
-  "statusPickCancelled": { "message": "Đã huỷ chụp phần tử." },
-  "statusTruncated": {
-    "message": "Lưu ý: trang đã chạm giới hạn 20.000 nút của bộ trích xuất nên ảnh chụp chưa đầy đủ."
+  "statusDownloaded": {
+    "message": "Đã lưu $1."
   },
-  "errorNoTab": { "message": "Không có thẻ nào đang hoạt động." },
+  "statusPicked": {
+    "message": "Đã chụp $1. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Đã huỷ chụp phần tử."
+  },
+  "statusTruncated": {
+    "message": "Lưu ý: trang đã chạm giới hạn 40.000 nút của bộ trích xuất nên ảnh chụp chưa đầy đủ."
+  },
+  "errorNoTab": {
+    "message": "Không có thẻ nào đang hoạt động."
+  },
   "errorRestrictedTab": {
     "message": "Chrome không cho phép tiện ích chạy trên trang này. Hãy mở một trang http(s) thông thường rồi thử lại."
   },
-  "errorInjection": { "message": "Không chạy được tập lệnh chụp trong thẻ này: $1" },
+  "errorInjection": {
+    "message": "Không chạy được tập lệnh chụp trong thẻ này: $1"
+  },
   "errorNoSnapshot": {
     "message": "Bộ trích xuất không tạo ra ảnh chụp nào (trang có thể không có body hiển thị)."
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "Ảnh chụp này lớn hơn $1 MB, vượt mức mà tuyến ảnh chụp của OpenPencil chấp nhận. Hãy dùng “Tải .op”, rồi mở tệp trong OpenPencil"
   },
-  "errorImport": { "message": "OpenPencil đã từ chối ảnh chụp: $1" },
-  "errorDownload": { "message": "Tải xuống thất bại: $1" },
+  "errorAccountTooLarge": {
+    "message": "Ảnh chụp này lớn hơn $1 MB, vượt mức mà hộp thư tài khoản chấp nhận. Hãy gửi về thiết bị này thay thế."
+  },
+  "errorImport": {
+    "message": "OpenPencil đã từ chối ảnh chụp: $1"
+  },
+  "errorDownload": {
+    "message": "Tải xuống thất bại: $1"
+  },
   "errorCoreMissing": {
     "message": "Tiện ích này chưa được dựng. Hãy chạy packages/op-chrome-extension/scripts/build-wasm.sh, rồi nhấn Tải lại trên thẻ tiện ích. ($1)"
   },
@@ -70,14 +115,24 @@
   "errorPickUnavailable": {
     "message": "Không dùng được chức năng chụp phần tử: worker nền của tiện ích không chạy. Hãy kiểm tra lỗi trên thẻ tiện ích trong chrome://extensions, chạy lại build-wasm.sh rồi nhấn Tải lại. ($1)"
   },
-  "accountSignIn": { "message": "Đăng nhập" },
-  "accountSignOut": { "message": "Đăng xuất" },
+  "accountSignIn": {
+    "message": "Đăng nhập"
+  },
+  "accountSignOut": {
+    "message": "Đăng xuất"
+  },
   "accountSignInOpened": {
     "message": "Hoàn tất đăng nhập ở trang vừa mở, sau đó mở lại cửa sổ này."
   },
-  "accountSignedOut": { "message": "Đã đăng xuất khỏi tài khoản OpenPencil." },
-  "accountSignOutManual": { "message": "Hoàn tất đăng xuất ở trang tài khoản vừa mở." },
-  "accountUnavailable": { "message": "Không kết nối được tới tài khoản OpenPencil của bạn: $1" },
+  "accountSignedOut": {
+    "message": "Đã đăng xuất khỏi tài khoản OpenPencil."
+  },
+  "accountSignOutManual": {
+    "message": "Hoàn tất đăng xuất ở trang tài khoản vừa mở."
+  },
+  "accountUnavailable": {
+    "message": "Không kết nối được tới tài khoản OpenPencil của bạn: $1"
+  },
   "errorAccountSignedOut": {
     "message": "Phiên đăng nhập tài khoản OpenPencil đã hết hạn. Hãy đăng nhập lại rồi thử lại."
   },
@@ -96,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Tải lên tài khoản quá nhiều lần. Hãy thử lại sau khoảng $1 giây."
   },
-  "errorAccountRejected": { "message": "Tài khoản OpenPencil của bạn đã từ chối ảnh chụp: $1" },
+  "errorAccountRejected": {
+    "message": "Tài khoản OpenPencil của bạn đã từ chối ảnh chụp: $1"
+  },
   "errorAccountUnavailable": {
     "message": "Tài khoản OpenPencil của bạn hiện không thể nhận ảnh chụp ($1). Hãy thử lại sau, hoặc gửi tới OpenPencil trên máy này."
   },
-  "regionLabel": { "message": "Khu vực" },
-  "regionCn": { "message": "Trung Quốc" },
-  "regionGlobal": { "message": "Toàn cầu" },
-  "deliveryLabel": { "message": "Gửi tới" },
-  "deliveryLocal": { "message": "OpenPencil trên máy này" },
-  "deliveryAccount": { "message": "Tài khoản OpenPencil của tôi" }
+  "regionLabel": {
+    "message": "Khu vực"
+  },
+  "regionCn": {
+    "message": "Trung Quốc"
+  },
+  "regionGlobal": {
+    "message": "Toàn cầu"
+  },
+  "deliveryLabel": {
+    "message": "Gửi tới"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil trên máy này"
+  },
+  "deliveryAccount": {
+    "message": "Tài khoản OpenPencil của tôi"
+  }
 }

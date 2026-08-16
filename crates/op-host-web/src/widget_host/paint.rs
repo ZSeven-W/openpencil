@@ -649,7 +649,7 @@ impl WidgetHost {
             op_editor_ui::widgets::file_drop_overlay::paint_file_drop_overlay(
                 &mut *backend,
                 &self.theme,
-                self.editor_state.editor_ui.locale,
+                self.editor_state.editor_ui.effective_locale(),
                 drop_rect,
                 // The browser host has no drag-position stream yet, so it can
                 // never resolve a node target to ring.

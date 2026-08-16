@@ -360,7 +360,7 @@ fn builtin_provider_menu_selects_ts_preset_for_draft() {
         .expect("draft remains open");
     assert_eq!(draft.preset, BuiltinAgentPresetKey::MiniMax);
     assert_eq!(draft.display_name, "MiniMax");
-    assert_eq!(draft.model, "MiniMax-M3");
+    assert_eq!(draft.models, ["MiniMax-M3"]);
     assert_eq!(draft.base_url, "https://api.minimaxi.com/anthropic");
 }
 

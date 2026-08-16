@@ -10,7 +10,7 @@
   var requestedRoot =
     options && options.root && options.root.nodeType === 1 ? options.root : null;
 
-  var MAX_NODES = 20000;
+  var MAX_NODES = 40000;
   var MAX_IMAGE_EDGE = 2048;
   var MAX_IMAGE_DATA_BYTES = 24 * 1024 * 1024;
   var GRAY_PLACEHOLDER =

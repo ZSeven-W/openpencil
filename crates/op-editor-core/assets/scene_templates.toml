@@ -31,7 +31,6 @@ tags = ["教程", "步骤", "小红书", "tutorial", "howto"]
 frames = 5
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "knowledge-carousel"
 scene = "carousel"
@@ -43,7 +42,6 @@ tags = ["知识", "观点", "轮播", "小红书", "carousel"]
 frames = 5
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "slide-deck"
 scene = "slides"
@@ -56,7 +54,6 @@ frames = 6
 frame_width = 1920
 frame_height = 1080
 style_guide = "corporate-blue-light"
-
 [[template]]
 id = "knowledge-card-vertical"
 scene = "card"
@@ -68,7 +65,6 @@ tags = ["卡片", "知识", "小红书", "图文", "card", "note"]
 frames = 1
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "knowledge-card-square"
 scene = "card"
@@ -80,7 +76,6 @@ tags = ["卡片", "知识", "方形", "公众号", "card", "square"]
 frames = 1
 frame_width = 1080
 frame_height = 1080
-
 [[template]]
 id = "before-after"
 scene = "comparison"
@@ -92,7 +87,6 @@ tags = ["对比", "前后", "复盘", "comparison", "before after"]
 frames = 1
 frame_width = 1600
 frame_height = 900
-
 [[template]]
 id = "pitch-deck-dark"
 scene = "slides"
@@ -105,7 +99,6 @@ frames = 6
 frame_width = 1920
 frame_height = 1080
 style_guide = "midnight-minimal-dark"
-
 [[template]]
 id = "lecture-deck-light"
 scene = "slides"
@@ -118,7 +111,6 @@ frames = 6
 frame_width = 1920
 frame_height = 1080
 style_guide = "education-friendly-light"
-
 [[template]]
 id = "minimal-keynote"
 scene = "slides"
@@ -131,7 +123,6 @@ frames = 9
 frame_width = 1920
 frame_height = 1080
 style_guide = "portfolio-minimal-light"
-
 [[template]]
 id = "gradient-tech"
 scene = "slides"
@@ -144,7 +135,6 @@ frames = 6
 frame_width = 1920
 frame_height = 1080
 style_guide = "cyber-gradient-dark"
-
 [[template]]
 id = "saas-landing-orange"
 scene = "web"
@@ -157,7 +147,6 @@ frames = 1
 frame_width = 1200
 frame_height = 3240
 style_guide = "editorial-orange-light"
-
 [[template]]
 id = "product-landing-light"
 scene = "web"
@@ -170,7 +159,6 @@ frames = 1
 frame_width = 1200
 frame_height = 5374
 style_guide = "broadsheet-lime-light"
-
 [[template]]
 id = "punch-quote-card"
 scene = "card"
@@ -182,7 +170,6 @@ tags = ["卡片", "金句", "语录", "观点", "深色", "小红书", "card", "
 frames = 1
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "journal-checklist-card"
 scene = "card"
@@ -194,7 +181,6 @@ tags = ["卡片", "清单", "待办", "计划", "知识库", "小红书", "card"
 frames = 1
 frame_width = 1080
 frame_height = 1350
-
 [[template]]
 id = "data-report-infographic"
 scene = "infographic"
@@ -206,7 +192,6 @@ tags = ["信息图", "长图", "数据", "图表", "报告", "复盘", "infograp
 frames = 1
 frame_width = 1080
 frame_height = 2684
-
 [[template]]
 id = "steps-flow-infographic"
 scene = "infographic"
@@ -218,7 +203,6 @@ tags = ["信息图", "长图", "流程", "步骤", "教程", "攻略", "infograp
 frames = 1
 frame_width = 1080
 frame_height = 3085
-
 [[template]]
 id = "event-poster-deck"
 scene = "slides"
@@ -231,7 +215,6 @@ frames = 6
 frame_width = 1920
 frame_height = 1080
 style_guide = "bauhaus-geometric-light"
-
 [[template]]
 id = "pitfall-list-infographic"
 scene = "infographic"
@@ -248,7 +231,6 @@ frame_height = 3226
 # 以下六套各是「一个主题 × 一个配方」的交点（card-system-0808.md §3 / §4.1）。
 # 主题给色彩、字体、材质、装饰语言；配方给信息层级与网格占位。它们同时是
 # 模板和体系的样张 —— 主题色板改了，这里必须跟着重出。
-
 [[template]]
 id = "spine-culture-card"
 scene = "card"
@@ -260,7 +242,6 @@ tags = ["卡片", "竖排", "文化", "封面", "深色", "小红书", "card", "
 frames = 1
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "metric-single-card"
 scene = "card"
@@ -272,7 +253,6 @@ tags = ["卡片", "数据", "数字", "结论", "极简", "方形", "card", "met
 frames = 1
 frame_width = 1080
 frame_height = 1080
-
 [[template]]
 id = "quote-frame-card"
 scene = "card"
@@ -284,7 +264,6 @@ tags = ["卡片", "引用", "书摘", "金句", "青绿", "小红书", "card", "
 frames = 1
 frame_width = 1080
 frame_height = 1350
-
 [[template]]
 id = "daily-sign-card"
 scene = "card"
@@ -296,7 +275,6 @@ tags = ["卡片", "日签", "一句话", "留白", "园林", "品牌", "card", "
 frames = 1
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "price-tier-card"
 scene = "card"
@@ -308,7 +286,6 @@ tags = ["卡片", "价格", "价目", "促销", "门店", "霓虹", "深色", "c
 frames = 1
 frame_width = 1080
 frame_height = 1080
-
 [[template]]
 id = "notice-board-card"
 scene = "card"
@@ -324,7 +301,6 @@ frame_height = 1350
 # ── 信息图档 · 第二批（+7）────────────────────────────────────────
 # 与已有三张共用信息图语法（深色页头 → 若干区块 → 深色收尾），各自答一个
 # 不同的阅读动机；每个生成器的模块注释里有对最近邻的差异论证。
-
 [[template]]
 id = "milestone-timeline-infographic"
 scene = "infographic"
@@ -336,7 +312,6 @@ tags = ["信息图", "长图", "时间线", "历程", "复盘", "大事记", "in
 frames = 1
 frame_width = 1080
 frame_height = 3018
-
 [[template]]
 id = "concept-contrast-infographic"
 scene = "infographic"
@@ -348,7 +323,6 @@ tags = ["信息图", "长图", "对比", "概念", "科普", "辨析", "infograp
 frames = 1
 frame_width = 1080
 frame_height = 3060
-
 [[template]]
 id = "ranking-board-infographic"
 scene = "infographic"
@@ -360,7 +334,6 @@ tags = ["信息图", "长图", "榜单", "推荐", "排行", "测评", "infograp
 frames = 1
 frame_width = 1080
 frame_height = 3154
-
 [[template]]
 id = "faq-thread-infographic"
 scene = "infographic"
@@ -372,7 +345,6 @@ tags = ["信息图", "长图", "问答", "FAQ", "答疑", "常见问题", "infog
 frames = 1
 frame_width = 1080
 frame_height = 2789
-
 [[template]]
 id = "data-story-infographic"
 scene = "infographic"
@@ -384,7 +356,6 @@ tags = ["信息图", "长图", "数据", "故事", "因果", "转化", "infograp
 frames = 1
 frame_width = 1080
 frame_height = 2711
-
 [[template]]
 id = "challenge-tracker-infographic"
 scene = "infographic"
@@ -396,7 +367,6 @@ tags = ["信息图", "长图", "打卡", "挑战", "习惯", "三十天", "infog
 frames = 1
 frame_width = 1080
 frame_height = 2692
-
 [[template]]
 id = "ecosystem-map-infographic"
 scene = "infographic"
@@ -411,7 +381,6 @@ frame_height = 2206
 
 # ── 第三批（+27）：对比 9 / 教程 9 / 轮播 9 ────────────────────────
 # 三档各自补满到 10 套。每个生成器的模块注释里都有对最近邻的差异论证。
-
 [[template]]
 id = "do-dont-comparison"
 scene = "comparison"
@@ -423,7 +392,6 @@ tags = ["对比", "示范", "正误", "双栏", "小红书", "comparison", "do",
 frames = 1
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "myth-truth-comparison"
 scene = "comparison"
@@ -435,7 +403,6 @@ tags = ["对比", "误区", "真相", "辟谣", "长图", "comparison", "myth", 
 frames = 1
 frame_width = 1080
 frame_height = 2593
-
 [[template]]
 id = "pricing-tiers-comparison"
 scene = "comparison"
@@ -447,7 +414,6 @@ tags = ["对比", "价格", "定价", "套餐", "档位", "comparison", "pricing
 frames = 1
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "scenario-guide-comparison"
 scene = "comparison"
@@ -459,7 +425,6 @@ tags = ["对比", "选择", "场景", "决策", "指南", "comparison", "scenari
 frames = 1
 frame_width = 1080
 frame_height = 2723
-
 [[template]]
 id = "spec-table-comparison"
 scene = "comparison"
@@ -471,7 +436,6 @@ tags = ["对比", "参数", "表格", "规格", "测评", "comparison", "spec", 
 frames = 1
 frame_width = 1080
 frame_height = 2405
-
 [[template]]
 id = "three-way-comparison"
 scene = "comparison"
@@ -483,7 +447,6 @@ tags = ["对比", "三方", "横评", "方案", "选型", "comparison", "three",
 frames = 1
 frame_width = 1080
 frame_height = 1886
-
 [[template]]
 id = "time-shift-comparison"
 scene = "comparison"
@@ -495,7 +458,6 @@ tags = ["对比", "时间", "前后", "成长", "复盘", "comparison", "before"
 frames = 1
 frame_width = 1080
 frame_height = 1440
-
 [[template]]
 id = "tradeoff-scale-comparison"
 scene = "comparison"
@@ -507,7 +469,6 @@ tags = ["对比", "优缺点", "权衡", "天平", "方形", "comparison", "trad
 frames = 1
 frame_width = 1080
 frame_height = 1080
-
 [[template]]
 id = "version-diff-comparison"
 scene = "comparison"
@@ -519,7 +480,6 @@ tags = ["对比", "版本", "更新", "变更", "日志", "comparison", "version
 frames = 1
 frame_width = 1080
 frame_height = 1080
-
 [[template]]
 id = "app-onboarding-triptych"
 scene = "tutorial"
@@ -813,3 +773,27 @@ frames = 7
 frame_width = 1920
 frame_height = 1080
 style_guide = "ledger-tick"
+
+[[template]]
+id = "brand-concept-sheet"
+scene = "comparison"
+title_key = "sceneTemplate.item.brandConceptSheet.title"
+title_fallback = "品牌概念板"
+summary_key = "sceneTemplate.item.brandConceptSheet.summary"
+summary_fallback = "横向品牌评审板：展示主锁定组合、构成逻辑、黑白反转与最小尺寸，适合首轮概念交付。"
+tags = ["品牌", "标志", "字标", "概念", "评审", "brand", "logo", "wordmark", "concept", "handoff"]
+frames = 1
+frame_width = 1600
+frame_height = 1000
+
+[[template]]
+id = "logo-qa-board"
+scene = "comparison"
+title_key = "sceneTemplate.item.logoQaBoard.title"
+title_fallback = "LOGO 融合验收板"
+summary_key = "sceneTemplate.item.logoQaBoard.summary"
+summary_fallback = "四格逐项检查共享承义、结构依存、轮廓统一与次级意象的自然出现，适合概念筛选和评审留痕。"
+tags = ["标志", "评审", "验收", "融合", "四格", "logo", "qa", "review", "fusion", "checklist"]
+frames = 1
+frame_width = 1600
+frame_height = 1000

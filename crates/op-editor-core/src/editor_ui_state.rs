@@ -13,13 +13,8 @@
 //!   - the property-panel tab + flex-layout + size toggles
 //!   - export scale + format, recent files, pending file action
 //!
-//! ### Move STATE, not RENDER code
-//!
-//! Many of these types are *declared* under shell-core's `widgets/`
-//! module — for example `ExportFormat` in `widgets/export_dialog.rs`.
-//! They are data/state enums, not rendering code, so their type
-//! definitions belong in the state layer. The widget *painting /
-//! hit-test* code stays in shell-core untouched.
+//! This module owns data/state enums only. Widget painting and hit-testing
+//! stay in the UI layer.
 //!
 //! All types here are plain data (enums + structs of primitives /
 //! strings / ids), so `op-editor-core` stays wasm32-clean.
@@ -32,15 +27,13 @@
 //! here, so every existing `editor_ui_state::*` import path still
 //! resolves:
 //!
-//! - [`chrome`] — theme / embed host / file actions / recent files /
-//!   theme-preset IO / update status / Design-MD request / pencil cursor
-//! - [`pickers`] — picker purposes, canvas overlay geometry, layer
-//!   context menu + page rename, variable-row / effect-param focus
+//! - [`chrome`] — chrome actions, preferences, status, and host embedding
+//! - [`pickers`] — picker purposes, overlay geometry, and focus state
 //! - [`git_panel`] — the whole in-app Git panel data model
-//! - [`groups`] — grouped sub-states (preview / size toggles /
-//!   Design-MD panel) carved out of the flat field list
+//! - [`groups`] — grouped panel and preview sub-states
 //! - `defaults` — `impl Default for EditorUiState`
 //! - `methods` — `impl EditorUiState`
+//! - [`slides_panel_state`] / `tests` — slide-panel navigation + regression tests
 
 pub mod chrome;
 mod defaults;
@@ -77,7 +70,6 @@ pub use slides_panel_state::{LeftPanelTab, SlidesDrag, SlidesPanelState, SlidesP
 use crate::node_id::NodeId;
 use crate::tool::Tool;
 use std::collections::HashSet;
-
 // `Locale` is the i18n locale enum — dependency-free + wasm-clean, so
 // it lives in `op-i18n` and re-exports cleanly into the state layer.
 pub use op_i18n::Locale;
@@ -108,29 +100,37 @@ pub struct EditorUiState {
     pub sidebar_open: bool,
     pub layer_panel_width: f32,
     pub property_panel_width: f32,
+    /// Responsive layout: live size class, touch density (≥44pt targets,
+    /// bottom dock, sheets), and the single open mobile sheet.
+    pub size_class: crate::size_class::EditorSizeClass,
+    pub touch: bool,
+    pub mobile_sheet: Option<crate::size_class::MobileSheetKind>,
 
     // --- Theme + locale --------------------------------------------
-    /// Active UI theme — TopBar Sun icon flips it.
+    /// User's OpenPencil theme preference — TopBar Sun icon flips it.
     pub theme_mode: ThemeMode,
+    /// Page-lifetime color scheme imposed by an embedding host. Paint-only;
+    /// separate from `theme_mode`, so host theme changes never persist.
+    pub host_theme_override: Option<ThemeMode>,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
+    /// Page-lifetime locale imposed by an embedding host. Presentation-only
+    /// like the host theme; never persisted as the user's locale.
+    pub host_locale_override: Option<Locale>,
     /// TopBar Globe dropdown state.
     pub locale_picker: jian_widgets::components::select::SelectState,
     /// User's last-set ⚡Nx parallel-agents team size — an app-level
     /// preference (persisted via `settings_io`), NOT the per-tab
-    /// `ChatState::agent_team_size` it seeds. `ChatSessions::new_tab`
-    /// carries the ACTIVE tab's current value forward for continuity
-    /// within a session; this field is what re-seeds tab 0's value across
-    /// a full app restart, where no "active tab" from a prior session
-    /// exists to carry forward from. Old `settings.json` files predating
-    /// this field default to `1` (serde default), matching
-    /// `ChatState::default().agent_team_size`.
+    /// `ChatState::agent_team_size` it seeds; `ChatSessions::new_tab` carries
+    /// the ACTIVE tab's value forward within a session. This field re-seeds
+    /// tab 0 across a full app restart; old `settings.json` files default
+    /// to `1` (serde default), matching `ChatState::default().agent_team_size`.
     pub preferred_agent_team_size: u32,
 
     // --- Collaboration ---------------------------------------------
     /// Sanitized collaboration display state shared by native and web
-    /// widgets. Transport handles, tickets, stable subjects, and device ids
-    /// deliberately never enter this paint-state projection.
+    /// widgets. Transport handles, tickets, subjects, and device ids never
+    /// enter this paint-state projection.
     pub collab: crate::collab_ui_state::CollabUiState,
 
     // --- File menu --------------------------------------------------
@@ -334,13 +334,6 @@ pub struct EditorUiState {
     /// Text filter, caret, selection, and blink state for the chat
     /// model-picker search box.
     pub chat_model_picker_input: jian_core::text_input::TextInputState,
-    /// Request seam raised every time the model picker OPENS: a host
-    /// with local CLI access re-discovers the external providers'
-    /// catalogs so a CLI that shipped new models mid-session is listed
-    /// without an app restart. Drained by the desktop pump
-    /// (`drain_model_catalog_refresh`), which applies its own TTL
-    /// debounce; hosts without subprocess access simply clear it.
-    pub pending_model_catalog_refresh: bool,
     /// Hovered chat design JSON card `(message_index, block_index)`;
     /// drives the TS-style hover reveal of the card's copy affordance.
     pub chat_design_block_hover: Option<(usize, usize)>,

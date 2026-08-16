@@ -12,7 +12,11 @@ impl WidgetHostNative {
     /// credential snapshot transfers ownership to the local settings
     /// file.
     pub(in crate::widget_host) fn commit_settings_focus_if_any(&mut self) {
-        if commit_settings_focus(&mut self.editor_state, SettingsCommitScope::Operator) {
+        if commit_settings_focus(
+            &mut self.editor_state,
+            SettingsCommitScope::Operator,
+            self.now_ms,
+        ) {
             self.mark_dirty();
         }
     }

@@ -66,14 +66,7 @@ fn run(args: &[String]) -> Result<String, CliError> {
     // For commands that talk to a running server, resolve the live
     // editor's published port (`~/.openpencil/.op-mcp-port`) unless the user
     // pinned `--port` explicitly. `op start` keeps the requested port.
-    let needs_server = matches!(
-        command,
-        Command::Status
-            | Command::ToolsList
-            | Command::ToolCall { .. }
-            | Command::ToolCallJson { .. }
-            | Command::Export { .. }
-    );
+    let needs_server = command_needs_server(&command);
     // The live MCP endpoint authenticates every stateful call, so the token
     // has to be resolved alongside the port rather than after it.
     let (target_port, target_token) = if port_explicit || !needs_server {
@@ -165,6 +158,27 @@ fn run(args: &[String]) -> Result<String, CliError> {
         )?,
     };
     Ok(if pretty { pretty_json(&out) } else { out })
+}
+
+/// Whether a parsed command talks to an already-running MCP endpoint.
+///
+/// Keep the dedicated aliases here alongside the generic tool-call variants:
+/// they bypass `Command::ToolCall` at dispatch time but still need the same
+/// live-port and instance-token discovery.
+fn command_needs_server(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::Status
+            | Command::ToolsList
+            | Command::ToolCall { .. }
+            | Command::ToolCallJson { .. }
+            | Command::ExportDeck { .. }
+            | Command::ExportFrames { .. }
+            | Command::Templates { .. }
+            | Command::UseTemplate { .. }
+            | Command::Styles { .. }
+            | Command::Export { .. }
+    )
 }
 
 #[derive(Debug, PartialEq, Eq)]

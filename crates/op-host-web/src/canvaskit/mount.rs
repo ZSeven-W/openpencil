@@ -1,8 +1,6 @@
 //! Body of the `mount_ck` entry point.
-//!
-//! Split out of `canvaskit.rs`: builds the `CkInner` shell, runs the daemon
-//! bootstrap sequence, and installs every DOM listener the web editor needs.
-//! The `#[wasm_bindgen]` export itself stays in the `canvaskit` spine.
+//! Builds the `CkInner` shell and installs the web editor's DOM listeners.
+//! The `#[wasm_bindgen]` export stays in the `canvaskit` spine.
 
 use wasm_bindgen::prelude::*;
 
@@ -62,6 +60,18 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         host.editor_state_mut(),
         credential_load.payload_theme(),
     );
+    // A managed embedding host may impose its current color scheme. Apply it
+    // after the user's stored theme but still before the synchronous first
+    // paint, so the iframe never flashes the wrong theme. The theme module
+    // retains the underlying user preference for every persistence path.
+    if let Some(theme) = crate::web_settings::theme::host_theme_from_query(&search) {
+        crate::web_settings::theme::set_host_override(host.editor_state_mut(), theme);
+    }
+    if let Some(locale) = crate::web_settings::host_locale_from_query(&search) {
+        host.editor_state_mut()
+            .editor_ui
+            .set_host_locale_override(Some(locale));
+    }
     host.mark_editor_state_dirty();
     let settings_fingerprint = credential_load.initial_settings_fingerprint(host.editor_state());
     let credential_fingerprint = credential_load.initial_fingerprint(host.editor_state());
@@ -338,6 +348,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 drop(b);
                 crate::web_chat::drain_chat_flags(&inner);
                 crate::web_image_panel::drain_image_jobs(&inner);
+                crate::web_builtin_model_discovery::drain_pending_builtin_model_discovery(&inner);
                 crate::iconify_web::drain_iconify_request(&inner);
                 crate::codegen_web::drain_codegen_flags(&inner);
                 crate::web_design_md::drain_design_md_action(&inner);
@@ -432,15 +443,26 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             };
             let (w, h) = b.backend.logical_size();
             let (x, y) = b.event_offset_to_logical(evt.offset_x() as f32, evt.offset_y() as f32);
+            let mut modifiers = op_editor_ui::Modifiers::empty();
+            modifiers.set(op_editor_ui::Modifiers::SHIFT, evt.shift_key());
+            modifiers.set(op_editor_ui::Modifiers::CTRL, evt.ctrl_key());
+            modifiers.set(op_editor_ui::Modifiers::CMD, evt.meta_key());
+            modifiers.set(op_editor_ui::Modifiers::ALT, evt.alt_key());
             let consumed = match classify_wheel_intent(
                 evt.delta_x() as f32,
                 evt.delta_y() as f32,
-                evt.shift_key(),
-                evt.ctrl_key(),
-                evt.meta_key(),
-                evt.alt_key(),
+                evt.delta_mode(),
+                w,
+                h,
+                modifiers,
             ) {
-                WheelIntent::Zoom { delta_y } => b.host.apply_wheel(x, y, delta_y, w, h),
+                WheelIntent::Zoom {
+                    scroll_delta_y,
+                    canvas_delta_y,
+                } => {
+                    b.host
+                        .apply_wheel_with_canvas_delta(x, y, scroll_delta_y, canvas_delta_y, w, h)
+                }
                 WheelIntent::Pan { dx, dy } => b.host.apply_pan_gesture(x, y, dx, dy, w, h),
             };
             if consumed {
@@ -734,6 +756,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             drop(b);
             crate::web_chat::drain_chat_flags(&inner);
             crate::web_image_panel::drain_image_jobs(&inner);
+            crate::web_builtin_model_discovery::drain_pending_builtin_model_discovery(&inner);
         })?;
     }
 

@@ -20,7 +20,7 @@ pub enum ImportWarning {
     EmptyBody,
     /// `content.dom_depth_truncated` — HTML nesting exceeded {max_depth} levels and deeper content was dropped
     DomDepthTruncated { max_depth: usize },
-    /// `content.node_limit_truncated` — node limit reached (20000), remaining content dropped
+    /// `content.node_limit_truncated` — node limit reached (40000), remaining content dropped
     NodeLimitTruncated,
     /// `content.node_limit_mapping` — node limit reached while mapping HTML
     NodeLimitMapping,
@@ -295,7 +295,7 @@ pub enum ImportWarning {
     // --- snapshot: Live browser-snapshot import.
     /// `snapshot.truncated` — browser snapshot was truncated during extraction
     SnapshotTruncated,
-    /// `snapshot.node_limit` — node limit reached (20000), remaining snapshot content dropped
+    /// `snapshot.node_limit` — node limit reached (40000), remaining snapshot content dropped
     SnapshotNodeLimit,
     /// `snapshot.tainted_images` — {count} images kept as remote URLs (CORS-tainted)
     SnapshotTaintedImages { count: usize },

@@ -14,6 +14,7 @@ random = ["dep:getrandom"]
 [dependencies]
 base64 = "0.22"
 blake3 = "1.5"
+chacha20poly1305 = { version = "0.10", default-features = false }
 getrandom = { version = "0.3", optional = true }
 hkdf = "0.12"
 hmac = "0.12"

@@ -49,7 +49,7 @@ fn drain(refresh: &mut ModelCatalogRefresh, state: &mut EditorState) -> bool {
 fn a_second_open_inside_the_ttl_does_not_reprobe() {
     let mut refresh = ModelCatalogRefresh::new();
     let now = Instant::now();
-    let connected = [false, true, false, false, false, false];
+    let connected = [false, true, false, false, false, false, false];
 
     assert!(refresh.request_with(connected, now, |_| Vec::new()));
     let mut state = EditorState::default();
@@ -68,7 +68,7 @@ fn a_second_open_inside_the_ttl_does_not_reprobe() {
 fn an_open_past_the_ttl_reprobes() {
     let mut refresh = ModelCatalogRefresh::new();
     let now = Instant::now();
-    let connected = [false, true, false, false, false, false];
+    let connected = [false, true, false, false, false, false, false];
 
     assert!(refresh.request_with(connected, now, |_| Vec::new()));
     let mut state = EditorState::default();
@@ -81,7 +81,7 @@ fn an_open_past_the_ttl_reprobes() {
 fn a_refresh_is_dropped_while_one_is_already_in_flight() {
     let mut refresh = ModelCatalogRefresh::new();
     let now = Instant::now();
-    let connected = [false, true, false, false, false, false];
+    let connected = [false, true, false, false, false, false, false];
 
     assert!(refresh.request_with(connected, now, |_| Vec::new()));
     assert!(refresh.is_pending());
@@ -112,7 +112,7 @@ fn only_verified_connected_providers_are_probed() {
 
     assert_eq!(
         rx.recv().expect("the worker ran"),
-        [false, true, false, false, false, false],
+        [false, true, false, false, false, false, false],
         "a provider the user never connected must not be probed"
     );
 }
@@ -120,7 +120,7 @@ fn only_verified_connected_providers_are_probed() {
 #[test]
 fn nothing_connected_means_no_worker() {
     let mut refresh = ModelCatalogRefresh::new();
-    assert!(!refresh.request_with([false; 6], Instant::now(), |_| {
+    assert!(!refresh.request_with([false; 7], Instant::now(), |_| {
         panic!("no connected provider means nothing to discover")
     }));
 }
@@ -172,7 +172,7 @@ fn landing_replaces_the_refreshed_slice_and_selection_follows() {
         .expect("seeded model");
     state.chat.selected_model = selected;
 
-    let mut mask = [false; 6];
+    let mut mask = [false; 7];
     mask[1] = true;
     assert!(refresh.request_with(mask, Instant::now(), |_| vec![
         ModelEntry::new(AiProvider::CodexCli, "gpt-5.6-sol", "GPT-5.6 Sol"),

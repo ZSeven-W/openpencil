@@ -116,11 +116,35 @@ function startPick(stateKey, labels) {
   globalThis[stateKey] = state;
 
   function elementAt(x, y) {
-    const found = doc.elementFromPoint(x, y);
+    let found = doc.elementFromPoint(x, y);
     if (!found || found === doc.documentElement) return null;
     // The overlay is `pointer-events: none`, so it should never be returned;
     // guard anyway in case a page stylesheet forces pointer events on.
-    return host.contains(found) ? null : found;
+    if (host.contains(found)) return null;
+    // `elementFromPoint` stops at a shadow HOST, which made everything inside
+    // a web component unpickable — micro-frontend sub-apps mounted in an open
+    // shadow root (wujie, qiankun strictStyleIsolation) could only be picked
+    // as one opaque block. Descend through open shadow roots the way DevTools
+    // inspect does; closed roots keep the host, which the extractor cannot
+    // see into anyway. Bounded: nested hosts, not a general cycle risk.
+    //
+    // Slot-bearing shadow roots are NOT descended: slotted (light) children
+    // are not `childNodes` of anything inside the shadow tree, so a pick that
+    // landed on shadow chrome would capture the component minus its content.
+    // The host is the one node whose extraction merges both trees, and the
+    // extractor already walks its shadow root.
+    try {
+      for (let depth = 0; found.shadowRoot && depth < 32; depth += 1) {
+        if (found.shadowRoot.querySelector('slot')) break;
+        const inner = found.shadowRoot.elementFromPoint(x, y);
+        if (!inner || inner === found) break;
+        found = inner;
+      }
+    } catch {
+      // A hostile shadowRoot getter or hit-test failure falls back to the
+      // host; never let a throw escape the armed picker's event handlers.
+    }
+    return found;
   }
 
   function draw(element) {

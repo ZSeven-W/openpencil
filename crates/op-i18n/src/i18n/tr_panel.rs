@@ -665,6 +665,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "PDF olarak dışa aktar",
         "slidesPanel.exportAllSlides" => "Tüm slaytları dışa aktar",
         "slidesPanel.exportSelectedSlides" => "Seçili slaytları dışa aktar ({{count}})",
+        "settings.tab.ai" => "YZ",
         "settings.agents.heroTitle" => "Yapay zekâ sağlayıcını bağla",
         "settings.agents.heroSubtitle" => "OpenPencil yerel CLI ajanlarını ve API sağlayıcılarını çalıştırır — tasarım üretmeye başlamak için birini bağla.",
         "settings.agents.statusConnected" => "Bağlandı",

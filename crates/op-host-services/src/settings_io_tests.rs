@@ -2,14 +2,8 @@ use super::*;
 
 #[path = "settings_io_checked_tests.rs"]
 mod checked_tests;
-
-fn settings_save_test_root(case: &str) -> std::path::PathBuf {
-    let sequence = SETTINGS_TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "openpencil-settings-save-{}-{sequence}-{case}",
-        std::process::id()
-    ))
-}
+#[path = "settings_io_save_tests.rs"]
+mod save_tests;
 
 #[test]
 fn persisted_locale_overrides_system_locale_seed() {
@@ -225,9 +219,10 @@ fn imported_agents_are_excluded_from_persistence() {
 
 #[test]
 fn connected_state_round_trips_through_payload() {
-    // Connect Claude (0) + Antigravity (4), leave the rest off.
+    // Connect Claude (0) + Antigravity (4) + DeepSeek Harness (6,
+    // the append-only tail slot), leave the rest off.
     let mut src = EditorState::new();
-    src.editor_ui.agent_settings.connected = [true, false, false, false, true, false];
+    src.editor_ui.agent_settings.connected = [true, false, false, false, true, false, true];
     // Serialize → JSON → deserialize, the real on-disk path.
     let json = serde_json::to_string(&to_payload(&src)).unwrap();
     let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
@@ -235,7 +230,7 @@ fn connected_state_round_trips_through_payload() {
     apply_payload(&mut dst, payload);
     assert_eq!(
         dst.editor_ui.agent_settings.connected,
-        [true, false, false, false, true, false]
+        [true, false, false, false, true, false, true]
     );
 }
 
@@ -246,13 +241,13 @@ fn six_cli_mcp_payload_migrates_to_new_cli_count() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 12];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, true, false, false, false, false, false, false, false]
+        [true, false, false, true, true, false, false, false, false, false, false, false, false]
     );
 }
 
@@ -263,13 +258,13 @@ fn seven_cli_mcp_payload_keeps_its_toggles_and_leaves_the_new_clis_off() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 12];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, true, false, true, false, true, false, false, false, false, false]
+        [true, false, true, false, true, false, true, false, false, false, false, false, false]
     );
 }
 
@@ -280,13 +275,13 @@ fn eleven_cli_mcp_payload_keeps_its_toggles_and_leaves_zcode_off() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 12];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, true, false, true, false, true, true, false, true, false, false]
+        [true, false, true, false, true, false, true, true, false, true, false, false, false]
     );
 }
 
@@ -302,12 +297,16 @@ fn eight_cli_mcp_payload_drops_gemini_without_shifting_later_clis() {
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, false, true, true, false, false, false, false, false]
+        [true, false, false, true, false, true, true, false, false, false, false, false, false]
     );
 }
 
 #[test]
-fn seven_provider_connected_payload_drops_gemini_without_shifting_later_providers() {
+fn seven_provider_connected_payload_is_the_current_layout_and_round_trips() {
+    // The current layout has seven slots (DeepSeek Harness appended at
+    // the tail). A 7-entry file must round-trip VERBATIM — treating it
+    // as the legacy Gemini-era layout would silently shift every saved
+    // connection on every load.
     let payload: SettingsPayload = serde_json::from_str(
         r#"{"version":1,"connected":[true,false,true,false,true,true,false]}"#,
     )
@@ -318,7 +317,24 @@ fn seven_provider_connected_payload_drops_gemini_without_shifting_later_provider
 
     assert_eq!(
         dst.editor_ui.agent_settings.connected,
-        [true, false, true, false, true, false]
+        [true, false, true, false, true, true, false]
+    );
+}
+
+#[test]
+fn six_provider_connected_payload_keeps_flags_and_leaves_dsh_off() {
+    // Files written since the Gemini retirement have six slots; the
+    // appended DeepSeek Harness slot starts disconnected.
+    let payload: SettingsPayload =
+        serde_json::from_str(r#"{"version":1,"connected":[true,false,true,false,true,true]}"#)
+            .unwrap();
+    let mut dst = EditorState::new();
+
+    apply_payload(&mut dst, payload);
+
+    assert_eq!(
+        dst.editor_ui.agent_settings.connected,
+        [true, false, true, false, true, true, false]
     );
 }
 
@@ -327,11 +343,11 @@ fn five_provider_connected_payload_drops_retired_gemini() {
     let payload: SettingsPayload =
         serde_json::from_str(r#"{"version":1,"connected":[true,false,false,false,true]}"#).unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.connected = [false, false, false, false, true, true];
+    dst.editor_ui.agent_settings.connected = [false, false, false, false, true, true, true];
     apply_payload(&mut dst, payload);
     assert_eq!(
         dst.editor_ui.agent_settings.connected,
-        [true, false, false, false, false, false]
+        [true, false, false, false, false, false, false]
     );
 }
 
@@ -344,7 +360,7 @@ fn legacy_settings_without_connected_field_default_to_disconnected() {
     let payload: SettingsPayload = serde_json::from_str(legacy).unwrap();
     let mut dst = EditorState::new();
     apply_payload(&mut dst, payload);
-    assert_eq!(dst.editor_ui.agent_settings.connected, [false; 6]);
+    assert_eq!(dst.editor_ui.agent_settings.connected, [false; 7]);
 }
 
 #[test]
@@ -375,6 +391,39 @@ fn builtin_agents_round_trip_through_payload() {
     assert_eq!(
         dst.editor_ui.agent_settings.builtin_agents[0].preset,
         BuiltinAgentPresetKey::MiniMax
+    );
+    assert_eq!(
+        dst.editor_ui.agent_settings.builtin_agents[0].models,
+        ["MiniMax-M2.7"]
+    );
+}
+
+#[test]
+fn builtin_agent_multiple_models_round_trip_with_legacy_first_mirror() {
+    let mut src = EditorState::new();
+    src.editor_ui.agent_settings.add_builtin_agent_configs(
+        "Private",
+        "sk-test",
+        ["model-a", "model-b", "model-c"],
+        BuiltinAgentKind::OpenAiCompat,
+        "https://example.com/v1",
+    );
+
+    let json = serde_json::to_string(&to_payload(&src)).unwrap();
+    let raw: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(raw["builtin_agents"][0]["model"], "model-a");
+    assert_eq!(
+        raw["builtin_agents"][0]["models"],
+        serde_json::json!(["model-a", "model-b", "model-c"])
+    );
+
+    let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+    let mut dst = EditorState::new();
+    apply_payload(&mut dst, payload);
+
+    assert_eq!(
+        dst.editor_ui.agent_settings.builtin_agents[0].models,
+        ["model-a", "model-b", "model-c"]
     );
 }
 
@@ -452,6 +501,46 @@ fn duplicate_builtin_agents_are_deduped_on_load() {
         "builtin-1"
     );
     assert_eq!(dst.editor_ui.agent_settings.next_builtin_agent_id, 2);
+}
+
+#[test]
+fn best_effort_load_keeps_operator_and_browser_owned_provider_cards_separate() {
+    let settings = r#"{
+        "version": 1,
+        "builtin_agents": [
+            {
+                "id": "builtin-1",
+                "preset": "openai",
+                "display_name": "Operator",
+                "kind": "openai-compat",
+                "api_key": "same-key",
+                "model": "model-a",
+                "base_url": "https://api.openai.com/v1",
+                "enabled": true
+            },
+            {
+                "id": "web-credential:builtin:browser-1",
+                "preset": "openai",
+                "display_name": "Browser",
+                "kind": "openai-compat",
+                "api_key": "same-key",
+                "model": "model-b",
+                "base_url": "https://api.openai.com/v1",
+                "enabled": true
+            }
+        ]
+    }"#;
+    let payload: SettingsPayload = serde_json::from_str(settings).unwrap();
+    let mut dst = EditorState::new();
+
+    apply_payload(&mut dst, payload);
+
+    let agents = &dst.editor_ui.agent_settings.builtin_agents;
+    assert_eq!(agents.len(), 2);
+    assert_eq!(agents[0].id, "builtin-1");
+    assert_eq!(agents[0].models, ["model-a"]);
+    assert_eq!(agents[1].id, "web-credential:builtin:browser-1");
+    assert_eq!(agents[1].models, ["model-b"]);
 }
 
 #[test]
@@ -637,77 +726,6 @@ fn openverse_oauth_round_trips_through_payload() {
 }
 
 #[test]
-fn checked_save_reports_an_unwritable_parent() {
-    let root = settings_save_test_root("unwritable-parent");
-    let blocking_parent = root.join("not-a-directory");
-    std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(&blocking_parent, b"block").unwrap();
-    let path = blocking_parent.join("settings.json");
-
-    let result = save_checked_to_path(&EditorState::new(), &path);
-
-    assert!(result.is_err());
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-#[cfg(unix)]
-#[test]
-fn checked_save_does_not_reuse_an_existing_temporary_path() {
-    let root = settings_save_test_root("unique-temp");
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
-    let path = root.join("settings.json");
-    let tmp = root.join("settings.json.tmp");
-    std::fs::write(&tmp, b"do not replace").unwrap();
-
-    let result = save_checked_to_path(&EditorState::new(), &path);
-
-    assert!(result.is_ok());
-    assert_eq!(std::fs::read(&tmp).unwrap(), b"do not replace");
-    assert!(path.is_file());
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-#[test]
-fn checked_save_removes_the_temporary_file_after_a_replace_failure() {
-    let root = settings_save_test_root("replace-failure");
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
-    let path = root.join("settings.json");
-    std::fs::create_dir(&path).unwrap();
-
-    let result = save_checked_to_path(&EditorState::new(), &path);
-
-    assert!(result.is_err());
-    let remaining = std::fs::read_dir(&root)
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .collect::<Vec<_>>();
-    assert_eq!(remaining, vec![path]);
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-#[cfg(unix)]
-#[test]
-fn checked_save_enforces_private_permissions_on_the_final_file() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let root = settings_save_test_root("private-mode");
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
-    let path = root.join("settings.json");
-    let old_tmp = root.join("settings.json.tmp");
-    std::fs::write(&old_tmp, b"old temporary contents").unwrap();
-    std::fs::set_permissions(&old_tmp, std::fs::Permissions::from_mode(0o666)).unwrap();
-
-    save_checked_to_path(&EditorState::new(), &path).unwrap();
-
-    let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-    assert_eq!(mode, 0o600);
-    let _ = std::fs::remove_dir_all(&root);
-}
-
-#[test]
 fn auto_update_preference_round_trips_through_payload() {
     let mut src = EditorState::new();
     src.editor_ui.agent_settings.auto_update_enabled = false;
@@ -721,7 +739,7 @@ fn auto_update_preference_round_trips_through_payload() {
 }
 
 #[test]
-fn legacy_ark_coding_payload_with_doubao_preset_migrates_to_ark_coding() {
+fn explicit_saved_builtin_preset_is_preserved_during_load() {
     let settings = r#"{
         "version": 1,
         "builtin_agents": [
@@ -745,6 +763,6 @@ fn legacy_ark_coding_payload_with_doubao_preset_migrates_to_ark_coding() {
     assert_eq!(dst.editor_ui.agent_settings.builtin_agents.len(), 1);
     assert_eq!(
         dst.editor_ui.agent_settings.builtin_agents[0].preset,
-        BuiltinAgentPresetKey::ArkCoding
+        BuiltinAgentPresetKey::Doubao
     );
 }

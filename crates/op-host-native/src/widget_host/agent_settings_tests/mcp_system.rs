@@ -22,9 +22,11 @@ fn scroll_to_centre(
         .agent_settings
         .scroll_y
         .offset = offset;
+    let effective_offset =
+        AgentSettingsPanel::for_editor(host.editor_state()).effective_scroll(rect);
     (
         target.origin.x + target.size.x / 2.0,
-        target.origin.y + target.size.y / 2.0 - offset,
+        target.origin.y + target.size.y / 2.0 - effective_offset,
     )
 }
 

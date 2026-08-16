@@ -58,6 +58,41 @@ thread_local! {
     /// At most one request per revision; a changed revision may supersede an
     /// older in-flight request, whose callback is discarded.
     static ACCOUNT_AVATAR_IN_FLIGHT: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// Orders `/api/auth/status` requests. Only the newest request may project
+    /// its response into editor state, so a slow pre-token request cannot hide
+    /// the account UI after a newer authenticated request has succeeded.
+    static STATUS_REQUEST_GATE: StatusRequestGate = const { StatusRequestGate::new() };
+}
+
+/// Latest-request-wins gate for the account status projection.
+///
+/// XHR callbacks can complete out of order. The sequence is assigned before a
+/// request starts, and every callback must pass both this ordering check and
+/// the HTTP success check before it may touch identity or UI state.
+struct StatusRequestGate {
+    latest_started: Cell<u64>,
+}
+
+impl StatusRequestGate {
+    const fn new() -> Self {
+        Self {
+            latest_started: Cell::new(0),
+        }
+    }
+
+    fn begin(&self) -> u64 {
+        let request_id = self
+            .latest_started
+            .get()
+            .checked_add(1)
+            .expect("auth status request sequence exhausted");
+        self.latest_started.set(request_id);
+        request_id
+    }
+
+    fn should_apply(&self, request_id: u64, http_status: u16) -> bool {
+        http_status == 200 && self.latest_started.get() == request_id
+    }
 }
 
 /// Shared latches for the interval tick.
@@ -145,7 +180,7 @@ fn navigate_login_popup(url: &str) {
 /// the interval runs for the page lifetime.
 pub(crate) fn start<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let base = crate::daemon_base::daemon_base();
-    fetch_status(inner, &base);
+    refresh_status(inner);
 
     let cells = FlowCells {
         busy: Rc::new(Cell::new(false)),
@@ -167,11 +202,30 @@ pub(crate) fn start<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     let _ = live_sync::start_interval(AUTH_POLL_INTERVAL_MS, tick);
 }
 
+/// Refresh the account capability/session projection immediately.
+///
+/// Managed embeds can receive their bridge token after the first bootstrap
+/// request has already left without authentication. Waiting for the regular
+/// ~30 s health check in that case leaves the account button missing even
+/// though the daemon has a working auth backend. The bridge calls this once
+/// when it installs a new token; repeated host init messages with the same
+/// token remain no-ops at that layer.
+pub(crate) fn refresh_status<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
+    let base = crate::daemon_base::daemon_base();
+    fetch_status(inner, &base);
+}
+
 fn fetch_status<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, base: &str) {
+    let request_id = STATUS_REQUEST_GATE.with(StatusRequestGate::begin);
     let inner = inner.clone();
-    let _ = live_sync::get(
+    let _ = live_sync::get_with_status(
         &format!("{base}{}", auth_routes::STATUS),
-        Rc::new(move |body: String| {
+        Rc::new(move |http_status, body: String| {
+            let should_apply =
+                STATUS_REQUEST_GATE.with(|gate| gate.should_apply(request_id, http_status));
+            if !should_apply {
+                return;
+            }
             let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body) else {
                 return;
             };
@@ -446,6 +500,28 @@ fn account_avatar_revision_active(revision: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auth_status_gate_rejects_stale_success_after_a_newer_request_starts() {
+        let gate = StatusRequestGate::new();
+        let pre_token_request = gate.begin();
+        let authenticated_request = gate.begin();
+
+        assert!(authenticated_request > pre_token_request);
+        assert!(!gate.should_apply(pre_token_request, 200));
+        assert!(gate.should_apply(authenticated_request, 200));
+    }
+
+    #[test]
+    fn auth_status_gate_rejects_non_success_even_for_latest_request() {
+        let gate = StatusRequestGate::new();
+        let request = gate.begin();
+
+        assert!(!gate.should_apply(request, 0));
+        assert!(!gate.should_apply(request, 401));
+        assert!(!gate.should_apply(request, 500));
+        assert!(gate.should_apply(request, 200));
+    }
 
     #[test]
     fn account_payload_prefers_username_and_never_uses_email_as_a_handle() {

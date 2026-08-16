@@ -408,10 +408,12 @@ impl WidgetHostNative {
             || self
                 .chat_model_picker_rect(viewport_w, viewport_h)
                 .is_some_and(|r| (r).contains(p))
-            || (self.toolbar_rect(viewport_w, viewport_h)).contains(p)
-            || self
-                .align_toolbar_rect(viewport_w, viewport_h)
-                .is_some_and(|r| (r).contains(p))
+            || (!self.editor_state.editor_ui.touch_chrome()
+                && (self.toolbar_rect(viewport_w, viewport_h)).contains(p))
+            || (!self.editor_state.editor_ui.touch_chrome()
+                && self
+                    .align_toolbar_rect(viewport_w, viewport_h)
+                    .is_some_and(|r| (r).contains(p)))
         {
             return true;
         }

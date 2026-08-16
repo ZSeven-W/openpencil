@@ -10,7 +10,7 @@
 //! the host's save dialog uses the chosen format + scale.
 
 use crate::theme::Theme;
-use crate::widgets::editor_state_ext::doc_export_format;
+use crate::widgets::editor_state_ext::{doc_export_format, export_format};
 use crate::widgets::text_metrics;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::editor_ui_state::EditorUiState;
@@ -64,12 +64,9 @@ impl ExportFormat {
         ExportFormat::Svg,
         ExportFormat::Pdf,
     ];
-    /// Whether the format has a working export backend. All five
-    /// formats are now implemented (PDF landed via skia's built-in
-    /// `pdf::new_document` backend in Phase 4); kept as a hook so a
-    /// future format can be added in a disabled state.
+    /// Whether the current target's shipping renderer contains this encoder.
     pub fn is_implemented(self) -> bool {
-        true
+        export_format(self).is_implemented()
     }
 }
 
@@ -99,7 +96,7 @@ impl ExportDialog {
     }
 
     pub fn paint(&self, backend: &mut dyn RenderBackend, theme: &Theme, ui: &EditorUiState) {
-        let tr = |key: &'static str| op_i18n::translate(ui.locale, key);
+        let tr = |key: &'static str| op_i18n::translate(ui.effective_locale(), key);
         backend.fill_round_rect(self.rect, CORNER, theme.popover);
         backend.stroke_round_rect(self.rect, CORNER, theme.border, 1.0);
 
@@ -472,11 +469,13 @@ mod tests {
     }
 
     #[test]
-    fn every_format_is_implemented() {
-        // Phase 4 enabled PDF via skia's built-in backend. All five
-        // formats are now selectable + dispatched to a real encoder.
+    fn every_host_format_matches_the_core_capability() {
         for fmt in ExportFormat::ALL {
-            assert!(fmt.is_implemented(), "{fmt:?} should be implemented");
+            assert_eq!(
+                fmt.is_implemented(),
+                export_format(fmt).is_implemented(),
+                "{fmt:?} capability drifted"
+            );
         }
     }
 

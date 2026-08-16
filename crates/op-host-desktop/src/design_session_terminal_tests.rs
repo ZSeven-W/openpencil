@@ -153,6 +153,16 @@ fn companion_chat_disconnect_cannot_drop_validation_completion_or_retry_payload(
             .status,
         ChatActivityStatus::Error
     );
+    assert_eq!(
+        message
+            .activities
+            .iter()
+            .find(|activity| activity.id == "sun_arc")
+            .unwrap()
+            .detail
+            .as_deref(),
+        Some("Reason: self-check failed")
+    );
     assert_eq!(message.failed_subtasks.len(), 1);
     assert_eq!(message.failed_subtasks[0].subtask_id, "sun_arc");
     assert_eq!(

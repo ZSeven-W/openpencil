@@ -7,33 +7,81 @@
     "message": "렌더링된 페이지를 캡처해 편집 가능한 디자인 노드로 OpenPencil에 가져옵니다.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "전체 페이지 캡처" },
-  "pickButton": { "message": "요소 캡처" },
-  "downloadButton": { "message": ".op 다운로드" },
-  "pickHint": { "message": "캡처할 요소를 클릭하세요" },
-  "pickCancelHint": { "message": "Esc로 취소" },
-  "endpointLabel": { "message": "OpenPencil 주소" },
-  "endpointHint": { "message": "데스크톱 앱: 설정 → MCP → 서버 시작(기본 포트 3100)." },
-  "languageLabel": { "message": "언어" },
-  "statusIdle": { "message": "준비됨." },
-  "statusCapturing": { "message": "페이지를 캡처하는 중…" },
-  "statusTransferring": { "message": "스냅샷을 전송하는 중($1)…" },
-  "statusSending": { "message": "OpenPencil로 보내는 중…" },
-  "statusImported": { "message": "노드 $1개를 OpenPencil로 가져왔습니다." },
-  "statusSendingAccount": { "message": "내 계정으로 보내는 중…" },
-  "statusSentToAccount": { "message": "내 계정으로 보냈습니다: $1" },
-  "statusSentLocalFallback": { "message": "계정 세션이 만료되어 이 컴퓨터의 OpenPencil로 보냈습니다: 노드 $1개를 가져왔습니다." },
-  "statusDownloaded": { "message": "저장했습니다: $1" },
-  "statusPicked": { "message": "캡처 완료: $1. $2" },
-  "statusPickCancelled": { "message": "요소 캡처를 취소했습니다." },
-  "statusTruncated": { "message": "참고: 페이지가 추출기의 20,000 노드 한도에 도달해 캡처가 일부만 완료되었습니다." },
-  "errorNoTab": { "message": "활성 탭이 없습니다." },
+  "captureButton": {
+    "message": "전체 페이지 캡처"
+  },
+  "pickButton": {
+    "message": "요소 캡처"
+  },
+  "downloadButton": {
+    "message": ".op 다운로드"
+  },
+  "pickHint": {
+    "message": "캡처할 요소를 클릭하세요"
+  },
+  "pickCancelHint": {
+    "message": "Esc로 취소"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil 주소"
+  },
+  "endpointHint": {
+    "message": "데스크톱 앱: 설정 → MCP → 서버 시작(기본 포트 3100)."
+  },
+  "languageLabel": {
+    "message": "언어"
+  },
+  "statusIdle": {
+    "message": "준비됨."
+  },
+  "statusCapturing": {
+    "message": "페이지를 캡처하는 중…"
+  },
+  "statusTransferring": {
+    "message": "스냅샷을 전송하는 중($1)…"
+  },
+  "statusSending": {
+    "message": "OpenPencil로 보내는 중…"
+  },
+  "statusImported": {
+    "message": "노드 $1개를 OpenPencil로 가져왔습니다."
+  },
+  "statusSendingAccount": {
+    "message": "내 계정으로 보내는 중…"
+  },
+  "statusSentToAccount": {
+    "message": "내 계정으로 보냈습니다: $1"
+  },
+  "statusSentLocalFallback": {
+    "message": "계정 세션이 만료되어 이 컴퓨터의 OpenPencil로 보냈습니다: 노드 $1개를 가져왔습니다."
+  },
+  "statusDownloaded": {
+    "message": "저장했습니다: $1"
+  },
+  "statusPicked": {
+    "message": "캡처 완료: $1. $2"
+  },
+  "statusPickCancelled": {
+    "message": "요소 캡처를 취소했습니다."
+  },
+  "statusTruncated": {
+    "message": "참고: 페이지가 추출기의 40,000 노드 한도에 도달해 캡처가 일부만 완료되었습니다."
+  },
+  "errorNoTab": {
+    "message": "활성 탭이 없습니다."
+  },
   "errorRestrictedTab": {
     "message": "Chrome은 이 페이지에서 확장 프로그램 실행을 허용하지 않습니다. 일반 http(s) 페이지를 열고 다시 시도하세요."
   },
-  "errorInjection": { "message": "이 탭에서 캡처 스크립트를 실행할 수 없습니다: $1" },
-  "errorNoSnapshot": { "message": "추출기가 스냅샷을 생성하지 못했습니다(페이지에 표시되는 body가 없을 수 있습니다)." },
-  "errorChunkLost": { "message": "캡처한 스냅샷이 전송 도중 유실되었습니다(페이지가 이동했을 수 있습니다). 다시 시도하세요." },
+  "errorInjection": {
+    "message": "이 탭에서 캡처 스크립트를 실행할 수 없습니다: $1"
+  },
+  "errorNoSnapshot": {
+    "message": "추출기가 스냅샷을 생성하지 못했습니다(페이지에 표시되는 body가 없을 수 있습니다)."
+  },
+  "errorChunkLost": {
+    "message": "캡처한 스냅샷이 전송 도중 유실되었습니다(페이지가 이동했을 수 있습니다). 다시 시도하세요."
+  },
   "errorEndpoint": {
     "message": "주소는 포트가 포함된 루프백이어야 합니다 — 127.0.0.1:3100, localhost:3100 또는 [::1]:3100."
   },
@@ -49,8 +97,15 @@
   "errorTooLarge": {
     "message": "이번 캡처는 $1 MB를 초과하여 OpenPencil의 스냅샷 경로가 거부합니다. [.op 다운로드]를 사용한 뒤 해당 파일을 OpenPencil에서 여세요"
   },
-  "errorImport": { "message": "OpenPencil이 스냅샷을 거부했습니다: $1" },
-  "errorDownload": { "message": "다운로드에 실패했습니다: $1" },
+  "errorAccountTooLarge": {
+    "message": "이번 캡처는 $1 MB를 초과하여 계정 수신함이 거부합니다. 대신 이 기기로 전송하세요."
+  },
+  "errorImport": {
+    "message": "OpenPencil이 스냅샷을 거부했습니다: $1"
+  },
+  "errorDownload": {
+    "message": "다운로드에 실패했습니다: $1"
+  },
   "errorCoreMissing": {
     "message": "이 확장 프로그램은 아직 빌드되지 않았습니다. packages/op-chrome-extension/scripts/build-wasm.sh를 실행한 뒤 확장 프로그램 카드에서 [새로고침]을 누르세요. ($1)"
   },
@@ -60,28 +115,64 @@
   "errorPickUnavailable": {
     "message": "요소 캡처를 사용할 수 없습니다: 확장 프로그램의 백그라운드 worker가 실행 중이 아닙니다. chrome://extensions의 확장 프로그램 카드에서 오류를 확인하고 build-wasm.sh를 다시 실행한 뒤 [새로고침]을 누르세요. ($1)"
   },
-  "accountSignIn": { "message": "로그인" },
-  "accountSignOut": { "message": "로그아웃" },
-  "accountSignInOpened": { "message": "새로 열린 페이지에서 로그인을 완료한 다음 이 팝업을 다시 여세요." },
-  "accountSignedOut": { "message": "OpenPencil 계정에서 로그아웃했습니다." },
-  "accountSignOutManual": { "message": "새로 열린 계정 페이지에서 로그아웃을 완료하세요." },
-  "accountUnavailable": { "message": "OpenPencil 계정에 연결할 수 없습니다: $1" },
-  "errorAccountSignedOut": { "message": "OpenPencil 계정 세션이 만료되었습니다. 다시 로그인한 후 시도해 주세요." },
-  "errorAccountForbidden": { "message": "허브가 이 업로드의 출처 또는 세션 토큰을 거부했습니다. 다시 로그인한 후 시도해 주세요. ($1)" },
+  "accountSignIn": {
+    "message": "로그인"
+  },
+  "accountSignOut": {
+    "message": "로그아웃"
+  },
+  "accountSignInOpened": {
+    "message": "새로 열린 페이지에서 로그인을 완료한 다음 이 팝업을 다시 여세요."
+  },
+  "accountSignedOut": {
+    "message": "OpenPencil 계정에서 로그아웃했습니다."
+  },
+  "accountSignOutManual": {
+    "message": "새로 열린 계정 페이지에서 로그아웃을 완료하세요."
+  },
+  "accountUnavailable": {
+    "message": "OpenPencil 계정에 연결할 수 없습니다: $1"
+  },
+  "errorAccountSignedOut": {
+    "message": "OpenPencil 계정 세션이 만료되었습니다. 다시 로그인한 후 시도해 주세요."
+  },
+  "errorAccountForbidden": {
+    "message": "허브가 이 업로드의 출처 또는 세션 토큰을 거부했습니다. 다시 로그인한 후 시도해 주세요. ($1)"
+  },
   "errorAccountQuota": {
     "message": "계정 보관함이 가득 찼습니다. 최대 $1개 또는 $2 MB까지 저장됩니다. 계정 페이지에서 일부를 삭제한 후 다시 시도해 주세요. ($3)"
   },
-  "errorAccountRateLimited": { "message": "계정으로의 업로드가 너무 많습니다. 잠시 후 다시 시도해 주세요. ($1)" },
-  "errorAccountRateLimitedMinutes": { "message": "계정으로의 업로드가 너무 많습니다. 약 $1분 후에 다시 시도해 주세요." },
-  "errorAccountRateLimitedSeconds": { "message": "계정으로의 업로드가 너무 많습니다. 약 $1초 후에 다시 시도해 주세요." },
-  "errorAccountRejected": { "message": "OpenPencil 계정이 스냅숏을 거부했습니다: $1" },
+  "errorAccountRateLimited": {
+    "message": "계정으로의 업로드가 너무 많습니다. 잠시 후 다시 시도해 주세요. ($1)"
+  },
+  "errorAccountRateLimitedMinutes": {
+    "message": "계정으로의 업로드가 너무 많습니다. 약 $1분 후에 다시 시도해 주세요."
+  },
+  "errorAccountRateLimitedSeconds": {
+    "message": "계정으로의 업로드가 너무 많습니다. 약 $1초 후에 다시 시도해 주세요."
+  },
+  "errorAccountRejected": {
+    "message": "OpenPencil 계정이 스냅숏을 거부했습니다: $1"
+  },
   "errorAccountUnavailable": {
     "message": "OpenPencil 계정이 지금은 캡처를 받을 수 없습니다 ($1). 잠시 후 다시 시도하거나 이 컴퓨터의 OpenPencil로 보내세요."
   },
-  "regionLabel": { "message": "지역" },
-  "regionCn": { "message": "중국" },
-  "regionGlobal": { "message": "글로벌" },
-  "deliveryLabel": { "message": "보낼 대상" },
-  "deliveryLocal": { "message": "이 컴퓨터의 OpenPencil" },
-  "deliveryAccount": { "message": "내 OpenPencil 계정" }
+  "regionLabel": {
+    "message": "지역"
+  },
+  "regionCn": {
+    "message": "중국"
+  },
+  "regionGlobal": {
+    "message": "글로벌"
+  },
+  "deliveryLabel": {
+    "message": "보낼 대상"
+  },
+  "deliveryLocal": {
+    "message": "이 컴퓨터의 OpenPencil"
+  },
+  "deliveryAccount": {
+    "message": "내 OpenPencil 계정"
+  }
 }

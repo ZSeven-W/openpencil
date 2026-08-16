@@ -247,6 +247,10 @@ pub fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) 
     next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
     next.editor_ui.font_import_supported = previous.editor_ui.font_import_supported;
     next.editor_ui.batch_frame_export_supported = previous.editor_ui.batch_frame_export_supported;
+    next.editor_ui.scene_template_center.save_current_supported = previous
+        .editor_ui
+        .scene_template_center
+        .save_current_supported;
     next.editor_ui.deck_html_export_supported = previous.editor_ui.deck_html_export_supported;
     next.editor_ui.slide_thumbnails_supported = previous.editor_ui.slide_thumbnails_supported;
     next.editor_ui.scene_template_generate_supported =
@@ -417,9 +421,13 @@ mod tests {
     }
 
     #[test]
-    fn app_preferences_preserve_runtime_font_availability() {
+    fn app_preferences_preserve_runtime_host_capabilities_and_fonts() {
         let mut previous = EditorState::new();
         previous.editor_ui.font_import_supported = true;
+        previous
+            .editor_ui
+            .scene_template_center
+            .save_current_supported = true;
         previous.editor_ui.system_fonts_loaded = true;
         previous.editor_ui.system_font_families = std::sync::Arc::new(vec!["PingFang SC".into()]);
         previous.editor_ui.bundled_font_families = std::sync::Arc::new(vec!["Inter".into()]);
@@ -429,6 +437,10 @@ mod tests {
         preserve_app_preferences(&previous, &mut next);
 
         assert!(next.editor_ui.font_import_supported);
+        assert!(
+            next.editor_ui.scene_template_center.save_current_supported,
+            "Open / New must keep the desktop-only Save As Template row"
+        );
         assert!(next.editor_ui.system_fonts_loaded);
         assert_eq!(&*next.editor_ui.system_font_families, &["PingFang SC"]);
         assert_eq!(&*next.editor_ui.bundled_font_families, &["Inter"]);

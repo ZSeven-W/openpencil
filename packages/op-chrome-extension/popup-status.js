@@ -150,8 +150,11 @@ export function reportAccountError(error) {
       );
     case 'rateLimited':
       return setStatus(rateLimitMessage(error.retryAfterSeconds, detail), 'error');
+    // The hub's own cap (32 MiB) is smaller than the local ingest cap, so
+    // this capture may still import locally — say so instead of the local
+    // message's "download the file".
     case 'tooLarge':
-      return setStatus(msg('errorTooLarge', [detail]), 'error');
+      return setStatus(msg('errorAccountTooLarge', [detail]), 'error');
     case 'rejected':
       return setStatus(msg('errorAccountRejected', [detail]), 'error');
     case 'unavailable':

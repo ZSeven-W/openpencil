@@ -27,10 +27,11 @@ use op_editor_core::scene_template_catalog::SceneTemplateDefinition;
 use op_editor_core::scene_template_palette::scene_template_palette;
 use op_util::hex_color;
 
+use super::asset_center_template_cards::UserTemplateCard;
+use super::icons::{draw_icon, Icon};
 use super::panel_controls::{paint_accent_button, paint_neutral_button, ButtonSpec};
 use super::scene_template_card_actions::{
-    card_action_rects, card_add_hover_token, card_generate_hover_token, ACTION_INSET,
-    ACTION_LABEL_SIZE, ACTION_RADIUS,
+    card_add_hover_token, card_generate_hover_token, ACTION_INSET, ACTION_LABEL_SIZE, ACTION_RADIUS,
 };
 use super::scene_template_panel::{
     preview_height, SceneTemplatePanel, CARD_PALETTE_H, CARD_PREVIEW_INSET,
@@ -314,7 +315,7 @@ impl SceneTemplatePanel<'_> {
         template: &'static SceneTemplateDefinition,
     ) {
         let picture = Self::card_preview_rect(card);
-        let (actions, _) = card_action_rects(card, self.card_offers_generate(template));
+        let (actions, _) = self.card_action_rects_for(card, self.card_offers_generate(template));
         let text_w = (picture.size.x - ACTION_INSET * 2.0).max(0.0);
         let lines = wrap_to_width(
             template.summary_for_locale(self.locale),
@@ -366,7 +367,7 @@ impl SceneTemplatePanel<'_> {
         template: &'static SceneTemplateDefinition,
         index: usize,
     ) {
-        let (add, generate) = card_action_rects(card, self.card_offers_generate(template));
+        let (add, generate) = self.card_action_rects_for(card, self.card_offers_generate(template));
         self.paint_card_action(
             cx,
             add,
@@ -459,7 +460,12 @@ impl SceneTemplatePanel<'_> {
     /// "6 页 · 1920×1080" — what distinguishes a deck from a poster at a
     /// glance, which is the decision the card exists to support.
     pub(super) fn metadata(&self, template: &SceneTemplateDefinition) -> String {
-        let count = template.frames.to_string();
+        self.frames_metadata(template.frames, template.frame_width, template.frame_height)
+    }
+
+    /// "N 页 · W×H" — the same sentence for a saved template's card.
+    fn frames_metadata(&self, frames: u16, width: u32, height: u32) -> String {
+        let count = frames.to_string();
         let pages =
             op_i18n::translate_with(self.locale, "sceneTemplate.frames", &[("count", &count)]);
         let pages = if pages == "sceneTemplate.frames" {
@@ -467,10 +473,180 @@ impl SceneTemplatePanel<'_> {
         } else {
             pages
         };
-        format!(
-            "{pages} · {}×{}",
-            template.frame_width, template.frame_height
-        )
+        format!("{pages} · {width}×{height}")
+    }
+
+    // ------------------------------------------------------------------
+    // Saved-template cards ("My templates")
+    // ------------------------------------------------------------------
+
+    /// One saved-template card: the same surface language as the shipped
+    /// cards — picture, caption, lift on hover — minus everything a saved
+    /// template does not have: no palette band (none is declared), no scene
+    /// chip (none is known), no generate action (no style guide to pin).
+    /// The one extra control is the hover ✕ that forgets it, mirroring the
+    /// style cards' delete.
+    pub(super) fn paint_user_card(
+        &self,
+        cx: &mut PaintCx<'_>,
+        rect: Rect,
+        card: &UserTemplateCard,
+        index: usize,
+    ) {
+        let hovered = self.state.editor_ui.scene_template_center.hover == Some(index)
+            || self.template_delete_visible(index);
+        cx.backend.fill_round_rect(
+            rect,
+            CARD_RADIUS,
+            if hovered {
+                self.theme.accent
+            } else {
+                self.theme.card
+            },
+        );
+        cx.backend.stroke_round_rect(
+            rect,
+            CARD_RADIUS,
+            if hovered {
+                self.theme.foreground.with_alpha(0.22)
+            } else {
+                self.theme.border
+            },
+            1.0,
+        );
+        paint_button_feedback_wash(
+            cx.backend,
+            &self.theme,
+            rect,
+            CARD_RADIUS,
+            hovered,
+            self.is_pressed(index),
+        );
+
+        self.paint_user_preview_block(cx, rect, card);
+        self.paint_user_caption(cx, rect, card);
+
+        if self.template_delete_visible(index) {
+            self.paint_user_delete_button(cx, Self::template_delete_rect(rect), index);
+        }
+    }
+
+    /// The preview block: the runtime JPEG on top, the muted fill that the
+    /// shipped palette band would occupy beneath it, one rounded clip around
+    /// both.
+    fn paint_user_preview_block(
+        &self,
+        cx: &mut PaintCx<'_>,
+        card: Rect,
+        template: &UserTemplateCard,
+    ) {
+        let block = Self::card_preview_block_rect(card);
+        let picture = Self::card_preview_rect(card);
+        cx.backend.save();
+        cx.backend.clip_round_rect(block, PREVIEW_RADIUS);
+        self.paint_user_picture(cx, picture, template);
+        // No declared palette, so the band is a plain fill — it keeps the
+        // block's rounded bottom from showing the card through it.
+        cx.backend
+            .fill_rect(Self::card_palette_rect(card), self.theme.muted);
+        cx.backend.restore();
+        cx.backend
+            .stroke_round_rect(block, PREVIEW_RADIUS, self.theme.border, 1.0);
+    }
+
+    fn paint_user_picture(&self, cx: &mut PaintCx<'_>, picture: Rect, template: &UserTemplateCard) {
+        if template.preview_jpeg.is_empty() {
+            cx.backend.fill_rect(picture, self.theme.muted);
+            return;
+        }
+        // Same decode handshake the shipped previews use, but the bytes are
+        // runtime registry bytes rather than a baked-in asset. The cache id is
+        // tied to the immutable registry allocation, so search/reorder keeps
+        // it stable while replacement preview bytes get a fresh slot.
+        if !has_cached_image_bytes(template.image_id) {
+            store_remote_image_bytes(template.image_id, template.preview_jpeg.clone());
+        }
+        let max_edge_px = required_raster_edge(picture, cx.backend.dpi_scale());
+        let sharp =
+            cx.backend
+                .image_decoded(template.image_id, &template.preview_jpeg, max_edge_px);
+        if !sharp {
+            note_pending_decode(template.image_id, max_edge_px);
+        }
+        if !sharp && !cx.backend.image_resident(template.image_id) {
+            cx.backend.fill_rect(picture, self.theme.muted);
+            return;
+        }
+        cx.backend.draw_image_with_mode(
+            picture,
+            template.image_id,
+            &template.preview_jpeg,
+            ImageDrawMode::Fill,
+        );
+    }
+
+    /// Title on the left, `N 页 · W×H` right-aligned on the same baseline.
+    /// No scene chip beneath: a saved template carries no scene.
+    fn paint_user_caption(&self, cx: &mut PaintCx<'_>, card: Rect, template: &UserTemplateCard) {
+        let top = Self::card_caption_top(card);
+        let left = card.origin.x + TEXT_INSET;
+        let right = card.origin.x + card.size.x - TEXT_INSET;
+        let baseline = top + 24.0;
+
+        let metadata =
+            self.frames_metadata(template.frames, template.frame_width, template.frame_height);
+        let meta_w = measure_chrome(cx.backend, &metadata, META_SIZE);
+        self.paint_text(
+            cx,
+            &metadata,
+            Point2D::new(right - meta_w, baseline),
+            META_SIZE,
+            self.theme.muted_foreground,
+        );
+
+        let title_w = (right - meta_w - 10.0 - left).max(0.0);
+        // The name is verbatim — the user's own word, deliberately not
+        // translated — so it is truncated to the room the metadata leaves.
+        let title = super::scene_template_panel_paint::truncate_to_width(
+            &template.name,
+            title_w,
+            CARD_TITLE_SIZE,
+        );
+        self.paint_text(
+            cx,
+            &title,
+            Point2D::new(left, baseline),
+            CARD_TITLE_SIZE,
+            self.theme.foreground,
+        );
+    }
+
+    /// The ✕ that forgets a saved template — the same hover-gated corner
+    /// button the imported style cards carry.
+    fn paint_user_delete_button(&self, cx: &mut PaintCx<'_>, rect: Rect, index: usize) {
+        let hovered = self.state.editor_ui.scene_template_center.hover
+            == Some(Self::template_delete_hover_token(index));
+        cx.backend.fill_round_rect(
+            rect,
+            rect.size.x / 2.0,
+            if hovered {
+                self.theme.destructive
+            } else {
+                self.theme.muted
+            },
+        );
+        draw_icon(
+            cx.backend,
+            Icon::Close,
+            Point2D::new(rect.origin.x + 6.0, rect.origin.y + 6.0),
+            rect.size.x - 12.0,
+            if hovered {
+                self.theme.destructive_foreground
+            } else {
+                self.theme.muted_foreground
+            },
+            1.6,
+        );
     }
 }
 

@@ -16,7 +16,7 @@ fn labels() -> PropertyLabels {
 
 #[test]
 fn three_rects_are_adjacent_and_non_overlapping_when_interact_shown() {
-    let rects = tab_strip_rects(&labels(), 100.0, 0.0, true);
+    let rects = tab_strip_rects(&labels(), 100.0, 0.0, true, false);
     assert_eq!(rects.len(), 3);
     assert_eq!(rects[0].0, PropertyTab::Design);
     assert_eq!(rects[1].0, PropertyTab::Interact);
@@ -38,7 +38,7 @@ fn three_rects_are_adjacent_and_non_overlapping_when_interact_shown() {
 
 #[test]
 fn interact_absent_and_code_directly_follows_design_when_flag_off() {
-    let rects = tab_strip_rects(&labels(), 100.0, 0.0, false);
+    let rects = tab_strip_rects(&labels(), 100.0, 0.0, false, false);
     assert_eq!(rects.len(), 2);
     assert_eq!(rects[0].0, PropertyTab::Design);
     assert_eq!(rects[1].0, PropertyTab::Code);
@@ -48,14 +48,14 @@ fn interact_absent_and_code_directly_follows_design_when_flag_off() {
 
 #[test]
 fn tab_strip_hit_maps_clicks_onto_all_three_tabs() {
-    let rects = tab_strip_rects(&labels(), 100.0, 0.0, true);
+    let rects = tab_strip_rects(&labels(), 100.0, 0.0, true, false);
     for (tab, rect) in &rects {
         let center = Point2D::new(
             rect.origin.x + rect.size.x / 2.0,
             rect.origin.y + rect.size.y / 2.0,
         );
         assert_eq!(
-            tab_strip_hit(&labels(), 100.0, 0.0, center, true),
+            tab_strip_hit(&labels(), 100.0, 0.0, center, true, false),
             Some(*tab)
         );
     }
@@ -68,7 +68,15 @@ fn tab_strip_hit_maps_clicks_onto_all_three_tabs() {
         interact_rect.origin.y + interact_rect.size.y / 2.0,
     );
     assert_ne!(
-        tab_strip_hit(&labels(), 100.0, 0.0, interact_center, false),
+        tab_strip_hit(&labels(), 100.0, 0.0, interact_center, false, false),
         Some(PropertyTab::Interact)
     );
+}
+
+#[test]
+fn touch_tabs_resolve_to_at_least_44_physical_points() {
+    let rects = tab_strip_rects(&labels(), 0.0, 0.0, false, true);
+    for (_, rect) in rects {
+        assert!(rect.size.y * 1.47 >= 44.0);
+    }
 }

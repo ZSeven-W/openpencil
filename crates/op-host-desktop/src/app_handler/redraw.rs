@@ -370,9 +370,9 @@ impl DesktopApp {
                 self.redraw_dirty = true;
             }
         }
-        // Drain the picker-open catalog refresh — a CLI that gained
-        // models since the last probe shows up without a restart.
-        if self.drain_model_catalog_refresh() {
+        // Drain picker-open built-in HTTP catalogs. Core rejects results whose
+        // target generation or credential fingerprint changed in flight.
+        if self.drain_builtin_model_refresh() {
             self.redraw_dirty = true;
         }
         // Drain the background auto-update probe.

@@ -1,0 +1,31 @@
+[package]
+name = "op-render-export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Mobile-safe OpenPencil raster, SVG, and PDF export core"
+
+[lib]
+name = "op_render_export"
+path = "src/lib.rs"
+
+[features]
+default = []
+pinned-skia-binaries = ["skia-safe/no-compile"]
+
+[dependencies]
+op-editor-core = { path = "../op-editor-core" }
+op-editor-ui = { path = "../op-editor-ui" }
+op-host-native = { path = "../op-host-native", default-features = false }
+op-pen-loader = { path = "../op-pen-loader" }
+glam = { version = "0.29", default-features = false, features = ["std"] }
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+  "pdf",
+] }
+
+[dev-dependencies]
+base64 = "0.22"
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }

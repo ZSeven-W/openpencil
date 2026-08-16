@@ -45,7 +45,7 @@ use op_collab::{
 use op_collab_transport::{JoinIntent, SharedQueueBudget, StaticKeyStore, TransportConfig};
 use op_editor_core::{
     CollabAvailability, CollabConnectionPhase, CollabNoticeKind, CollabPendingEditUi,
-    CollabRejectUiCode, CollabUiAction,
+    CollabRejectUiCode, CollabTransportCapabilities, CollabUiAction,
 };
 use support::{production_key_store, random_epoch};
 
@@ -111,6 +111,7 @@ pub struct CollabRuntime {
     key_store: Arc<dyn StaticKeyStore>,
     bridge_budget: SharedQueueBudget,
     relay_locator_control_plane: Arc<dyn RelayLocatorControlPlane>,
+    transport_capabilities: CollabTransportCapabilities,
 }
 
 struct OwnerReadyState {
@@ -137,7 +138,7 @@ impl CollabRuntime {
         runtime
     }
 
-    fn with_key_store(key_store: Arc<dyn StaticKeyStore>) -> Self {
+    pub fn with_key_store(key_store: Arc<dyn StaticKeyStore>) -> Self {
         let maximum = TransportConfig::default().connections.global_queued_bytes;
         let bridge_budget =
             SharedQueueBudget::new(maximum).expect("default collaboration bridge budget is valid");
@@ -182,7 +183,13 @@ impl CollabRuntime {
             key_store,
             bridge_budget,
             relay_locator_control_plane: Arc::new(EnvironmentRelayLocatorControlPlane),
+            transport_capabilities: CollabTransportCapabilities::default(),
         }
+    }
+
+    /// Restrict transport paths exposed to and accepted from shared chrome.
+    pub fn set_transport_capabilities(&mut self, capabilities: CollabTransportCapabilities) {
+        self.transport_capabilities = capabilities;
     }
 
     pub fn set_wake_notifier(&mut self, notifier: CollabWakeNotifier) {
@@ -204,12 +211,20 @@ impl CollabRuntime {
             CollabAvailability::SignInRequired
         };
         let collab = &mut host.editor_state_mut().editor_ui.collab;
-        if collab.availability == next {
-            return false;
+        let mut changed = false;
+        if collab.transport_capabilities != self.transport_capabilities {
+            collab.transport_capabilities = self.transport_capabilities;
+            collab.panel.hover = None;
+            changed = true;
         }
-        collab.set_availability(next);
-        host.mark_editor_state_dirty();
-        true
+        if collab.availability != next {
+            collab.set_availability(next);
+            changed = true;
+        }
+        if changed {
+            host.mark_editor_state_dirty();
+        }
+        changed
     }
 
     pub fn drain_ui_action(&mut self, host: &mut impl CollabHost) -> bool {
@@ -221,6 +236,14 @@ impl CollabRuntime {
         else {
             return false;
         };
+        if !self.transport_capabilities.supports(&action) {
+            self.set_notice(
+                host,
+                CollabNoticeKind::Reject(CollabRejectUiCode::Unsupported),
+            );
+            host.mark_editor_state_dirty();
+            return true;
+        }
         let result = match action {
             CollabUiAction::OpenCreate => Ok(()),
             CollabUiAction::Start => self.start_owner(host, true),

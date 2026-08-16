@@ -11,7 +11,6 @@ use op_editor_ui::Point2D;
 impl WidgetHostNative {
     pub fn update_agent_settings_hover(&mut self, x: f32, y: f32) -> bool {
         use op_editor_core::AgentSettingsTab;
-        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
         self.refresh_layout_scene();
         let point = Point2D::new(x, y);
         let (
@@ -21,6 +20,7 @@ impl WidgetHostNative {
             new_acp,
             new_acp_preset,
             new_preset_hover,
+            new_model_hover,
             new_close_hover,
             new_server_hover,
             new_copy_hover,
@@ -35,8 +35,8 @@ impl WidgetHostNative {
             new_image_profile_test_hover,
             new_image_provider_option_hover,
         ) = {
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+            let (panel, panel_rect) =
+                self.agent_settings_geometry(self.last_viewport_w, self.last_viewport_h);
             let nav = panel.nav_at(panel_rect, point);
             let tab = self.editor_state.editor_ui.agent_settings.tab;
             let is_agents = matches!(tab, AgentSettingsTab::Agents);
@@ -65,6 +65,11 @@ impl WidgetHostNative {
             };
             let preset_hover = if is_agents {
                 panel.builtin_preset_hover_at(panel_rect, point)
+            } else {
+                None
+            };
+            let model_hover = if is_agents {
+                panel.builtin_model_hover_at(panel_rect, point)
             } else {
                 None
             };
@@ -155,6 +160,7 @@ impl WidgetHostNative {
                 acp,
                 acp_preset,
                 preset_hover,
+                model_hover,
                 close_hover,
                 server_hover,
                 copy_hover,
@@ -211,6 +217,19 @@ impl WidgetHostNative {
                 .editor_ui
                 .agent_settings
                 .builtin_preset_menu_hover = new_preset_hover;
+            changed = true;
+        }
+        if new_model_hover
+            != self
+                .editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_model_menu_hover
+        {
+            self.editor_state
+                .editor_ui
+                .agent_settings
+                .builtin_model_menu_hover = new_model_hover;
             changed = true;
         }
         if new_close_hover
@@ -388,8 +407,8 @@ impl WidgetHostNative {
         ) {
             use op_editor_ui::widgets::agent_settings_fonts::FontsHit;
             use op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit;
-            let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-            let panel_rect = panel.rect(self.last_viewport_w, self.last_viewport_h);
+            let (panel, panel_rect) =
+                self.agent_settings_geometry(self.last_viewport_w, self.last_viewport_h);
             match panel.hit_test(panel_rect, point) {
                 AgentSettingsHit::Fonts(FontsHit::ChooseFont(row)) => (
                     Some(op_editor_core::missing_fonts::MissingFontsHover::ChooseFile(row)),

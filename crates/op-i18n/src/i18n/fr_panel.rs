@@ -685,6 +685,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "Exporter en PDF",
         "slidesPanel.exportAllSlides" => "Exporter toutes les diapositives",
         "slidesPanel.exportSelectedSlides" => "Exporter les diapositives sélectionnées ({{count}})",
+        "settings.tab.ai" => "IA",
         "settings.agents.heroTitle" => "Connectez votre fournisseur d'IA",
         "settings.agents.heroSubtitle" => "OpenPencil pilote vos agents CLI locaux et vos fournisseurs d'API — connectez-en un pour générer des designs.",
         "settings.agents.statusConnected" => "Connecté",

@@ -20,7 +20,7 @@
 //! | `agent_settings/config_types.rs`| built-in / ACP / image-gen value types |
 //! | `agent_settings/mutators.rs`    | `impl AgentSettings` mutators        |
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::agent_settings_builtin_presets::BuiltinAgentPresetKey;
 pub use crate::chat::AgentProvider;
@@ -29,8 +29,9 @@ mod config_types;
 mod mutators;
 
 pub use config_types::{
-    AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig, BuiltinAgentKind, ImageGenProfile,
-    ImageGenProvider, OPENVERSE_AUTH_DOCS_URL,
+    normalize_builtin_models, AcpAgentConfig, AcpConnectionType, BuiltinAgentConfig,
+    BuiltinAgentKind, ImageGenProfile, ImageGenProvider, MAX_BUILTIN_AGENT_MODELS,
+    MAX_BUILTIN_MODEL_CHARS, OPENVERSE_AUTH_DOCS_URL,
 };
 
 /// Which section of the settings modal is active.
@@ -83,14 +84,17 @@ pub enum McpCli {
     Cursor,
     Kimi,
     ZCode,
+    Dsh,
 }
 
 impl McpCli {
     /// Append-only: `mcp_cli_enabled` is indexed positionally by this
     /// array, and `migrate_mcp_cli_flags` reads persisted settings by the
     /// same index. Inserting in the middle silently reassigns a user's
-    /// saved toggles to the wrong CLIs.
-    pub const ALL: [McpCli; 12] = [
+    /// saved toggles to the wrong CLIs. New CLIs must be appended at the
+    /// end (12 → 13) and appended to `DISPLAY` wherever the product wants
+    /// the row to show.
+    pub const ALL: [McpCli; 13] = [
         McpCli::ClaudeCode,
         McpCli::Codex,
         McpCli::OpenCode,
@@ -103,7 +107,38 @@ impl McpCli {
         McpCli::Cursor,
         McpCli::Kimi,
         McpCli::ZCode,
+        McpCli::Dsh,
     ];
+
+    /// Row order on the MCP tab's terminal-integrations list. Deliberately
+    /// NOT the persistence order — paint and hit-test both walk this array
+    /// (row `i` shows `DISPLAY[i]`) while the toggle state is read through
+    /// [`McpCli::index`] into the append-only `mcp_cli_enabled` layout.
+    /// Kept a permutation of `ALL`; `tests_agent_settings.rs` asserts that.
+    pub const DISPLAY: [McpCli; 13] = [
+        McpCli::ClaudeCode,
+        McpCli::Codex,
+        McpCli::Dsh,
+        McpCli::OpenCode,
+        McpCli::Kiro,
+        McpCli::GithubCopilot,
+        McpCli::Antigravity,
+        McpCli::GrokBuild,
+        McpCli::GeminiCli,
+        McpCli::QwenCode,
+        McpCli::Cursor,
+        McpCli::Kimi,
+        McpCli::ZCode,
+    ];
+
+    /// Position in [`McpCli::ALL`] — the index of this CLI's toggle in
+    /// `mcp_cli_enabled` (and in the persisted positional flag arrays).
+    pub fn index(self) -> usize {
+        McpCli::ALL
+            .iter()
+            .position(|candidate| *candidate == self)
+            .expect("every McpCli variant is registered in McpCli::ALL")
+    }
 
     pub fn label(self) -> &'static str {
         match self {
@@ -119,6 +154,7 @@ impl McpCli {
             McpCli::Cursor => "Cursor",
             McpCli::Kimi => "Kimi CLI",
             McpCli::ZCode => "ZCode",
+            McpCli::Dsh => "DeepSeek Harness",
         }
     }
 }
@@ -128,6 +164,10 @@ impl McpCli {
 // call sites keep the `agent_settings::McpServer` path.
 pub use crate::agent_settings_acp_connection::{
     AcpAgentConnectOutcome, AcpAgentConnectPhase, AcpAgentConnectRequest, AcpAgentConnection,
+};
+pub use crate::agent_settings_builtin_models::{
+    BuiltinModelCatalog, BuiltinModelCatalogPhase, BuiltinModelCatalogRefreshOutcome,
+    BuiltinModelCatalogRefreshRequest, BuiltinModelCatalogTarget, BuiltinModelOption,
 };
 pub use crate::agent_settings_connection::{
     McpServer, ProviderConnectOutcome, ProviderConnectPhase, ProviderConnection,
@@ -200,11 +240,20 @@ pub enum BuiltinAgentPresetMenuTarget {
     Draft,
 }
 
+/// Which built-in provider form has its model dropdown open. The menu
+/// targets the same cards as `BuiltinAgentPresetMenuTarget`, but it is
+/// keyed on the Model field instead of the provider preset select.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinModelMenuTarget {
+    Agent(usize),
+    Draft,
+}
+
 /// State for the floating agent-settings modal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgentSettings {
     pub tab: AgentSettingsTab,
-    pub connected: [bool; 6],
+    pub connected: [bool; 7],
     /// The embedding host's real MCP endpoint (e.g. the VS Code
     /// extension's McpProxy URL), delivered via the bridge `init`
     /// message. When set, the MCP tab's client-config card displays
@@ -214,7 +263,7 @@ pub struct AgentSettings {
     pub embed_mcp_url: Option<String>,
     /// Probe-derived per-provider connect status, indexed like
     /// `connected`. Runtime-only — not persisted.
-    pub provider_connection: [ProviderConnection; 6],
+    pub provider_connection: [ProviderConnection; 7],
     /// Connect-press request seam — the desktop host drains this
     /// into the async provider probe (`provider_probe_host.rs`).
     pub pending_provider_connect: Option<AgentProvider>,
@@ -223,7 +272,18 @@ pub struct AgentSettings {
     pub builtin_preset_menu_open: Option<BuiltinAgentPresetMenuTarget>,
     pub builtin_preset_menu_scroll: jian_core::scroll::ScrollState,
     pub builtin_preset_menu_hover: Option<BuiltinAgentPresetKey>,
+    /// Dropdown of discovered models anchored to the built-in form's
+    /// Model field. Runtime-only — never persisted.
+    pub builtin_model_menu_open: Option<BuiltinModelMenuTarget>,
+    pub builtin_model_menu_scroll: jian_core::scroll::ScrollState,
+    /// Hovered row index into the visible model options.
+    pub builtin_model_menu_hover: Option<usize>,
     pub next_builtin_agent_id: u64,
+    /// Runtime-only provider model catalogs. Persisted settings retain only the
+    /// explicitly selected `BuiltinAgentConfig::models`.
+    pub builtin_model_catalogs: BTreeMap<BuiltinModelCatalogTarget, BuiltinModelCatalog>,
+    pub pending_builtin_model_catalog_refreshes: VecDeque<BuiltinModelCatalogRefreshRequest>,
+    pub builtin_model_catalog_generation: u64,
     /// Ids of `builtin_agents` that were auto-imported from an external
     /// CLI config (e.g. Zode's `~/.zode/config.json`). Runtime-only —
     /// NOT persisted. These agents are re-derived from their source file
@@ -247,7 +307,7 @@ pub struct AgentSettings {
     pub acp_preset_installed: BTreeMap<String, bool>,
     pub scroll_y: jian_core::scroll::ScrollState,
     pub mcp_server: McpServer,
-    pub mcp_cli_enabled: [bool; 12],
+    pub mcp_cli_enabled: [bool; 13],
     pub mcp_client_config_copied_at_ms: Option<u64>,
     pub hover_agent_settings_close: bool,
     pub hover_mcp_server_button: bool,
@@ -301,7 +361,7 @@ impl Default for AgentSettings {
     fn default() -> Self {
         Self {
             tab: AgentSettingsTab::Agents,
-            connected: [false; 6],
+            connected: [false; 7],
             embed_mcp_url: None,
             provider_connection: Default::default(),
             pending_provider_connect: None,
@@ -310,7 +370,13 @@ impl Default for AgentSettings {
             builtin_preset_menu_open: None,
             builtin_preset_menu_scroll: Default::default(),
             builtin_preset_menu_hover: None,
+            builtin_model_menu_open: None,
+            builtin_model_menu_scroll: Default::default(),
+            builtin_model_menu_hover: None,
             next_builtin_agent_id: 1,
+            builtin_model_catalogs: BTreeMap::new(),
+            pending_builtin_model_catalog_refreshes: VecDeque::new(),
+            builtin_model_catalog_generation: 0,
             imported_agent_ids: BTreeSet::new(),
             acp_agents: Vec::new(),
             acp_agent_draft: None,
@@ -321,7 +387,7 @@ impl Default for AgentSettings {
             acp_preset_installed: BTreeMap::new(),
             scroll_y: Default::default(),
             mcp_server: McpServer::default(),
-            mcp_cli_enabled: [false; 12],
+            mcp_cli_enabled: [false; 13],
             mcp_client_config_copied_at_ms: None,
             hover_agent_settings_close: false,
             hover_mcp_server_button: false,

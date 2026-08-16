@@ -5,14 +5,17 @@
 //! treated as an error); outbound events are built with `serde_json::json!`
 //! and serialized once per call.
 //!
-//! Message `type` values — inbound: `op-bridge/init`, `op-bridge/open-document`,
-//! `op-bridge/snapshot`, `op-bridge/save-committed`, `op-bridge/resolve-conflict`;
+//! Message `type` values — inbound: `op-bridge/init`, `op-bridge/theme`,
+//! `op-bridge/locale`, `op-bridge/open-document`, `op-bridge/snapshot`,
+//! `op-bridge/save-committed`, `op-bridge/resolve-conflict`;
 //! outbound: `op-bridge/ready`, `op-bridge/dirty-changed`, `op-bridge/opened`,
 //! `op-bridge/snapshot-result`, `op-bridge/snapshot-conflict`,
 //! `op-bridge/sync-conflict`, `op-bridge/conflict-resolved`. Field names are
 //! camelCase (`requestId`, `serverVersion`, `docJson`).
 
 use serde_json::Value;
+
+use crate::{Locale, ThemeMode};
 
 #[derive(Debug, PartialEq)]
 pub enum BridgeInbound {
@@ -23,6 +26,12 @@ pub enum BridgeInbound {
         /// instead of the daemon-internal port. Optional: older hosts
         /// don't send it.
         mcp_url: Option<String>,
+    },
+    Theme {
+        color_scheme: ThemeMode,
+    },
+    Locale {
+        locale: Locale,
     },
     OpenDocument {
         json: String,
@@ -62,6 +71,14 @@ impl BridgeInbound {
                     .map(str::to_string);
                 Some(BridgeInbound::Init { token, mcp_url })
             }
+            "op-bridge/theme" => {
+                let color_scheme = color_scheme_from_wire(value.get("colorScheme")?.as_str()?)?;
+                Some(BridgeInbound::Theme { color_scheme })
+            }
+            "op-bridge/locale" => {
+                let locale = locale_from_wire(value.get("locale")?.as_str()?)?;
+                Some(BridgeInbound::Locale { locale })
+            }
             "op-bridge/open-document" => {
                 let json = value.get("json")?.as_str()?.to_string();
                 Some(BridgeInbound::OpenDocument { json })
@@ -93,6 +110,26 @@ impl BridgeInbound {
             }
             _ => None,
         }
+    }
+}
+
+/// Strictly parse the two color-scheme values accepted from an embedding
+/// host. This is public so the web mount can apply the identical contract to
+/// its `?theme=` bootstrap hint before the first paint.
+pub fn color_scheme_from_wire(raw: &str) -> Option<ThemeMode> {
+    match raw {
+        "light" => Some(ThemeMode::Light),
+        "dark" => Some(ThemeMode::Dark),
+        _ => None,
+    }
+}
+
+/// Strictly parse the two BCP 47 locale values accepted from an embedding host.
+pub fn locale_from_wire(raw: &str) -> Option<Locale> {
+    match raw {
+        "zh-CN" => Some(Locale::ZhCn),
+        "en-US" => Some(Locale::EnUs),
+        _ => None,
     }
 }
 
@@ -198,6 +235,18 @@ mod tests {
             })
         );
         assert_eq!(
+            BridgeInbound::parse(r#"{"type":"op-bridge/theme","colorScheme":"light"}"#),
+            Some(BridgeInbound::Theme {
+                color_scheme: ThemeMode::Light
+            })
+        );
+        assert_eq!(
+            BridgeInbound::parse(r#"{"type":"op-bridge/theme","colorScheme":"dark"}"#),
+            Some(BridgeInbound::Theme {
+                color_scheme: ThemeMode::Dark
+            })
+        );
+        assert_eq!(
             BridgeInbound::parse(
                 r#"{"type":"op-bridge/resolve-conflict","mode":"use-local","requestId":"r1"}"#
             ),
@@ -206,8 +255,49 @@ mod tests {
                 request_id: "r1".into()
             })
         );
+        assert_eq!(
+            BridgeInbound::parse(r#"{"type":"op-bridge/locale","locale":"zh-CN"}"#),
+            Some(BridgeInbound::Locale {
+                locale: Locale::ZhCn
+            })
+        );
+        assert_eq!(
+            BridgeInbound::parse(r#"{"type":"op-bridge/locale","locale":"en-US"}"#),
+            Some(BridgeInbound::Locale {
+                locale: Locale::EnUs
+            })
+        );
         assert_eq!(BridgeInbound::parse(r#"{"type":"react-devtools"}"#), None);
         assert_eq!(BridgeInbound::parse("not json"), None);
+    }
+
+    #[test]
+    fn theme_requires_an_exact_supported_color_scheme() {
+        for raw in [
+            r#"{"type":"op-bridge/theme"}"#,
+            r#"{"type":"op-bridge/theme","colorScheme":null}"#,
+            r#"{"type":"op-bridge/theme","colorScheme":1}"#,
+            r#"{"type":"op-bridge/theme","colorScheme":"Light"}"#,
+            r#"{"type":"op-bridge/theme","colorScheme":"system"}"#,
+            r#"{"type":"op-bridge/theme","colorScheme":""}"#,
+        ] {
+            assert_eq!(BridgeInbound::parse(raw), None, "{raw}");
+        }
+    }
+
+    #[test]
+    fn locale_requires_an_exact_supported_value() {
+        for raw in [
+            r#"{"type":"op-bridge/locale"}"#,
+            r#"{"type":"op-bridge/locale","locale":null}"#,
+            r#"{"type":"op-bridge/locale","locale":1}"#,
+            r#"{"type":"op-bridge/locale","locale":"zh"}"#,
+            r#"{"type":"op-bridge/locale","locale":"en"}"#,
+            r#"{"type":"op-bridge/locale","locale":"EN"}"#,
+            r#"{"type":"op-bridge/locale","locale":""}"#,
+        ] {
+            assert_eq!(BridgeInbound::parse(raw), None, "{raw}");
+        }
     }
 
     #[test]

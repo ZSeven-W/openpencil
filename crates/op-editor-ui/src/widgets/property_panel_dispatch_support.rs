@@ -62,6 +62,10 @@ pub fn apply_codegen_action(
 ) -> CodegenFollowUp {
     use op_editor_core::codegen::CodegenPhase;
     let property_panel_width = state.editor_ui.property_panel_width;
+    let density = PropertyPanel::for_selection(state);
+    let logical_property_panel_width = density.as_ref().map_or(property_panel_width, |panel| {
+        panel.logical_length(property_panel_width)
+    });
     let cg = &mut state.codegen;
     match action {
         CodegenAction::SelectFramework(fw) => {
@@ -108,9 +112,15 @@ pub fn apply_codegen_action(
         CodegenAction::Download => CodegenFollowUp::Download,
         CodegenAction::ExportBundle => CodegenFollowUp::ExportBundle,
         CodegenAction::ScrollFrameworksLeft | CodegenAction::ScrollFrameworksRight => {
-            let max =
-                crate::widgets::property_panel_code::framework_row_overflow(property_panel_width);
-            let step = 100.0;
+            let logical_max = crate::widgets::property_panel_code::framework_row_overflow(
+                logical_property_panel_width,
+            );
+            let max = density
+                .as_ref()
+                .map_or(logical_max, |panel| panel.physical_length(logical_max));
+            let step = density
+                .as_ref()
+                .map_or(100.0, |panel| panel.physical_length(100.0));
             let delta = if matches!(action, CodegenAction::ScrollFrameworksLeft) {
                 -step
             } else {

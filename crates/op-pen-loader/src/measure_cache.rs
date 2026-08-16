@@ -24,11 +24,13 @@ use std::rc::Rc;
 
 use jian_core::layout::measure::{FontStyleKind, MeasureBackend, MeasureRequest, MeasureResult};
 
-/// Cap on distinct cached measurements. A large multi-page design has at most a
-/// few thousand distinct text leaves; past this, drop the whole cache rather
-/// than track LRU order — a full refill is one layout pass, far cheaper than
-/// per-measure bookkeeping.
-const MAX_ENTRIES: usize = 8192;
+/// Cap on distinct cached measurements. Sized above the snapshot importer's
+/// 40,000-node budget (a text-heavy web capture can carry tens of thousands
+/// of distinct text leaves — at the old 8,192 such an import cleared the
+/// cache mid-pass and re-measured at a near-0% hit rate); past this, drop the
+/// whole cache rather than track LRU order — a full refill is one layout
+/// pass, far cheaper than per-measure bookkeeping.
+const MAX_ENTRIES: usize = 49_152;
 
 /// Owned, hashable mirror of a `StyledRun`. `f32` fields are keyed by their bit
 /// pattern (`to_bits`) since `f32` is not `Hash`/`Eq`; font sizes / spacings are

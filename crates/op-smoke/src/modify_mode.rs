@@ -235,7 +235,7 @@ fn build_openai_compat_provider(
         display_name: "smoke-modify".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key,
-        model,
+        models: vec![model],
         base_url,
         enabled: true,
     };

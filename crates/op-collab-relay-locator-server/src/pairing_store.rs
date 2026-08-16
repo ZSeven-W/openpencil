@@ -317,6 +317,17 @@ mod tests {
         assert_eq!(
             store.put(
                 OWNER_A,
+                code_id(8),
+                vec![0; MAX_SEALED_INVITE_BYTES],
+                1,
+                FAR
+            ),
+            Ok(PairingPutOutcome::Stored),
+            "opaque storage retains the v0.8.4 sealed-blob ceiling"
+        );
+        assert_eq!(
+            store.put(
+                OWNER_A,
                 code_id(9),
                 vec![0; MAX_SEALED_INVITE_BYTES + 1],
                 1,

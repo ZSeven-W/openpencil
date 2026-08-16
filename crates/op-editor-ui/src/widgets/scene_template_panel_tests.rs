@@ -76,6 +76,8 @@ fn the_filter_row_fits_the_panel_in_every_locale() {
 #[test]
 fn cards_fill_their_row_and_wrap_inside_the_viewport() {
     let state = open_state();
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
+
     let panel = SceneTemplatePanel::for_editor(&state).expect("open");
     let viewport = panel.cards_viewport(PANEL);
     let (columns, _, _) = panel.grid_metrics(PANEL);
@@ -345,6 +347,8 @@ fn the_grid_fills_the_panel_while_a_single_control_stays_capped() {
 #[test]
 fn a_press_on_a_card_resolves_to_that_template() {
     let state = open_state();
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
+
     let panel = SceneTemplatePanel::for_editor(&state).expect("open");
     let templates = panel.filtered();
     let (index, rect) = panel.card_rects(PANEL).into_iter().next().expect("a card");
@@ -363,6 +367,8 @@ fn a_press_on_a_card_resolves_to_that_template() {
 #[test]
 fn search_narrows_the_grid_and_an_empty_result_is_representable() {
     let mut state = open_state();
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
+
     state.editor_ui.scene_template_center.search.set_text("PPT");
     let panel = SceneTemplatePanel::for_editor(&state).expect("open");
     let hits = panel.filtered();
@@ -385,6 +391,8 @@ fn a_pointer_below_the_viewport_does_not_hover_a_scrolled_card() {
     // view — paint clips them. Without the viewport gate, a pointer under the
     // panel would light up a row nobody can see.
     let state = open_state();
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
+
     let panel = SceneTemplatePanel::for_editor(&state).expect("open");
     let viewport = panel.cards_viewport(PANEL);
     let below = Point2D::new(

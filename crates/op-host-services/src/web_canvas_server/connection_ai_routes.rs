@@ -8,6 +8,29 @@
 
 use super::*;
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BuiltinModelDiscoveryRequest {
+    id: String,
+    generation: u64,
+    credential: serde_json::Value,
+}
+
+fn parse_builtin_model_discovery_request(
+    body: &str,
+) -> Option<(
+    BuiltinModelDiscoveryRequest,
+    op_editor_core::BuiltinAgentConfig,
+)> {
+    if body.len() > crate::web_credentials::MAX_CREDENTIAL_BODY_BYTES {
+        return None;
+    }
+    let request: BuiltinModelDiscoveryRequest = serde_json::from_str(body).ok()?;
+    let credential =
+        crate::web_credentials::parse_transient_builtin_for_discovery(&request.credential)?;
+    (request.id == credential.id).then_some((request, credential))
+}
+
 /// Serve one `/api/ai/*` route.
 ///
 /// `Ok(None)` means the request is not an AI route and the caller should keep
@@ -23,6 +46,61 @@ pub(super) fn serve_ai_route<S: Read + Write>(
     }
     let state = ctx.state;
     match req.path.as_str() {
+        // Browser-local credentials never enter daemon settings. This route
+        // accepts exactly one request-scoped provider config, applies the
+        // public-endpoint dial policy, and returns a bounded runtime catalog.
+        // It runs on the connection thread and never takes the editor lock.
+        "/api/ai/models/discover" => {
+            let Some((request, credential)) = parse_builtin_model_discovery_request(&req.body)
+            else {
+                crate::mcp_serve::write_mcp_http_response_with_origin(
+                    stream,
+                    "400 Bad Request",
+                    r#"{"ok":false,"error":"invalid model discovery request"}"#,
+                    cors_origin,
+                )?;
+                return Ok(Some(false));
+            };
+            let result = crate::chat_runtime::block_on_anywhere(
+                crate::builtin_model_discovery::discover_builtin_models(
+                    &credential,
+                    crate::builtin_model_discovery::BuiltinModelAccess::PublicOnly,
+                ),
+            );
+            let (status, body) = match result {
+                Ok(catalog) => (
+                    "200 OK",
+                    serde_json::json!({
+                        "ok": true,
+                        "id": request.id,
+                        "generation": request.generation,
+                        "models": catalog.models.into_iter().map(|model| serde_json::json!({
+                            "id": model.id,
+                            "displayName": model.display_name,
+                        })).collect::<Vec<_>>(),
+                    })
+                    .to_string(),
+                ),
+                Err(error) => (
+                    "502 Bad Gateway",
+                    serde_json::json!({
+                        "ok": false,
+                        "id": request.id,
+                        "generation": request.generation,
+                        "unsupported": error.is_unsupported(),
+                        "error": error.to_string(),
+                    })
+                    .to_string(),
+                ),
+            };
+            crate::mcp_serve::write_mcp_http_response_with_origin(
+                stream,
+                status,
+                &body,
+                cors_origin,
+            )?;
+            Ok(Some(false))
+        }
         // AI proxy stream: the browser bundle POSTs a model request and we
         // stream the provider's `ChatDelta`s back as SSE. Streaming route
         // (long-lived socket write), so handled here rather than in the
@@ -185,5 +263,58 @@ pub(super) fn serve_ai_route<S: Read + Write>(
             Ok(Some(false))
         }
         _ => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod model_discovery_tests {
+    use super::*;
+
+    fn credential(id: &str, key: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "preset": "openai",
+            "display_name": "OpenAI",
+            "kind": "openai-compat",
+            "api_key": key,
+            "model": "gpt-test",
+            "base_url": "https://api.openai.com/v1",
+            "enabled": true,
+        })
+    }
+
+    #[test]
+    fn discovery_body_accepts_exactly_one_matching_credential() {
+        let body = serde_json::json!({
+            "id": "builtin-7",
+            "generation": 9,
+            "credential": credential("builtin-7", "sk-one"),
+        })
+        .to_string();
+        let (request, parsed) = parse_builtin_model_discovery_request(&body).expect("request");
+
+        assert_eq!(request.generation, 9);
+        assert_eq!(parsed.id, "builtin-7");
+        assert_eq!(parsed.api_key, "sk-one");
+    }
+
+    #[test]
+    fn discovery_body_rejects_mismatched_identity_and_extra_credentials() {
+        let mismatched = serde_json::json!({
+            "id": "builtin-7",
+            "generation": 9,
+            "credential": credential("builtin-8", "sk-one"),
+        })
+        .to_string();
+        assert!(parse_builtin_model_discovery_request(&mismatched).is_none());
+
+        let extra = serde_json::json!({
+            "id": "builtin-7",
+            "generation": 9,
+            "credential": credential("builtin-7", "sk-one"),
+            "credentials": [credential("builtin-8", "sk-two")],
+        })
+        .to_string();
+        assert!(parse_builtin_model_discovery_request(&extra).is_none());
     }
 }

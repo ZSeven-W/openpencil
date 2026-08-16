@@ -383,7 +383,7 @@
           postInstallNormalize = ''
             rm -f packages/node_modules/.bun/node_modules/{string-width,strip-ansi,wrap-ansi}
           '';
-          hash = "sha256-jaGVEagUeYrM2MzjUPvvzIF7DJwafLXJiWLWtts38SI=";
+          hash = "sha256-aY3Nr1+a1o7TojefRcozmntbdfrF2JRtOrRY8Hqs8rE=";
         };
         webSdkPackages = pkgs.stdenvNoCC.mkDerivation {
           pname = "openpencil-web-sdk-packages";

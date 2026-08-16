@@ -91,7 +91,7 @@ fn model_at_resolves_row_and_skips_headers() {
     };
     let first_row_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
     assert_eq!(
-        model_at(rect, Point2D::new(100.0, first_row_y), &models, 0.0, ""),
+        model_at(rect, Point2D::new(100.0, first_row_y), &models, 0.0, "",),
         Some(0)
     );
     let header_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H / 2.0;
@@ -151,7 +151,7 @@ fn model_at_filters_by_search_and_returns_original_index() {
             Point2D::new(100.0, first_filtered_row_y),
             &models,
             0.0,
-            "5.5"
+            "5.5",
         ),
         Some(1)
     );
@@ -174,7 +174,7 @@ fn model_picker_hit_uses_shared_select_state_protocol() {
     let first_row_y = MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H + MODEL_ROW_H / 2.0;
 
     assert_eq!(
-        model_picker_hit(&state, rect, Point2D::new(100.0, first_row_y), &models, ""),
+        model_picker_hit(&state, rect, Point2D::new(100.0, first_row_y), &models, "",),
         SelectHit::Row(0)
     );
     assert_eq!(
@@ -184,6 +184,42 @@ fn model_picker_hit_uses_shared_select_state_protocol() {
     assert_eq!(
         model_picker_hit(&state, rect, Point2D::new(-1.0, 12.0), &models, ""),
         SelectHit::Outside
+    );
+}
+
+#[test]
+fn model_picker_search_uses_the_full_header_width() {
+    let models = vec![entry(AgentProvider::CodexCli, "gpt-5")];
+    let rect = Rect::xywh(10.0, 20.0, 240.0, picker_view_height(&models, ""));
+    let state = SelectState {
+        open: true,
+        ..Default::default()
+    };
+    let clear_point = Point2D::new(rect.origin.x + rect.size.x - 22.0, rect.origin.y + 19.0);
+    assert!(search_clear_hit(rect, clear_point, "gpt"));
+
+    let theme = Theme::dark();
+    let mut input = TextInputState::default();
+    input.set_text("gpt");
+    let mut backend = RoundFillBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    paint_model_picker(
+        &mut cx,
+        &theme,
+        rect,
+        &models,
+        0,
+        &state,
+        &input,
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+    assert_eq!(
+        model_picker_hit(&state, rect, clear_point, &models, "gpt"),
+        SelectHit::Inside,
+        "the search clear target stays header chrome, never a model row"
     );
 }
 
@@ -381,6 +417,10 @@ fn builtin_group_header_falls_back_to_generic_label_without_retained_name() {
 fn newer_provider_group_labels_match_their_provider_names() {
     assert_eq!(provider_label(AgentProvider::Antigravity), "ANTIGRAVITY");
     assert_eq!(provider_label(AgentProvider::GrokBuild), "GROK BUILD");
+    assert_eq!(
+        provider_label(AgentProvider::DeepSeekHarness),
+        "DEEPSEEK HARNESS"
+    );
 }
 
 #[test]

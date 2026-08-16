@@ -23,7 +23,10 @@ pub mod intent;
 pub(crate) mod mobile_content_rail;
 mod mobile_reflow;
 pub mod model_profile;
-pub(crate) mod orchestration_self_check;
+// Public (was pub(crate)) so `op-host-services` can reuse the drift detector
+// for `finalize_design`'s advisories — services → orchestrator is the
+// existing dependency direction (DS P2-a item ③).
+pub mod orchestration_self_check;
 pub mod palette_harmonize;
 pub mod parse;
 pub mod plan;
@@ -54,6 +57,9 @@ pub mod append;
 pub(crate) mod avatar_repair;
 #[cfg(test)]
 mod avatar_repair_tests;
+/// Public (like `orchestration_self_check`) so `op-host-services` can reuse
+/// the trailing-void scan for `finalize_design`'s advisories (DS P2-b item C).
+pub mod board_trailing_void;
 pub(crate) mod chip_repair;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;

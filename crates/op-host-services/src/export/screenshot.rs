@@ -16,9 +16,7 @@ use op_editor_core::EditorState;
 use op_editor_ui::layout_scene::LayoutScene;
 use op_editor_ui::Rect;
 
-use super::{
-    collect_bounds, page_bounds, paint_node, paint_nodes, BoundsAcc, ExportError, RasterFormat,
-};
+use super::{node_bounds, page_bounds, paint_node, paint_nodes, ExportError, RasterFormat};
 
 /// Capture parameters — decoupled from `op_mcp::ScreenshotRequest` so
 /// this module compiles (and tests) without the `mcp-debug-tools`
@@ -90,13 +88,9 @@ pub fn capture_scene(
                 .ok_or_else(|| ExportError::NodeNotFoundOnActivePage {
                     node_id: node_id.clone(),
                 })?;
-            let mut acc = BoundsAcc::new();
-            collect_bounds(node, glam::Affine2::IDENTITY, &mut acc);
-            let bounds = acc
-                .into_rect()
-                .ok_or_else(|| ExportError::NodePaintsNothing {
-                    node_id: node_id.clone(),
-                })?;
+            let bounds = node_bounds(node).ok_or_else(|| ExportError::NodePaintsNothing {
+                node_id: node_id.clone(),
+            })?;
             let png = render(bounds, scale, padding, |canvas| paint_node(canvas, node))?;
             (
                 Some((

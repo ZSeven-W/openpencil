@@ -177,12 +177,26 @@ pub fn paint_scene_page(
     zoom: f32,
     cull: Rect,
 ) {
+    paint_scene_page_with_options(cx, page, viewport_origin, zoom, cull, None);
+}
+
+/// Like [`paint_scene_page`], but with an optional inline text-edit
+/// caret: the painter then renders the edited node's draft text +
+/// composition + caret (the mobile players' text-edit path).
+pub fn paint_scene_page_with_options(
+    cx: &mut PaintCx<'_>,
+    page: &crate::layout_scene::ScenePage,
+    viewport_origin: Point2D,
+    zoom: f32,
+    cull: Rect,
+    edit_caret: Option<EditCaret>,
+) {
     let _ = paint_scene_nodes_with_options_hiding(
         cx,
         &page.children,
         viewport_origin,
         zoom,
-        None,
+        edit_caret,
         cull,
         None,
         None,

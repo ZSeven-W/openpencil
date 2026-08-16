@@ -22,10 +22,11 @@ use crate::widgets::text_metrics;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout, Theme};
 
-const HEIGHT: f32 = 36.0;
-const RADIUS: f32 = 18.0;
-/// Square-ish tap target per control.
-const BUTTON_W: f32 = 40.0;
+/// Every control is a real 44pt touch target, not a small desktop icon whose
+/// hit rect only happens to be larger.
+const HEIGHT: f32 = 44.0;
+const RADIUS: f32 = 22.0;
+const BUTTON_W: f32 = 44.0;
 /// Floor for the counter segment; wider labels grow it (see [`counter_width`]).
 const COUNTER_MIN_W: f32 = 62.0;
 /// Upper-bound advance per counter character at [`FONT_SIZE`]. Digits and
@@ -33,8 +34,8 @@ const COUNTER_MIN_W: f32 = 62.0;
 /// for its label.
 const COUNTER_CHAR_W: f32 = 8.0;
 const COUNTER_PAD_X: f32 = 14.0;
-const BOTTOM_MARGIN: f32 = 20.0;
-const ICON_SIZE: f32 = 16.0;
+const BOTTOM_MARGIN: f32 = 16.0;
+const ICON_SIZE: f32 = 18.0;
 const ICON_STROKE: f32 = 1.6;
 const FONT_SIZE: f32 = 13.0;
 /// The board shows through the pill: it reads as an overlay on the slide
@@ -131,6 +132,28 @@ impl SlideshowToolbar<'_> {
         );
         cx.backend
             .stroke_round_rect(pill, RADIUS, theme.border, 1.0);
+
+        // Exit is intentionally a visible terminal segment. It remains a
+        // calm neutral surface, but the divider and persistent wash make the
+        // way out discoverable on touch without turning it into an alarm.
+        let exit_rect = Self::button_rects(canvas, self.label)[2].1;
+        cx.backend.fill_round_rect(
+            inset(exit_rect, 4.0),
+            RADIUS - 4.0,
+            Color {
+                a: 0.12,
+                ..theme.button_hover
+            },
+        );
+        cx.backend.stroke_line(
+            Point2D::new(exit_rect.origin.x, exit_rect.origin.y + 10.0),
+            Point2D::new(
+                exit_rect.origin.x,
+                exit_rect.origin.y + exit_rect.size.y - 10.0,
+            ),
+            theme.border,
+            1.0,
+        );
 
         for (button, rect) in Self::button_rects(canvas, self.label) {
             let enabled = self.enabled(button);
@@ -238,6 +261,29 @@ mod tests {
     }
 
     #[test]
+    fn every_control_has_a_true_44_point_touch_target() {
+        for (_, rect) in SlideshowToolbar::button_rects(canvas(), "3 / 6") {
+            assert!(rect.size.x >= 44.0, "touch width was {}", rect.size.x);
+            assert!(rect.size.y >= 44.0, "touch height was {}", rect.size.y);
+        }
+    }
+
+    #[test]
+    fn the_toolbar_stays_inside_short_and_narrow_safe_local_stages() {
+        for canvas in [
+            Rect::xywh(0.0, 0.0, 320.0, 180.0),
+            Rect::xywh(0.0, 0.0, 390.0, 763.0),
+            Rect::xywh(0.0, 0.0, 1_024.0, 744.0),
+        ] {
+            let pill = SlideshowToolbar::pill_rect(canvas, "12 / 120");
+            assert!(pill.origin.x >= canvas.origin.x);
+            assert!(pill.origin.y >= canvas.origin.y);
+            assert!(pill.origin.x + pill.size.x <= canvas.origin.x + canvas.size.x);
+            assert!(pill.origin.y + pill.size.y <= canvas.origin.y + canvas.size.y);
+        }
+    }
+
+    #[test]
     fn a_long_counter_widens_the_pill_without_moving_it_off_centre() {
         let short = SlideshowToolbar::pill_rect(canvas(), "3 / 6");
         let long = SlideshowToolbar::pill_rect(canvas(), "100 / 120");
@@ -294,6 +340,43 @@ mod tests {
         assert_eq!(
             SlideshowToolbar::hit_test(canvas(), label, midpoint(previous)),
             Some(SlideshowToolbarButton::Previous)
+        );
+    }
+
+    #[test]
+    fn exit_paints_as_a_persistent_segment_even_without_hover() {
+        use crate::widgets::test_capture_backend::CaptureBackend;
+
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let toolbar = SlideshowToolbar {
+            label: "3 / 6",
+            can_go_back: true,
+            can_go_forward: true,
+            hover: None,
+            pressed: None,
+        };
+        toolbar.paint(&mut cx, canvas(), &Theme::dark());
+
+        let exit = SlideshowToolbar::button_rects(canvas(), "3 / 6")[2].1;
+        let persistent_wash = inset(exit, 4.0);
+        assert!(
+            backend
+                .round_fills
+                .iter()
+                .any(|(rect, _, _)| *rect == persistent_wash),
+            "the exit target needs a visible surface before hover"
+        );
+        assert!(
+            backend.svg_strokes.iter().any(|(_, origin, size, _, _)| {
+                origin.x >= exit.origin.x
+                    && origin.x + size <= exit.origin.x + exit.size.x
+                    && origin.y >= exit.origin.y
+                    && origin.y + size <= exit.origin.y + exit.size.y
+            }),
+            "the exit glyph must paint inside its touch target"
         );
     }
 }

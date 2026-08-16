@@ -214,7 +214,7 @@ impl<'a> HtmlImportDiagnosticsPanel<'a> {
             .max(self.rows().len())
             .to_string();
         op_i18n::translate_with(
-            self.ui.locale,
+            self.ui.effective_locale(),
             "htmlImport.diagnostics.summary",
             &[("count", total.as_str())],
         )
@@ -224,7 +224,7 @@ impl<'a> HtmlImportDiagnosticsPanel<'a> {
 /// Localized text for one warning row, falling back to the importer's own
 /// English sentence when the code has no locale entry.
 pub fn row_text(ui: &EditorUiState, diagnostic: &HtmlImportDiagnostic) -> String {
-    match op_i18n::translate_dynamic(ui.locale, &diagnostic.i18n_key) {
+    match op_i18n::translate_dynamic(ui.effective_locale(), &diagnostic.i18n_key) {
         Some(template) => op_i18n::interpolate(template, &diagnostic.arg_pairs()),
         None => diagnostic.message.clone(),
     }
@@ -439,7 +439,7 @@ impl Widget for HtmlImportDiagnosticsPanel<'_> {
                 // Trailing `+N more`: the rows the cap dropped. It carries no
                 // code line, so it centres in the row instead.
                 let label = op_i18n::translate_with(
-                    self.ui.locale,
+                    self.ui.effective_locale(),
                     "htmlImport.diagnostics.more",
                     &[("count", hidden.to_string().as_str())],
                 );

@@ -105,14 +105,18 @@ impl EditorState {
             .is_some_and(node_editable)
     }
 
-    /// Stricter form of [`EditorState::is_editable`] — every
-    /// descendant must also be editable. Gates destructive ops so a
-    /// locked / hidden child protects its ancestor.
-    pub fn is_subtree_editable(&self, id: &NodeId) -> bool {
-        let Some(node) = find_node(self.active_children(), id) else {
-            return false;
-        };
-        subtree_all_editable(node)
+    /// Tree-op gate (delete / drag / reorder): nothing in the
+    /// subtree — the node itself included — may be locked, so a
+    /// locked child protects its ancestor. Visibility is irrelevant
+    /// on BOTH ends (Figma parity — a hidden layer selected in the
+    /// layer panel deletes and reorders like any other, and hidden
+    /// descendants go with their ancestor). HTML imports routinely
+    /// carry `visibility: hidden` elements mapped to
+    /// `visible: false` nodes, which under the old
+    /// every-descendant-visible rule made every imported frame
+    /// permanently undeletable and immovable.
+    pub fn is_subtree_unlocked(&self, id: &NodeId) -> bool {
+        find_node(self.active_children(), id).is_some_and(subtree_unlocked)
     }
 
     /// Largest editor-minted `n{N}` id suffix anywhere in the
@@ -384,9 +388,11 @@ impl EditorState {
 
     // --- Tree ops ----------------------------------------------------
 
-    /// Remove every editable node in the selection set from its
-    /// parent. Locked / hidden subtrees are protected. True on
-    /// success; selection collapses to the kept (protected) ids.
+    /// Remove every deletable node in the selection set from its
+    /// parent. Only locks protect (anywhere in the subtree, root
+    /// included); hidden nodes — selected roots and descendants
+    /// alike — delete normally. True on success; selection collapses
+    /// to the kept (protected) ids.
     pub fn delete_selected(&mut self) -> bool {
         if self.selection.set.is_empty() {
             return false;
@@ -396,7 +402,7 @@ impl EditorState {
             .set
             .iter()
             .cloned()
-            .partition(|id| self.is_subtree_editable(id));
+            .partition(|id| self.is_subtree_unlocked(id));
         if deletable.is_empty() {
             return false;
         }
@@ -493,7 +499,7 @@ impl EditorState {
         if source == parent || !source.is_real() || !parent.is_real() {
             return false;
         }
-        if !self.is_subtree_editable(&source) {
+        if !self.is_subtree_unlocked(&source) {
             return false;
         }
         let children = self.active_children();
@@ -519,7 +525,7 @@ impl EditorState {
         if source == anchor || !source.is_real() || !anchor.is_real() {
             return false;
         }
-        if !self.is_subtree_editable(&source) {
+        if !self.is_subtree_unlocked(&source) {
             return false;
         }
         let children = self.active_children();
@@ -542,99 +548,6 @@ impl EditorState {
             walkers::insert_after_in_children(children, &anchor, node)
         };
         r.is_ok()
-    }
-
-    /// Select the chat model at `idx` in `chat.available_models` and
-    /// close the picker. Also re-syncs `editor_ui.chat_selected_agent`
-    /// to the model's provider so the desktop chat transport targets
-    /// the matching CLI. A bad index is ignored (the picker still
-    /// closes). Faithful port of shell-core's
-    /// `Document::select_chat_model`.
-    pub fn select_chat_model(&mut self, idx: usize) {
-        // Extract everything we need from the borrowed entry before
-        // releasing it, then apply mutations — required because
-        // `self.chat` is a `ChatSessions` Deref wrapper and the borrow
-        // checker cannot reason about field-level disjointness through
-        // the Deref impl.
-        let update = self.chat.available_models.get(idx).map(|entry| {
-            (
-                entry.provider,
-                entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none(),
-            )
-        });
-        if let Some((provider, use_native_agent)) = update {
-            self.chat.selected_model = idx;
-            if use_native_agent {
-                if let Some(pidx) = crate::AgentProvider::ALL
-                    .iter()
-                    .position(|p| *p == provider)
-                {
-                    self.editor_ui.chat_selected_agent = pidx;
-                }
-            }
-        }
-        self.editor_ui.close_chat_model_picker();
-    }
-
-    /// Recompute the chat model-picker's `available_models` from the
-    /// discovered catalog filtered by the providers connected in
-    /// Settings → Agents. Thin wrapper over
-    /// [`ChatState::rebuild_available_models`] that reads the
-    /// connected mask off `editor_ui.agent_settings`. Hosts call this
-    /// after discovery finishes and after every connect toggle.
-    pub fn rebuild_chat_models(&mut self) {
-        let prev = self
-            .chat
-            .available_models
-            .get(self.chat.selected_model)
-            .cloned();
-        let connected = self.editor_ui.agent_settings.verified_connected_mask();
-        self.chat.rebuild_available_models(&connected);
-        self.chat.available_models.extend(
-            self.editor_ui
-                .agent_settings
-                .builtin_agents
-                .iter()
-                .filter(|agent| agent.ready())
-                .map(|agent| {
-                    crate::ModelEntry::builtin_with_display_name(
-                        agent.kind.model_provider(),
-                        agent.id.clone(),
-                        agent.display_name.clone(),
-                        format!("builtin:{}:{}", agent.id, agent.model),
-                        agent.model.clone(),
-                    )
-                }),
-        );
-        let agent_settings = &self.editor_ui.agent_settings;
-        self.chat.available_models.extend(
-            agent_settings
-                .acp_agents
-                .iter()
-                .filter(|agent| {
-                    agent.ready() && agent_settings.acp_agent_verified_connected(&agent.id)
-                })
-                .map(|agent| crate::ModelEntry::acp(agent.id.clone(), agent.display_name.clone())),
-        );
-        if let Some(prev) = prev {
-            if let Some(idx) = self.chat.available_models.iter().position(|entry| {
-                entry.provider == prev.provider
-                    && entry.value == prev.value
-                    && entry.builtin_provider_id == prev.builtin_provider_id
-            }) {
-                self.chat.selected_model = idx;
-            }
-        }
-        if let Some(entry) = self.chat.selected_model_entry() {
-            if entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none() {
-                if let Some(pidx) = crate::AgentProvider::ALL
-                    .iter()
-                    .position(|p| *p == entry.provider)
-                {
-                    self.editor_ui.chat_selected_agent = pidx;
-                }
-            }
-        }
     }
 
     /// Cycle the active tab's ⚡Nx (`chat.agent_team_size`) AND mirror the
@@ -713,13 +626,13 @@ fn node_editable(node: &PenNode) -> bool {
     base.visible.unwrap_or(true) && !base.locked.unwrap_or(false)
 }
 
-/// True when `node` and every descendant are editable.
-fn subtree_all_editable(node: &PenNode) -> bool {
-    if !node_editable(node) {
+/// True when neither `node` nor any descendant is locked.
+fn subtree_unlocked(node: &PenNode) -> bool {
+    if node.base().locked.unwrap_or(false) {
         return false;
     }
     match node.children() {
-        Some(children) => children.iter().all(subtree_all_editable),
+        Some(children) => children.iter().all(subtree_unlocked),
         None => true,
     }
 }

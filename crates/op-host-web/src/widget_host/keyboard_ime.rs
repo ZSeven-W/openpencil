@@ -90,9 +90,13 @@ impl WidgetHost {
     }
 
     /// Route a multi-character text payload (IME commit, clipboard paste)
-    /// into whichever input owns the keyboard, char-by-char through
-    /// `apply_text` so every focus branch + per-field filter applies.
+    /// into whichever input owns the keyboard. The built-in provider Model
+    /// list preserves normalized newlines; all other fields retain their
+    /// existing single-line and per-character filters.
     pub fn apply_paste_text(&mut self, text: &str) -> bool {
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_text_payload(text);
+        }
         let mut consumed = false;
         for c in text.chars() {
             if !c.is_control() && self.apply_text(c) {

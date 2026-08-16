@@ -50,6 +50,10 @@ use op_editor_host_core::codegen::{
 use crate::repaint_ctx::RepaintContext;
 use crate::web_ai_transport::{post_ai_stream, AiEvent, AiStreamHandle};
 
+#[path = "codegen_web_request.rs"]
+mod request_body;
+use request_body::build_body_json;
+
 type CodegenDocumentIdentity = (u64, u64);
 
 fn document_identity(
@@ -99,6 +103,9 @@ struct CodegenRun {
     model: String,
     /// Exact provider selected alongside `model`, when one is available.
     provider: Option<AgentProvider>,
+    /// Exact daemon built-in selected alongside `model`, when this is an
+    /// operator-owned catalog row rather than a browser-local credential.
+    builtin_provider_id: Option<String>,
     /// Target framework captured at launch — the Download file extension must
     /// match what was GENERATED even if the user switches tabs afterwards
     /// (desktop `CodegenSession.framework` parity).
@@ -375,7 +382,7 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
     // 1. Build input from the live editor state. Nothing to generate from
     //    (empty page + no selection) surfaces an inline error (desktop
     //    `launch_codegen_if_pending` parity).
-    let (input, provider, model, credential, framework, document_identity) = {
+    let (input, provider, builtin_provider_id, model, credential, framework, document_identity) = {
         let b = inner.borrow();
         let state = b.host().editor_state();
         let Some(input) = build_codegen_input(state) else {
@@ -405,7 +412,8 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
             let _ = bm.repaint();
             return;
         }
-        let (model, credential) = crate::web_ai_credentials::selected_target(state);
+        let (model, credential, builtin_provider_id) =
+            crate::web_ai_credentials::selected_target(state);
         // The browser surface is built-in-only. Structured built-in catalog
         // entries still carry provider identity, but a transient CLI entry
         // must never opt this request into daemon-side CLI routing.
@@ -415,6 +423,7 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
         (
             input,
             provider,
+            builtin_provider_id,
             model,
             credential,
             state.codegen.framework,
@@ -456,6 +465,7 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
             cancelled: false,
             model,
             provider,
+            builtin_provider_id,
             framework,
             selection_snapshot,
             credential,
@@ -554,6 +564,7 @@ fn fire_request<C: RepaintContext + 'static>(
         build_body_json(
             &req,
             run.0.provider,
+            run.0.builtin_provider_id.as_deref(),
             &run.0.model,
             run.0.credential.as_ref(),
         )
@@ -624,34 +635,6 @@ fn fire_request<C: RepaintContext + 'static>(
             drive(inner, base, shared);
         }
     }
-}
-
-/// Build the JSON request body for the proxy. Skill NAMES (not expanded
-/// prompts) are forwarded; the daemon proxy composes the final system prompt
-/// (the same `op_ai_skills::compose_system_prompt` the desktop host runs
-/// in-process). Hand-rolled to avoid a serde derive for this tiny payload.
-fn build_body_json(
-    req: &PendingRequest,
-    provider: Option<AgentProvider>,
-    model: &str,
-    credential: Option<&serde_json::Value>,
-) -> String {
-    let skills_json = req
-        .skills
-        .iter()
-        .map(|s| serde_json::Value::String((*s).to_string()))
-        .collect::<Vec<_>>();
-    let body = serde_json::json!({
-        "provider": provider.map(AgentProvider::wire_id),
-        "model": model,
-        "skills": skills_json,
-        "user": req.user_message,
-        "max_output_tokens": req.max_output_tokens,
-        "thinking": req.thinking.as_str(),
-        "effort": req.effort.as_str(),
-        "credential": credential,
-    });
-    serde_json::to_string(&body).unwrap_or_else(|_| "{}".to_string())
 }
 
 /// Start the rAF pump that drains queued deltas into `editor_state.codegen`

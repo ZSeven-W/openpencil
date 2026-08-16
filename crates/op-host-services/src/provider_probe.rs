@@ -95,6 +95,16 @@ fn no_models_error(locale: Locale, provider: AgentProvider) -> String {
         AgentProvider::GithubCopilot => "providerProbe.noModelsCopilot",
         AgentProvider::Antigravity => "providerProbe.noModelsAntigravity",
         AgentProvider::GrokBuild => "providerProbe.noModelsGrok",
+        // dsh exposes no verified model-listing command, so the probe
+        // never queries one — this arm only covers a hypothetical
+        // empty-catalog outcome, reusing the shared key + name var.
+        AgentProvider::DeepSeekHarness => {
+            return tw(
+                locale,
+                "providerProbe.noModelList",
+                &[("name", "DeepSeek Harness")],
+            );
+        }
     };
     t(locale, key)
 }
@@ -133,6 +143,7 @@ pub fn connect_provider(provider: AgentProvider, locale: Locale) -> ProbeOutcome
         AgentProvider::GithubCopilot => connect_copilot(locale),
         AgentProvider::Antigravity => crate::cli_provider_probe::connect_antigravity(),
         AgentProvider::GrokBuild => crate::cli_provider_probe::connect_grok_build(),
+        AgentProvider::DeepSeekHarness => crate::cli_provider_probe::connect_deepseek_harness(),
     }
 }
 
@@ -174,6 +185,7 @@ fn install_command_for_platform(
         AgentProvider::Antigravity => "curl -fsSL https://antigravity.google/cli/install.sh | bash",
         AgentProvider::GrokBuild if windows => "irm https://x.ai/cli/install.ps1 | iex",
         AgentProvider::GrokBuild => "curl -fsSL https://x.ai/cli/install.sh | bash",
+        AgentProvider::DeepSeekHarness => "npm install -g @deepseek-ai/dsh",
     }
 }
 

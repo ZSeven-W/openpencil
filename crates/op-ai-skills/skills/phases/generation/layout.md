@@ -12,7 +12,7 @@ LAYOUT ENGINE (flexbox-based):
 
 - Frames with layout: "vertical"/"horizontal" auto-position children via gap, padding, justifyContent, alignItems.
 - NEVER set x/y on children inside layout containers.
-- CHILD WIDTH RULE: child width must be <= parent content area. Use `width="fill_container"` when in doubt; this advice is for WIDTH only.
+- CHILD WIDTH RULE: child width must be <= parent content area. Use `width="fill_container"` when in doubt.
 - HEIGHT DEFAULT: content-bearing frames/sections/cards/wrappers use `height="fit_content"` (Hug). Use `height="fill_container"` only for an explicit remainder consumer under a definite-height parent (e.g. a sidebar/work surface, a clipped scroll viewport) or cross-axis stretch inside a fixed-height horizontal row.
 - `space_between`, uneven card content, or wanting to remove bottom whitespace are NOT reasons to switch a container to Full Height — don't make every sibling card Full Height just to equalize a row.
 - In vertical layout, `width="fill_container"` stretches horizontally; in horizontal layout it fills remaining width. A child's `height="fill_container"` stretches only across a row's definite cross-axis height.
@@ -20,11 +20,12 @@ LAYOUT ENGINE (flexbox-based):
 - ABSOLUTE-STACK Z-ORDER: `layout: "none"` children are front-to-back by array index — `children[0]` is TOPMOST because canvas paint walks the array in reverse. Put badges/labels/controls/scrims BEFORE the full-bleed media or background they must cover. Keep the media as a separate EMPTY frame/rectangle slot for strict `G(...)`; never use the badge-owning stack itself as the image slot.
 - CARD HEIGHT: cards holding text + a CTA (promo/offer/info cards) MUST use height="fit_content" — NEVER a fixed pixel height, which + clipContent clips the CTA. Reserve fixed heights for image-only cards with a known aspect ratio.
 - justifyContent: "space_between" (navbars), "center", "start"/"end", "space_around".
-- WIDTH CONSISTENCY: siblings must use same width strategy. Don't mix fixed-px and fill_container.
+- SIBLING ISOMORPHISM: one width strategy + one structure — same nesting/indent/type ladder; only copy differs. Don't mix fixed-px and fill_container.
 - Never create a main-axis circular dependency by making a child Full Height solely under a Hug Height vertical parent.
 - Two-column: horizontal frame - two child frames each "fill_container" width.
 - Keep hierarchy shallow: no pointless wrappers. Only use wrappers with visual purpose (fill, padding).
 - Section root: width="fill_container", height="fit_content", layout="vertical".
+- MARGIN FLOOR: root h-pad ≥64 (1920)/≥48 (1080); no text at canvas edge (full-bleed bg image is the only exception).
 - TRANSPARENT INNER SECTIONS — interior wrappers (Header, Search Section, Categories, etc.) MUST have `fill: []` (inherit page bg); an explicit fill like #FFFFFF creates an unwanted white card against a colored page. Only opt into a fill when the section IS intentionally a card with its own surface (a promo banner, inset card).
 - FORMS: ALL inputs AND primary button MUST use width="fill_container". Vertical layout, gap=16-20.
 

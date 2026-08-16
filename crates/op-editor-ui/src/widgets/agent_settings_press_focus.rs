@@ -67,7 +67,7 @@ pub(crate) fn builtin_field_text(
     match field {
         BuiltinAgentField::DisplayName => agent.display_name.clone(),
         BuiltinAgentField::ApiKey => agent.api_key.clone(),
-        BuiltinAgentField::Model => agent.model.clone(),
+        BuiltinAgentField::Model => agent.models_text(),
         BuiltinAgentField::BaseUrl => agent.base_url.clone(),
     }
 }

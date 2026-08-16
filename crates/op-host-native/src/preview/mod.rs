@@ -58,7 +58,10 @@
 //! `private_interfaces` on the `AppMode` type).
 
 mod app_mode;
+#[cfg(feature = "gl-host")]
 mod auto_wire;
+#[cfg(not(feature = "gl-host"))]
+mod auto_wire_stub;
 mod binding_sites;
 mod error;
 mod input;
@@ -267,9 +270,14 @@ impl PreviewSession {
         // here); either way the CALLER's document is never mutated. See
         // `auto_wire`'s module doc for the "any marker → skip entirely"
         // rationale.
+        #[cfg(feature = "gl-host")]
         let auto_wired = (!presenting)
             .then(|| auto_wire::auto_wire_for_preview(doc, active_page_index))
             .flatten();
+        // Mobile: the orchestrator-backed pass is not linked; authored
+        // `screen` markers still drive App Mode.
+        #[cfg(not(feature = "gl-host"))]
+        let auto_wired: Option<jian_ops_schema::PenDocument> = None;
         let doc: &jian_ops_schema::PenDocument = auto_wired.as_ref().unwrap_or(doc);
 
         // Prepare the document EXACTLY as the design canvas does before

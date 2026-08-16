@@ -146,12 +146,15 @@ impl LlmClient for ChatProviderLlmClient {
                     // orchestrator parses the accumulated text and
                     // decides what to do.
                     ChatDelta::Done { .. } => break,
-                    // Tool calls aren't routed through the orchestrator
-                    // — it expects a single text completion per call.
-                    // If a CLI agent decides to invoke an MCP tool
-                    // mid-turn the result text follows in subsequent
-                    // `TextDelta`s anyway.
-                    ChatDelta::ToolUse { .. } => None,
+                    // The orchestrator expects exactly one text completion;
+                    // ignoring a tool call can leave it parsing a truncated
+                    // pre-tool response as a design script.
+                    ChatDelta::ToolUse { name, .. } => Some(Err(LlmError {
+                        message: format!(
+                            "provider attempted unsupported tool `{name}` during design generation"
+                        ),
+                        aborted: false,
+                    })),
                 };
                 if let Some(c) = chunk {
                     if tx.unbounded_send(c).is_err() {
@@ -295,6 +298,23 @@ mod tests {
         }
     }
 
+    struct ToolEscapingProvider;
+    impl ChatProvider for ToolEscapingProvider {
+        fn provider_label(&self) -> &str {
+            "tool-escaping"
+        }
+
+        fn send(&self, _request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+            Box::new(
+                vec![ChatDelta::ToolUse {
+                    name: "write".into(),
+                    args: "{}".into(),
+                }]
+                .into_iter(),
+            )
+        }
+    }
+
     fn collect_chunks(client: ChatProviderLlmClient) -> Vec<Result<LlmChunk, LlmError>> {
         let req = CallRequest {
             system_prompt: "sys".into(),
@@ -352,5 +372,17 @@ mod tests {
             .collect();
         assert_eq!(text, "I(null, {\"type\":\"frame\"});");
         assert_eq!(thinking, "considering the layout...");
+    }
+
+    #[test]
+    fn tool_use_is_a_design_generation_error() {
+        let chunks = collect_chunks(ChatProviderLlmClient::new(Arc::new(ToolEscapingProvider)));
+        assert!(
+            chunks.iter().any(|chunk| matches!(
+                chunk,
+                Err(error) if error.message.contains("unsupported tool `write`")
+            )),
+            "{chunks:?}"
+        );
     }
 }

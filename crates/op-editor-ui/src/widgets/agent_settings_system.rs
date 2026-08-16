@@ -268,7 +268,7 @@ fn paint_appearance_row(
     cx.backend.stroke_round_rect(group, 8.0, theme.border, 1.0);
     for (i, mode) in SEGMENT_MODES.iter().enumerate() {
         let seg = segment_rect(content, i);
-        let active = ui.theme_mode == *mode;
+        let active = ui.effective_theme_mode() == *mode;
         if active {
             cx.backend.fill_round_rect(seg, 7.0, theme.muted);
         }

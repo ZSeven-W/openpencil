@@ -29,6 +29,7 @@ impl Widget for PropertyPanel {
     }
 
     fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
+        let rect = self.begin_density_paint(cx.backend, rect);
         cx.backend.fill_rect(rect, self.theme.card);
         cx.backend.fill_rect(
             Rect {
@@ -51,6 +52,7 @@ impl Widget for PropertyPanel {
                 active: self.tab,
                 hover: self.tab_hover,
                 show_interact: self.snapshot.widget.is_some(),
+                touch_controls: self.density_scale > 1.0,
             },
             x,
             rect.origin.y,
@@ -66,7 +68,7 @@ impl Widget for PropertyPanel {
         };
         let caps = self.capabilities();
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
-            crate::widgets::property_panel_code::paint_code_panel_in_panel_with_locale_and_pressed(
+            crate::widgets::property_panel_code::paint_code_panel_in_panel_with_locale_pressed_and_touch(
                 cx,
                 &self.theme,
                 &self.codegen,
@@ -74,7 +76,9 @@ impl Widget for PropertyPanel {
                 rect,
                 self.now_ms,
                 self.codegen_pressed,
+                self.density_scale > 1.0,
             );
+            self.end_density_paint(cx.backend);
             return;
         }
         if self.page_only {
@@ -93,6 +97,7 @@ impl Widget for PropertyPanel {
                 rect,
             );
             cx.backend.restore();
+            self.end_density_paint(cx.backend);
             return;
         }
         // Section content scrolls below the pinned tab strip; clip it
@@ -153,6 +158,7 @@ impl Widget for PropertyPanel {
                 &self.labels,
                 self.locale,
                 self.padding_edit_mode,
+                self.density_scale > 1.0,
                 x,
                 y,
                 w,
@@ -167,6 +173,7 @@ impl Widget for PropertyPanel {
                 &self.labels,
                 self.size_flags,
                 self.snapshot.can_clip_content,
+                self.density_scale > 1.0,
                 x,
                 y,
                 w,
@@ -190,6 +197,7 @@ impl Widget for PropertyPanel {
                 &self.snapshot,
                 &edit_ctx,
                 self.locale,
+                self.density_scale > 1.0,
                 x,
                 y,
                 w,
@@ -229,6 +237,7 @@ impl Widget for PropertyPanel {
                 &self.labels,
                 &edit_ctx,
                 !self.is_multi,
+                self.density_scale > 1.0,
                 self.locale,
                 x,
                 y,
@@ -246,6 +255,7 @@ impl Widget for PropertyPanel {
                 self.fill_type_picker.open,
                 self.fill_variable_ref.as_deref(),
                 self.color_variable_count > 0 || self.fill_variable_ref.is_some(),
+                self.density_scale > 1.0,
                 self.locale,
                 x,
                 y,
@@ -275,6 +285,7 @@ impl Widget for PropertyPanel {
                 &self.labels,
                 &self.snapshot.effects,
                 &edit_ctx,
+                self.density_scale > 1.0,
                 x,
                 y,
                 w,
@@ -457,6 +468,7 @@ impl Widget for PropertyPanel {
                 x,
                 flex_section_y + crate::widgets::property_panel_inputs::SECTION_HEADER_HEIGHT,
                 w,
+                self.density_scale > 1.0,
             );
         }
         if caps.stroke && self.stroke_mode_popover_open {
@@ -469,6 +481,7 @@ impl Widget for PropertyPanel {
                 x,
                 stroke_section_y,
                 w,
+                self.density_scale > 1.0,
             );
         }
         // Export-section inline select popups — painted last so the
@@ -492,7 +505,7 @@ impl Widget for PropertyPanel {
         // The colour-variable picker paints as a floating popover over the
         // visible rail, so a long variable list scrolls inside its own
         // capped box instead of stretching the inspector.
-        if let Some(layout) = self.color_variable_picker_layout(rect) {
+        if let Some(layout) = self.color_variable_picker_layout_logical(rect) {
             crate::widgets::property_panel_color_variables::paint_color_variable_picker(
                 cx,
                 &self.theme,
@@ -505,6 +518,7 @@ impl Widget for PropertyPanel {
         }
         self.paint_compositing_picker(cx, rect);
         cx.backend.restore();
+        self.end_density_paint(cx.backend);
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -536,6 +550,7 @@ impl PropertyPanel {
         if matches!(self.tab, op_editor_core::PropertyTab::Code) {
             return;
         }
+        let rect = self.begin_density_paint(cx.backend, rect);
         let scroll = self.effective_scroll(rect);
         let scrolled = Rect {
             origin: Point2D::new(rect.origin.x, rect.origin.y - scroll),
@@ -583,5 +598,6 @@ impl PropertyPanel {
                 self.now_ms,
             );
         }
+        self.end_density_paint(cx.backend);
     }
 }

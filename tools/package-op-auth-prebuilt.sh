@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Package an already-hardened private op-auth ABI-v2 archive.
+# Package an already-hardened private op-auth ABI-v2 or ABI-v3 archive.
 #
 # This script intentionally does not strip or obfuscate an existing archive:
 # those transformations must happen while rebuilding from private source, where
@@ -56,8 +56,10 @@ for required in artifact target version source_revision build_id signing_key out
 done
 
 case "$target" in
-    aarch64-apple-darwin|aarch64-pc-windows-msvc|aarch64-unknown-linux-gnu|\
-    x86_64-apple-darwin|x86_64-pc-windows-msvc|x86_64-unknown-linux-gnu)
+    aarch64-apple-darwin|aarch64-apple-ios|aarch64-apple-ios-sim|\
+    aarch64-linux-android|aarch64-pc-windows-msvc|aarch64-unknown-linux-gnu|\
+    x86_64-apple-darwin|x86_64-linux-android|x86_64-pc-windows-msvc|\
+    x86_64-unknown-linux-gnu)
         ;;
     *)
         printf 'error: unsupported target: %s\n' "$target" >&2
@@ -185,4 +187,4 @@ printf '\n' >> "$target_dir/PROVENANCE.sig"
 OP_AUTH_PREBUILT_ROOT="$output_root" \
     bash "$script_dir/check-op-auth-prebuilt.sh" --require-hardened
 
-printf 'staged signed op-auth ABI-v2 artifact at %s\n' "$target_dir"
+printf 'staged signed op-auth ABI-v%s artifact at %s\n' "$abi" "$target_dir"

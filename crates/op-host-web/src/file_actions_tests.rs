@@ -61,6 +61,33 @@ fn app_preferences_preserve_runtime_font_availability() {
 }
 
 #[test]
+fn app_preferences_preserve_transient_embedding_theme_and_locale_separately() {
+    let mut previous = EditorState::new();
+    previous.editor_ui.theme_mode = op_editor_core::ThemeMode::Light;
+    previous
+        .editor_ui
+        .set_host_theme_override(Some(op_editor_core::ThemeMode::Dark));
+    previous.editor_ui.locale = op_editor_core::Locale::ZhCn;
+    previous
+        .editor_ui
+        .set_host_locale_override(Some(op_editor_core::Locale::EnUs));
+    let mut next = EditorState::new();
+
+    preserve_app_preferences(&previous, &mut next);
+
+    assert_eq!(next.editor_ui.theme_mode, op_editor_core::ThemeMode::Light);
+    assert_eq!(
+        next.editor_ui.effective_theme_mode(),
+        op_editor_core::ThemeMode::Dark
+    );
+    assert_eq!(next.editor_ui.locale, op_editor_core::Locale::ZhCn);
+    assert_eq!(
+        next.editor_ui.effective_locale(),
+        op_editor_core::Locale::EnUs
+    );
+}
+
+#[test]
 fn attachment_media_type_matches_desktop_image_extensions() {
     assert_eq!(attachment_media_type_for_name("a.png"), "image/png");
     assert_eq!(attachment_media_type_for_name("a.JPG"), "image/jpeg");

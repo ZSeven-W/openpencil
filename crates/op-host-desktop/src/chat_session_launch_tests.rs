@@ -148,7 +148,9 @@ fn design_launch_preparation_captures_builtin_model_before_detaching_chat() {
             display_name: "MiniMax".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "sk-test".into(),
-            model: "MiniMax-M3".into(),
+            // Both rows are explicitly saved; the active tab selects the
+            // second one and must win for this turn.
+            models: vec!["MiniMax-M2.7".into(), "MiniMax-M3".into()],
             base_url: "http://localhost:9".into(),
             enabled: true,
         });
@@ -180,6 +182,72 @@ fn design_launch_preparation_captures_builtin_model_before_detaching_chat() {
         Some("builtin-1"),
         "snapshot preparation must restore the live builtin selection"
     );
+}
+
+#[test]
+fn selected_builtin_config_is_narrowed_to_the_saved_tab_model() {
+    let mut state = EditorState::new();
+    state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .push(BuiltinAgentConfig {
+            id: "builtin-1".into(),
+            preset: BuiltinAgentPresetKey::Custom,
+            display_name: "MiniMax".into(),
+            kind: BuiltinAgentKind::OpenAiCompat,
+            api_key: "sk-test".into(),
+            models: vec!["persisted-fallback".into(), "active-tab-model".into()],
+            base_url: "http://localhost:9".into(),
+            enabled: true,
+        });
+    state.chat.available_models = vec![ModelEntry::builtin(
+        AgentProvider::ClaudeCode,
+        "builtin-1",
+        "builtin:builtin-1:active-tab-model",
+        "Active tab model",
+    )];
+    state.chat.selected_model = 0;
+    let entry = state
+        .chat
+        .selected_model_entry()
+        .expect("selected model entry");
+    let config = providers::selected_builtin_agent_config(&state, entry)
+        .expect("selected builtin resolves a provider config");
+
+    assert_eq!(config.models, ["active-tab-model"]);
+    assert_eq!(
+        state.editor_ui.agent_settings.builtin_agents[0].models,
+        ["persisted-fallback", "active-tab-model"],
+        "routing must narrow a clone, never mutate persisted settings"
+    );
+}
+
+#[test]
+fn stale_builtin_row_cannot_override_current_provider_credentials() {
+    let mut state = EditorState::new();
+    state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .push(BuiltinAgentConfig {
+            id: "builtin-1".into(),
+            preset: BuiltinAgentPresetKey::Custom,
+            display_name: "Provider".into(),
+            kind: BuiltinAgentKind::OpenAiCompat,
+            api_key: "sk-new".into(),
+            models: vec!["current-model".into()],
+            base_url: "http://localhost:9".into(),
+            enabled: true,
+        });
+    let stale = ModelEntry::builtin(
+        AgentProvider::ClaudeCode,
+        "builtin-1",
+        "builtin:builtin-1:old-private-model",
+        "Old private model",
+    );
+
+    assert!(providers::selected_builtin_agent_config(&state, &stale).is_none());
 }
 
 /// Regression lock for a real bug a user hit: the CLI-standard route

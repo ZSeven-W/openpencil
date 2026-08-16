@@ -84,6 +84,11 @@ impl WidgetHost {
         let center = &mut self.editor_state.editor_ui.scene_template_center;
         center.take_pending_style_persist();
         center.take_pending_style_delete();
+        // Saved-template deletes are dropped for the same reason: this host
+        // shows no user templates (its registry is always empty — the M1
+        // boundary), so a delete request can never be raised, and the drain
+        // keeps the queue from accumulating if one ever were.
+        center.take_pending_template_delete();
         // `pending_file_pick` is deliberately NOT drained here. It is the one
         // style-import request this host can honour, and the mount's post-press
         // drain opens the browser file dialog with it — taking it here would

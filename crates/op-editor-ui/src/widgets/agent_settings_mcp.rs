@@ -72,7 +72,7 @@ pub(super) fn cli_row_rect(content: Rect, index: usize) -> Rect {
 }
 
 fn integrations_block_h() -> f32 {
-    SECTION_HEADER_H + McpCli::ALL.len() as f32 * ROW_HEIGHT + FOOTNOTE_H
+    SECTION_HEADER_H + McpCli::DISPLAY.len() as f32 * ROW_HEIGHT + FOOTNOTE_H
 }
 
 /// Row boxes for this tab, paired with their line count — walked by the
@@ -81,7 +81,7 @@ fn integrations_block_h() -> f32 {
 pub(super) fn row_boxes(content: Rect) -> Vec<(Rect, RowLines)> {
     let mut boxes = vec![(server_row_rect(content), SERVER_ROW_LINES)];
     if CLI_INTEGRATIONS_AVAILABLE {
-        boxes.extend((0..McpCli::ALL.len()).map(|i| (cli_row_rect(content, i), RowLines::One)));
+        boxes.extend((0..McpCli::DISPLAY.len()).map(|i| (cli_row_rect(content, i), RowLines::One)));
     }
     boxes
 }
@@ -173,7 +173,10 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> M
         return McpHit::FocusPort;
     }
     if CLI_INTEGRATIONS_AVAILABLE {
-        for (i, cli) in McpCli::ALL.iter().enumerate() {
+        // Row order is `McpCli::DISPLAY`; paint below walks the same array
+        // with the same rect math, so a click always lands on the CLI that
+        // was painted there.
+        for (i, cli) in McpCli::DISPLAY.iter().enumerate() {
             if (cli_row_rect(content, i)).contains(scrolled) {
                 return McpHit::ToggleCli(*cli);
             }
@@ -209,15 +212,17 @@ pub(super) fn paint_mcp_tab(
             Icon::Terminal,
             t_settings(ui, "settings.mcp.terminalIntegrations"),
         );
-        let last = McpCli::ALL.len() - 1;
-        for (i, cli) in McpCli::ALL.iter().enumerate() {
+        let last = McpCli::DISPLAY.len() - 1;
+        for (i, cli) in McpCli::DISPLAY.iter().enumerate() {
             let row = cli_row_rect(content, i);
             paint_row_label(cx, theme, row, cli.label(), None, SETTINGS_SWITCH_W + 16.0);
             paint_settings_switch(
                 cx,
                 theme,
                 row_control_rect(row, SETTINGS_SWITCH_W, SETTINGS_SWITCH_H),
-                settings.mcp_cli_enabled[i],
+                // Toggle state is stored positionally in append-only
+                // `McpCli::ALL` order; the displayed row is `DISPLAY` order.
+                settings.mcp_cli_enabled[cli.index()],
             );
             if i != last {
                 paint_row_hairline(cx, theme, row);

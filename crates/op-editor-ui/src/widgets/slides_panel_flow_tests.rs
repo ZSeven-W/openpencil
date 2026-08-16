@@ -117,6 +117,20 @@ fn the_layers_tree_keeps_the_whole_rail_without_a_tab_row() {
 }
 
 #[test]
+fn touch_tabs_have_44_point_targets_and_shift_content_together() {
+    let mut deck = deck_state(THREE_BOARDS);
+    deck.editor_ui.touch = true;
+    let tabs = tab_row(&deck, PANEL).expect("deck has touch tabs");
+    assert_eq!(tabs.row.size.y, 52.0);
+    assert_eq!(tabs.layers.size.y, 44.0);
+    assert_eq!(tabs.slides.size.y, 44.0);
+    assert_eq!(
+        layers_content_rect(&deck, PANEL).origin.y,
+        PANEL.origin.y + 52.0
+    );
+}
+
+#[test]
 fn a_stale_slides_tab_cannot_strand_a_document_with_nothing_to_list() {
     let mut empty = deck_state(r#"{"version":"1.0.0","children":[]}"#);
     empty.editor_ui.slides_panel.tab = LeftPanelTab::Slides;

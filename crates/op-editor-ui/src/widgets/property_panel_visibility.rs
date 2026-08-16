@@ -228,6 +228,9 @@ pub struct VisibleSections {
     pub layout_justify: LayoutJustifyValue,
     pub layout_align: LayoutAlignValue,
     pub size_options: bool,
+    /// Comfortable vertical slots for touch-only Size check rows. The
+    /// checkbox glyph stays compact; only row spacing and hit geometry grow.
+    pub touch_controls: bool,
     /// Per-dimension sizing modes. Numeric W/H editors remain visible
     /// and show the resolved snapshot size in every mode.
     pub size_fill_width: bool,
@@ -287,6 +290,7 @@ impl VisibleSections {
         layout_justify: LayoutJustifyValue::Start,
         layout_align: LayoutAlignValue::Start,
         size_options: true,
+        touch_controls: false,
         size_fill_width: false,
         size_fill_height: false,
         size_hug_width: false,

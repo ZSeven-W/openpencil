@@ -17,6 +17,19 @@ use super::input::NODE_DRAG_THRESHOLD_PX;
 use super::*;
 use op_editor_ui::Point2D;
 
+/// Minimum screen-space travel before a presentation drag becomes a swipe.
+///
+/// This deliberately leaves a wide neutral band above the ordinary 4px tap
+/// slop: a slightly wandering finger must cancel the tap without accidentally
+/// changing slides. Logical host pixels are points on the mobile players, so
+/// 48px is also a comfortable touch threshold there.
+const SLIDESHOW_SWIPE_THRESHOLD_PX: f32 = 48.0;
+
+/// Horizontal motion must beat vertical motion by this factor before a deck
+/// changes slides. Near-diagonal and vertical drags stay inert, which lets a
+/// presenter reposition their finger without an unexpected page change.
+const SLIDESHOW_SWIPE_AXIS_DOMINANCE: f32 = 1.25;
+
 /// Scene-space rect through the canvas pan/zoom into screen space.
 ///
 /// Same formula as the canvas painter's (`canvas_origin + pan + doc *
@@ -67,8 +80,32 @@ impl WidgetHostNative {
         self.editor_state.editor_ui.preview.device = Some(PreviewDeviceKind::Canvas);
         self.clear_device_preview_state();
         self.preview_mode_transition = None;
+        if self.editor_state.editor_ui.touch_chrome() {
+            self.dismiss_touch_overlays_for_slideshow();
+        }
         self.frame_slideshow_board(canvas_size);
         true
+    }
+
+    /// A presentation is the top-most surface. Close editor overlays at the
+    /// shared deck-entry point so touch, toolbar, and keyboard preview paths
+    /// cannot leave a hidden input or modal owning events above the slide.
+    fn dismiss_touch_overlays_for_slideshow(&mut self) {
+        self.cancel_native_touch_gestures();
+        self.cancel_agent_settings_touch_gesture();
+        self.blur_text_inputs_on_blank_press();
+        self.release_property_keyboard_owner();
+        self.dismiss_mobile_surface();
+        if self.editor_state.editor_ui.agent_settings_open {
+            self.apply_toggle_agent_settings();
+        }
+        op_editor_ui::widgets::account_press_flow::close_login_modal(&mut self.editor_state);
+        op_editor_ui::widgets::account_press_flow::close_account_menu(&mut self.editor_state);
+        let panel = &mut self.editor_state.editor_ui.collab.panel;
+        panel.open = false;
+        panel.join_address_focused = false;
+        panel.hover = None;
+        self.cancel_auth_login();
     }
 
     /// Fit the board on screen into the canvas region, centred. Returns
@@ -211,8 +248,13 @@ impl WidgetHostNative {
         if !SlideshowToolbar::contains(canvas, &label, point) {
             return false;
         }
-        self.editor_state.editor_ui.preview.toolbar_pressed =
-            SlideshowToolbar::hit_test(canvas, &label, point);
+        let hit = SlideshowToolbar::hit_test(canvas, &label, point);
+        self.editor_state.editor_ui.preview.toolbar_pressed = hit;
+        // Touch shells commonly emit Down then Up with no intervening Move.
+        // Seed the release target from Down so a stationary tap activates;
+        // a later move still replaces it and preserves drag-off cancellation.
+        self.editor_state.editor_ui.preview.toolbar_hover = hit;
+        self.slideshow_cursor = Some((x, y));
         self.mark_dirty();
         true
     }
@@ -291,8 +333,41 @@ impl WidgetHostNative {
         self.slideshow_cursor = Some((x, y));
     }
 
-    /// Advance on release, unless the pointer travelled far enough to be a
-    /// drag. Returns whether a board press was in flight.
+    /// Preserve the platform's authoritative pointer-up position for a
+    /// presentation gesture. Mobile event streams are allowed to deliver a
+    /// quick flick or drag-off as Down + Up without an intervening Move;
+    /// without this narrow endpoint update a flick still looks like the tap
+    /// seeded above and a toolbar drag-off can activate the pressed control.
+    ///
+    /// Ordinary editor and interactive-preview drags are intentionally
+    /// untouched. Their release behavior must not gain a synthesized Move.
+    pub fn preview_slideshow_release_point(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        if self
+            .editor_state
+            .editor_ui
+            .preview
+            .toolbar_pressed
+            .is_some()
+        {
+            self.slideshow_toolbar_hover(x, y, viewport_w, viewport_h);
+            return true;
+        }
+        if self.slideshow_press_screen.is_none() {
+            return false;
+        }
+        self.slideshow_cursor = Some((x, y));
+        true
+    }
+
+    /// Resolve a board gesture on release. A tap advances, a deliberate left
+    /// or right swipe changes slides in that direction, and every other drag
+    /// is inert. Returns whether a board press was in flight.
     ///
     /// The deck clamps at the last board: a click there does nothing rather
     /// than wrapping or exiting. An accidental exit costs the presenter their
@@ -302,9 +377,19 @@ impl WidgetHostNative {
             return false;
         };
         let (last_x, last_y) = self.slideshow_cursor.unwrap_or((press_x, press_y));
-        let travel = (last_x - press_x).abs().max((last_y - press_y).abs());
+        let delta_x = last_x - press_x;
+        let delta_y = last_y - press_y;
+        let horizontal = delta_x.abs();
+        let vertical = delta_y.abs();
+        let travel = horizontal.max(vertical);
         if travel <= NODE_DRAG_THRESHOLD_PX {
             self.preview_slideshow_step(1);
+        } else if horizontal >= SLIDESHOW_SWIPE_THRESHOLD_PX
+            && horizontal >= vertical * SLIDESHOW_SWIPE_AXIS_DOMINANCE
+        {
+            // Content follows the finger: dragging it left reveals the next
+            // slide, while dragging it right returns to the previous one.
+            self.preview_slideshow_step(if delta_x < 0.0 { 1 } else { -1 });
         }
         self.mark_dirty();
         true
@@ -337,4 +422,24 @@ mod tests {
         assert_eq!(screen.size.x, 960.0);
         assert_eq!(screen.size.y, 540.0);
     }
+
+    #[test]
+    fn release_points_only_update_an_armed_board_gesture() {
+        let mut host = WidgetHostNative::new();
+
+        assert!(!host.preview_slideshow_release_point(90.0, 40.0, 390.0, 844.0));
+        assert_eq!(host.slideshow_cursor, None);
+
+        host.slideshow_board_press(20.0, 30.0);
+        assert!(host.preview_slideshow_release_point(90.0, 40.0, 390.0, 844.0));
+        assert_eq!(host.slideshow_cursor, Some((90.0, 40.0)));
+    }
 }
+
+#[cfg(all(test, not(target_os = "windows")))]
+#[path = "preview_slideshow_swipe_tests.rs"]
+mod swipe_tests;
+
+#[cfg(all(test, not(target_os = "windows")))]
+#[path = "preview_slideshow_touch_tests.rs"]
+mod touch_tests;

@@ -1,0 +1,4 @@
+"embeddedLogin.title" = "Sign In";
+"embeddedLogin.close" = "Close sign-in";
+"embeddedLogin.loadError" = "Unable to load the sign-in page. Check your connection and try again.";
+"embeddedLogin.externalBrowser" = "Continue signing in in your browser, then return to OpenPencil.";

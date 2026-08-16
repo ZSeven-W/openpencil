@@ -31,6 +31,9 @@ impl WidgetHostNative {
     /// True when the cursor is over either resize gutter — used by
     /// the runner to set `CursorIcon::EwResize`. None = no gutter.
     pub fn panel_resize_hover(&self, x: f32, y: f32, viewport_w: f32) -> Option<PanelResizeKind> {
+        if self.editor_state.editor_ui.touch_chrome() {
+            return None;
+        }
         if y < TOP_BAR_HEIGHT {
             return None;
         }
@@ -395,8 +398,7 @@ impl WidgetHostNative {
         viewport_h: f32,
         panel: Option<&op_editor_ui::widgets::PropertyPanel>,
     ) -> bool {
-        use op_editor_ui::widgets::TOP_BAR_HEIGHT;
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.export_scale_picker_open
             && !self.editor_state.editor_ui.export_format_picker_open
         {
@@ -405,16 +407,7 @@ impl WidgetHostNative {
         let Some(panel) = panel else {
             return false;
         };
-        let property_rect = Rect {
-            origin: Point2D::new(
-                viewport_w - self.editor_state.editor_ui.property_panel_width,
-                TOP_BAR_HEIGHT,
-            ),
-            size: Point2D::new(
-                self.editor_state.editor_ui.property_panel_width,
-                (viewport_h - TOP_BAR_HEIGHT).max(0.0),
-            ),
-        };
+        let property_rect = self.property_rect(viewport_w, viewport_h);
         let new_hover = panel.export_picker_row_at(property_rect, Point2D::new(x, y));
         if new_hover != self.editor_state.editor_ui.export_picker_hover {
             self.editor_state.editor_ui.export_picker_hover = new_hover;
@@ -436,24 +429,14 @@ impl WidgetHostNative {
         viewport_h: f32,
         panel: Option<&op_editor_ui::widgets::PropertyPanel>,
     ) -> bool {
-        use op_editor_ui::widgets::TOP_BAR_HEIGHT;
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.effect_add_picker_open {
             return false;
         }
         let Some(panel) = panel else {
             return false;
         };
-        let property_rect = Rect {
-            origin: Point2D::new(
-                viewport_w - self.editor_state.editor_ui.property_panel_width,
-                TOP_BAR_HEIGHT,
-            ),
-            size: Point2D::new(
-                self.editor_state.editor_ui.property_panel_width,
-                (viewport_h - TOP_BAR_HEIGHT).max(0.0),
-            ),
-        };
+        let property_rect = self.property_rect(viewport_w, viewport_h);
         let new_hover = panel.effect_add_menu_row_at(property_rect, Point2D::new(x, y));
         if new_hover != self.editor_state.editor_ui.effect_add_menu_hover {
             self.editor_state.editor_ui.effect_add_menu_hover = new_hover;
@@ -475,24 +458,14 @@ impl WidgetHostNative {
         viewport_h: f32,
         panel: Option<&op_editor_ui::widgets::PropertyPanel>,
     ) -> bool {
-        use op_editor_ui::widgets::TOP_BAR_HEIGHT;
-        use op_editor_ui::{Point2D, Rect};
+        use op_editor_ui::Point2D;
         if !self.editor_state.editor_ui.interaction_menu_open {
             return false;
         }
         let Some(panel) = panel else {
             return false;
         };
-        let property_rect = Rect {
-            origin: Point2D::new(
-                viewport_w - self.editor_state.editor_ui.property_panel_width,
-                TOP_BAR_HEIGHT,
-            ),
-            size: Point2D::new(
-                self.editor_state.editor_ui.property_panel_width,
-                (viewport_h - TOP_BAR_HEIGHT).max(0.0),
-            ),
-        };
+        let property_rect = self.property_rect(viewport_w, viewport_h);
         let new_hover = panel.interaction_menu_row_at(property_rect, Point2D::new(x, y));
         if new_hover != self.editor_state.editor_ui.interaction_menu_hover {
             self.editor_state.editor_ui.interaction_menu_hover = new_hover;
@@ -509,23 +482,27 @@ impl WidgetHostNative {
         use op_editor_ui::widgets::LayerPanelHit;
         let sidebar_open = self.editor_state.editor_ui.sidebar_open;
         let panel_w = self.editor_state.editor_ui.layer_panel_width;
-        // A top-most floating panel covers the layer rail when dragged
-        // over it — no row highlights underneath it.
+        let point = Point2D::new(x, y);
+        // A top-most overlay covers the layer rail when dragged over it — no
+        // row highlights underneath it.
         let blocked_by_overlay = self
             .chat_model_picker_rect(viewport_w, viewport_h)
             .is_some()
             || self.chat_panel_surface_contains(x, y, viewport_w, viewport_h)
             || self.over_topmost_panel(x, y, viewport_w, viewport_h)
-            || self.over_dropdown_overlay(x, y, viewport_w, viewport_h);
+            || self.over_dropdown_overlay(x, y, viewport_w, viewport_h)
+            || self
+                .layer_context_menu_rect()
+                .is_some_and(|rect| rect.contains(point));
         let (new_layer, new_page) = if sidebar_open
             && !blocked_by_overlay
             && y >= TOP_BAR_HEIGHT
             && x >= 0.0
             && x <= panel_w
         {
-            let layer_rect = self.layers_content_rect(viewport_h);
+            let layer_rect = self.layers_content_rect(viewport_w, viewport_h);
             let panel = self.layer_panel();
-            match panel.hit_test(layer_rect, Point2D::new(x, y)) {
+            match panel.hit_test(layer_rect, point) {
                 Some(LayerPanelHit::Layer(id))
                 | Some(LayerPanelHit::ToggleHidden(id))
                 | Some(LayerPanelHit::ToggleLocked(id))
@@ -613,6 +590,9 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<Rect> {
+        if self.editor_state.editor_ui.touch_chrome() {
+            return None;
+        }
         canvas_geometry::status_bar_rect(&self.editor_state, viewport_w, viewport_h)
     }
 
@@ -718,12 +698,12 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<op_editor_ui::widgets::AlignToolbarHit> {
+        if self.editor_state.editor_ui.touch_chrome() {
+            return None;
+        }
         use op_editor_ui::widgets::AlignToolbar;
-        let (cx, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let canvas_region = Rect {
-            origin: Point2D::new(cx, TOP_BAR_HEIGHT),
-            size: Point2D::new(cw, ch),
-        };
+        let canvas_region =
+            canvas_geometry::canvas_rect(&self.editor_state, viewport_w, viewport_h);
         AlignToolbar::for_canvas_region(canvas_region, &self.editor_state)?
             .hit_test_action(Point2D::new(x, y))
     }

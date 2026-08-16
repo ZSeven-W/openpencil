@@ -37,6 +37,10 @@ use events::{
     write_done_event, write_error_event, write_thinking_event,
 };
 
+#[path = "web_chat_standard_model_selection.rs"]
+mod model_selection;
+use model_selection::selected_model_id;
+
 const STANDARD_MODIFY_STEP: &str =
     r#"<step title="Checking guidelines">Analyzing modification request...</step>"#;
 
@@ -209,7 +213,7 @@ pub fn stream_standard_turn<W: Write>(
         }
     };
 
-    let model = selected_model_id(&req.ai);
+    let model = selected_model_id(&req.ai, &snapshot);
     if matches!(
         op_orchestrator::classify_intent(&req.ai.user),
         op_orchestrator::Intent::Design
@@ -323,7 +327,7 @@ fn apply_request_snapshot(
     let mut snapshot = {
         let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(agent) = req.transient_builtin.as_ref() {
-            if agent.model.trim() != req.ai.model.trim() {
+            if !agent.has_model(req.ai.model.trim()) {
                 return Err(WebChatStandardError::TransientModelMismatch);
             }
             // `web_credentials` is outside this pass; carry its verdict text.
@@ -411,15 +415,6 @@ fn inject_transient_builtin(state: &mut EditorState, transient: Option<&BuiltinA
     agents.retain(|agent| agent.id != transient.id);
     agents.insert(0, transient.clone());
     state.rebuild_chat_models();
-}
-
-fn selected_model_id(req: &AiStreamRequest) -> Option<String> {
-    let model = req.model.trim();
-    if model.is_empty() || model == "default" || model.starts_with("builtin:") {
-        None
-    } else {
-        Some(model.to_string())
-    }
 }
 
 fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
@@ -772,3 +767,7 @@ impl DocSink for WebDesignDocSink<'_> {
 #[cfg(test)]
 #[path = "web_chat_standard_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "web_chat_standard_model_tests.rs"]
+mod model_tests;

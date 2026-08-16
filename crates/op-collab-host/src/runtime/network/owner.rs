@@ -35,11 +35,17 @@ const PEER_TERMINAL_CAPACITY: usize = 1;
 /// timeout, while remaining bounded and holding a pending-handshake slot.
 const OWNER_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
 
+fn when_lan_advertising<T>(enabled: bool, start: impl FnOnce() -> Option<T>) -> Option<T> {
+    enabled.then(start).flatten()
+}
+
 pub(super) struct OwnerTarget {
     pub(super) bind_address: SocketAddr,
     pub(super) session_id: SessionId,
     pub(super) epoch: Epoch,
     pub(super) relay: Option<RelayOwnerRequest>,
+    /// Whether this owner may advertise through multicast DNS.
+    pub(super) advertise_lan: bool,
 }
 
 pub(super) fn run(
@@ -68,6 +74,7 @@ fn run_inner(
         session_id,
         epoch,
         relay,
+        advertise_lan,
     } = target;
     let config = TransportConfig::default();
     let key = Arc::new(
@@ -104,7 +111,9 @@ fn run_inner(
         .local_addr()
         .map_err(|_| CollabRuntimeFailure::Transport)?;
     let share_endpoint = select_share_endpoint(endpoint, dual_stack);
-    let mut publisher = DiscoveryPublisher::start_for_listener(endpoint, dual_stack).ok();
+    let mut publisher = when_lan_advertising(advertise_lan, || {
+        DiscoveryPublisher::start_for_listener(endpoint, dual_stack).ok()
+    });
     let discovery_id = match publisher.as_ref() {
         Some(publisher) => publisher.discovery_id().to_owned(),
         None => random_hex_identifier()?,
@@ -685,6 +694,24 @@ mod approval_timeout_tests {
             &DiscoveryError::PublisherStopped,
             true
         ));
+    }
+
+    #[test]
+    fn relay_only_owner_never_constructs_a_discovery_publisher() {
+        let mut starts = 0;
+        let publisher = when_lan_advertising(false, || {
+            starts += 1;
+            Some(())
+        });
+        assert!(publisher.is_none());
+        assert_eq!(starts, 0);
+
+        assert!(when_lan_advertising(true, || {
+            starts += 1;
+            Some(())
+        })
+        .is_some());
+        assert_eq!(starts, 1);
     }
 
     #[test]

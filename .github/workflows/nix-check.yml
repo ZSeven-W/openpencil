@@ -9,6 +9,9 @@ on:
       - "flake.lock"
       - "nix/release-manifest.json"
       - "nix/integration/**"
+      - "packages/package.json"
+      - "packages/bun.lock"
+      - "packages/*/package.json"
       - "crates/op-host-desktop/assets/icon.png"
       - ".github/workflows/nix-check.yml"
   push:
@@ -20,6 +23,9 @@ on:
       - "flake.lock"
       - "nix/release-manifest.json"
       - "nix/integration/**"
+      - "packages/package.json"
+      - "packages/bun.lock"
+      - "packages/*/package.json"
       - "crates/op-host-desktop/assets/icon.png"
       - ".github/workflows/nix-check.yml"
   workflow_dispatch:

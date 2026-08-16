@@ -352,7 +352,8 @@ fn auto_flex_item_uses_intrinsic_width_without_fill_container_cycles() {
 #[test]
 fn node_limit_truncates_with_warning() {
     let mut html = String::from("<div>");
-    for _ in 0..25_000 {
+    // ~2 output nodes per <p>; 45,000 keeps a >2x margin over the 40k cap.
+    for _ in 0..45_000 {
         html.push_str("<p>x</p>");
     }
     html.push_str("</div>");
@@ -372,7 +373,9 @@ fn generated_content_also_obeys_the_output_node_limit() {
         "<style>p::before{content:'before';display:block}\
          p::after{content:'after';display:block}</style><div>",
     );
-    for _ in 0..3_500 {
+    // Each <p> expands to ~6 output nodes with the generated content, so
+    // 7,500 paragraphs lands ~45k — just over MAX_OUTPUT_NODES (40k).
+    for _ in 0..7_500 {
         html.push_str("<p>x</p>");
     }
     html.push_str("</div>");

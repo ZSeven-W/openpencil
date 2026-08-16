@@ -211,7 +211,15 @@ impl CollabPanel<'_> {
         if self.model.actions.is_empty() {
             0.0
         } else {
-            ACTION_HEIGHT + PAD
+            self.action_height() + PAD
+        }
+    }
+
+    pub(super) fn action_height(&self) -> f32 {
+        if self.ui.touch_chrome() {
+            44.0
+        } else {
+            ACTION_HEIGHT
         }
     }
 
@@ -304,12 +312,21 @@ impl CollabPanel<'_> {
     }
 
     pub(super) fn close_rect(&self, panel: Rect) -> Rect {
-        Rect::xywh(
-            panel.origin.x + panel.size.x - 38.0,
-            panel.origin.y + 8.0,
-            30.0,
-            28.0,
-        )
+        if self.ui.touch_chrome() {
+            Rect::xywh(
+                panel.origin.x + panel.size.x - 44.0,
+                panel.origin.y,
+                44.0,
+                44.0,
+            )
+        } else {
+            Rect::xywh(
+                panel.origin.x + panel.size.x - 38.0,
+                panel.origin.y + 8.0,
+                30.0,
+                28.0,
+            )
+        }
     }
 
     pub(super) fn address_rect(&self, panel: Rect, y: f32) -> Rect {
@@ -337,11 +354,12 @@ impl CollabPanel<'_> {
     }
 
     pub(super) fn sign_in_rect(&self, panel: Rect, body_top: f32) -> Rect {
+        let height = self.action_height();
         Rect::xywh(
             panel.origin.x + PAD,
             body_top + 40.0,
             panel.size.x - PAD * 2.0,
-            ACTION_HEIGHT,
+            height,
         )
     }
 
@@ -352,7 +370,8 @@ impl CollabPanel<'_> {
         let count = self.model.actions.len() as f32;
         let available = panel.size.x - PAD * 2.0 - ACTION_GAP * (count - 1.0);
         let width = available / count;
-        let y = panel.origin.y + panel.size.y - PAD - ACTION_HEIGHT;
+        let height = self.action_height();
+        let y = panel.origin.y + panel.size.y - PAD - height;
         self.model
             .actions
             .iter()
@@ -363,7 +382,7 @@ impl CollabPanel<'_> {
                         panel.origin.x + PAD + index as f32 * (width + ACTION_GAP),
                         y,
                         width,
-                        ACTION_HEIGHT,
+                        height,
                     ),
                     action.clone(),
                 )

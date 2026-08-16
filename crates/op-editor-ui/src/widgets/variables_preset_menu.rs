@@ -83,7 +83,7 @@ impl ThemePresetMenu {
         let name_input_active = state.editor_ui.preset_name_input_active();
         Self {
             theme: theme_for(&state.editor_ui),
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             preset_names: state.theme_presets.iter().map(|p| p.name.clone()).collect(),
             name_input_active,
             name_draft: if name_input_active {

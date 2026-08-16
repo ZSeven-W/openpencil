@@ -31,6 +31,59 @@ fn settings_input_uses_text_input_state_for_editing() {
 }
 
 #[test]
+fn enter_adds_a_model_line_instead_of_committing_settings() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().editor_ui;
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("model-a");
+    }
+
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state().editor_ui.settings_input.text(),
+        "model-a\n"
+    );
+    assert_eq!(
+        host.editor_state().editor_ui.agent_settings.focus,
+        Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model))
+    );
+}
+
+#[test]
+fn model_clipboard_paste_preserves_lines_and_normalizes_newlines() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().editor_ui;
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("old-model");
+        ui.settings_input.select_all();
+    }
+
+    assert!(host.apply_input_paste("model-a\r\nmodel-b\rmodel-c\nmodel-d",));
+    assert_eq!(
+        host.editor_state().editor_ui.settings_input.text(),
+        "model-a\nmodel-b\nmodel-c\nmodel-d"
+    );
+}
+
+#[test]
+fn model_ime_commit_preserves_lines_for_mobile_editor_shells() {
+    let mut host = WidgetHostNative::new();
+    {
+        let ui = &mut host.editor_state_mut().editor_ui;
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("");
+    }
+
+    assert!(host.apply_ime_commit("模型甲\r\n模型乙\r模型丙"));
+    assert_eq!(
+        host.editor_state().editor_ui.settings_input.text(),
+        "模型甲\n模型乙\n模型丙"
+    );
+}
+
+#[test]
 fn next_animation_deadline_uses_focused_variable_row_input_anchor() {
     let _guard = crate::agent_indicator_test_support::write();
     op_editor_core::agent_indicators::clear();

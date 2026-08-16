@@ -1,0 +1,76 @@
+name: OpenPencilPlayer
+
+options:
+  bundleIdPrefix: tech.zseven
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "26.4"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: c++17
+
+targets:
+  OpenPencilPlayer:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Sources
+      - path: Resources
+        buildPhase: resources
+      - path: Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.zseven.openpencil
+        PRODUCT_NAME: OpenPencilPlayer
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: OpenPencil
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: "NO"
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Connect to an OpenPencil collaboration session on your local network when you enter its address."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/OpenPencilPlayer-Bridging-Header.h"
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../../crates/op-engine-ffi/include"
+        "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios/release"
+        "LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios-sim/release"
+        OP_AUTH_ARCHIVE: ""
+        OTHER_LDFLAGS: "$(inherited) $(OP_ENGINE_ARCHIVE) $(OP_AUTH_ARCHIVE) -lc++"
+      configs:
+        Debug:
+          "OP_ENGINE_ARCHIVE[sdk=iphoneos*]": "$(SRCROOT)/../../target/aarch64-apple-ios/debug/libop_engine_ffi.a"
+          "OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]": "$(SRCROOT)/../../target/aarch64-apple-ios-sim/debug/libop_engine_ffi.a"
+        Release:
+          GCC_OPTIMIZATION_LEVEL: s
+          "OP_ENGINE_ARCHIVE[sdk=iphoneos*]": "$(SRCROOT)/../../target/aarch64-apple-ios/release/libop_engine_ffi.a"
+          "OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]": "$(SRCROOT)/../../target/aarch64-apple-ios-sim/release/libop_engine_ffi.a"
+    preBuildScripts:
+      - name: Validate optional op-auth archive
+        script: |
+          if [ -n "${OP_AUTH_ARCHIVE:-}" ]; then
+            case "${PLATFORM_NAME:-}" in
+              iphoneos) export OP_AUTH_TARGET=aarch64-apple-ios ;;
+              iphonesimulator) export OP_AUTH_TARGET=aarch64-apple-ios-sim ;;
+              *) echo "error: unsupported auth link platform: ${PLATFORM_NAME:-unset}" >&2; exit 1 ;;
+            esac
+            bash "$SRCROOT/../../tools/check-mobile-auth-link-input.sh"
+          fi
+        basedOnDependencyAnalysis: false
+    dependencies:
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+      - sdk: WebKit.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+      - sdk: Foundation.framework
+      - sdk: CoreFoundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: ImageIO.framework
+      - sdk: MobileCoreServices.framework

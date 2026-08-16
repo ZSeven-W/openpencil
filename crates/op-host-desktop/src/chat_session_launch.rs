@@ -98,7 +98,9 @@ pub fn launch_if_pending(
         if launch_direct_modify_turn(host, &effective_user_text, current_chat, current_design) {
             return true;
         }
-    } else if matches!(classify_intent(&effective_user_text), Intent::Design) {
+    } else if !op_host_services::chat_intent::is_non_request_text(&effective_user_text)
+        && matches!(classify_intent(&effective_user_text), Intent::Design)
+    {
         // Record what this turn establishes the document to be BEFORE either
         // design route can clear the starter frame — once the page is empty
         // the "was it empty?" fact is gone. See `design_turn_scenario`.

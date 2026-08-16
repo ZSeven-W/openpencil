@@ -1,0 +1,35 @@
+id: dashboard-team-people-page-composite
+category: dashboard
+difficulty: composite
+prompt: |
+  Design the people / members section of a workspace's team
+  settings page. The panel is 720px wide. Contents top-to-bottom:
+    - a section header "Members" (16/600) with a small subtle
+      "5 people" count beside it
+    - 5 member rows, each ~64px tall, separated by hairline
+      dividers:
+        - "Sarah Lee" (sarah@acme.com) — Owner role badge
+        - "Marcus Chen" (marcus@acme.com) — Admin role badge
+        - "Aiko Tanaka" (aiko@acme.com) — Editor role badge
+        - "Raj Patel" (raj@acme.com) — Editor role badge
+        - "Jordan Kim" (jordan@acme.com) — Viewer role badge
+    - a thin divider
+    - a sub-heading "Pending invitations" (14/600, muted)
+    - 1 invite row: "leon@acme.com" / "Editor" / Pending status /
+      "Resend" action
+  Do NOT render the left sidebar, top app bar, "Invite people"
+  CTA button, or any other settings sections — only the members
+  + pending-invites block described above.
+expected:
+  must_contain_roles:
+    - section-header
+    - member-row
+    - member-row-avatar
+    - member-row-name
+    - member-row-badge
+    - invite-row
+    - invite-row-email
+    - invite-row-status-text
+  min_roles:
+    member-row: 5
+    invite-row: 1

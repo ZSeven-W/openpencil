@@ -685,6 +685,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "Als PDF exportieren",
         "slidesPanel.exportAllSlides" => "Alle Folien exportieren",
         "slidesPanel.exportSelectedSlides" => "Ausgewählte Folien exportieren ({{count}})",
+        "settings.tab.ai" => "KI",
         "settings.agents.heroTitle" => "Verbinde deinen KI-Anbieter",
         "settings.agents.heroSubtitle" => "OpenPencil steuert deine lokalen CLI-Agenten und API-Anbieter — verbinde einen, um Designs zu generieren.",
         "settings.agents.statusConnected" => "Verbunden",

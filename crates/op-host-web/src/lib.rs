@@ -99,6 +99,8 @@ mod theme_preset_io;
 mod web_ai_credentials;
 #[cfg(feature = "canvaskit")]
 mod web_ai_transport;
+#[cfg(feature = "canvaskit")]
+mod web_builtin_model_discovery;
 // Web Iconify bridge — drains the icon picker's remote-search request directly
 // against api.iconify.design (CORS-open, same as TS).
 #[cfg(feature = "canvaskit")]
