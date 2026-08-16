@@ -542,12 +542,15 @@ fn formal_release_calls_mobile_distribution_lanes_without_coupling_ios_failure()
         .expect("release artifact flattener is readable");
 
     assert!(
-        release.contains("uses: ./.github/workflows/ios-app-store.yml")
-            && release.contains("uses: ./.github/workflows/android-release.yml")
-            && release.contains("release_sha: ${{ github.sha }}")
+        release.contains("uses: ./.github/workflows/android-release.yml")
+            && release.contains("environment: testflight")
+            && release.contains("run: scripts/publish-ios-testflight.sh")
+            && release.contains(
+                "IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}",
+            )
             && !release.contains("auth_artifact_ref")
             && !release.contains("tools/check-op-auth-artifact-commit.sh"),
-        "the formal tag release should call both mobile distribution lanes"
+        "the formal tag release should build Android assets and publish iOS from the protected environment"
     );
     assert!(
         release.contains(

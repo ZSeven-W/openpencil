@@ -124,11 +124,13 @@ expected_permissions.each do |name, permissions|
   raise "#{name} permissions exceed the reviewed minimum" unless jobs.fetch(name).fetch("permissions") == permissions
 end
 raise "secret-free version gate must not request the release environment" if version.key?("environment")
-reusable_jobs = %w[ios-app-store android-release]
+reusable_jobs = %w[android-release]
 reusable_jobs.each do |name|
   raise "#{name} must not set a caller-side environment" if jobs.fetch(name).key?("environment")
 end
-(jobs.keys - ["version"] - reusable_jobs).each do |name|
+raise "iOS publishing must read testflight environment secrets directly" unless
+  jobs.fetch("ios-app-store").fetch("environment") == "testflight"
+(jobs.keys - ["version", "ios-app-store"] - reusable_jobs).each do |name|
   raise "#{name} must be protected by release-production" unless jobs.fetch(name).fetch("environment") == "release-production"
 end
 
@@ -284,21 +286,45 @@ end
 end
 
 ios = jobs.fetch("ios-app-store")
-unless ios.fetch("uses") == "./.github/workflows/ios-app-store.yml" &&
+unless !ios.key?("uses") &&
     ios.fetch("if") == "startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == true)" &&
     ios.fetch("needs") == "version" &&
-    ios.fetch("with") == {
-      "release_sha" => '${{ github.sha }}',
-      "release_ref" => '${{ github.ref }}',
-    } &&
-    ios.fetch("secrets") == {
+    ios.fetch("runs-on") == "macos-26" &&
+    ios.fetch("environment") == "testflight" &&
+    ios.fetch("timeout-minutes") == 120 &&
+    !ios.key?("env")
+  raise "tag releases and explicit iOS-only dispatches must use the protected App Store job"
+end
+ios_steps = ios.fetch("steps")
+ios_checkout = ios_steps.find { |step| step["name"] == "Checkout the exact release source without credentials" }
+unless ios_checkout && ios_checkout.fetch("with") == {
+    "fetch-depth" => 1,
+    "persist-credentials" => false,
+    "ref" => '${{ needs.version.outputs.source_sha }}',
+    "submodules" => "recursive",
+  }
+  raise "iOS publication must check out the validated source without credentials"
+end
+ios_publish = ios_steps.find { |step| step["name"] == "Publish the collaboration-enabled build to TestFlight" }
+unless ios_publish && ios_publish.fetch("run") == "scripts/publish-ios-testflight.sh" &&
+    ios_publish.fetch("env").slice(
+      "APPLE_TEAM_ID",
+      "APP_STORE_CONNECT_API_KEY_BASE64",
+      "APP_STORE_CONNECT_API_KEY_ID",
+      "APP_STORE_CONNECT_ISSUER_ID",
+      "IOS_DISTRIBUTION_CERTIFICATE_BASE64",
+      "IOS_DISTRIBUTION_CERTIFICATE_PASSWORD",
+      "IOS_PROVISIONING_PROFILE_BASE64",
+    ) == {
       "APPLE_TEAM_ID" => '${{ secrets.APPLE_TEAM_ID }}',
-      "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN" =>
-        '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}',
-      "OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL" =>
-        '${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}',
+      "APP_STORE_CONNECT_API_KEY_BASE64" => '${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}',
+      "APP_STORE_CONNECT_API_KEY_ID" => '${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}',
+      "APP_STORE_CONNECT_ISSUER_ID" => '${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}',
+      "IOS_DISTRIBUTION_CERTIFICATE_BASE64" => '${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}',
+      "IOS_DISTRIBUTION_CERTIFICATE_PASSWORD" => '${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}',
+      "IOS_PROVISIONING_PROFILE_BASE64" => '${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}',
     }
-  raise "tag releases and explicit iOS-only dispatches must call the exact reusable App Store lane"
+  raise "the protected iOS publish step must read Apple credentials from testflight secrets"
 end
 
 android = jobs.fetch("android-release")

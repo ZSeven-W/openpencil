@@ -5,51 +5,9 @@ name: Rust release artifacts
 # tarballs, publishes the web SDK packages to npm, publishes a GitHub
 # prerelease, then updates the Homebrew tap and Scoop bucket.
 #
-# Artifact matrix (per platform; <v> = tag version, arch token = x64/arm64 to
-# match electron-builder's `${productName}-${version}-${arch}-…` convention
-# from apps/desktop/electron-builder.yml):
-#   macOS   OpenPencil-<v>-<arch>-mac.dmg        notarized final DMG containing
-#                                                a notarized .app from
-#                                                scripts/bundle-macos.sh
-#                                                (.op/.pen/.fig associations in
-#                                                Info.plist, op CLI embedded in
-#                                                Contents/MacOS; Developer ID
-#                                                signed/notarized when secrets
-#                                                exist, ad-hoc signed locally)
-#           op-cli-<label>.tar.gz                standalone CLI
-#   Windows OpenPencil-<v>-<arch>-win-setup.exe  NSIS installer (Start-Menu +
-#                                                desktop shortcuts, HKCR
-#                                                .op/.pen ProgID, uninstaller,
-#                                                bundles op.exe)
-#           openpencil-desktop-<label>.zip       portable (kept)
-#           op-cli-<label>.zip                   standalone CLI
-#   Linux   OpenPencil-<v>-<arch>-linux.AppImage both arches (appimagetool
-#                                                1.9.1 ships native x86_64 AND
-#                                                aarch64 builds)
-#           OpenPencil-<v>-<arch>-linux.deb      .desktop + shared-mime-info
-#                                                registration of .op/.pen,
-#                                                bundles usr/bin/op
-#           openpencil-desktop-<label>.tar.gz    raw binary (kept)
-#           op-cli-<label>.tar.gz                standalone CLI
-#   Android OpenPencil-<v>-android.apk            signed universal installer
-#           OpenPencil-<v>-android.aab            signed App Bundle retained as
-#                                                a GitHub Release asset (this
-#                                                workflow does not upload Play)
-#   iOS     Uploads the signed build to App Store Connect / TestFlight through
-#           the reusable protected workflow; no iOS binary is attached here
-#   all     openpencil-vscode-<v>-<t>.vsix       VS Code extension, one per
-#                                                vsce target (darwin/linux/
-#                                                win32 × x64/arm64), each
-#                                                bundling the platform's
-#                                                op-host-web-server + the
-#                                                wasm/CanvasKit web assets
-#
-# Branding: productName "OpenPencil" everywhere (parity with
-# electron-builder.yml). The macOS bundle id stays com.zseven-w.openpencil
-# (the Rust shell identity already registered with LaunchServices via
-# scripts/bundle-macos.sh + op-host-desktop bundle metadata) — intentionally
-# NOT electron's dev.openpencil.app, so the Electron and Rust apps can
-# coexist without fighting over file-association ownership.
+# Desktop installers, Android APK/AAB, web/SDK/VSIX assets, and package-manager
+# updates are attached to the GitHub release. The protected iOS job uploads to
+# App Store Connect / TestFlight and intentionally produces no GitHub asset.
 #
 # Platform installer and notarization paths still require a real tag run;
 # repository-owned scripts and workflow contract checks cover local validation.
@@ -126,16 +84,59 @@ jobs:
     name: iOS App Store / TestFlight
     needs: version
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == true)
+    runs-on: macos-26
+    timeout-minutes: 120
+    environment: testflight
     permissions:
       contents: read
-    uses: ./.github/workflows/ios-app-store.yml
-    with:
-      release_sha: ${{ github.sha }}
-      release_ref: ${{ github.ref }}
-    secrets:
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
-      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+    steps:
+      - name: Checkout the exact release source without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.version.outputs.source_sha }}
+          submodules: recursive
+
+      - name: Prepare the pinned iOS release runner
+        id: ios_release
+        shell: bash
+        env:
+          OPENPENCIL_RELEASE_SHA: ${{ needs.version.outputs.source_sha }}
+          OPENPENCIL_RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: scripts/prepare-ios-app-store-runner.sh
+
+      - name: Validate protected production release configuration
+        shell: bash
+        env:
+          RELAY_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          RELAY_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+        run: |
+          set -euo pipefail
+          relay_cn=$RELAY_CN
+          relay_global=$RELAY_GLOBAL
+          unset RELAY_CN RELAY_GLOBAL
+          printf '%s\0%s\0' "$relay_cn" "$relay_global" \
+            | python3 tools/check-collab-bootstrap-urls.py
+          echo "Validated the protected production release configuration."
+
+      - name: Publish the collaboration-enabled build to TestFlight
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          IOS_BUILD_NUMBER: ${{ steps.ios_release.outputs.build_number }}
+          IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+          IOS_MARKETING_VERSION: ${{ steps.ios_release.outputs.version }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+          OP_AUTH_ARTIFACT_ROOT: ${{ github.workspace }}/crates/op-auth-bridge/prebuilt
+          XCODEGEN_BIN: ${{ steps.ios_release.outputs.xcodegen_binary }}
+        run: scripts/publish-ios-testflight.sh
 
   android-release:
     name: Android APK / AAB
