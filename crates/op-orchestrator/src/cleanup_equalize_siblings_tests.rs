@@ -387,3 +387,306 @@ fn driver_attributes_the_repairs_to_the_equalize_checkpoint() {
         summary.records()
     );
 }
+
+// ── DS P2-d ①: same-position decorative-container fill votes ────────────────
+
+/// An entry frame whose first child is a number chip (Rectangle) with a
+/// primary solid fill, then a title text — the measured 0815 shape whose
+/// chip colours drifted per item. `fills` is the chip's whole `fill` array.
+fn chip_item(id: &str, name: &str, fills: serde_json::Value) -> serde_json::Value {
+    json!({
+        "type": "frame",
+        "id": id,
+        "name": name,
+        "layout": "vertical",
+        "padding": 20,
+        "gap": 12,
+        "alignItems": "start",
+        "children": [
+            { "type": "rectangle", "id": format!("{id}-chip"), "name": "Chip",
+              "width": 32, "height": 32, "cornerRadius": 8, "fill": fills },
+            { "type": "text", "id": format!("{id}-title"), "content": "Title",
+              "fontSize": 16, "fontWeight": 700 }
+        ]
+    })
+}
+
+fn solid(hex: &str) -> serde_json::Value {
+    json!([{ "type": "solid", "color": hex }])
+}
+
+fn gradient() -> serde_json::Value {
+    json!([{
+        "type": "linear_gradient",
+        "stops": [
+            { "offset": 0, "color": "#000000" },
+            { "offset": 1, "color": "#ffffff" }
+        ]
+    }])
+}
+
+fn chip_family(chip_fills: &[serde_json::Value]) -> serde_json::Value {
+    json!({
+        "type": "frame", "id": "root", "name": "Knowledge Card",
+        "width": 1200, "height": 800, "layout": "vertical",
+        "children": chip_fills.iter().enumerate().map(|(i, fill)| {
+            chip_item(&format!("c{}", i + 1), &format!("Card {:02}", i + 1), fill.clone())
+        }).collect::<Vec<_>>()
+    })
+}
+
+fn insert_chip_family(sink: &mut VecDocSink, chip_fills: &[serde_json::Value]) {
+    insert_tree(sink, &chip_family(chip_fills).to_string());
+}
+
+#[test]
+fn a_drifted_chip_fill_is_aligned_to_the_majority_fill() {
+    // The 0815 positive shape: four of five entries share one chip colour,
+    // the fifth drifted — the outlier joins the family norm.
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[
+            solid("#111111"),
+            solid("#111111"),
+            solid("#111111"),
+            solid("#111111"),
+            solid("#ff0000"),
+        ],
+    );
+
+    let applied = run_pass(&mut sink, "root");
+    assert_eq!(
+        applied, 1,
+        "only the drifted chip fill is repaired: {applied}"
+    );
+    assert_eq!(
+        node_json(&sink, "c5-chip")["fill"][0]["color"],
+        json!("#111111"),
+        "the outlier chip joins the majority: {}",
+        node_json(&sink, "c5-chip")
+    );
+    // Majority members stay untouched.
+    assert_eq!(
+        node_json(&sink, "c1-chip")["fill"][0]["color"],
+        json!("#111111")
+    );
+}
+
+#[test]
+fn three_distinct_chip_fills_have_no_majority() {
+    // Black / red / pink — one each on a three-member family: no value
+    // clears 2/3, so nothing moves.
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[solid("#000000"), solid("#ff0000"), solid("#ff69b4")],
+    );
+
+    assert_eq!(
+        run_pass(&mut sink, "root"),
+        0,
+        "a 1/1/1 split has no provable norm"
+    );
+}
+
+#[test]
+fn a_two_two_one_chip_fill_split_has_no_majority() {
+    // The measured 黑/黑/红/红/粉 distribution: 2/5 and 2/5 both fall short
+    // of 2/3 — the pass must not guess between two tied camps.
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[
+            solid("#000000"),
+            solid("#000000"),
+            solid("#ff0000"),
+            solid("#ff0000"),
+            solid("#ff69b4"),
+        ],
+    );
+
+    assert_eq!(
+        run_pass(&mut sink, "root"),
+        0,
+        "a 2/2/1 split has no provable norm"
+    );
+}
+
+#[test]
+fn a_gradient_chip_blocks_the_whole_fill_position() {
+    // One member decorates the chip slot with a gradient: the slot is not
+    // proven to be a colour slot, so the ENTIRE position is skipped — even
+    // the solid outlier that a per-member abstention would have fixed.
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[
+            solid("#111111"),
+            solid("#111111"),
+            solid("#111111"),
+            solid("#ff0000"),
+            gradient(),
+        ],
+    );
+
+    assert_eq!(run_pass(&mut sink, "root"), 0, "the slot stays unprovable");
+    assert_eq!(
+        node_json(&sink, "c5-chip")["fill"][0]["type"],
+        json!("linear_gradient"),
+        "the gradient decoration is never touched"
+    );
+    assert_eq!(
+        node_json(&sink, "c4-chip")["fill"][0]["color"],
+        json!("#ff0000"),
+        "the solid outlier survives too — nothing at this position may move"
+    );
+}
+
+#[test]
+fn variable_reference_chip_fills_vote_by_reference_string() {
+    // Same reference is same value: four `$primary` chips against one
+    // `$accent` chip — the outlier joins the reference majority, and the
+    // patch writes the reference, not a resolved hex.
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[
+            solid("$primary"),
+            solid("$primary"),
+            solid("$primary"),
+            solid("$primary"),
+            solid("$accent"),
+        ],
+    );
+
+    let applied = run_pass(&mut sink, "root");
+    assert_eq!(applied, 1, "only the ref outlier is repaired: {applied}");
+    assert_eq!(
+        node_json(&sink, "c5-chip")["fill"][0]["color"],
+        json!("$primary"),
+        "the outlier joins by reference string: {}",
+        node_json(&sink, "c5-chip")
+    );
+}
+
+#[test]
+fn mixed_reference_and_literal_chip_fills_are_not_touched() {
+    // `$primary` (3) against `#ff0000` (2): a literal cannot be proven
+    // synonymous with a reference, so even the 3/5 literal-free camp must
+    // not absorb the others.
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[
+            solid("$primary"),
+            solid("$primary"),
+            solid("$primary"),
+            solid("#ff0000"),
+            solid("#ff0000"),
+        ],
+    );
+
+    assert_eq!(
+        run_pass(&mut sink, "root"),
+        0,
+        "the two value systems are never cross-compared"
+    );
+}
+
+#[test]
+fn text_node_fills_are_never_touched() {
+    // The chip pass fires (4/5), while the title TEXT fills differ per item
+    // — text colour is the contrast pass's territory, never the equalizer's.
+    let mut sink = VecDocSink::new();
+    insert_tree(
+        &mut sink,
+        &json!({
+            "type": "frame", "id": "root", "name": "Knowledge Card",
+            "width": 1200, "height": 800, "layout": "vertical",
+            "children": [
+                chip_item("c1", "Card 01", solid("#111111")),
+                chip_item("c2", "Card 02", solid("#111111")),
+                chip_item("c3", "Card 03", solid("#111111")),
+                chip_item("c4", "Card 04", solid("#111111")),
+                chip_item("c5", "Card 05", solid("#ff0000"))
+            ]
+        })
+        .to_string(),
+    );
+    let title_fills = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff"];
+    for (i, hex) in title_fills.iter().enumerate() {
+        sink.state.apply(EditorCommand::PatchNodeData {
+            node_id: NodeId::new(format!("c{}-title", i + 1)),
+            patch_json: json!({ "fill": [{ "type": "solid", "color": hex }] }).to_string(),
+            page_id: None,
+        });
+    }
+    sink.applied.clear();
+
+    let applied = run_pass(&mut sink, "root");
+    assert_eq!(
+        applied, 1,
+        "only the drifted chip fill is repaired — text fills are exempt: {applied}"
+    );
+    for (i, hex) in title_fills.iter().enumerate() {
+        assert_eq!(
+            node_json(&sink, &format!("c{}-title", i + 1))["fill"][0]["color"],
+            json!(hex),
+            "the text fill of item {} must survive the pass",
+            i + 1
+        );
+    }
+    assert_eq!(
+        node_json(&sink, "c5-chip")["fill"][0]["color"],
+        json!("#111111"),
+        "the chip outlier still joins the majority"
+    );
+}
+
+#[test]
+fn a_missing_chip_fill_joins_the_majority_fill() {
+    // Four chips share a colour and the fifth has NO fill at all — the
+    // missing value is drift against the 2/3 norm and inherits it.
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[
+            solid("#111111"),
+            solid("#111111"),
+            solid("#111111"),
+            solid("#111111"),
+            json!([]),
+        ],
+    );
+
+    let applied = run_pass(&mut sink, "root");
+    assert_eq!(applied, 1, "the missing fill joins the majority: {applied}");
+    assert_eq!(
+        node_json(&sink, "c5-chip")["fill"][0]["color"],
+        json!("#111111"),
+        "the fill-less chip inherits the family norm: {}",
+        node_json(&sink, "c5-chip")
+    );
+}
+
+#[test]
+fn the_fill_pass_is_idempotent() {
+    let mut sink = VecDocSink::new();
+    insert_chip_family(
+        &mut sink,
+        &[
+            solid("#111111"),
+            solid("#111111"),
+            solid("#111111"),
+            solid("#111111"),
+            solid("#ff0000"),
+        ],
+    );
+    assert!(run_pass(&mut sink, "root") > 0, "first run repairs");
+    assert_eq!(
+        run_pass(&mut sink, "root"),
+        0,
+        "the second run has nothing left to repair"
+    );
+}

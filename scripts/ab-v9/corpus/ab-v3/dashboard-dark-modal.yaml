@@ -1,0 +1,18 @@
+id: dashboard-dark-modal
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY a DARK-THEME confirm dialog: a centered card with a
+  dark slate background (NOT white), bold light-colored title
+  "Escalate to supervisor?", and a muted light secondary line
+  "The customer will receive an email update." underneath. The
+  modal sits on a dimmed backdrop. Do NOT include action buttons,
+  close button, or other page content — just the theme-aware
+  modal shell that should work in dark mode.
+expected:
+  must_contain_roles:
+    - modal-scrim
+    - modal-shell-card
+    - modal-title
+    - modal-subtitle
+expected_tool_if_any: add_modal_shell_v1

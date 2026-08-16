@@ -1,0 +1,22 @@
+id: landing-newsletter-signup
+category: landing
+difficulty: obvious
+prompt: |
+  Design ONLY the newsletter signup row at the bottom of a landing
+  page: a single 44px-tall row with two side-by-side elements:
+    - on the left, a wide rounded input field with a small mail
+      icon inside on the left and the placeholder text "Enter
+      your email" in muted slate
+    - on the right, a "Subscribe" pill button in accent blue with
+      white text
+  Both pieces are on the same horizontal row at the same height.
+  Do NOT render a heading, supporting copy, privacy disclaimer,
+  or surrounding section — just the email-input + Subscribe row.
+expected:
+  must_contain_roles:
+    - input-with-action
+    - input-with-action-input
+    - input-with-action-text
+    - input-with-action-button
+    - input-with-action-label
+expected_tool_if_any: add_input_with_action_v0

@@ -22,6 +22,29 @@
 //! - A value is the norm only when >= 2/3 of the editable members hold it.
 //!   Three members with three paddings have no provable majority and are
 //!   left alone; nothing is aligned toward a tie.
+//!
+//! ## Decorative-container fill alignment (DS P2-d ①)
+//!
+//! Measured 0815: after five sibling entries were made structurally
+//! isomorphic, their number-chip FILL colours kept drifting per item
+//! (black/black/red/red/pink) — same-family entries, same decorative
+//! container slot, different colours, which no author intends. Beside the
+//! same-position text votes, same-position Frame/Rectangle descendant nodes
+//! vote on their PRIMARY fill through the same 2/3 mechanism:
+//!
+//! - Only a SOLID primary fill votes; a gradient / image / shader / mesh
+//!   primary fill at any position makes that position unprovable and skips
+//!   the WHOLE position (mirrors the gap rule: one decorative slot means the
+//!   slot is not proven to be a colour slot at all).
+//! - A `$variable` reference votes by the reference string — same reference
+//!   is same value. A position mixing references and literals is never
+//!   touched: the two systems cannot be proven synonymous.
+//! - A missing fill is a votable missing value: it JOINS a concrete 2/3
+//!   majority (the family norm is re-applied to the straggler), but a
+//!   majority of "no fill" is never enforced — removing a fill is a
+//!   destructive move this pass does not make.
+//! - Text-node fills are never touched — that is the contrast pass's
+//!   territory, and text colour is a legibility decision, not family drift.
 
 use super::*;
 
@@ -31,7 +54,9 @@ use jian_ops_schema::node::container::{
     AlignItems, ContainerProps, JustifyContent, LayoutMode, Padding,
 };
 use jian_ops_schema::node::{FontWeight, NumberOrExpression, PenNode};
+use jian_ops_schema::style::PenFill;
 use op_design_lint::node_util::{children as node_children, is_node_visible, node_kind_str};
+use op_editor_core::variables_resolve::is_variable_ref;
 use serde_json::{json, Value};
 
 /// Minimum sibling count for a family.
@@ -49,8 +74,14 @@ pub(super) fn equalize_sibling_items(sink: &mut dyn DocSink, root_id: &str) -> u
     };
     let mut container_patches: Vec<(NodeId, String)> = Vec::new();
     let mut text_patches: Vec<(NodeId, String)> = Vec::new();
-    collect_family_plans(root, &mut container_patches, &mut text_patches);
-    let applied = container_patches.len() + text_patches.len();
+    let mut fill_patches: Vec<(NodeId, String)> = Vec::new();
+    collect_family_plans(
+        root,
+        &mut container_patches,
+        &mut text_patches,
+        &mut fill_patches,
+    );
+    let applied = container_patches.len() + text_patches.len() + fill_patches.len();
     for (node_id, patch_json) in container_patches {
         sink.apply(EditorCommand::PatchNodeData {
             node_id,
@@ -65,6 +96,12 @@ pub(super) fn equalize_sibling_items(sink: &mut dyn DocSink, root_id: &str) -> u
             page_id: None,
         });
     }
+    for (node_id, hex) in fill_patches {
+        // `SetNodeFillHex` replaces the first solid in place (or prepends),
+        // accepts `$variable` references, and validates literal hex — the
+        // same fill writer the property panel uses.
+        sink.apply(EditorCommand::SetNodeFillHex { node_id, hex });
+    }
     applied
 }
 
@@ -75,21 +112,27 @@ struct Member<'a> {
     /// Text nodes in DFS pre-order; members with an equal `kind_seq` have the
     /// same count, so index `k` names "the same text position" across them.
     text_nodes: Vec<&'a PenNode>,
+    /// Frame / Rectangle descendants in DFS pre-order (the member root
+    /// itself excluded — the family members are the siblings, their
+    /// decorative containers are the vote targets). Same alignment property
+    /// as `text_nodes`: index `k` is the same container slot across members.
+    fill_nodes: Vec<&'a PenNode>,
 }
 
 fn collect_family_plans(
     node: &PenNode,
     container_patches: &mut Vec<(NodeId, String)>,
     text_patches: &mut Vec<(NodeId, String)>,
+    fill_patches: &mut Vec<(NodeId, String)>,
 ) {
     let Some(children) = node.children() else {
         return;
     };
     if let Some(family) = sibling_family(node, children) {
-        plan_family_repairs(&family, container_patches, text_patches);
+        plan_family_repairs(&family, container_patches, text_patches, fill_patches);
     }
     for child in children {
-        collect_family_plans(child, container_patches, text_patches);
+        collect_family_plans(child, container_patches, text_patches, fill_patches);
     }
 }
 
@@ -120,6 +163,7 @@ fn sibling_family<'a>(parent: &PenNode, children: &'a [PenNode]) -> Option<Vec<M
             node: child,
             kind_seq: kind_sequence(child),
             text_nodes: collect_text_nodes(child),
+            fill_nodes: collect_fill_nodes(child),
         })
         .collect();
     if members.len() < MIN_MEMBERS {
@@ -178,6 +222,7 @@ fn plan_family_repairs(
     family: &[Member],
     container_patches: &mut Vec<(NodeId, String)>,
     text_patches: &mut Vec<(NodeId, String)>,
+    fill_patches: &mut Vec<(NodeId, String)>,
 ) {
     let n = family.len();
     // Per-member container-property changes, keyed by JSON field name.
@@ -344,6 +389,70 @@ fn plan_family_repairs(
             ));
         }
     }
+
+    // Same-position Frame/Rectangle descendants: primary solid fill votes
+    // (DS P2-d ①). Equal kind-sequences guarantee every member has the same
+    // container-slot count, so position `k` means the same decorative slot
+    // in every member — the number chip of a five-entry family, say.
+    let Some(first_fills) = family.first().map(|member| &member.fill_nodes) else {
+        return;
+    };
+    // Per member, per container-slot: the hex / `$ref` string to write.
+    let mut fill_changes: Vec<Vec<Option<String>>> = vec![vec![None; first_fills.len()]; n];
+    for (position, _slot_node) in first_fills.iter().enumerate() {
+        let slots: Vec<FillSlot> = family
+            .iter()
+            .map(|member| fill_slot(member.fill_nodes[position]))
+            .collect();
+        // A non-solid primary fill (gradient / image / shader / mesh) on ANY
+        // member proves nothing about the slot — decorative slots are not
+        // provably colour slots, so the whole position is skipped (the same
+        // unprovable-skip rule the gap vote uses).
+        if slots.iter().any(|slot| matches!(slot, FillSlot::NonSolid)) {
+            continue;
+        }
+        let votes: Vec<Option<FillVote>> = slots
+            .iter()
+            .map(|slot| match slot {
+                FillSlot::Solid(vote) => Some(vote.clone()),
+                FillSlot::Missing | FillSlot::NonSolid => None,
+            })
+            .collect();
+        // Reference strings and literals cannot be proven synonymous — a
+        // position mixing them is never touched.
+        let has_ref = votes
+            .iter()
+            .any(|vote| matches!(vote, Some(FillVote::Ref(_))));
+        let has_literal = votes
+            .iter()
+            .any(|vote| matches!(vote, Some(FillVote::Literal(_))));
+        if has_ref && has_literal {
+            continue;
+        }
+        // A CONCRETE 2/3 majority defines the norm; a majority of "no fill"
+        // is never enforced (removing a fill is destructive and out of
+        // scope). Members holding a different value — or none at all — join
+        // the norm.
+        let Some(Some(majority)) = majority_of(&votes) else {
+            continue;
+        };
+        let hex = match &majority {
+            FillVote::Literal(hex) | FillVote::Ref(hex) => hex.clone(),
+        };
+        for (i, vote) in votes.iter().enumerate() {
+            if vote.as_ref() != Some(&majority) {
+                fill_changes[i][position] = Some(hex.clone());
+            }
+        }
+    }
+    for (member, changes) in family.iter().zip(&fill_changes) {
+        for (position, hex) in changes.iter().enumerate() {
+            if let Some(hex) = hex {
+                let node = member.fill_nodes[position];
+                fill_patches.push((NodeId::new(node.id_str()), hex.clone()));
+            }
+        }
+    }
 }
 
 /// The value held by the most members, when it clears the 2/3 bar.
@@ -412,6 +521,68 @@ fn push_text_nodes<'a>(node: &'a PenNode, found: &mut Vec<&'a PenNode>) {
     }
     for child in node_children(node) {
         push_text_nodes(child, found);
+    }
+}
+
+/// Frame / Rectangle nodes in DFS pre-order (the root itself excluded).
+fn collect_fill_nodes(node: &PenNode) -> Vec<&PenNode> {
+    let mut found = Vec::new();
+    for child in node_children(node) {
+        push_fill_nodes(child, &mut found);
+    }
+    found
+}
+
+fn push_fill_nodes<'a>(node: &'a PenNode, found: &mut Vec<&'a PenNode>) {
+    if matches!(node, PenNode::Frame(_) | PenNode::Rectangle(_)) {
+        found.push(node);
+    }
+    for child in node_children(node) {
+        push_fill_nodes(child, found);
+    }
+}
+
+/// What a same-position Frame/Rectangle's PRIMARY fill holds, for the vote.
+#[derive(Debug, Clone, PartialEq)]
+enum FillVote {
+    /// A `#rrggbb` literal — comparable and patchable as itself.
+    Literal(String),
+    /// A `$variable` reference string — votes by the reference itself (same
+    /// reference is same value).
+    Ref(String),
+}
+
+/// The votability of one container slot's primary fill.
+#[derive(Debug)]
+enum FillSlot {
+    /// The primary fill is NOT solid (gradient / image / shader / mesh) —
+    /// the slot is decorative, not a provable colour slot.
+    NonSolid,
+    /// No fill, an empty fill list, or no solid entry — a missing value that
+    /// can join a concrete majority, but never define one.
+    Missing,
+    /// A solid literal or `$variable` reference.
+    Solid(FillVote),
+}
+
+/// Classify the PRIMARY (first) fill of a Frame/Rectangle node. Only the
+/// first entry decides: a solid layered under a gradient is a fallback, not
+/// the slot's colour, and later entries never rescue an unprovable slot.
+fn fill_slot(node: &PenNode) -> FillSlot {
+    let Some(fills) = op_editor_core::fills::node_fills(node) else {
+        return FillSlot::Missing;
+    };
+    match fills.first() {
+        None => FillSlot::Missing,
+        Some(PenFill::Solid(body)) => {
+            let color = body.color.as_str();
+            if is_variable_ref(color) {
+                FillSlot::Solid(FillVote::Ref(color.to_string()))
+            } else {
+                FillSlot::Solid(FillVote::Literal(color.to_string()))
+            }
+        }
+        Some(_) => FillSlot::NonSolid,
     }
 }
 

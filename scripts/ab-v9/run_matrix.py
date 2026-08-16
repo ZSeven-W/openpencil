@@ -31,7 +31,10 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CORPUS = os.path.join(REPO, "packages/pen-ai-skills/corpus/ab-v3")
+# ab-v3 corpus was restored to its new home under this harness after the TS
+# retirement removed the original packages/pen-ai-skills/corpus/ab-v3 (see
+# scripts/ab-v9/corpus/ab-v3/README.md).
+CORPUS = os.path.join(REPO, "scripts/ab-v9/corpus/ab-v3")
 SMOKE = os.path.join(REPO, "target/debug/op-smoke")
 
 ARK_BASE = "https://ark.cn-beijing.volces.com/api/coding/v3"

@@ -482,3 +482,84 @@ fn finalize_reports_no_void_advisory_for_a_full_card_board() {
         "a full board must produce no void advisory: {json}"
     );
 }
+
+// ── DS P2-d item ②: card format-drift advisories ────────────────────────────
+
+/// A card board grown from 3:4 to 1080x2116 by the text-wrap reflow — the
+/// measured 0815 regen shape. The format-drift advisory must ride the same
+/// echo-only channel, informational only.
+const FORMAT_DRIFT_FIXTURE: &str = r##"{
+  "version": "1.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "name": "知识卡片",
+      "width": 1080,
+      "height": 2116,
+      "layout": "vertical",
+      "children": [
+        { "type": "frame", "id": "body", "name": "Body", "width": 900, "height": 864,
+          "layout": "vertical",
+          "children": [ { "type": "text", "id": "t1", "name": "Title", "content": "x" } ] }
+      ]
+    }
+  ]
+}"##;
+
+#[test]
+fn finalize_reports_a_format_drift_advisory_for_a_long_form_card_board() {
+    let live = load_fixture(FORMAT_DRIFT_FIXTURE);
+    let tool = finalize_design_snapshot(&live);
+    let outcome = tool.call(&BTreeMap::new());
+    let json = match outcome {
+        ToolOutcome::OkJsonWithCommand(json, _) | ToolOutcome::OkJson(json) => json,
+        other => panic!("unexpected finalize outcome: {other:?}"),
+    };
+
+    let advisories = advisories_of(&json);
+    let drifts: Vec<&serde_json::Value> = advisories
+        .iter()
+        .filter(|advisory| advisory["code"].as_str() == Some("board-format-drift"))
+        .collect();
+    assert_eq!(drifts.len(), 1, "exactly one format-drift advisory: {json}");
+    let advisory = drifts[0];
+    assert_eq!(
+        advisory["nodeIds"]
+            .as_array()
+            .and_then(|ids| ids.first())
+            .and_then(|v| v.as_str()),
+        Some("root"),
+        "the advisory names the board root: {json}"
+    );
+    let message = advisory["message"].as_str().expect("message");
+    assert!(
+        message.contains("1.96:1")
+            && message.contains("compress content to restore 3:4")
+            && message.contains("keep the long-form card if scroll-length output is acceptable"),
+        "the message names the ratio and both directions: {json}"
+    );
+}
+
+#[test]
+fn finalize_reports_no_format_drift_for_a_regular_card_board() {
+    // The P2-b full-card fixture is a regular 1080x1440 board — the
+    // authored 3:4 contract, so no format-drift advisory may ride the
+    // channel alongside the (also absent) void one.
+    let live = load_fixture(FULL_FIXTURE);
+    let tool = finalize_design_snapshot(&live);
+    let outcome = tool.call(&BTreeMap::new());
+    let json = match outcome {
+        ToolOutcome::OkJsonWithCommand(json, _) | ToolOutcome::OkJson(json) => json,
+        other => panic!("unexpected finalize outcome: {other:?}"),
+    };
+    let advisories = advisories_of(&json);
+    let drifts: Vec<&serde_json::Value> = advisories
+        .iter()
+        .filter(|advisory| advisory["code"].as_str() == Some("board-format-drift"))
+        .collect();
+    assert!(
+        drifts.is_empty(),
+        "a regular 3:4 card must produce no format-drift advisory: {json}"
+    );
+}

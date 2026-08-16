@@ -1,0 +1,19 @@
+id: mobile-file-attachment
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY a single file attachment list item: a light gray
+  rounded bar containing a document icon on the left, the file name
+  "quarterly-report.pdf" in bold, the file size "1.2 MB" in smaller
+  muted text beneath the name, and a small × remove-button on the
+  right edge. Do NOT include upload progress, other attachments,
+  page background, or surrounding form — just the one attachment
+  row.
+expected:
+  must_contain_roles:
+    - attachment-row
+    - attachment-icon
+    - attachment-filename
+    - attachment-size
+    - attachment-remove
+expected_tool_if_any: add_attachment_row_v0

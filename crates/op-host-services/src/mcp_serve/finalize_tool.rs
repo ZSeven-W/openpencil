@@ -107,7 +107,20 @@ impl McpTool for FinalizeDesignTool {
         // tells the caller to add density.
         let void_advisories =
             op_orchestrator::board_trailing_void::collect_board_trailing_void(&state);
-        let json = finalize_result_json(&summary, root_ids.len(), &advisories, &void_advisories);
+        // DS P2-d item ②: card format drift rides the same channel too. A
+        // Card board whose authored aspect passed the 3:4 / 1:1 regular band
+        // (e.g. the text-wrap reflow growing 1440 → 2116) is an
+        // informational finding — whether long-form output is acceptable is
+        // a product decision, so the advisory names the ratio and both
+        // directions and repairs nothing.
+        let format_drift = op_orchestrator::board_trailing_void::collect_board_format_drift(&state);
+        let json = finalize_result_json(
+            &summary,
+            root_ids.len(),
+            &advisories,
+            &void_advisories,
+            &format_drift,
+        );
         if commands.is_empty() {
             ToolOutcome::OkJson(json)
         } else {
@@ -222,8 +235,9 @@ fn default_root_ids(state: &EditorState) -> Vec<String> {
 /// `quality_credential` surface the built-in agent loop shows its users, plus
 /// the structured per-category tally so an MCP client can reason about it.
 ///
-/// `advisories` (DS P2-a item ③) are the echo-only structure-drift findings
-/// and `void_advisories` (DS P2-b item C) the board-trailing-void ones: both
+/// `advisories` (DS P2-a item ③) are the echo-only structure-drift findings,
+/// `void_advisories` (DS P2-b item C) the board-trailing-void ones and
+/// `format_drift` (DS P2-d item ②) the card format-drift ones: all
 /// informational, NOT part of the repair tally, and the document is never
 /// changed because of them.
 fn finalize_result_json(
@@ -231,6 +245,7 @@ fn finalize_result_json(
     roots: usize,
     advisories: &[op_orchestrator::orchestration_self_check::SectionStructureDriftAdvisory],
     void_advisories: &[op_orchestrator::board_trailing_void::BoardTrailingVoidAdvisory],
+    format_drift: &[op_orchestrator::board_trailing_void::BoardFormatDriftAdvisory],
 ) -> String {
     let quality = crate::quality_credential::quality_summary_from_repairs(summary);
     let credential =
@@ -276,6 +291,11 @@ fn finalize_result_json(
         .collect();
     advisories_json.extend(
         void_advisories
+            .iter()
+            .map(|advisory| render(advisory.code, &advisory.node_ids, &advisory.message)),
+    );
+    advisories_json.extend(
+        format_drift
             .iter()
             .map(|advisory| render(advisory.code, &advisory.node_ids, &advisory.message)),
     );

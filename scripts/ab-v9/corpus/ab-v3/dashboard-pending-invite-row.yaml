@@ -1,0 +1,25 @@
+id: dashboard-pending-invite-row
+category: dashboard
+difficulty: obvious
+prompt: |
+  Design ONLY one row of a "Pending invitations" table on a team
+  settings page. The row is ~56px tall, full width on a 720-wide
+  panel. Left to right:
+    - a 36px circular avatar with the invitee's initial "M" on a
+      neutral background
+    - a vertical text stack: "marcus@acme.com" (15/500) on top,
+      "Editor" (13/400, muted) below
+    - a small pill-shaped status badge reading "Pending" with a
+      yellow-amber tone
+    - a trailing text-only action label "Resend"
+  Do NOT render the surrounding table headers, neighboring invite
+  rows, or a confirm dialog — only this single pending invite row.
+expected:
+  must_contain_roles:
+    - invite-row
+    - invite-row-avatar-initial
+    - invite-row-text
+    - invite-row-email
+    - invite-row-role
+    - invite-row-status-text
+expected_tool_if_any: add_invite_row_v0

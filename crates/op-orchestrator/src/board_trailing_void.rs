@@ -27,6 +27,13 @@ pub(crate) const CARD_VOID_CENTRE_FLOOR: f64 = 0.20;
 /// Trailing-void fraction that still reads as sparse AFTER centring — which
 /// can at best halve the void — and therefore triggers the advisory (item C).
 pub(crate) const BOARD_VOID_ADVISORY_FLOOR: f64 = 0.25;
+/// Authored height/width ratio ABOVE which a card board has left the regular
+/// 3:4 (1.333) / 1:1 (1.0) band and entered the long-form band (DS P2-d ②).
+/// The 0815 regen sample measured 1440 → 2116 (1.96:1) after `board-text-wrap`
+/// reflowed the board taller; the threshold sits between the 3:4 ratio and
+/// 9:16 (1.778), so both the wrap-grown board and a deliberate long card are
+/// reported — the advisory is informational and names both directions.
+pub(crate) const CARD_FORMAT_DRIFT_FLOOR: f64 = 1.5;
 
 /// Resolved geometry of one node (absolute scene coordinates).
 struct Rect {
@@ -175,6 +182,57 @@ pub fn collect_board_trailing_void(state: &EditorState) -> Vec<BoardTrailingVoid
                     "{}% of the board height sits empty below the content — \
                      add content or scale up type/spacing",
                     (void * 100.0).round() as i64
+                ),
+            })
+        })
+        .collect()
+}
+
+/// One card format-drift advisory for the `finalize_design` summary
+/// (DS P2-d ②, riding the P2-a advisories channel): the board's authored
+/// aspect has left the regular band.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoardFormatDriftAdvisory {
+    pub code: &'static str,
+    pub node_ids: Vec<String>,
+    pub message: String,
+}
+
+/// Scan every top-level root of the active page for Card boards whose
+/// AUTHORED numeric height/width ratio exceeds [`CARD_FORMAT_DRIFT_FLOOR`] —
+/// the board left the 3:4 / 1:1 regular band and now renders as a long-form
+/// image. Read-only: the document is never modified here. Whether the
+/// long-form output is acceptable is a PRODUCT decision, so the advisory
+/// only reports the ratio and both directions (compress the content back to
+/// 3:4, or keep the long-form card when scroll-length output is fine).
+/// Boards that never grew are silent: a 3:4 card is the authored contract,
+/// and a Deck (or any non-Card form) is a different surface entirely.
+pub fn collect_board_format_drift(state: &EditorState) -> Vec<BoardFormatDriftAdvisory> {
+    state
+        .active_children()
+        .iter()
+        .filter_map(|root| {
+            let root_id = root.id_str();
+            let form = crate::geometry_validation::root_design_form(state, root_id);
+            if !form.is_card_board() {
+                return None;
+            }
+            // Authored numeric sizes only: a hug/fill root has no fixed
+            // aspect to drift from (same numeric contract as the form
+            // classifier and the trailing-void reader).
+            let width = root.width_px().filter(|width| *width > 0.0)?;
+            let height = root.height_px().filter(|height| *height > 0.0)?;
+            let ratio = height / width;
+            if ratio <= CARD_FORMAT_DRIFT_FLOOR {
+                return None;
+            }
+            Some(BoardFormatDriftAdvisory {
+                code: "board-format-drift",
+                node_ids: vec![root_id.to_string()],
+                message: format!(
+                    "this card board is {ratio:.2}:1 (h:w), past the 3:4 regular band — \
+                     compress content to restore 3:4, or keep the long-form card if \
+                     scroll-length output is acceptable"
                 ),
             })
         })

@@ -206,3 +206,89 @@ fn a_board_sized_in_flow_child_alone_reports_nothing() {
 
     assert!(collect_board_trailing_void(&sink.state).is_empty());
 }
+
+// ── DS P2-d ②: card format-drift advisories ─────────────────────────────────
+
+#[test]
+fn a_long_form_card_board_reports_a_format_drift_advisory() {
+    // The 0815 regen shape: a 3:4 card grown to 1080x2116 by the text-wrap
+    // reflow — 1.96:1 is past the 1.5 drift floor. The advisory is
+    // informational: it names the ratio and BOTH directions (compress back
+    // to 3:4, or keep the long-form card).
+    let mut sink = VecDocSink::new();
+    insert_tree(
+        &mut sink,
+        &json!({
+            "type": "frame", "id": "card", "name": "知识卡片",
+            "width": 1080, "height": 2116, "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "body", "name": "Body", "layout": "vertical",
+                  "width": 900, "height": 864,
+                  "children": [{ "type": "text", "id": "t", "content": "正文", "fontSize": 28 }] }
+            ]
+        }),
+    );
+
+    let advisories = collect_board_format_drift(&sink.state);
+    assert_eq!(
+        advisories.len(),
+        1,
+        "exactly one format-drift advisory: {advisories:?}"
+    );
+    let advisory = &advisories[0];
+    assert_eq!(advisory.code, "board-format-drift");
+    assert_eq!(advisory.node_ids, vec!["card".to_string()]);
+    assert!(
+        advisory.message.contains("1.96:1"),
+        "the message names the current ratio: {}",
+        advisory.message
+    );
+    assert!(
+        advisory.message.contains("compress content to restore 3:4")
+            && advisory
+                .message
+                .contains("keep the long-form card if scroll-length output is acceptable"),
+        "the message gives both directions: {}",
+        advisory.message
+    );
+}
+
+#[test]
+fn a_regular_3_4_card_board_reports_no_format_drift() {
+    // 1080x1440 is exactly the authored 3:4 contract — the regular band, not
+    // drift.
+    let mut sink = VecDocSink::new();
+    insert_tree(
+        &mut sink,
+        &json!({
+            "type": "frame", "id": "card", "name": "知识卡片",
+            "width": 1080, "height": 1440, "layout": "vertical",
+            "children": [
+                { "type": "text", "id": "t", "content": "正文", "fontSize": 28 }
+            ]
+        }),
+    );
+
+    assert!(
+        collect_board_format_drift(&sink.state).is_empty(),
+        "the regular 3:4 card must stay silent"
+    );
+}
+
+#[test]
+fn a_deck_board_reports_no_format_drift() {
+    // A 16:9 deck is not a Card form — the drift finding is card-specific.
+    let mut sink = VecDocSink::new();
+    insert_tree(
+        &mut sink,
+        &json!({
+            "type": "frame", "id": "deck", "name": "Cover",
+            "width": 1920, "height": 1080, "layout": "vertical",
+            "children": [
+                { "type": "text", "id": "t", "content": "x", "fontSize": 28 }
+            ]
+        }),
+    );
+
+    assert!(collect_board_format_drift(&sink.state).is_empty());
+}
