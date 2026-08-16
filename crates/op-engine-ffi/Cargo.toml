@@ -32,6 +32,7 @@ editor = [
   "dep:op-builtin-model-discovery",
   "dep:op-collab-host",
   "dep:op-collab-transport",
+  "dep:op-render-export",
   "dep:tokio",
   "dep:zeroize",
 ]
@@ -62,6 +63,9 @@ op-builtin-model-discovery = { path = "../op-builtin-model-discovery", optional 
 op-collab-host = { path = "../op-collab-host", optional = true }
 op-collab-transport = { path = "../op-collab-transport", optional = true }
 op-config-store = { path = "../op-config-store" }
+# Mobile-safe raster/SVG/PDF export core. This intentionally stays separate
+# from op-host-services so player builds never pull daemon/QuickJS/process IO.
+op-render-export = { path = "../op-render-export", optional = true }
 # Canonical `.op` schema — `PenDocument` parse targets.
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # `TextInputState` (IME composition/selection model) + UTF-16 ↔ UTF-8

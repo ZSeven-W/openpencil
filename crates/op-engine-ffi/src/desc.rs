@@ -83,10 +83,13 @@ pub struct OpCallbacks {
     pub credential_store_if_absent: OpCredentialStoreIfAbsent,
 }
 
-/// Engine construction descriptor. `asset_base` is the filesystem root for
-/// doc-referenced media. Mobile editor shells must also provide
-/// `storage_root`, their private sandbox root, before any runtime/config
-/// service is constructed.
+/// Engine construction descriptor. `doc_ptr`/`doc_len` normally hold a
+/// non-empty canonical `.op` document; a full-editor shell (`mode == 1`) may
+/// pass null/zero to open [`op_editor_core::EditorState::starter`]. Viewer mode
+/// always requires document bytes. `asset_base` is the filesystem root for
+/// doc-referenced media. Mobile editor shells must also provide `storage_root`,
+/// their private sandbox root, before any runtime/config service is
+/// constructed.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct OpCreateDesc {
@@ -250,21 +253,44 @@ pub(crate) unsafe fn parse_create(pointer: *const OpCreateDesc) -> FfiResult<Cre
         unsafe { read_covered::<*const u8>(base, size, offset_of!(OpCreateDesc, asset_base_ptr)) };
     let asset_base_len =
         unsafe { read_covered::<usize>(base, size, offset_of!(OpCreateDesc, asset_base_len)) };
+    let mode = unsafe { read_covered::<i32>(base, size, offset_of!(OpCreateDesc, mode)) };
+    #[cfg(feature = "editor")]
+    let editor_mode = match mode {
+        None => false, // pre-mode shells stay in viewer mode
+        Some(0) => false,
+        Some(1) => true,
+        Some(other) => {
+            return Err(FfiError::invalid(format!("unknown mode {other}")));
+        }
+    };
+    // Without the editor feature the mode is validated and ignored.
+    #[cfg(not(feature = "editor"))]
+    if let Some(other) = mode {
+        if other != 0 && other != 1 {
+            return Err(FfiError::invalid(format!("unknown mode {other}")));
+        }
+    }
     if doc_len.unwrap_or(0) > DOCUMENT_CAP {
         return Err(FfiError::invalid(format!(
             "document length exceeds {DOCUMENT_CAP} bytes"
         )));
     }
-    if doc_len.unwrap_or(0) == 0 {
+    let empty_editor_document =
+        cfg!(feature = "editor") && mode == Some(1) && doc_len.unwrap_or(0) == 0;
+    if doc_len.unwrap_or(0) == 0 && !empty_editor_document {
         return Err(FfiError::invalid("document is empty"));
     }
-    let document = unsafe {
-        read_utf8(
-            doc_ptr.unwrap_or(ptr::null()),
-            doc_len.unwrap_or(0),
-            DOCUMENT_CAP,
-            "document",
-        )?
+    let document = if empty_editor_document {
+        String::new()
+    } else {
+        unsafe {
+            read_utf8(
+                doc_ptr.unwrap_or(ptr::null()),
+                doc_len.unwrap_or(0),
+                DOCUMENT_CAP,
+                "document",
+            )?
+        }
     };
     let width = width.unwrap_or(0.0);
     let height = height.unwrap_or(0.0);
@@ -289,23 +315,6 @@ pub(crate) unsafe fn parse_create(pointer: *const OpCreateDesc) -> FfiResult<Cre
             )?
         })
     };
-    let mode = unsafe { read_covered::<i32>(base, size, offset_of!(OpCreateDesc, mode)) };
-    #[cfg(feature = "editor")]
-    let editor_mode = match mode {
-        None => false, // pre-mode shells stay in viewer mode
-        Some(0) => false,
-        Some(1) => true,
-        Some(other) => {
-            return Err(FfiError::invalid(format!("unknown mode {other}")));
-        }
-    };
-    // Without the editor feature the mode is validated and ignored.
-    #[cfg(not(feature = "editor"))]
-    if let Some(other) = mode {
-        if other != 0 && other != 1 {
-            return Err(FfiError::invalid(format!("unknown mode {other}")));
-        }
-    }
     let storage_root_ptr = unsafe {
         read_covered::<*const u8>(base, size, offset_of!(OpCreateDesc, storage_root_ptr))
     };
@@ -382,4 +391,48 @@ pub(crate) unsafe fn surface_handle(desc: *const OpSurfaceDesc) -> FfiResult<*mu
         return Err(FfiError::invalid("surface handle is null"));
     }
     Ok(handle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_create_desc(mode: i32) -> OpCreateDesc {
+        OpCreateDesc {
+            size: size_of::<OpCreateDesc>(),
+            doc_ptr: ptr::null(),
+            doc_len: 0,
+            width: 390.0,
+            height: 844.0,
+            dpr: 1.0,
+            callbacks: ptr::null(),
+            asset_base_ptr: ptr::null(),
+            asset_base_len: 0,
+            mode,
+            storage_root_ptr: ptr::null(),
+            storage_root_len: 0,
+        }
+    }
+
+    #[test]
+    fn viewer_mode_rejects_an_empty_document() {
+        let desc = empty_create_desc(0);
+        let error = unsafe { parse_create(&desc) }
+            .err()
+            .expect("viewer must reject empty document bytes");
+        assert_eq!(error.status, OpStatus::InvalidArg);
+        assert_eq!(error.message, "document is empty");
+    }
+
+    #[cfg(feature = "editor")]
+    #[test]
+    fn editor_mode_accepts_an_empty_document_as_the_starter_sentinel() {
+        let desc = empty_create_desc(1);
+        let options = match unsafe { parse_create(&desc) } {
+            Ok(options) => options,
+            Err(error) => panic!("editor blank sentinel rejected: {}", error.message),
+        };
+        assert!(options.editor_mode);
+        assert!(options.document.is_empty());
+    }
 }

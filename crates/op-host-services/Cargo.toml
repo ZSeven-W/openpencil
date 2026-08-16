@@ -45,6 +45,7 @@ op-ai-skills = { path = "../op-ai-skills" }
 op-orchestrator = { path = "../op-orchestrator" }
 op-design-lint = { path = "../op-design-lint" }
 op-pen-loader = { path = "../op-pen-loader" }
+op-render-export = { path = "../op-render-export" }
 # Shared image-slot detection + result write-back for the MCP
 # `enrich_images` tool (also used by op-host-desktop's search session).
 op-image-enrich = { path = "../op-image-enrich" }
@@ -56,10 +57,6 @@ op-util = { path = "../op-util" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 agent = { path = "../../vendor/agent/crates/agent", default-features = false }
 anthropic-agent-sdk = { path = "../../vendor/anthropic-agent-sdk" }
-# Raster-only op-host-native (Phase 0 approach Y: gl-host is non-default, so
-# default-features=false drops winit/glutin/GL). Pulled solely for the export
-# endpoint's NativeBackend + NativeFrameBackend.
-op-host-native = { path = "../op-host-native", default-features = false }
 # Collaboration runtime — the daemon runs the same owner/guest actors the
 # desktop GUI runs, so a browser client gets real sessions instead of a
 # permanently `Unavailable` panel.
@@ -92,10 +89,10 @@ sha2 = "0.10"
 
 zip = "2"
 memmap2 = "0.9"
-glam = { version = "0.29", default-features = false, features = ["std"] }
 dirs = "5"
-# Raster + pdf skia for the export endpoint — NO `gl` (the headless server links
-# no GL). Cargo keeps this gl-free in the isolated `-p op-host-services` build.
+# Raster + PDF Skia shared with `op-render-export`, plus chat image processing
+# in this crate — NO `gl` (the headless server links no GL). Cargo keeps this
+# gl-free in the isolated `-p op-host-services` build.
 skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
   "textlayout",

@@ -64,6 +64,9 @@ pub(crate) struct Session {
     /// Mobile auth/WebView payload and exactly-once shell action state.
     #[cfg(feature = "editor")]
     pub(crate) auth_shell: crate::editor_auth::EditorAuthShellState,
+    /// Frozen file payload waiting for the platform save UI.
+    #[cfg(feature = "editor")]
+    pub(crate) export_shell: crate::editor_export::EditorExportShellState,
     /// Background provider-catalog jobs. Workers never own or call back into
     /// this session; results land from the engine-thread frame pump only.
     #[cfg(feature = "editor")]
@@ -77,19 +80,18 @@ pub(crate) struct Session {
 impl Session {
     pub(crate) fn new(options: CreateOptions) -> FfiResult<Session> {
         let src = options.document;
-        // Canonical load: strict schema with legacy-major compatibility,
-        // exactly the path `op-host-services::doc_io` uses for the
-        // desktop editor.
-        let meta = op_pen_loader::extract_editor_meta_with_report(&src).map(|e| e.meta);
-        let loaded =
-            op_pen_loader::payload::load_canonical_with_compatibility(&src).map_err(|e| {
-                FfiError::new(
-                    OpStatus::BadDocument,
-                    format!("document rejected by the canonical schema: {e}"),
-                )
-            })?;
-        let mut state = EditorState::from_document(loaded.loaded.value);
-        op_pen_loader::apply_editor_meta_or_legacy_fallback(&mut state, meta);
+        // An editor shell with no explicit document opens the same canonical
+        // blank starter as File -> New. Viewer mode still requires bytes at
+        // the descriptor boundary, so an empty source can only reach here in
+        // a full-editor build.
+        #[cfg(feature = "editor")]
+        let state = if options.editor_mode && src.is_empty() {
+            EditorState::starter()
+        } else {
+            crate::lifecycle_initial_document::load_initial_state(&src)?
+        };
+        #[cfg(not(feature = "editor"))]
+        let state = crate::lifecycle_initial_document::load_initial_state(&src)?;
         let scene = op_pen_loader::editor_state_to_active_page_layout_scene(&state);
         if scene.active_page().is_none() {
             return Err(FfiError::new(
@@ -116,6 +118,9 @@ impl Session {
             // full width; rail classes keep it open.
             let ui = &mut host.editor_state_mut().editor_ui;
             ui.touch = true;
+            if !ui.export_format.is_implemented() {
+                ui.export_format = op_editor_core::ExportFormat::Png;
+            }
             ui.size_class = op_editor_core::size_class::size_class(options.width, options.height);
             ui.sidebar_open = ui.size_class.is_rail_layout();
             Some(host)
@@ -163,6 +168,8 @@ impl Session {
             editor_collab,
             #[cfg(feature = "editor")]
             auth_shell: Default::default(),
+            #[cfg(feature = "editor")]
+            export_shell: Default::default(),
             #[cfg(feature = "editor")]
             model_discovery: Default::default(),
         };

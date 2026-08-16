@@ -133,16 +133,27 @@ adb shell am start -n tech.zseven.openpencil/.MainActivity
 adb logcat -s OpenPencilPlayer:V OpJni:V AndroidRuntime:E libEGL:W
 ```
 
-The app loads the bundled PowerPoint demo at `assets/ppt-demo.op` by default: a
-six-slide, 16:9 OpenPencil presentation deck derived from
-`crates/op-editor-core/assets/scene_templates/slide-deck.op` and pinned to the
-`corporate-blue-light` style guide. Pass the asset name without the `.op`
-suffix in the existing `doc` intent extra to load another bundled document, for
-example:
+The full editor starts with a new untitled `.op` document instead of loading
+demo content. Pass an asset name without the `.op` suffix in the existing
+`doc` intent extra to load a bundled document. For example, load the six-slide,
+16:9 PowerPoint demo at `assets/ppt-demo.op` with:
 
 ```bash
-adb shell am start -n tech.zseven.openpencil/.MainActivity --es doc sample
+adb shell am start -n tech.zseven.openpencil/.MainActivity --es doc ppt-demo
 ```
+
+The demo is derived from
+`crates/op-editor-core/assets/scene_templates/slide-deck.op` and pinned to the
+`corporate-blue-light` style guide. Use `--es doc sample` to load the bundled
+sample instead. A viewer-only launch (`--ez editor false`) still falls back to
+`ppt-demo.op` when no `doc` override is supplied.
+
+In editor mode, the engine-painted **Export** action renders PNG, JPEG, SVG,
+or PDF into an app-private staging file (Rust writes it directly, so large
+payloads never cross JNI as a byte array) and then presents the system
+create-document UI; the chosen destination receives a plain copy and the
+staging directory is removed on every terminal path. WebP is hidden on mobile
+because the pinned Skia archive does not include its encoder.
 
 ## What the shell does / does not own
 

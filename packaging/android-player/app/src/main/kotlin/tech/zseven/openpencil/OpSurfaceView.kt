@@ -120,6 +120,7 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     private var safeAreaPx = intArrayOf(0, 0, 0, 0) // t, r, b, l
     private var keyboardHeight = 0f
     private var openDocumentHandler: (() -> Unit)? = null
+    private var exportDocumentHandler: (() -> Unit)? = null
     private var openLoginWebViewHandler: ((String) -> Unit)? = null
     private var closeLoginWebViewHandler: (() -> Unit)? = null
     private var systemChromeAppearanceHandler: ((Boolean) -> Unit)? = null
@@ -146,6 +147,11 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
         openDocumentHandler = handler
     }
 
+    /** Registers the Activity-owned save-UI handler for frozen exports. */
+    fun setExportDocumentHandler(handler: () -> Unit) {
+        exportDocumentHandler = handler
+    }
+
     /** Registers lifecycle callbacks for the Activity-owned login WebView. */
     fun setLoginWebViewHandlers(open: (String) -> Unit, close: () -> Unit) {
         openLoginWebViewHandler = open
@@ -159,6 +165,31 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
         val status = OpNative.nativeEditorCancelLogin(current)
         if (status != 0 && status != OpNative.STATUS_CLOSING) {
             Log.i(TAG, "login cancel returned status=$status")
+        }
+        requestFrame()
+    }
+
+    /** Copies the frozen export's file name without consuming the artifact. */
+    fun exportFileName(): String? {
+        val current = engine
+        if (!editorMode || current == 0L) return null
+        return OpNative.nativeEditorExportFileName(current)
+    }
+
+    /** Writes the frozen export into a new absolute staging file. */
+    fun exportToPath(path: String): Int {
+        val current = engine
+        if (!editorMode || current == 0L) return OpNative.STATUS_CLOSING
+        return OpNative.nativeEditorExportToPath(current, path)
+    }
+
+    /** Discards the frozen export when the save UI cannot run. */
+    fun cancelExport() {
+        val current = engine
+        if (!editorMode || current == 0L) return
+        val status = OpNative.nativeEditorCancelExport(current)
+        if (status != 0 && status != OpNative.STATUS_CLOSING) {
+            Log.i(TAG, "export cancel returned status=$status")
         }
         requestFrame()
     }
@@ -702,6 +733,9 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
             action == OpNative.SHELL_ACTION_OPEN_DOCUMENT -> post {
                 if (engine != 0L) openDocumentHandler?.invoke()
             }
+            action == OpNative.SHELL_ACTION_EXPORT_DOCUMENT -> post {
+                if (engine != 0L) exportDocumentHandler?.invoke()
+            }
             action == OpNative.SHELL_ACTION_OPEN_LOGIN_WEBVIEW -> {
                 val url = OpNative.nativeEditorTakeLoginUrl(engine)
                 if (url.isNullOrBlank()) {
@@ -780,6 +814,7 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
 
     fun destroy() {
         openDocumentHandler = null
+        exportDocumentHandler = null
         openLoginWebViewHandler = null
         closeLoginWebViewHandler = null
         systemChromeAppearanceHandler = null

@@ -4061,6 +4061,7 @@ dependencies = [
  "op-editor-ui",
  "op-host-native",
  "op-pen-loader",
+ "op-render-export",
  "serde_json",
  "skia-safe",
  "tokio",
@@ -4222,7 +4223,6 @@ dependencies = [
  "futures",
  "getrandom 0.3.4",
  "github-copilot-sdk",
- "glam",
  "hmac",
  "jian-ops-schema",
  "libc",
@@ -4239,7 +4239,6 @@ dependencies = [
  "op-editor-host-core",
  "op-editor-ui",
  "op-figma",
- "op-host-native",
  "op-html",
  "op-i18n",
  "op-image-enrich",
@@ -4247,6 +4246,7 @@ dependencies = [
  "op-orchestrator",
  "op-pen-loader",
  "op-process-io",
+ "op-render-export",
  "op-util",
  "reqwest 0.12.28",
  "serde",
@@ -4395,6 +4395,20 @@ name = "op-process-io"
 version = "0.8.5"
 dependencies = [
  "tokio",
+]
+
+[[package]]
+name = "op-render-export"
+version = "0.8.5"
+dependencies = [
+ "base64",
+ "glam",
+ "jian-ops-schema",
+ "op-editor-core",
+ "op-editor-ui",
+ "op-host-native",
+ "op-pen-loader",
+ "skia-safe",
 ]
 
 [[package]]

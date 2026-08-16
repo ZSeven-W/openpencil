@@ -38,6 +38,8 @@ mod editor_auth;
 #[cfg(feature = "editor")]
 mod editor_collab;
 #[cfg(feature = "editor")]
+mod editor_export;
+#[cfg(feature = "editor")]
 mod editor_model_discovery;
 #[cfg(feature = "editor")]
 mod editor_pointer_release;
@@ -48,6 +50,7 @@ mod editor_transform;
 mod error;
 mod input;
 mod lifecycle;
+mod lifecycle_initial_document;
 mod measure;
 mod media;
 mod pages;
@@ -74,6 +77,11 @@ pub use editor_auth::{
     op_editor_cancel_login, op_editor_configure_auth, op_editor_copy_login_url,
     SHELL_ACTION_CLOSE_LOGIN_WEBVIEW, SHELL_ACTION_NONE, SHELL_ACTION_OPEN_DOCUMENT,
     SHELL_ACTION_OPEN_LOGIN_WEBVIEW,
+};
+#[cfg(feature = "editor")]
+pub use editor_export::{
+    op_editor_cancel_export, op_editor_copy_export_file_name, op_editor_export_to_path,
+    SHELL_ACTION_EXPORT_DOCUMENT,
 };
 #[cfg(feature = "editor")]
 pub use editor_transform::op_editor_begin_transform;

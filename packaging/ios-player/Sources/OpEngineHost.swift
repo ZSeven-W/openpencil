@@ -25,6 +25,7 @@ final class OpEngineHost: NSObject {
     private var displayLink: CADisplayLink?
     private let displayLinkTarget = OpDisplayLinkTarget()
     private var observers: [NSObjectProtocol] = []
+    private lazy var documentExportCoordinator = DocumentExportCoordinator(host: self)
     /// Editor mode (full desktop chrome) vs bare viewer.
     let editorMode: Bool
 
@@ -111,6 +112,7 @@ final class OpEngineHost: NSObject {
         displayLink?.isPaused = true
         displayLink?.invalidate()
         displayLink = nil
+        documentExportCoordinator.cancelForTeardown()
 
         if let engine {
             let suspendStatus = op_suspend(engine)
@@ -130,20 +132,32 @@ final class OpEngineHost: NSObject {
     }
 
     private func createAndAttach(surface: CAMetalLayer) {
-        // `-doc <name>` picks a bundled document (default `ppt-demo`).
-        let docName = {
+        // The full editor starts with the engine's canonical blank document.
+        // `-doc <name>` remains an explicit bundled-document override; the
+        // viewer-only shell keeps `ppt-demo` as its fallback.
+        let explicitDocName: String? = {
             let args = ProcessInfo.processInfo.arguments
             if let index = args.firstIndex(of: "-doc"), index + 1 < args.count {
                 return args[index + 1]
             }
-            return "ppt-demo"
+            return nil
         }()
-        guard
-            let documentURL = Bundle.main.url(forResource: docName, withExtension: "op"),
-            let document = try? Data(contentsOf: documentURL),
-            let storageURL = AuthStorage.prepare()
-        else {
-            NSLog("OpenPencil Player could not prepare its document or private storage")
+        let document: Data
+        if editorMode && explicitDocName == nil {
+            document = Data()
+        } else {
+            let docName = explicitDocName ?? "ppt-demo"
+            guard
+                let documentURL = Bundle.main.url(forResource: docName, withExtension: "op"),
+                let bundledDocument = try? Data(contentsOf: documentURL)
+            else {
+                NSLog("OpenPencil Player could not load bundled document %@.op", docName)
+                return
+            }
+            document = bundledDocument
+        }
+        guard let storageURL = AuthStorage.prepare() else {
+            NSLog("OpenPencil Player could not prepare its private storage")
             return
         }
 
@@ -431,6 +445,10 @@ final class OpEngineHost: NSObject {
             } else if action == Int32(OpShellAction_CloseLoginWebView.rawValue) {
                 DispatchQueue.main.async { [weak self] in
                     self?.view?.closeEmbeddedLoginFromHost()
+                }
+            } else if action == Int32(OpShellAction_ExportDocument.rawValue) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.documentExportCoordinator.beginExport()
                 }
             }
         }

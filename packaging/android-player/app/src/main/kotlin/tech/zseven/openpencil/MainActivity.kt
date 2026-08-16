@@ -1,5 +1,6 @@
 package tech.zseven.openpencil
 
+import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
@@ -17,6 +18,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.Locale
+import java.util.UUID
 
 private const val TAG = "OpenPencilPlayer"
 // JNI, the UTF-8 ABI copy, and JSON decoding temporarily coexist. Keep the
@@ -40,6 +42,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var loginWebView: LoginWebViewOverlay
     private lateinit var loginBackCallback: OnBackPressedCallback
     private var documentOpenInProgress = false
+    private var exportStagedFile: File? = null
+    private var exportStagingDir: File? = null
 
     private val openDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -51,6 +55,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val exportDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val staged = exportStagedFile
+        val uri = result.data?.data
+        if (staged == null || result.resultCode != RESULT_OK || uri == null) {
+            // The user abandoned the save UI (or it returned nothing usable);
+            // the engine artifact was already consumed by the staged write, so
+            // only the app-private copy needs to go.
+            cleanupExportStaging()
+        } else {
+            copyStagedExport(staged, uri)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -58,14 +77,27 @@ class MainActivity : ComponentActivity() {
         // insets to the engine so only interactive chrome avoids system UI.
         configureEdgeToEdge(window)
 
-        val docName = intent.getStringExtra("doc") ?: "ppt-demo"
-        val doc = readAsset("$docName.op") ?: ByteArray(0)
         val editorMode = intent.getBooleanExtra("editor", true)
+        val explicitDocName = intent.getStringExtra("doc")
+        val doc = if (editorMode && explicitDocName == null) {
+            // An empty editor payload selects the engine's canonical starter document.
+            ByteArray(0)
+        } else {
+            // Preserve bundled-document overrides, and retain the demo fallback
+            // for the viewer-only shell.
+            val docName = explicitDocName ?: "ppt-demo"
+            readAsset("$docName.op") ?: run {
+                Toast.makeText(this, R.string.document_open_failed, Toast.LENGTH_SHORT).show()
+                finish()
+                return
+            }
+        }
         val fonts = readFontAssets()
 
         surfaceView = OpSurfaceView(this).apply {
             configure(doc, editorMode, fonts)
             setOpenDocumentHandler(::launchDocumentPicker)
+            setExportDocumentHandler(::beginDocumentExport)
             setSystemChromeAppearanceHandler { prefersLightIcons ->
                 updateSystemChromeAppearance(
                     window,
@@ -155,6 +187,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (::loginWebView.isInitialized) loginWebView.destroy()
+        cleanupExportStaging()
         // Teardown unconditionally (rotation never reaches here thanks to
         // configChanges).
         if (::surfaceView.isInitialized) surfaceView.destroy()
@@ -174,6 +207,104 @@ class MainActivity : ComponentActivity() {
             Log.w(TAG, "could not launch document picker", e)
             showOpenDocumentError()
         }
+    }
+
+    /**
+     * Bridges one frozen Rust export to the system save UI. Rust writes the
+     * payload into an app-private, single-use staging directory so large
+     * PNG/PDF exports never cross JNI as a byte array; the SAF create-document
+     * result then receives a plain file copy. Every terminal path removes the
+     * staging directory.
+     */
+    private fun beginDocumentExport() {
+        if (isFinishing || isDestroyed) return
+        // A second shell action must not replace a staged file that the save
+        // UI is still copying. Discard only the newly frozen engine request.
+        if (exportStagingDir != null) {
+            surfaceView.cancelExport()
+            return
+        }
+        val filename = DocumentExportSupport.validatedFilename(surfaceView.exportFileName())
+        if (filename == null) {
+            surfaceView.cancelExport()
+            showExportError()
+            return
+        }
+        val directory = File(cacheDir, "exports/${UUID.randomUUID()}")
+        if (!directory.mkdirs()) {
+            Log.w(TAG, "could not create export staging directory")
+            surfaceView.cancelExport()
+            showExportError()
+            return
+        }
+        exportStagingDir = directory
+        val staged = File(directory, filename)
+        val status = surfaceView.exportToPath(staged.absolutePath)
+        if (status != 0) {
+            Log.w(
+                TAG,
+                "could not stage export '$filename', status=$status: " +
+                    OpNative.nativeLastError(surfaceView.engine),
+            )
+            // The failed write leaves the artifact frozen; discard it so the
+            // next export request is not refused as busy.
+            surfaceView.cancelExport()
+            cleanupExportStaging()
+            showExportError()
+            return
+        }
+        // A successful atomic write consumed the frozen Rust request; from
+        // here only the staged copy needs lifecycle care.
+        exportStagedFile = staged
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = DocumentExportSupport.mimeTypeFor(filename)
+            putExtra(Intent.EXTRA_TITLE, filename)
+        }
+        try {
+            exportDocumentLauncher.launch(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "could not launch export save UI", e)
+            cleanupExportStaging()
+            showExportError()
+        }
+    }
+
+    private fun copyStagedExport(staged: File, uri: Uri) {
+        Thread({
+            val result = runCatching {
+                val output = try {
+                    // "wt" truncates when the user picked an existing file;
+                    // some providers reject the mode, so fall back to "w".
+                    contentResolver.openOutputStream(uri, "wt")
+                } catch (e: Exception) {
+                    contentResolver.openOutputStream(uri)
+                } ?: throw IOException("content resolver returned no output stream")
+                output.use { destination ->
+                    staged.inputStream().use { input -> input.copyTo(destination) }
+                }
+            }
+            runOnUiThread {
+                cleanupExportStaging()
+                result.exceptionOrNull()?.let { error ->
+                    Log.w(TAG, "could not save export '${staged.name}'", error)
+                    if (!isFinishing && !isDestroyed) showExportError()
+                }
+            }
+        }, "OpenPencilExportWriter").start()
+    }
+
+    private fun cleanupExportStaging() {
+        exportStagedFile = null
+        val directory = exportStagingDir ?: return
+        exportStagingDir = null
+        if (!directory.deleteRecursively()) {
+            Log.w(TAG, "could not remove export staging directory")
+        }
+    }
+
+    private fun showExportError() {
+        Toast.makeText(this, R.string.document_export_failed, Toast.LENGTH_SHORT).show()
     }
 
     private fun readAndOpenDocument(uri: Uri) {

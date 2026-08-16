@@ -552,12 +552,20 @@ impl WidgetHostNative {
                         self.now_ms,
                     );
                 }
-                op_editor_ui::widgets::MobileMoreEntry::OpenFile => {
+                op_editor_ui::widgets::MobileMoreEntry::NewFile
+                | op_editor_ui::widgets::MobileMoreEntry::OpenFile => {
                     if self.collab_allows_user_action(
                         op_editor_core::CollabGateAction::ReplaceDocument,
                     ) {
-                        self.editor_state.editor_ui.pending_file_action =
-                            Some(op_editor_core::editor_ui_state::FileAction::Open);
+                        self.editor_state.editor_ui.pending_file_action = Some(match entry {
+                            op_editor_ui::widgets::MobileMoreEntry::NewFile => {
+                                op_editor_core::editor_ui_state::FileAction::New
+                            }
+                            op_editor_ui::widgets::MobileMoreEntry::OpenFile => {
+                                op_editor_core::editor_ui_state::FileAction::Open
+                            }
+                            _ => unreachable!("matched mobile file entry"),
+                        });
                     }
                 }
                 op_editor_ui::widgets::MobileMoreEntry::Templates

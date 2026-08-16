@@ -11,12 +11,9 @@
 //!
 //! Scope note: the whole surface is typed now. The FILE-WRITING entry points
 //! (`export_raster`, `export_node_raster`, `export_svg`, `export_node_svg`,
-//! `export_pdf`) and `screenshot::capture{,_scene}` used to keep a `String`
-//! because `op-host-desktop::persistence::export_editor_state_to_path`
-//! returned their `Result` directly and `mcp_live.rs` baked the error type
-//! into its screenshot `SyncSender`. Both of those converted, so the
-//! `*_typed` twins and the `From<ExportError> for String` bridge are gone and
-//! the public names ARE the typed cores.
+//! `export_pdf`) and the host screenshot wrapper all carry this type through
+//! their internal boundaries. The public names are the typed cores; no
+//! stringly `*_typed` twin or `From<ExportError> for String` bridge remains.
 //!
 //! One inbound seam still speaks `String`: `op_editor_ui::svg_export`'s
 //! serializer, which lives in a crate this pass does not own. Its message is
@@ -60,6 +57,10 @@ pub enum ExportError {
     /// Skia's encoder failed for the requested format ("PNG" / "JPEG" /
     /// "WEBP").
     Encode { format: &'static str },
+    /// The selected build deliberately omits an optional encoder. Mobile
+    /// release archives omit WebP, so callers must not fall through to a
+    /// generic Skia encode failure.
+    UnsupportedFormat { format: &'static str },
     /// Skia's PDF backend closed the document without emitting any bytes.
     PdfEncoderEmpty,
     /// A multi-node PDF export was asked for an empty id list.
@@ -112,6 +113,9 @@ impl fmt::Display for ExportError {
             ),
             ExportError::SurfaceAlloc => f.write_str("alloc surface"),
             ExportError::Encode { format } => write!(f, "encode {format} failed"),
+            ExportError::UnsupportedFormat { format } => {
+                write!(f, "{format} export is not supported by this build")
+            }
             ExportError::PdfEncoderEmpty => f.write_str("PDF encoder returned no bytes"),
             ExportError::NoNodeIdsRequested => f.write_str("no node ids provided"),
             ExportError::NoRequestedNodesPaint => {

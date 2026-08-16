@@ -561,12 +561,15 @@ pub fn action_button_rects_with_fill_picker(
             }
         }
         if export_format_picker_open {
-            let formats = [
+            let formats: Vec<_> = [
                 op_editor_core::ExportFormat::Png,
                 op_editor_core::ExportFormat::Jpeg,
                 op_editor_core::ExportFormat::Webp,
                 op_editor_core::ExportFormat::Svg,
-            ];
+            ]
+            .into_iter()
+            .filter(|format| format.is_implemented())
+            .collect();
             let count = formats.len() as f32;
             let first_row_y = format_rect.origin.y - 4.0 - 6.0 - count * EXPORT_PICKER_ROW_H;
             for (i, fmt) in formats.into_iter().enumerate() {

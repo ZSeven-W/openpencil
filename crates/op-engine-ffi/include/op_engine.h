@@ -99,10 +99,12 @@ typedef struct OpCallbacks {
     OpCredentialStoreIfAbsent credential_store_if_absent;
 } OpCallbacks;
 
-/* Engine construction descriptor. asset_base is the v1 tail; mode is the
- * v2 tail (0 = viewer, 1 = full editor); storage_root is the v3 tail. Mobile
- * editor shells must pass a private app-sandbox directory before any runtime
- * config is resolved. */
+/* Engine construction descriptor. doc_ptr/doc_len normally hold a non-empty
+ * canonical .op document. Full-editor mode may pass NULL/0 to open the
+ * canonical blank starter; viewer mode always requires document bytes.
+ * asset_base is the v1 tail; mode is the v2 tail (0 = viewer, 1 = full
+ * editor); storage_root is the v3 tail. Mobile editor shells must pass a
+ * private app-sandbox directory before any runtime config is resolved. */
 typedef struct OpCreateDesc {
     size_t size;
     const uint8_t *doc_ptr;
@@ -138,6 +140,7 @@ typedef enum OpShellAction {
     OpShellAction_OpenDocument = 1,
     OpShellAction_OpenLoginWebView = 2,
     OpShellAction_CloseLoginWebView = 3,
+    OpShellAction_ExportDocument = 4,
 } OpShellAction;
 
 /* Surrounding-text snapshot for the shell's input connection. The text
@@ -296,9 +299,21 @@ OpStatus op_editor_ime_commit(OpEngine *engine, const uint8_t *text_ptr, size_t 
 /* Whether the editor host currently holds the IME (show/hide keyboard). */
 OpStatus op_editor_ime_focused(OpEngine *engine, bool *out);
 
-/* Drain the next platform-shell action. Non-Open file actions stay queued for
- * their owning host integration. */
+/* Drain the next platform-shell action. File actions not owned by the mobile
+ * shell stay queued for their host integration. */
 OpStatus op_editor_take_shell_action(OpEngine *engine, int32_t *out);
+
+/* Peek/copy the UTF-8 file name of the frozen export. NULL/0 reports the
+ * required length without consuming it. The payload is not NUL-terminated. */
+OpStatus op_editor_copy_export_file_name(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Atomically create the absolute UTF-8 staging path with the frozen export.
+ * The target must not already exist. Success consumes the export; failure
+ * leaves it retryable. */
+OpStatus op_editor_export_to_path(OpEngine *engine, const uint8_t *path_ptr, size_t path_len);
+
+/* Discard a frozen export when the platform save UI cannot be presented. */
+OpStatus op_editor_cancel_export(OpEngine *engine);
 
 /* Configure the real mobile auth backend. `storage_dir` must be a private
  * app-owned directory; device name and app version are display metadata. The

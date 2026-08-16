@@ -18,10 +18,10 @@ const PANEL_PADDING: f32 = 12.0;
 const GRID_GAP: f32 = 8.0;
 const TILE_HEIGHT: f32 = 76.0;
 const PORTRAIT_COLUMN_COUNT: usize = 3;
-// Ten visible actions fit in two rows on a landscape phone. Keeping four
-// columns would grow the sheet to the full 320pt viewport and leave no useful
-// canvas context behind the modal surface.
-const LANDSCAPE_COLUMN_COUNT: usize = 5;
+// Eleven visible actions fit in two rows on a landscape phone. Keeping the
+// portrait column count would grow the sheet to the full 320pt viewport and
+// leave no useful canvas context behind the modal surface.
+const LANDSCAPE_COLUMN_COUNT: usize = 6;
 const PHONE_BOTTOM_PADDING: f32 = 16.0;
 const TABLET_PANEL_WIDTH: f32 = 320.0;
 const TABLET_BOTTOM_PADDING: f32 = 20.0;
@@ -30,6 +30,7 @@ const LABEL_SIDE_PADDING: f32 = 6.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MobileMoreEntry {
+    NewFile,
     OpenFile,
     Templates,
     Assets,
@@ -46,7 +47,8 @@ pub enum MobileMoreEntry {
 impl MobileMoreEntry {
     /// Exhaustive semantic entries. Paint and hit-test use [`Self::visible`]
     /// because Sign in and Account are mutually exclusive states of one tile.
-    pub const ALL: [MobileMoreEntry; 11] = [
+    pub const ALL: [MobileMoreEntry; 12] = [
+        MobileMoreEntry::NewFile,
         MobileMoreEntry::OpenFile,
         MobileMoreEntry::Templates,
         MobileMoreEntry::Assets,
@@ -65,6 +67,7 @@ impl MobileMoreEntry {
     /// leave an invisible Sign-in target behind (or vice versa).
     pub fn visible(state: &EditorState) -> Vec<MobileMoreEntry> {
         vec![
+            MobileMoreEntry::NewFile,
             MobileMoreEntry::OpenFile,
             MobileMoreEntry::Templates,
             MobileMoreEntry::Assets,
@@ -84,6 +87,7 @@ impl MobileMoreEntry {
 
     fn label(self, ui: &EditorUiState) -> &'static str {
         let key = match self {
+            MobileMoreEntry::NewFile => "fileMenu.newFile",
             MobileMoreEntry::OpenFile => "fileMenu.openFile",
             MobileMoreEntry::Templates => "sceneTemplate.title",
             MobileMoreEntry::Assets => "assetCenter.title",
@@ -106,6 +110,7 @@ impl MobileMoreEntry {
 
     fn icon(self) -> Icon {
         match self {
+            MobileMoreEntry::NewFile => Icon::FilePlus,
             MobileMoreEntry::OpenFile => Icon::from_name("folder-open").unwrap_or(Icon::FolderOpen),
             MobileMoreEntry::Templates => Icon::LayoutDashboard,
             MobileMoreEntry::Assets => Icon::Palette,
@@ -380,9 +385,9 @@ mod tests {
     }
 
     #[test]
-    fn compact_landscape_uses_a_five_by_two_sheet() {
+    fn compact_landscape_uses_a_six_by_two_sheet() {
         let state = touch_state(EditorSizeClass::Compact);
-        assert_grid(&state, 568.0, 320.0, 5, PHONE_BOTTOM_PADDING);
+        assert_grid(&state, 568.0, 320.0, 6, PHONE_BOTTOM_PADDING);
     }
 
     #[test]
@@ -403,15 +408,21 @@ mod tests {
     #[test]
     fn restored_entries_reuse_localized_labels_and_desktop_icons() {
         let mut state = EditorState::starter();
-        assert_eq!(MobileMoreEntry::ALL.len(), 11);
-        assert_eq!(MobileMoreEntry::visible(&state).len(), 10);
-        assert_eq!(MobileMoreEntry::ALL[0], MobileMoreEntry::OpenFile);
+        assert_eq!(MobileMoreEntry::ALL.len(), 12);
+        assert_eq!(MobileMoreEntry::visible(&state).len(), 11);
+        assert_eq!(MobileMoreEntry::ALL[0], MobileMoreEntry::NewFile);
+        assert_eq!(MobileMoreEntry::ALL[1], MobileMoreEntry::OpenFile);
+        assert_eq!(MobileMoreEntry::NewFile.icon(), Icon::FilePlus);
         assert_eq!(MobileMoreEntry::OpenFile.icon(), Icon::FolderOpen);
         assert_eq!(MobileMoreEntry::Templates.icon(), Icon::LayoutDashboard);
         assert_eq!(MobileMoreEntry::Assets.icon(), Icon::Palette);
 
         for locale in op_i18n::Locale::ALL {
             state.editor_ui.locale = locale;
+            assert_ne!(
+                MobileMoreEntry::NewFile.label(&state.editor_ui),
+                "fileMenu.newFile"
+            );
             let label = MobileMoreEntry::OpenFile.label(&state.editor_ui);
             assert!(!label.ends_with('.'));
             assert!(!label.ends_with('…'));
@@ -431,10 +442,10 @@ mod tests {
     fn account_state_swaps_one_tile_without_moving_collaboration_or_changing_count() {
         let mut state = touch_state(EditorSizeClass::Compact);
         let anonymous = MobileMoreEntry::visible(&state);
-        assert_eq!(anonymous.len(), 10);
+        assert_eq!(anonymous.len(), 11);
         assert!(anonymous.contains(&MobileMoreEntry::SignIn));
         assert!(!anonymous.contains(&MobileMoreEntry::Account));
-        assert_eq!(anonymous[4], MobileMoreEntry::Collaboration);
+        assert_eq!(anonymous[5], MobileMoreEntry::Collaboration);
         assert_eq!(MobileMoreEntry::SignIn.icon(), Icon::User);
         assert_eq!(MobileMoreEntry::Collaboration.icon(), Icon::Users);
         assert_ne!(
@@ -454,7 +465,7 @@ mod tests {
         assert_eq!(signed_in.len(), anonymous.len());
         assert!(!signed_in.contains(&MobileMoreEntry::SignIn));
         assert!(signed_in.contains(&MobileMoreEntry::Account));
-        assert_eq!(signed_in[4], MobileMoreEntry::Collaboration);
+        assert_eq!(signed_in[5], MobileMoreEntry::Collaboration);
         assert_eq!(
             signed_in
                 .iter()

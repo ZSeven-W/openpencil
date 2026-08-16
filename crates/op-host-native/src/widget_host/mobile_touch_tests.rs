@@ -31,6 +31,28 @@ fn touch_host(size_class: EditorSizeClass) -> WidgetHostNative {
     host
 }
 
+#[test]
+fn blank_mobile_app_bar_uses_the_localized_untitled_title() {
+    let mut host = touch_host(EditorSizeClass::Compact);
+
+    for (locale, expected) in [
+        (op_i18n::Locale::EnUs, "Untitled"),
+        (op_i18n::Locale::ZhCn, "未命名"),
+    ] {
+        host.editor_state_mut().editor_ui.locale = locale;
+        assert_eq!(
+            MobileAppBar::for_editor(host.editor_state()).title,
+            expected
+        );
+    }
+
+    host.editor_state_mut().editor_ui.file_name_display = Some("deck.op".to_string());
+    assert_eq!(
+        MobileAppBar::for_editor(host.editor_state()).title,
+        "deck.op"
+    );
+}
+
 fn press_more_entry(
     host: &mut WidgetHostNative,
     entry: MobileMoreEntry,
@@ -199,15 +221,13 @@ fn closed_touch_surface_allows_canvas_pinch_zoom() {
 fn more_open_file_queues_the_shared_file_action_and_closes() {
     let mut host = touch_host(EditorSizeClass::Medium);
     let (width, height) = (834.0, 1112.0);
-    host.editor_state_mut().editor_ui.mobile_sheet = Some(MobileSheetKind::More);
-    let panel = host.mobile_sheet_rect(width, height, MobileSheetKind::More);
-    let point = center(op_editor_ui::widgets::mobile_chrome::more_entry_rect(
-        host.editor_state(),
-        panel,
-        0,
-    ));
 
-    assert!(host.apply_press(point.x, point.y, width, height));
+    assert!(press_more_entry(
+        &mut host,
+        MobileMoreEntry::OpenFile,
+        width,
+        height
+    ));
     assert_eq!(
         host.editor_state().editor_ui.pending_file_action,
         Some(FileAction::Open)
@@ -216,33 +236,47 @@ fn more_open_file_queues_the_shared_file_action_and_closes() {
 }
 
 #[test]
-fn more_open_file_does_not_queue_when_collaboration_blocks_replacement() {
-    let mut host = touch_host(EditorSizeClass::Medium);
+fn more_new_file_queues_the_shared_file_action_and_closes() {
     let (width, height) = (834.0, 1112.0);
-    assert!(host
-        .editor_state_mut()
-        .editor_ui
-        .collab
-        .set_authenticated_session(
-            CollabConnectionPhase::Active,
-            AuthenticatedCollabSession {
-                session_name: "Test session".to_string(),
-                role: CollabUiRole::Viewer,
-                share_endpoint: None,
-            },
-            Vec::new(),
-        ));
-    host.editor_state_mut().editor_ui.mobile_sheet = Some(MobileSheetKind::More);
-    let panel = host.mobile_sheet_rect(width, height, MobileSheetKind::More);
-    let point = center(op_editor_ui::widgets::mobile_chrome::more_entry_rect(
-        host.editor_state(),
-        panel,
-        0,
-    ));
+    let mut host = touch_host(EditorSizeClass::Medium);
 
-    assert!(host.apply_press(point.x, point.y, width, height));
-    assert_eq!(host.editor_state().editor_ui.pending_file_action, None);
+    assert!(press_more_entry(
+        &mut host,
+        MobileMoreEntry::NewFile,
+        width,
+        height
+    ));
+    assert_eq!(
+        host.editor_state().editor_ui.pending_file_action,
+        Some(FileAction::New)
+    );
     assert_eq!(host.editor_state().editor_ui.mobile_sheet, None);
+}
+
+#[test]
+fn more_file_actions_do_not_queue_when_collaboration_blocks_replacement() {
+    let (width, height) = (834.0, 1112.0);
+
+    for entry in [MobileMoreEntry::NewFile, MobileMoreEntry::OpenFile] {
+        let mut host = touch_host(EditorSizeClass::Medium);
+        assert!(host
+            .editor_state_mut()
+            .editor_ui
+            .collab
+            .set_authenticated_session(
+                CollabConnectionPhase::Active,
+                AuthenticatedCollabSession {
+                    session_name: "Test session".to_string(),
+                    role: CollabUiRole::Viewer,
+                    share_endpoint: None,
+                },
+                Vec::new(),
+            ));
+
+        assert!(press_more_entry(&mut host, entry, width, height));
+        assert_eq!(host.editor_state().editor_ui.pending_file_action, None);
+        assert_eq!(host.editor_state().editor_ui.mobile_sheet, None);
+    }
 }
 
 #[test]

@@ -552,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    fn shell_action_drains_only_open() {
+    fn shell_action_drains_open_but_leaves_unowned_actions_queued() {
         let mut engine = editor_engine(SAMPLE_DOC);
         let pointer = &mut engine as *mut OpEngine;
         engine

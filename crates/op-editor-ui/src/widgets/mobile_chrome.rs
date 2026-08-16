@@ -88,7 +88,9 @@ impl MobileAppBar {
             .editor_ui
             .file_name_display
             .clone()
-            .unwrap_or_else(|| "OpenPencil".to_string());
+            .unwrap_or_else(|| {
+                super::editor_state_ext::translate(&state.editor_ui, "common.untitled").to_string()
+            });
         Self {
             title,
             theme: super::editor_state_ext::theme_for(&state.editor_ui),

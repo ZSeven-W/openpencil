@@ -37,17 +37,21 @@ unless slides.all? { |slide| slide["type"] == "frame" && slide["width"] == 1920 
 end
 
 ios_source = File.read(File.join(repo_dir, "packaging/ios-player/Sources/OpEngineHost.swift"))
-unless ios_source.include?('return "ppt-demo"') &&
+unless ios_source.include?("if editorMode && explicitDocName == nil") &&
+       ios_source.include?("document = Data()") &&
+       ios_source.include?('let docName = explicitDocName ?? "ppt-demo"') &&
        ios_source.include?('Bundle.main.url(forResource: docName, withExtension: "op")')
-  raise "iOS must load the bundled ppt-demo.op by default while preserving -doc overrides"
+  raise "iOS must start the editor blank while preserving -doc and viewer demo behavior"
 end
 
 android_source = File.read(
   File.join(repo_dir, "packaging/android-player/app/src/main/kotlin/tech/zseven/openpencil/MainActivity.kt")
 )
-unless android_source.include?('intent.getStringExtra("doc") ?: "ppt-demo"') &&
+unless android_source.include?('if (editorMode && explicitDocName == null)') &&
+       android_source.include?("ByteArray(0)") &&
+       android_source.include?('val docName = explicitDocName ?: "ppt-demo"') &&
        android_source.include?('readAsset("$docName.op")')
-  raise "Android must load the bundled ppt-demo.op by default while preserving doc overrides"
+  raise "Android must start the editor blank while preserving doc and viewer demo behavior"
 end
 
-puts "bundled PPT demo contract validates"
+puts "mobile blank-start and bundled PPT demo contracts validate"

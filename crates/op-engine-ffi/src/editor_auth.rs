@@ -150,17 +150,62 @@ pub(crate) fn take_shell_action(session: &mut Session) -> FfiResult<i32> {
         return Ok(action);
     }
 
-    let host = session.editor_mut()?;
-    if matches!(
-        host.editor_state().editor_ui.pending_file_action,
-        Some(op_editor_core::FileAction::Open)
-    ) {
-        host.editor_state_mut().editor_ui.pending_file_action = None;
-        host.mark_editor_state_dirty();
-        Ok(SHELL_ACTION_OPEN_DOCUMENT)
-    } else {
-        Ok(SHELL_ACTION_NONE)
+    let pending = session
+        .editor_mut()?
+        .editor_state()
+        .editor_ui
+        .pending_file_action;
+    match pending {
+        Some(op_editor_core::FileAction::New) => {
+            install_new_document(session)?;
+            Ok(SHELL_ACTION_NONE)
+        }
+        Some(op_editor_core::FileAction::Open) => {
+            let host = session.editor_mut()?;
+            host.editor_state_mut().editor_ui.pending_file_action = None;
+            host.mark_editor_state_dirty();
+            Ok(SHELL_ACTION_OPEN_DOCUMENT)
+        }
+        #[cfg(any(target_os = "ios", target_os = "android", test))]
+        Some(op_editor_core::FileAction::ExportImageConfirm)
+        | Some(op_editor_core::FileAction::ExportDeckPdfSelection) => {
+            crate::editor_export::stage_export(session, pending)
+        }
+        _ => Ok(SHELL_ACTION_NONE),
     }
+}
+
+fn install_new_document(session: &mut Session) -> FfiResult<()> {
+    let starter_document = op_editor_core::EditorState::starter().doc;
+    {
+        let host = session.editor_mut()?;
+        // Consume the one-shot request even when collaboration starts between
+        // the press and this drain. A rejected replacement must not retry on
+        // every later frame.
+        host.editor_state_mut().editor_ui.pending_file_action = None;
+        host.install_open_document(starter_document, None, None)
+            .map_err(|_| {
+                FfiError::new(
+                    OpStatus::Busy,
+                    "new document is blocked by the collaboration session",
+                )
+            })?;
+    }
+
+    session.selected = None;
+    session.gesture.reset();
+    session.user_interacted = false;
+    session.fit_content_to_viewports();
+    // Fitting mutates the host-owned viewport. Clone only afterwards so the
+    // lightweight state used by page APIs remains identical to the live host.
+    session.state = session
+        .editor()
+        .ok_or_else(|| FfiError::new(OpStatus::NotReady, "engine is not in editor mode"))?
+        .editor_state()
+        .clone();
+    session.scene = op_pen_loader::editor_state_to_active_page_layout_scene(&session.state);
+    session.request_redraw();
+    Ok(())
 }
 
 fn take_auth_shell_action(state: &mut EditorAuthShellState) -> Option<i32> {
@@ -290,7 +335,8 @@ mod tests {
     use super::*;
     use crate::desc::{Callbacks, CreateOptions};
     use crate::lifecycle::{OpEngine, Session};
-    use op_editor_core::{LoginFlowError, LoginFlowStatus};
+    use op_editor_core::size_class::{EditorSizeClass, MobileSheetKind};
+    use op_editor_core::{LoginFlowError, LoginFlowStatus, ThemeMode};
 
     const SAMPLE_DOC: &str =
         include_str!("../../op-editor-core/assets/scene_templates/daily-sign-card.op");
@@ -308,6 +354,96 @@ mod tests {
             })
             .expect("editor session"),
         )
+    }
+
+    #[test]
+    fn empty_editor_session_starts_with_the_canonical_blank_document() {
+        let session = Session::new(CreateOptions {
+            document: String::new(),
+            width: 390.0,
+            height: 844.0,
+            dpr: 1.0,
+            callbacks: Callbacks::default(),
+            asset_base: None,
+            editor_mode: true,
+        })
+        .expect("blank editor session");
+        let starter = op_editor_core::EditorState::starter();
+        let host = session.editor().expect("editor host");
+
+        assert_eq!(session.state.doc, starter.doc);
+        assert_eq!(host.editor_state().doc, session.state.doc);
+        assert_eq!(session.state.page_count(), 1);
+        assert!(op_editor_core::blank_starter::active_page_is_blank_starter(
+            host.editor_state()
+        ));
+        assert!(host.editor_state().selection.is_empty());
+        assert!(!host.editor_state().is_dirty());
+        assert_eq!(host.editor_state().editor_ui.file_name_display, None);
+        assert_eq!(session.scene.active_page_index, 0);
+    }
+
+    #[test]
+    fn new_action_installs_a_clean_untitled_starter_and_synchronizes_session() {
+        let mut engine = editor_engine();
+        let session = engine.session_mut_for_test();
+        let initial_epoch = {
+            let host = session.editor_mut().expect("editor host");
+            let ui = &mut host.editor_state_mut().editor_ui;
+            ui.touch = true;
+            ui.size_class = EditorSizeClass::Medium;
+            ui.theme_mode = ThemeMode::Light;
+            ui.file_name_display = Some("old-document.op".into());
+            ui.mobile_sheet = Some(MobileSheetKind::More);
+            ui.pending_file_action = Some(op_editor_core::FileAction::New);
+            host.editor_state_mut().mark_document_changed();
+            host.mark_editor_state_dirty();
+            host.document_epoch()
+        };
+        session.selected = Some("old-selection".into());
+        session.user_interacted = true;
+
+        assert_eq!(
+            take_shell_action(session).expect("new action"),
+            SHELL_ACTION_NONE
+        );
+
+        assert_eq!(session.selected, None);
+        assert!(!session.user_interacted);
+        let host = session.editor().expect("editor host");
+        let live = host.editor_state();
+        assert!(op_editor_core::blank_starter::active_page_is_blank_starter(
+            live
+        ));
+        assert_eq!(live.page_count(), 1);
+        assert!(live.selection.is_empty());
+        assert!(!live.is_dirty());
+        assert_eq!(live.editor_ui.file_name_display, None);
+        assert_eq!(live.editor_ui.mobile_sheet, None);
+        assert_eq!(live.editor_ui.pending_file_action, None);
+        assert!(live.editor_ui.touch);
+        assert_eq!(live.editor_ui.size_class, EditorSizeClass::Medium);
+        assert_eq!(live.editor_ui.theme_mode, ThemeMode::Light);
+        assert_eq!(host.document_epoch(), initial_epoch.wrapping_add(1));
+
+        assert_eq!(session.state.doc, live.doc);
+        assert_eq!(session.state.viewport, live.viewport);
+        assert_eq!(
+            session.state.ui.active_page_index,
+            live.ui.active_page_index
+        );
+        assert_eq!(session.state.editor_ui.touch, live.editor_ui.touch);
+        assert_eq!(
+            session.state.editor_ui.size_class,
+            live.editor_ui.size_class
+        );
+        assert_eq!(
+            session.state.editor_ui.theme_mode,
+            live.editor_ui.theme_mode
+        );
+        assert_eq!(session.state.editor_ui.file_name_display, None);
+        assert!(!session.state.is_dirty());
+        assert_eq!(session.scene.active_page_index, live.ui.active_page_index);
     }
 
     #[test]

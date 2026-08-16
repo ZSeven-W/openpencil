@@ -44,6 +44,25 @@ fn raster_format_quality_matches_ts() {
     assert_eq!(RasterFormat::Webp.quality(), 92);
 }
 
+#[cfg(any(target_os = "ios", target_os = "android"))]
+#[test]
+fn mobile_safe_build_rejects_webp_at_the_public_boundary() {
+    let scene = scene_with(vec![filled_rect("n10", 0.0, 0.0, 10.0, 10.0, Color::BLACK)]);
+    let error = render_page_raster_bytes(
+        scene.active_page().expect("active page"),
+        RasterFormat::Webp,
+        1.0,
+    )
+    .expect_err("mobile Skia cache omits WebP");
+    assert_eq!(error, ExportError::UnsupportedFormat { format: "WEBP" });
+}
+
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[test]
+fn desktop_webp_is_not_blocked_by_the_mobile_capability_gate() {
+    assert!(RasterFormat::Webp.ensure_supported().is_ok());
+}
+
 #[test]
 fn export_raster_writes_png_for_minimal_scene() {
     let scene = scene_with(vec![filled_rect(

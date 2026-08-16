@@ -14,6 +14,7 @@ object OpNative {
     const val SHELL_ACTION_OPEN_DOCUMENT = 1
     const val SHELL_ACTION_OPEN_LOGIN_WEBVIEW = 2
     const val SHELL_ACTION_CLOSE_LOGIN_WEBVIEW = 3
+    const val SHELL_ACTION_EXPORT_DOCUMENT = 4
 
     init {
         System.loadLibrary("op_engine_jni")
@@ -98,6 +99,9 @@ object OpNative {
     external fun nativeEditorCancelLogin(engine: Long): Int
     external fun nativeEditorTakeShellAction(engine: Long): Int
     external fun nativeEditorOpenDocument(engine: Long, bytes: ByteArray, name: String): Int
+    external fun nativeEditorExportFileName(engine: Long): String?
+    external fun nativeEditorExportToPath(engine: Long, path: String): Int
+    external fun nativeEditorCancelExport(engine: Long): Int
 }
 
 /** Editor key codes (mirror `KEY_*` in op-engine-ffi/src/editor.rs). */

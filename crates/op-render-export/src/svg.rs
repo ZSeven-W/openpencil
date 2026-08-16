@@ -7,7 +7,21 @@
 use op_editor_ui::layout_scene::LayoutScene;
 use std::path::Path as StdPath;
 
-use crate::export::ExportError;
+use crate::ExportError;
+
+/// Serialize the active page to UTF-8 SVG bytes.
+pub fn render_svg_bytes(scene: &LayoutScene) -> Result<Vec<u8>, ExportError> {
+    op_editor_ui::svg_export::serialize_active_page_svg(scene)
+        .map(String::into_bytes)
+        .map_err(|e| ExportError::SvgSerialize(e.to_string()))
+}
+
+/// Serialize one node and its subtree to UTF-8 SVG bytes.
+pub fn render_node_svg_bytes(scene: &LayoutScene, node_id: &str) -> Result<Vec<u8>, ExportError> {
+    op_editor_ui::svg_export::serialize_node_svg(scene, node_id)
+        .map(String::into_bytes)
+        .map_err(|e| ExportError::SvgSerialize(e.to_string()))
+}
 
 /// Serialize the scene's active page to an SVG file at `target`.
 ///
@@ -16,9 +30,7 @@ use crate::export::ExportError;
 /// carries its sentence verbatim (`to_string` so the adapter keeps working
 /// if that crate later types its own error).
 pub fn export_svg(scene: &LayoutScene, target: &StdPath) -> Result<(), ExportError> {
-    let svg = op_editor_ui::svg_export::serialize_active_page_svg(scene)
-        .map_err(|e| ExportError::SvgSerialize(e.to_string()))?;
-    std::fs::write(target, svg).map_err(|e| ExportError::Write(e.to_string()))
+    std::fs::write(target, render_svg_bytes(scene)?).map_err(|e| ExportError::Write(e.to_string()))
 }
 
 /// Serialize one node and its subtree to an SVG file at `target`. Same
@@ -28,15 +40,14 @@ pub fn export_node_svg(
     node_id: &str,
     target: &StdPath,
 ) -> Result<(), ExportError> {
-    let svg = op_editor_ui::svg_export::serialize_node_svg(scene, node_id)
-        .map_err(|e| ExportError::SvgSerialize(e.to_string()))?;
-    std::fs::write(target, svg).map_err(|e| ExportError::Write(e.to_string()))
+    std::fs::write(target, render_node_svg_bytes(scene, node_id)?)
+        .map_err(|e| ExportError::Write(e.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::export::test_support::{filled_rect, scene_with};
+    use crate::test_support::{filled_rect, scene_with};
     use op_editor_ui::Color;
 
     #[test]

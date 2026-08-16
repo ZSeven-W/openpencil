@@ -19,6 +19,7 @@ required=(
   "$player_dir/Sources/OpPlayerApp.swift"
   "$player_dir/Sources/OpPlayerView.swift"
   "$player_dir/Sources/OpEngineHost.swift"
+  "$player_dir/Sources/DocumentExportCoordinator.swift"
   "$player_dir/Sources/AuthStorage.swift"
   "$player_dir/Sources/EmbeddedLoginRequest.swift"
   "$player_dir/Sources/EmbeddedLoginWebViewController.swift"
@@ -144,13 +145,23 @@ grep -Fq -- "BoundedDocumentReader.read" "$player_dir/Sources/OpPlayerView.swift
 grep -Fq -- "maximumBytes = 32 * 1024 * 1024" "$player_dir/Sources/BoundedDocumentReader.swift"
 grep -Fq -- "op_editor_take_shell_action" "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- "op_editor_open_document" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "OpShellAction_ExportDocument.rawValue" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "documentExportCoordinator.cancelForTeardown()" "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- "op_editor_copy_export_file_name" "$player_dir/Sources/DocumentExportCoordinator.swift"
+grep -Fq -- "op_editor_export_to_path" "$player_dir/Sources/DocumentExportCoordinator.swift"
+grep -Fq -- "op_editor_cancel_export" "$player_dir/Sources/DocumentExportCoordinator.swift"
+grep -Fq -- "UUID().uuidString" "$player_dir/Sources/DocumentExportCoordinator.swift"
+grep -Fq -- "UIDocumentPickerViewController(forExporting: [stagedFile], asCopy: true)" "$player_dir/Sources/DocumentExportCoordinator.swift"
+grep -Fq -- "FileManager.default.removeItem(at: directory)" "$player_dir/Sources/DocumentExportCoordinator.swift"
 grep -Fq -- "desc.storage_root_ptr" "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- "desc.storage_root_len" "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- "callbacks.credential_load = nil" "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- "callbacks.credential_store_if_absent = nil" "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- "FileProtectionType.completeUntilFirstUserAuthentication" "$player_dir/Sources/AuthStorage.swift"
 grep -Fq -- "isExcludedFromBackup = true" "$player_dir/Sources/AuthStorage.swift"
-grep -Fq -- 'return "ppt-demo"' "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- 'if editorMode && explicitDocName == nil' "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- 'document = Data()' "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- 'let docName = explicitDocName ?? "ppt-demo"' "$player_dir/Sources/OpEngineHost.swift"
 grep -Fq -- '.ignoresSafeArea(.all, edges: .all)' "$player_dir/Sources/OpPlayerApp.swift"
 grep -Fq -- 'viewportConvergence.signal' "$player_dir/Sources/OpPlayerView.swift"
 grep -Fq -- 'viewportConvergence.displayFrame' "$player_dir/Sources/OpPlayerView.swift"
@@ -194,6 +205,32 @@ root = create.index("desc.storage_root_ptr")
 call = create.index("return op_create(&desc, &created)")
 raise "private storage must be prepared and bound before op_create" unless prepare && root && call && prepare < root && root < call
 raise "auth must reuse the create-time storage root" unless create.include?("configureMobileAuth(engine: created, storageURL: storageURL)")
+RUBY
+
+ruby - "$player_dir/Sources/OpEngineHost.swift" \
+  "$player_dir/Sources/DocumentExportCoordinator.swift" <<'RUBY'
+host = File.read(ARGV.fetch(0))
+coordinator = File.read(ARGV.fetch(1))
+
+drain = host[/private func drainShellActions\b.*?(?=\n    \/\/\/ Copies the borrowed Rust string)/m]
+raise "iOS export shell-action branch missing" unless drain
+action = drain.index("OpShellAction_ExportDocument.rawValue")
+defer_to_uikit = drain.index("DispatchQueue.main.async", action || 0)
+begin_export = drain.index("documentExportCoordinator.beginExport()", action || 0)
+raise "export presentation must leave the editor ABI stack" unless action && defer_to_uikit && begin_export && action < defer_to_uikit && defer_to_uikit < begin_export
+
+begin_method = coordinator[/func beginExport\(\).*?(?=\n    func cancelForTeardown)/m]
+raise "iOS export coordinator missing" unless begin_method
+filename = begin_method.index("copyExportFilename")
+stage = begin_method.index("makeStagedFileURL")
+write = begin_method.index("op_editor_export_to_path")
+present = begin_method.index("presentDocumentPicker")
+raise "export must name, stage, write, then present" unless filename && stage && write && present && filename < stage && stage < write && write < present
+
+teardown = coordinator[/func cancelForTeardown\(\).*?(?=\n    private func copyExportFilename)/m]
+raise "export teardown cleanup missing" unless teardown&.include?("cancelPendingEngineRequest()") && teardown.include?("cleanupStagingDirectory()")
+raise "picker success cleanup missing" unless coordinator.include?("didPickDocumentsAt urls: [URL]") && coordinator.include?("finishPicker()")
+raise "picker cancellation cleanup missing" unless coordinator.include?("documentPickerWasCancelled")
 RUBY
 
 ruby "$repo_dir/packaging/mobile-editor-handoff/Tests/TouchCancelRoutingTests.rb" \

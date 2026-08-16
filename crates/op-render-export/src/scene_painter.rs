@@ -16,7 +16,7 @@
 //! runs at `zoom = 1` with a zero viewport origin — exactly the
 //! editor-canvas math at zoom 1 with the pan baked into the matrix.
 //!
-//! Vector writers stay on their own paths: `export_svg.rs` is a
+//! Vector writers stay on their own paths: `svg.rs` is a
 //! hand-rolled SVG serializer (divergence documented there), while
 //! `export_pdf.rs` paints through this bridge too — skia's PDF canvas
 //! is a `skia_safe::Canvas`, so it inherits the same parity.
