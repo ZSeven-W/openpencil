@@ -5,7 +5,8 @@
 //! so native and web share the same detection logic.
 
 use crate::font_catalog::{
-    is_generic_or_system_font_alias, primary_concrete_font_family, split_font_family_stack,
+    is_generic_or_system_font_alias, is_same_font_family, primary_concrete_font_family,
+    split_font_family_stack,
 };
 use crate::{EditorState, EditorUiState};
 use jian_ops_schema::font_plan::FontPlan;
@@ -40,7 +41,7 @@ fn family_available(family: &str, ui: &EditorUiState) -> bool {
     if is_generic_or_system_font_alias(family) {
         return true;
     }
-    let matches = |candidate: &String| candidate.trim().eq_ignore_ascii_case(family);
+    let matches = |candidate: &String| is_same_font_family(family, candidate.trim());
     ui.imported_font_families.iter().any(matches)
         || ui.bundled_font_families.iter().any(matches)
         || ui.system_font_families.iter().any(matches)
@@ -199,6 +200,43 @@ mod tests {
         assert_eq!(prompt.entries.len(), 1);
         assert_eq!(prompt.entries[0].family, "Katibeh");
         assert!(prompt.entries[0].run_count >= 1);
+    }
+
+    #[test]
+    fn windows_ui_family_split_does_not_report_the_authored_family_missing() {
+        // Issue #211: Windows enumerates `Microsoft YaHei UI` for msyh.ttc;
+        // a document authored with `Microsoft YaHei` must not prompt.
+        let mut state = state_with_text("Microsoft YaHei");
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.system_font_families =
+            std::sync::Arc::new(vec!["Microsoft YaHei UI".into()]);
+
+        assert!(detect_missing_fonts(&state).is_none());
+    }
+
+    #[test]
+    fn windows_ui_family_split_matches_in_both_directions() {
+        // A document authored on Windows with the UI spelling must also
+        // resolve against a machine enumerating the plain family.
+        let mut state = state_with_text("Microsoft YaHei UI");
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.system_font_families =
+            std::sync::Arc::new(vec!["Arial".into(), "Microsoft YaHei".into()]);
+
+        assert!(detect_missing_fonts(&state).is_none());
+    }
+
+    #[test]
+    fn unrelated_ui_family_stays_missing() {
+        // The `… UI` fold must not swallow genuinely distinct families —
+        // only the same stem with/without the suffix matches.
+        let mut state = state_with_text("Adventure Works Sans");
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.system_font_families =
+            std::sync::Arc::new(vec!["Arial".into(), "Contoso UI".into()]);
+
+        let prompt = detect_missing_fonts(&state).expect("distinct family stays missing");
+        assert_eq!(prompt.entries[0].family, "Adventure Works Sans");
     }
 
     #[test]

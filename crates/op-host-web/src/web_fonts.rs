@@ -285,7 +285,7 @@ fn collect_text_font_families(nodes: &[PenNode], out: &mut Vec<String>) {
 }
 
 fn request_font_bytes<C: RepaintContext + 'static>(inner: &InnerRc<C>, family: String) {
-    let Some(key) = family_key(&family) else {
+    let Some(key) = font_data_key_for_family(&family) else {
         return;
     };
     let should_start = LOADED_FAMILIES.with(|loaded| !loaded.borrow().contains(&key))
@@ -427,6 +427,37 @@ fn normalized_family_name(family: &str) -> Option<String> {
 
 fn family_key(family: &str) -> Option<String> {
     normalized_family_name(family).map(|family| family.to_lowercase())
+}
+
+/// Resolve the `FONT_DATA_BY_FAMILY` key for an authored family, falling
+/// back to an alias-equivalent enumerated key (the Windows `… UI`
+/// family-name split: `Microsoft YaHei` vs `Microsoft YaHei UI` are two
+/// names for the same installed face, and `queryLocalFonts` may surface
+/// only one spelling).
+fn font_data_key_for_family(family: &str) -> Option<String> {
+    let key = family_key(family)?;
+    FONT_DATA_BY_FAMILY.with(|slot| {
+        let fonts = slot.borrow();
+        if fonts.contains_key(&key) {
+            return Some(key);
+        }
+        alias_equivalent_font_data_key(family, &key, fonts.keys())
+    })
+}
+
+/// Pure key-resolution half of [`font_data_key_for_family`] so the alias
+/// fallback is unit-testable without a populated browser font table.
+fn alias_equivalent_font_data_key<'a>(
+    family: &str,
+    exact_key: &str,
+    keys: impl IntoIterator<Item = &'a String>,
+) -> Option<String> {
+    keys.into_iter()
+        .find(|candidate| {
+            candidate.as_str() != exact_key
+                && op_editor_core::font_catalog::is_same_font_family(family, candidate)
+        })
+        .cloned()
 }
 
 // ---------------------------------------------------------------------

@@ -91,6 +91,30 @@ pub fn is_generic_or_system_font_alias(family: &str) -> bool {
     )
 }
 
+/// Whether two concrete family names denote the same installed face.
+///
+/// Matching ignores ASCII case and the Windows `… UI` family-name split:
+/// one font file (e.g. `msyh.ttc`) ships under two family names —
+/// `Microsoft YaHei` and `Microsoft YaHei UI` — and a system enumeration
+/// may surface only one of the pair. A document authored with the other
+/// spelling still resolves to the same face, so availability checks and
+/// import mismatch notes must treat the pair as one family. The suffix
+/// only matches as a separate trailing word (`Name UI`); a compound
+/// (`NameUI`) stays distinct.
+pub fn is_same_font_family(authored: &str, available: &str) -> bool {
+    fn ui_folded_key(family: &str) -> String {
+        let lowered = family.trim().to_ascii_lowercase();
+        lowered
+            .strip_suffix(" ui")
+            .map(str::trim)
+            .map(str::to_string)
+            .unwrap_or(lowered)
+    }
+    let authored_key = ui_folded_key(authored);
+    let available_key = ui_folded_key(available);
+    !authored_key.is_empty() && !available_key.is_empty() && authored_key == available_key
+}
+
 /// First concrete authored family in a CSS stack. Generic fallbacks are
 /// skipped because they cannot be supplied by a font file.
 pub fn primary_concrete_font_family(stack: &str) -> Option<String> {
@@ -133,5 +157,35 @@ mod tests {
             primary_concrete_font_family("system-ui, 'PingFang SC', sans-serif").as_deref(),
             Some("PingFang SC")
         );
+    }
+
+    #[test]
+    fn same_family_matches_across_case_and_windows_ui_split() {
+        // Issue #211: Windows surfaces `Microsoft YaHei UI` for msyh.ttc while
+        // documents are authored with `Microsoft YaHei` (and vice versa).
+        assert!(is_same_font_family("Microsoft YaHei", "Microsoft YaHei UI"));
+        assert!(is_same_font_family("Microsoft YaHei UI", "Microsoft YaHei"));
+        assert!(is_same_font_family("microsoft yahei", "Microsoft YaHei UI"));
+        assert!(is_same_font_family("Segoe UI", "Segoe UI"));
+        assert!(is_same_font_family(
+            " Microsoft YaHei UI ",
+            "microsoft yahei"
+        ));
+    }
+
+    #[test]
+    fn same_family_keeps_distinct_families_distinct() {
+        assert!(!is_same_font_family(
+            "Microsoft YaHei",
+            "Microsoft JhengHei"
+        ));
+        assert!(!is_same_font_family("Segoe UI", "Noto Sans UI"));
+        // `UI` must match only as a separate trailing word.
+        assert!(!is_same_font_family("NameUI", "Name"));
+        assert!(!is_same_font_family("Name", "NameUI"));
+        // Trimming the suffix must not leave an empty match-all.
+        assert!(!is_same_font_family("UI", ""));
+        assert!(!is_same_font_family("", "ui"));
+        assert!(!is_same_font_family("Microsoft YaHei", ""));
     }
 }

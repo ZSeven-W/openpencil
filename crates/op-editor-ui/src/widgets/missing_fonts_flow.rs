@@ -221,7 +221,9 @@ pub fn note_font_supplied(state: &mut EditorState, row: usize, actual_family: Op
         .and_then(|prompt| prompt.entries.get_mut(row))
     {
         entry.mismatch_note = actual_family
-            .filter(|actual| !actual.eq_ignore_ascii_case(&entry.family))
+            .filter(|actual| {
+                !op_editor_core::font_catalog::is_same_font_family(actual, &entry.family)
+            })
             .map(|actual| {
                 mismatch_template
                     .replace("{actual}", actual)
@@ -229,4 +231,79 @@ pub fn note_font_supplied(state: &mut EditorState, row: usize, actual_family: Op
             });
     }
     refresh_prompt(state);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use op_editor_core::missing_fonts::{MissingFontEntry, MissingFontsPrompt};
+
+    fn state_with_missing_row(family: &str) -> EditorState {
+        let doc: jian_ops_schema::PenDocument = serde_json::from_value(serde_json::json!({
+            "version": "0.8.0",
+            "children": [{
+                "type": "text",
+                "id": "t1",
+                "name": "t",
+                "x": 0,
+                "y": 0,
+                "width": 10,
+                "height": 10,
+                "content": "hi",
+                "fontFamily": family
+            }]
+        }))
+        .expect("document");
+        let mut state = EditorState::from_document(doc);
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.missing_fonts_prompt = Some(MissingFontsPrompt {
+            entries: vec![MissingFontEntry {
+                family: family.to_string(),
+                run_count: 1,
+                mismatch_note: None,
+                resolved: false,
+            }],
+        });
+        state
+    }
+
+    #[test]
+    fn supplied_ui_alias_family_records_no_mismatch_note() {
+        // Issue #211: a `Microsoft YaHei` row supplied with a file whose
+        // declared family is the `… UI` spelling names the same face —
+        // reporting a mismatch would send the user hunting for a font they
+        // already have.
+        let mut state = state_with_missing_row("Microsoft YaHei");
+
+        note_font_supplied(&mut state, 0, Some("Microsoft YaHei UI"));
+
+        let note = state
+            .editor_ui
+            .missing_fonts_prompt
+            .as_ref()
+            .unwrap()
+            .entries[0]
+            .mismatch_note
+            .as_deref();
+        assert_eq!(note, None);
+    }
+
+    #[test]
+    fn supplied_genuinely_different_family_still_records_a_mismatch_note() {
+        let mut state = state_with_missing_row("Microsoft YaHei");
+
+        note_font_supplied(&mut state, 0, Some("Instrument Serif"));
+
+        let note = state
+            .editor_ui
+            .missing_fonts_prompt
+            .as_ref()
+            .unwrap()
+            .entries[0]
+            .mismatch_note
+            .as_deref()
+            .expect("mismatch note");
+        assert!(note.contains("Instrument Serif"));
+        assert!(note.contains("Microsoft YaHei"));
+    }
 }
