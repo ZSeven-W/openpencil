@@ -75,9 +75,35 @@ pub(super) fn expanded_card_height_for_ui(
     } else {
         EXPANDED_CARD_HEIGHT
     };
-    base + model_editor_extra_height(settings, index, touch)
+    // Editing an existing provider carries a delete row at the bottom of
+    // the form (a new draft has nothing to delete yet).
+    let delete = if index.is_some() {
+        delete_row_height(touch)
+    } else {
+        0.0
+    };
+    base + delete
+        + model_editor_extra_height(settings, index, touch)
         + agent_settings_builtin_parts::preset_menu_height(settings, index, touch)
         + agent_settings_builtin_model_menu::model_menu_height(settings, index, touch)
+}
+
+pub(super) fn delete_row_height(touch: bool) -> f32 {
+    if touch {
+        TOUCH_TARGET + 8.0
+    } else {
+        32.0
+    }
+}
+
+/// Bottom-of-form "Delete provider" target while editing a saved card.
+pub(super) fn editing_delete_rect(card: Rect, touch: bool) -> Rect {
+    let row = delete_row_height(touch);
+    let pad = if touch { 16.0 } else { 12.0 };
+    Rect {
+        origin: Point2D::new(card.origin.x + pad, card.origin.y + card.size.y - row),
+        size: Point2D::new(card.size.x - pad * 2.0, row - 6.0),
+    }
 }
 
 fn model_editor_expanded(settings: &AgentSettings, index: Option<usize>) -> bool {

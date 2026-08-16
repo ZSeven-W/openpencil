@@ -143,6 +143,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.modelsOnePerLine" => "Model kimlikleri, her satıra bir tane",
         "builtin.typeModelManually" => "Model listesi alınamadı. Kimlikleri elle, her satıra bir tane girin.",
         "settings.provider.deepSeekHarness" => "DeepSeek Harness modelleri",
+        "settings.agents.deleteProvider" => "Sağlayıcıyı sil",
         _ => return None,
     })
 }

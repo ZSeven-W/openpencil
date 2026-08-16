@@ -159,6 +159,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.modelsOnePerLine" => "モデル ID（1 行に 1 つ）",
         "builtin.typeModelManually" => "モデル一覧の取得に失敗しました。モデル ID を 1 行に 1 つ入力してください",
         "settings.provider.deepSeekHarness" => "DeepSeek Harness モデル",
+        "settings.agents.deleteProvider" => "プロバイダーを削除",
         _ => return None,
     })
 }
