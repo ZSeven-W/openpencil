@@ -60,6 +60,16 @@ raise "deployment target must be iOS 15+" unless settings.fetch("IPHONEOS_DEPLOY
 raise "display name must be OpenPencil" unless settings.fetch("INFOPLIST_KEY_CFBundleDisplayName") == "OpenPencil"
 raise "export-compliance exemption must stay source-controlled" unless settings.fetch("INFOPLIST_KEY_ITSAppUsesNonExemptEncryption") == "NO"
 raise "exempt builds must not carry an export-compliance code" if settings.key?("INFOPLIST_KEY_ITSEncryptionExportComplianceCode")
+iphone_orientations = settings.fetch("INFOPLIST_KEY_UISupportedInterfaceOrientations").split
+ipad_orientations = settings.fetch("INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad").split
+expected_ipad_orientations = %w[
+  UIInterfaceOrientationPortrait
+  UIInterfaceOrientationPortraitUpsideDown
+  UIInterfaceOrientationLandscapeLeft
+  UIInterfaceOrientationLandscapeRight
+]
+raise "iPhone orientation contract drifted" unless iphone_orientations == expected_ipad_orientations.reject { |value| value.end_with?("UpsideDown") }
+raise "iPad multitasking requires all four orientations" unless ipad_orientations == expected_ipad_orientations
 local_network_usage = settings.fetch("INFOPLIST_KEY_NSLocalNetworkUsageDescription")
 raise "manual LAN collaboration requires a local-network usage description" unless local_network_usage.include?("collaboration")
 raise "relay-only mobile builds must not declare Bonjour discovery" if settings.key?("INFOPLIST_KEY_NSBonjourServices")
@@ -98,6 +108,9 @@ raise "generated project has stale display-name settings" unless display_names =
 encryption_declarations = project.scan(/^\s*INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = (?:"([^"]+)"|([^;]+));$/).map { |quoted, plain| quoted || plain }
 raise "generated project has stale export-compliance settings" unless encryption_declarations == ["NO", "NO"]
 raise "generated project must not contain an export-compliance code" if project.include?("INFOPLIST_KEY_ITSEncryptionExportComplianceCode")
+ipad_orientations = project.scan(/^\s*INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "([^"]+)";/).flatten
+expected_ipad_orientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+raise "generated project must preserve all iPad multitasking orientations" unless ipad_orientations == [expected_ipad_orientations, expected_ipad_orientations]
 RUBY
 fi
 

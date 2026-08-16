@@ -544,6 +544,28 @@ if /usr/libexec/PlistBuddy \
     printf 'error: exempt build must not contain an export compliance code\n' >&2
     exit 1
 fi
+required_ipad_orientations=(
+    UIInterfaceOrientationPortrait
+    UIInterfaceOrientationPortraitUpsideDown
+    UIInterfaceOrientationLandscapeLeft
+    UIInterfaceOrientationLandscapeRight
+)
+for index in "${!required_ipad_orientations[@]}"; do
+    actual_orientation=$(
+        /usr/libexec/PlistBuddy \
+            -c "Print :UISupportedInterfaceOrientations~ipad:$index" "$app_info"
+    )
+    [[ "$actual_orientation" == "${required_ipad_orientations[$index]}" ]] || {
+        printf 'error: archived iPad orientation contract is incomplete\n' >&2
+        exit 1
+    }
+done
+if /usr/libexec/PlistBuddy \
+    -c "Print :UISupportedInterfaceOrientations~ipad:${#required_ipad_orientations[@]}" \
+    "$app_info" >/dev/null 2>&1; then
+    printf 'error: archived iPad orientation contract has unexpected entries\n' >&2
+    exit 1
+fi
 local_network_usage=$(
     /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$app_info" \
         2>/dev/null || true
