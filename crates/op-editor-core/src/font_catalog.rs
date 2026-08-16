@@ -91,28 +91,41 @@ pub fn is_generic_or_system_font_alias(family: &str) -> bool {
     )
 }
 
-/// Whether two concrete family names denote the same installed face.
+/// Windows pairs where one font FILE ships two family NAMES.
 ///
-/// Matching ignores ASCII case and the Windows `… UI` family-name split:
-/// one font file (e.g. `msyh.ttc`) ships under two family names —
-/// `Microsoft YaHei` and `Microsoft YaHei UI` — and a system enumeration
-/// may surface only one of the pair. A document authored with the other
-/// spelling still resolves to the same face, so availability checks and
-/// import mismatch notes must treat the pair as one family. The suffix
-/// only matches as a separate trailing word (`Name UI`); a compound
-/// (`NameUI`) stays distinct.
-pub fn is_same_font_family(authored: &str, available: &str) -> bool {
-    fn ui_folded_key(family: &str) -> String {
-        let lowered = family.trim().to_ascii_lowercase();
-        lowered
-            .strip_suffix(" ui")
-            .map(str::trim)
-            .map(str::to_string)
-            .unwrap_or(lowered)
+/// Deliberately not a general `Name UI ≡ Name` fold: for most Windows
+/// families the UI variant is a distinct face with different vertical
+/// metrics (`Yu Gothic UI`, `Meiryo UI`, `Leelawadee UI`, `Segoe UI`).
+/// Only `msyh.ttc` is known to register both `Microsoft YaHei` and
+/// `Microsoft YaHei UI`.
+pub const WINDOWS_UI_FAMILY_ALIASES: &[(&str, &str)] = &[("microsoft yahei", "microsoft yahei ui")];
+
+/// Whether `left` and `right` are a documented same-file Windows alias pair.
+pub fn is_windows_family_alias(left: &str, right: &str) -> bool {
+    let left = left.trim();
+    let right = right.trim();
+    if left.is_empty() || right.is_empty() {
+        return false;
     }
-    let authored_key = ui_folded_key(authored);
-    let available_key = ui_folded_key(available);
-    !authored_key.is_empty() && !available_key.is_empty() && authored_key == available_key
+    WINDOWS_UI_FAMILY_ALIASES.iter().any(|(a, b)| {
+        (left.eq_ignore_ascii_case(a) && right.eq_ignore_ascii_case(b))
+            || (left.eq_ignore_ascii_case(b) && right.eq_ignore_ascii_case(a))
+    })
+}
+
+/// Whether two concrete family names should be treated as the same installed
+/// face for availability, picker highlight, and import mismatch notes.
+///
+/// Matching is ASCII-case-insensitive equality, plus the documented
+/// same-file aliases in [`WINDOWS_UI_FAMILY_ALIASES`]. It is not a general
+/// `Name UI ≡ Name` rule, and it allocates nothing.
+pub fn is_same_font_family(authored: &str, available: &str) -> bool {
+    let authored = authored.trim();
+    let available = available.trim();
+    !authored.is_empty()
+        && !available.is_empty()
+        && (authored.eq_ignore_ascii_case(available)
+            || is_windows_family_alias(authored, available))
 }
 
 /// First concrete authored family in a CSS stack. Generic fallbacks are
@@ -171,6 +184,11 @@ mod tests {
             " Microsoft YaHei UI ",
             "microsoft yahei"
         ));
+        assert!(is_windows_family_alias(
+            "Microsoft YaHei",
+            "Microsoft YaHei UI"
+        ));
+        assert!(!is_windows_family_alias("Yu Gothic", "Yu Gothic UI"));
     }
 
     #[test]
@@ -180,12 +198,29 @@ mod tests {
             "Microsoft JhengHei"
         ));
         assert!(!is_same_font_family("Segoe UI", "Noto Sans UI"));
-        // `UI` must match only as a separate trailing word.
-        assert!(!is_same_font_family("NameUI", "Name"));
-        assert!(!is_same_font_family("Name", "NameUI"));
-        // Trimming the suffix must not leave an empty match-all.
+        // Trimming must not leave an empty match-all.
         assert!(!is_same_font_family("UI", ""));
         assert!(!is_same_font_family("", "ui"));
         assert!(!is_same_font_family("Microsoft YaHei", ""));
+    }
+
+    #[test]
+    fn windows_ui_variant_is_not_a_universal_alias() {
+        // The UI face is a distinct family for these Windows pairs.
+        for (plain, ui) in [
+            ("Yu Gothic", "Yu Gothic UI"),
+            ("Segoe", "Segoe UI"),
+            ("Meiryo", "Meiryo UI"),
+            ("Leelawadee", "Leelawadee UI"),
+        ] {
+            assert!(
+                !is_same_font_family(plain, ui),
+                "{plain} must not equal {ui}"
+            );
+            assert!(
+                !is_same_font_family(ui, plain),
+                "{ui} must not equal {plain}"
+            );
+        }
     }
 }

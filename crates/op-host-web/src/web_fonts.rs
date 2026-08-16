@@ -430,10 +430,9 @@ fn family_key(family: &str) -> Option<String> {
 }
 
 /// Resolve the `FONT_DATA_BY_FAMILY` key for an authored family, falling
-/// back to an alias-equivalent enumerated key (the Windows `… UI`
-/// family-name split: `Microsoft YaHei` vs `Microsoft YaHei UI` are two
-/// names for the same installed face, and `queryLocalFonts` may surface
-/// only one spelling).
+/// back to a documented same-file alias key (`Microsoft YaHei` vs
+/// `Microsoft YaHei UI`). Other `… UI` faces stay distinct so we do not
+/// load Segoe UI bytes for an authored Segoe family.
 fn font_data_key_for_family(family: &str) -> Option<String> {
     let key = family_key(family)?;
     FONT_DATA_BY_FAMILY.with(|slot| {

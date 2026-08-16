@@ -205,7 +205,8 @@ mod tests {
     #[test]
     fn windows_ui_family_split_does_not_report_the_authored_family_missing() {
         // Issue #211: Windows enumerates `Microsoft YaHei UI` for msyh.ttc;
-        // a document authored with `Microsoft YaHei` must not prompt.
+        // a document authored with `Microsoft YaHei` must not prompt. This
+        // is the documented same-file alias, not a general `… UI` fold.
         let mut state = state_with_text("Microsoft YaHei");
         state.editor_ui.system_fonts_loaded = true;
         state.editor_ui.system_font_families =
@@ -228,8 +229,6 @@ mod tests {
 
     #[test]
     fn unrelated_ui_family_stays_missing() {
-        // The `… UI` fold must not swallow genuinely distinct families —
-        // only the same stem with/without the suffix matches.
         let mut state = state_with_text("Adventure Works Sans");
         state.editor_ui.system_fonts_loaded = true;
         state.editor_ui.system_font_families =
@@ -237,6 +236,19 @@ mod tests {
 
         let prompt = detect_missing_fonts(&state).expect("distinct family stays missing");
         assert_eq!(prompt.entries[0].family, "Adventure Works Sans");
+    }
+
+    #[test]
+    fn yu_gothic_ui_does_not_satisfy_yu_gothic() {
+        // The over-broad `Name UI ≡ Name` fold treated these as one family
+        // and silently dropped the missing-font prompt. They are distinct
+        // faces with different vertical metrics.
+        let mut state = state_with_text("Yu Gothic");
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.system_font_families = std::sync::Arc::new(vec!["Yu Gothic UI".into()]);
+
+        let prompt = detect_missing_fonts(&state).expect("Yu Gothic stays missing");
+        assert_eq!(prompt.entries[0].family, "Yu Gothic");
     }
 
     #[test]

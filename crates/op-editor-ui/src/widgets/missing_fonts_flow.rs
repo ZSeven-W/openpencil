@@ -270,9 +270,8 @@ mod tests {
     #[test]
     fn supplied_ui_alias_family_records_no_mismatch_note() {
         // Issue #211: a `Microsoft YaHei` row supplied with a file whose
-        // declared family is the `… UI` spelling names the same face —
-        // reporting a mismatch would send the user hunting for a font they
-        // already have.
+        // declared family is the documented `YaHei UI` alias of the same
+        // file. Other `… UI` faces still warn (see the Segoe case below).
         let mut state = state_with_missing_row("Microsoft YaHei");
 
         note_font_supplied(&mut state, 0, Some("Microsoft YaHei UI"));
@@ -286,6 +285,26 @@ mod tests {
             .mismatch_note
             .as_deref();
         assert_eq!(note, None);
+    }
+
+    #[test]
+    fn supplied_distinct_ui_face_still_records_a_mismatch_note() {
+        // Supplying Segoe UI for a missing Segoe row is a real mismatch.
+        let mut state = state_with_missing_row("Segoe");
+
+        note_font_supplied(&mut state, 0, Some("Segoe UI"));
+
+        let note = state
+            .editor_ui
+            .missing_fonts_prompt
+            .as_ref()
+            .unwrap()
+            .entries[0]
+            .mismatch_note
+            .as_deref()
+            .expect("mismatch note");
+        assert!(note.contains("Segoe UI"));
+        assert!(note.contains("Segoe"));
     }
 
     #[test]

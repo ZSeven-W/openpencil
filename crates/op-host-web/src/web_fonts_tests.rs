@@ -147,12 +147,13 @@ fn system_font_key_preserves_a_comma_inside_one_family_name() {
 #[test]
 fn font_data_key_falls_back_to_the_windows_ui_alias_spelling() {
     // Issue #211: the document says `Microsoft YaHei`; the browser's
-    // `queryLocalFonts` surfaced only the `… UI` spelling. The byte lookup
-    // must resolve to the enumerated key so the face actually loads.
+    // `queryLocalFonts` surfaced only the documented YaHei UI alias.
+    // The byte lookup must resolve to that enumerated key.
     let enumerated = vec![
         "arial".to_string(),
         "microsoft yahei ui".to_string(),
         "segoe ui".to_string(),
+        "yu gothic ui".to_string(),
     ];
     assert_eq!(
         alias_equivalent_font_data_key("Microsoft YaHei", "microsoft yahei", &enumerated)
@@ -173,6 +174,15 @@ fn font_data_key_falls_back_to_the_windows_ui_alias_spelling() {
     // A family with no alias present stays unresolved.
     assert_eq!(
         alias_equivalent_font_data_key("Adventure Works Sans", "adventure works sans", &enumerated),
+        None
+    );
+    // Distinct UI faces must not load the other face's bytes.
+    assert_eq!(
+        alias_equivalent_font_data_key("Segoe", "segoe", &enumerated),
+        None
+    );
+    assert_eq!(
+        alias_equivalent_font_data_key("Yu Gothic", "yu gothic", &enumerated),
         None
     );
 }
