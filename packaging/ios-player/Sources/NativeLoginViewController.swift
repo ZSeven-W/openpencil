@@ -470,19 +470,25 @@ final class NativeLoginViewController: UIViewController {
         }
     }
 
-    /// Third-party sign-in stays inside the app: an in-app Safari sheet opens
-    /// the pairing login page deep-linked to the tapped provider (`provider`
-    /// query). The pairing is approved in that sheet and Rust's poll observes
-    /// it, dismissing this whole stack — the sheet included.
+    /// Providers without a native SDK stay inside the app on their own OAuth
+    /// page: the SSO start endpoint 302s straight to the provider's authorize
+    /// screen carrying the pairing, and the callback lands directly on the
+    /// dedicated pairing-approval page — the ZSeven login page never appears.
+    /// The deliberate approve tap is kept so a shared start link cannot
+    /// silently sign a foreign device in.
     private func openProviderLogin(providerID: String?) {
-        var url = verificationURL
-        if let providerID, !providerID.isEmpty,
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = components.queryItems ?? []
-            items.append(URLQueryItem(name: "provider", value: providerID))
-            components.queryItems = items
-            url = components.url ?? url
-        }
+        guard let providerID, !providerID.isEmpty else { return }
+        var components = URLComponents(
+            url: origin.appendingPathComponent(
+                "/api/v1/auth/providers/\(providerID)/start"
+            ),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "channel", value: "web_mobile"),
+            URLQueryItem(name: "device_pairing", value: pairingID),
+        ]
+        guard let url = components?.url else { return }
         statusLabel.text = NSLocalizedString(
             "nativeLogin.browserHint",
             value: "Finish signing in, and you will return automatically.",

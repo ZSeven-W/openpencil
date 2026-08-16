@@ -406,19 +406,22 @@ internal class NativeLoginOverlay(
     }
 
     /**
-     * Third-party sign-in stays inside the app: a Custom Tab opens the
-     * pairing login page deep-linked to the tapped provider (`provider`
-     * query). The pairing is approved in that tab and the engine's poll
-     * observes it, closing this overlay.
+     * Providers without a native SDK stay inside the app on their own OAuth
+     * page: the SSO start endpoint 302s straight to the provider's authorize
+     * screen carrying the pairing, and the callback lands directly on the
+     * dedicated pairing-approval page — the ZSeven login page never appears.
+     * The deliberate approve tap is kept so a shared start link cannot
+     * silently sign a foreign device in.
      */
     private fun openProviderLogin(providerId: String) {
         statusLabel.text = activity.getString(R.string.native_login_browser_hint)
         statusLabel.visibility = View.VISIBLE
-        val base = request?.verificationUrl ?: return
+        val current = request ?: return
         val uri = try {
-            Uri.parse(base)
+            Uri.parse("${current.origin}/api/v1/auth/providers/$providerId/start")
                 .buildUpon()
-                .appendQueryParameter("provider", providerId)
+                .appendQueryParameter("channel", "web_mobile")
+                .appendQueryParameter("device_pairing", current.pairingId)
                 .build()
         } catch (_: Exception) {
             return

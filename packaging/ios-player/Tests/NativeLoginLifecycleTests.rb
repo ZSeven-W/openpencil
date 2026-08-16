@@ -40,14 +40,15 @@ raise "approval success must wait for the engine close action" unless login_sour
 finish = login_source[/func finishFromHost\b.*?\n    \}/m]
 raise "host-driven dismissal missing" unless finish&.include?("dismiss(animated: animated)")
 
-# Third-party providers stay inside the app: an in-app Safari sheet opens the
-# engine-provided verification URL deep-linked to the tapped provider — never
-# an embedded WebView, never an external-browser bounce.
-raise "provider hand-off must reuse verification_uri" unless login_source.include?(
-  "var url = verificationURL"
+# Providers without a native SDK stay inside the app on their own OAuth
+# page: the sheet opens the SSO start endpoint carrying the pairing, and the
+# callback lands on the dedicated approval page — never an embedded WebView,
+# never an external-browser bounce, never the generic login page.
+raise "provider tap must open the provider start endpoint" unless login_source.include?(
+  '"/api/v1/auth/providers/\(providerID)/start"'
 )
-raise "provider tap must deep-link the tapped provider" unless login_source.include?(
-  'URLQueryItem(name: "provider", value: providerID)'
+raise "provider start must carry the pairing" unless login_source.include?(
+  'URLQueryItem(name: "device_pairing", value: pairingID)'
 )
 raise "provider sign-in must stay in-app" unless login_source.include?(
   "present(SFSafariViewController(url: url), animated: true)"
@@ -57,8 +58,8 @@ raise "WebKit must stay out of the login path" if login_source.include?("import 
 # Apple sign-in is SDK-native: the tapped card runs the system
 # AuthenticationServices sheet, exchanges the nonce-bound identity token at
 # the SSO native-login endpoint, then approves the pairing directly. A user
-# cancel returns to the screen; other failures fall back to the in-app web
-# flow.
+# cancel returns to the screen; other failures surface an inline error and
+# never touch a web page.
 raise "apple card must run the native sheet" unless login_source.include?(
   'if providerID == "apple" {'
 )
