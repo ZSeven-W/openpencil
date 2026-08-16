@@ -7,37 +7,75 @@
     "message": "रेंडर हो चुके पेज को कैप्चर करें और उसे संपादन योग्य डिज़ाइन नोड्स के रूप में OpenPencil में आयात करें।",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "पूरा पेज कैप्चर करें" },
-  "pickButton": { "message": "एलिमेंट कैप्चर करें" },
-  "downloadButton": { "message": ".op डाउनलोड करें" },
-  "pickHint": { "message": "कैप्चर करने के लिए किसी एलिमेंट पर क्लिक करें" },
-  "pickCancelHint": { "message": "रद्द करने के लिए Esc दबाएँ" },
-  "endpointLabel": { "message": "OpenPencil का पता" },
+  "captureButton": {
+    "message": "पूरा पेज कैप्चर करें"
+  },
+  "pickButton": {
+    "message": "एलिमेंट कैप्चर करें"
+  },
+  "downloadButton": {
+    "message": ".op डाउनलोड करें"
+  },
+  "pickHint": {
+    "message": "कैप्चर करने के लिए किसी एलिमेंट पर क्लिक करें"
+  },
+  "pickCancelHint": {
+    "message": "रद्द करने के लिए Esc दबाएँ"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil का पता"
+  },
   "endpointHint": {
     "message": "डेस्कटॉप ऐप: सेटिंग्स → MCP → सर्वर शुरू करें (डिफ़ॉल्ट पोर्ट 3100)।"
   },
-  "languageLabel": { "message": "भाषा" },
-  "statusIdle": { "message": "तैयार।" },
-  "statusCapturing": { "message": "पेज कैप्चर किया जा रहा है…" },
-  "statusTransferring": { "message": "स्नैपशॉट भेजा जा रहा है ($1)…" },
-  "statusSending": { "message": "OpenPencil को भेजा जा रहा है…" },
-  "statusImported": { "message": "$1 नोड OpenPencil में आयात किए गए।" },
-  "statusSendingAccount": { "message": "आपके OpenPencil खाते में भेजा जा रहा है…" },
-  "statusSentToAccount": { "message": "आपके OpenPencil खाते में भेजा गया: $1" },
+  "languageLabel": {
+    "message": "भाषा"
+  },
+  "statusIdle": {
+    "message": "तैयार।"
+  },
+  "statusCapturing": {
+    "message": "पेज कैप्चर किया जा रहा है…"
+  },
+  "statusTransferring": {
+    "message": "स्नैपशॉट भेजा जा रहा है ($1)…"
+  },
+  "statusSending": {
+    "message": "OpenPencil को भेजा जा रहा है…"
+  },
+  "statusImported": {
+    "message": "$1 नोड OpenPencil में आयात किए गए।"
+  },
+  "statusSendingAccount": {
+    "message": "आपके OpenPencil खाते में भेजा जा रहा है…"
+  },
+  "statusSentToAccount": {
+    "message": "आपके OpenPencil खाते में भेजा गया: $1"
+  },
   "statusSentLocalFallback": {
     "message": "आपके खाते का सत्र समाप्त हो चुका था, इसलिए यह इस कंप्यूटर के OpenPencil में गया: $1 नोड आयात हुए।"
   },
-  "statusDownloaded": { "message": "$1 सहेजा गया।" },
-  "statusPicked": { "message": "$1 कैप्चर किया गया। $2" },
-  "statusPickCancelled": { "message": "एलिमेंट कैप्चर रद्द कर दिया गया।" },
-  "statusTruncated": {
-    "message": "ध्यान दें: पेज एक्सट्रैक्टर की 20,000 नोड सीमा तक पहुँच गया, इसलिए कैप्चर अधूरा है।"
+  "statusDownloaded": {
+    "message": "$1 सहेजा गया।"
   },
-  "errorNoTab": { "message": "कोई सक्रिय टैब नहीं है।" },
+  "statusPicked": {
+    "message": "$1 कैप्चर किया गया। $2"
+  },
+  "statusPickCancelled": {
+    "message": "एलिमेंट कैप्चर रद्द कर दिया गया।"
+  },
+  "statusTruncated": {
+    "message": "ध्यान दें: पेज एक्सट्रैक्टर की 40,000 नोड सीमा तक पहुँच गया, इसलिए कैप्चर अधूरा है।"
+  },
+  "errorNoTab": {
+    "message": "कोई सक्रिय टैब नहीं है।"
+  },
   "errorRestrictedTab": {
     "message": "Chrome एक्सटेंशन को इस पेज पर चलने की अनुमति नहीं देता। कोई सामान्य http(s) पेज खोलें और फिर से कोशिश करें।"
   },
-  "errorInjection": { "message": "इस टैब में कैप्चर स्क्रिप्ट नहीं चल सकी: $1" },
+  "errorInjection": {
+    "message": "इस टैब में कैप्चर स्क्रिप्ट नहीं चल सकी: $1"
+  },
   "errorNoSnapshot": {
     "message": "एक्सट्रैक्टर ने कोई स्नैपशॉट नहीं बनाया (शायद पेज पर दिखने वाला body नहीं है)।"
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "यह कैप्चर $1 MB से बड़ा है, जिसे OpenPencil का स्नैपशॉट मार्ग स्वीकार नहीं करता। “.op डाउनलोड करें” का उपयोग करें, फिर फ़ाइल को OpenPencil में खोलें"
   },
-  "errorImport": { "message": "OpenPencil ने स्नैपशॉट अस्वीकार कर दिया: $1" },
-  "errorDownload": { "message": "डाउनलोड विफल: $1" },
+  "errorAccountTooLarge": {
+    "message": "यह कैप्चर $1 MB से बड़ा है, जिसे खाते का इनबॉक्स स्वीकार नहीं करता। इसके बजाय इसे इस डिवाइस पर भेजें।"
+  },
+  "errorImport": {
+    "message": "OpenPencil ने स्नैपशॉट अस्वीकार कर दिया: $1"
+  },
+  "errorDownload": {
+    "message": "डाउनलोड विफल: $1"
+  },
   "errorCoreMissing": {
     "message": "यह एक्सटेंशन बनाया नहीं गया है। packages/op-chrome-extension/scripts/build-wasm.sh चलाएँ, फिर एक्सटेंशन कार्ड पर “रीलोड” दबाएँ। ($1)"
   },
@@ -70,14 +115,24 @@
   "errorPickUnavailable": {
     "message": "एलिमेंट कैप्चर उपलब्ध नहीं है: एक्सटेंशन का बैकग्राउंड worker नहीं चल रहा। chrome://extensions में एक्सटेंशन कार्ड पर त्रुटि देखें, build-wasm.sh दोबारा चलाएँ, फिर “रीलोड” दबाएँ। ($1)"
   },
-  "accountSignIn": { "message": "साइन इन करें" },
-  "accountSignOut": { "message": "साइन आउट करें" },
+  "accountSignIn": {
+    "message": "साइन इन करें"
+  },
+  "accountSignOut": {
+    "message": "साइन आउट करें"
+  },
   "accountSignInOpened": {
     "message": "अभी खुले पेज पर साइन इन पूरा करें, फिर यह पॉपअप दोबारा खोलें।"
   },
-  "accountSignedOut": { "message": "आप अपने OpenPencil खाते से साइन आउट हो गए।" },
-  "accountSignOutManual": { "message": "अभी खुले खाता पेज पर साइन आउट पूरा करें।" },
-  "accountUnavailable": { "message": "आपके OpenPencil खाते से संपर्क नहीं हो सका: $1" },
+  "accountSignedOut": {
+    "message": "आप अपने OpenPencil खाते से साइन आउट हो गए।"
+  },
+  "accountSignOutManual": {
+    "message": "अभी खुले खाता पेज पर साइन आउट पूरा करें।"
+  },
+  "accountUnavailable": {
+    "message": "आपके OpenPencil खाते से संपर्क नहीं हो सका: $1"
+  },
   "errorAccountSignedOut": {
     "message": "आपके OpenPencil खाते का सत्र समाप्त हो गया है। दोबारा साइन इन करें, फिर पुनः प्रयास करें।"
   },
@@ -96,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "आपके खाते में बहुत अधिक अपलोड। लगभग $1 सेकंड बाद पुनः प्रयास करें।"
   },
-  "errorAccountRejected": { "message": "आपके OpenPencil खाते ने स्नैपशॉट अस्वीकार कर दिया: $1" },
+  "errorAccountRejected": {
+    "message": "आपके OpenPencil खाते ने स्नैपशॉट अस्वीकार कर दिया: $1"
+  },
   "errorAccountUnavailable": {
     "message": "आपका OpenPencil खाता अभी कैप्चर नहीं ले सकता ($1)। बाद में प्रयास करें, या इस कंप्यूटर के OpenPencil में भेजें।"
   },
-  "regionLabel": { "message": "क्षेत्र" },
-  "regionCn": { "message": "चीन" },
-  "regionGlobal": { "message": "ग्लोबल" },
-  "deliveryLabel": { "message": "यहाँ भेजें" },
-  "deliveryLocal": { "message": "इस कंप्यूटर का OpenPencil" },
-  "deliveryAccount": { "message": "मेरा OpenPencil खाता" }
+  "regionLabel": {
+    "message": "क्षेत्र"
+  },
+  "regionCn": {
+    "message": "चीन"
+  },
+  "regionGlobal": {
+    "message": "ग्लोबल"
+  },
+  "deliveryLabel": {
+    "message": "यहाँ भेजें"
+  },
+  "deliveryLocal": {
+    "message": "इस कंप्यूटर का OpenPencil"
+  },
+  "deliveryAccount": {
+    "message": "मेरा OpenPencil खाता"
+  }
 }

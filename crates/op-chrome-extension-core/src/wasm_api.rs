@@ -119,6 +119,13 @@ pub fn snapshot_too_large(chars: f64) -> bool {
     transfer::snapshot_too_large(chars)
 }
 
+/// Whether a built `/mcp` fallback envelope exceeds the endpoint's 64 MiB
+/// whole-body cap (JSON re-escaping can inflate past the snapshot cap).
+#[wasm_bindgen(js_name = mcpEnvelopeTooLarge)]
+pub fn mcp_envelope_too_large(chars: f64) -> bool {
+    transfer::mcp_envelope_too_large(chars)
+}
+
 /// Classify a reply from `POST /api/import/web-snapshot`. See
 /// [`reply_to_json`] for the shape returned.
 #[wasm_bindgen(js_name = classifyIngestReply)]
@@ -266,6 +273,13 @@ pub fn hub_snapshot_placeholder() -> String {
 #[wasm_bindgen(js_name = hubSnapshotTooLarge)]
 pub fn hub_snapshot_too_large(chars: f64) -> bool {
     hub::snapshot_too_large(chars)
+}
+
+/// The Hub's own body cap, in megabytes (used in the account over-size
+/// message; smaller than the local ingest cap).
+#[wasm_bindgen(js_name = hubMaxSnapshotMb)]
+pub fn hub_max_snapshot_mb() -> u32 {
+    hub::HUB_MAX_SNAPSHOT_MB
 }
 
 /// Milliseconds before an upload to the Hub is abandoned.

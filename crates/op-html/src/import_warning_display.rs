@@ -133,7 +133,7 @@ impl ImportWarning {
         let text = match self {
             Self::EmptyInput => "no importable content: input HTML is empty",
             Self::EmptyBody => "no importable content: input HTML produced an empty body",
-            Self::NodeLimitTruncated => "node limit reached (20000), remaining content dropped",
+            Self::NodeLimitTruncated => "node limit reached (40000), remaining content dropped",
             Self::NodeLimitMapping => "node limit reached while mapping HTML",
             Self::NodeLimitInlineRow => "node limit reached while creating an inline formatting row",
             Self::NodeLimitPseudo => "generated pseudo-elements omitted because the node limit was reached",
@@ -235,7 +235,7 @@ impl ImportWarning {
             Self::TableRowGroupsUnflattened => "CSS un-flattened a table's row groups, so its cells no longer share one column grid and each row's widths are approximated",
             Self::TableIndefiniteWidthApproximated => "a CSS table without a definite width was measured against its containing block, so its column widths are approximate",
             Self::SnapshotTruncated => "browser snapshot was truncated during extraction",
-            Self::SnapshotNodeLimit => "node limit reached (20000), remaining snapshot content dropped",
+            Self::SnapshotNodeLimit => "node limit reached (40000), remaining snapshot content dropped",
             Self::SnapshotInvalidRect => "snapshot node with missing or invalid rect was skipped",
             Self::SnapshotUnknownKind => "snapshot node with unknown kind was skipped",
             Self::SnapshotUnsupportedTransform => "unsupported snapshot transform ignored (only matrix rotation imported)",

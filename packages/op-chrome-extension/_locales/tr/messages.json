@@ -7,37 +7,75 @@
     "message": "İşlenmiş sayfayı yakalayın ve düzenlenebilir tasarım düğümleri olarak OpenPencil’a aktarın.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Tüm sayfayı yakala" },
-  "pickButton": { "message": "Öğe yakala" },
-  "downloadButton": { "message": ".op indir" },
-  "pickHint": { "message": "Yakalamak için bir öğeye tıklayın" },
-  "pickCancelHint": { "message": "İptal için Esc" },
-  "endpointLabel": { "message": "OpenPencil adresi" },
+  "captureButton": {
+    "message": "Tüm sayfayı yakala"
+  },
+  "pickButton": {
+    "message": "Öğe yakala"
+  },
+  "downloadButton": {
+    "message": ".op indir"
+  },
+  "pickHint": {
+    "message": "Yakalamak için bir öğeye tıklayın"
+  },
+  "pickCancelHint": {
+    "message": "İptal için Esc"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil adresi"
+  },
   "endpointHint": {
     "message": "Masaüstü uygulaması: Ayarlar → MCP → sunucuyu başlatın (varsayılan port 3100)."
   },
-  "languageLabel": { "message": "Dil" },
-  "statusIdle": { "message": "Hazır." },
-  "statusCapturing": { "message": "Sayfa yakalanıyor…" },
-  "statusTransferring": { "message": "Anlık görüntü aktarılıyor ($1)…" },
-  "statusSending": { "message": "OpenPencil’a gönderiliyor…" },
-  "statusImported": { "message": "$1 düğüm OpenPencil’a aktarıldı." },
-  "statusSendingAccount": { "message": "OpenPencil hesabınıza gönderiliyor…" },
-  "statusSentToAccount": { "message": "OpenPencil hesabınıza gönderildi: $1" },
+  "languageLabel": {
+    "message": "Dil"
+  },
+  "statusIdle": {
+    "message": "Hazır."
+  },
+  "statusCapturing": {
+    "message": "Sayfa yakalanıyor…"
+  },
+  "statusTransferring": {
+    "message": "Anlık görüntü aktarılıyor ($1)…"
+  },
+  "statusSending": {
+    "message": "OpenPencil’a gönderiliyor…"
+  },
+  "statusImported": {
+    "message": "$1 düğüm OpenPencil’a aktarıldı."
+  },
+  "statusSendingAccount": {
+    "message": "OpenPencil hesabınıza gönderiliyor…"
+  },
+  "statusSentToAccount": {
+    "message": "OpenPencil hesabınıza gönderildi: $1"
+  },
   "statusSentLocalFallback": {
     "message": "Hesap oturumunuzun süresi dolmuştu, bu yüzden bu bilgisayardaki OpenPencil'a gitti: $1 düğüm içe aktarıldı."
   },
-  "statusDownloaded": { "message": "$1 kaydedildi." },
-  "statusPicked": { "message": "$1 yakalandı. $2" },
-  "statusPickCancelled": { "message": "Öğe yakalama iptal edildi." },
-  "statusTruncated": {
-    "message": "Not: Sayfa, çıkarıcının 20.000 düğüm sınırına ulaştı; bu nedenle yakalama eksik."
+  "statusDownloaded": {
+    "message": "$1 kaydedildi."
   },
-  "errorNoTab": { "message": "Etkin sekme yok." },
+  "statusPicked": {
+    "message": "$1 yakalandı. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Öğe yakalama iptal edildi."
+  },
+  "statusTruncated": {
+    "message": "Not: Sayfa, çıkarıcının 40.000 düğüm sınırına ulaştı; bu nedenle yakalama eksik."
+  },
+  "errorNoTab": {
+    "message": "Etkin sekme yok."
+  },
   "errorRestrictedTab": {
     "message": "Chrome, uzantıların bu sayfada çalışmasına izin vermiyor. Normal bir http(s) sayfası açıp yeniden deneyin."
   },
-  "errorInjection": { "message": "Yakalama betiği bu sekmede çalıştırılamadı: $1" },
+  "errorInjection": {
+    "message": "Yakalama betiği bu sekmede çalıştırılamadı: $1"
+  },
   "errorNoSnapshot": {
     "message": "Çıkarıcı hiçbir anlık görüntü üretmedi (sayfada görünür bir body olmayabilir)."
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "Bu yakalama $1 MB’tan büyük ve OpenPencil’ın anlık görüntü yolu bunu reddediyor. “.op indir” kullanın, ardından dosyayı OpenPencil’da açın"
   },
-  "errorImport": { "message": "OpenPencil anlık görüntüyü reddetti: $1" },
-  "errorDownload": { "message": "İndirme başarısız: $1" },
+  "errorAccountTooLarge": {
+    "message": "Bu yakalama $1 MB’tan büyük ve hesabın gelen kutusu bunu reddediyor. Bunun yerine bu cihaza gönderin."
+  },
+  "errorImport": {
+    "message": "OpenPencil anlık görüntüyü reddetti: $1"
+  },
+  "errorDownload": {
+    "message": "İndirme başarısız: $1"
+  },
   "errorCoreMissing": {
     "message": "Bu uzantı derlenmemiş. packages/op-chrome-extension/scripts/build-wasm.sh betiğini çalıştırın, sonra uzantı kartındaki Yeniden Yükle düğmesine basın. ($1)"
   },
@@ -70,14 +115,24 @@
   "errorPickUnavailable": {
     "message": "Öğe yakalama kullanılamıyor: uzantının arka plan worker’ı çalışmıyor. chrome://extensions sayfasındaki uzantı kartında hata olup olmadığını kontrol edin, build-wasm.sh betiğini yeniden çalıştırın, sonra Yeniden Yükle düğmesine basın. ($1)"
   },
-  "accountSignIn": { "message": "Oturum aç" },
-  "accountSignOut": { "message": "Oturumu kapat" },
+  "accountSignIn": {
+    "message": "Oturum aç"
+  },
+  "accountSignOut": {
+    "message": "Oturumu kapat"
+  },
   "accountSignInOpened": {
     "message": "Az önce açılan sayfada oturum açmayı tamamlayın, sonra bu pencereyi yeniden açın."
   },
-  "accountSignedOut": { "message": "OpenPencil hesabınızdan çıkış yapıldı." },
-  "accountSignOutManual": { "message": "Az önce açılan hesap sayfasında çıkışı tamamlayın." },
-  "accountUnavailable": { "message": "OpenPencil hesabınıza ulaşılamadı: $1" },
+  "accountSignedOut": {
+    "message": "OpenPencil hesabınızdan çıkış yapıldı."
+  },
+  "accountSignOutManual": {
+    "message": "Az önce açılan hesap sayfasında çıkışı tamamlayın."
+  },
+  "accountUnavailable": {
+    "message": "OpenPencil hesabınıza ulaşılamadı: $1"
+  },
   "errorAccountSignedOut": {
     "message": "OpenPencil hesap oturumunuzun süresi doldu. Yeniden oturum açıp tekrar deneyin."
   },
@@ -96,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Hesabınıza çok fazla yükleme yapıldı. Yaklaşık $1 saniye sonra tekrar deneyin."
   },
-  "errorAccountRejected": { "message": "OpenPencil hesabınız anlık görüntüyü reddetti: $1" },
+  "errorAccountRejected": {
+    "message": "OpenPencil hesabınız anlık görüntüyü reddetti: $1"
+  },
   "errorAccountUnavailable": {
     "message": "OpenPencil hesabınız şu anda yakalama alamıyor ($1). Daha sonra deneyin veya bu bilgisayardaki OpenPencil'a gönderin."
   },
-  "regionLabel": { "message": "Bölge" },
-  "regionCn": { "message": "Çin" },
-  "regionGlobal": { "message": "Küresel" },
-  "deliveryLabel": { "message": "Gönderilecek yer" },
-  "deliveryLocal": { "message": "Bu bilgisayardaki OpenPencil" },
-  "deliveryAccount": { "message": "OpenPencil hesabım" }
+  "regionLabel": {
+    "message": "Bölge"
+  },
+  "regionCn": {
+    "message": "Çin"
+  },
+  "regionGlobal": {
+    "message": "Küresel"
+  },
+  "deliveryLabel": {
+    "message": "Gönderilecek yer"
+  },
+  "deliveryLocal": {
+    "message": "Bu bilgisayardaki OpenPencil"
+  },
+  "deliveryAccount": {
+    "message": "OpenPencil hesabım"
+  }
 }

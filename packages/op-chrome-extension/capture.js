@@ -21,7 +21,7 @@
  * an extractor result can reach tens of MB (it embeds rasterized images up to
  * 24 MB) and `chrome.scripting.executeScript` has to structured-clone the
  * result across a process boundary. 4 MiB per hop stays far below any IPC
- * limit while keeping the number of round trips small (8 for a 32 MB page).
+ * limit while keeping the number of round trips small (12 for a maximum 48 MB page).
  * Which slice to ask for, whether the answer was acceptable, whether the
  * total adds up, and whether the payload carries the extractor's `truncated`
  * flag are all decided by the Rust core's `ChunkPlan`; this file only moves

@@ -459,7 +459,7 @@ pub(crate) fn wrap_imported_document(imported: HtmlImportResult) -> HtmlDocument
     )
 }
 
-pub(crate) const MAX_OUTPUT_NODES: usize = 20_000;
+pub(crate) const MAX_OUTPUT_NODES: usize = 40_000;
 
 fn truncate_dom_nodes(nodes: &mut Vec<dom::DomNode>, remaining: &mut usize) -> bool {
     let original_len = nodes.len();

@@ -287,8 +287,11 @@ function accountFailureMessage(code, detail, error) {
       };
     case 'rateLimited':
       return accountRateLimitMessage(error.retryAfterSeconds, detail);
+    // NOT `errorTooLarge`: the hub's 32 MiB cap is smaller than the local
+    // ingest cap, so a capture in between imports fine locally — the local
+    // message's "download the file" remedy would be wrong here.
     case 'tooLarge':
-      return { key: 'errorTooLarge', args: [detail] };
+      return { key: 'errorAccountTooLarge', args: [detail] };
     case 'rejected':
       return { key: 'errorAccountRejected', args: [detail] };
     case 'unavailable':

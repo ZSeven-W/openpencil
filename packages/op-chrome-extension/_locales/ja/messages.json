@@ -7,35 +7,81 @@
     "message": "レンダリングされたページをキャプチャし、編集可能なデザインノードとして OpenPencil にインポートします。",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "ページ全体をキャプチャ" },
-  "pickButton": { "message": "要素をキャプチャ" },
-  "downloadButton": { "message": ".op をダウンロード" },
-  "pickHint": { "message": "キャプチャする要素をクリックしてください" },
-  "pickCancelHint": { "message": "Esc でキャンセル" },
-  "endpointLabel": { "message": "OpenPencil の接続先" },
-  "endpointHint": { "message": "デスクトップアプリ: 設定 → MCP → サーバーを起動（既定のポートは 3100）。" },
-  "languageLabel": { "message": "言語" },
-  "statusIdle": { "message": "準備完了。" },
-  "statusCapturing": { "message": "ページをキャプチャしています…" },
-  "statusTransferring": { "message": "スナップショットを転送しています（$1）…" },
-  "statusSending": { "message": "OpenPencil に送信しています…" },
-  "statusImported": { "message": "$1 個のノードを OpenPencil にインポートしました。" },
-  "statusSendingAccount": { "message": "アカウントに送信しています…" },
-  "statusSentToAccount": { "message": "アカウントに送信しました: $1" },
+  "captureButton": {
+    "message": "ページ全体をキャプチャ"
+  },
+  "pickButton": {
+    "message": "要素をキャプチャ"
+  },
+  "downloadButton": {
+    "message": ".op をダウンロード"
+  },
+  "pickHint": {
+    "message": "キャプチャする要素をクリックしてください"
+  },
+  "pickCancelHint": {
+    "message": "Esc でキャンセル"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil の接続先"
+  },
+  "endpointHint": {
+    "message": "デスクトップアプリ: 設定 → MCP → サーバーを起動（既定のポートは 3100）。"
+  },
+  "languageLabel": {
+    "message": "言語"
+  },
+  "statusIdle": {
+    "message": "準備完了。"
+  },
+  "statusCapturing": {
+    "message": "ページをキャプチャしています…"
+  },
+  "statusTransferring": {
+    "message": "スナップショットを転送しています（$1）…"
+  },
+  "statusSending": {
+    "message": "OpenPencil に送信しています…"
+  },
+  "statusImported": {
+    "message": "$1 個のノードを OpenPencil にインポートしました。"
+  },
+  "statusSendingAccount": {
+    "message": "アカウントに送信しています…"
+  },
+  "statusSentToAccount": {
+    "message": "アカウントに送信しました: $1"
+  },
   "statusSentLocalFallback": {
     "message": "アカウントのセッションが期限切れだったため、このパソコンの OpenPencil に送信しました: $1 個のノードをインポートしました。"
   },
-  "statusDownloaded": { "message": "$1 を保存しました。" },
-  "statusPicked": { "message": "$1 をキャプチャしました。$2" },
-  "statusPickCancelled": { "message": "要素のキャプチャをキャンセルしました。" },
-  "statusTruncated": { "message": "注意: ページが抽出ツールの 20,000 ノード上限に達したため、キャプチャは一部のみです。" },
-  "errorNoTab": { "message": "アクティブなタブがありません。" },
+  "statusDownloaded": {
+    "message": "$1 を保存しました。"
+  },
+  "statusPicked": {
+    "message": "$1 をキャプチャしました。$2"
+  },
+  "statusPickCancelled": {
+    "message": "要素のキャプチャをキャンセルしました。"
+  },
+  "statusTruncated": {
+    "message": "注意: ページが抽出ツールの 40,000 ノード上限に達したため、キャプチャは一部のみです。"
+  },
+  "errorNoTab": {
+    "message": "アクティブなタブがありません。"
+  },
   "errorRestrictedTab": {
     "message": "Chrome はこのページでの拡張機能の実行を許可していません。通常の http(s) ページを開いてもう一度お試しください。"
   },
-  "errorInjection": { "message": "このタブでキャプチャスクリプトを実行できませんでした: $1" },
-  "errorNoSnapshot": { "message": "抽出ツールがスナップショットを生成しませんでした（ページに表示可能な body がない可能性があります）。" },
-  "errorChunkLost": { "message": "キャプチャしたスナップショットが転送中に失われました（ページが遷移した可能性があります）。もう一度お試しください。" },
+  "errorInjection": {
+    "message": "このタブでキャプチャスクリプトを実行できませんでした: $1"
+  },
+  "errorNoSnapshot": {
+    "message": "抽出ツールがスナップショットを生成しませんでした（ページに表示可能な body がない可能性があります）。"
+  },
+  "errorChunkLost": {
+    "message": "キャプチャしたスナップショットが転送中に失われました（ページが遷移した可能性があります）。もう一度お試しください。"
+  },
   "errorEndpoint": {
     "message": "接続先はポート付きのループバックアドレスである必要があります — 127.0.0.1:3100、localhost:3100、または [::1]:3100。"
   },
@@ -51,8 +97,15 @@
   "errorTooLarge": {
     "message": "このキャプチャは $1 MB を超えており、OpenPencil のスナップショット受け口が受け付けません。「.op をダウンロード」してから、そのファイルを OpenPencil で開いてください"
   },
-  "errorImport": { "message": "OpenPencil がスナップショットを拒否しました: $1" },
-  "errorDownload": { "message": "ダウンロードに失敗しました: $1" },
+  "errorAccountTooLarge": {
+    "message": "このキャプチャは $1 MB を超えており、アカウントの受信箱が受け付けません。代わりにこのデバイスへ送信してください。"
+  },
+  "errorImport": {
+    "message": "OpenPencil がスナップショットを拒否しました: $1"
+  },
+  "errorDownload": {
+    "message": "ダウンロードに失敗しました: $1"
+  },
   "errorCoreMissing": {
     "message": "この拡張機能はまだビルドされていません。packages/op-chrome-extension/scripts/build-wasm.sh を実行してから、拡張機能カードの「再読み込み」を押してください。（$1）"
   },
@@ -62,30 +115,64 @@
   "errorPickUnavailable": {
     "message": "要素のキャプチャは利用できません: 拡張機能のバックグラウンド worker が実行されていません。chrome://extensions の拡張機能カードでエラーを確認し、build-wasm.sh を再実行してから「再読み込み」を押してください。（$1）"
   },
-  "accountSignIn": { "message": "ログイン" },
-  "accountSignOut": { "message": "ログアウト" },
-  "accountSignInOpened": { "message": "開いたページでログインを完了してから、このポップアップを開き直してください。" },
-  "accountSignedOut": { "message": "OpenPencil アカウントからログアウトしました。" },
-  "accountSignOutManual": { "message": "開いたアカウントページでログアウトを完了してください。" },
-  "accountUnavailable": { "message": "OpenPencil アカウントに接続できませんでした: $1" },
-  "errorAccountSignedOut": { "message": "OpenPencil アカウントのセッションが期限切れです。もう一度サインインしてからお試しください。" },
+  "accountSignIn": {
+    "message": "ログイン"
+  },
+  "accountSignOut": {
+    "message": "ログアウト"
+  },
+  "accountSignInOpened": {
+    "message": "開いたページでログインを完了してから、このポップアップを開き直してください。"
+  },
+  "accountSignedOut": {
+    "message": "OpenPencil アカウントからログアウトしました。"
+  },
+  "accountSignOutManual": {
+    "message": "開いたアカウントページでログアウトを完了してください。"
+  },
+  "accountUnavailable": {
+    "message": "OpenPencil アカウントに接続できませんでした: $1"
+  },
+  "errorAccountSignedOut": {
+    "message": "OpenPencil アカウントのセッションが期限切れです。もう一度サインインしてからお試しください。"
+  },
   "errorAccountForbidden": {
     "message": "ハブがこのアップロードの送信元またはセッショントークンを拒否しました。もう一度サインインしてからお試しください。($1)"
   },
   "errorAccountQuota": {
     "message": "アカウントの受信ボックスがいっぱいです。保存できるのは最大 $1 件、$2 MB までです。アカウントページでいくつか削除してから再試行してください。($3)"
   },
-  "errorAccountRateLimited": { "message": "アカウントへのアップロードが多すぎます。しばらくしてからお試しください。($1)" },
-  "errorAccountRateLimitedMinutes": { "message": "アカウントへのアップロードが多すぎます。約 $1 分後にお試しください。" },
-  "errorAccountRateLimitedSeconds": { "message": "アカウントへのアップロードが多すぎます。約 $1 秒後にお試しください。" },
-  "errorAccountRejected": { "message": "OpenPencil アカウントがスナップショットを拒否しました: $1" },
+  "errorAccountRateLimited": {
+    "message": "アカウントへのアップロードが多すぎます。しばらくしてからお試しください。($1)"
+  },
+  "errorAccountRateLimitedMinutes": {
+    "message": "アカウントへのアップロードが多すぎます。約 $1 分後にお試しください。"
+  },
+  "errorAccountRateLimitedSeconds": {
+    "message": "アカウントへのアップロードが多すぎます。約 $1 秒後にお試しください。"
+  },
+  "errorAccountRejected": {
+    "message": "OpenPencil アカウントがスナップショットを拒否しました: $1"
+  },
   "errorAccountUnavailable": {
     "message": "OpenPencil アカウントは現在キャプチャを受け取れません ($1)。しばらくしてから、またはこのパソコンの OpenPencil に送信してください。"
   },
-  "regionLabel": { "message": "リージョン" },
-  "regionCn": { "message": "中国" },
-  "regionGlobal": { "message": "グローバル" },
-  "deliveryLabel": { "message": "送信先" },
-  "deliveryLocal": { "message": "このパソコンの OpenPencil" },
-  "deliveryAccount": { "message": "自分の OpenPencil アカウント" }
+  "regionLabel": {
+    "message": "リージョン"
+  },
+  "regionCn": {
+    "message": "中国"
+  },
+  "regionGlobal": {
+    "message": "グローバル"
+  },
+  "deliveryLabel": {
+    "message": "送信先"
+  },
+  "deliveryLocal": {
+    "message": "このパソコンの OpenPencil"
+  },
+  "deliveryAccount": {
+    "message": "自分の OpenPencil アカウント"
+  }
 }

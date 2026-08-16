@@ -7,44 +7,105 @@
     "message": "擷取網頁算繪後的實際樣貌，並以可編輯的設計節點匯入 OpenPencil。",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "擷取整頁" },
-  "pickButton": { "message": "擷取元素" },
-  "downloadButton": { "message": "下載 .op" },
-  "pickHint": { "message": "點選要擷取的元素" },
-  "pickCancelHint": { "message": "按 Esc 取消" },
-  "endpointLabel": { "message": "OpenPencil 位址" },
-  "endpointHint": { "message": "桌面版：設定 → MCP → 啟動伺服器（預設連接埠 3100）。" },
-  "languageLabel": { "message": "語言" },
-  "statusIdle": { "message": "就緒。" },
-  "statusCapturing": { "message": "正在擷取頁面…" },
-  "statusTransferring": { "message": "正在傳輸快照（$1）…" },
-  "statusSending": { "message": "正在傳送到 OpenPencil…" },
-  "statusImported": { "message": "已將 $1 個節點匯入 OpenPencil。" },
-  "statusSendingAccount": { "message": "正在傳送到我的帳號…" },
-  "statusSentToAccount": { "message": "已傳送到我的帳號：$1" },
-  "statusSentLocalFallback": { "message": "帳號工作階段已過期，已改為傳送到本機的 OpenPencil：匯入 $1 個節點。" },
-  "statusDownloaded": { "message": "已儲存 $1。" },
-  "statusPicked": { "message": "已擷取 $1。$2" },
-  "statusPickCancelled": { "message": "已取消元素擷取。" },
-  "statusTruncated": { "message": "提示：頁面觸發了擷取器的 20000 節點上限，本次擷取並不完整。" },
-  "errorNoTab": { "message": "沒有作用中的分頁。" },
-  "errorRestrictedTab": { "message": "Chrome 不允許擴充功能在此頁面執行。請開啟一般的 http(s) 頁面後再試一次。" },
-  "errorInjection": { "message": "無法在此分頁執行擷取指令碼：$1" },
-  "errorNoSnapshot": { "message": "擷取器沒有產生快照（頁面可能沒有可見的 body）。" },
-  "errorChunkLost": { "message": "快照在傳輸途中遺失（頁面可能已跳轉）。請再試一次。" },
-  "errorEndpoint": { "message": "位址必須是本機回送位址加連接埠——127.0.0.1:3100、localhost:3100 或 [::1]:3100。" },
+  "captureButton": {
+    "message": "擷取整頁"
+  },
+  "pickButton": {
+    "message": "擷取元素"
+  },
+  "downloadButton": {
+    "message": "下載 .op"
+  },
+  "pickHint": {
+    "message": "點選要擷取的元素"
+  },
+  "pickCancelHint": {
+    "message": "按 Esc 取消"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil 位址"
+  },
+  "endpointHint": {
+    "message": "桌面版：設定 → MCP → 啟動伺服器（預設連接埠 3100）。"
+  },
+  "languageLabel": {
+    "message": "語言"
+  },
+  "statusIdle": {
+    "message": "就緒。"
+  },
+  "statusCapturing": {
+    "message": "正在擷取頁面…"
+  },
+  "statusTransferring": {
+    "message": "正在傳輸快照（$1）…"
+  },
+  "statusSending": {
+    "message": "正在傳送到 OpenPencil…"
+  },
+  "statusImported": {
+    "message": "已將 $1 個節點匯入 OpenPencil。"
+  },
+  "statusSendingAccount": {
+    "message": "正在傳送到我的帳號…"
+  },
+  "statusSentToAccount": {
+    "message": "已傳送到我的帳號：$1"
+  },
+  "statusSentLocalFallback": {
+    "message": "帳號工作階段已過期，已改為傳送到本機的 OpenPencil：匯入 $1 個節點。"
+  },
+  "statusDownloaded": {
+    "message": "已儲存 $1。"
+  },
+  "statusPicked": {
+    "message": "已擷取 $1。$2"
+  },
+  "statusPickCancelled": {
+    "message": "已取消元素擷取。"
+  },
+  "statusTruncated": {
+    "message": "提示：頁面觸發了擷取器的 40000 節點上限，本次擷取並不完整。"
+  },
+  "errorNoTab": {
+    "message": "沒有作用中的分頁。"
+  },
+  "errorRestrictedTab": {
+    "message": "Chrome 不允許擴充功能在此頁面執行。請開啟一般的 http(s) 頁面後再試一次。"
+  },
+  "errorInjection": {
+    "message": "無法在此分頁執行擷取指令碼：$1"
+  },
+  "errorNoSnapshot": {
+    "message": "擷取器沒有產生快照（頁面可能沒有可見的 body）。"
+  },
+  "errorChunkLost": {
+    "message": "快照在傳輸途中遺失（頁面可能已跳轉）。請再試一次。"
+  },
+  "errorEndpoint": {
+    "message": "位址必須是本機回送位址加連接埠——127.0.0.1:3100、localhost:3100 或 [::1]:3100。"
+  },
   "errorOffline": {
     "message": "無法連線到 $1。請啟動 OpenPencil 桌面版並在 設定 → MCP 中啟動伺服器，或執行：openpencil-desktop --serve-web 3100"
   },
-  "errorTimeout": { "message": "$1 已接受連線，但 $2 秒內沒有回應。應用程式可能正忙或已卡住，請檢查後再試一次。" },
+  "errorTimeout": {
+    "message": "$1 已接受連線，但 $2 秒內沒有回應。應用程式可能正忙或已卡住，請檢查後再試一次。"
+  },
   "errorNoIngress": {
     "message": "此 OpenPencil 版本沒有擴充功能入口（$1）。請更新應用程式，或使用「下載 .op」後在 OpenPencil 中開啟該檔案"
   },
   "errorTooLarge": {
     "message": "本次擷取超過 $1 MB，超出 OpenPencil 快照入口的上限。請使用「下載 .op」，然後在 OpenPencil 中開啟該檔案"
   },
-  "errorImport": { "message": "OpenPencil 拒絕了這份快照：$1" },
-  "errorDownload": { "message": "下載失敗：$1" },
+  "errorAccountTooLarge": {
+    "message": "本次擷取超過 $1 MB，超出帳號收件匣的上限。請改為傳送到本裝置。"
+  },
+  "errorImport": {
+    "message": "OpenPencil 拒絕了這份快照：$1"
+  },
+  "errorDownload": {
+    "message": "下載失敗：$1"
+  },
   "errorCoreMissing": {
     "message": "擴充功能尚未建置。請執行 packages/op-chrome-extension/scripts/build-wasm.sh，然後在擴充功能卡片上按「重新載入」。（$1）"
   },
@@ -54,24 +115,64 @@
   "errorPickUnavailable": {
     "message": "無法進行元素擷取：擴充功能的背景 worker 沒有執行。請在 chrome://extensions 的擴充功能卡片上查看錯誤，重新執行 build-wasm.sh 後按「重新載入」。（$1）"
   },
-  "accountSignIn": { "message": "登入" },
-  "accountSignOut": { "message": "登出" },
-  "accountSignInOpened": { "message": "請在剛開啟的頁面中完成登入，然後重新開啟此彈出視窗。" },
-  "accountSignedOut": { "message": "已登出 OpenPencil 帳號。" },
-  "accountSignOutManual": { "message": "請在剛開啟的帳號頁面中完成登出。" },
-  "accountUnavailable": { "message": "無法連線到你的 OpenPencil 帳號：$1" },
-  "errorAccountSignedOut": { "message": "OpenPencil 帳號工作階段已過期。請重新登入後再試一次。" },
-  "errorAccountForbidden": { "message": "Hub 拒絕了這次上傳的來源或工作階段權杖。請重新登入後再試一次。($1)" },
-  "errorAccountQuota": { "message": "帳號收件匣已滿——最多保存 $1 份快照或 $2 MB。請先在帳號頁面刪除一些，然後重試。($3)" },
-  "errorAccountRateLimited": { "message": "上傳到帳號的次數過多，請稍後再試。($1)" },
-  "errorAccountRateLimitedMinutes": { "message": "上傳到帳號的次數過多，請約 $1 分鐘後再試。" },
-  "errorAccountRateLimitedSeconds": { "message": "上傳到帳號的次數過多，請約 $1 秒後再試。" },
-  "errorAccountRejected": { "message": "OpenPencil 帳號拒絕了這份快照：$1" },
-  "errorAccountUnavailable": { "message": "OpenPencil 帳號目前無法接收擷取（$1）。請稍後再試，或改傳到本機的 OpenPencil。" },
-  "regionLabel": { "message": "區域" },
-  "regionCn": { "message": "中國" },
-  "regionGlobal": { "message": "全球" },
-  "deliveryLabel": { "message": "傳送至" },
-  "deliveryLocal": { "message": "本機的 OpenPencil" },
-  "deliveryAccount": { "message": "我的 OpenPencil 帳號" }
+  "accountSignIn": {
+    "message": "登入"
+  },
+  "accountSignOut": {
+    "message": "登出"
+  },
+  "accountSignInOpened": {
+    "message": "請在剛開啟的頁面中完成登入，然後重新開啟此彈出視窗。"
+  },
+  "accountSignedOut": {
+    "message": "已登出 OpenPencil 帳號。"
+  },
+  "accountSignOutManual": {
+    "message": "請在剛開啟的帳號頁面中完成登出。"
+  },
+  "accountUnavailable": {
+    "message": "無法連線到你的 OpenPencil 帳號：$1"
+  },
+  "errorAccountSignedOut": {
+    "message": "OpenPencil 帳號工作階段已過期。請重新登入後再試一次。"
+  },
+  "errorAccountForbidden": {
+    "message": "Hub 拒絕了這次上傳的來源或工作階段權杖。請重新登入後再試一次。($1)"
+  },
+  "errorAccountQuota": {
+    "message": "帳號收件匣已滿——最多保存 $1 份快照或 $2 MB。請先在帳號頁面刪除一些，然後重試。($3)"
+  },
+  "errorAccountRateLimited": {
+    "message": "上傳到帳號的次數過多，請稍後再試。($1)"
+  },
+  "errorAccountRateLimitedMinutes": {
+    "message": "上傳到帳號的次數過多，請約 $1 分鐘後再試。"
+  },
+  "errorAccountRateLimitedSeconds": {
+    "message": "上傳到帳號的次數過多，請約 $1 秒後再試。"
+  },
+  "errorAccountRejected": {
+    "message": "OpenPencil 帳號拒絕了這份快照：$1"
+  },
+  "errorAccountUnavailable": {
+    "message": "OpenPencil 帳號目前無法接收擷取（$1）。請稍後再試，或改傳到本機的 OpenPencil。"
+  },
+  "regionLabel": {
+    "message": "區域"
+  },
+  "regionCn": {
+    "message": "中國"
+  },
+  "regionGlobal": {
+    "message": "全球"
+  },
+  "deliveryLabel": {
+    "message": "傳送至"
+  },
+  "deliveryLocal": {
+    "message": "本機的 OpenPencil"
+  },
+  "deliveryAccount": {
+    "message": "我的 OpenPencil 帳號"
+  }
 }

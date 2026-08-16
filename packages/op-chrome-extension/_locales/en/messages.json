@@ -7,37 +7,75 @@
     "message": "Capture the rendered page and import it into OpenPencil as editable design nodes.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Capture full page" },
-  "pickButton": { "message": "Capture element" },
-  "downloadButton": { "message": "Download .op" },
-  "pickHint": { "message": "Click an element to capture it" },
-  "pickCancelHint": { "message": "Esc to cancel" },
-  "endpointLabel": { "message": "OpenPencil endpoint" },
+  "captureButton": {
+    "message": "Capture full page"
+  },
+  "pickButton": {
+    "message": "Capture element"
+  },
+  "downloadButton": {
+    "message": "Download .op"
+  },
+  "pickHint": {
+    "message": "Click an element to capture it"
+  },
+  "pickCancelHint": {
+    "message": "Esc to cancel"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil endpoint"
+  },
   "endpointHint": {
     "message": "Desktop app: Settings → MCP → start the server (default port 3100)."
   },
-  "languageLabel": { "message": "Language" },
-  "statusIdle": { "message": "Ready." },
-  "statusCapturing": { "message": "Capturing the page…" },
-  "statusTransferring": { "message": "Transferring snapshot ($1)…" },
-  "statusSending": { "message": "Sending to OpenPencil…" },
-  "statusImported": { "message": "Imported $1 nodes into OpenPencil." },
-  "statusSendingAccount": { "message": "Sending to your OpenPencil account…" },
-  "statusSentToAccount": { "message": "Sent to your OpenPencil account: $1" },
+  "languageLabel": {
+    "message": "Language"
+  },
+  "statusIdle": {
+    "message": "Ready."
+  },
+  "statusCapturing": {
+    "message": "Capturing the page…"
+  },
+  "statusTransferring": {
+    "message": "Transferring snapshot ($1)…"
+  },
+  "statusSending": {
+    "message": "Sending to OpenPencil…"
+  },
+  "statusImported": {
+    "message": "Imported $1 nodes into OpenPencil."
+  },
+  "statusSendingAccount": {
+    "message": "Sending to your OpenPencil account…"
+  },
+  "statusSentToAccount": {
+    "message": "Sent to your OpenPencil account: $1"
+  },
   "statusSentLocalFallback": {
     "message": "Your account session had expired, so this went to the OpenPencil on this computer: $1 nodes imported."
   },
-  "statusDownloaded": { "message": "Saved $1." },
-  "statusPicked": { "message": "Captured $1. $2" },
-  "statusPickCancelled": { "message": "Element capture cancelled." },
-  "statusTruncated": {
-    "message": "Note: the page hit the extractor's 20,000-node cap, so the capture is partial."
+  "statusDownloaded": {
+    "message": "Saved $1."
   },
-  "errorNoTab": { "message": "No active tab." },
+  "statusPicked": {
+    "message": "Captured $1. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Element capture cancelled."
+  },
+  "statusTruncated": {
+    "message": "Note: the page hit the extractor's 40,000-node cap, so the capture is partial."
+  },
+  "errorNoTab": {
+    "message": "No active tab."
+  },
   "errorRestrictedTab": {
     "message": "Chrome does not allow extensions to run on this page. Open a normal http(s) page and try again."
   },
-  "errorInjection": { "message": "Could not run the capture script in this tab: $1" },
+  "errorInjection": {
+    "message": "Could not run the capture script in this tab: $1"
+  },
   "errorNoSnapshot": {
     "message": "The extractor produced no snapshot (the page may have no visible body)."
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "This capture is larger than $1 MB, which OpenPencil's snapshot route refuses. Use Download .op, then open the file in OpenPencil."
   },
-  "errorImport": { "message": "OpenPencil refused the snapshot: $1" },
-  "errorDownload": { "message": "Download failed: $1" },
+  "errorAccountTooLarge": {
+    "message": "This capture is larger than $1 MB, which the account inbox refuses. Deliver it to this device instead."
+  },
+  "errorImport": {
+    "message": "OpenPencil refused the snapshot: $1"
+  },
+  "errorDownload": {
+    "message": "Download failed: $1"
+  },
   "errorCoreMissing": {
     "message": "This extension has not been built. Run packages/op-chrome-extension/scripts/build-wasm.sh, then hit Reload on the extension card. ($1)"
   },
@@ -70,14 +115,24 @@
   "errorPickUnavailable": {
     "message": "Element capture is unavailable: the extension's background worker is not running. Check the extension card in chrome://extensions for an error, re-run build-wasm.sh, then hit Reload. ($1)"
   },
-  "accountSignIn": { "message": "Sign in" },
-  "accountSignOut": { "message": "Sign out" },
+  "accountSignIn": {
+    "message": "Sign in"
+  },
+  "accountSignOut": {
+    "message": "Sign out"
+  },
   "accountSignInOpened": {
     "message": "Finish signing in on the page that just opened, then reopen this popup."
   },
-  "accountSignedOut": { "message": "Signed out of your OpenPencil account." },
-  "accountSignOutManual": { "message": "Finish signing out on the account page that just opened." },
-  "accountUnavailable": { "message": "Your OpenPencil account could not be reached: $1" },
+  "accountSignedOut": {
+    "message": "Signed out of your OpenPencil account."
+  },
+  "accountSignOutManual": {
+    "message": "Finish signing out on the account page that just opened."
+  },
+  "accountUnavailable": {
+    "message": "Your OpenPencil account could not be reached: $1"
+  },
   "errorAccountSignedOut": {
     "message": "Your OpenPencil account session has expired. Sign in again, then try once more."
   },
@@ -96,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Too many uploads to your account. Try again in about $1 seconds."
   },
-  "errorAccountRejected": { "message": "Your OpenPencil account refused the snapshot: $1" },
+  "errorAccountRejected": {
+    "message": "Your OpenPencil account refused the snapshot: $1"
+  },
   "errorAccountUnavailable": {
     "message": "Your OpenPencil account cannot accept captures right now ($1). Try again later, or send to the OpenPencil on this computer."
   },
-  "regionLabel": { "message": "Region" },
-  "regionCn": { "message": "China" },
-  "regionGlobal": { "message": "Global" },
-  "deliveryLabel": { "message": "Send to" },
-  "deliveryLocal": { "message": "OpenPencil on this computer" },
-  "deliveryAccount": { "message": "My OpenPencil account" }
+  "regionLabel": {
+    "message": "Region"
+  },
+  "regionCn": {
+    "message": "China"
+  },
+  "regionGlobal": {
+    "message": "Global"
+  },
+  "deliveryLabel": {
+    "message": "Send to"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil on this computer"
+  },
+  "deliveryAccount": {
+    "message": "My OpenPencil account"
+  }
 }

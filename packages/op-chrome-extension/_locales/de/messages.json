@@ -7,33 +7,69 @@
     "message": "Erfasst die gerenderte Seite und importiert sie als bearbeitbare Design-Knoten in OpenPencil.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Ganze Seite erfassen" },
-  "pickButton": { "message": "Element erfassen" },
-  "downloadButton": { "message": ".op herunterladen" },
-  "pickHint": { "message": "Klicke auf ein Element, um es zu erfassen" },
-  "pickCancelHint": { "message": "Esc zum Abbrechen" },
-  "endpointLabel": { "message": "OpenPencil-Adresse" },
+  "captureButton": {
+    "message": "Ganze Seite erfassen"
+  },
+  "pickButton": {
+    "message": "Element erfassen"
+  },
+  "downloadButton": {
+    "message": ".op herunterladen"
+  },
+  "pickHint": {
+    "message": "Klicke auf ein Element, um es zu erfassen"
+  },
+  "pickCancelHint": {
+    "message": "Esc zum Abbrechen"
+  },
+  "endpointLabel": {
+    "message": "OpenPencil-Adresse"
+  },
   "endpointHint": {
     "message": "Desktop-App: Einstellungen → MCP → Server starten (Standardport 3100)."
   },
-  "languageLabel": { "message": "Sprache" },
-  "statusIdle": { "message": "Bereit." },
-  "statusCapturing": { "message": "Seite wird erfasst…" },
-  "statusTransferring": { "message": "Momentaufnahme wird übertragen ($1)…" },
-  "statusSending": { "message": "Wird an OpenPencil gesendet…" },
-  "statusImported": { "message": "$1 Knoten in OpenPencil importiert." },
-  "statusSendingAccount": { "message": "Wird an dein OpenPencil-Konto gesendet…" },
-  "statusSentToAccount": { "message": "An dein OpenPencil-Konto gesendet: $1" },
+  "languageLabel": {
+    "message": "Sprache"
+  },
+  "statusIdle": {
+    "message": "Bereit."
+  },
+  "statusCapturing": {
+    "message": "Seite wird erfasst…"
+  },
+  "statusTransferring": {
+    "message": "Momentaufnahme wird übertragen ($1)…"
+  },
+  "statusSending": {
+    "message": "Wird an OpenPencil gesendet…"
+  },
+  "statusImported": {
+    "message": "$1 Knoten in OpenPencil importiert."
+  },
+  "statusSendingAccount": {
+    "message": "Wird an dein OpenPencil-Konto gesendet…"
+  },
+  "statusSentToAccount": {
+    "message": "An dein OpenPencil-Konto gesendet: $1"
+  },
   "statusSentLocalFallback": {
     "message": "Deine Kontositzung war abgelaufen, daher ging die Aufnahme an das OpenPencil auf diesem Computer: $1 Knoten importiert."
   },
-  "statusDownloaded": { "message": "$1 gespeichert." },
-  "statusPicked": { "message": "$1 erfasst. $2" },
-  "statusPickCancelled": { "message": "Elementerfassung abgebrochen." },
-  "statusTruncated": {
-    "message": "Hinweis: Die Seite hat das Limit von 20.000 Knoten des Extraktors erreicht, die Erfassung ist daher unvollständig."
+  "statusDownloaded": {
+    "message": "$1 gespeichert."
   },
-  "errorNoTab": { "message": "Kein aktiver Tab." },
+  "statusPicked": {
+    "message": "$1 erfasst. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Elementerfassung abgebrochen."
+  },
+  "statusTruncated": {
+    "message": "Hinweis: Die Seite hat das Limit von 40.000 Knoten des Extraktors erreicht, die Erfassung ist daher unvollständig."
+  },
+  "errorNoTab": {
+    "message": "Kein aktiver Tab."
+  },
   "errorRestrictedTab": {
     "message": "Chrome erlaubt Erweiterungen auf dieser Seite nicht. Öffne eine normale http(s)-Seite und versuche es erneut."
   },
@@ -61,8 +97,15 @@
   "errorTooLarge": {
     "message": "Diese Erfassung ist größer als $1 MB und wird von OpenPencils Momentaufnahme-Route abgelehnt. Nutze „.op herunterladen“ und öffne dann die Datei in OpenPencil"
   },
-  "errorImport": { "message": "OpenPencil hat die Momentaufnahme abgelehnt: $1" },
-  "errorDownload": { "message": "Download fehlgeschlagen: $1" },
+  "errorAccountTooLarge": {
+    "message": "Diese Erfassung ist größer als $1 MB und wird vom Konto-Posteingang abgelehnt. Sende sie stattdessen an dieses Gerät."
+  },
+  "errorImport": {
+    "message": "OpenPencil hat die Momentaufnahme abgelehnt: $1"
+  },
+  "errorDownload": {
+    "message": "Download fehlgeschlagen: $1"
+  },
   "errorCoreMissing": {
     "message": "Diese Erweiterung wurde nicht gebaut. Führe packages/op-chrome-extension/scripts/build-wasm.sh aus und klicke dann auf der Erweiterungskarte auf Aktualisieren. ($1)"
   },
@@ -72,16 +115,24 @@
   "errorPickUnavailable": {
     "message": "Elementerfassung ist nicht verfügbar: Der Hintergrund-Worker der Erweiterung läuft nicht. Prüfe die Erweiterungskarte in chrome://extensions auf einen Fehler, führe build-wasm.sh erneut aus und klicke dann auf Aktualisieren. ($1)"
   },
-  "accountSignIn": { "message": "Anmelden" },
-  "accountSignOut": { "message": "Abmelden" },
+  "accountSignIn": {
+    "message": "Anmelden"
+  },
+  "accountSignOut": {
+    "message": "Abmelden"
+  },
   "accountSignInOpened": {
     "message": "Schließe die Anmeldung auf der soeben geöffneten Seite ab und öffne dieses Fenster erneut."
   },
-  "accountSignedOut": { "message": "Von deinem OpenPencil-Konto abgemeldet." },
+  "accountSignedOut": {
+    "message": "Von deinem OpenPencil-Konto abgemeldet."
+  },
   "accountSignOutManual": {
     "message": "Schließe die Abmeldung auf der soeben geöffneten Kontoseite ab."
   },
-  "accountUnavailable": { "message": "Dein OpenPencil-Konto ist nicht erreichbar: $1" },
+  "accountUnavailable": {
+    "message": "Dein OpenPencil-Konto ist nicht erreichbar: $1"
+  },
   "errorAccountSignedOut": {
     "message": "Die Sitzung deines OpenPencil-Kontos ist abgelaufen. Melde dich erneut an und versuche es noch einmal."
   },
@@ -100,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Zu viele Uploads in dein Konto. Versuche es in etwa $1 Sekunden erneut."
   },
-  "errorAccountRejected": { "message": "Dein OpenPencil-Konto hat die Aufnahme abgelehnt: $1" },
+  "errorAccountRejected": {
+    "message": "Dein OpenPencil-Konto hat die Aufnahme abgelehnt: $1"
+  },
   "errorAccountUnavailable": {
     "message": "Dein OpenPencil-Konto kann derzeit keine Aufnahmen annehmen ($1). Versuche es später erneut oder sende an das OpenPencil auf diesem Computer."
   },
-  "regionLabel": { "message": "Region" },
-  "regionCn": { "message": "China" },
-  "regionGlobal": { "message": "Global" },
-  "deliveryLabel": { "message": "Senden an" },
-  "deliveryLocal": { "message": "OpenPencil auf diesem Computer" },
-  "deliveryAccount": { "message": "Mein OpenPencil-Konto" }
+  "regionLabel": {
+    "message": "Region"
+  },
+  "regionCn": {
+    "message": "China"
+  },
+  "regionGlobal": {
+    "message": "Global"
+  },
+  "deliveryLabel": {
+    "message": "Senden an"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil auf diesem Computer"
+  },
+  "deliveryAccount": {
+    "message": "Mein OpenPencil-Konto"
+  }
 }

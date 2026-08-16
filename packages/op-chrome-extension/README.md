@@ -105,7 +105,7 @@ JavaScript's, and it has to be: `JSON.stringify` is the one escaper that
 round-trips a lone surrogate (as `\udXXX`), which pages do put in titles and
 `alt` text and which a Rust `&str` cannot represent at all — passing the
 snapshot into wasm rewrote every one of them to `U+FFFD`. Splicing outside
-wasm also keeps a 32 MB capture from being copied into and back out of the
+wasm also keeps a capture of tens of MB from being copied into and back out of the
 wasm heap.
 
 `wasm/` holds the build product (`op_chrome_extension_core.js` +
@@ -142,7 +142,7 @@ would be a remote request)". A `data:` URI cannot execute under this policy;
 | **Download .op**      | Captures and saves a ready-to-open `<page-title>.op` document instead of sending it — double-click it to open in OpenPencil.               |
 
 The status area reports node counts, importer warnings, and whether the page hit
-the extractor's 20,000-node cap. The endpoint setting is collapsed by default —
+the extractor's 40,000-node cap. The endpoint setting is collapsed by default —
 open it only if OpenPencil is not on `127.0.0.1:3100`.
 
 ### Capture element
@@ -372,7 +372,7 @@ this destination:
 
 | Ceiling                | Value                          | What you see                                                              |
 | ---------------------- | ------------------------------ | ------------------------------------------------------------------------- |
-| Per capture            | 32 MB, same as the local route | Refused before the upload starts, with the `Download .op` advice.         |
+| Per capture            | 32 MB (the hub's own cap — smaller than the local route's 48 MB) | Refused before the upload starts, with the advice to deliver to this device instead. |
 | Per account            | 50 snapshots or 200 MB         | "Your account inbox is full", naming both ceilings.                       |
 | Per hour               | 20 uploads                     | "Try again in about N minutes", from the hub's own `Retry-After`.         |
 | Retention              | 30 days                        | An unclaimed capture is deleted; the inbox is not storage.                |
@@ -498,7 +498,7 @@ carry across a process boundary. So the capture is transferred in 4 MiB slices:
 the harness parks the JSON string on a global in the tab's isolated world, and
 the popup pulls it back slice by slice, verifying the reassembled length before
 using it. A capture is never silently truncated — a lost or short slice is
-reported as an error. (The extractor's own 20,000-node cap is separate, is set
+reported as an error. (The extractor's own 40,000-node cap is separate, is set
 by the Rust asset, and is surfaced in the status area when it trips.)
 
 ## Files
@@ -637,12 +637,14 @@ open the file in OpenPencil. You will also see this if the editor was started wi
 `OPENPENCIL_EXTENSION_ALLOWED_IDS` set to a list that does not include this
 extension's id.
 
-**"This capture is larger than 32 MB"** — the snapshot route caps its body at
-32 MB (it is the one ingress that needs no token, so it does not get to make the
+**"This capture is larger than 48 MB"** — the snapshot route caps its body at
+48 MB (it is the one ingress that needs no token, so it does not get to make the
 editor buffer an arbitrary amount). Use `Download .op` and open the file in
-OpenPencil, which has no such limit.
+OpenPencil, which has no such limit. Delivery to the account has its own,
+smaller 32 MB ceiling — the hub's, not this route's — and its message suggests
+delivering to this device instead.
 
-**"… did not answer within 15s"** — the connection was accepted but the reply
+**"… did not answer within 30s"** — the connection was accepted but the reply
 never came. The editor is busy or stuck (a modal dialog blocking its UI thread
 will do it). Check the app window, then retry.
 

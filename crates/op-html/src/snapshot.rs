@@ -25,7 +25,7 @@ mod snapshot_stack;
 #[path = "snapshot_text.rs"]
 mod text_run;
 
-const MAX_SNAPSHOT_BYTES: usize = 32 * 1024 * 1024;
+const MAX_SNAPSHOT_BYTES: usize = 48 * 1024 * 1024;
 
 pub const SNAPSHOT_EXTRACTOR_JS: &str = include_str!("../assets/snapshot-extractor.js");
 
@@ -56,7 +56,7 @@ pub enum SnapshotError {
 impl std::fmt::Display for SnapshotError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TooLarge => formatter.write_str("snapshot JSON exceeds the 32 MiB input limit"),
+            Self::TooLarge => formatter.write_str("snapshot JSON exceeds the 48 MiB input limit"),
             Self::InvalidJson(detail) => write!(formatter, "invalid snapshot JSON: {detail}"),
             Self::NotAnObject => formatter.write_str("snapshot JSON must be an object"),
             Self::UnsupportedVersion(version) => {

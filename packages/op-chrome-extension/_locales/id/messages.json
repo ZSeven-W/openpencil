@@ -7,37 +7,75 @@
     "message": "Tangkap halaman sebagaimana dirender dan impor ke OpenPencil sebagai node desain yang dapat diedit.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Tangkap seluruh halaman" },
-  "pickButton": { "message": "Tangkap elemen" },
-  "downloadButton": { "message": "Unduh .op" },
-  "pickHint": { "message": "Klik elemen yang ingin ditangkap" },
-  "pickCancelHint": { "message": "Esc untuk membatalkan" },
-  "endpointLabel": { "message": "Alamat OpenPencil" },
+  "captureButton": {
+    "message": "Tangkap seluruh halaman"
+  },
+  "pickButton": {
+    "message": "Tangkap elemen"
+  },
+  "downloadButton": {
+    "message": "Unduh .op"
+  },
+  "pickHint": {
+    "message": "Klik elemen yang ingin ditangkap"
+  },
+  "pickCancelHint": {
+    "message": "Esc untuk membatalkan"
+  },
+  "endpointLabel": {
+    "message": "Alamat OpenPencil"
+  },
   "endpointHint": {
     "message": "Aplikasi desktop: Pengaturan → MCP → mulai server (port bawaan 3100)."
   },
-  "languageLabel": { "message": "Bahasa" },
-  "statusIdle": { "message": "Siap." },
-  "statusCapturing": { "message": "Menangkap halaman…" },
-  "statusTransferring": { "message": "Mengirim cuplikan ($1)…" },
-  "statusSending": { "message": "Mengirim ke OpenPencil…" },
-  "statusImported": { "message": "$1 node diimpor ke OpenPencil." },
-  "statusSendingAccount": { "message": "Mengirim ke akun OpenPencil Anda…" },
-  "statusSentToAccount": { "message": "Terkirim ke akun OpenPencil Anda: $1" },
+  "languageLabel": {
+    "message": "Bahasa"
+  },
+  "statusIdle": {
+    "message": "Siap."
+  },
+  "statusCapturing": {
+    "message": "Menangkap halaman…"
+  },
+  "statusTransferring": {
+    "message": "Mengirim cuplikan ($1)…"
+  },
+  "statusSending": {
+    "message": "Mengirim ke OpenPencil…"
+  },
+  "statusImported": {
+    "message": "$1 node diimpor ke OpenPencil."
+  },
+  "statusSendingAccount": {
+    "message": "Mengirim ke akun OpenPencil Anda…"
+  },
+  "statusSentToAccount": {
+    "message": "Terkirim ke akun OpenPencil Anda: $1"
+  },
   "statusSentLocalFallback": {
     "message": "Sesi akun Anda sudah kedaluwarsa, jadi tangkapan ini dikirim ke OpenPencil di komputer ini: $1 node diimpor."
   },
-  "statusDownloaded": { "message": "$1 disimpan." },
-  "statusPicked": { "message": "$1 ditangkap. $2" },
-  "statusPickCancelled": { "message": "Penangkapan elemen dibatalkan." },
-  "statusTruncated": {
-    "message": "Catatan: halaman mencapai batas 20.000 node milik ekstraktor, sehingga hasil tangkapan tidak lengkap."
+  "statusDownloaded": {
+    "message": "$1 disimpan."
   },
-  "errorNoTab": { "message": "Tidak ada tab aktif." },
+  "statusPicked": {
+    "message": "$1 ditangkap. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Penangkapan elemen dibatalkan."
+  },
+  "statusTruncated": {
+    "message": "Catatan: halaman mencapai batas 40.000 node milik ekstraktor, sehingga hasil tangkapan tidak lengkap."
+  },
+  "errorNoTab": {
+    "message": "Tidak ada tab aktif."
+  },
   "errorRestrictedTab": {
     "message": "Chrome tidak mengizinkan ekstensi berjalan di halaman ini. Buka halaman http(s) biasa lalu coba lagi."
   },
-  "errorInjection": { "message": "Skrip penangkap tidak dapat dijalankan di tab ini: $1" },
+  "errorInjection": {
+    "message": "Skrip penangkap tidak dapat dijalankan di tab ini: $1"
+  },
   "errorNoSnapshot": {
     "message": "Ekstraktor tidak menghasilkan cuplikan (halaman mungkin tidak memiliki body yang terlihat)."
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "Tangkapan ini lebih besar dari $1 MB, dan rute cuplikan OpenPencil menolaknya. Gunakan “Unduh .op”, lalu buka berkas di OpenPencil"
   },
-  "errorImport": { "message": "OpenPencil menolak cuplikan: $1" },
-  "errorDownload": { "message": "Unduhan gagal: $1" },
+  "errorAccountTooLarge": {
+    "message": "Tangkapan ini lebih besar dari $1 MB, dan kotak masuk akun menolaknya. Kirimkan ke perangkat ini saja."
+  },
+  "errorImport": {
+    "message": "OpenPencil menolak cuplikan: $1"
+  },
+  "errorDownload": {
+    "message": "Unduhan gagal: $1"
+  },
   "errorCoreMissing": {
     "message": "Ekstensi ini belum dibangun. Jalankan packages/op-chrome-extension/scripts/build-wasm.sh, lalu klik Muat Ulang pada kartu ekstensi. ($1)"
   },
@@ -70,16 +115,24 @@
   "errorPickUnavailable": {
     "message": "Penangkapan elemen tidak tersedia: worker latar belakang ekstensi tidak berjalan. Periksa kartu ekstensi di chrome://extensions untuk melihat error, jalankan ulang build-wasm.sh, lalu klik Muat Ulang. ($1)"
   },
-  "accountSignIn": { "message": "Masuk" },
-  "accountSignOut": { "message": "Keluar" },
+  "accountSignIn": {
+    "message": "Masuk"
+  },
+  "accountSignOut": {
+    "message": "Keluar"
+  },
   "accountSignInOpened": {
     "message": "Selesaikan proses masuk di halaman yang baru terbuka, lalu buka lagi jendela ini."
   },
-  "accountSignedOut": { "message": "Anda telah keluar dari akun OpenPencil." },
+  "accountSignedOut": {
+    "message": "Anda telah keluar dari akun OpenPencil."
+  },
   "accountSignOutManual": {
     "message": "Selesaikan proses keluar di halaman akun yang baru terbuka."
   },
-  "accountUnavailable": { "message": "Tidak dapat menghubungi akun OpenPencil Anda: $1" },
+  "accountUnavailable": {
+    "message": "Tidak dapat menghubungi akun OpenPencil Anda: $1"
+  },
   "errorAccountSignedOut": {
     "message": "Sesi akun OpenPencil Anda sudah kedaluwarsa. Masuk lagi, lalu coba sekali lagi."
   },
@@ -98,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Terlalu banyak unggahan ke akun Anda. Coba lagi sekitar $1 detik lagi."
   },
-  "errorAccountRejected": { "message": "Akun OpenPencil Anda menolak snapshot: $1" },
+  "errorAccountRejected": {
+    "message": "Akun OpenPencil Anda menolak snapshot: $1"
+  },
   "errorAccountUnavailable": {
     "message": "Akun OpenPencil Anda tidak dapat menerima tangkapan saat ini ($1). Coba lagi nanti, atau kirim ke OpenPencil di komputer ini."
   },
-  "regionLabel": { "message": "Wilayah" },
-  "regionCn": { "message": "Tiongkok" },
-  "regionGlobal": { "message": "Global" },
-  "deliveryLabel": { "message": "Kirim ke" },
-  "deliveryLocal": { "message": "OpenPencil di komputer ini" },
-  "deliveryAccount": { "message": "Akun OpenPencil saya" }
+  "regionLabel": {
+    "message": "Wilayah"
+  },
+  "regionCn": {
+    "message": "Tiongkok"
+  },
+  "regionGlobal": {
+    "message": "Global"
+  },
+  "deliveryLabel": {
+    "message": "Kirim ke"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil di komputer ini"
+  },
+  "deliveryAccount": {
+    "message": "Akun OpenPencil saya"
+  }
 }

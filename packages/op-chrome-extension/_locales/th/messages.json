@@ -7,37 +7,75 @@
     "message": "จับภาพหน้าเว็บตามที่แสดงผลจริง แล้วนำเข้าสู่ OpenPencil เป็นโหนดออกแบบที่แก้ไขได้",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "จับภาพทั้งหน้า" },
-  "pickButton": { "message": "จับภาพเอลิเมนต์" },
-  "downloadButton": { "message": "ดาวน์โหลด .op" },
-  "pickHint": { "message": "คลิกเอลิเมนต์ที่ต้องการจับภาพ" },
-  "pickCancelHint": { "message": "กด Esc เพื่อยกเลิก" },
-  "endpointLabel": { "message": "ที่อยู่ OpenPencil" },
+  "captureButton": {
+    "message": "จับภาพทั้งหน้า"
+  },
+  "pickButton": {
+    "message": "จับภาพเอลิเมนต์"
+  },
+  "downloadButton": {
+    "message": "ดาวน์โหลด .op"
+  },
+  "pickHint": {
+    "message": "คลิกเอลิเมนต์ที่ต้องการจับภาพ"
+  },
+  "pickCancelHint": {
+    "message": "กด Esc เพื่อยกเลิก"
+  },
+  "endpointLabel": {
+    "message": "ที่อยู่ OpenPencil"
+  },
   "endpointHint": {
     "message": "แอปเดสก์ท็อป: การตั้งค่า → MCP → เริ่มเซิร์ฟเวอร์ (พอร์ตเริ่มต้น 3100)"
   },
-  "languageLabel": { "message": "ภาษา" },
-  "statusIdle": { "message": "พร้อมใช้งาน" },
-  "statusCapturing": { "message": "กำลังจับภาพหน้าเว็บ…" },
-  "statusTransferring": { "message": "กำลังส่งสแนปช็อต ($1)…" },
-  "statusSending": { "message": "กำลังส่งไปยัง OpenPencil…" },
-  "statusImported": { "message": "นำเข้า $1 โหนดไปยัง OpenPencil แล้ว" },
-  "statusSendingAccount": { "message": "กำลังส่งไปยังบัญชี OpenPencil ของคุณ…" },
-  "statusSentToAccount": { "message": "ส่งไปยังบัญชี OpenPencil ของคุณแล้ว: $1" },
+  "languageLabel": {
+    "message": "ภาษา"
+  },
+  "statusIdle": {
+    "message": "พร้อมใช้งาน"
+  },
+  "statusCapturing": {
+    "message": "กำลังจับภาพหน้าเว็บ…"
+  },
+  "statusTransferring": {
+    "message": "กำลังส่งสแนปช็อต ($1)…"
+  },
+  "statusSending": {
+    "message": "กำลังส่งไปยัง OpenPencil…"
+  },
+  "statusImported": {
+    "message": "นำเข้า $1 โหนดไปยัง OpenPencil แล้ว"
+  },
+  "statusSendingAccount": {
+    "message": "กำลังส่งไปยังบัญชี OpenPencil ของคุณ…"
+  },
+  "statusSentToAccount": {
+    "message": "ส่งไปยังบัญชี OpenPencil ของคุณแล้ว: $1"
+  },
   "statusSentLocalFallback": {
     "message": "เซสชันบัญชีของคุณหมดอายุ จึงส่งไปยัง OpenPencil บนเครื่องนี้แทน: นำเข้า $1 โหนด"
   },
-  "statusDownloaded": { "message": "บันทึก $1 แล้ว" },
-  "statusPicked": { "message": "จับภาพ $1 แล้ว $2" },
-  "statusPickCancelled": { "message": "ยกเลิกการจับภาพเอลิเมนต์แล้ว" },
-  "statusTruncated": {
-    "message": "หมายเหตุ: หน้านี้ถึงขีดจำกัด 20,000 โหนดของตัวแยกข้อมูล การจับภาพจึงไม่สมบูรณ์"
+  "statusDownloaded": {
+    "message": "บันทึก $1 แล้ว"
   },
-  "errorNoTab": { "message": "ไม่มีแท็บที่ใช้งานอยู่" },
+  "statusPicked": {
+    "message": "จับภาพ $1 แล้ว $2"
+  },
+  "statusPickCancelled": {
+    "message": "ยกเลิกการจับภาพเอลิเมนต์แล้ว"
+  },
+  "statusTruncated": {
+    "message": "หมายเหตุ: หน้านี้ถึงขีดจำกัด 40,000 โหนดของตัวแยกข้อมูล การจับภาพจึงไม่สมบูรณ์"
+  },
+  "errorNoTab": {
+    "message": "ไม่มีแท็บที่ใช้งานอยู่"
+  },
   "errorRestrictedTab": {
     "message": "Chrome ไม่อนุญาตให้ส่วนขยายทำงานบนหน้านี้ กรุณาเปิดหน้า http(s) ทั่วไปแล้วลองใหม่"
   },
-  "errorInjection": { "message": "ไม่สามารถเรียกใช้สคริปต์จับภาพในแท็บนี้: $1" },
+  "errorInjection": {
+    "message": "ไม่สามารถเรียกใช้สคริปต์จับภาพในแท็บนี้: $1"
+  },
   "errorNoSnapshot": {
     "message": "ตัวแยกข้อมูลไม่ได้สร้างสแนปช็อต (หน้านี้อาจไม่มี body ที่มองเห็นได้)"
   },
@@ -59,8 +97,15 @@
   "errorTooLarge": {
     "message": "การจับภาพครั้งนี้ใหญ่กว่า $1 MB ซึ่งเส้นทางสแนปช็อตของ OpenPencil ปฏิเสธ กรุณาใช้ “ดาวน์โหลด .op” แล้วเปิดไฟล์ใน OpenPencil"
   },
-  "errorImport": { "message": "OpenPencil ปฏิเสธสแนปช็อตนี้: $1" },
-  "errorDownload": { "message": "ดาวน์โหลดไม่สำเร็จ: $1" },
+  "errorAccountTooLarge": {
+    "message": "การจับภาพครั้งนี้ใหญ่กว่า $1 MB ซึ่งกล่องขาเข้าของบัญชีปฏิเสธ กรุณาส่งไปยังอุปกรณ์นี้แทน"
+  },
+  "errorImport": {
+    "message": "OpenPencil ปฏิเสธสแนปช็อตนี้: $1"
+  },
+  "errorDownload": {
+    "message": "ดาวน์โหลดไม่สำเร็จ: $1"
+  },
   "errorCoreMissing": {
     "message": "ส่วนขยายนี้ยังไม่ได้บิลด์ กรุณารัน packages/op-chrome-extension/scripts/build-wasm.sh แล้วกด “โหลดซ้ำ” บนการ์ดส่วนขยาย ($1)"
   },
@@ -70,14 +115,24 @@
   "errorPickUnavailable": {
     "message": "ใช้การจับภาพเอลิเมนต์ไม่ได้: worker เบื้องหลังของส่วนขยายไม่ได้ทำงานอยู่ กรุณาตรวจสอบข้อผิดพลาดบนการ์ดส่วนขยายใน chrome://extensions รัน build-wasm.sh อีกครั้ง แล้วกด “โหลดซ้ำ” ($1)"
   },
-  "accountSignIn": { "message": "เข้าสู่ระบบ" },
-  "accountSignOut": { "message": "ออกจากระบบ" },
+  "accountSignIn": {
+    "message": "เข้าสู่ระบบ"
+  },
+  "accountSignOut": {
+    "message": "ออกจากระบบ"
+  },
   "accountSignInOpened": {
     "message": "ทำการเข้าสู่ระบบให้เสร็จในหน้าที่เพิ่งเปิด แล้วเปิดหน้าต่างนี้อีกครั้ง"
   },
-  "accountSignedOut": { "message": "ออกจากระบบบัญชี OpenPencil แล้ว" },
-  "accountSignOutManual": { "message": "ทำการออกจากระบบให้เสร็จในหน้าบัญชีที่เพิ่งเปิด" },
-  "accountUnavailable": { "message": "ไม่สามารถเชื่อมต่อบัญชี OpenPencil ของคุณ: $1" },
+  "accountSignedOut": {
+    "message": "ออกจากระบบบัญชี OpenPencil แล้ว"
+  },
+  "accountSignOutManual": {
+    "message": "ทำการออกจากระบบให้เสร็จในหน้าบัญชีที่เพิ่งเปิด"
+  },
+  "accountUnavailable": {
+    "message": "ไม่สามารถเชื่อมต่อบัญชี OpenPencil ของคุณ: $1"
+  },
   "errorAccountSignedOut": {
     "message": "เซสชันบัญชี OpenPencil ของคุณหมดอายุแล้ว กรุณาลงชื่อเข้าใช้อีกครั้งแล้วลองใหม่"
   },
@@ -96,14 +151,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "อัปโหลดไปยังบัญชีบ่อยเกินไป กรุณาลองใหม่ในอีกประมาณ $1 วินาที"
   },
-  "errorAccountRejected": { "message": "บัญชี OpenPencil ของคุณปฏิเสธสแนปช็อตนี้: $1" },
+  "errorAccountRejected": {
+    "message": "บัญชี OpenPencil ของคุณปฏิเสธสแนปช็อตนี้: $1"
+  },
   "errorAccountUnavailable": {
     "message": "บัญชี OpenPencil ของคุณรับการจับภาพไม่ได้ในขณะนี้ ($1) กรุณาลองใหม่ภายหลัง หรือส่งไปยัง OpenPencil บนเครื่องนี้"
   },
-  "regionLabel": { "message": "ภูมิภาค" },
-  "regionCn": { "message": "จีน" },
-  "regionGlobal": { "message": "ทั่วโลก" },
-  "deliveryLabel": { "message": "ส่งไปยัง" },
-  "deliveryLocal": { "message": "OpenPencil บนคอมพิวเตอร์เครื่องนี้" },
-  "deliveryAccount": { "message": "บัญชี OpenPencil ของฉัน" }
+  "regionLabel": {
+    "message": "ภูมิภาค"
+  },
+  "regionCn": {
+    "message": "จีน"
+  },
+  "regionGlobal": {
+    "message": "ทั่วโลก"
+  },
+  "deliveryLabel": {
+    "message": "ส่งไปยัง"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil บนคอมพิวเตอร์เครื่องนี้"
+  },
+  "deliveryAccount": {
+    "message": "บัญชี OpenPencil ของฉัน"
+  }
 }
