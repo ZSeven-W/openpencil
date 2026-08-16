@@ -421,7 +421,53 @@ final class NativeLoginViewController: UIViewController {
     }
 
     @objc private func providerCardTapped(_ sender: UIButton) {
-        openProviderLogin(providerID: sender.accessibilityIdentifier)
+        let providerID = sender.accessibilityIdentifier
+        if providerID == "apple" {
+            startAppleNativeSignIn()
+            return
+        }
+        openProviderLogin(providerID: providerID)
+    }
+
+    /// Apple sign-in runs fully natively: the system sheet mints an identity
+    /// token bound to a fresh nonce, the SSO exchanges it for a session in
+    /// this screen's cookie jar, and the running pairing is approved without
+    /// any web page. A user cancel just returns to this screen; a failure
+    /// surfaces an error instead of bouncing to the browser flow.
+    private func startAppleNativeSignIn() {
+        setBusy(true)
+        let signIn = AppleNativeSignIn { [weak self] in
+            self?.view.window
+        }
+        signIn.start { [weak self] outcome in
+            guard let self else { return }
+            switch outcome {
+            case .canceled:
+                self.setBusy(false)
+            case .failed:
+                self.setBusy(false)
+                self.showError(NSLocalizedString(
+                    "nativeLogin.error.appleUnavailable",
+                    value: "Apple sign-in is unavailable. Sign in to your Apple Account in Settings and try again.",
+                    comment: "Native Apple sheet failure"
+                ))
+            case .authorized(let identityToken, let nonce):
+                self.client.nativeLogin(
+                    providerID: "apple",
+                    identityToken: identityToken,
+                    nonce: nonce
+                ) { [weak self] result in
+                    guard let self else { return }
+                    switch result {
+                    case .failure(let error):
+                        self.setBusy(false)
+                        self.showError(error.localizedText)
+                    case .success:
+                        self.approvePairing()
+                    }
+                }
+            }
+        }
     }
 
     /// Third-party sign-in stays inside the app: an in-app Safari sheet opens

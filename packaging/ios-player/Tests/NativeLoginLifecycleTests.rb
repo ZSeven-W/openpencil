@@ -54,6 +54,21 @@ raise "provider sign-in must stay in-app" unless login_source.include?(
 )
 raise "WebKit must stay out of the login path" if login_source.include?("import WebKit")
 
+# Apple sign-in is SDK-native: the tapped card runs the system
+# AuthenticationServices sheet, exchanges the nonce-bound identity token at
+# the SSO native-login endpoint, then approves the pairing directly. A user
+# cancel returns to the screen; other failures fall back to the in-app web
+# flow.
+raise "apple card must run the native sheet" unless login_source.include?(
+  'if providerID == "apple" {'
+)
+raise "apple token must exchange at native-login" unless login_source.include?(
+  'providerID: "apple",'
+) && login_source.include?("self.client.nativeLogin(")
+raise "native apple success must approve the pairing" unless login_source.include?(
+  "self.approvePairing()"
+)
+
 # Region codes are literals for standalone-test compilability; pin them to
 # the C header so they cannot drift.
 raise "region code 0 must be China" unless region_source.include?("case .china: return 0")

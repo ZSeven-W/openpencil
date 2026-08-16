@@ -18,6 +18,7 @@
 "nativeLogin.error.network" = "网络错误，请检查连接后重试。";
 "nativeLogin.error.generic" = "登录失败，请重试。";
 "nativeLogin.error.pairingExpired" = "本次登录请求已过期，请关闭后重试。";
+"nativeLogin.error.appleUnavailable" = "暂时无法使用 Apple 登录。请先在系统设置中登录 Apple 账户，然后重试。";
 "register.title" = "创建账号";
 "register.subtitle" = "注册 ZSeven 账号";
 "register.submit" = "注册";

@@ -18,6 +18,7 @@
 "nativeLogin.error.network" = "Network error. Check your connection and try again.";
 "nativeLogin.error.generic" = "Sign-in failed. Please try again.";
 "nativeLogin.error.pairingExpired" = "This sign-in request expired. Close and try again.";
+"nativeLogin.error.appleUnavailable" = "Apple sign-in is unavailable. Sign in to your Apple Account in Settings and try again.";
 "register.title" = "Create account";
 "register.subtitle" = "Sign up for ZSeven";
 "register.submit" = "Sign Up";
