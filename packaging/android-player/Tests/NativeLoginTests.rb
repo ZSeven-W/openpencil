@@ -48,9 +48,18 @@ raise "login WebView overlay must stay deleted" if File.exist?(
   File.join(root, "LoginWebViewOverlay.kt"),
 )
 
-# Third-party providers hand off to the system browser at the engine URL.
-raise "provider hand-off must reuse the verification URL" unless overlay.include?(
-  "openExternal(request?.verificationUrl)",
+# Providers without a native SDK stay inside the app on their own OAuth
+# page: a Custom Tab opens the SSO start endpoint carrying the pairing, and
+# the callback lands on the dedicated approval page — never the generic
+# login page. A plain-browser intent is the Custom-Tab fallback.
+raise "provider tap must open the provider start endpoint" unless overlay.include?(
+  "/api/v1/auth/providers/$providerId/start",
+)
+raise "provider start must carry the pairing" unless overlay.include?(
+  'appendQueryParameter("device_pairing", current.pairingId)',
+)
+raise "provider sign-in must stay in-app" unless overlay.include?(
+  '"android.support.customtabs.extra.SESSION"',
 )
 
 # Region codes are pinned to the C header; probing consults the ZSeven

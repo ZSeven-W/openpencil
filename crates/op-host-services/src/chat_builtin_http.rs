@@ -569,6 +569,16 @@ async fn run_openai_chat(
         "max_tokens": max_output_tokens,
         "messages": messages,
     });
+    // Optional temperature override: read OPENPENCIL_LLM_TEMPERATURE
+    // (f32 in range 0.0..=2.0). If set and valid, add to body; else
+    // omit (preserve provider default).
+    if let Ok(temp_str) = std::env::var("OPENPENCIL_LLM_TEMPERATURE") {
+        if let Ok(temp) = temp_str.parse::<f32>() {
+            if (0.0..=2.0).contains(&temp) {
+                body["temperature"] = json!(temp);
+            }
+        }
+    }
     // 推理模型不关思考会把 reasoning 烧到占满输出预算,JSON content 被截断甚至
     // 留空(glm-5.2 实测一个设计子任务 thinking≈3 万字符、content 0,整段 parse
     // 失败、重试也撞同一堵墙)。当调用方明确要求关思考(`disable_thinking`,如编排器

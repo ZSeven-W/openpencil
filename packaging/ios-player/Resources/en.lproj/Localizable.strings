@@ -11,13 +11,14 @@
 "nativeLogin.forgotPassword" = "Forgot password?";
 "nativeLogin.region" = "Region: %@ · Switch";
 "nativeLogin.completing" = "Finishing sign-in…";
-"nativeLogin.browserHint" = "Finish signing in in the browser, then return to OpenPencil.";
+"nativeLogin.browserHint" = "Finish signing in, and you will return automatically.";
 "nativeLogin.error.missingFields" = "Enter your email and password.";
 "nativeLogin.error.invalidCredentials" = "Incorrect email or password.";
 "nativeLogin.error.rateLimited" = "Too many attempts. Try again in a moment.";
 "nativeLogin.error.network" = "Network error. Check your connection and try again.";
 "nativeLogin.error.generic" = "Sign-in failed. Please try again.";
 "nativeLogin.error.pairingExpired" = "This sign-in request expired. Close and try again.";
+"nativeLogin.error.appleUnavailable" = "Apple sign-in is unavailable. Sign in to your Apple Account in Settings and try again.";
 "register.title" = "Create account";
 "register.subtitle" = "Sign up for ZSeven";
 "register.submit" = "Sign Up";

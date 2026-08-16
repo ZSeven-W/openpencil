@@ -1,3 +1,4 @@
+import SafariServices
 import UIKit
 
 /// Platform-native sign-in for one engine device-login flow, styled after
@@ -333,9 +334,10 @@ final class NativeLoginViewController: UIViewController {
             let card = AuthTheme.makeProviderCard(
                 assetName: "Provider-\(provider.id)",
                 target: self,
-                action: #selector(openProvidersInBrowser)
+                action: #selector(providerCardTapped(_:))
             )
             card.accessibilityLabel = provider.displayName
+            card.accessibilityIdentifier = provider.id
             providerRow.addArrangedSubview(card)
         }
         contentStack.viewWithTag(Self.dividerTag)?.isHidden = false
@@ -418,14 +420,82 @@ final class NativeLoginViewController: UIViewController {
         }
     }
 
-    @objc private func openProvidersInBrowser() {
+    @objc private func providerCardTapped(_ sender: UIButton) {
+        let providerID = sender.accessibilityIdentifier
+        if providerID == "apple" {
+            startAppleNativeSignIn()
+            return
+        }
+        openProviderLogin(providerID: providerID)
+    }
+
+    /// Apple sign-in runs fully natively: the system sheet mints an identity
+    /// token bound to a fresh nonce, the SSO exchanges it for a session in
+    /// this screen's cookie jar, and the running pairing is approved without
+    /// any web page. A user cancel just returns to this screen; a failure
+    /// surfaces an error instead of bouncing to the browser flow.
+    private func startAppleNativeSignIn() {
+        setBusy(true)
+        let signIn = AppleNativeSignIn { [weak self] in
+            self?.view.window
+        }
+        signIn.start { [weak self] outcome in
+            guard let self else { return }
+            switch outcome {
+            case .canceled:
+                self.setBusy(false)
+            case .failed:
+                self.setBusy(false)
+                self.showError(NSLocalizedString(
+                    "nativeLogin.error.appleUnavailable",
+                    value: "Apple sign-in is unavailable. Sign in to your Apple Account in Settings and try again.",
+                    comment: "Native Apple sheet failure"
+                ))
+            case .authorized(let identityToken, let nonce):
+                self.client.nativeLogin(
+                    providerID: "apple",
+                    identityToken: identityToken,
+                    nonce: nonce
+                ) { [weak self] result in
+                    guard let self else { return }
+                    switch result {
+                    case .failure(let error):
+                        self.setBusy(false)
+                        self.showError(error.localizedText)
+                    case .success:
+                        self.approvePairing()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Providers without a native SDK stay inside the app on their own OAuth
+    /// page: the SSO start endpoint 302s straight to the provider's authorize
+    /// screen carrying the pairing, and the callback lands directly on the
+    /// dedicated pairing-approval page — the ZSeven login page never appears.
+    /// The deliberate approve tap is kept so a shared start link cannot
+    /// silently sign a foreign device in.
+    private func openProviderLogin(providerID: String?) {
+        guard let providerID, !providerID.isEmpty else { return }
+        var components = URLComponents(
+            url: origin.appendingPathComponent(
+                "/api/v1/auth/providers/\(providerID)/start"
+            ),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "channel", value: "web_mobile"),
+            URLQueryItem(name: "device_pairing", value: pairingID),
+        ]
+        guard let url = components?.url else { return }
         statusLabel.text = NSLocalizedString(
             "nativeLogin.browserHint",
-            value: "Finish signing in in the browser, then return to OpenPencil.",
-            comment: "External browser hand-off hint"
+            value: "Finish signing in, and you will return automatically.",
+            comment: "In-app provider sign-in hint"
         )
         statusLabel.isHidden = false
-        UIApplication.shared.open(verificationURL, options: [:])
+        present(SFSafariViewController(url: url), animated: true)
     }
 
     @objc private func openRegister() {

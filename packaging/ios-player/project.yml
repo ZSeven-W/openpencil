@@ -37,6 +37,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/OpenPencilPlayer-Bridging-Header.h"
+        CODE_SIGN_ENTITLEMENTS: "$(SRCROOT)/OpenPencilPlayer.entitlements"
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../../crates/op-engine-ffi/include"
         "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios/release"
         "LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios-sim/release"
@@ -73,3 +74,5 @@ targets:
       - sdk: CoreText.framework
       - sdk: ImageIO.framework
       - sdk: MobileCoreServices.framework
+      - sdk: SafariServices.framework
+      - sdk: AuthenticationServices.framework

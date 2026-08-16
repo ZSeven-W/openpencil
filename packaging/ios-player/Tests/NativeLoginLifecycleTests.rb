@@ -40,12 +40,35 @@ raise "approval success must wait for the engine close action" unless login_sour
 finish = login_source[/func finishFromHost\b.*?\n    \}/m]
 raise "host-driven dismissal missing" unless finish&.include?("dismiss(animated: animated)")
 
-# Third-party providers and recovery hand off to the system browser at the
-# engine-provided verification URL / regional web pages — never a WebView.
-raise "provider hand-off must reuse verification_uri" unless login_source.include?(
-  "UIApplication.shared.open(verificationURL"
+# Providers without a native SDK stay inside the app on their own OAuth
+# page: the sheet opens the SSO start endpoint carrying the pairing, and the
+# callback lands on the dedicated approval page — never an embedded WebView,
+# never an external-browser bounce, never the generic login page.
+raise "provider tap must open the provider start endpoint" unless login_source.include?(
+  '"/api/v1/auth/providers/\(providerID)/start"'
+)
+raise "provider start must carry the pairing" unless login_source.include?(
+  'URLQueryItem(name: "device_pairing", value: pairingID)'
+)
+raise "provider sign-in must stay in-app" unless login_source.include?(
+  "present(SFSafariViewController(url: url), animated: true)"
 )
 raise "WebKit must stay out of the login path" if login_source.include?("import WebKit")
+
+# Apple sign-in is SDK-native: the tapped card runs the system
+# AuthenticationServices sheet, exchanges the nonce-bound identity token at
+# the SSO native-login endpoint, then approves the pairing directly. A user
+# cancel returns to the screen; other failures surface an inline error and
+# never touch a web page.
+raise "apple card must run the native sheet" unless login_source.include?(
+  'if providerID == "apple" {'
+)
+raise "apple token must exchange at native-login" unless login_source.include?(
+  'providerID: "apple",'
+) && login_source.include?("self.client.nativeLogin(")
+raise "native apple success must approve the pairing" unless login_source.include?(
+  "self.approvePairing()"
+)
 
 # Region codes are literals for standalone-test compilability; pin them to
 # the C header so they cannot drift.

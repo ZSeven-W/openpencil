@@ -342,7 +342,7 @@ internal class NativeLoginOverlay(
         if (providers.isEmpty()) return
         providerRow.removeAllViews()
         for ((position, provider) in providers.withIndex()) {
-            val card = AuthUi.providerCard(activity, provider.id) { openProvidersInBrowser() }
+            val card = AuthUi.providerCard(activity, provider.id) { openProviderLogin(provider.id) }
             card.contentDescription = provider.displayName
             val params = LinearLayout.LayoutParams(
                 AuthUi.dp(activity, 56),
@@ -405,10 +405,49 @@ internal class NativeLoginOverlay(
         }
     }
 
-    private fun openProvidersInBrowser() {
+    /**
+     * Providers without a native SDK stay inside the app on their own OAuth
+     * page: the SSO start endpoint 302s straight to the provider's authorize
+     * screen carrying the pairing, and the callback lands directly on the
+     * dedicated pairing-approval page — the ZSeven login page never appears.
+     * The deliberate approve tap is kept so a shared start link cannot
+     * silently sign a foreign device in.
+     */
+    private fun openProviderLogin(providerId: String) {
         statusLabel.text = activity.getString(R.string.native_login_browser_hint)
         statusLabel.visibility = View.VISIBLE
-        openExternal(request?.verificationUrl)
+        val current = request ?: return
+        val uri = try {
+            Uri.parse("${current.origin}/api/v1/auth/providers/$providerId/start")
+                .buildUpon()
+                .appendQueryParameter("channel", "web_mobile")
+                .appendQueryParameter("device_pairing", current.pairingId)
+                .build()
+        } catch (_: Exception) {
+            return
+        }
+        launchInAppTab(uri)
+    }
+
+    /**
+     * Launches a Chrome Custom Tab through the raw extras protocol (no
+     * androidx.browser dependency); browsers without Custom Tab support fall
+     * back to a plain view intent.
+     */
+    private fun launchInAppTab(uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        val extras = android.os.Bundle()
+        extras.putBinder("android.support.customtabs.extra.SESSION", null)
+        intent.putExtras(extras)
+        intent.putExtra(
+            "android.support.customtabs.extra.TOOLBAR_COLOR",
+            AuthUi.backgroundColor(activity),
+        )
+        try {
+            activity.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            openExternal(uri.toString())
+        }
     }
 
     private fun openExternal(url: String?) {

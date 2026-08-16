@@ -70,6 +70,23 @@ final class SsoAuthClient {
         )
     }
 
+    /// `POST /api/v1/auth/providers/<id>/native-login` — signs in with an
+    /// identity token minted by a native provider SDK (Sign in with Apple);
+    /// on success the session cookie lands in this client's jar and the
+    /// caller approves the running pairing.
+    func nativeLogin(
+        providerID: String,
+        identityToken: String,
+        nonce: String,
+        completion: @escaping (Result<Void, SsoAuthError>) -> Void
+    ) {
+        post(
+            path: "/api/v1/auth/providers/\(providerID)/native-login",
+            body: ["identity_token": identityToken, "nonce": nonce],
+            completion: completion
+        )
+    }
+
     /// `POST /api/v1/auth/email-codes` — sends a verification code for
     /// registration (`purpose: "register"`) or password recovery
     /// (`purpose: "password_reset"`), localized to the device language.

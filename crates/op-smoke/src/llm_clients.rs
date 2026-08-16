@@ -217,6 +217,16 @@ impl LlmClient for DirectOpenAiClient {
                     { "role": "user", "content": user },
                 ],
             });
+            // Optional temperature override: read OPENPENCIL_LLM_TEMPERATURE
+            // (f32 in range 0.0..=2.0). If set and valid, add to body; else
+            // omit (preserve provider default).
+            if let Ok(temp_str) = std::env::var("OPENPENCIL_LLM_TEMPERATURE") {
+                if let Ok(temp) = temp_str.parse::<f32>() {
+                    if (0.0..=2.0).contains(&temp) {
+                        body["temperature"] = serde_json::json!(temp);
+                    }
+                }
+            }
             // Reasoning models burn their whole output budget on thinking and
             // return truncated (or empty) JSON, so a design turn asks for it
             // reduced. Both the DECISION and the wire shape are production's:
