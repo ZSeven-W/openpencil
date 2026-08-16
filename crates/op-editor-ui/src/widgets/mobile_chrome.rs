@@ -45,6 +45,29 @@ pub fn centered_icon_rect(target: Rect, icon_size: f32) -> Rect {
 /// its canonical 24×24 coordinate system. Every subpath must share the
 /// same transform; fitting each subpath independently deforms compound
 /// icons such as Settings, Braces and Download.
+/// Surface colors the platform safe-area bands should carry so the touch
+/// chrome reads as one continuous surface: the top band matches the app
+/// bar, and (phones only — tablets float their dock) the bottom band
+/// matches the edge-to-edge dock. `None` keeps the theme background.
+pub fn safe_area_band_colors(state: &EditorState) -> (Option<Color>, Option<Color>) {
+    if !state.editor_ui.touch_chrome() {
+        return (None, None);
+    }
+    let theme = crate::widgets::editor_state_ext::theme_for(&state.editor_ui);
+    let top = Some(mix(theme.background, theme.card, 0.42));
+    // Mirrors the dock's paint gating: a modal sheet or the variables panel
+    // hides the dock, so the band returns to the plain background.
+    let bottom = if state.editor_ui.compact_layout()
+        && state.editor_ui.mobile_sheet.is_none()
+        && !state.editor_ui.variables_panel_open
+    {
+        Some(mix(theme.background, theme.card, 0.48))
+    } else {
+        None
+    };
+    (top, bottom)
+}
+
 pub fn paint_touch_icon(
     cx: &mut PaintCx<'_>,
     target: Rect,

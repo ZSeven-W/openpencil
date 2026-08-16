@@ -514,35 +514,31 @@ impl WidgetHostNative {
             match entry {
                 op_editor_ui::widgets::MobileMoreEntry::Ai => unreachable!("handled above"),
                 op_editor_ui::widgets::MobileMoreEntry::SignIn => {
-                    let backend_available = {
-                        let ui = &mut self.editor_state.editor_ui;
-                        ui.account_menu_open = false;
-                        ui.collab.panel.open = false;
-                        ui.collab.panel.join_address_focused = false;
-                        ui.login_modal_open = true;
-                        ui.login_modal_hover = None;
-                        // Mobile targets without the proprietary auth bridge
-                        // keep this entry visible, but the modal must say so
-                        // honestly.
-                        ui.login_modal_stub_hint_shown = !ui.account_ui_available;
-                        ui.account_ui_available
-                    };
-                    // A configured mobile backend starts immediately. The
-                    // modal remains behind the platform WebView so terminal
-                    // denial/expiry can still surface an actionable error.
-                    if backend_available {
-                        self.begin_browser_login();
-                    }
-                }
-                op_editor_ui::widgets::MobileMoreEntry::Account => {
-                    // Touch chrome uses a full, reachable Account settings
-                    // surface rather than a dropdown anchored to an unpainted
-                    // desktop avatar button.
+                    // Touch chrome never opens the engine-painted login
+                    // modal: the shell owns the whole sign-in experience.
+                    // The one-shot request lets it configure the auth
+                    // runtime lazily (region resolution) before starting
+                    // the flow, and surface unavailability natively.
                     let ui = &mut self.editor_state.editor_ui;
                     ui.account_menu_open = false;
-                    ui.agent_settings_open = true;
-                    ui.agent_settings.tab =
-                        op_editor_core::agent_settings::AgentSettingsTab::Account;
+                    ui.collab.panel.open = false;
+                    ui.collab.panel.join_address_focused = false;
+                    ui.pending_mobile_login = true;
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Language => {
+                    // The shell presents a native 15-language sheet and
+                    // applies the choice through `op_editor_set_locale`.
+                    self.editor_state.editor_ui.pending_language_picker = true;
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Account => {
+                    // Touch chrome hands the account surface to the mobile
+                    // shell's native account-center screen (drained through
+                    // the FFI shell-action channel) instead of the painted
+                    // desktop Settings tab: the SSO account experience on
+                    // phones is platform-native by design.
+                    let ui = &mut self.editor_state.editor_ui;
+                    ui.account_menu_open = false;
+                    ui.pending_account_center = true;
                     self.editor_state.chat.blur_input(self.now_ms);
                 }
                 op_editor_ui::widgets::MobileMoreEntry::Collaboration => {

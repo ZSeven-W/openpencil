@@ -7,16 +7,19 @@ use jni::sys::{jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 
 use op_engine_ffi::{
+    op_editor_account_snapshot, op_editor_auth_sign_out, op_editor_begin_login,
     op_editor_cancel_export, op_editor_cancel_login, op_editor_configure_auth,
     op_editor_copy_export_file_name, op_editor_copy_login_url, op_editor_export_to_path,
-    op_editor_open_document, op_editor_take_shell_action, OpStatus, SHELL_ACTION_NONE,
+    op_editor_locale_code, op_editor_open_document, op_editor_set_locale,
+    op_editor_take_shell_action, OpStatus, SHELL_ACTION_NONE,
 };
 
 use crate::bindings::{call_status, jstring_bytes, with_engine};
 use crate::engine_thread::STATUS_CLOSING;
 
 /// `OpNative.nativeEditorConfigureAuth` — initialize the real mobile auth
-/// backend with a private shell-owned storage directory.
+/// backend with a private shell-owned storage directory and the regional SSO
+/// deployment the shell resolved (an `OpAuthRegion` code).
 #[no_mangle]
 pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorConfigureAuth<'local>(
     mut env: JNIEnv<'local>,
@@ -25,6 +28,7 @@ pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorConfigur
     storage_dir: JString<'local>,
     device_name: JString<'local>,
     app_version: JString<'local>,
+    region: jint,
 ) -> jint {
     let Some(storage_dir) = jstring_bytes(&mut env, &storage_dir) else {
         return OpStatus::InvalidArg as jint;
@@ -44,8 +48,54 @@ pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorConfigur
             device_name.len(),
             app_version.as_ptr(),
             app_version.len(),
+            region,
         )
     })
+}
+
+/// `OpNative.nativeEditorAccountSnapshot` — copies the JSON account snapshot
+/// for the native account center, or returns null when it cannot be read.
+/// The snapshot is re-read per call and never consumed.
+#[no_mangle]
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorAccountSnapshot<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+) -> jstring {
+    let bytes = with_engine(engine, move |e| {
+        let mut required = 0usize;
+        let status =
+            unsafe { op_editor_account_snapshot(e, std::ptr::null_mut(), 0, &mut required) };
+        if status != OpStatus::Ok || required == 0 {
+            return None;
+        }
+        let mut bytes = vec![0_u8; required];
+        let status = unsafe {
+            op_editor_account_snapshot(e, bytes.as_mut_ptr(), bytes.len(), &mut required)
+        };
+        (status == OpStatus::Ok).then_some(bytes)
+    })
+    .flatten();
+    let Some(bytes) = bytes else {
+        return std::ptr::null_mut();
+    };
+    let Ok(text) = String::from_utf8(bytes) else {
+        return std::ptr::null_mut();
+    };
+    env.new_string(text)
+        .map(|value| value.into_raw())
+        .unwrap_or(std::ptr::null_mut())
+}
+
+/// `OpNative.nativeEditorSignOut` — revoke the device session and clear the
+/// engine's account mirror (native account-center sign out).
+#[no_mangle]
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorSignOut<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+) -> jint {
+    call_status(engine, move |e| unsafe { op_editor_auth_sign_out(e) })
 }
 
 /// `OpNative.nativeEditorTakeLoginUrl` — atomically copies and consumes the
@@ -150,6 +200,63 @@ pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorCancelEx
     engine: jlong,
 ) -> jint {
     call_status(engine, move |e| unsafe { op_editor_cancel_export(e) })
+}
+
+/// `OpNative.nativeEditorBeginLogin` — start the device flow after the shell
+/// configured the auth runtime (RequestLogin follow-up).
+#[no_mangle]
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorBeginLogin<'local>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+) -> jint {
+    call_status(engine, move |e| unsafe { op_editor_begin_login(e) })
+}
+
+/// `OpNative.nativeEditorSetLocale` — apply a UI locale by BCP-47 tag.
+#[no_mangle]
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorSetLocale<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+    tag: JString<'local>,
+) -> jint {
+    let Some(tag) = jstring_bytes(&mut env, &tag) else {
+        return OpStatus::InvalidArg as jint;
+    };
+    call_status(engine, move |e| unsafe {
+        op_editor_set_locale(e, tag.as_ptr(), tag.len())
+    })
+}
+
+/// `OpNative.nativeEditorLocaleCode` — the current UI locale's BCP-47 tag.
+#[no_mangle]
+pub extern "system" fn Java_tech_zseven_openpencil_OpNative_nativeEditorLocaleCode<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    engine: jlong,
+) -> jstring {
+    let bytes = with_engine(engine, move |e| {
+        let mut required = 0usize;
+        let status = unsafe { op_editor_locale_code(e, std::ptr::null_mut(), 0, &mut required) };
+        if status != OpStatus::Ok || required == 0 {
+            return None;
+        }
+        let mut bytes = vec![0_u8; required];
+        let status =
+            unsafe { op_editor_locale_code(e, bytes.as_mut_ptr(), bytes.len(), &mut required) };
+        (status == OpStatus::Ok).then_some(bytes)
+    })
+    .flatten();
+    let Some(bytes) = bytes else {
+        return std::ptr::null_mut();
+    };
+    let Ok(text) = String::from_utf8(bytes) else {
+        return std::ptr::null_mut();
+    };
+    env.new_string(text)
+        .map(|value| value.into_raw())
+        .unwrap_or(std::ptr::null_mut())
 }
 
 /// `OpNative.nativeEditorTakeShellAction` — returns an `OpShellAction` value.

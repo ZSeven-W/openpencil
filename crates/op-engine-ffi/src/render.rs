@@ -137,6 +137,36 @@ pub(crate) fn paint_into_canvas(session: &mut Session, canvas: &skia_safe::Canva
             // the logical-point layout maps onto the physical surface.
             let (w, h) = (usable_w, usable_h);
             canvas.scale((session.dpr, session.dpr));
+            // Blend the platform-owned bands into the touch chrome: the
+            // status-bar band carries the app-bar surface and the phone's
+            // gesture band carries the dock surface, so the chrome reads as
+            // one continuous sheet instead of stripes of canvas backdrop.
+            if !host.preview_slideshow_active() {
+                let (top_band, bottom_band) =
+                    op_editor_ui::widgets::mobile_chrome::safe_area_band_colors(
+                        host.editor_state(),
+                    );
+                let full_w = usable_w + session.insets.left + session.insets.right;
+                let mut band_frame = NativeFrameBackend::new(backend, canvas);
+                if let (Some(color), true) = (top_band, session.insets.top > 0.0) {
+                    band_frame.fill_rect(
+                        Rect {
+                            origin: Point2D::new(0.0, 0.0),
+                            size: Point2D::new(full_w, session.insets.top),
+                        },
+                        color,
+                    );
+                }
+                if let (Some(color), true) = (bottom_band, session.insets.bottom > 0.0) {
+                    band_frame.fill_rect(
+                        Rect {
+                            origin: Point2D::new(0.0, session.insets.top + usable_h),
+                            size: Point2D::new(full_w, session.insets.bottom),
+                        },
+                        color,
+                    );
+                }
+            }
             if insets_left > 0.0 || insets_top > 0.0 {
                 canvas.translate((insets_left, insets_top));
             }
@@ -354,11 +384,79 @@ mod editor_viewport_tests {
         paint_into_canvas(&mut session, surface.canvas());
         let mut pixels = vec![0_u8; 320 * 480 * 4];
         assert!(surface.read_rgba8(&mut pixels));
-        let top_band = (12 * 320 + 160) * 4;
+        // The band carries whatever chrome surface sits under it (the touch
+        // app bar when touch chrome is active, else the root surface) — the
+        // invariant is continuity with the row right below, in light colors.
+        let sample = |x: usize, y: usize| {
+            let i = (y * 320 + x) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
         assert_eq!(
-            &pixels[top_band..top_band + 4],
-            &[0xef, 0xef, 0xef, 0xff],
-            "light chrome must extend its root surface through the safe band"
+            sample(160, 12),
+            sample(160, 30),
+            "light chrome must stay continuous through the safe band"
+        );
+        assert!(
+            sample(160, 12).iter().all(|channel| *channel > 0xC0),
+            "light theme band must stay light"
+        );
+    }
+
+    #[test]
+    fn touch_chrome_blends_the_safe_bands_with_bar_and_dock_surfaces() {
+        let mut session = Session::new(CreateOptions {
+            document: SAMPLE_DOC.to_owned(),
+            width: 320.0,
+            height: 480.0,
+            dpr: 1.0,
+            callbacks: Callbacks::default(),
+            asset_base: None,
+            editor_mode: true,
+        })
+        .expect("editor session");
+        session.insets = crate::viewport::OpInsets {
+            top: 24.0,
+            right: 0.0,
+            bottom: 20.0,
+            left: 0.0,
+        };
+        {
+            let ui = &mut session
+                .editor
+                .as_mut()
+                .expect("editor host")
+                .editor_state_mut()
+                .editor_ui;
+            ui.touch = true;
+            ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+        }
+
+        let mut surface = SkiaSurface::new_raster(320, 480);
+        paint_into_canvas(&mut session, surface.canvas());
+        let mut pixels = vec![0_u8; 320 * 480 * 4];
+        assert!(surface.read_rgba8(&mut pixels));
+
+        let sample = |x: usize, y: usize| {
+            let i = (y * 320 + x) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+        // The status band must match the app-bar surface painted right
+        // below it, and the gesture band must match the dock painted right
+        // above it — no black canvas stripes.
+        assert_eq!(
+            sample(160, 12),
+            sample(160, 30),
+            "status band must blend with the app bar"
+        );
+        assert_eq!(
+            sample(160, 470),
+            sample(160, 445),
+            "gesture band must blend with the bottom dock"
+        );
+        assert_ne!(
+            sample(160, 12),
+            [0, 0, 0],
+            "band must not stay canvas-black"
         );
     }
 }

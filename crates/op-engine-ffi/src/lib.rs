@@ -67,16 +67,19 @@ pub use desc::{
 #[cfg(feature = "editor")]
 pub use editor::{
     op_editor_cancel_gesture, op_editor_ime_commit, op_editor_ime_focused, op_editor_ime_preedit,
-    op_editor_key, op_editor_move, op_editor_open_document, op_editor_pan, op_editor_pinch,
-    op_editor_press, op_editor_release, op_editor_right_press, op_editor_take_shell_action,
-    op_editor_text, KEY_ARROW_DOWN, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_ARROW_UP, KEY_BACKSPACE,
-    KEY_DELETE, KEY_DUPLICATE, KEY_ENTER, KEY_ESCAPE, KEY_REDO, KEY_UNDO,
+    op_editor_key, op_editor_locale_code, op_editor_move, op_editor_open_document, op_editor_pan,
+    op_editor_pinch, op_editor_press, op_editor_release, op_editor_right_press,
+    op_editor_set_locale, op_editor_take_shell_action, op_editor_text, KEY_ARROW_DOWN,
+    KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_ARROW_UP, KEY_BACKSPACE, KEY_DELETE, KEY_DUPLICATE,
+    KEY_ENTER, KEY_ESCAPE, KEY_REDO, KEY_UNDO,
 };
 #[cfg(feature = "editor")]
 pub use editor_auth::{
-    op_editor_cancel_login, op_editor_configure_auth, op_editor_copy_login_url,
-    SHELL_ACTION_CLOSE_LOGIN_WEBVIEW, SHELL_ACTION_NONE, SHELL_ACTION_OPEN_DOCUMENT,
-    SHELL_ACTION_OPEN_LOGIN_WEBVIEW,
+    op_editor_account_snapshot, op_editor_auth_sign_out, op_editor_begin_login,
+    op_editor_cancel_login, op_editor_configure_auth, op_editor_copy_login_url, AUTH_REGION_CHINA,
+    AUTH_REGION_GLOBAL, SHELL_ACTION_CLOSE_LOGIN_WEBVIEW, SHELL_ACTION_NONE,
+    SHELL_ACTION_OPEN_ACCOUNT_CENTER, SHELL_ACTION_OPEN_DOCUMENT,
+    SHELL_ACTION_OPEN_LANGUAGE_PICKER, SHELL_ACTION_OPEN_LOGIN_WEBVIEW, SHELL_ACTION_REQUEST_LOGIN,
 };
 #[cfg(feature = "editor")]
 pub use editor_export::{

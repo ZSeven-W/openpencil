@@ -147,6 +147,19 @@ pub struct EditorUiState {
     pub export_quick_menu_hover: Option<crate::export_quick_menu_state::ExportQuickRow>,
     /// Pending file-menu action for the host runner to handle.
     pub pending_file_action: Option<FileAction>,
+    /// One-shot request for the mobile shell to present its native
+    /// account-center screen (set by the touch more-panel's Account tile;
+    /// desktop chrome keeps its painted account surfaces and never sets it).
+    pub pending_account_center: bool,
+    /// One-shot request for the mobile shell to start the sign-in flow (set
+    /// by the touch more-panel's Sign in tile). The shell configures the
+    /// auth runtime for its resolved region if needed, then calls
+    /// `op_editor_begin_login`; the engine-painted login modal never opens
+    /// on touch chrome.
+    pub pending_mobile_login: bool,
+    /// One-shot request for the mobile shell to present its native language
+    /// picker (set by the touch more-panel's Language tile).
+    pub pending_language_picker: bool,
     /// Recent files (head = newest, cap 10).
     pub recent_files: Vec<RecentFile>,
     /// TopBar display name; `None` = "Untitled".

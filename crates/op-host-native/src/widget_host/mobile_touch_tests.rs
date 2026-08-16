@@ -5,13 +5,11 @@ mod mobile_auth_collab_tests;
 mod mobile_layer_drag_tests;
 use op_editor_core::size_class::{EditorSizeClass, MobileSheetKind};
 use op_editor_core::{
-    agent_settings::AgentSettingsTab,
     editor_ui_state::{EffectParamFocus, FileAction},
     AccountState, AssetCenterTab, AuthenticatedCollabSession, CollabAvailability,
     CollabConnectionPhase, CollabUiRole, EffectField, FontPickerPurpose, NodeId, PropertyFocus,
     Tool,
 };
-use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 use op_editor_ui::widgets::{host_canvas_geometry, CollabPanel, MobileAppBar, MobileMoreEntry};
 use op_editor_ui::{Point2D, Rect};
 
