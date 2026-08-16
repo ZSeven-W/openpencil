@@ -1,8 +1,11 @@
 //! Embedded mobile authentication bridge.
 //!
-//! The Rust host owns the device-code flow and polling. Platform shells only
-//! present the verification URL in an in-app WebView, cancel it when the user
-//! closes that view, and dismiss it when the engine emits the close action.
+//! The Rust host owns the device-code flow and polling. Platform shells
+//! present the verification URL in their native login UI (email/password
+//! against the regional SSO JSON API plus a system-browser hand-off for
+//! third-party providers), cancel the flow when the user closes that UI, and
+//! dismiss it when the engine emits the close action. The account-center
+//! snapshot and sign-out calls back the shells' native account screens.
 
 use crate::error::{read_utf8, FfiError, FfiResult};
 use crate::lifecycle::{call_session, Session};
@@ -13,10 +16,20 @@ use std::path::PathBuf;
 pub const SHELL_ACTION_NONE: i32 = 0;
 /// Present the platform document picker.
 pub const SHELL_ACTION_OPEN_DOCUMENT: i32 = 1;
-/// Present the pending device-login URL in an embedded WebView.
+/// Present the pending device-login flow in the shell's native login UI
+/// (historically an embedded WebView — the constant name is part of the
+/// frozen shell contract).
 pub const SHELL_ACTION_OPEN_LOGIN_WEBVIEW: i32 = 2;
-/// Dismiss the embedded login WebView without canceling the completed flow.
+/// Dismiss the shell login UI without canceling the completed flow.
 pub const SHELL_ACTION_CLOSE_LOGIN_WEBVIEW: i32 = 3;
+/// Present the shell's native account-center screen.
+pub const SHELL_ACTION_OPEN_ACCOUNT_CENTER: i32 = 5;
+/// Start the sign-in flow: the shell configures the auth runtime for its
+/// resolved region if needed, then calls [`op_editor_begin_login`].
+pub const SHELL_ACTION_REQUEST_LOGIN: i32 = 6;
+/// Present the shell's native language picker
+/// ([`crate::op_editor_set_locale`] applies the choice).
+pub const SHELL_ACTION_OPEN_LANGUAGE_PICKER: i32 = 7;
 
 const AUTH_POLL_INTERVAL_MS: u64 = 250;
 const AUTH_STORAGE_PATH_CAP: usize = 16 * 1024;
@@ -34,8 +47,16 @@ pub(crate) struct EditorAuthShellState {
     pub(crate) close_pending: bool,
 }
 
+/// SSO region codes for [`op_editor_configure_auth`]. Both map to pinned
+/// first-party origins inside `op-auth-bridge` — the shell only ever picks a
+/// region, never supplies a URL.
+pub const AUTH_REGION_CHINA: i32 = 0;
+pub const AUTH_REGION_GLOBAL: i32 = 1;
+
 /// Configure the real mobile auth backend with a shell-owned private storage
-/// directory. The SSO origin is pinned to production by `op-auth-bridge`.
+/// directory and the regional SSO deployment the shell resolved (persisted
+/// preference, falling back to an IP-informed default). Both regional
+/// origins stay pinned by `op-auth-bridge`.
 ///
 /// # Safety
 ///
@@ -50,9 +71,15 @@ pub unsafe extern "C" fn op_editor_configure_auth(
     device_name_len: usize,
     app_version_ptr: *const u8,
     app_version_len: usize,
+    region: i32,
 ) -> OpStatus {
     unsafe {
         call_session(engine, |session| {
+            let region = match region {
+                AUTH_REGION_CHINA => op_host_native::MobileSsoRegion::China,
+                AUTH_REGION_GLOBAL => op_host_native::MobileSsoRegion::Global,
+                _ => return Err(FfiError::invalid("unknown auth region code")),
+            };
             let storage_dir = read_nonempty_utf8(
                 storage_dir_ptr,
                 storage_dir_len,
@@ -78,7 +105,7 @@ pub unsafe extern "C" fn op_editor_configure_auth(
                 "auth app version",
             )?;
             let host = session.editor_mut()?;
-            if !host.configure_mobile_auth(storage_dir, device_name, app_version) {
+            if !host.configure_mobile_auth(storage_dir, device_name, app_version, region) {
                 return Err(FfiError::new(
                     OpStatus::NotReady,
                     "mobile authentication backend is unavailable",
@@ -145,9 +172,124 @@ pub unsafe extern "C" fn op_editor_cancel_login(engine: *mut crate::OpEngine) ->
     }
 }
 
+/// Copy a JSON snapshot of the signed-in account for the shell's native
+/// account-center screen: `{"signed_in":bool, "display_name":…,
+/// "username":…, "primary_email":…, "avatar_url":…, "device_id":…}`.
+/// Optional fields are `null` when the runtime did not report them; every
+/// field except `signed_in` is absent-as-null when signed out.
+///
+/// A null buffer with zero capacity reports the required byte length; the
+/// snapshot is re-read on every call and never consumed.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread. `required` must be
+/// writable; a non-null `buffer` must cover `capacity` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_account_snapshot(
+    engine: *mut crate::OpEngine,
+    buffer: *mut u8,
+    capacity: usize,
+    required: *mut usize,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            if required.is_null() {
+                return Err(FfiError::invalid(
+                    "account snapshot required-length pointer is null",
+                ));
+            }
+            let json = session
+                .editor()
+                .map(|host| host.mobile_account_snapshot_json())
+                .ok_or_else(|| FfiError::new(OpStatus::NotReady, "engine is not in editor mode"))?;
+            let bytes = json.as_bytes();
+            required.write(bytes.len());
+            if buffer.is_null() {
+                if capacity == 0 {
+                    return Ok(());
+                }
+                return Err(FfiError::invalid(
+                    "account snapshot buffer is null with nonzero capacity",
+                ));
+            }
+            if capacity < bytes.len() {
+                return Err(FfiError::invalid(format!(
+                    "account snapshot buffer covers {capacity} bytes but {} are required",
+                    bytes.len()
+                )));
+            }
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer, bytes.len());
+            Ok(())
+        })
+    }
+}
+
+/// Start the engine's device-login flow after the shell configured the auth
+/// runtime (`SHELL_ACTION_REQUEST_LOGIN` follow-up). `NotReady` means the
+/// backend is a stub or refused a flow handle — the shell shows a native
+/// "sign-in unavailable" notice instead of an engine modal.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_begin_login(engine: *mut crate::OpEngine) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let host = session.editor_mut()?;
+            if !host.begin_mobile_login() {
+                return Err(FfiError::new(
+                    OpStatus::NotReady,
+                    "mobile authentication backend is unavailable",
+                ));
+            }
+            session.request_redraw();
+            Ok(())
+        })
+    }
+}
+
+/// Sign the account out: revoke the device session in the auth runtime and
+/// clear the engine's account mirror. Safe to call when already signed out.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_auth_sign_out(engine: *mut crate::OpEngine) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let host = session.editor_mut()?;
+            host.sign_out_account();
+            session.request_redraw();
+            Ok(())
+        })
+    }
+}
+
 pub(crate) fn take_shell_action(session: &mut Session) -> FfiResult<i32> {
     if let Some(action) = take_auth_shell_action(&mut session.auth_shell) {
         return Ok(action);
+    }
+
+    {
+        let host = session.editor_mut()?;
+        if host.editor_state().editor_ui.pending_account_center {
+            host.editor_state_mut().editor_ui.pending_account_center = false;
+            host.mark_editor_state_dirty();
+            return Ok(SHELL_ACTION_OPEN_ACCOUNT_CENTER);
+        }
+        if host.editor_state().editor_ui.pending_mobile_login {
+            host.editor_state_mut().editor_ui.pending_mobile_login = false;
+            host.mark_editor_state_dirty();
+            return Ok(SHELL_ACTION_REQUEST_LOGIN);
+        }
+        if host.editor_state().editor_ui.pending_language_picker {
+            host.editor_state_mut().editor_ui.pending_language_picker = false;
+            host.mark_editor_state_dirty();
+            return Ok(SHELL_ACTION_OPEN_LANGUAGE_PICKER);
+        }
     }
 
     let pending = session
@@ -610,6 +752,7 @@ mod tests {
                     device.len(),
                     version.as_ptr(),
                     version.len(),
+                    AUTH_REGION_CHINA,
                 )
             },
             OpStatus::InvalidArg

@@ -152,6 +152,32 @@ pub const ENV_DEV_FAKE_LOGIN: &str = "OPENPENCIL_DEV_FAKE_LOGIN";
 /// not redirect credential-bearing requests.
 pub const PRODUCTION_SSO_ORIGIN: &str = "https://sso.zseven.cn";
 
+/// Overseas SSO origin. Same logical account space as
+/// [`PRODUCTION_SSO_ORIGIN`]; the mobile shells pick one region per install
+/// (IP-informed default with a user override) before the runtime starts.
+pub const GLOBAL_SSO_ORIGIN: &str = "https://sso.zseven.tech";
+
+/// Regional SSO deployment an embedded mobile shell signs in against.
+///
+/// Region is an *install-time* input: the proprietary runtime initializes
+/// once per process and persists its device credential against a single
+/// origin, so switching regions takes effect on the next launch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MobileSsoRegion {
+    China,
+    Global,
+}
+
+impl MobileSsoRegion {
+    /// The credential-bearing SSO origin for this region.
+    pub fn origin(self) -> &'static str {
+        match self {
+            MobileSsoRegion::China => PRODUCTION_SSO_ORIGIN,
+            MobileSsoRegion::Global => GLOBAL_SSO_ORIGIN,
+        }
+    }
+}
+
 /// Everything the runtime needs at startup.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthInitConfig {
@@ -262,14 +288,17 @@ pub fn platform_id() -> &'static str {
 /// Pinned production configuration for an embedded iOS or Android shell.
 /// Unlike desktop startup this deliberately ignores environment overrides:
 /// an app process must not redirect persisted device credentials through an
-/// ambient shell variable.
+/// ambient shell variable. The shell supplies the region it resolved
+/// (persisted preference, falling back to an IP-informed default); both
+/// values are first-party production origins, never caller-provided URLs.
 pub fn mobile_init_config(
     storage_dir: PathBuf,
     device_name: impl Into<String>,
     app_version: impl Into<String>,
+    region: MobileSsoRegion,
 ) -> AuthInitConfig {
     AuthInitConfig {
-        base_url: PRODUCTION_SSO_ORIGIN.to_string(),
+        base_url: region.origin().to_string(),
         storage_dir,
         device_name: device_name.into(),
         app_version: app_version.into(),
@@ -426,11 +455,26 @@ mod abi_tests {
 
     #[test]
     fn mobile_configuration_is_pinned_to_production() {
-        let config = mobile_init_config(PathBuf::from("/private/app/auth"), "Test Phone", "1.0.0");
+        let config = mobile_init_config(
+            PathBuf::from("/private/app/auth"),
+            "Test Phone",
+            "1.0.0",
+            MobileSsoRegion::China,
+        );
         assert_eq!(config.base_url, PRODUCTION_SSO_ORIGIN);
         assert_eq!(config.storage_dir, PathBuf::from("/private/app/auth"));
         assert_eq!(config.device_name, "Test Phone");
         assert_eq!(config.app_version, "1.0.0");
+
+        let global = mobile_init_config(
+            PathBuf::from("/private/app/auth"),
+            "Test Phone",
+            "1.0.0",
+            MobileSsoRegion::Global,
+        );
+        assert_eq!(global.base_url, GLOBAL_SSO_ORIGIN);
+        assert_eq!(MobileSsoRegion::China.origin(), "https://sso.zseven.cn");
+        assert_eq!(MobileSsoRegion::Global.origin(), "https://sso.zseven.tech");
     }
 
     #[test]

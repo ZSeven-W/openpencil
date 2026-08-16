@@ -51,7 +51,7 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     private var docBytes: ByteArray = ByteArray(0)
     private var editorMode = false
     private var fontBytes: List<ByteArray> = emptyList()
-    private val authRuntime = AndroidAuthRuntime(context)
+    internal val authRuntime = AndroidAuthRuntime(context)
     private val privateStorageRoot =
         File(context.applicationContext.noBackupFilesDir, "config").absolutePath
 
@@ -121,8 +121,11 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     private var keyboardHeight = 0f
     private var openDocumentHandler: (() -> Unit)? = null
     private var exportDocumentHandler: (() -> Unit)? = null
-    private var openLoginWebViewHandler: ((String) -> Unit)? = null
-    private var closeLoginWebViewHandler: (() -> Unit)? = null
+    private var accountCenterHandler: (() -> Unit)? = null
+    private var requestLoginHandler: (() -> Unit)? = null
+    private var languagePickerHandler: (() -> Unit)? = null
+    private var openLoginUiHandler: ((String) -> Unit)? = null
+    private var closeLoginUiHandler: (() -> Unit)? = null
     private var systemChromeAppearanceHandler: ((Boolean) -> Unit)? = null
     private var prefersLightSystemIcons: Boolean? = null
 
@@ -152,10 +155,25 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
         exportDocumentHandler = handler
     }
 
-    /** Registers lifecycle callbacks for the Activity-owned login WebView. */
-    fun setLoginWebViewHandlers(open: (String) -> Unit, close: () -> Unit) {
-        openLoginWebViewHandler = open
-        closeLoginWebViewHandler = close
+    /** Registers the Activity-owned native account-center handler. */
+    fun setAccountCenterHandler(handler: () -> Unit) {
+        accountCenterHandler = handler
+    }
+
+    /** Registers the Activity-owned sign-in starter (lazy auth configure). */
+    fun setRequestLoginHandler(handler: () -> Unit) {
+        requestLoginHandler = handler
+    }
+
+    /** Registers the Activity-owned native language picker. */
+    fun setLanguagePickerHandler(handler: () -> Unit) {
+        languagePickerHandler = handler
+    }
+
+    /** Registers lifecycle callbacks for the Activity-owned native login UI. */
+    fun setLoginUiHandlers(open: (String) -> Unit, close: () -> Unit) {
+        openLoginUiHandler = open
+        closeLoginUiHandler = close
     }
 
     /** User close/back: cancel the single auth flow owned by this engine. */
@@ -165,6 +183,49 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
         val status = OpNative.nativeEditorCancelLogin(current)
         if (status != 0 && status != OpNative.STATUS_CLOSING) {
             Log.i(TAG, "login cancel returned status=$status")
+        }
+        requestFrame()
+    }
+
+    /** Starts the device flow; returns the raw engine status. */
+    fun beginLogin(): Int {
+        val current = engine
+        if (!editorMode || current == 0L) return OpNative.STATUS_CLOSING
+        val status = OpNative.nativeEditorBeginLogin(current)
+        requestFrame()
+        return status
+    }
+
+    /** Applies a UI locale tag; returns the raw engine status. */
+    fun setLocale(tag: String): Int {
+        val current = engine
+        if (!editorMode || current == 0L) return OpNative.STATUS_CLOSING
+        val status = OpNative.nativeEditorSetLocale(current, tag)
+        requestFrame()
+        return status
+    }
+
+    /** The current UI locale's BCP-47 tag, if readable. */
+    fun localeCode(): String? {
+        val current = engine
+        if (!editorMode || current == 0L) return null
+        return OpNative.nativeEditorLocaleCode(current)
+    }
+
+    /** Copies the engine's JSON account snapshot (never consumed). */
+    fun accountSnapshot(): String? {
+        val current = engine
+        if (!editorMode || current == 0L) return null
+        return OpNative.nativeEditorAccountSnapshot(current)
+    }
+
+    /** Revokes the device session from the native account center. */
+    fun signOutAccount() {
+        val current = engine
+        if (!editorMode || current == 0L) return
+        val status = OpNative.nativeEditorSignOut(current)
+        if (status != 0 && status != OpNative.STATUS_CLOSING) {
+            Log.i(TAG, "sign out returned status=$status")
         }
         requestFrame()
     }
@@ -281,6 +342,9 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
                 return
             }
             authRuntime.configure(engine, editorMode)
+            EngineLanguage.storedPreference(context)?.let { tag ->
+                OpNative.nativeEditorSetLocale(engine, tag)
+            }
             Log.i(TAG, "engine created (${wLogical}x$hLogical dpr=$viewportDensity)")
             for (bytes in fontBytes) {
                 OpNative.nativeRegisterFont(engine, bytes)
@@ -736,19 +800,28 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
             action == OpNative.SHELL_ACTION_EXPORT_DOCUMENT -> post {
                 if (engine != 0L) exportDocumentHandler?.invoke()
             }
+            action == OpNative.SHELL_ACTION_OPEN_ACCOUNT_CENTER -> post {
+                if (engine != 0L) accountCenterHandler?.invoke()
+            }
+            action == OpNative.SHELL_ACTION_REQUEST_LOGIN -> post {
+                if (engine != 0L) requestLoginHandler?.invoke()
+            }
+            action == OpNative.SHELL_ACTION_OPEN_LANGUAGE_PICKER -> post {
+                if (engine != 0L) languagePickerHandler?.invoke()
+            }
             action == OpNative.SHELL_ACTION_OPEN_LOGIN_WEBVIEW -> {
                 val url = OpNative.nativeEditorTakeLoginUrl(engine)
                 if (url.isNullOrBlank()) {
-                    Log.w(TAG, "login WebView action had no URL; canceling the flow")
+                    Log.w(TAG, "login action had no URL; canceling the flow")
                     OpNative.nativeEditorCancelLogin(engine)
                 } else {
                     post {
-                        if (engine != 0L) openLoginWebViewHandler?.invoke(url)
+                        if (engine != 0L) openLoginUiHandler?.invoke(url)
                     }
                 }
             }
             action == OpNative.SHELL_ACTION_CLOSE_LOGIN_WEBVIEW -> post {
-                closeLoginWebViewHandler?.invoke()
+                closeLoginUiHandler?.invoke()
             }
             else -> Log.w(TAG, "unknown editor shell action=$action")
         }
@@ -815,8 +888,11 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     fun destroy() {
         openDocumentHandler = null
         exportDocumentHandler = null
-        openLoginWebViewHandler = null
-        closeLoginWebViewHandler = null
+        accountCenterHandler = null
+        requestLoginHandler = null
+        languagePickerHandler = null
+        openLoginUiHandler = null
+        closeLoginUiHandler = null
         systemChromeAppearanceHandler = null
         if (engine != 0L) {
             OpNative.nativeDestroy(engine)

@@ -50,6 +50,58 @@ pub unsafe extern "C" fn op_editor_take_shell_action(
     }
 }
 
+/// Apply a UI locale by BCP-47 tag ("zh-CN", "en-US", …). Unsupported tags
+/// are rejected so the shell's picker cannot silently fall back.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread; a non-empty byte
+/// range must cover readable UTF-8 for its declared length.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_set_locale(
+    engine: *mut crate::OpEngine,
+    tag_ptr: *const u8,
+    tag_len: usize,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let tag = crate::error::read_utf8(tag_ptr, tag_len, STRING_CAP, "locale tag")?;
+            let Some(locale) = op_editor_core::editor_ui_state::Locale::from_tag(&tag) else {
+                return Err(FfiError::invalid("unsupported locale tag"));
+            };
+            let host = session.editor_mut()?;
+            host.editor_state_mut().editor_ui.locale = locale;
+            host.mark_editor_state_dirty();
+            session.request_redraw();
+            Ok(())
+        })
+    }
+}
+
+/// Copy the current UI locale's BCP-47 tag (never consumed).
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread; `required` must be
+/// writable and a non-null `buffer` must cover `capacity` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_locale_code(
+    engine: *mut crate::OpEngine,
+    buffer: *mut u8,
+    capacity: usize,
+    required: *mut usize,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let code = session
+                .editor()
+                .map(|host| host.editor_state().editor_ui.locale.code())
+                .ok_or_else(|| FfiError::new(OpStatus::NotReady, "engine is not in editor mode"))?;
+            crate::error::write_bytes(code.as_bytes(), buffer, capacity, required)
+        })
+    }
+}
+
 /// Parse and atomically install a document selected by the platform shell.
 /// Parsing, compatibility migration, editor metadata extraction, and scene
 /// validation all finish before the live host is touched, so a rejected file

@@ -16,10 +16,10 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     private var touchIDs: [ObjectIdentifier: UInt32] = [:]
     private var nextTouchID: UInt32 = 1
     private var keyboardObservers: [NSObjectProtocol] = []
-    private var didTearDown = false
+    var didTearDown = false
     private var documentPickerPresented = false
     private var documentOpenErrorPending = false
-    private weak var embeddedLoginController: EmbeddedLoginWebViewController?
+    weak var nativeLoginController: NativeLoginViewController?
     private var systemChromeStyle: UIUserInterfaceStyle?
     private let viewportConvergence = ViewportConvergence()
     private var viewportDisplayLink: CADisplayLink?
@@ -38,7 +38,7 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     private var lastPinchDistance: CGFloat = 0
 
     // ---- IME bridge ----------------------------------------------------
-    private let imeTextView = UITextView()
+    let imeTextView = ImeConduitTextView()
     private var wasComposing = false
     private var composingSelection = NSRange(location: 0, length: 0)
 
@@ -103,6 +103,15 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     // MARK: - IME bridge
 
     private func setupImeTextView() {
+        // Plain backspace on the EMPTY conduit never reaches the delegate
+        // (there is nothing to change), so the key must be forwarded from
+        // deleteBackward itself — otherwise engine inputs can type but
+        // never delete.
+        imeTextView.onEmptyDeleteBackward = { [weak self] in
+            guard let self, self.host.editorMode else { return }
+            self.host.editorKey(Int32(OpKey_Backspace))
+            self.host.requestImmediateFrame()
+        }
         // A 1×1 offscreen text view that can still become first responder:
         // the engine owns the text, this view is only the IME conduit.
         imeTextView.frame = CGRect(x: -40, y: -40, width: 1, height: 1)
@@ -355,50 +364,11 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         didTearDown = true
         viewportDisplayLink?.invalidate()
         viewportDisplayLink = nil
-        embeddedLoginController?.finishForTeardown(animated: false)
-        embeddedLoginController = nil
+        nativeLoginController?.finishForTeardown(animated: false)
+        nativeLoginController = nil
         host.teardown()
         keyboardObservers.forEach(NotificationCenter.default.removeObserver)
         keyboardObservers.removeAll()
-    }
-
-    // MARK: - Embedded login
-
-    /// Presents the exact login URL copied from the engine's active auth flow.
-    /// With the v1 URL-only ABI, top-level navigation stays on that exact HTTPS
-    /// origin; additional identity-provider origins require an explicit future
-    /// allowlist getter rather than an unsafe blanket HTTPS exception.
-    func showEmbeddedLogin(url: URL) {
-        precondition(Thread.isMainThread)
-        // Duplicate actions must not cancel the already-visible browser.
-        guard embeddedLoginController == nil else { return }
-        guard
-            !didTearDown,
-            let presenter = nearestViewController(),
-            presenter.presentedViewController == nil,
-            let request = EmbeddedLoginRequest(initialURL: url)
-        else {
-            host.cancelEmbeddedLogin()
-            return
-        }
-
-        if imeTextView.isFirstResponder {
-            imeTextView.resignFirstResponder()
-        }
-        let (navigation, browser) = makeEmbeddedLoginPresentation(
-            request: request,
-            onCancel: { [weak self] _ in self?.host.cancelEmbeddedLogin() }
-        )
-        embeddedLoginController = browser
-        presenter.present(navigation, animated: true)
-    }
-
-    /// Rust is authoritative for success/error/cancellation and emits the
-    /// close shell action only after its auth state reaches a terminal phase.
-    func closeEmbeddedLoginFromHost() {
-        precondition(Thread.isMainThread)
-        embeddedLoginController?.finishFromHost(animated: true)
-        embeddedLoginController = nil
     }
 
     // MARK: - Document picker
@@ -498,7 +468,7 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         presenter.present(alert, animated: true)
     }
 
-    private func nearestViewController() -> UIViewController? {
+    func nearestViewController() -> UIViewController? {
         var responder: UIResponder? = self
         while let current = responder {
             if let controller = current as? UIViewController { return controller }
@@ -795,5 +765,22 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
             firstResponder: imeTextView.isFirstResponder
         )
         host.updateKeyboardHeight(height)
+    }
+}
+
+
+/// IME conduit: a 1×1 offscreen text view whose only job is forwarding
+/// keyboard/IME events to the engine. `deleteBackward` fires even when the
+/// conduit is empty — the delegate path does not — so plain backspace is
+/// forwarded from here.
+final class ImeConduitTextView: UITextView {
+    var onEmptyDeleteBackward: (() -> Void)?
+
+    override func deleteBackward() {
+        if markedTextRange == nil, text.isEmpty {
+            onEmptyDeleteBackward?()
+            return
+        }
+        super.deleteBackward()
     }
 }

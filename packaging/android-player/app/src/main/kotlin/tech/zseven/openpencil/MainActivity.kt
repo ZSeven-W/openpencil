@@ -39,7 +39,8 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var surfaceView: OpSurfaceView
     private lateinit var rootView: FrameLayout
-    private lateinit var loginWebView: LoginWebViewOverlay
+    private lateinit var nativeLogin: NativeLoginOverlay
+    private lateinit var accountCenter: AccountCenterOverlay
     private lateinit var loginBackCallback: OnBackPressedCallback
     private var documentOpenInProgress = false
     private var exportStagedFile: File? = null
@@ -99,14 +100,7 @@ class MainActivity : ComponentActivity() {
             setOpenDocumentHandler(::launchDocumentPicker)
             setExportDocumentHandler(::beginDocumentExport)
             setSystemChromeAppearanceHandler { prefersLightIcons ->
-                updateSystemChromeAppearance(
-                    window,
-                    if (::loginWebView.isInitialized && loginWebView.isVisible) {
-                        false
-                    } else {
-                        prefersLightIcons
-                    },
-                )
+                updateSystemChromeAppearance(window, prefersLightIcons)
             }
         }
         // Do not pad or resize the SurfaceView: its background should remain
@@ -120,36 +114,54 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
+        val regionStore = surfaceView.authRuntime.regionStore()
         loginBackCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
-                loginWebView.handleBack()
+                if (accountCenter.isVisible) {
+                    accountCenter.handleBack()
+                } else {
+                    nativeLogin.handleBack()
+                }
             }
         }
         onBackPressedDispatcher.addCallback(this, loginBackCallback)
-        loginWebView = LoginWebViewOverlay(
+        val syncBackCallback = {
+            loginBackCallback.isEnabled = nativeLogin.isVisible || accountCenter.isVisible
+        }
+        nativeLogin = NativeLoginOverlay(
             activity = this,
             root = rootView,
+            regionStore = regionStore,
             onCanceled = { surfaceView.cancelLogin() },
-            onRequestRejected = { error ->
-                Log.w(TAG, "rejected login WebView request: $error")
+            onRequestRejected = {
+                Log.w(TAG, "rejected native login request (bad verification URL)")
                 surfaceView.cancelLogin()
-                Toast.makeText(this, R.string.login_webview_load_failed, Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.native_login_load_failed, Toast.LENGTH_SHORT).show()
             },
-            onVisibilityChanged = { visible ->
-                loginBackCallback.isEnabled = visible
-                if (visible) {
-                    // The WebView safe-area band is light even when the
-                    // document behind it uses a dark editor theme.
-                    updateSystemChromeAppearance(window, prefersLightIcons = false)
-                } else {
-                    surfaceView.replaySystemChromeAppearance()
-                }
-            },
+            onVisibilityChanged = { _ -> syncBackCallback() },
         )
-        surfaceView.setLoginWebViewHandlers(
-            open = { url -> loginWebView.show(LoginWebViewRequest(initialUrl = url)) },
-            close = { loginWebView.dismissFromNative() },
+        accountCenter = AccountCenterOverlay(
+            activity = this,
+            root = rootView,
+            regionStore = regionStore,
+            onSignOut = { surfaceView.signOutAccount() },
+            onVisibilityChanged = { _ -> syncBackCallback() },
         )
+        surfaceView.setLoginUiHandlers(
+            open = { url -> nativeLogin.show(url) },
+            close = { nativeLogin.dismissFromNative() },
+        )
+        surfaceView.setAccountCenterHandler {
+            val snapshot = surfaceView.accountSnapshot()?.let(AccountSnapshot::parse)
+            if (snapshot != null) accountCenter.show(snapshot)
+        }
+        surfaceView.setRequestLoginHandler {
+            surfaceView.authRuntime.startLogin(surfaceView) {
+                Toast.makeText(this, R.string.native_login_unavailable, Toast.LENGTH_SHORT)
+                    .show()
+            }
+        }
+        surfaceView.setLanguagePickerHandler { presentLanguagePicker() }
         setContentView(rootView)
 
         installEditorInsets(rootView, surfaceView)
@@ -162,31 +174,13 @@ class MainActivity : ComponentActivity() {
         // SurfaceView is recreated. Refresh the logical-pixel conversion used
         // by resize and touch, then request fresh cutout/bar/IME insets.
         surfaceView.refreshDisplayMetrics()
-        if (::loginWebView.isInitialized && loginWebView.isVisible) {
-            updateSystemChromeAppearance(window, prefersLightIcons = false)
-        } else {
-            surfaceView.replaySystemChromeAppearance()
-        }
+        surfaceView.replaySystemChromeAppearance()
         if (::rootView.isInitialized) ViewCompat.requestApplyInsets(rootView)
     }
 
-    override fun onPause() {
-        if (::loginWebView.isInitialized) loginWebView.onPause()
-        super.onPause()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (::loginWebView.isInitialized) {
-            loginWebView.onResume()
-            if (loginWebView.isVisible) {
-                updateSystemChromeAppearance(window, prefersLightIcons = false)
-            }
-        }
-    }
-
     override fun onDestroy() {
-        if (::loginWebView.isInitialized) loginWebView.destroy()
+        if (::nativeLogin.isInitialized) nativeLogin.destroy()
+        if (::accountCenter.isInitialized) accountCenter.destroy()
         cleanupExportStaging()
         // Teardown unconditionally (rotation never reaches here thanks to
         // configChanges).
@@ -301,6 +295,25 @@ class MainActivity : ComponentActivity() {
         if (!directory.deleteRecursively()) {
             Log.w(TAG, "could not remove export staging directory")
         }
+    }
+
+    /** Native 15-language sheet; the engine applies the choice immediately
+     *  and the preference re-applies on launch. */
+    private fun presentLanguagePicker() {
+        val current = surfaceView.localeCode()
+        val labels = EngineLanguage.all.map { (code, name) ->
+            if (code == current) "✓ $name" else name
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.language_picker_title)
+            .setItems(labels.toTypedArray()) { _, index ->
+                val (code, _) = EngineLanguage.all[index]
+                if (surfaceView.setLocale(code) == 0) {
+                    EngineLanguage.savePreference(this, code)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun showExportError() {

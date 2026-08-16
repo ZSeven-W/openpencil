@@ -17,14 +17,18 @@ impl WidgetHostNative {
     /// and mirror any persisted session into this editor host.
     ///
     /// The caller owns platform storage protection and supplies a private app
-    /// directory. The SSO origin remains pinned inside `op-auth-bridge`.
+    /// directory plus the regional SSO deployment it resolved (persisted
+    /// preference or IP-informed default); both regional origins stay pinned
+    /// inside `op-auth-bridge`.
     pub fn configure_mobile_auth(
         &mut self,
         storage_dir: std::path::PathBuf,
         device_name: String,
         app_version: String,
+        region: op_auth_bridge::MobileSsoRegion,
     ) -> bool {
-        let config = op_auth_bridge::mobile_init_config(storage_dir, device_name, app_version);
+        let config =
+            op_auth_bridge::mobile_init_config(storage_dir, device_name, app_version, region);
         if !op_auth_bridge::available() || !op_auth_bridge::init_mobile(&config) {
             self.editor_state.editor_ui.account_ui_available = false;
             return false;
@@ -46,6 +50,18 @@ impl WidgetHostNative {
         }
         self.mark_dirty();
         true
+    }
+
+    /// Mobile-shell login entry: start the device flow after the shell has
+    /// configured the auth runtime. Returns whether a flow is now active —
+    /// `false` means the backend is a stub or refused a handle, which the
+    /// shell surfaces natively (touch chrome never opens the engine modal).
+    pub fn begin_mobile_login(&mut self) -> bool {
+        if !self.editor_state.editor_ui.account_ui_available {
+            return false;
+        }
+        self.begin_browser_login();
+        self.auth_login_handle.is_some()
     }
 
     /// Start the browser device-login flow (called from the sign-in
@@ -247,6 +263,45 @@ impl WidgetHostNative {
             self.mark_dirty();
         }
         changed
+    }
+
+    /// JSON snapshot of the signed-in account for the mobile shells' native
+    /// account-center screens. Re-read from the auth runtime on every call;
+    /// `{"signed_in":false}` when signed out or the backend is a stub.
+    pub fn mobile_account_snapshot_json(&self) -> String {
+        match op_auth_bridge::poll(op_auth_bridge::SESSION_HANDLE) {
+            AuthStatus::SignedIn {
+                display_name,
+                username,
+                primary_email,
+                avatar_url,
+                device_id,
+            } => serde_json::json!({
+                "signed_in": true,
+                "display_name": display_name,
+                "username": username,
+                "primary_email": primary_email,
+                "avatar_url": avatar_url,
+                "device_id": device_id,
+            })
+            .to_string(),
+            _ => serde_json::json!({ "signed_in": false }).to_string(),
+        }
+    }
+
+    /// Native-shell sign-out: revoke the device session in the private
+    /// runtime and clear this host's account mirror. This is the same
+    /// sequence the engine-painted account menu's Sign out row runs; the
+    /// mobile shells reach it through the C ABI from their native account
+    /// screen instead of a painted press.
+    pub fn sign_out_account(&mut self) {
+        op_auth_bridge::sign_out();
+        self.forget_auth_session_profile();
+        let ui = &mut self.editor_state.editor_ui;
+        if ui.account != AccountState::Anonymous {
+            ui.account = AccountState::Anonymous;
+        }
+        self.mark_dirty();
     }
 
     /// Forget host-local comparison state after either native sign-out path.

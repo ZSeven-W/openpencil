@@ -13,6 +13,8 @@ import UIKit
 /// and the engine paints the complete desktop chrome each frame.
 final class OpEngineHost: NSObject {
     weak var view: OpPlayerView?
+    var authStorageURL: URL?
+    var authConfigured = false
 
     private(set) var engine: OpaquePointer?
     private weak var surfaceLayer: CAMetalLayer?
@@ -210,41 +212,15 @@ final class OpEngineHost: NSObject {
             return
         }
         isSuspended = false
+        authStorageURL = storageURL
         configureMobileAuth(engine: created, storageURL: storageURL)
+        applyPersistedLocale(engine: created)
+        UpdateChecker.checkOncePerDay { [weak self] in
+            self?.view?.nearestViewController()
+        }
         syncSystemChromeStyle()
     }
 
-    /// Installs the mobile auth runtime only when secure local storage can be
-    /// prepared. `NotReady` means this build has no compatible auth archive;
-    /// the Rust UI remains in its honest unavailable/stub state.
-    private func configureMobileAuth(engine: OpaquePointer, storageURL: URL) {
-        let deviceName = UIDevice.current.name
-        let appVersion = Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "unknown"
-        let storage = Data(storageURL.path.utf8)
-        let device = Data(deviceName.utf8)
-        let version = Data(appVersion.utf8)
-        guard !storage.isEmpty, !device.isEmpty, !version.isEmpty else { return }
-        let status = storage.withUnsafeBytes { storageBytes in
-            device.withUnsafeBytes { deviceBytes in
-                version.withUnsafeBytes { versionBytes in
-                    op_editor_configure_auth(
-                        engine,
-                        storageBytes.bindMemory(to: UInt8.self).baseAddress,
-                        storageBytes.count,
-                        deviceBytes.bindMemory(to: UInt8.self).baseAddress,
-                        deviceBytes.count,
-                        versionBytes.bindMemory(to: UInt8.self).baseAddress,
-                        versionBytes.count
-                    )
-                }
-            }
-        }
-        if status != OpStatus_Ok && status != OpStatus_NotReady {
-            reportFailure(status, operation: "op_editor_configure_auth", engine: engine)
-        }
-    }
 
     /// Registers every bundled `fonts/*.ttf` into the engine's font
     /// registry (mirrors the Android shell's asset staging).
@@ -435,16 +411,29 @@ final class OpEngineHost: NSObject {
                     self?.view?.showDocumentPicker()
                 }
             } else if action == Int32(OpShellAction_OpenLoginWebView.rawValue) {
-                guard let url = copyEmbeddedLoginURL(engine: engine) else {
-                    cancelEmbeddedLogin()
+                guard let url = copyLoginURL(engine: engine) else {
+                    cancelLoginFlow()
                     continue
                 }
                 DispatchQueue.main.async { [weak self] in
-                    self?.view?.showEmbeddedLogin(url: url)
+                    self?.view?.showNativeLogin(url: url)
                 }
             } else if action == Int32(OpShellAction_CloseLoginWebView.rawValue) {
                 DispatchQueue.main.async { [weak self] in
-                    self?.view?.closeEmbeddedLoginFromHost()
+                    self?.view?.closeNativeLoginFromHost()
+                }
+            } else if action == Int32(OpShellAction_RequestLogin.rawValue) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.startLoginFlow()
+                }
+            } else if action == Int32(OpShellAction_OpenLanguagePicker.rawValue) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.presentLanguagePicker()
+                }
+            } else if action == Int32(OpShellAction_OpenAccountCenter.rawValue) {
+                guard let snapshot = accountSnapshot(engine: engine) else { continue }
+                DispatchQueue.main.async { [weak self] in
+                    self?.view?.showAccountCenter(snapshot: snapshot)
                 }
             } else if action == Int32(OpShellAction_ExportDocument.rawValue) {
                 DispatchQueue.main.async { [weak self] in
@@ -454,36 +443,9 @@ final class OpEngineHost: NSObject {
         }
     }
 
-    /// Copies the borrowed Rust string into Swift-owned storage before any
-    /// other engine call. The first query obtains the exact required size;
-    /// the second call fills the caller-owned buffer.
-    private func copyEmbeddedLoginURL(engine: OpaquePointer) -> URL? {
-        var required = 0
-        guard
-            op_editor_copy_login_url(engine, nil, 0, &required) == OpStatus_Ok,
-            required > 0,
-            required <= 16 * 1024
-        else { return nil }
-        var bytes = [UInt8](repeating: 0, count: required)
-        let status = bytes.withUnsafeMutableBufferPointer { buffer in
-            op_editor_copy_login_url(engine, buffer.baseAddress, buffer.count, &required)
-        }
-        guard status == OpStatus_Ok, required <= bytes.count else { return nil }
-        let text = String(decoding: bytes.prefix(required), as: UTF8.self)
-        return URL(string: text)
-    }
 
-    /// User-originated close path. This runs on the engine's owner/main thread,
-    /// outside the editor ABI call that originally queued the shell action.
-    func cancelEmbeddedLogin() {
-        precondition(Thread.isMainThread)
-        guard let engine, editorMode else { return }
-        let status = op_editor_cancel_login(engine)
-        if status != OpStatus_Ok && status != OpStatus_Suspended {
-            reportFailure(status, operation: "op_editor_cancel_login", engine: engine)
-        }
-        requestImmediateFrame()
-    }
+
+
 
     /// Polls the engine's IME focus after every frame; the view shows or
     /// hides the system keyboard on transitions.

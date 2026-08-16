@@ -159,6 +159,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.modelsOnePerLine" => "모델 ID, 한 줄에 하나씩",
         "builtin.typeModelManually" => "모델 목록을 가져오지 못했습니다. 모델 ID를 한 줄에 하나씩 입력하세요",
         "settings.provider.deepSeekHarness" => "DeepSeek Harness 모델",
+        "settings.agents.deleteProvider" => "프로바이더 삭제",
         _ => return None,
     })
 }

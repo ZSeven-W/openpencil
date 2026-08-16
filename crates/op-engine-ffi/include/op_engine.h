@@ -138,10 +138,26 @@ typedef enum OpPointerPhase {
 typedef enum OpShellAction {
     OpShellAction_None = 0,
     OpShellAction_OpenDocument = 1,
+    /* Present the pending device-login flow in the shell's native login UI
+     * (the enum name predates the WebView retirement). */
     OpShellAction_OpenLoginWebView = 2,
     OpShellAction_CloseLoginWebView = 3,
     OpShellAction_ExportDocument = 4,
+    OpShellAction_OpenAccountCenter = 5,
+    /* Configure the auth runtime for the resolved region if needed, then
+     * call op_editor_begin_login. */
+    OpShellAction_RequestLogin = 6,
+    /* Present the shell's native language picker; apply the choice with
+     * op_editor_set_locale. */
+    OpShellAction_OpenLanguagePicker = 7,
 } OpShellAction;
+
+/* Regional SSO deployments for op_editor_configure_auth. Both map to pinned
+ * first-party origins inside the engine; the shell only picks a region. */
+typedef enum OpAuthRegion {
+    OpAuthRegion_China = 0,
+    OpAuthRegion_Global = 1,
+} OpAuthRegion;
 
 /* Surrounding-text snapshot for the shell's input connection. The text
  * pointer is BORROWED from the engine and valid only until the next engine
@@ -316,9 +332,29 @@ OpStatus op_editor_export_to_path(OpEngine *engine, const uint8_t *path_ptr, siz
 OpStatus op_editor_cancel_export(OpEngine *engine);
 
 /* Configure the real mobile auth backend. `storage_dir` must be a private
- * app-owned directory; device name and app version are display metadata. The
- * production SSO origin is pinned by the engine and is not shell-provided. */
-OpStatus op_editor_configure_auth(OpEngine *engine, const uint8_t *storage_dir_ptr, size_t storage_dir_len, const uint8_t *device_name_ptr, size_t device_name_len, const uint8_t *app_version_ptr, size_t app_version_len);
+ * app-owned directory; device name and app version are display metadata.
+ * `region` is an OpAuthRegion value; both regional SSO origins are pinned by
+ * the engine and are never shell-provided. */
+OpStatus op_editor_configure_auth(OpEngine *engine, const uint8_t *storage_dir_ptr, size_t storage_dir_len, const uint8_t *device_name_ptr, size_t device_name_len, const uint8_t *app_version_ptr, size_t app_version_len, int32_t region);
+
+/* Copy a JSON snapshot of the signed-in account ({"signed_in":bool,
+ * "display_name":…, "username":…, "primary_email":…, "avatar_url":…,
+ * "device_id":…}). NULL/0 reports the required length; the snapshot is
+ * re-read per call and never consumed. Not NUL-terminated. */
+OpStatus op_editor_account_snapshot(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Apply a UI locale by BCP-47 tag; unsupported tags are rejected. */
+OpStatus op_editor_set_locale(OpEngine *engine, const uint8_t *tag_ptr, size_t tag_len);
+
+/* Copy the current UI locale's BCP-47 tag (never consumed). */
+OpStatus op_editor_locale_code(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Start the device-login flow after configuring auth (RequestLogin
+ * follow-up). NotReady = stub backend; surface natively. */
+OpStatus op_editor_begin_login(OpEngine *engine);
+
+/* Revoke the device session and clear the engine's account mirror. */
+OpStatus op_editor_auth_sign_out(OpEngine *engine);
 
 /* Peek/copy the pending UTF-8 login URL. NULL/0 reports the required length
  * without consuming it. A complete copy consumes it; a short copy fails and

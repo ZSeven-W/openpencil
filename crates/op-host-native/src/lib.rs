@@ -124,6 +124,10 @@ pub use preview::{PreviewEnterError, PreviewLayoutError, PreviewSession};
     target_os = "android"
 ))]
 pub use widget_host::{CursorHint, WidgetHostNative};
+// Regional SSO selection for embedded mobile shells; re-exported so the
+// C-ABI layer can name it without depending on op-auth-bridge directly.
+#[cfg(feature = "widget-host")]
+pub use op_auth_bridge::MobileSsoRegion;
 
 // canvas_view_stub stays desktop-only (uses glow GL-isolation probe).
 #[cfg(feature = "gl-host")]

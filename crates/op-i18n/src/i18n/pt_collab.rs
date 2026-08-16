@@ -143,6 +143,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.modelsOnePerLine" => "IDs de modelo, um por linha",
         "builtin.typeModelManually" => "Falha ao obter a lista de modelos. Insira os IDs manualmente, um por linha.",
         "settings.provider.deepSeekHarness" => "Modelos DeepSeek Harness",
+        "settings.agents.deleteProvider" => "Excluir provedor",
         _ => return None,
     })
 }

@@ -37,6 +37,7 @@ pub enum MobileMoreEntry {
     Ai,
     SignIn,
     Account,
+    Language,
     Collaboration,
     Settings,
     Variables,
@@ -47,7 +48,7 @@ pub enum MobileMoreEntry {
 impl MobileMoreEntry {
     /// Exhaustive semantic entries. Paint and hit-test use [`Self::visible`]
     /// because Sign in and Account are mutually exclusive states of one tile.
-    pub const ALL: [MobileMoreEntry; 12] = [
+    pub const ALL: [MobileMoreEntry; 13] = [
         MobileMoreEntry::NewFile,
         MobileMoreEntry::OpenFile,
         MobileMoreEntry::Templates,
@@ -56,6 +57,7 @@ impl MobileMoreEntry {
         MobileMoreEntry::SignIn,
         MobileMoreEntry::Account,
         MobileMoreEntry::Collaboration,
+        MobileMoreEntry::Language,
         MobileMoreEntry::Settings,
         MobileMoreEntry::Variables,
         MobileMoreEntry::Preview,
@@ -78,6 +80,7 @@ impl MobileMoreEntry {
             } else {
                 MobileMoreEntry::SignIn
             },
+            MobileMoreEntry::Language,
             MobileMoreEntry::Settings,
             MobileMoreEntry::Variables,
             MobileMoreEntry::Preview,
@@ -95,6 +98,7 @@ impl MobileMoreEntry {
             MobileMoreEntry::SignIn => "settings.account.signIn",
             MobileMoreEntry::Account => "settings.account.title",
             MobileMoreEntry::Collaboration => "collab.topbar.collaborate",
+            MobileMoreEntry::Language => "tooltip.topbar.language",
             MobileMoreEntry::Settings => "settings.title",
             MobileMoreEntry::Variables => "toolbar.variables",
             MobileMoreEntry::Preview => "tooltip.topbar.preview",
@@ -117,6 +121,7 @@ impl MobileMoreEntry {
             MobileMoreEntry::Ai => Icon::from_name("sparkles").unwrap_or(Icon::Sparkles),
             MobileMoreEntry::SignIn | MobileMoreEntry::Account => Icon::User,
             MobileMoreEntry::Collaboration => Icon::Users,
+            MobileMoreEntry::Language => Icon::Globe,
             MobileMoreEntry::Settings => Icon::from_name("settings").unwrap_or(Icon::Settings),
             MobileMoreEntry::Variables => Icon::from_name("braces").unwrap_or(Icon::Braces),
             MobileMoreEntry::Preview => Icon::from_name("play").unwrap_or(Icon::Play),
@@ -408,8 +413,8 @@ mod tests {
     #[test]
     fn restored_entries_reuse_localized_labels_and_desktop_icons() {
         let mut state = EditorState::starter();
-        assert_eq!(MobileMoreEntry::ALL.len(), 12);
-        assert_eq!(MobileMoreEntry::visible(&state).len(), 11);
+        assert_eq!(MobileMoreEntry::ALL.len(), 13);
+        assert_eq!(MobileMoreEntry::visible(&state).len(), 12);
         assert_eq!(MobileMoreEntry::ALL[0], MobileMoreEntry::NewFile);
         assert_eq!(MobileMoreEntry::ALL[1], MobileMoreEntry::OpenFile);
         assert_eq!(MobileMoreEntry::NewFile.icon(), Icon::FilePlus);
@@ -442,7 +447,7 @@ mod tests {
     fn account_state_swaps_one_tile_without_moving_collaboration_or_changing_count() {
         let mut state = touch_state(EditorSizeClass::Compact);
         let anonymous = MobileMoreEntry::visible(&state);
-        assert_eq!(anonymous.len(), 11);
+        assert_eq!(anonymous.len(), 12);
         assert!(anonymous.contains(&MobileMoreEntry::SignIn));
         assert!(!anonymous.contains(&MobileMoreEntry::Account));
         assert_eq!(anonymous[5], MobileMoreEntry::Collaboration);

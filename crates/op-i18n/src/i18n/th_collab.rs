@@ -145,6 +145,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "builtin.modelsOnePerLine" => "รหัสโมเดล หนึ่งรายการต่อบรรทัด",
         "builtin.typeModelManually" => "ดึงรายการโมเดลไม่สำเร็จ โปรดกรอกรหัสโมเดลด้วยตนเอง หนึ่งรายการต่อบรรทัด",
         "settings.provider.deepSeekHarness" => "โมเดล DeepSeek Harness",
+        "settings.agents.deleteProvider" => "ลบผู้ให้บริการ",
         _ => return None,
     })
 }

@@ -69,6 +69,26 @@ pub(super) fn paint_builtin_agent_form(
     }
     agent_settings_builtin_parts::paint_preset_menu(cx, theme, settings, agent, index, card, touch);
     model_menu::paint_model_menu(cx, theme, settings, ui, agent, index, card, touch);
+    // Editing an existing provider exposes deletion right in the form —
+    // the collapsed card's trash icon alone left the action undiscoverable
+    // once the card was open.
+    if index.is_some() {
+        let rect = crate::widgets::agent_settings_builtin_layout::editing_delete_rect(card, touch);
+        let danger = theme.destructive;
+        cx.backend
+            .stroke_round_rect(rect, 10.0, danger.with_alpha(0.55), 1.0);
+        let label = t_settings(ui, "settings.agents.deleteProvider");
+        let font = if touch { 15.0 } else { 12.0 };
+        let text_w = cx.backend.measure_text(label, font);
+        draw_text(
+            cx,
+            label,
+            font,
+            danger,
+            rect.origin.x + (rect.size.x - text_w) / 2.0,
+            jian_widgets::centered_text_baseline_y(rect, font),
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

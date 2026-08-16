@@ -21,8 +21,15 @@ required=(
   "$player_dir/Sources/OpEngineHost.swift"
   "$player_dir/Sources/DocumentExportCoordinator.swift"
   "$player_dir/Sources/AuthStorage.swift"
-  "$player_dir/Sources/EmbeddedLoginRequest.swift"
-  "$player_dir/Sources/EmbeddedLoginWebViewController.swift"
+  "$player_dir/Sources/DeviceLoginRequestInfo.swift"
+  "$player_dir/Sources/NativeLoginViewController.swift"
+  "$player_dir/Sources/AuthCodeFormViewController.swift"
+  "$player_dir/Sources/RegisterViewController.swift"
+  "$player_dir/Sources/AuthTheme.swift"
+  "$player_dir/Sources/AccountCenterViewController.swift"
+  "$player_dir/Sources/SsoAuthClient.swift"
+  "$player_dir/Sources/SsoProviderList.swift"
+  "$player_dir/Sources/SsoRegion.swift"
   "$player_dir/Sources/PinchZoomDelta.swift"
 )
 
@@ -81,9 +88,10 @@ raise "op_engine.h search path missing" unless settings.fetch("HEADER_SEARCH_PAT
 raise "device staticlib search path missing" unless settings.fetch("LIBRARY_SEARCH_PATHS[sdk=iphoneos*]").include?("aarch64-apple-ios/release")
 raise "simulator staticlib search path missing" unless settings.fetch("LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]").include?("aarch64-apple-ios-sim/release")
 frameworks = target.fetch("dependencies").map { |entry| entry["sdk"] }.compact
-%w[CoreFoundation.framework Metal.framework QuartzCore.framework WebKit.framework Security.framework UIKit.framework].each do |framework|
+%w[CoreFoundation.framework Metal.framework QuartzCore.framework Security.framework UIKit.framework].each do |framework|
   raise "#{framework} dependency missing" unless frameworks.include?(framework)
 end
+raise "native login must not link WebKit" if frameworks.include?("WebKit.framework")
 raise "optional auth archive must be empty by default" unless settings.fetch("OP_AUTH_ARCHIVE") == ""
 raise "final link must consume the explicit auth archive setting" unless settings.fetch("OTHER_LDFLAGS").include?("$(OP_AUTH_ARCHIVE)")
 raise "final link must consume the exact engine archive setting" unless settings.fetch("OTHER_LDFLAGS").include?("$(OP_ENGINE_ARCHIVE)")
@@ -198,7 +206,7 @@ RUBY
 
 ruby - "$player_dir/Sources/OpEngineHost.swift" <<'RUBY'
 source = File.read(ARGV.fetch(0))
-create = source[/private func createAndAttach\b.*?(?=\n    \/\/\/ Installs the mobile auth runtime)/m]
+create = source[/private func createAndAttach\b.*?(?=\n    \/\/\/ Registers every bundled)/m]
 raise "iOS engine create path missing" unless create
 prepare = create.index("let storageURL = AuthStorage.prepare()")
 root = create.index("desc.storage_root_ptr")
@@ -212,7 +220,7 @@ ruby - "$player_dir/Sources/OpEngineHost.swift" \
 host = File.read(ARGV.fetch(0))
 coordinator = File.read(ARGV.fetch(1))
 
-drain = host[/private func drainShellActions\b.*?(?=\n    \/\/\/ Copies the borrowed Rust string)/m]
+drain = host[/private func drainShellActions\b.*?(?=\n    \/\/\/ Polls the engine)/m]
 raise "iOS export shell-action branch missing" unless drain
 action = drain.index("OpShellAction_ExportDocument.rawValue")
 defer_to_uikit = drain.index("DispatchQueue.main.async", action || 0)
@@ -315,20 +323,21 @@ xcrun swiftc \
   -o "$pinch_test"
 "$pinch_test"
 
-embedded_login_test="$reader_test_dir/embedded-login-request-runner"
+device_login_test="$reader_test_dir/device-login-request-runner"
 xcrun swiftc \
   -warnings-as-errors \
   -parse-as-library \
-  "$player_dir/Sources/EmbeddedLoginRequest.swift" \
-  "$player_dir/Tests/EmbeddedLoginRequestTests.swift" \
-  -o "$embedded_login_test"
-"$embedded_login_test"
+  "$player_dir/Sources/DeviceLoginRequestInfo.swift" \
+  "$player_dir/Sources/SsoProviderList.swift" \
+  "$player_dir/Tests/DeviceLoginRequestInfoTests.swift" \
+  -o "$device_login_test"
+"$device_login_test"
 
-if [[ -f "$player_dir/Tests/EmbeddedLoginLifecycleTests.rb" ]]; then
-  ruby "$player_dir/Tests/EmbeddedLoginLifecycleTests.rb" \
-    "$player_dir/Sources/OpPlayerView.swift" \
-    "$player_dir/Sources/EmbeddedLoginWebViewController.swift" \
-    "$player_dir/Sources/AuthStorage.swift"
-fi
+ruby "$player_dir/Tests/NativeLoginLifecycleTests.rb" \
+  "$player_dir/Sources/OpPlayerView+Login.swift" \
+  "$player_dir/Sources/NativeLoginViewController.swift" \
+  "$player_dir/Sources/AuthStorage.swift" \
+  "$player_dir/Sources/SsoRegion.swift" \
+  "$header_dir/op_engine.h"
 
 echo "iOS Player sources and ABI imports validate"

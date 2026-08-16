@@ -65,7 +65,6 @@ targets:
     dependencies:
       - sdk: Metal.framework
       - sdk: QuartzCore.framework
-      - sdk: WebKit.framework
       - sdk: Security.framework
       - sdk: UIKit.framework
       - sdk: Foundation.framework

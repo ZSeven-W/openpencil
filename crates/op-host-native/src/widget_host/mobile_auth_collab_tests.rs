@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn anonymous_more_sign_in_is_reachable_and_honest_at_every_touch_breakpoint() {
+fn anonymous_more_sign_in_queues_the_shell_login_request() {
     for (class, width, height) in [
         (EditorSizeClass::Compact, 320.0, 568.0),
         (EditorSizeClass::Medium, 834.0, 1_112.0),
@@ -24,10 +24,14 @@ fn anonymous_more_sign_in_is_reachable_and_honest_at_every_touch_breakpoint() {
             height,
         ));
 
+        // Touch chrome hands the whole sign-in experience to the shell: the
+        // engine-painted login modal never opens; the one-shot request lets
+        // the shell configure auth lazily and present its native screen (or
+        // a native unavailability notice).
         let ui = &host.editor_state().editor_ui;
         assert_eq!(ui.mobile_sheet, None, "{class:?}");
-        assert!(ui.login_modal_open, "{class:?}");
-        assert!(ui.login_modal_stub_hint_shown, "{class:?}");
+        assert!(ui.pending_mobile_login, "{class:?}");
+        assert!(!ui.login_modal_open, "{class:?}");
         assert!(!ui.account_menu_open, "{class:?}");
         assert!(!ui.collab.panel.open, "{class:?}");
         assert!(!ui.collab.panel.join_address_focused, "{class:?}");
@@ -37,23 +41,18 @@ fn anonymous_more_sign_in_is_reachable_and_honest_at_every_touch_breakpoint() {
 }
 
 #[test]
-fn configured_more_sign_in_starts_auth_without_waiting_for_modal_confirmation() {
+fn begin_mobile_login_reports_stub_unavailability_without_a_modal() {
     let mut host = touch_host(EditorSizeClass::Compact);
-    // The runtime gate is the host's authoritative signal. This test build has
-    // the inert bridge, so an immediate begin settles to Failed(Unavailable)
-    // instead of creating a handle; importantly it never shows the stub hint.
+    // Unconfigured backend fails closed.
+    assert!(!host.begin_mobile_login());
+    // The runtime gate is the host's authoritative signal. This test build
+    // has the inert bridge, so an immediate begin settles to
+    // Failed(Unavailable) instead of creating a handle; the shell surfaces
+    // that natively and the modal stays closed.
     host.editor_state_mut().editor_ui.account_ui_available = true;
-
-    assert!(press_more_entry(
-        &mut host,
-        MobileMoreEntry::SignIn,
-        390.0,
-        844.0,
-    ));
-
+    assert!(!host.begin_mobile_login());
     let ui = &host.editor_state().editor_ui;
-    assert!(ui.login_modal_open);
-    assert!(!ui.login_modal_stub_hint_shown);
+    assert!(!ui.login_modal_open);
     assert_eq!(
         ui.login_modal_status,
         Some(op_editor_core::LoginFlowStatus::Failed(
@@ -63,7 +62,7 @@ fn configured_more_sign_in_starts_auth_without_waiting_for_modal_confirmation() 
 }
 
 #[test]
-fn signed_in_more_account_opens_the_actual_account_settings_tab() {
+fn signed_in_more_account_requests_the_native_account_center() {
     for (class, width, height) in [
         (EditorSizeClass::Compact, 390.0, 844.0),
         (EditorSizeClass::Medium, 834.0, 1_112.0),
@@ -85,16 +84,11 @@ fn signed_in_more_account_opens_the_actual_account_settings_tab() {
 
         let state = host.editor_state();
         assert_eq!(state.editor_ui.mobile_sheet, None, "{class:?}");
-        assert!(state.editor_ui.agent_settings_open, "{class:?}");
-        assert_eq!(
-            state.editor_ui.agent_settings.tab,
-            AgentSettingsTab::Account
-        );
-        assert_eq!(
-            AgentSettingsPanel::for_editor(state).active_tab(),
-            AgentSettingsTab::Account,
-            "the signed-in mobile Account entry must not silently fall back to Agents"
-        );
+        // The SSO account experience on phones is platform-native: the tile
+        // queues a one-shot shell request instead of opening the painted
+        // desktop Settings surface.
+        assert!(state.editor_ui.pending_account_center, "{class:?}");
+        assert!(!state.editor_ui.agent_settings_open, "{class:?}");
     }
 }
 
