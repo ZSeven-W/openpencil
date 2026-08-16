@@ -45,6 +45,7 @@
 use std::sync::Arc;
 
 mod audit_rubric;
+mod best_of;
 mod llm_clients;
 mod loop_mode;
 mod loop_seed;
@@ -641,6 +642,22 @@ async fn main() -> std::process::ExitCode {
         vision: &vision,
         system_prompt: String::new(),
     };
+
+    // `OPENPENCIL_SMOKE_BEST_OF=N` (2..=4): N independent generations,
+    // geometry-scored, best one saved. The plain single-run path below
+    // stays byte-identical when the knob is unset.
+    let best_of_n = best_of::parse_best_of_count();
+    if best_of_n > 1 {
+        return best_of::run_best_of(
+            best_of_n,
+            &request,
+            &sink.state,
+            llm.as_ref(),
+            &abort,
+            &providers,
+        )
+        .await;
+    }
 
     let mut on_progress = |p: Progress| {
         eprintln!("[PROGRESS] {p:?}");
