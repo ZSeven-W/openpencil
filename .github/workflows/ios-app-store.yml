@@ -7,10 +7,10 @@ name: iOS App Store / TestFlight
 # resolves the canonical remote ref, requires it to select that source, and
 # verifies the signed Auth matrix already committed in the same source tree.
 #
-# The `testflight` environment must require a reviewer and allow only protected
-# release tags/branches. Store signing and App Store Connect credentials as its
-# secrets. The repository's existing team and relay values remain secrets and
-# are referenced only by the protected publish job.
+# The `testflight` environment must allow only reviewed release tags/branches.
+# Store signing and App Store Connect credentials as its secrets. The
+# repository's existing team and relay values remain secrets and are referenced
+# only by the protected publish job.
 #
 # Environment secrets:
 # - IOS_DISTRIBUTION_CERTIFICATE_BASE64
@@ -20,7 +20,7 @@ name: iOS App Store / TestFlight
 # - APP_STORE_CONNECT_API_KEY_ID
 # - APP_STORE_CONNECT_ISSUER_ID
 #
-# Existing repository secrets (used only after environment approval):
+# Existing repository secrets (used only by the protected publish job):
 # - APPLE_TEAM_ID
 # - OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN
 # - OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL
@@ -41,9 +41,27 @@ on:
         required: true
         type: string
     secrets:
+      APP_STORE_CONNECT_API_KEY_BASE64:
+        description: App Store Connect API private key
+        required: false
+      APP_STORE_CONNECT_API_KEY_ID:
+        description: App Store Connect API key identifier
+        required: false
+      APP_STORE_CONNECT_ISSUER_ID:
+        description: App Store Connect API issuer identifier
+        required: false
       APPLE_TEAM_ID:
         description: Apple Developer team identifier
         required: true
+      IOS_DISTRIBUTION_CERTIFICATE_BASE64:
+        description: Apple Distribution PKCS12 certificate
+        required: false
+      IOS_DISTRIBUTION_CERTIFICATE_PASSWORD:
+        description: Apple Distribution PKCS12 password
+        required: false
+      IOS_PROVISIONING_PROFILE_BASE64:
+        description: App Store provisioning profile
+        required: false
       OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN:
         description: Reviewed China collaboration bootstrap URL
         required: true

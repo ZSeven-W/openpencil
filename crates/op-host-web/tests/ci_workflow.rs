@@ -442,10 +442,14 @@ fn ios_app_store_workflow_is_reusable_and_supports_exact_source_retries() {
     );
     assert!(
         workflow.contains(
-            "    secrets:\n      APPLE_TEAM_ID:\n        description: Apple Developer team identifier\n        required: true",
+            "      APPLE_TEAM_ID:\n        description: Apple Developer team identifier\n        required: true",
         ) && workflow.contains("      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN:")
-            && workflow.contains("      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL:"),
-        "the reusable lane should accept only its three repository-level release secrets"
+            && workflow.contains("      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL:")
+            && workflow.contains(
+                "      IOS_DISTRIBUTION_CERTIFICATE_BASE64:\n        description: Apple Distribution PKCS12 certificate\n        required: false",
+            )
+            && workflow.contains("      IOS_PROVISIONING_PROFILE_BASE64:"),
+        "the reusable lane should declare repository secrets and defer signing secrets to testflight"
     );
     assert!(
         workflow.contains("ref: ${{ inputs.release_sha }}")

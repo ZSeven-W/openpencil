@@ -66,16 +66,29 @@ end
   end
 end
 call_secrets = triggers.fetch("workflow_call").fetch("secrets")
-expected_call_secrets = %w[
+required_call_secrets = %w[
   APPLE_TEAM_ID
   OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN
   OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL
 ]
-unless call_secrets.keys.sort == expected_call_secrets.sort
-  raise "reusable App Store workflow must accept only the reviewed repository secrets"
+environment_call_secrets = %w[
+  APP_STORE_CONNECT_API_KEY_BASE64
+  APP_STORE_CONNECT_API_KEY_ID
+  APP_STORE_CONNECT_ISSUER_ID
+  IOS_DISTRIBUTION_CERTIFICATE_BASE64
+  IOS_DISTRIBUTION_CERTIFICATE_PASSWORD
+  IOS_PROVISIONING_PROFILE_BASE64
+]
+unless call_secrets.keys.sort == (required_call_secrets + environment_call_secrets).sort
+  raise "reusable App Store workflow must declare the reviewed repository and environment secrets"
 end
-call_secrets.each do |name, secret|
+required_call_secrets.each do |name|
+  secret = call_secrets.fetch(name)
   raise "workflow_call #{name} must be required" unless secret.fetch("required") == true
+end
+environment_call_secrets.each do |name|
+  secret = call_secrets.fetch(name)
+  raise "workflow_call #{name} must defer to the environment" unless secret.fetch("required") == false
 end
 
 jobs = document.fetch("jobs")
