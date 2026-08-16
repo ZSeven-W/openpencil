@@ -155,6 +155,22 @@ create-document UI; the chosen destination receives a plain copy and the
 staging directory is removed on every terminal path. WebP is hidden on mobile
 because the pinned Skia archive does not include its encoder.
 
+Sign-in is platform-native: the engine's device-login flow hands its
+verification URL to a programmatic-View overlay that performs email/password
+sign-in against the regional SSO JSON API and approves the pairing directly,
+while third-party providers, registration, and password recovery open the
+regional web pages in the system browser — the running pairing is approved
+there instead. The Account tile opens a native account center backed by the
+engine's read-only profile snapshot. The third-party buttons are
+region-accurate: the login overlay fetches
+`GET /api/v1/auth/providers?channel=web_mobile` from the pairing's origin, so
+the mainland site lists WeChat / Alipay / Douyin and the global site lists
+Apple / GitHub / Google without a hardcoded table. The sign-in region (Mainland China
+`sso.zseven.cn` / Global `sso.zseven.tech`) resolves from a persisted user
+choice, then an IP-informed probe of the global gateway's mainland redirect,
+then the device locale; changes apply on the next launch because the auth
+runtime initializes once per process.
+
 ## What the shell does / does not own
 
 - `OpSurfaceView` — create/attach/resume/suspend/resize on

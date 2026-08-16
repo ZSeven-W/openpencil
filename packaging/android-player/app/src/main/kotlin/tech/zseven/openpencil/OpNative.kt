@@ -15,6 +15,9 @@ object OpNative {
     const val SHELL_ACTION_OPEN_LOGIN_WEBVIEW = 2
     const val SHELL_ACTION_CLOSE_LOGIN_WEBVIEW = 3
     const val SHELL_ACTION_EXPORT_DOCUMENT = 4
+    const val SHELL_ACTION_OPEN_ACCOUNT_CENTER = 5
+    const val SHELL_ACTION_REQUEST_LOGIN = 6
+    const val SHELL_ACTION_OPEN_LANGUAGE_PICKER = 7
 
     init {
         System.loadLibrary("op_engine_jni")
@@ -94,6 +97,7 @@ object OpNative {
         storageDir: String,
         deviceName: String,
         appVersion: String,
+        region: Int, // OpAuthRegion: 0 = China, 1 = Global
     ): Int
     external fun nativeEditorTakeLoginUrl(engine: Long): String?
     external fun nativeEditorCancelLogin(engine: Long): Int
@@ -102,6 +106,11 @@ object OpNative {
     external fun nativeEditorExportFileName(engine: Long): String?
     external fun nativeEditorExportToPath(engine: Long, path: String): Int
     external fun nativeEditorCancelExport(engine: Long): Int
+    external fun nativeEditorAccountSnapshot(engine: Long): String?
+    external fun nativeEditorSignOut(engine: Long): Int
+    external fun nativeEditorBeginLogin(engine: Long): Int
+    external fun nativeEditorSetLocale(engine: Long, tag: String): Int
+    external fun nativeEditorLocaleCode(engine: Long): String?
 }
 
 /** Editor key codes (mirror `KEY_*` in op-engine-ffi/src/editor.rs). */
