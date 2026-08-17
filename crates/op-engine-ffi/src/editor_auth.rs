@@ -308,7 +308,7 @@ pub(crate) fn take_shell_action(session: &mut Session) -> FfiResult<i32> {
             host.mark_editor_state_dirty();
             Ok(SHELL_ACTION_OPEN_DOCUMENT)
         }
-        #[cfg(any(target_os = "ios", target_os = "android", test))]
+        #[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
         Some(op_editor_core::FileAction::ExportImageConfirm)
         | Some(op_editor_core::FileAction::ExportDeckPdfSelection) => {
             crate::editor_export::stage_export(session, pending)

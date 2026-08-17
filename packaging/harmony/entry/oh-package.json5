@@ -1,0 +1,15 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "OpenPencil player entry HAP.",
+  "main": "",
+  "author": "ZSeven",
+  "license": "MIT",
+  "dependencies": {
+    // Type-only package for the prebuilt Rust NAPI module. The actual
+    // `libopenpencil.so` is dropped into `entry/libs/<abi>/` by
+    // `scripts/build-ohos.sh`; this entry only teaches the ArkTS compiler
+    // the shape of `import napi from 'libopenpencil.so'`.
+    "libopenpencil.so": "file:./src/main/cpp/types/libopenpencil"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "OpenPencil player entry module."
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "OpenPencil"
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "Loads remote images referenced by the open document."
+    },
+    {
+      "name": "document_open_failed",
+      "value": "Couldn't open this file."
+    },
+    {
+      "name": "document_type_unsupported",
+      "value": "Choose an .op or .pen file."
+    },
+    {
+      "name": "document_export_failed",
+      "value": "Couldn't export this file."
+    },
+    {
+      "name": "engine_start_failed",
+      "value": "Couldn't start the OpenPencil engine."
+    },
+    {
+      "name": "native_login_unavailable",
+      "value": "Sign-in is not available on HarmonyOS yet."
+    },
+    {
+      "name": "language_picker_title",
+      "value": "Language"
+    },
+    {
+      "name": "dialog_cancel",
+      "value": "Cancel"
+    },
+    {
+      "name": "notice_dismiss",
+      "value": "OK"
+    }
+  ]
+}

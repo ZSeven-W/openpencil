@@ -333,7 +333,10 @@ pub(crate) unsafe fn parse_create(pointer: *const OpCreateDesc) -> FfiResult<Cre
             )?
         })
     };
-    #[cfg(all(feature = "editor", any(target_os = "ios", target_os = "android")))]
+    #[cfg(all(
+        feature = "editor",
+        any(target_os = "ios", target_os = "android", target_env = "ohos")
+    ))]
     if editor_mode && storage_root.is_none() {
         return Err(FfiError::invalid(
             "mobile editor mode requires a private storage root",

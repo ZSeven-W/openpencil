@@ -1,0 +1,48 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "OpenPencil 播放器入口模块。"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "OpenPencil"
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "加载当前文档引用的远程图片。"
+    },
+    {
+      "name": "document_open_failed",
+      "value": "打开文件失败。"
+    },
+    {
+      "name": "document_type_unsupported",
+      "value": "请选择 .op 或 .pen 文件。"
+    },
+    {
+      "name": "document_export_failed",
+      "value": "导出文件失败。"
+    },
+    {
+      "name": "engine_start_failed",
+      "value": "无法启动 OpenPencil 引擎。"
+    },
+    {
+      "name": "native_login_unavailable",
+      "value": "鸿蒙版暂不支持登录。"
+    },
+    {
+      "name": "language_picker_title",
+      "value": "语言"
+    },
+    {
+      "name": "dialog_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "notice_dismiss",
+      "value": "好"
+    }
+  ]
+}

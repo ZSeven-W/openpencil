@@ -14,7 +14,9 @@
 //! thread only ever exits through the normal Close/deferred-final path.
 //!
 //! Pure `std` — host-testable; the JNI/NDK edges live in the Android-only
-//! modules and only hand this queue closures.
+//! modules and only hand this queue closures. `op-engine-napi` (OHOS) reuses
+//! this queue verbatim rather than forking a twin, so the two mobile
+//! bindings can never drift on teardown ordering.
 
 use std::any::Any;
 use std::collections::VecDeque;
@@ -66,7 +68,7 @@ fn run_guarded(what: &str, f: impl FnOnce()) {
 /// panics is the resulting payload FORGOTTEN rather than dropped — its
 /// `Drop` never runs, so an arbitrarily deep panicking-`Drop` chain cannot
 /// re-enter and unwind.
-pub(crate) fn drop_guarded(payload: Box<dyn Any + Send + 'static>) {
+pub fn drop_guarded(payload: Box<dyn Any + Send + 'static>) {
     if let Err(poison) = catch_unwind(AssertUnwindSafe(move || drop(payload))) {
         std::mem::forget(poison);
     }

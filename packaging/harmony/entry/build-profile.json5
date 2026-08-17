@@ -1,0 +1,33 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    // The engine is a PREBUILT shared library produced by
+    // `crates/op-engine-napi` (see scripts/build-ohos.sh). hvigor packages
+    // everything under `entry/libs/<abi>/` into the HAP, so no
+    // externalNativeOptions/CMake entry is declared here.
+    "napiLibFilterOption": {
+      "excludes": [],
+      "enableOverride": false
+    }
+  },
+  "buildOptionSet": [
+    {
+      "name": "release",
+      "arkOptions": {
+        "obfuscation": {
+          "ruleOptions": {
+            "enable": false
+          }
+        }
+      }
+    }
+  ],
+  "targets": [
+    {
+      "name": "default"
+    },
+    {
+      "name": "ohosTest"
+    }
+  ]
+}

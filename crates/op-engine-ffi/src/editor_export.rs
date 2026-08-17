@@ -6,13 +6,13 @@
 
 use crate::error::{read_utf8, FfiError, FfiResult};
 use crate::lifecycle::call_session;
-#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
 use crate::lifecycle::Session;
 use crate::OpStatus;
-#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
 use op_editor_core::FileAction;
 use op_render_export::ExportArtifact;
-#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
 use op_render_export::{EditorExportScope, ExportError};
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -93,7 +93,7 @@ pub unsafe extern "C" fn op_editor_cancel_export(engine: *mut crate::OpEngine) -
     }
 }
 
-#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
 pub(crate) fn stage_export(session: &mut Session, action: Option<FileAction>) -> FfiResult<i32> {
     let state = {
         let host = session.editor_mut()?;
@@ -212,7 +212,7 @@ fn write_pending_export(state: &mut EditorExportShellState, path: &Path) -> FfiR
     Ok(())
 }
 
-#[cfg(any(target_os = "ios", target_os = "android", test))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
 fn export_error_to_ffi(error: ExportError) -> FfiError {
     let status = match &error {
         ExportError::OutputTooLarge { .. } | ExportError::SurfaceAlloc => OpStatus::OutOfMemory,

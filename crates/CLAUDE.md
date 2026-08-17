@@ -38,6 +38,7 @@ crates/
 ├── op-host-native/       Native host lib: WidgetHostNative + skia-safe GL backend (desktop + mobile)
 ├── op-engine-ffi/        Player C ABI: embed the canvas in iOS / Android shells (metal / gl / raster surfaces)
 ├── op-engine-jni/        Android JNI marshalling layer for op-engine-ffi (engine thread, registry, callbacks)
+├── op-engine-napi/       OpenHarmony (OHOS) Node-API layer → `libopenpencil.so`; reuses op-engine-jni's engine thread + registry, everything else target-gated on `target_env = "ohos"` (see its README for the ArkTS API table)
 ├── op-host-web/          Browser bundle entry: wasm32-unknown-unknown cdylib, CanvasKit renderer
 ├── op-host-desktop/      Desktop binary `openpencil-desktop` (winit + skia-safe GL); also the `--serve-web` daemon
 ├── op-cli/               `op` command-line tool
