@@ -102,7 +102,48 @@ fn entries_fall_back_to_ts_system_list_when_unenumerated() {
 }
 
 #[test]
-fn entries_use_host_enumeration_and_filter_by_search() {
+fn system_picker_dedupes_only_the_documented_yahei_alias() {
+    let system = vec![
+        "Microsoft YaHei".to_string(),
+        "Microsoft YaHei UI".to_string(),
+        "Segoe".to_string(),
+        "Segoe UI".to_string(),
+        "Yu Gothic".to_string(),
+        "Yu Gothic UI".to_string(),
+    ];
+
+    let entries = font_picker_entries(&[], &[], &system, "");
+    let families = entries
+        .iter()
+        .map(|entry| entry.family.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        families,
+        [
+            "Microsoft YaHei",
+            "Segoe",
+            "Segoe UI",
+            "Yu Gothic",
+            "Yu Gothic UI",
+        ]
+    );
+}
+
+#[test]
+fn system_alias_does_not_collapse_an_imported_family_into_the_system_group() {
+    let imported = vec!["Microsoft YaHei UI".to_string()];
+    let system = vec!["Microsoft YaHei".to_string()];
+
+    let entries = font_picker_entries(&imported, &[], &system, "");
+
+    assert_eq!(entries.len(), 2);
+    assert!(entries[0].imported);
+    assert!(entries[1].family.eq_ignore_ascii_case("Microsoft YaHei"));
+}
+
+#[test]
+fn entries_keep_host_enumeration_and_filter_by_search() {
     let system = vec!["Avenir".to_string(), "Menlo".to_string()];
     let entries = font_picker_entries(&[], &bundled(), &system, "");
     assert_eq!(entries.len(), BUNDLED_FONT_FAMILIES.len() + 2);

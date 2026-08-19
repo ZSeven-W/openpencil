@@ -86,6 +86,7 @@ fn build_font_picker_entries(
     let matches = |family: &str| q.is_empty() || family.to_lowercase().contains(q);
     let mut out: Vec<FontPickerEntry> = Vec::new();
     let mut seen = std::collections::HashSet::<String>::new();
+    let mut seen_system_families = Vec::<String>::new();
     for family in imported_families {
         let key = family.trim().to_ascii_lowercase();
         if !key.is_empty() && matches(family) && seen.insert(key) {
@@ -120,7 +121,11 @@ fn build_font_picker_entries(
     } else {
         for family in system_families {
             let key = family.trim().to_ascii_lowercase();
-            if !key.is_empty() && matches(family) && seen.insert(key) {
+            let is_alias_duplicate = seen_system_families.iter().any(|existing| {
+                op_editor_core::font_catalog::is_same_font_family(existing, family)
+            });
+            if !key.is_empty() && matches(family) && !is_alias_duplicate && seen.insert(key) {
+                seen_system_families.push(family.clone());
                 out.push(FontPickerEntry {
                     family: family.clone(),
                     bundled: false,

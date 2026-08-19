@@ -41,10 +41,13 @@ fn family_available(family: &str, ui: &EditorUiState) -> bool {
     if is_generic_or_system_font_alias(family) {
         return true;
     }
-    let matches = |candidate: &String| is_same_font_family(family, candidate.trim());
-    ui.imported_font_families.iter().any(matches)
-        || ui.bundled_font_families.iter().any(matches)
-        || ui.system_font_families.iter().any(matches)
+    let exact_match = |candidate: &String| candidate.trim().eq_ignore_ascii_case(family);
+    ui.imported_font_families.iter().any(exact_match)
+        || ui.bundled_font_families.iter().any(exact_match)
+        || ui
+            .system_font_families
+            .iter()
+            .any(|candidate| is_same_font_family(family, candidate.trim()))
 }
 
 fn family_stack_available(stack: &str, ui: &EditorUiState) -> bool {
@@ -225,6 +228,19 @@ mod tests {
             std::sync::Arc::new(vec!["Arial".into(), "Microsoft YaHei".into()]);
 
         assert!(detect_missing_fonts(&state).is_none());
+    }
+
+    #[test]
+    fn imported_ui_family_does_not_satisfy_a_system_alias_row() {
+        // The documented alias is a system-font enumeration fact, not a
+        // license to treat an unrelated imported file as the same face.
+        let mut state = state_with_text("Microsoft YaHei");
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.imported_font_families =
+            std::sync::Arc::new(vec!["Microsoft YaHei UI".into()]);
+
+        let prompt = detect_missing_fonts(&state).expect("imported alias stays distinct");
+        assert_eq!(prompt.entries[0].family, "Microsoft YaHei");
     }
 
     #[test]
