@@ -303,6 +303,35 @@ pub fn editor_cancel_export(engine: i64) -> i32 {
     call_status(engine, move |e| unsafe { op_editor_cancel_export(e) })
 }
 
+/// `editorHover` — desktop-chrome cursor motion without a pressed button;
+/// drives hover highlighting (mouse/trackpad on 2in1 devices).
+#[napi(js_name = "editorHover")]
+pub fn editor_hover(engine: i64, x: f64, y: f64) -> i32 {
+    call_status(engine, move |e| unsafe {
+        op_engine_ffi::op_editor_hover(e, x as f32, y as f32)
+    })
+}
+
+/// `editorWheel` — desktop wheel/trackpad scroll at the cursor: panel-aware
+/// (scrolls the panel under the cursor, pans the canvas otherwise); `zoom`
+/// promotes the delta to Ctrl+wheel zoom.
+#[napi(js_name = "editorWheel")]
+pub fn editor_wheel(engine: i64, x: f64, y: f64, dx: f64, dy: f64, zoom: bool) -> i32 {
+    call_status(engine, move |e| unsafe {
+        op_engine_ffi::op_editor_wheel(e, x as f32, y as f32, dx as f32, dy as f32, i32::from(zoom))
+    })
+}
+
+/// `editorSetTouchChrome` — chrome family: `true` keeps the mobile touch
+/// chrome (phone/tablet default), `false` switches the engine to the full
+/// desktop layout for desktop-class devices (HarmonyOS PC / 2in1).
+#[napi(js_name = "editorSetTouchChrome")]
+pub fn editor_set_touch_chrome(engine: i64, enabled: bool) -> i32 {
+    call_status(engine, move |e| unsafe {
+        op_engine_ffi::op_editor_set_touch_chrome(e, i32::from(enabled))
+    })
+}
+
 /// `editorSetLocale` — apply a UI locale by BCP-47 tag; unsupported tags are
 /// rejected with `OpStatus::InvalidArg`.
 #[napi(js_name = "editorSetLocale")]

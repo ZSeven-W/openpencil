@@ -16,6 +16,12 @@ export default napi;
 export enum OpStatus {
   OK = 0,
   CLOSING = -1,
+  /**
+   * `OpStatus::InvalidArg`. From `keyEvent` it means "this key has no editor
+   * binding" — the shell must leave it to the IME as text rather than
+   * consuming it.
+   */
+  INVALID_ARG = 1,
   /** `OpStatus::GpuError` discriminant. */
   GPU_ERROR = 4,
 }
@@ -33,6 +39,14 @@ export enum OpShellAction {
   OPEN_ACCOUNT_CENTER = 5,
   REQUEST_LOGIN = 6,
   OPEN_LANGUAGE_PICKER = 7,
+  /**
+   * The TopBar's painted traffic-light dots. Only desktop-class (2in1)
+   * shells see these: they hid the platform title bar, so the engine's own
+   * dots are the window controls. Touch chrome paints none.
+   */
+  WINDOW_CLOSE = 8,
+  WINDOW_MINIMIZE = 9,
+  WINDOW_ZOOM = 10,
 }
 
 /** Pointer phases mirroring the C ABI `OpPointerPhase`. */

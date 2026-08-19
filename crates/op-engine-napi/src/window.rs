@@ -159,6 +159,11 @@ pub fn size_for(id: &str) -> Option<(u64, u64)> {
 
 /// Records that `engine` now borrows the window behind `id` (called after a
 /// successful `op_attach_surface` / `op_resume`).
+/// The engine handle bound to an XComponent id, or 0 when none is bound.
+pub fn engine_for(id: &str) -> i64 {
+    lock(surfaces()).get(id).map_or(0, |slot| slot.engine)
+}
+
 pub fn bind_engine(id: &str, engine: i64) {
     if let Some(slot) = lock(surfaces()).get_mut(id) {
         slot.engine = engine;

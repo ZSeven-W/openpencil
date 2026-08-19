@@ -190,7 +190,12 @@ impl AgentSettingsPanel<'_> {
                 }
             }
             AgentSettingsTab::Mcp => {
-                match agent_settings_mcp::hit_test(content, &self.settings, scrolled) {
+                match agent_settings_mcp::hit_test(
+                    content,
+                    &self.settings,
+                    scrolled,
+                    self.ui.external_cli_available,
+                ) {
                     McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
                     McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
                     McpHit::CopyClientConfig => return AgentSettingsHit::CopyMcpClientConfig,
@@ -459,7 +464,9 @@ impl AgentSettingsPanel<'_> {
     pub fn content_total_height(&self) -> f32 {
         match self.mode.active_tab(&self.settings, self.ui) {
             AgentSettingsTab::Agents => agents_content_height(&self.settings, self.mode, self.ui),
-            AgentSettingsTab::Mcp => agent_settings_mcp::content_height(&self.settings),
+            AgentSettingsTab::Mcp => {
+                agent_settings_mcp::content_height(&self.settings, self.ui.external_cli_available)
+            }
             AgentSettingsTab::Images => {
                 let content_width = if self.ui.compact_layout() {
                     390.0

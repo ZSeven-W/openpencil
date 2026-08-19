@@ -78,9 +78,9 @@ fn integrations_block_h() -> f32 {
 /// Row boxes for this tab, paired with their line count — walked by the
 /// traversal layout test.
 #[cfg(test)]
-pub(super) fn row_boxes(content: Rect) -> Vec<(Rect, RowLines)> {
+pub(super) fn row_boxes(content: Rect, external_cli_available: bool) -> Vec<(Rect, RowLines)> {
     let mut boxes = vec![(server_row_rect(content), SERVER_ROW_LINES)];
-    if CLI_INTEGRATIONS_AVAILABLE {
+    if cli_integrations_visible(external_cli_available) {
         boxes.extend((0..McpCli::DISPLAY.len()).map(|i| (cli_row_rect(content, i), RowLines::One)));
     }
     boxes
@@ -94,18 +94,19 @@ fn has_client_config(settings: &AgentSettings) -> bool {
 
 /// Top of the custom-configuration section. Its *visibility* depends on
 /// whether a server is listening (`has_client_config`), but its position
-/// does not, so callers gate and place independently.
-pub(super) fn custom_config_top(content: Rect) -> f32 {
+/// does not, so callers gate and place independently. It DOES move up by
+/// the whole integrations block when that block is hidden.
+pub(super) fn custom_config_top(content: Rect, external_cli_available: bool) -> f32 {
     let mut y = body_top(content) + row_height(SERVER_ROW_LINES);
-    if CLI_INTEGRATIONS_AVAILABLE {
+    if cli_integrations_visible(external_cli_available) {
         y += SECTION_GAP + integrations_block_h();
     }
     y + SECTION_GAP
 }
 
-pub(super) fn content_height(settings: &AgentSettings) -> f32 {
+pub(super) fn content_height(settings: &AgentSettings, external_cli_available: bool) -> f32 {
     let mut h = tab_intro_height(INTRO_HAS_DESC) + row_height(SERVER_ROW_LINES);
-    if CLI_INTEGRATIONS_AVAILABLE {
+    if cli_integrations_visible(external_cli_available) {
         h += SECTION_GAP + integrations_block_h();
     }
     if has_client_config(settings) {
@@ -141,29 +142,54 @@ pub(super) fn port_field_rect(content: Rect) -> Rect {
     }
 }
 
-pub(super) fn client_config_copy_button_rect(content: Rect) -> Rect {
+pub(super) fn client_config_copy_button_rect(content: Rect, external_cli_available: bool) -> Rect {
     let header = Rect {
-        origin: Point2D::new(content.origin.x, custom_config_top(content)),
+        origin: Point2D::new(
+            content.origin.x,
+            custom_config_top(content, external_cli_available),
+        ),
         size: Point2D::new(content.size.x, SECTION_HEADER_H),
     };
     row_control_rect(header, COPY_BTN_W, COPY_BTN_H)
 }
 
-/// Host capability: the CLI-integration toggles write MCP endpoints
+/// Build capability: the CLI-integration toggles write MCP endpoints
 /// into external CLI config files (`~/.claude.json` etc.) via the
 /// desktop MCP runtime (`mcp_integrations.rs`). The web host has no
 /// consumer — hide the list there instead of painting toggles that
 /// silently do nothing (same pattern as `GIT_BUTTON_AVAILABLE`).
-pub(super) const CLI_INTEGRATIONS_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
+const CLI_INTEGRATIONS_PLATFORM: bool = !cfg!(target_arch = "wasm32");
 
-pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> McpHit {
+/// Whether the terminal-integration list exists on this surface at all.
+/// Build capability AND the runtime host capability
+/// [`EditorUiState::external_cli_available`] — mobile shells (iOS /
+/// Android / HarmonyOS) cannot spawn subprocess CLIs, so writing an MCP
+/// endpoint into a CLI config there would configure a client that can
+/// never run.
+///
+/// Every geometry fn on this tab that walks past the block takes the raw
+/// `external_cli_available` bool and resolves it here, so paint, hit-test
+/// and the content-height walk cannot disagree about whether the block
+/// occupies space.
+pub(super) fn cli_integrations_visible(external_cli_available: bool) -> bool {
+    CLI_INTEGRATIONS_PLATFORM && external_cli_available
+}
+
+pub fn hit_test(
+    content: Rect,
+    settings: &AgentSettings,
+    scrolled: Point2D,
+    external_cli_available: bool,
+) -> McpHit {
     // Host-managed (embed): the extension owns the lifecycle — no
     // start/stop, no port editing; the config section always copies.
     let host_managed = settings.mcp_host_managed();
     if !host_managed && (server_button_rect(content)).contains(scrolled) {
         return McpHit::ToggleServer;
     }
-    if has_client_config(settings) && (client_config_copy_button_rect(content)).contains(scrolled) {
+    if has_client_config(settings)
+        && (client_config_copy_button_rect(content, external_cli_available)).contains(scrolled)
+    {
         return McpHit::CopyClientConfig;
     }
     if !host_managed
@@ -172,7 +198,7 @@ pub fn hit_test(content: Rect, settings: &AgentSettings, scrolled: Point2D) -> M
     {
         return McpHit::FocusPort;
     }
-    if CLI_INTEGRATIONS_AVAILABLE {
+    if cli_integrations_visible(external_cli_available) {
         // Row order is `McpCli::DISPLAY`; paint below walks the same array
         // with the same rect math, so a click always lands on the CLI that
         // was painted there.
@@ -192,6 +218,7 @@ pub(super) fn paint_mcp_tab(
     ui: &EditorUiState,
     content: Rect,
     now_ms: u64,
+    external_cli_available: bool,
 ) {
     paint_tab_intro(
         cx,
@@ -202,7 +229,7 @@ pub(super) fn paint_mcp_tab(
     );
     paint_server_row(cx, theme, settings, ui, content, now_ms);
 
-    if CLI_INTEGRATIONS_AVAILABLE {
+    if cli_integrations_visible(external_cli_available) {
         let top = integrations_top(content);
         paint_section_header(
             cx,
@@ -237,7 +264,15 @@ pub(super) fn paint_mcp_tab(
         );
     }
 
-    paint_custom_config(cx, theme, settings, ui, content, now_ms);
+    paint_custom_config(
+        cx,
+        theme,
+        settings,
+        ui,
+        content,
+        now_ms,
+        external_cli_available,
+    );
 }
 
 /// Section header: glyph + title on the left, optional action on the
@@ -421,6 +456,7 @@ fn paint_server_row(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn paint_custom_config(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
@@ -428,11 +464,12 @@ fn paint_custom_config(
     ui: &EditorUiState,
     content: Rect,
     now_ms: u64,
+    external_cli_available: bool,
 ) {
     if !has_client_config(settings) {
         return;
     }
-    let top = custom_config_top(content);
+    let top = custom_config_top(content, external_cli_available);
     paint_section_header(
         cx,
         theme,
@@ -442,7 +479,7 @@ fn paint_custom_config(
         t_settings(ui, "settings.mcp.customConfigTitle"),
     );
 
-    let copy = client_config_copy_button_rect(content);
+    let copy = client_config_copy_button_rect(content, external_cli_available);
     let copied = mcp_client_config_copy_feedback_active(settings, now_ms);
     cx.backend.fill_round_rect(copy, 6.0, theme.muted);
     cx.backend.stroke_round_rect(copy, 6.0, theme.border, 1.0);

@@ -181,7 +181,10 @@ fn mcp_rows_keep_their_text_inside_their_boxes() {
     let content = crate::widgets::agent_settings_panel::content_viewport(rect);
     audit(
         "MCP",
-        &crate::widgets::agent_settings_mcp::row_boxes(content),
+        &crate::widgets::agent_settings_mcp::row_boxes(
+            content,
+            state.editor_ui.external_cli_available,
+        ),
         &runs,
     );
 }

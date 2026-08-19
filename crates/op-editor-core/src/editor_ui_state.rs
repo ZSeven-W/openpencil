@@ -47,7 +47,7 @@ mod tests;
 
 pub use chrome::{
     DesignMdRequest, EmbedHost, FileAction, PencilCursorStyle, RecentFile, ThemeMode,
-    ThemePresetIo, UpdateStatus, RECENT_FILE_CAP,
+    ThemePresetIo, UpdateStatus, WindowControlRequest, RECENT_FILE_CAP,
 };
 pub use git_panel::{
     CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary, CommitDiffView,
@@ -104,6 +104,11 @@ pub struct EditorUiState {
     /// bottom dock, sheets), and the single open mobile sheet.
     pub size_class: crate::size_class::EditorSizeClass,
     pub touch: bool,
+    /// Whether external CLI agents (Claude Code, Codex, …) can run on this
+    /// platform. Mobile shells (iOS / Android / HarmonyOS) cannot spawn
+    /// subprocess CLIs, so their FFI clears this and the chat catalog plus
+    /// the settings panel hide every external-CLI surface.
+    pub external_cli_available: bool,
     pub mobile_sheet: Option<crate::size_class::MobileSheetKind>,
 
     // --- Theme + locale --------------------------------------------
@@ -160,6 +165,9 @@ pub struct EditorUiState {
     /// One-shot request for the mobile shell to present its native language
     /// picker (set by the touch more-panel's Language tile).
     pub pending_language_picker: bool,
+    /// One-shot request for the embedded shell to drive the window from the
+    /// TopBar's painted traffic-light dots (desktop chrome only).
+    pub pending_window_control: Option<WindowControlRequest>,
     /// Recent files (head = newest, cap 10).
     pub recent_files: Vec<RecentFile>,
     /// TopBar display name; `None` = "Untitled".

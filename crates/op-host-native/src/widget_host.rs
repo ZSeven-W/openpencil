@@ -267,6 +267,8 @@ mod variables_panel_tests;
 mod variables_panel_ux_tests;
 mod variables_preset_press;
 mod viewport_fit;
+#[cfg(test)]
+mod window_control_tests;
 
 /// Cursor affordance the host suggests for a given screen point — re-exported
 /// from `jian-core` so widgets (via `cursor_at`) and hosts share one vocabulary.

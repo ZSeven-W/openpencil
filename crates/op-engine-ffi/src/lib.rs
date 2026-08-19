@@ -35,10 +35,14 @@ mod desc;
 mod editor;
 #[cfg(feature = "editor")]
 mod editor_auth;
+#[cfg(all(feature = "editor", test))]
+mod editor_auth_window_tests;
 #[cfg(feature = "editor")]
 mod editor_collab;
 #[cfg(feature = "editor")]
 mod editor_export;
+#[cfg(feature = "editor")]
+mod editor_ime;
 #[cfg(feature = "editor")]
 mod editor_model_discovery;
 #[cfg(feature = "editor")]
@@ -66,12 +70,11 @@ pub use desc::{
 };
 #[cfg(feature = "editor")]
 pub use editor::{
-    op_editor_cancel_gesture, op_editor_ime_commit, op_editor_ime_focused, op_editor_ime_preedit,
-    op_editor_key, op_editor_locale_code, op_editor_move, op_editor_open_document, op_editor_pan,
-    op_editor_pinch, op_editor_press, op_editor_release, op_editor_right_press,
-    op_editor_set_locale, op_editor_take_shell_action, op_editor_text, KEY_ARROW_DOWN,
-    KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_ARROW_UP, KEY_BACKSPACE, KEY_DELETE, KEY_DUPLICATE,
-    KEY_ENTER, KEY_ESCAPE, KEY_REDO, KEY_UNDO,
+    op_editor_cancel_gesture, op_editor_key, op_editor_locale_code, op_editor_move,
+    op_editor_open_document, op_editor_pan, op_editor_pinch, op_editor_press, op_editor_release,
+    op_editor_right_press, op_editor_set_locale, op_editor_take_shell_action, op_editor_text,
+    KEY_ARROW_DOWN, KEY_ARROW_LEFT, KEY_ARROW_RIGHT, KEY_ARROW_UP, KEY_BACKSPACE, KEY_DELETE,
+    KEY_DUPLICATE, KEY_ENTER, KEY_ESCAPE, KEY_REDO, KEY_UNDO,
 };
 #[cfg(feature = "editor")]
 pub use editor_auth::{
@@ -80,6 +83,7 @@ pub use editor_auth::{
     AUTH_REGION_GLOBAL, SHELL_ACTION_CLOSE_LOGIN_WEBVIEW, SHELL_ACTION_NONE,
     SHELL_ACTION_OPEN_ACCOUNT_CENTER, SHELL_ACTION_OPEN_DOCUMENT,
     SHELL_ACTION_OPEN_LANGUAGE_PICKER, SHELL_ACTION_OPEN_LOGIN_WEBVIEW, SHELL_ACTION_REQUEST_LOGIN,
+    SHELL_ACTION_WINDOW_CLOSE, SHELL_ACTION_WINDOW_MINIMIZE, SHELL_ACTION_WINDOW_ZOOM,
 };
 #[cfg(feature = "editor")]
 pub use editor_export::{
@@ -87,10 +91,14 @@ pub use editor_export::{
     SHELL_ACTION_EXPORT_DOCUMENT,
 };
 #[cfg(feature = "editor")]
-pub use editor_transform::op_editor_begin_transform;
+pub use editor_ime::{op_editor_ime_commit, op_editor_ime_focused, op_editor_ime_preedit};
+#[cfg(feature = "editor")]
+pub use editor_transform::{op_editor_begin_transform, op_editor_hover, op_editor_wheel};
 pub use lifecycle::OpEngine;
 pub use media::{op_register_font, op_remote_image_result};
 pub use pages::{op_get_page_count, op_set_active_page};
+#[cfg(feature = "editor")]
+pub use system_chrome::op_editor_set_touch_chrome;
 pub use system_chrome::op_prefers_light_system_icons;
 pub use text::{
     op_ime_cancel_composition, op_ime_commit_composition, op_ime_set_composing_text,

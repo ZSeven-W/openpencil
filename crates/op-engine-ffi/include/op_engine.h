@@ -150,6 +150,13 @@ typedef enum OpShellAction {
     /* Present the shell's native language picker; apply the choice with
      * op_editor_set_locale. */
     OpShellAction_OpenLanguagePicker = 7,
+    /* The user pressed one of the TopBar's painted window-control dots.
+     * Only desktop-class shells that hid the platform title bar can see
+     * these; touch chrome paints no dots. Append-only: existing codes never
+     * move, so an older shell simply logs an unknown action. */
+    OpShellAction_WindowClose = 8,
+    OpShellAction_WindowMinimize = 9,
+    OpShellAction_WindowZoom = 10,
 } OpShellAction;
 
 /* Regional SSO deployments for op_editor_configure_auth. Both map to pinned
@@ -279,6 +286,14 @@ OpStatus op_set_active_page(OpEngine *engine, uint32_t index);
  * desktop chrome. Pointer press (single finger). */
 OpStatus op_editor_press(OpEngine *engine, float x, float y);
 
+/* Desktop-chrome hover (cursor motion without a pressed button); drives
+ * hover highlighting and needs no pointer capture. */
+OpStatus op_editor_hover(OpEngine *engine, float x, float y);
+
+/* Desktop-chrome wheel scroll: panel-aware (scrolls panels under the
+ * cursor, pans the canvas otherwise); zoom != 0 = Ctrl+wheel zoom. */
+OpStatus op_editor_wheel(OpEngine *engine, float x, float y, float dx, float dy, int32_t zoom);
+
 /* Pointer move (single finger). */
 OpStatus op_editor_move(OpEngine *engine, float x, float y);
 
@@ -344,6 +359,10 @@ OpStatus op_editor_configure_auth(OpEngine *engine, const uint8_t *storage_dir_p
 OpStatus op_editor_account_snapshot(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
 
 /* Apply a UI locale by BCP-47 tag; unsupported tags are rejected. */
+/* Chrome family: 1 = touch (phones/tablets, the mobile default), 0 = full
+ * desktop chrome for desktop-class devices (HarmonyOS PC / 2in1). */
+OpStatus op_editor_set_touch_chrome(OpEngine *engine, int32_t enabled);
+
 OpStatus op_editor_set_locale(OpEngine *engine, const uint8_t *tag_ptr, size_t tag_len);
 
 /* Copy the current UI locale's BCP-47 tag (never consumed). */
@@ -381,6 +400,18 @@ enum {
     OpKey_ArrowDown = 10,
     OpKey_ArrowLeft = 11,
     OpKey_ArrowRight = 12,
+    OpKey_SelectAll = 13,
+    OpKey_Copy = 14,
+    OpKey_Cut = 15,
+    OpKey_Paste = 16,
+    OpKey_Group = 17,
+    OpKey_Ungroup = 18,
+    OpKey_ReorderBack = 19,
+    OpKey_ReorderForward = 20,
+    OpKey_ArrowUpBig = 21,
+    OpKey_ArrowDownBig = 22,
+    OpKey_ArrowLeftBig = 23,
+    OpKey_ArrowRightBig = 24,
 };
 
 #ifdef __cplusplus

@@ -1,8 +1,9 @@
 {
-  "hvigorVersion": "5.0.0",
-  "dependencies": {
-    "@ohos/hvigor-ohos-plugin": "5.0.0"
-  },
+  // Must match the ohpm modelVersion in /oh-package.json5; with a
+  // modelVersion the IDE resolves the hvigor and hvigor-ohos-plugin
+  // versions itself (declaring hvigorVersion here would conflict).
+  "modelVersion": "5.0.0",
+  "dependencies": {},
   "execution": {},
   "logging": {},
   "debugging": {},

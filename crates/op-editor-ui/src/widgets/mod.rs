@@ -263,6 +263,8 @@ mod agent_settings_connect_tests;
 mod agent_settings_density_tests;
 #[cfg(test)]
 mod agent_settings_embed_tests;
+#[cfg(test)]
+mod agent_settings_external_cli_tests;
 mod agent_settings_focus_geometry;
 pub mod agent_settings_fonts;
 #[cfg(test)]

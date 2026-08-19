@@ -35,7 +35,14 @@ impl EditorState {
             .available_models
             .get(self.chat.selected_model)
             .cloned();
-        let connected = self.editor_ui.agent_settings.verified_connected_mask();
+        // Platforms that cannot spawn subprocess CLIs (mobile shells) keep
+        // every external-CLI model out of the catalog; built-in API-key
+        // providers below are unaffected.
+        let connected = if self.editor_ui.external_cli_available {
+            self.editor_ui.agent_settings.verified_connected_mask()
+        } else {
+            [false; 7]
+        };
         self.chat.rebuild_available_models(&connected);
 
         let builtin_entries = self

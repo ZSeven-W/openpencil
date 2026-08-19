@@ -122,6 +122,48 @@ pub fn node_kind_str(node: &PenNode) -> &'static str {
     }
 }
 
+/// Read an authored x coordinate. A missing coordinate is not treated as zero
+/// because flex layout may supply it later.
+pub fn node_x(node: &PenNode) -> Option<f64> {
+    base(node).x
+}
+
+/// Read an authored y coordinate. A missing coordinate is not treated as zero
+/// because flex layout may supply it later.
+pub fn node_y(node: &PenNode) -> Option<f64> {
+    base(node).y
+}
+
+/// Read a numeric authored width from the node kinds that have one.
+pub fn numeric_width(node: &PenNode) -> Option<f64> {
+    numeric_sizing(width_sizing(node))
+}
+
+/// Read a numeric authored height from the node kinds that have one.
+pub fn numeric_height(node: &PenNode) -> Option<f64> {
+    numeric_sizing(height_sizing(node))
+}
+
+fn width_sizing(node: &PenNode) -> Option<&SizingBehavior> {
+    match node {
+        PenNode::Frame(n) => n.container.width.as_ref(),
+        PenNode::Group(n) => n.container.width.as_ref(),
+        PenNode::Rectangle(n) => n.container.width.as_ref(),
+        PenNode::Ellipse(n) => n.width.as_ref(),
+        PenNode::Polygon(n) => n.width.as_ref(),
+        PenNode::Path(n) => n.width.as_ref(),
+        PenNode::Image(n) => n.width.as_ref(),
+        _ => None,
+    }
+}
+
+fn numeric_sizing(sizing: Option<&SizingBehavior>) -> Option<f64> {
+    match sizing {
+        Some(SizingBehavior::Number(value)) if value.is_finite() && *value > 0.0 => Some(*value),
+        _ => None,
+    }
+}
+
 /// A node's children. In jian, only Frame / Group / Rectangle declare a
 /// `children` field at all; every other kind yields an empty slice. A
 /// Frame / Group / Rectangle whose `children` is unset also yields an empty

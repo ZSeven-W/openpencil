@@ -163,6 +163,10 @@ only trust the fields when `status === 0`.
 | `editorAccountSnapshot` | `engine: number` | `string \| null` — JSON, re-read per call |
 | `editorSignOut` | `engine: number` | `number` |
 | `editorBeginLogin` | `engine: number` | `number` — `10` (NotReady) = stub backend, see below |
+| `editorSetTouchChrome` | `(engine: number, enabled: boolean) => number` | Chrome family: `false` = full desktop layout for PC/2in1 devices, `true` = mobile touch chrome. |
+| `editorHover` | `(engine: number, x: number, y: number) => number` | Desktop-chrome hover: cursor motion without a pressed button (no capture needed). |
+| `editorWheel` | `(engine: number, x: number, y: number, deltaY: number, zoom: boolean) => number` | Panel-aware wheel scroll; `zoom` = Ctrl+wheel zoom at the cursor. |
+| `keyModifiers` | `() => number` | Live hardware modifier bitmask (1 shift / 2 ctrl / 4 alt / 8 meta) from the native key stream. |
 | `editorSetLocale` | `engine: number, tag: string` | `number` — BCP-47 |
 | `editorLocaleCode` | `engine: number` | `string \| null` |
 
@@ -172,7 +176,12 @@ falls back to China rather than being forwarded.
 Shell action codes (`editorTakeShellAction`), from `op_engine.h`:
 `0` None · `1` OpenDocument · `2` OpenLoginWebView · `3` CloseLoginWebView ·
 `4` ExportDocument · `5` OpenAccountCenter · `6` RequestLogin ·
-`7` OpenLanguagePicker.
+`7` OpenLanguagePicker · `8` WindowClose · `9` WindowMinimize ·
+`10` WindowZoom.
+
+`8`/`9`/`10` come from the TopBar's painted traffic-light dots and only reach
+desktop-class shells that hid the platform title bar; touch chrome paints no
+dots and never raises them.
 
 Editor key codes (`editorKey`): `1` Backspace · `2` Delete · `3` Enter ·
 `4` Escape · `5` Duplicate · `6` Undo · `7` Redo · `9` ArrowUp ·
@@ -195,6 +204,7 @@ No Android counterpart — these cover the XComponent surface model and the
 | `keyEvent` | `engine: number, keyCode: number, modifiers: number` | `number` — `1` (InvalidArg) = no editor binding, route as text |
 | `clipboardSetText` | `engine: number, text: string` | `number` — pastes shell-read pasteboard text |
 | `clipboardGetText` | `engine: number` | `string \| null` — **RESERVED, always null** |
+| `setImeConduitAttached` | `attached: boolean` | `void` — gates native printable-key text injection |
 
 * `setXcomponentListener` `event` is `"created"`, `"changed"`, or
   `"destroyed"`; the size is in PHYSICAL pixels. `"destroyed"` is a
@@ -219,6 +229,15 @@ No Android counterpart — these cover the XComponent surface model and the
 * `clipboardGetText` never returns text: `op_engine.h` has no channel for the
   engine to hand a selection back to the shell (the Android player has the
   same gap). Treat `null` as "copy unsupported"; do not branch on it.
+* `setImeConduitAttached` decides who owns printable characters. A SURFACE
+  XComponent consumes hardware keys on the native channel, so on 2-in-1 / PC
+  the system IME never sees a physical keystroke and never emits `insertText`
+  — the native key callback injects the character through `op_editor_text`
+  itself whenever the engine reports IME focus **and** the shell has reported
+  `false` here. Report `true` from the moment a system `InputMethodController`
+  attaches (phones and tablets) so the same keystroke is not typed twice; the
+  default is `false`. The native table is US-QWERTY without composition, so a
+  composing IME still needs the conduit.
 
 ---
 

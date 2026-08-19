@@ -148,6 +148,85 @@ export class WindowBridge {
       });
   }
 
+  /**
+   * Minimises the window (2in1 free-form only; a phone's window is managed
+   * by the launcher and the call is a documented no-op there).
+   */
+  minimize(): void {
+    const win: window.Window | null = this.mainWindow;
+    if (win === null) {
+      return;
+    }
+    win.minimize().catch((error: Object) => {
+      hilog.warn(DOMAIN, TAG, 'window minimize failed: %{public}s', JSON.stringify(error));
+    });
+  }
+
+  /**
+   * Toggles maximised / restored.
+   *
+   * FULL_SCREEN counts as expanded, not just MAXIMIZE: this window runs with
+   * `setWindowLayoutFullScreen(true)`, so HarmonyOS reports FULL_SCREEN once
+   * it has been maximised and a MAXIMIZE-only test made the green dot a
+   * one-way trip (verified on the HarmonyOS 6 2in1 emulator — the second
+   * press re-maximised a maximised window instead of restoring it). A read
+   * failure falls back to maximising, which is the right guess for a
+   * floating window and the common first press.
+   */
+  toggleMaximize(): void {
+    const win: window.Window | null = this.mainWindow;
+    if (win === null) {
+      return;
+    }
+    let expanded = false;
+    try {
+      const status: window.WindowStatusType = win.getWindowStatus();
+      expanded =
+        status === window.WindowStatusType.MAXIMIZE ||
+        status === window.WindowStatusType.FULL_SCREEN;
+      hilog.info(DOMAIN, TAG, 'window status=%{public}d expanded=%{public}s', status, `${expanded}`);
+    } catch (error) {
+      hilog.warn(DOMAIN, TAG, 'window status read failed: %{public}s', JSON.stringify(error));
+    }
+    const done: Promise<void> = expanded ? win.recover() : win.maximize();
+    done.catch((error: Object) => {
+      hilog.warn(DOMAIN, TAG, 'window maximize toggle failed: %{public}s', JSON.stringify(error));
+    });
+  }
+
+  /**
+   * Hides the floating system title buttons on desktop-class windows.
+   *
+   * The engine paints its own traffic-light trio in the TopBar, and
+   * HarmonyOS keeps the platform buttons FLOATING at the window's top-right
+   * even after `setWindowDecorVisible(false)` — where they overlap the
+   * engine's own right-hand cluster. Returns the width (vp) that still has
+   * to be reserved: `0` when every button is gone, otherwise the live
+   * `getTitleButtonRect` width so the engine can shift its cluster left.
+   */
+  hideTitleButtons(win: window.Window): number {
+    try {
+      // Third argument (close) is optional on some API levels; passing it is
+      // the only way to retire the whole trio.
+      win.setWindowTitleButtonVisible(false, false, false);
+    } catch (error) {
+      hilog.warn(DOMAIN, TAG, 'title button hide unavailable: %{public}s', JSON.stringify(error));
+    }
+    try {
+      const rect: window.TitleButtonRect = win.getTitleButtonRect();
+      hilog.info(
+        DOMAIN,
+        TAG,
+        'title button rect %{public}s',
+        `right=${rect.right} top=${rect.top} w=${rect.width} h=${rect.height}`
+      );
+      return Number.isFinite(rect.width) && rect.width > 0 ? rect.width : 0;
+    } catch (error) {
+      hilog.warn(DOMAIN, TAG, 'title button rect unavailable: %{public}s', JSON.stringify(error));
+      return 0;
+    }
+  }
+
   /** Re-reads window bounds, avoid areas, and density into one tuple. */
   refresh(): void {
     const win: window.Window | null = this.mainWindow;

@@ -350,7 +350,7 @@ pub use editor_ui_state::{
     PreviewDeviceKind, PreviewState, PromptCenterFocus, PromptCenterState, PromptFilter,
     PropertyTab, RecentFile, SceneFilter, SceneTemplateCenterState, SceneTemplateFocus,
     SizeToggleState, SlidesDrag, SlidesPanelState, SlidesPanelTarget, StyleImportState, ThemeMode,
-    UpdateStatus, VariableRowFocus,
+    UpdateStatus, VariableRowFocus, WindowControlRequest,
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use export_quick_menu_state::ExportQuickRow;

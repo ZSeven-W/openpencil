@@ -23,9 +23,9 @@ use std::sync::{Arc, OnceLock};
 use napi_derive_ohos::napi;
 use napi_ohos::bindgen_prelude::Buffer;
 use op_engine_ffi::{
-    op_attach_surface, op_create, op_destroy, op_frame, op_get_pixel_size, op_pointer,
-    op_prefers_light_system_icons, op_resize, op_resize_with_safe_area, op_resume, op_set_keyboard,
-    op_set_safe_area, op_suspend, OpCreateDesc, OpEngine, OpStatus, OpSurfaceDesc,
+    op_attach_surface, op_create, op_destroy, op_frame, op_get_pixel_size, op_last_error,
+    op_pointer, op_prefers_light_system_icons, op_resize, op_resize_with_safe_area, op_resume,
+    op_set_keyboard, op_set_safe_area, op_suspend, OpCreateDesc, OpEngine, OpStatus, OpSurfaceDesc,
 };
 use op_engine_jni::registry::{Registry, HANDLE_FAILURE};
 use op_engine_jni::{Dispatch, EngineThread};
@@ -332,7 +332,7 @@ fn attach_or_resume(engine: i64, xcomponent_id: String, resuming: bool) -> i32 {
         return OpStatus::InvalidArg as i32;
     };
     let window = window as usize;
-    let status = with_engine(engine, move |e| {
+    let (status, error_text) = with_engine(engine, move |e| {
         let desc = OpSurfaceDesc {
             size: std::mem::size_of::<OpSurfaceDesc>(),
             handle: window as *mut c_void,
@@ -344,9 +344,33 @@ fn attach_or_resume(engine: i64, xcomponent_id: String, resuming: bool) -> i32 {
         } else {
             unsafe { op_attach_surface(e, &desc) }
         };
-        status as i32
+        let error_text = if status == OpStatus::Ok {
+            String::new()
+        } else {
+            let mut buffer = vec![0u8; 2048];
+            let mut required = 0usize;
+            // SAFETY: dispatched onto the engine's owner thread; the buffer
+            // outlives the call.
+            let read =
+                unsafe { op_last_error(e, buffer.as_mut_ptr(), buffer.len(), &mut required) };
+            if read == OpStatus::Ok {
+                let end = required.min(buffer.len());
+                String::from_utf8_lossy(&buffer[..end])
+                    .trim_end_matches('\0')
+                    .to_string()
+            } else {
+                String::new()
+            }
+        };
+        (status as i32, error_text)
     })
-    .unwrap_or(STATUS_CLOSING);
+    .unwrap_or((STATUS_CLOSING, String::new()));
+    if status != OpStatus::Ok as i32 {
+        crate::hilog::error(
+            "OpNapi",
+            &format!("attach_or_resume(resuming={resuming}) status={status}: {error_text}"),
+        );
+    }
     if status == OpStatus::Ok as i32 {
         crate::window::bind_engine(&xcomponent_id, engine);
     }

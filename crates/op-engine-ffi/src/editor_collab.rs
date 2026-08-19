@@ -290,20 +290,33 @@ impl Session {
             KEY_UNDO => self.request_collab_history(CollabHistoryAction::Undo),
             KEY_REDO => self.request_collab_history(CollabHistoryAction::Redo),
             KEY_BACKSPACE | KEY_DELETE | KEY_ENTER | KEY_ESCAPE | KEY_DUPLICATE | KEY_ARROW_UP
-            | KEY_ARROW_DOWN | KEY_ARROW_LEFT | KEY_ARROW_RIGHT => {
-                self.with_collab_local_edit(|host| match key {
-                    KEY_BACKSPACE => host.apply_backspace(),
-                    KEY_DELETE => host.apply_delete(),
-                    KEY_ENTER => host.apply_send(),
-                    KEY_ESCAPE => host.apply_escape(),
-                    KEY_DUPLICATE => host.apply_duplicate(),
-                    KEY_ARROW_UP => host.apply_nudge(0.0, -1.0),
-                    KEY_ARROW_DOWN => host.apply_nudge(0.0, 1.0),
-                    KEY_ARROW_LEFT => host.apply_nudge(-1.0, 0.0),
-                    KEY_ARROW_RIGHT => host.apply_nudge(1.0, 0.0),
-                    _ => unreachable!("key was classified above"),
-                })
-            }
+            | KEY_ARROW_DOWN | KEY_ARROW_LEFT | KEY_ARROW_RIGHT | KEY_SELECT_ALL | KEY_COPY
+            | KEY_CUT | KEY_PASTE | KEY_GROUP | KEY_UNGROUP | KEY_REORDER_BACK
+            | KEY_REORDER_FORWARD | KEY_ARROW_UP_BIG | KEY_ARROW_DOWN_BIG | KEY_ARROW_LEFT_BIG
+            | KEY_ARROW_RIGHT_BIG => self.with_collab_local_edit(|host| match key {
+                KEY_BACKSPACE => host.apply_backspace(),
+                KEY_DELETE => host.apply_delete(),
+                KEY_ENTER => host.apply_send(),
+                KEY_ESCAPE => host.apply_escape(),
+                KEY_DUPLICATE => host.apply_duplicate(),
+                KEY_ARROW_UP => host.apply_nudge(0.0, -1.0),
+                KEY_ARROW_DOWN => host.apply_nudge(0.0, 1.0),
+                KEY_ARROW_LEFT => host.apply_nudge(-1.0, 0.0),
+                KEY_ARROW_RIGHT => host.apply_nudge(1.0, 0.0),
+                KEY_SELECT_ALL => host.apply_select_all(),
+                KEY_COPY => host.apply_copy(),
+                KEY_CUT => host.apply_cut(),
+                KEY_PASTE => host.apply_paste(),
+                KEY_GROUP => host.apply_group(),
+                KEY_UNGROUP => host.apply_ungroup(),
+                KEY_REORDER_BACK => host.apply_reorder(op_editor_core::ReorderDirection::Down),
+                KEY_REORDER_FORWARD => host.apply_reorder(op_editor_core::ReorderDirection::Up),
+                KEY_ARROW_UP_BIG => host.apply_nudge(0.0, -10.0),
+                KEY_ARROW_DOWN_BIG => host.apply_nudge(0.0, 10.0),
+                KEY_ARROW_LEFT_BIG => host.apply_nudge(-10.0, 0.0),
+                KEY_ARROW_RIGHT_BIG => host.apply_nudge(10.0, 0.0),
+                _ => unreachable!("key was classified above"),
+            }),
             other => Err(FfiError::invalid(format!("unknown editor key {other}"))),
         }
     }

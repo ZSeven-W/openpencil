@@ -126,3 +126,43 @@ mod tests {
         assert!(!prefers_light);
     }
 }
+
+/// Apply a UI locale by BCP-47 tag ("zh-CN", "en-US", …). Unsupported tags
+/// are rejected so the shell's picker cannot silently fall back.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread; a non-empty byte
+/// range must cover readable UTF-8 for its declared length.
+/// Select the chrome family for this engine. Mobile shells default to the
+/// touch chrome; a desktop-class device (HarmonyOS 2in1 / PC) passes
+/// `enabled = 0` to get the full desktop layout — top bar, side panels, and
+/// pointer-first interactions — from the same engine build.
+///
+/// # Safety
+/// `engine` must be a live engine on its owner thread.
+#[cfg(feature = "editor")]
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_set_touch_chrome(
+    engine: *mut crate::OpEngine,
+    enabled: i32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let host = session.editor_mut()?;
+            let state = host.editor_state_mut();
+            let ui = &mut state.editor_ui;
+            ui.touch = enabled != 0;
+            // Desktop chrome opens the rail layout the way the desktop
+            // binary does; touch chrome re-applies the mobile default.
+            ui.sidebar_open = if ui.touch {
+                ui.size_class.is_rail_layout()
+            } else {
+                true
+            };
+            host.mark_editor_state_dirty();
+            session.request_redraw();
+            Ok(())
+        })
+    }
+}

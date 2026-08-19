@@ -134,9 +134,11 @@ pub fn mcp_server_button(panel: Rect) -> Rect {
 }
 
 /// MCP tab: the "Copy MCP config" action in the custom-configuration
-/// section header.
-pub fn mcp_copy_config_button(panel: Rect) -> Rect {
-    agent_settings_mcp::client_config_copy_button_rect(content_rect(panel))
+/// section header. Its y depends on whether the terminal-integration
+/// list sits above it, so callers pass the host's
+/// [`EditorUiState::external_cli_available`] capability.
+pub fn mcp_copy_config_button(panel: Rect, external_cli_available: bool) -> Rect {
+    agent_settings_mcp::client_config_copy_button_rect(content_rect(panel), external_cli_available)
 }
 
 /// System tab: the switch on the Auto-update row.
@@ -205,8 +207,19 @@ impl AgentSettingsPanelMode {
         }
     }
 
+    /// Whether the Agents tab paints the external-CLI half of the tab —
+    /// the ACP section and the provider card list, plus the section
+    /// headers that only exist to add or connect one.
+    ///
+    /// `external_cli_available` is the runtime host capability: mobile
+    /// shells (iOS / Android / HarmonyOS) cannot spawn subprocess CLIs,
+    /// so every external-CLI surface is hidden there and the built-in
+    /// API-key providers become the only agent path. Paint, hit-test,
+    /// hover, and the content-height walk all read this one predicate so
+    /// a hidden block leaves no live hit rect behind it.
     fn shows_external_agents(self, ui: &EditorUiState) -> bool {
-        !ui.touch_chrome()
+        ui.external_cli_available
+            && !ui.touch_chrome()
             && matches!(
                 self,
                 AgentSettingsPanelMode::Full | AgentSettingsPanelMode::FullWithAccount

@@ -34,6 +34,13 @@ pub fn set_rotation(node: &mut PenNode, rotation: f64) -> bool {
     true
 }
 
+/// Write `base.y` (document-space authored position). Applies to every node
+/// kind.
+pub fn set_y(node: &mut PenNode, y: f64) -> bool {
+    base_mut(node).y = Some(y);
+    true
+}
+
 /// Clear `effects` on a node kind that carries them (Frame/Group/Rectangle/
 /// Path/Text). Returns whether the node kind has an `effects` field.
 pub fn clear_effects(node: &mut PenNode) -> bool {

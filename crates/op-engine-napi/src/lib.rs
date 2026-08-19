@@ -175,6 +175,11 @@ mod contract_tests {
         "keyEvent",
         "clipboardSetText",
         "clipboardGetText",
+        "editorSetTouchChrome",
+        "editorHover",
+        "editorWheel",
+        "keyModifiers",
+        "setImeConduitAttached",
     ];
 
     /// Every source file that may carry a `#[napi]` export.
@@ -249,7 +254,7 @@ mod contract_tests {
         assert_eq!(EXPORTED_NAMES[KOTLIN_DERIVED], "setXcomponentListener");
         assert_eq!(EXPORTED_NAMES[0], "create");
         assert_eq!(EXPORTED_NAMES[KOTLIN_DERIVED - 1], "editorLocaleCode");
-        assert_eq!(EXPORTED_NAMES.len(), 65);
+        assert_eq!(EXPORTED_NAMES.len(), 70);
     }
 
     /// The engine's own C header — the single source of truth for the codes
@@ -280,6 +285,9 @@ mod contract_tests {
                 "OpShellAction_OpenLanguagePicker",
                 SHELL_ACTION_OPEN_LANGUAGE_PICKER,
             ),
+            ("OpShellAction_WindowClose", SHELL_ACTION_WINDOW_CLOSE),
+            ("OpShellAction_WindowMinimize", SHELL_ACTION_WINDOW_MINIMIZE),
+            ("OpShellAction_WindowZoom", SHELL_ACTION_WINDOW_ZOOM),
         ] {
             assert!(
                 HEADER.contains(&format!("{name} = {code},")),

@@ -163,18 +163,43 @@ They pin the XComponent ↔ `libopenpencil.so` binding, the device-type list,
 the bundle name, all seven shell action codes against
 `crates/op-engine-ffi/include/op_engine.h`, the empty-conduit backspace
 contract, the 15-locale table (cross-checked against the Android shell), the
-export format set without WebP, SSO-origin hygiene, and the rule that the
-ArkTS NAPI declaration matches the Android JNI surface function-for-function.
+export format set without WebP, and the rule that the ArkTS NAPI declaration
+matches the Android JNI surface function-for-function.
+
+The SSO section pins the parts that are easy to break silently: origins may
+appear only in `SsoRegion.ets` (cross-checked against `SsoRegion.kt`, probe
+target and mainland redirect host included), the configure is lazy for touch
+chrome and eager for 2in1, the login presentation splits browser-vs-native on
+`isDesktopClass()`, the JSON API routes match the Android client, cookies stay
+an in-memory `Map`, and nothing in the auth path logs a credential.
 
 ## Limitations
 
-- **Sign-in and the account center are unavailable.** The private `op-auth`
-  runtime has no HarmonyOS build yet, so shell actions 2 (OpenLoginWebView),
-  5 (OpenAccountCenter), and 6 (RequestLogin) present a native notice
-  explaining that sign-in is not yet available and cancel the engine-side
-  flow through the same `editorCancelLogin` call the Android shell uses when
-  it rejects a login request. No SSO origin is hardcoded anywhere in this
-  shell.
+- **Sign-in is native, and splits by form factor.** Shell actions 2
+  (OpenLoginWebView), 5 (OpenAccountCenter), and 6 (RequestLogin) are wired
+  to the ZSeven SSO flow, mirroring the Android shell.
+  - **2in1 (PC)** — the engine's verification URL is handed to the **system
+    browser** (implicit `ohos.want.action.viewData` want): the user signs in
+    and approves there, and the engine's background poll drives the close
+    action. No native login page is built on a PC. The account center is a
+    small native card (name, region, manage-in-browser, sign out).
+  - **Phone / tablet** — a full native login page (ZSeven design: logo,
+    labeled boxed inputs, gradient sign-in button, provider icon cards
+    fetched from the pairing origin, region row) plus native
+    registration / password-reset forms and a full-window account center.
+    *This path compiles and is contract-pinned but has NOT been exercised on
+    a phone emulator yet* — the available emulator is a 2in1.
+  - A build with no `op-auth` backend answers `NotReady` (10); the shell then
+    shows the "sign-in unavailable" notice and cancels the flow, exactly as
+    before.
+  - No SSO origin is hardcoded anywhere outside `ets/common/SsoRegion.ets`,
+    which owns the two regional deployments and the IP probe; the Ruby
+    contracts enforce that. Session cookies are memory-only and the device
+    token never leaves the engine.
+  - **Region switching needs a manual relaunch.** The auth runtime locks its
+    origin at the first `configureAuth`, and `UIAbilityContext.restartApp` is
+    API 22 while this module targets API 12 — so "restart now" terminates the
+    ability and the user reopens the app.
 - **Collaboration credentials are not stored.** `onCredentialLoad` returns
   null and `onCredentialStoreIfAbsent` returns false: HarmonyOS has no
   OpenPencil credential store yet, and storing a device key in plaintext

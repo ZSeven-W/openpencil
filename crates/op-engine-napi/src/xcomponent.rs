@@ -72,6 +72,168 @@ extern "C" {
         component: *mut OhNativeXComponent,
         callback: *mut OhNativeXComponentCallback,
     ) -> i32;
+
+    fn OH_NativeXComponent_RegisterKeyEventCallback(
+        component: *mut OhNativeXComponent,
+        callback: extern "C" fn(*mut OhNativeXComponent, *mut c_void),
+    ) -> i32;
+
+    fn OH_NativeXComponent_GetKeyEvent(
+        component: *mut OhNativeXComponent,
+        event: *mut *mut OhNativeXComponentKeyEvent,
+    ) -> i32;
+
+    fn OH_NativeXComponent_GetKeyEventAction(
+        event: *mut OhNativeXComponentKeyEvent,
+        action: *mut i32,
+    ) -> i32;
+
+    fn OH_NativeXComponent_GetKeyEventCode(
+        event: *mut OhNativeXComponentKeyEvent,
+        code: *mut i32,
+    ) -> i32;
+}
+
+/// Opaque `OH_NativeXComponent_KeyEvent` (native_xcomponent_key_event.h).
+#[repr(C)]
+pub struct OhNativeXComponentKeyEvent {
+    _private: [u8; 0],
+}
+
+/// `OH_NativeXComponent_KeyAction` (native_xcomponent_key_event.h):
+/// UNKNOWN = -1, DOWN = 0, UP = 1.
+const KEY_ACTION_DOWN: i32 = 0;
+
+/// SURFACE-type XComponents deliver hardware keys on the NATIVE channel
+/// only (ArkTS `onKeyEvent` never fires while the surface holds focus), so
+/// the key path lives here. Modifier state is tracked from the raw stream;
+/// keys without an editor binding fall through to the IME as text.
+/// Live hardware-modifier bitmask (this crate's MOD_* bits), maintained from
+/// the native key stream and readable by the shell (wheel-zoom needs Ctrl).
+static MODIFIERS: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+/// Whether the ArkTS `ImeConduit` currently holds a system
+/// `InputMethodController`. Physical printable keys are injected as engine
+/// text ONLY while it does not — otherwise the same keystroke would arrive
+/// twice (once here, once as the conduit's `insertText`).
+static IME_CONDUIT_ATTACHED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Last logged key-routing signature; `-1` until the first key arrives so the
+/// very first keystroke always produces a line. See [`probe_key`].
+static KEY_PROBE_SIGNATURE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+/// The current modifier bitmask.
+pub fn current_modifiers() -> i32 {
+    MODIFIERS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The ArkTS shell reports its IME-conduit attachment state here; see
+/// [`IME_CONDUIT_ATTACHED`].
+pub fn set_ime_conduit_attached(attached: bool) {
+    IME_CONDUIT_ATTACHED.store(attached, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the ArkTS IME conduit is attached.
+pub fn ime_conduit_attached() -> bool {
+    IME_CONDUIT_ATTACHED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+extern "C" fn on_key_event(component: *mut OhNativeXComponent, _window: *mut c_void) {
+    use std::sync::atomic::Ordering;
+
+    let mut event: *mut OhNativeXComponentKeyEvent = std::ptr::null_mut();
+    // SAFETY: the component pointer is live for the duration of the callback.
+    if unsafe { OH_NativeXComponent_GetKeyEvent(component, &mut event) } != RESULT_SUCCESS
+        || event.is_null()
+    {
+        return;
+    }
+    let (mut action, mut code) = (-1_i32, -1_i32);
+    // SAFETY: `event` was just produced by the NDK for this callback.
+    unsafe {
+        let _ = OH_NativeXComponent_GetKeyEventAction(event, &mut action);
+        let _ = OH_NativeXComponent_GetKeyEventCode(event, &mut code);
+    }
+    let down = action == KEY_ACTION_DOWN;
+    // KeyCode transcription (oh_key_code.h): shift 2047/2048, ctrl 2072/2073,
+    // alt 2045/2046, meta 2076/2077.
+    let modifier_bit = match code {
+        2047 | 2048 => crate::action::MOD_SHIFT,
+        2072 | 2073 => crate::action::MOD_CTRL,
+        2045 | 2046 => crate::action::MOD_ALT,
+        2076 | 2077 => crate::action::MOD_META,
+        _ => 0,
+    };
+    if modifier_bit != 0 {
+        if down {
+            MODIFIERS.fetch_or(modifier_bit, Ordering::Relaxed);
+        } else {
+            MODIFIERS.fetch_and(!modifier_bit, Ordering::Relaxed);
+        }
+        return;
+    }
+    if !down {
+        return;
+    }
+    #[cfg(feature = "editor")]
+    {
+        let engine = crate::window::engine_for(&component_id(component));
+        if engine == 0 {
+            return;
+        }
+        let modifiers = MODIFIERS.load(Ordering::Relaxed);
+        // TEXT FIRST while an engine input holds the IME and no system
+        // conduit is attached. On desktop-class HarmonyOS the XComponent
+        // consumes hardware keys here, so the system IME never sees them and
+        // never emits `insertText` — this is the only path a typed character
+        // can take into a focused chat / property / canvas-text input. It
+        // also keeps `[` / `]` from reordering layers mid-word, since those
+        // have an unconditional editor binding in `map_key`.
+        let ime = crate::bindings_editor::editor_ime_focused(engine);
+        let conduit = IME_CONDUIT_ATTACHED.load(Ordering::Relaxed);
+        if ime && !conduit {
+            if let Some(ch) = crate::action::printable_char(code, modifiers) {
+                let status = crate::bindings_editor::editor_text(engine, ch.to_string());
+                probe_key(code, modifiers, ime, conduit, "text", status);
+                return;
+            }
+        }
+        // Unmapped keys return InvalidArg — nothing else can consume them.
+        let status = crate::bindings_input::key_event(engine, code, modifiers);
+        probe_key(code, modifiers, ime, conduit, "key", status);
+    }
+    #[cfg(not(feature = "editor"))]
+    {
+        let _ = (code, &MODIFIERS);
+    }
+}
+
+/// Logs the FIRST key that reaches the native channel, and afterwards only a
+/// key whose ROUTING changed (IME focus gained/lost, conduit attach/detach,
+/// text-vs-editor-key branch, success-vs-failure).
+///
+/// Diagnosing this lane needs proof that (a) hardware keys arrive at all and
+/// (b) which branch claimed them. A line per keystroke answers both but
+/// rotates hilog's buffer within seconds of typing, so the signature filter
+/// keeps the same evidence at a bounded volume.
+#[cfg(feature = "editor")]
+fn probe_key(code: i32, modifiers: i32, ime: bool, conduit: bool, route: &str, status: i32) {
+    use std::sync::atomic::Ordering;
+    let signature = (ime as i32)
+        | (conduit as i32) << 1
+        | ((route == "text") as i32) << 2
+        | ((status != 0) as i32) << 3;
+    if KEY_PROBE_SIGNATURE.swap(signature, Ordering::Relaxed) == signature {
+        return;
+    }
+    crate::hilog::info(
+        "OpNapi",
+        &format!(
+            "native key code={code} mods={modifiers} imeFocused={ime} \
+             conduit={conduit} route={route} status={status}"
+        ),
+    );
 }
 
 /// The callback table handed to `OH_NativeXComponent_RegisterCallback`. The
@@ -171,6 +333,15 @@ pub unsafe fn adopt(component: *mut OhNativeXComponent) {
     let table = &raw mut CALLBACKS;
     // SAFETY: `component` is the framework's live instance.
     let status = unsafe { OH_NativeXComponent_RegisterCallback(component, table) };
+    // SAFETY: same component pointer; the fn pointer is 'static.
+    let key_status =
+        unsafe { OH_NativeXComponent_RegisterKeyEventCallback(component, on_key_event) };
+    if key_status != RESULT_SUCCESS {
+        crate::hilog::error(
+            "OpNapi",
+            &format!("RegisterKeyEventCallback failed ({key_status})"),
+        );
+    }
     if status == RESULT_SUCCESS {
         crate::hilog::info("OpNapi", "XComponent callbacks registered");
     } else {

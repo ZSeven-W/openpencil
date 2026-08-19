@@ -25,10 +25,16 @@ pub const SHELL_ACTION_EXPORT_DOCUMENT: i32 = 4;
 pub const SHELL_ACTION_OPEN_ACCOUNT_CENTER: i32 = 5;
 pub const SHELL_ACTION_REQUEST_LOGIN: i32 = 6;
 pub const SHELL_ACTION_OPEN_LANGUAGE_PICKER: i32 = 7;
+/// TopBar red dot — close the shell's window.
+pub const SHELL_ACTION_WINDOW_CLOSE: i32 = 8;
+/// TopBar yellow dot — minimise the shell's window.
+pub const SHELL_ACTION_WINDOW_MINIMIZE: i32 = 9;
+/// TopBar green dot — toggle maximised / restored.
+pub const SHELL_ACTION_WINDOW_ZOOM: i32 = 10;
 
 /// Every shell action the engine can hand the OHOS shell, in `OpShellAction`
 /// order. `SHELL_ACTION_NONE` is deliberately absent — it means "no work".
-pub const SHELL_ACTIONS: [i32; 7] = [
+pub const SHELL_ACTIONS: [i32; 10] = [
     SHELL_ACTION_OPEN_DOCUMENT,
     SHELL_ACTION_OPEN_LOGIN_WEBVIEW,
     SHELL_ACTION_CLOSE_LOGIN_WEBVIEW,
@@ -36,6 +42,9 @@ pub const SHELL_ACTIONS: [i32; 7] = [
     SHELL_ACTION_OPEN_ACCOUNT_CENTER,
     SHELL_ACTION_REQUEST_LOGIN,
     SHELL_ACTION_OPEN_LANGUAGE_PICKER,
+    SHELL_ACTION_WINDOW_CLOSE,
+    SHELL_ACTION_WINDOW_MINIMIZE,
+    SHELL_ACTION_WINDOW_ZOOM,
 ];
 
 /// Whether `code` is an action the shell must handle. Negative values are
@@ -168,6 +177,18 @@ pub const OP_KEY_ARROW_UP: i32 = 9;
 pub const OP_KEY_ARROW_DOWN: i32 = 10;
 pub const OP_KEY_ARROW_LEFT: i32 = 11;
 pub const OP_KEY_ARROW_RIGHT: i32 = 12;
+pub const OP_KEY_SELECT_ALL: i32 = 13;
+pub const OP_KEY_COPY: i32 = 14;
+pub const OP_KEY_CUT: i32 = 15;
+pub const OP_KEY_PASTE: i32 = 16;
+pub const OP_KEY_GROUP: i32 = 17;
+pub const OP_KEY_UNGROUP: i32 = 18;
+pub const OP_KEY_REORDER_BACK: i32 = 19;
+pub const OP_KEY_REORDER_FORWARD: i32 = 20;
+pub const OP_KEY_ARROW_UP_BIG: i32 = 21;
+pub const OP_KEY_ARROW_DOWN_BIG: i32 = 22;
+pub const OP_KEY_ARROW_LEFT_BIG: i32 = 23;
+pub const OP_KEY_ARROW_RIGHT_BIG: i32 = 24;
 
 // ---- Modifier bitmask (this crate's contract with ArkTS) ----------------
 
@@ -184,17 +205,43 @@ fn command(modifiers: i32) -> bool {
 
 // ---- OHOS key codes (`oh_key_code.h` / `@ohos.multimodalInput.keyCode`) --
 
+pub const KEYCODE_0: i32 = 2000;
+pub const KEYCODE_9: i32 = 2009;
 pub const KEYCODE_DPAD_UP: i32 = 2012;
 pub const KEYCODE_DPAD_DOWN: i32 = 2013;
 pub const KEYCODE_DPAD_LEFT: i32 = 2014;
 pub const KEYCODE_DPAD_RIGHT: i32 = 2015;
+pub const KEYCODE_A: i32 = 2017;
+pub const KEYCODE_C: i32 = 2019;
 pub const KEYCODE_D: i32 = 2020;
+pub const KEYCODE_G: i32 = 2023;
+pub const KEYCODE_V: i32 = 2038;
+pub const KEYCODE_X: i32 = 2040;
+pub const KEYCODE_LEFT_BRACKET: i32 = 2059;
+pub const KEYCODE_RIGHT_BRACKET: i32 = 2060;
 pub const KEYCODE_Y: i32 = 2041;
 pub const KEYCODE_Z: i32 = 2042;
+pub const KEYCODE_COMMA: i32 = 2043;
+pub const KEYCODE_PERIOD: i32 = 2044;
+pub const KEYCODE_SPACE: i32 = 2050;
 pub const KEYCODE_ENTER: i32 = 2054;
 pub const KEYCODE_DEL: i32 = 2055;
+pub const KEYCODE_GRAVE: i32 = 2056;
+pub const KEYCODE_MINUS: i32 = 2057;
+pub const KEYCODE_EQUALS: i32 = 2058;
+pub const KEYCODE_BACKSLASH: i32 = 2061;
+pub const KEYCODE_SEMICOLON: i32 = 2062;
+pub const KEYCODE_APOSTROPHE: i32 = 2063;
+pub const KEYCODE_SLASH: i32 = 2064;
 pub const KEYCODE_ESCAPE: i32 = 2070;
 pub const KEYCODE_FORWARD_DEL: i32 = 2071;
+pub const KEYCODE_NUMPAD_0: i32 = 2100;
+pub const KEYCODE_NUMPAD_9: i32 = 2109;
+pub const KEYCODE_NUMPAD_DIVIDE: i32 = 2110;
+pub const KEYCODE_NUMPAD_MULTIPLY: i32 = 2111;
+pub const KEYCODE_NUMPAD_SUBTRACT: i32 = 2112;
+pub const KEYCODE_NUMPAD_ADD: i32 = 2113;
+pub const KEYCODE_NUMPAD_DOT: i32 = 2114;
 pub const KEYCODE_NUMPAD_ENTER: i32 = 2119;
 
 /// Maps an OHOS key code + modifier bitmask onto an `OpKey_*` value, or
@@ -203,16 +250,40 @@ pub const KEYCODE_NUMPAD_ENTER: i32 = 2119;
 ///
 /// The shortcut set matches the desktop host: Cmd/Ctrl+D duplicates,
 /// Cmd/Ctrl+Z undoes, Cmd/Ctrl+Shift+Z and Cmd/Ctrl+Y redo.
+/// Shift promotes an arrow nudge to the 10-px step (desktop parity).
+fn shifted(modifiers: i32, plain: i32, big: i32) -> i32 {
+    if modifiers & MOD_SHIFT != 0 {
+        big
+    } else {
+        plain
+    }
+}
+
 pub fn map_key(key_code: i32, modifiers: i32) -> Option<i32> {
     match key_code {
         KEYCODE_DEL => Some(OP_KEY_BACKSPACE),
         KEYCODE_FORWARD_DEL => Some(OP_KEY_DELETE),
         KEYCODE_ENTER | KEYCODE_NUMPAD_ENTER => Some(OP_KEY_ENTER),
         KEYCODE_ESCAPE => Some(OP_KEY_ESCAPE),
-        KEYCODE_DPAD_UP => Some(OP_KEY_ARROW_UP),
-        KEYCODE_DPAD_DOWN => Some(OP_KEY_ARROW_DOWN),
-        KEYCODE_DPAD_LEFT => Some(OP_KEY_ARROW_LEFT),
-        KEYCODE_DPAD_RIGHT => Some(OP_KEY_ARROW_RIGHT),
+        KEYCODE_DPAD_UP => Some(shifted(modifiers, OP_KEY_ARROW_UP, OP_KEY_ARROW_UP_BIG)),
+        KEYCODE_DPAD_DOWN => Some(shifted(modifiers, OP_KEY_ARROW_DOWN, OP_KEY_ARROW_DOWN_BIG)),
+        KEYCODE_DPAD_LEFT => Some(shifted(modifiers, OP_KEY_ARROW_LEFT, OP_KEY_ARROW_LEFT_BIG)),
+        KEYCODE_DPAD_RIGHT => Some(shifted(
+            modifiers,
+            OP_KEY_ARROW_RIGHT,
+            OP_KEY_ARROW_RIGHT_BIG,
+        )),
+        KEYCODE_A if command(modifiers) => Some(OP_KEY_SELECT_ALL),
+        KEYCODE_C if command(modifiers) => Some(OP_KEY_COPY),
+        KEYCODE_X if command(modifiers) => Some(OP_KEY_CUT),
+        KEYCODE_V if command(modifiers) => Some(OP_KEY_PASTE),
+        KEYCODE_G if command(modifiers) => Some(if modifiers & MOD_SHIFT != 0 {
+            OP_KEY_UNGROUP
+        } else {
+            OP_KEY_GROUP
+        }),
+        KEYCODE_LEFT_BRACKET => Some(OP_KEY_REORDER_BACK),
+        KEYCODE_RIGHT_BRACKET => Some(OP_KEY_REORDER_FORWARD),
         KEYCODE_D if command(modifiers) => Some(OP_KEY_DUPLICATE),
         KEYCODE_Y if command(modifiers) => Some(OP_KEY_REDO),
         KEYCODE_Z if command(modifiers) => Some(if modifiers & MOD_SHIFT != 0 {
@@ -222,6 +293,69 @@ pub fn map_key(key_code: i32, modifiers: i32) -> Option<i32> {
         }),
         _ => None,
     }
+}
+
+/// Maps an OHOS key code + modifier bitmask onto the character a US-QWERTY
+/// keyboard would produce, or `None` when the key has no printable form.
+///
+/// WHY THIS EXISTS: a SURFACE-type XComponent consumes hardware keys on the
+/// NATIVE channel, so on desktop-class (2in1) HarmonyOS the system IME never
+/// sees a physical keystroke and therefore never emits `insertText`. Without
+/// this table an engine-drawn text input (chat box, property field, canvas
+/// text) can be focused but never typed into. Phones and tablets keep the
+/// IME conduit — see [`crate::xcomponent`] for the routing rule.
+///
+/// LIMITATION: this is a US-QWERTY table with no dead keys and no composition,
+/// so a CJK or other composing IME still has to go through the conduit. The
+/// engine's own preedit ABI (`op_editor_ime_preedit`) is unaffected.
+///
+/// A Ctrl/Meta chord is never text — those belong to [`map_key`] or the
+/// system, so this returns `None` for them.
+pub fn printable_char(key_code: i32, modifiers: i32) -> Option<char> {
+    if modifiers & (MOD_CTRL | MOD_META) != 0 {
+        return None;
+    }
+    let shift = modifiers & MOD_SHIFT != 0;
+    if (KEYCODE_A..=KEYCODE_Z).contains(&key_code) {
+        let offset = (key_code - KEYCODE_A) as u8;
+        let base = if shift { b'A' } else { b'a' };
+        return Some((base + offset) as char);
+    }
+    if (KEYCODE_0..=KEYCODE_9).contains(&key_code) {
+        let digit = (key_code - KEYCODE_0) as usize;
+        // US-QWERTY shifted number row, indexed by the digit itself.
+        const SHIFTED: [char; 10] = [')', '!', '@', '#', '$', '%', '^', '&', '*', '('];
+        return Some(if shift {
+            SHIFTED[digit]
+        } else {
+            (b'0' + digit as u8) as char
+        });
+    }
+    // The numeric keypad is layout-independent and ignores Shift.
+    if (KEYCODE_NUMPAD_0..=KEYCODE_NUMPAD_9).contains(&key_code) {
+        return Some((b'0' + (key_code - KEYCODE_NUMPAD_0) as u8) as char);
+    }
+    let (plain, shifted) = match key_code {
+        KEYCODE_SPACE => (' ', ' '),
+        KEYCODE_COMMA => (',', '<'),
+        KEYCODE_PERIOD => ('.', '>'),
+        KEYCODE_GRAVE => ('`', '~'),
+        KEYCODE_MINUS => ('-', '_'),
+        KEYCODE_EQUALS => ('=', '+'),
+        KEYCODE_LEFT_BRACKET => ('[', '{'),
+        KEYCODE_RIGHT_BRACKET => (']', '}'),
+        KEYCODE_BACKSLASH => ('\\', '|'),
+        KEYCODE_SEMICOLON => (';', ':'),
+        KEYCODE_APOSTROPHE => ('\'', '"'),
+        KEYCODE_SLASH => ('/', '?'),
+        KEYCODE_NUMPAD_DIVIDE => ('/', '/'),
+        KEYCODE_NUMPAD_MULTIPLY => ('*', '*'),
+        KEYCODE_NUMPAD_SUBTRACT => ('-', '-'),
+        KEYCODE_NUMPAD_ADD => ('+', '+'),
+        KEYCODE_NUMPAD_DOT => ('.', '.'),
+        _ => return None,
+    };
+    Some(if shift { shifted } else { plain })
 }
 
 #[cfg(test)]
@@ -236,7 +370,7 @@ mod tests {
         assert!(!is_shell_action(SHELL_ACTION_NONE));
         assert!(!is_shell_action(STATUS_CLOSING));
         assert!(!is_shell_action(-6)); // -(OpStatus::WrongThread)
-        assert!(!is_shell_action(8)); // past the last defined action
+        assert!(!is_shell_action(11)); // past the last defined action
     }
 
     #[test]
@@ -326,5 +460,51 @@ mod tests {
         }
         // Alt alone is not the command modifier.
         assert_eq!(map_key(KEYCODE_Z, MOD_ALT), None);
+    }
+
+    #[test]
+    fn printable_letters_follow_shift() {
+        assert_eq!(printable_char(KEYCODE_A, 0), Some('a'));
+        assert_eq!(printable_char(KEYCODE_A, MOD_SHIFT), Some('A'));
+        assert_eq!(printable_char(KEYCODE_Z, 0), Some('z'));
+        assert_eq!(printable_char(KEYCODE_Z, MOD_SHIFT), Some('Z'));
+    }
+
+    #[test]
+    fn printable_digits_and_punctuation_use_the_us_layout() {
+        assert_eq!(printable_char(KEYCODE_0, 0), Some('0'));
+        assert_eq!(printable_char(KEYCODE_0, MOD_SHIFT), Some(')'));
+        assert_eq!(printable_char(KEYCODE_9, 0), Some('9'));
+        assert_eq!(printable_char(KEYCODE_9, MOD_SHIFT), Some('('));
+        assert_eq!(printable_char(KEYCODE_SPACE, 0), Some(' '));
+        assert_eq!(printable_char(KEYCODE_SPACE, MOD_SHIFT), Some(' '));
+        assert_eq!(printable_char(KEYCODE_SLASH, MOD_SHIFT), Some('?'));
+        assert_eq!(printable_char(KEYCODE_LEFT_BRACKET, 0), Some('['));
+        assert_eq!(printable_char(KEYCODE_LEFT_BRACKET, MOD_SHIFT), Some('{'));
+        // The keypad is layout-independent: Shift never changes it.
+        assert_eq!(printable_char(KEYCODE_NUMPAD_0, MOD_SHIFT), Some('0'));
+        assert_eq!(printable_char(KEYCODE_NUMPAD_DOT, MOD_SHIFT), Some('.'));
+    }
+
+    #[test]
+    fn command_chords_and_named_keys_are_never_text() {
+        // The whole point of the ctrl/meta guard: Cmd+A must stay select-all.
+        assert_eq!(printable_char(KEYCODE_A, MOD_META), None);
+        assert_eq!(printable_char(KEYCODE_A, MOD_CTRL), None);
+        assert_eq!(printable_char(KEYCODE_A, MOD_CTRL | MOD_SHIFT), None);
+        for code in [
+            KEYCODE_ENTER,
+            KEYCODE_NUMPAD_ENTER,
+            KEYCODE_DEL,
+            KEYCODE_FORWARD_DEL,
+            KEYCODE_ESCAPE,
+            KEYCODE_DPAD_UP,
+            KEYCODE_DPAD_DOWN,
+            KEYCODE_DPAD_LEFT,
+            KEYCODE_DPAD_RIGHT,
+        ] {
+            assert_eq!(printable_char(code, 0), None, "key {code} is not text");
+            assert!(map_key(code, 0).is_some(), "key {code} needs an editor arm");
+        }
     }
 }

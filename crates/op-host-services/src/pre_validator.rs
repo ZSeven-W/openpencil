@@ -15,6 +15,7 @@
 //! | `Remove`               | `DeleteNode { node_id, page_id: None }`                 |
 //! | `SetHeightFitContent`  | `SetNodeLayoutProp { property:"height", Keyword("fit_content") }` |
 //! | `SetRotation(deg)`     | `SetNodeRotation { degrees }`                           |
+//! | `SetY(y)`              | `SetNodeLayoutProp { property:"y", Number }`           |
 //! | `SetCornerRadius(r)`   | `SetNodeCornerRadius { radius }`                        |
 //! | `SetFontSize(px)`      | `SetNodeFontSize { font_size }`                         |
 //! | `ClearEffects`         | N × `RemoveNodeEffect { index }` (highest→lowest)       |
@@ -182,6 +183,14 @@ fn planned_fix_to_commands(fix: &PlannedFix, state: &EditorState) -> Vec<EditorC
             cmds.push(EditorCommand::SetNodeRotation {
                 node_id: node_id.clone(),
                 degrees: *deg as f32,
+            });
+        }
+
+        PlannedAction::SetY(y) => {
+            cmds.push(EditorCommand::SetNodeLayoutProp {
+                node_id: node_id.clone(),
+                property: "y".to_string(),
+                value: op_editor_core::LayoutPropValue::Number(*y),
             });
         }
 

@@ -2,7 +2,8 @@
 //! diagnostics layer. Each detector is a pure recursive walk over the jian
 //! `PenNode` tree returning `Vec<Issue>`.
 //!
-//! `detect_all` runs all 14 detectors in the TS `detectAllIssues` order and
+//! `detect_all` runs the detectors in the TS `detectAllIssues` order, followed
+//! by the local geometry and accessibility checks, and
 //! returns the deduplicated combined issue list.
 
 use std::collections::HashSet;
@@ -13,10 +14,12 @@ use jian_ops_schema::PenDocument;
 use crate::design_form::{classify_root_form_node, DesignForm};
 use crate::issue::Issue;
 
+pub mod empty_filled_panel;
 pub mod siblings;
 pub mod spacing;
 pub mod structure;
 pub mod text;
+pub mod top_anchored_bars;
 pub mod typography;
 pub mod widget_a11y;
 
@@ -25,14 +28,16 @@ mod siblings_tests;
 #[cfg(test)]
 mod spacing_edge_tests;
 
+pub use empty_filled_panel::*;
 pub use siblings::*;
 pub use spacing::*;
 pub use structure::*;
 pub use text::*;
+pub use top_anchored_bars::*;
 pub use typography::*;
 pub use widget_a11y::*;
 
-/// Port of `detectAllIssues` (`detectors.ts:698-724`). Runs the 14 detectors
+/// Port of `detectAllIssues` (`detectors.ts:698-724`). Runs the detectors
 /// in the exact TS call order, concatenates their issue lists, and dedups on
 /// `{node_id}:{property}` — the first occurrence (in detector order, then
 /// tree-walk order) wins.
@@ -72,6 +77,8 @@ pub fn detect_all_for_form(root: &PenNode, doc: &PenDocument, form: DesignForm) 
     combined.extend(detect_edge_section_padding(root));
     combined.extend(detect_stacked_horizontal_padding(root));
     combined.extend(detect_text_bg_contrast(root, doc));
+    combined.extend(detect_empty_filled_panel(root));
+    combined.extend(detect_top_anchored_bars(root));
     // Phase E5 — widget a11y. No TS counterpart; runs last so it never
     // shadows an earlier detector under the `{node_id}:{property}` dedup.
     combined.extend(detect_unlabeled_inputs(root));
@@ -87,6 +94,7 @@ pub fn detect_all_for_form(root: &PenNode, doc: &PenDocument, form: DesignForm) 
 mod detect_all_tests {
     use super::*;
     use crate::issue::{FixProperty, IssueCategory, IssueSeverity};
+    use crate::node_util::{children, node_id, node_y, numeric_height};
     use serde_json::json;
 
     fn node(value: serde_json::Value) -> PenNode {
@@ -194,5 +202,98 @@ mod detect_all_tests {
             categories,
             vec![IssueCategory::EmptyPath, IssueCategory::UnexpectedRotation]
         );
+    }
+
+    /// Reduced copy of the two affected artboards from the K3 deck. The
+    /// fixture is intentionally self-contained so the test never reads the
+    /// external `.op` sample.
+    #[test]
+    fn deck_fixture_reports_two_empty_panels_and_repairs_one_bar_group() {
+        let mut document = deck_fixture();
+        let all_issues: Vec<Issue> = document
+            .children
+            .iter()
+            .flat_map(|root| detect_all(root, &document))
+            .collect();
+
+        assert_eq!(
+            all_issues
+                .iter()
+                .filter(|issue| issue.category == IssueCategory::EmptyFilledPanel)
+                .count(),
+            2
+        );
+        let bar_issues: Vec<&Issue> = all_issues
+            .iter()
+            .filter(|issue| issue.category == IssueCategory::TopAnchoredBars)
+            .collect();
+        assert_eq!(bar_issues.len(), 6);
+        assert!(bar_issues
+            .iter()
+            .all(|issue| issue.suggested_value.is_number()));
+
+        let original_heights: Vec<f64> = children(&document.children[0])
+            .iter()
+            .filter(|node| node_id(node).starts_with("bar-"))
+            .map(|node| numeric_height(node).expect("bar height"))
+            .collect();
+        let report = crate::apply_fixes(&mut document, &all_issues);
+        assert_eq!(report.total, 6);
+        assert_eq!(
+            report.by_category.get(&IssueCategory::TopAnchoredBars),
+            Some(&6)
+        );
+
+        let repaired_bars: Vec<&PenNode> = children(&document.children[0])
+            .iter()
+            .filter(|node| node_id(node).starts_with("bar-"))
+            .collect();
+        assert_eq!(repaired_bars.len(), 6);
+        let baseline =
+            node_y(repaired_bars[0]).unwrap() + numeric_height(repaired_bars[0]).unwrap();
+        for (bar, original_height) in repaired_bars.iter().zip(original_heights) {
+            assert_eq!(numeric_height(bar), Some(original_height));
+            assert!((node_y(bar).unwrap() + original_height - baseline).abs() < 1e-9);
+        }
+    }
+
+    fn deck_fixture() -> PenDocument {
+        doc(json!({
+            "version": "1.0",
+            "children": [
+                {
+                    "type": "frame", "id": "slide-04", "name": "04-增长趋势",
+                    "width": 1920, "height": 1080,
+                    "fill": [{"type":"solid", "color":"#F7F4EE"}],
+                    "children": [
+                        {"type":"rectangle", "id":"axis", "x":120, "y":378, "width":1120, "height":2,
+                         "fill":[{"type":"solid","color":"#D3D1CD"}]},
+                        {"type":"rectangle", "id":"bar-a", "x":150, "y":380, "width":96, "height":284,
+                         "fill":[{"type":"solid","color":"#044A7D"}]},
+                        {"type":"rectangle", "id":"bar-b", "x":326, "y":380, "width":96, "height":316,
+                         "fill":[{"type":"solid","color":"#266EA4"}]},
+                        {"type":"rectangle", "id":"bar-c", "x":502, "y":380, "width":96, "height":342,
+                         "fill":[{"type":"solid","color":"#266EA4"}]},
+                        {"type":"rectangle", "id":"bar-d", "x":678, "y":380, "width":96, "height":392,
+                         "fill":[{"type":"solid","color":"#266EA4"}]},
+                        {"type":"rectangle", "id":"bar-e", "x":854, "y":380, "width":96, "height":420,
+                         "fill":[{"type":"solid","color":"#266EA4"}]},
+                        {"type":"rectangle", "id":"bar-f", "x":1030, "y":380, "width":96, "height":448,
+                         "fill":[{"type":"solid","color":"#044A7D"}]},
+                        {"type":"rectangle", "id":"panel-04", "x":1292, "y":96, "width":508, "height":840,
+                         "fill":[{"type":"solid","color":"#EBE7DF"}]}
+                    ]
+                },
+                {
+                    "type": "frame", "id": "slide-07", "name": "07-问题与归因",
+                    "width": 1920, "height": 1080,
+                    "fill": [{"type":"solid", "color":"#F7F4EE"}],
+                    "children": [
+                        {"type":"rectangle", "id":"panel-07", "x":1200, "y":260, "width":600, "height":680,
+                         "fill":[{"type":"solid","color":"#EBE7DF"}]}
+                    ]
+                }
+            ]
+        }))
     }
 }

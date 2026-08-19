@@ -30,6 +30,13 @@ pub const SHELL_ACTION_REQUEST_LOGIN: i32 = 6;
 /// Present the shell's native language picker
 /// ([`crate::op_editor_set_locale`] applies the choice).
 pub const SHELL_ACTION_OPEN_LANGUAGE_PICKER: i32 = 7;
+/// The TopBar's red dot: close the shell's window.
+pub const SHELL_ACTION_WINDOW_CLOSE: i32 = 8;
+/// The TopBar's yellow dot: minimise the shell's window.
+pub const SHELL_ACTION_WINDOW_MINIMIZE: i32 = 9;
+/// The TopBar's green dot: toggle the shell's window between maximised and
+/// restored.
+pub const SHELL_ACTION_WINDOW_ZOOM: i32 = 10;
 
 const AUTH_POLL_INTERVAL_MS: u64 = 250;
 const AUTH_STORAGE_PATH_CAP: usize = 16 * 1024;
@@ -289,6 +296,15 @@ pub(crate) fn take_shell_action(session: &mut Session) -> FfiResult<i32> {
             host.editor_state_mut().editor_ui.pending_language_picker = false;
             host.mark_editor_state_dirty();
             return Ok(SHELL_ACTION_OPEN_LANGUAGE_PICKER);
+        }
+        if let Some(control) = host.editor_state().editor_ui.pending_window_control {
+            host.editor_state_mut().editor_ui.pending_window_control = None;
+            host.mark_editor_state_dirty();
+            return Ok(match control {
+                op_editor_core::WindowControlRequest::Close => SHELL_ACTION_WINDOW_CLOSE,
+                op_editor_core::WindowControlRequest::Minimize => SHELL_ACTION_WINDOW_MINIMIZE,
+                op_editor_core::WindowControlRequest::Zoom => SHELL_ACTION_WINDOW_ZOOM,
+            });
         }
     }
 

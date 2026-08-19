@@ -119,6 +119,30 @@ impl WidgetHostNative {
         };
         let mut top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
         top_bar.chip_text_w = Some(self.topbar_chip_text_w(&top_bar));
+        // Window-control dots first: they are painted at the bar's left edge
+        // and overlap nothing the app owns, so resolving them before the
+        // normal hit-test keeps a dot click driving the WINDOW. Desktop
+        // chrome only — touch chrome paints no dots and phones keep the
+        // platform's own window management. The desktop runner reads the
+        // dots itself before dispatching a press here, so this arm serves
+        // the embedded hosts, whose shells drain the request over the FFI.
+        if !self.editor_state.editor_ui.touch_chrome() {
+            if let Some(ctl) = top_bar.window_control_at(top_bar_rect, Point2D::new(x, y)) {
+                self.editor_state.editor_ui.pending_window_control = Some(match ctl {
+                    op_editor_ui::widgets::WindowControl::Close => {
+                        op_editor_core::WindowControlRequest::Close
+                    }
+                    op_editor_ui::widgets::WindowControl::Minimize => {
+                        op_editor_core::WindowControlRequest::Minimize
+                    }
+                    op_editor_ui::widgets::WindowControl::Maximize => {
+                        op_editor_core::WindowControlRequest::Zoom
+                    }
+                });
+                self.mark_dirty();
+                return Some(true);
+            }
+        }
         if let Some(hit) = self.topbar_hit_test(&top_bar, top_bar_rect, Point2D::new(x, y)) {
             if hit == TopBarHit::OpenAgentSettings {
                 // The modal paints above the inspector. Release its complete

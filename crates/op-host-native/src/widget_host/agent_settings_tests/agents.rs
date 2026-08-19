@@ -553,3 +553,65 @@ fn acp_agent_compact_edit_focuses_display_name_form() {
         "ACP Agent 1"
     );
 }
+
+/// Sweep the settings body for a Connect target, leaving the scroll
+/// offset that made it visible in place. Used to prove the host's press
+/// path stops finding one when the platform cannot spawn CLIs.
+fn find_connect_target(host: &mut WidgetHostNative) -> (Point2D, op_editor_core::AgentProvider) {
+    let rect = AgentSettingsPanel::for_editor(host.editor_state()).rect(VIEWPORT_W, VIEWPORT_H);
+    let max_scroll = AgentSettingsPanel::for_editor(host.editor_state()).max_scroll(rect);
+    let mut scroll = 0.0_f32;
+    loop {
+        host.editor_state_mut()
+            .editor_ui
+            .agent_settings
+            .scroll_y
+            .offset = scroll;
+        {
+            let panel = AgentSettingsPanel::for_editor(host.editor_state());
+            let content = panel.resolved_content_viewport(rect);
+            let mut y = content.origin.y;
+            while y <= content.origin.y + content.size.y {
+                let mut x = content.origin.x;
+                while x <= content.origin.x + content.size.x {
+                    let point = Point2D::new(x, y);
+                    if let AgentSettingsHit::Connect(provider) = panel.hit_test(rect, point) {
+                        return (point, provider);
+                    }
+                    x += 8.0;
+                }
+                y += 8.0;
+            }
+        }
+        if scroll >= max_scroll {
+            break;
+        }
+        scroll = (scroll + 24.0).min(max_scroll);
+    }
+    panic!("the desktop Agents tab must offer a provider Connect target");
+}
+
+#[test]
+fn external_cli_unavailable_kills_the_provider_connect_press_path() {
+    let mut host = WidgetHostNative::new();
+    let (point, provider) = find_connect_target(&mut host);
+
+    // Same point, same scroll — only the host capability changed.
+    host.editor_state_mut().editor_ui.external_cli_available = false;
+    let rect = AgentSettingsPanel::for_editor(host.editor_state()).rect(VIEWPORT_W, VIEWPORT_H);
+    assert_ne!(
+        AgentSettingsPanel::for_editor(host.editor_state()).hit_test(rect, point),
+        AgentSettingsHit::Connect(provider),
+        "a hidden provider card must leave no live Connect rect"
+    );
+
+    assert!(host.dispatch_agent_settings_press(point.x, point.y, VIEWPORT_W, VIEWPORT_H));
+    let settings = &host.editor_state().editor_ui.agent_settings;
+    for candidate in op_editor_core::AgentProvider::ALL {
+        assert!(
+            !settings.provider_probe_in_flight(candidate)
+                && !settings.provider_verified_connected(candidate),
+            "pressing where {candidate:?}'s card used to be must do nothing"
+        );
+    }
+}

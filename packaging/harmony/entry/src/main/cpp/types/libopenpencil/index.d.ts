@@ -138,6 +138,41 @@ export const remoteImageResult: (
   bytes: ArrayBuffer | null
 ) => number;
 export const registerFont: (engine: number, bytes: ArrayBuffer) => number;
+/**
+ * Chrome family: `false` switches to the full desktop layout (top bar, side
+ * panels) for desktop-class devices (2in1/PC); `true` restores the mobile
+ * touch chrome. Call once right after `create`.
+ */
+export const editorSetTouchChrome: (engine: number, enabled: boolean) => number;
+/** Desktop-chrome hover: cursor motion without a pressed button. */
+export const editorHover: (engine: number, x: number, y: number) => number;
+/** Live hardware modifier bitmask (1 shift / 2 ctrl / 4 alt / 8 meta). */
+export const keyModifiers: () => number;
+/**
+ * A hardware key as a raw HarmonyOS key code plus this crate's modifier
+ * bitmask (1 shift / 2 ctrl / 4 alt / 8 meta), mapped onto an `OpKey_*`.
+ * Returns `OpStatus.INVALID_ARG` (1) when the key has no editor binding —
+ * the shell's signal to leave it to the IME as text.
+ */
+export const keyEvent: (engine: number, keyCode: number, modifiers: number) => number;
+/**
+ * Reports whether the shell's `ImeConduit` holds a system
+ * `InputMethodController`. While it does NOT, the native key channel injects
+ * printable characters itself (the 2in1 case: a SURFACE XComponent eats
+ * hardware keys before the IME framework sees them, so `insertText` never
+ * fires). While it DOES, the IME owns them and native injection would type
+ * every character twice. Defaults to `false`.
+ */
+export const setImeConduitAttached: (attached: boolean) => void;
+/** Panel-aware wheel scroll; zoom = Ctrl+wheel zoom at the cursor. */
+export const editorWheel: (
+  engine: number,
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  zoom: boolean
+) => number;
 export const getPageCount: (engine: number) => number;
 export const setActivePage: (engine: number, index: number) => number;
 

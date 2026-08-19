@@ -83,7 +83,10 @@ fn copy_mcp_client_config_queues_clipboard_text() {
 
     let panel = AgentSettingsPanel::for_editor(host.editor_state());
     let rect = panel.rect(VIEWPORT_W, VIEWPORT_H);
-    let copy = op_editor_ui::widgets::agent_settings_panel::mcp_copy_config_button(rect);
+    let copy = op_editor_ui::widgets::agent_settings_panel::mcp_copy_config_button(
+        rect,
+        host.editor_state().editor_ui.external_cli_available,
+    );
     let (x, y) = scroll_to_centre(&mut host, rect, copy);
     assert!(host.dispatch_agent_settings_press(x, y, VIEWPORT_W, VIEWPORT_H));
 
@@ -242,7 +245,10 @@ fn copying_mcp_client_config_records_feedback_time() {
         .running = true;
 
     let rect = AgentSettingsPanel::for_editor(host.editor_state()).rect(VIEWPORT_W, VIEWPORT_H);
-    let copy = op_editor_ui::widgets::agent_settings_panel::mcp_copy_config_button(rect);
+    let copy = op_editor_ui::widgets::agent_settings_panel::mcp_copy_config_button(
+        rect,
+        host.editor_state().editor_ui.external_cli_available,
+    );
     let (x, y) = scroll_to_centre(&mut host, rect, copy);
 
     assert!(host.dispatch_agent_settings_press(x, y, VIEWPORT_W, VIEWPORT_H));
@@ -267,4 +273,55 @@ fn copying_mcp_client_config_records_feedback_time() {
 
     assert!(host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H));
     assert_eq!(host.editor_state().editor_ui.pressed_button, None);
+}
+
+#[test]
+fn external_cli_unavailable_kills_the_mcp_cli_toggle_press_path() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Mcp;
+    let rect = AgentSettingsPanel::for_editor(host.editor_state()).rect(VIEWPORT_W, VIEWPORT_H);
+
+    // Row centres of the desktop toggle grid, captured before the flag
+    // flips — the exact points that used to write an MCP endpoint into a
+    // CLI config file.
+    let rows: Vec<(f32, f32)> = {
+        let panel = AgentSettingsPanel::for_editor(host.editor_state());
+        let content = panel.resolved_content_viewport(rect);
+        let mut rows = Vec::new();
+        let mut y = content.origin.y;
+        while y <= content.origin.y + content.size.y {
+            let mut x = content.origin.x;
+            while x <= content.origin.x + content.size.x {
+                if matches!(
+                    panel.hit_test(rect, Point2D::new(x, y)),
+                    AgentSettingsHit::ToggleMcpCli(_)
+                ) {
+                    rows.push((x, y));
+                }
+                x += 8.0;
+            }
+            y += 8.0;
+        }
+        rows
+    };
+    assert!(
+        !rows.is_empty(),
+        "the desktop MCP tab must paint hittable CLI toggles"
+    );
+
+    host.editor_state_mut().editor_ui.external_cli_available = false;
+    for (x, y) in rows {
+        assert!(host.dispatch_agent_settings_press(x, y, VIEWPORT_W, VIEWPORT_H));
+    }
+
+    assert!(
+        !host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .mcp_cli_enabled
+            .iter()
+            .any(|enabled| *enabled),
+        "pressing where the toggles used to be must not flip any CLI integration"
+    );
 }

@@ -1,9 +1,11 @@
 import { http } from '@kit.NetworkKit';
+import { deviceInfo } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { fileIo as fs } from '@kit.CoreFileKit';
+import { displaySync } from '@kit.ArkGraphics2D';
 import { OpCallbacks } from 'libopenpencil.so';
 import napi, { OpEngineMode, OpShellAction, OpStatus } from './OpNative';
 import { ImeConduit, ImeConduitHost } from './ImeConduit';
-import { KeyForwarder, KeyModifiers } from './KeyForwarder';
 import { PointerRouter, PointerRouterHost } from './PointerRouter';
 import { ViewportBands } from './WindowBridge';
 import { ViewportInputState } from './ViewportInputState';
@@ -16,19 +18,37 @@ const PUMP_INTERVAL_MS = 100;
 /** Remote image fetch budget. */
 const REMOTE_IMAGE_TIMEOUT_MS = 15000;
 
+/**
+ * Which of the TopBar's painted traffic-light dots the user pressed. The
+ * engine owns no window, so it can only name the intent.
+ */
+export enum WindowControlKind {
+  CLOSE = 0,
+  MINIMIZE = 1,
+  ZOOM = 2,
+}
+
 /** Main-thread handlers the page installs for engine-requested shell work. */
 export interface ShellActionSink {
-  onOpenDocument(): void;
-  onExportDocument(): void;
-  onOpenAccountCenter(): void;
-  onRequestLogin(): void;
-  onOpenLanguagePicker(): void;
+  onOpenDocument: () => void;
+  onExportDocument: () => void;
+  onOpenAccountCenter: () => void;
+  onRequestLogin: () => void;
+  onOpenLanguagePicker: () => void;
+  /** A TopBar traffic-light dot asked the shell to drive the window. */
+  onWindowControl: (kind: WindowControlKind) => void;
+  /**
+   * The engine gained or lost text-input focus. The page moves the hidden
+   * IME proxy's ArkUI focus to match — that proxy is what makes the app a
+   * real input client, which a SURFACE XComponent is not.
+   */
+  onImeFocusChanged: (focused: boolean) => void;
   /** The engine produced a device-login verification URL. */
-  onOpenLoginUi(url: string): void;
+  onOpenLoginUi: (url: string) => void;
   /** The engine terminated the login flow itself. */
-  onCloseLoginUi(): void;
+  onCloseLoginUi: () => void;
   /** The engine's backdrop needs light system glyphs. */
-  onSystemChromeAppearance(prefersLightIcons: boolean): void;
+  onSystemChromeAppearance: (prefersLightIcons: boolean) => void;
 }
 
 /**
@@ -48,6 +68,10 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
   private engine: number = 0;
   private editorMode: boolean = true;
   private attachedOnce: boolean = false;
+  private framePumpTimer: number = -1;
+  private frameSync: displaySync.DisplaySync | null = null;
+  private framePending: boolean = true;
+  private nextWakeAtMs: number = 0;
   private surfaceId: string = '';
   private destroyed: boolean = false;
   private sink: ShellActionSink | null = null;
@@ -61,6 +85,8 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
   private pumpTimer: number = -1;
   private imeFocused: boolean = false;
   private lightIconPreference: boolean | null = null;
+  /** 2in1 / PC: desktop chrome, pointer-first input, no soft keyboard. */
+  private readonly desktopClass: boolean = deviceInfo.deviceType === '2in1';
 
   // ---- Lifecycle ---------------------------------------------------------
 
@@ -74,6 +100,11 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
 
   isEditorMode(): boolean {
     return this.editorMode;
+  }
+
+  /** 2in1 / PC: the shell signs in through the system browser, not a page. */
+  isDesktopClass(): boolean {
+    return this.desktopClass;
   }
 
   get router(): PointerRouter {
@@ -106,6 +137,8 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
 
     this.engine = napi.create(
       doc,
+      // ABI contract (op_engine.h): create/resize take the LOGICAL viewport
+      // plus the device-pixel ratio — ViewportBands' vp values verbatim.
       bands.width,
       bands.height,
       bands.dpr,
@@ -120,15 +153,63 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
     hilog.info(
       DOMAIN,
       TAG,
-      'engine created (%{public}fx%{public}f dpr=%{public}f)',
-      bands.width,
-      bands.height,
-      bands.dpr
+      'engine created %{public}s',
+      `${bands.width}x${bands.height} dpr=${bands.dpr}`
     );
     this.attach();
+    // Desktop-class devices get the engine's full desktop chrome (top bar,
+    // side panels, pointer-first interactions); phones and tablets keep the
+    // touch chrome.
+    if (this.desktopClass) {
+      napi.editorSetTouchChrome(this.engine, false);
+      // No soft keyboard exists here; the conduit still attaches, for
+      // composition (see `syncIme`).
+      this.ime.setShowKeyboard(false);
+    }
+    // Until the IME proves it delivers, the native key channel owns
+    // printable characters. See `ImeConduit`'s prove-then-suppress rule.
+    napi.setImeConduitAttached(false);
     this.applyViewport(bands);
+    this.registerSystemCjkFont();
     this.startPump();
     return true;
+  }
+
+  /**
+   * skia has no OHOS system font manager, so without this the engine can
+   * paint only its embedded Latin font and CJK chrome strings render as
+   * tofu. HarmonyOS Sans SC carries the CJK repertoire; the engine's
+   * imported-font fallback chain picks it up per codepoint.
+   */
+  private registerSystemCjkFont(): void {
+    // Coverage for every non-Latin chrome locale: Simplified/Traditional
+    // Chinese, Japanese+Korean (the CJK collection), Thai, and Devanagari.
+    // HarmonyOS Sans itself covers Latin/Cyrillic/Greek.
+    const paths: string[] = [
+      '/system/fonts/HarmonyOS_Sans_SC.ttf',
+      '/system/fonts/HarmonyOS_Sans_TC.ttf',
+      '/system/fonts/NotoSansCJK-Regular.ttc',
+      '/system/fonts/NotoSansThai[wdth,wght].ttf',
+      '/system/fonts/NotoSansDevanagariUI-Regular.ttf',
+    ];
+    for (const path of paths) {
+      try {
+        const stat = fs.statSync(path);
+        const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
+        const bytes = new ArrayBuffer(stat.size);
+        fs.readSync(file.fd, bytes);
+        fs.closeSync(file);
+        const status: number = napi.registerFont(this.engine, bytes);
+        hilog.info(
+          DOMAIN,
+          TAG,
+          'system font registered %{public}s',
+          `${path} (${stat.size} bytes) status=${status}`
+        );
+      } catch (error) {
+        hilog.warn(DOMAIN, TAG, 'system font unavailable %{public}s', `${path}: ${error}`);
+      }
+    }
   }
 
   /** Applies the persisted UI locale right after engine create. */
@@ -159,6 +240,7 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
       const status: number = napi.attachSurface(this.engine, this.surfaceId);
       if (status === OpStatus.OK) {
         this.attachedOnce = true;
+        this.startFramePump();
       } else {
         hilog.warn(
           DOMAIN,
@@ -171,6 +253,71 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
       return;
     }
     napi.resume(this.engine, this.surfaceId);
+    this.startFramePump();
+  }
+
+  /**
+   * Main-thread frame pump. The engine's own dirty tracking makes an idle
+   * tick cheap, mirroring the Android player's Choreographer barrier; a
+   * dedicated native vsync pump can replace this later without touching the
+   * shell contract.
+   */
+  private startFramePump(): void {
+    if (this.frameSync !== null || this.framePumpTimer !== -1) {
+      return;
+    }
+    this.framePending = true;
+    try {
+      // Real vsync alignment: one coalesced frame per display refresh at
+      // most. `framePending` merges every redraw request (input, engine
+      // callbacks) that arrived since the previous tick.
+      const sync = displaySync.create();
+      sync.setExpectedFrameRateRange({ expected: 120, min: 60, max: 120 });
+      sync.on('frame', () => this.framePumpTick());
+      sync.start();
+      this.frameSync = sync;
+    } catch (error) {
+      hilog.warn(
+        DOMAIN,
+        TAG,
+        'displaySync unavailable (%{public}s); falling back to a timer',
+        String(error)
+      );
+      this.framePumpTimer = setInterval(() => this.framePumpTick(), 16);
+    }
+  }
+
+  private framePumpTick(): void {
+    if (this.engine === 0) {
+      return;
+    }
+    const now: number = Date.now();
+    const timedWakeDue: boolean = this.nextWakeAtMs > 0 && now >= this.nextWakeAtMs;
+    if (!this.framePending && !timedWakeDue) {
+      return;
+    }
+    this.framePending = false;
+    if (timedWakeDue) {
+      this.nextWakeAtMs = 0;
+    }
+    const frameStatus: number = napi.frame(this.engine, now);
+    this.pump();
+  }
+
+  /** Coalesced redraw request: painted on the next vsync tick. */
+  requestFrame(): void {
+    this.framePending = true;
+  }
+
+  stopFramePump(): void {
+    if (this.frameSync !== null) {
+      this.frameSync.stop();
+      this.frameSync = null;
+    }
+    if (this.framePumpTimer !== -1) {
+      clearInterval(this.framePumpTimer);
+      this.framePumpTimer = -1;
+    }
   }
 
   /** Blocking barrier before the platform reclaims the surface. */
@@ -179,6 +326,7 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
       return;
     }
     this.stopPump();
+    this.stopFramePump();
     napi.suspend(this.engine);
   }
 
@@ -193,6 +341,7 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
   destroy(): void {
     this.destroyed = true;
     this.stopPump();
+    this.stopFramePump();
     this.ime.release();
     this.sink = null;
     if (this.engine === 0) {
@@ -228,6 +377,7 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
     }
     this.bands = bands.clone();
     this.inputState.stageDensity(bands.dpr);
+    // ABI contract: logical viewport + dpr + logical safe-area insets.
     const status: number = napi.resizeWithSafeArea(
       this.engine,
       bands.width,
@@ -258,29 +408,33 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
   // ---- Input -------------------------------------------------------------
 
   handleTouch(event: TouchEvent): void {
+    // Engine input almost always dirties the scene; marking here saves one
+    // callback round-trip of latency before the vsync tick paints.
+    this.framePending = true;
     this.pointerRouter.handleTouch(event);
   }
 
   handleMouse(event: MouseEvent): void {
+    this.framePending = true;
     this.pointerRouter.handleMouse(event.action, event.button, event.x, event.y);
   }
 
-  /** Returns true when the engine consumed the key. */
-  handleKey(keyCode: number, keyText: string, modifiers: KeyModifiers): boolean {
+  /**
+   * Mouse-wheel / trackpad axis input (2in1). Routed through the engine's
+   * panel-aware wheel logic: panels under the cursor scroll, the canvas
+   * pans, and Ctrl+wheel zooms around the cursor.
+   */
+  handleAxis(x: number, y: number, dx: number, dy: number, ctrlDown: boolean): void {
     if (this.engine === 0 || !this.editorMode) {
-      return false;
+      return;
     }
-    const handled: boolean = KeyForwarder.handleKeyDown(
-      this.engine,
-      keyCode,
-      keyText,
-      modifiers,
-      this.ime.isAttached
-    );
-    if (handled) {
-      this.pump();
-    }
-    return handled;
+    this.framePending = true;
+    napi.editorWheel(this.engine, x, y, dx, dy, ctrlDown);
+    this.pump();
+  }
+
+  viewportVpWidth(): number {
+    return this.bands.width;
   }
 
   onPointerActivity(): void {
@@ -372,19 +526,58 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
           sink.onOpenLanguagePicker();
         }
         break;
+      case OpShellAction.WINDOW_CLOSE:
+        if (sink !== null) {
+          sink.onWindowControl(WindowControlKind.CLOSE);
+        }
+        break;
+      case OpShellAction.WINDOW_MINIMIZE:
+        if (sink !== null) {
+          sink.onWindowControl(WindowControlKind.MINIMIZE);
+        }
+        break;
+      case OpShellAction.WINDOW_ZOOM:
+        if (sink !== null) {
+          sink.onWindowControl(WindowControlKind.ZOOM);
+        }
+        break;
       default:
         hilog.warn(DOMAIN, TAG, 'unknown editor shell action=%{public}d', action);
         break;
     }
   }
 
-  /** The engine's host owns IME focus; keep the system keyboard in sync. */
+  /**
+   * The engine's host owns IME focus; keep the system IME in sync.
+   *
+   * The conduit attaches on EVERY form factor, desktop-class included: it is
+   * the only route a composing IME (pinyin, and every other CJK layout) has
+   * into the engine, and the native key channel's direct injection is a
+   * US-QWERTY table with no composition. The two coexist through
+   * `setImeConduitAttached`, which the conduit raises only once the input
+   * framework has actually delivered something — so a 2in1 whose IME never
+   * engages keeps typing through the native path instead of going dead.
+   *
+   * Desktop-class hosts attach WITHOUT asking for a soft keyboard: there is
+   * no on-screen keyboard to raise on a 2in1, and requesting one would only
+   * risk covering the canvas.
+   */
   private syncIme(): void {
     const focused: boolean = napi.editorImeFocused(this.engine);
     if (focused === this.imeFocused) {
       return;
     }
     this.imeFocused = focused;
+    hilog.info(
+      DOMAIN,
+      TAG,
+      'engine ime focus %{public}s',
+      `${focused} desktopClass=${this.desktopClass}`
+    );
+    const sink: ShellActionSink | null = this.sink;
+    if (sink !== null) {
+      sink.onImeFocusChanged(focused);
+    }
     if (focused) {
       this.ime.show();
     } else {
@@ -405,6 +598,51 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
   }
 
   // ---- Login / export / document passthroughs ----------------------------
+
+  /**
+   * Hands the engine's auth runtime its shell-owned storage directory, this
+   * device's name, the app version, and the regional SSO deployment
+   * (`OpAuthRegion`: 0 = China, 1 = Global). Called AT MOST ONCE per process
+   * by `AuthRuntime` — the runtime locks its origin on the first call.
+   */
+  configureAuth(
+    storageDir: string,
+    deviceName: string,
+    appVersion: string,
+    region: number
+  ): number {
+    if (this.engine === 0 || !this.editorMode) {
+      return OpStatus.CLOSING;
+    }
+    return napi.editorConfigureAuth(this.engine, storageDir, deviceName, appVersion, region);
+  }
+
+  /** Starts a device-login pairing; the URL arrives as shell action 2. */
+  beginLogin(): number {
+    if (this.engine === 0 || !this.editorMode) {
+      return OpStatus.CLOSING;
+    }
+    return napi.editorBeginLogin(this.engine);
+  }
+
+  /** JSON profile snapshot, or null when the engine has no account. */
+  accountSnapshot(): string | null {
+    if (this.engine === 0 || !this.editorMode) {
+      return null;
+    }
+    return napi.editorAccountSnapshot(this.engine);
+  }
+
+  signOut(): number {
+    if (this.engine === 0 || !this.editorMode) {
+      return OpStatus.CLOSING;
+    }
+    const status: number = napi.editorSignOut(this.engine);
+    if (status === OpStatus.OK) {
+      this.pump();
+    }
+    return status;
+  }
 
   /** User close/back or an unsupported flow: cancel the single auth flow. */
   cancelLogin(): void {
@@ -460,9 +698,14 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
 
   private callbacks(): OpCallbacks {
     return {
-      onNeedsRedraw: (_hasNextWake: boolean, _nextWakeMs: number): void => {
-        // The native side owns the vsync pump, so no frame is scheduled
-        // here. A mutation may still have queued a shell action, so drain.
+      onNeedsRedraw: (hasNextWake: boolean, nextWakeMs: number): void => {
+        // Coalesce: mark pending and let the vsync tick paint exactly one
+        // frame per refresh. Painting here directly would double-draw on
+        // top of the pump and saturate the main thread under fast input.
+        this.framePending = true;
+        if (hasNextWake && nextWakeMs > 0) {
+          this.nextWakeAtMs = nextWakeMs;
+        }
         this.pump();
       },
       onRuntimeError: (kind: number, message: string, source: string | null): void => {

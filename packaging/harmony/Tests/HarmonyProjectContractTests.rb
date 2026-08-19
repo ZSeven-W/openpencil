@@ -8,6 +8,7 @@
 require "json"
 
 player_dir = File.expand_path("..", __dir__)
+repo_dir = File.expand_path("../..", player_dir)
 ets_dir = File.join(player_dir, "entry/src/main/ets")
 
 def parse_json5(path)
@@ -93,24 +94,52 @@ raise "surface teardown must suspend before the platform reclaims it" unless ind
 )
 raise "page teardown must destroy the engine" unless index.include?("this.host.destroy()")
 
-# The native side owns the vsync pump; ArkTS forwards lifecycle only.
-Dir.glob(File.join(ets_dir, "**/*.ets")).each do |source|
-  if File.read(source).match?(/napi\.frame\s*\(/)
-    raise "#{File.basename(source)} must not drive frames: the native side pumps vsync"
-  end
-end
+# ArkTS owns a COALESCING vsync-aligned frame pump: displaySync ticks paint
+# at most one frame per refresh, `framePending` merges every redraw request
+# (engine callbacks and raw input), and the engine's timed wakes ride the
+# same tick. Verified on the HarmonyOS 6 emulator: a per-event immediate
+# paint saturates the main thread and drops frames.
 engine_host = read(ets_dir, "common/EngineHost.ets")
-raise "the native vsync pump must be documented" unless engine_host.include?("OH_NativeVSync")
+raise "frame pump must be vsync-aligned" unless engine_host.include?("displaySync.create()")
+raise "frame pump must coalesce redraw requests" unless engine_host.include?("framePending")
+raise "engine timed wakes must ride the pump" unless engine_host.include?("nextWakeAtMs")
+frame_calls = Dir.glob(File.join(ets_dir, "**/*.ets")).sum do |source|
+  File.read(source).scan(/napi\.frame\s*\(/).length
+end
+raise "exactly one frame call site (the pump tick), found #{frame_calls}" unless frame_calls == 1
 
 # ---- Input coverage: touch, mouse, keyboard, focus -------------------------
 
 raise "touch input must be forwarded" unless index.include?(".onTouch(")
 raise "mouse input must be forwarded for 2in1/PC" unless index.include?(".onMouse(")
 raise "hover must be handled for 2in1/PC" unless index.include?(".onHover(")
-raise "physical keys must be forwarded" unless index.include?(".onKeyEvent(")
 raise "the surface must take focus for keyboard input" unless index.include?(".focusable(true)") &&
   index.include?(".defaultFocus(true)")
-raise "key forwarding must carry modifiers" unless index.include?("Index.modifiersOf(event)")
+# A SURFACE XComponent consumes hardware keys on the NATIVE channel, so ArkTS
+# `onKeyEvent` never fires while it holds focus: the key path lives in
+# `xcomponent.rs`. A second ArkTS forwarder would double every keystroke.
+xcomponent = read(repo_dir, "crates/op-engine-napi/src/xcomponent.rs")
+raise "physical keys must be forwarded on the native channel" unless xcomponent.include?(
+  "OH_NativeXComponent_RegisterKeyEventCallback",
+)
+raise "the native key path must carry the live modifier bitmask" unless xcomponent.include?(
+  "MODIFIERS.load(Ordering::Relaxed)",
+)
+raise "ArkTS must not forward keys as well" if Dir.glob(File.join(ets_dir, "**/*.ets")).any? { |source|
+  File.read(source).include?(".onKeyEvent(")
+}
+# Typing into an engine input on 2in1: no soft keyboard ever appears, so the
+# native channel injects printable characters itself while the IME conduit is
+# detached (`setImeConduitAttached`).
+raise "printable keys must reach the engine as text" unless xcomponent.include?(
+  "crate::action::printable_char(code, modifiers)",
+)
+raise "native text injection must be gated on engine IME focus" unless xcomponent.include?(
+  "if ime && !conduit {",
+)
+raise "the shell must report its IME conduit state to native" unless engine_host.include?(
+  "napi.setImeConduitAttached(false)",
+)
 
 pointer_router = read(ets_dir, "common/PointerRouter.ets")
 raise "the shell must forward raw pointers, not interpret gestures" unless pointer_router.include?(
@@ -169,6 +198,26 @@ app_scope_keys = app_strings["string"].map { |entry| entry["name"] }
 module_referenced = File.read(File.join(player_dir, "entry/src/main/module.json5")).scan(/\$string:([A-Za-z0-9_]+)/).flatten
 module_missing = (module_referenced.uniq - base_keys - app_scope_keys).sort
 raise "unresolved module string resources: #{module_missing.join(', ')}" unless module_missing.empty?
+
+# Media: every `$r('app.media.*')` must resolve to a real PNG, and the SSO
+# brand marks must stay in step with the Android shell's drawable set.
+media_dir = File.join(player_dir, "entry/src/main/resources/base/media")
+media_keys = Dir.glob(File.join(media_dir, "*")).map { |path| File.basename(path, ".*") }
+media_referenced = Dir.glob(File.join(ets_dir, "**/*.ets")).flat_map do |source|
+  File.read(source).scan(/\$r\('app\.media\.([A-Za-z0-9_]+)'\)/).flatten
+end
+media_missing = (media_referenced.uniq - media_keys).sort
+raise "unresolved media resources: #{media_missing.join(', ')}" unless media_missing.empty?
+
+android_drawable = File.join(repo_dir, "packaging/android/app/src/main/res/drawable-nodpi")
+if File.directory?(android_drawable)
+  providers = Dir.glob(File.join(android_drawable, "provider_*.png")).map { |path| File.basename(path) }
+  (providers + ["zseven_logo.png"]).each do |asset|
+    path = File.join(media_dir, asset)
+    raise "SSO asset #{asset} missing from the HarmonyOS media set" unless File.exist?(path)
+    raise "SSO asset #{asset} must be a PNG" unless File.binread(path).start_with?("\x89PNG\r\n\x1a\n".b)
+  end
+end
 
 colors = JSON.parse(read(player_dir, "entry/src/main/resources/base/element/color.json"))["color"]
 raise "start window background color missing" unless colors.any? { |entry| entry["name"] == "start_window_background" }

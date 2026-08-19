@@ -100,7 +100,10 @@ fn vscode_embed_opens_directly_on_mcp_even_though_settings_tab_is_agents() {
     // tab; matching it against the MCP tab's own content height proves
     // the dialog renders MCP content directly instead of falling back
     // to (or ever showing) Agents.
-    let expected = agent_settings_mcp::content_height(&state.editor_ui.agent_settings);
+    let expected = agent_settings_mcp::content_height(
+        &state.editor_ui.agent_settings,
+        state.editor_ui.external_cli_available,
+    );
     assert_eq!(panel.content_total_height(), expected);
 }
 

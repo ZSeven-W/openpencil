@@ -43,7 +43,7 @@ windows-sys = { version = "0.61", features = [
   "Win32_Security_Credentials",
 ], optional = true }
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(all(target_os = "linux", not(target_env = "ohos")))'.dependencies]
 keyring = { version = "3.6.3", default-features = false, features = [
   "async-io",
   "async-secret-service",

@@ -156,6 +156,9 @@ fn first_builtin_row_offset() -> f32 {
 fn mcp_client_config_copy_rect(rect: Rect) -> Rect {
     super::agent_settings_mcp::client_config_copy_button_rect(
         crate::widgets::agent_settings_panel::content_viewport(rect),
+        // Every state in this file is `EditorState::default()`, whose
+        // `external_cli_available` is the desktop default.
+        true,
     )
 }
 

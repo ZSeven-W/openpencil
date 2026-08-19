@@ -140,9 +140,15 @@ fn paint_panel(cx: &mut PaintCx<'_>, panel: Rect, args: PanelPaintArgs<'_>) {
         AgentSettingsTab::Agents => {
             paint_agents_tab(cx, theme, settings, ui, content_rect, now_ms, mode)
         }
-        AgentSettingsTab::Mcp => {
-            agent_settings_mcp::paint_mcp_tab(cx, theme, settings, ui, content_rect, now_ms)
-        }
+        AgentSettingsTab::Mcp => agent_settings_mcp::paint_mcp_tab(
+            cx,
+            theme,
+            settings,
+            ui,
+            content_rect,
+            now_ms,
+            ui.external_cli_available,
+        ),
         AgentSettingsTab::Images => {
             paint_secondary_hero(cx, theme, ui, content_rect, "settings.images");
             agent_settings_images::paint_images_tab(

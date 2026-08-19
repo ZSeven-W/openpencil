@@ -46,6 +46,24 @@ impl EmbedHost {
     }
 }
 
+/// A press on the TopBar's engine-painted window-control dots, raised for
+/// the platform shell to execute.
+///
+/// The widget layer owns no window, so the dots can only record an intent.
+/// The desktop runner reads the dots directly through
+/// `TopBar::window_control_at` and never sets this; the embedded mobile
+/// hosts (whose shells own the window) drain it through the C ABI's
+/// shell-action channel instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowControlRequest {
+    /// Red dot — close the window.
+    Close,
+    /// Yellow dot — minimise the window.
+    Minimize,
+    /// Green dot — toggle maximised / restored.
+    Zoom,
+}
+
 /// File-menu actions the host runner has to handle (rfd dialogs +
 /// serde live host-side, not here). `ExportImage` opens the picker;
 /// `ExportImageConfirm` commits.

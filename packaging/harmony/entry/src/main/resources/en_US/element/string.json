@@ -30,7 +30,7 @@
     },
     {
       "name": "native_login_unavailable",
-      "value": "Sign-in is not available on HarmonyOS yet."
+      "value": "Sign-in is unavailable in this build."
     },
     {
       "name": "language_picker_title",
@@ -43,6 +43,210 @@
     {
       "name": "notice_dismiss",
       "value": "OK"
+    },
+    {
+      "name": "native_login_welcome",
+      "value": "Welcome back"
+    },
+    {
+      "name": "native_login_subtitle",
+      "value": "Sign in to ZSeven"
+    },
+    {
+      "name": "native_login_email_label",
+      "value": "Email address"
+    },
+    {
+      "name": "native_login_email_placeholder",
+      "value": "Enter your email"
+    },
+    {
+      "name": "native_login_password_label",
+      "value": "Password"
+    },
+    {
+      "name": "native_login_password_placeholder",
+      "value": "Enter your password"
+    },
+    {
+      "name": "native_login_sign_in",
+      "value": "Sign In"
+    },
+    {
+      "name": "native_login_forgot_password",
+      "value": "Forgot password"
+    },
+    {
+      "name": "native_login_continue_with",
+      "value": "Or continue with"
+    },
+    {
+      "name": "native_login_no_account",
+      "value": "No account yet?"
+    },
+    {
+      "name": "native_login_register_now",
+      "value": "Sign up"
+    },
+    {
+      "name": "native_login_region",
+      "value": "Region: %s · Switch"
+    },
+    {
+      "name": "native_login_completing",
+      "value": "Finishing sign-in…"
+    },
+    {
+      "name": "native_login_browser_hint",
+      "value": "Finish signing in in your browser; you will return automatically."
+    },
+    {
+      "name": "native_login_load_failed",
+      "value": "Couldn't start sign-in."
+    },
+    {
+      "name": "native_login_error_missing_fields",
+      "value": "Enter your email and password."
+    },
+    {
+      "name": "native_login_error_invalid_credentials",
+      "value": "Incorrect email or password."
+    },
+    {
+      "name": "native_login_error_rate_limited",
+      "value": "Too many attempts. Try again in a moment."
+    },
+    {
+      "name": "native_login_error_network",
+      "value": "Network error. Check your connection and try again."
+    },
+    {
+      "name": "native_login_error_generic",
+      "value": "Sign-in failed. Please try again."
+    },
+    {
+      "name": "native_login_error_pairing_expired",
+      "value": "This sign-in request expired. Close and try again."
+    },
+    {
+      "name": "account_center_signed_out",
+      "value": "Not signed in"
+    },
+    {
+      "name": "account_center_region_value",
+      "value": "Sign-in region: %s"
+    },
+    {
+      "name": "account_center_manage",
+      "value": "Manage account in browser"
+    },
+    {
+      "name": "account_center_sign_out",
+      "value": "Sign out"
+    },
+    {
+      "name": "account_center_sign_out_confirm",
+      "value": "Sign out of OpenPencil?"
+    },
+    {
+      "name": "sso_region_china",
+      "value": "Mainland China"
+    },
+    {
+      "name": "sso_region_global",
+      "value": "Global"
+    },
+    {
+      "name": "sso_region_restart_note",
+      "value": "A region change takes effect after you restart OpenPencil."
+    },
+    {
+      "name": "sso_region_switched_title",
+      "value": "Region set to %s"
+    },
+    {
+      "name": "sso_region_later",
+      "value": "Later"
+    },
+    {
+      "name": "sso_region_restart_now",
+      "value": "Restart now"
+    },
+    {
+      "name": "register_title",
+      "value": "Create account"
+    },
+    {
+      "name": "register_subtitle",
+      "value": "Sign up for ZSeven"
+    },
+    {
+      "name": "register_submit",
+      "value": "Sign Up"
+    },
+    {
+      "name": "register_code_label",
+      "value": "Email verification code"
+    },
+    {
+      "name": "register_code_placeholder",
+      "value": "Enter the code"
+    },
+    {
+      "name": "register_send_code",
+      "value": "Send code"
+    },
+    {
+      "name": "register_code_sent",
+      "value": "Verification code sent. Check your inbox."
+    },
+    {
+      "name": "register_confirm_label",
+      "value": "Confirm password"
+    },
+    {
+      "name": "register_confirm_placeholder",
+      "value": "Enter the password again"
+    },
+    {
+      "name": "register_rule_length",
+      "value": "Use 12–50 characters"
+    },
+    {
+      "name": "register_rule_uppercase",
+      "value": "At least one uppercase letter"
+    },
+    {
+      "name": "register_rule_digit",
+      "value": "At least one number"
+    },
+    {
+      "name": "register_rule_special",
+      "value": "At least one special character"
+    },
+    {
+      "name": "register_error_missing_email",
+      "value": "Enter your email first."
+    },
+    {
+      "name": "register_error_missing_fields",
+      "value": "Fill in every field."
+    },
+    {
+      "name": "register_error_mismatch",
+      "value": "The passwords do not match."
+    },
+    {
+      "name": "reset_title",
+      "value": "Reset password"
+    },
+    {
+      "name": "reset_subtitle",
+      "value": "We'll email you a verification code"
+    },
+    {
+      "name": "reset_submit",
+      "value": "Reset and sign in"
     }
   ]
 }

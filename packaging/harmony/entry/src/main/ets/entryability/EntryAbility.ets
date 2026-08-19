@@ -1,5 +1,6 @@
 import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
+import { deviceInfo } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { WindowBridge } from '../common/WindowBridge';
 
@@ -35,6 +36,27 @@ export default class EntryAbility extends UIAbility {
     windowStage
       .getMainWindow()
       .then((mainWindow: window.Window) => {
+        // Desktop-class free windows drop the system decor bar: the engine
+        // paints its own top bar, so the window reads as borderless. Phones
+        // and tablets have no decor and the call is skipped.
+        if (deviceInfo.deviceType === '2in1') {
+          try {
+            mainWindow.setWindowDecorVisible(false);
+          } catch (error) {
+            hilog.warn(DOMAIN, TAG, 'decor hide unavailable: %{public}s', String(error));
+          }
+          // Hiding the decor bar leaves the platform's maximise / minimise /
+          // close buttons FLOATING over the window's top-right corner, right
+          // on top of the engine's own right-hand TopBar cluster. The engine
+          // paints its own traffic lights (shell actions 8/9/10), so retire
+          // the system trio instead of reserving space around it.
+          hilog.info(
+            DOMAIN,
+            TAG,
+            'title buttons hidden, residual reserve=%{public}d vp',
+            WindowBridge.shared.hideTitleButtons(mainWindow)
+          );
+        }
         // Keep the surface behind the system bars, then start publishing the
         // four-sided safe area and keyboard occlusion to the page.
         return WindowBridge.shared.attach(mainWindow);

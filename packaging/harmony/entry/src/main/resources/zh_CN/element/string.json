@@ -30,7 +30,7 @@
     },
     {
       "name": "native_login_unavailable",
-      "value": "鸿蒙版暂不支持登录。"
+      "value": "当前构建未内置登录后端。"
     },
     {
       "name": "language_picker_title",
@@ -43,6 +43,210 @@
     {
       "name": "notice_dismiss",
       "value": "好"
+    },
+    {
+      "name": "native_login_welcome",
+      "value": "欢迎回来"
+    },
+    {
+      "name": "native_login_subtitle",
+      "value": "登录到 ZSeven"
+    },
+    {
+      "name": "native_login_email_label",
+      "value": "邮箱地址"
+    },
+    {
+      "name": "native_login_email_placeholder",
+      "value": "请输入邮箱"
+    },
+    {
+      "name": "native_login_password_label",
+      "value": "密码"
+    },
+    {
+      "name": "native_login_password_placeholder",
+      "value": "请输入密码"
+    },
+    {
+      "name": "native_login_sign_in",
+      "value": "登录"
+    },
+    {
+      "name": "native_login_forgot_password",
+      "value": "忘记密码"
+    },
+    {
+      "name": "native_login_continue_with",
+      "value": "或使用以下方式继续"
+    },
+    {
+      "name": "native_login_no_account",
+      "value": "还没有账号？"
+    },
+    {
+      "name": "native_login_register_now",
+      "value": "立即注册"
+    },
+    {
+      "name": "native_login_region",
+      "value": "区域：%s · 切换"
+    },
+    {
+      "name": "native_login_completing",
+      "value": "正在完成登录…"
+    },
+    {
+      "name": "native_login_browser_hint",
+      "value": "请在浏览器中完成登录，完成后将自动返回。"
+    },
+    {
+      "name": "native_login_load_failed",
+      "value": "无法启动登录。"
+    },
+    {
+      "name": "native_login_error_missing_fields",
+      "value": "请输入邮箱和密码。"
+    },
+    {
+      "name": "native_login_error_invalid_credentials",
+      "value": "邮箱或密码不正确。"
+    },
+    {
+      "name": "native_login_error_rate_limited",
+      "value": "尝试次数过多，请稍后再试。"
+    },
+    {
+      "name": "native_login_error_network",
+      "value": "网络错误，请检查连接后重试。"
+    },
+    {
+      "name": "native_login_error_generic",
+      "value": "登录失败，请重试。"
+    },
+    {
+      "name": "native_login_error_pairing_expired",
+      "value": "本次登录请求已过期，请关闭后重试。"
+    },
+    {
+      "name": "account_center_signed_out",
+      "value": "未登录"
+    },
+    {
+      "name": "account_center_region_value",
+      "value": "登录区域：%s"
+    },
+    {
+      "name": "account_center_manage",
+      "value": "在浏览器中管理账号"
+    },
+    {
+      "name": "account_center_sign_out",
+      "value": "退出登录"
+    },
+    {
+      "name": "account_center_sign_out_confirm",
+      "value": "退出 OpenPencil 登录？"
+    },
+    {
+      "name": "sso_region_china",
+      "value": "中国大陆"
+    },
+    {
+      "name": "sso_region_global",
+      "value": "国际"
+    },
+    {
+      "name": "sso_region_restart_note",
+      "value": "切换区域将在重启 OpenPencil 后生效。"
+    },
+    {
+      "name": "sso_region_switched_title",
+      "value": "已切换到%s"
+    },
+    {
+      "name": "sso_region_later",
+      "value": "稍后"
+    },
+    {
+      "name": "sso_region_restart_now",
+      "value": "立即重启"
+    },
+    {
+      "name": "register_title",
+      "value": "创建账号"
+    },
+    {
+      "name": "register_subtitle",
+      "value": "注册 ZSeven 账号"
+    },
+    {
+      "name": "register_submit",
+      "value": "注册"
+    },
+    {
+      "name": "register_code_label",
+      "value": "邮箱验证码"
+    },
+    {
+      "name": "register_code_placeholder",
+      "value": "请输入验证码"
+    },
+    {
+      "name": "register_send_code",
+      "value": "发送验证码"
+    },
+    {
+      "name": "register_code_sent",
+      "value": "验证码已发送，请查收邮箱。"
+    },
+    {
+      "name": "register_confirm_label",
+      "value": "确认密码"
+    },
+    {
+      "name": "register_confirm_placeholder",
+      "value": "请再次输入密码"
+    },
+    {
+      "name": "register_rule_length",
+      "value": "使用 12–50 个字符"
+    },
+    {
+      "name": "register_rule_uppercase",
+      "value": "至少包含一个大写字母"
+    },
+    {
+      "name": "register_rule_digit",
+      "value": "至少包含一个数字"
+    },
+    {
+      "name": "register_rule_special",
+      "value": "至少包含一个特殊字符"
+    },
+    {
+      "name": "register_error_missing_email",
+      "value": "请先输入邮箱。"
+    },
+    {
+      "name": "register_error_missing_fields",
+      "value": "请填写所有字段。"
+    },
+    {
+      "name": "register_error_mismatch",
+      "value": "两次输入的密码不一致。"
+    },
+    {
+      "name": "reset_title",
+      "value": "重置密码"
+    },
+    {
+      "name": "reset_subtitle",
+      "value": "我们将向你的邮箱发送验证码"
+    },
+    {
+      "name": "reset_submit",
+      "value": "重置并登录"
     }
   ]
 }

@@ -15,6 +15,8 @@ export interface PointerRouterHost {
   isEditorMode(): boolean;
   /** A pointer interaction landed: drain shell actions and redraw. */
   onPointerActivity(): void;
+  /** The current logical (vp) viewport width, 0 before the first layout. */
+  viewportVpWidth(): number;
 }
 
 /** One tracked pointer in component-local vp. */
@@ -38,7 +40,9 @@ class PointerSample {
  * `OpSurfaceView.editorTouch` on Android and `OpPlayerView` on iOS.
  *
  * ArkUI already reports touch coordinates in vp — the engine's logical unit
- * with a top-left origin — so no density conversion happens anywhere here.
+ * with a top-left origin. The ENGINE consumes surface pixels (the Android
+ * player forwards physical px), so every coordinate is multiplied by the
+ * committed density at this entry point before it crosses the NAPI.
  */
 export class PointerRouter {
   private readonly host: PointerRouterHost;
@@ -70,6 +74,7 @@ export class PointerRouter {
     if (engine === 0) {
       return;
     }
+
     const action: ViewportInputAction = PointerRouter.actionFor(event.type);
     // A window resize/fold/rotation may have updated ArkUI geometry before
     // the atomic native viewport tuple. Do not mutate the document in that
@@ -79,26 +84,29 @@ export class PointerRouter {
     }
     const tMs: number = Math.floor(event.timestamp / 1000000);
     const changed: TouchObject[] = event.changedTouches;
+    // ABI contract: editor input is LOGICAL (vp) full-drawable coordinates,
+    // which is exactly what ArkUI's TouchObject already reports.
+    const px: number = 1;
 
     switch (action) {
       case ViewportInputAction.DOWN:
         for (const touch of changed) {
-          this.onDown(engine, touch.id, touch.x, touch.y, tMs);
+          this.onDown(engine, touch.id, touch.x * px, touch.y * px, tMs);
         }
         break;
       case ViewportInputAction.MOVE:
         for (const touch of changed) {
           const sample: PointerSample | undefined = this.active.get(touch.id);
           if (sample !== undefined) {
-            sample.x = touch.x;
-            sample.y = touch.y;
+            sample.x = touch.x * px;
+            sample.y = touch.y * px;
           }
         }
         this.onMove(engine, changed, tMs);
         break;
       case ViewportInputAction.UP:
         for (const touch of changed) {
-          this.onUp(engine, touch.id, touch.x, touch.y, tMs);
+          this.onUp(engine, touch.id, touch.x * px, touch.y * px, tMs);
         }
         break;
       default:
@@ -117,25 +125,36 @@ export class PointerRouter {
     this.lastKnownY = y;
     switch (action) {
       case MouseAction.Press:
+        // Left press/release ride the platform's synthesized touch stream
+        // (same path as fingers), because forwarding both the mouse event
+        // AND its synthesized touch double-fires every press and toggles
+        // chrome buttons straight back closed. Only the right button has no
+        // touch twin.
         if (button === MouseButton.Right) {
           napi.editorRightPress(engine, x, y);
-        } else {
-          napi.editorPress(engine, x, y);
+          this.host.onPointerActivity();
         }
-        this.host.onPointerActivity();
         break;
       case MouseAction.Release:
-        if (button !== MouseButton.Right) {
-          napi.editorRelease(engine, x, y);
-        }
-        this.host.onPointerActivity();
         break;
       default:
-        // Move and Hover both feed the engine's cursor tracking, which is
-        // what drives hover highlighting in the desktop chrome.
-        napi.editorMove(engine, x, y);
+        // Un-pressed cursor motion drives hover highlighting through the
+        // capture-free hover channel; a pressed drag already flows through
+        // the synthesized touch stream's editorMove.
+        napi.editorHover(engine, x, y);
         break;
     }
+  }
+
+  /**
+   * How many touch pointers are live. `0` while a trackpad drives the
+   * surface, which is how the page's PinchGesture tells a two-finger
+   * TRACKPAD pinch (no touches; the gesture is the only signal) apart from a
+   * two-finger TOUCH pinch (handled right here, with pan, and therefore not
+   * to be zoomed twice).
+   */
+  get activePointers(): number {
+    return this.active.size;
   }
 
   /** Cancels every live stream; used on geometry transitions and teardown. */

@@ -24,7 +24,7 @@ pub(crate) enum SurfaceSlot {
     None,
     #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
     Metal(jian_skia::surface::metal::MetalSurface),
-    #[cfg(all(feature = "gl", target_os = "android"))]
+    #[cfg(all(feature = "gl", any(target_os = "android", target_env = "ohos")))]
     Egl(jian_skia::surface::egl_android::EglSurface),
 }
 
@@ -118,6 +118,8 @@ impl Session {
             // full width; rail classes keep it open.
             let ui = &mut host.editor_state_mut().editor_ui;
             ui.touch = true;
+            // No mobile platform can spawn external agent CLIs.
+            ui.external_cli_available = false;
             if !ui.export_format.is_implemented() {
                 ui.export_format = op_editor_core::ExportFormat::Png;
             }
@@ -510,7 +512,7 @@ impl Session {
                     result.map_err(|e| FfiError::new(OpStatus::GpuError, e)),
                 )
             }
-            #[cfg(all(feature = "gl", target_os = "android"))]
+            #[cfg(all(feature = "gl", any(target_os = "android", target_env = "ohos")))]
             SurfaceSlot::Egl(mut egl) => {
                 let result = egl.draw_frame(|skia| paint_frame(self, skia));
                 if let Err(e) = &result {
@@ -657,7 +659,7 @@ fn build_surface(handle: *mut c_void) -> FfiResult<SurfaceSlot> {
             .map_err(|e| FfiError::new(OpStatus::GpuError, e))?;
         return Ok(SurfaceSlot::Metal(metal));
     }
-    #[cfg(all(feature = "gl", target_os = "android"))]
+    #[cfg(all(feature = "gl", any(target_os = "android", target_env = "ohos")))]
     {
         // SAFETY: the handle contract is the caller's (see above); the
         // surface borrows the window and never retains it.
@@ -668,7 +670,7 @@ fn build_surface(handle: *mut c_void) -> FfiResult<SurfaceSlot> {
     }
     #[cfg(not(any(
         all(feature = "metal", any(target_os = "macos", target_os = "ios")),
-        all(feature = "gl", target_os = "android")
+        all(feature = "gl", any(target_os = "android", target_env = "ohos"))
     )))]
     {
         let _ = handle;

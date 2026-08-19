@@ -91,6 +91,28 @@ pub fn key_event(engine: i64, key_code: i32, modifiers: i32) -> i32 {
     }
 }
 
+/// `keyModifiers` — the live hardware-modifier bitmask (1 = shift,
+/// 2 = ctrl, 4 = alt, 8 = meta), maintained from the native key stream.
+/// The shell reads it where ArkUI cannot see keys (wheel-zoom's Ctrl).
+#[napi(js_name = "keyModifiers")]
+pub fn key_modifiers() -> i32 {
+    crate::xcomponent::current_modifiers()
+}
+
+/// `setImeConduitAttached` — the shell reports whether its `ImeConduit`
+/// currently holds a system `InputMethodController`.
+///
+/// While it does, the IME owns printable characters and the native key
+/// channel must not inject them as well (that types every character twice).
+/// While it does not — the desktop-class (2in1) case, where there is no soft
+/// keyboard and the SURFACE XComponent eats hardware keys before the IME
+/// framework can see them — the native channel is the ONLY route text can
+/// take into a focused engine input.
+#[napi(js_name = "setImeConduitAttached")]
+pub fn set_ime_conduit_attached(attached: bool) {
+    crate::xcomponent::set_ime_conduit_attached(attached);
+}
+
 /// `clipboardSetText` — deliver text the shell read from
 /// `@ohos.pasteboard` into the focused editor input (i.e. paste).
 ///
