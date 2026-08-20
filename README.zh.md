@@ -111,6 +111,8 @@ Web 应用 + macOS、Windows 和 Linux 原生桌面端 — 单一 Rust 核心，
 
 ## 安装
 
+**Windows 源码编译：** 参见 [BUILD_WINDOWS.zh.md](./docs/build_windows/BUILD_WINDOWS.zh.md)
+
 **macOS（Homebrew）：**
 
 ```bash

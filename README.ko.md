@@ -111,6 +111,8 @@ Claude Code, Codex, OpenCode, Kiro 또는 Copilot CLI에 원클릭 설치. 터�
 
 ## 설치
 
+**Windows 빌드：** [BUILD_WINDOWS.ko.md](./docs/build_windows/BUILD_WINDOWS.ko.md)
+
 **macOS (Homebrew):**
 
 ```bash

@@ -111,6 +111,8 @@ Tek bir `.op` dosyasından React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, S
 
 ## Kurulum
 
+**Windows'da derleme:** [BUILD_WINDOWS.tr.md](./docs/build_windows/BUILD_WINDOWS.tr.md)
+
 **macOS (Homebrew):**
 
 ```bash

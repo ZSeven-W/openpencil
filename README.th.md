@@ -111,6 +111,8 @@ Orchestrator แบ่งหน้าที่ซับซ้อนออกเ�
 
 ## การติดตั้ง
 
+**คอมไพล์บน Windows:** [BUILD_WINDOWS.th.md](./docs/build_windows/BUILD_WINDOWS.th.md)
+
 **macOS (Homebrew):**
 
 ```bash

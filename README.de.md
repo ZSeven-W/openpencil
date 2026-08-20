@@ -111,6 +111,8 @@ Export aus einer einzigen `.op`-Datei nach React + Tailwind, HTML + CSS, Vue, Sv
 
 ## Installation
 
+**Für Windows kompilieren:** [BUILD_WINDOWS.de.md](./docs/build_windows/BUILD_WINDOWS.de.md)
+
 **macOS (Homebrew):**
 
 ```bash

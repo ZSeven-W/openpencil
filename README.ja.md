@@ -111,6 +111,8 @@ Web アプリ + macOS・Windows・Linux ネイティブデスクトップ — �
 
 ## インストール
 
+**Windows ビルド：** [BUILD_WINDOWS.ja.md](./docs/build_windows/BUILD_WINDOWS.ja.md)
+
 **macOS（Homebrew）：**
 
 ```bash

@@ -111,6 +111,8 @@ Claude Code, Codex, OpenCode, Kiro, या Copilot CLIs में वन-क्�
 
 ## इंस्टॉल करें
 
+**Windows पर बिल्ड करें:** [BUILD_WINDOWS.hi.md](./docs/build_windows/BUILD_WINDOWS.hi.md)
+
 **macOS (Homebrew):**
 
 ```bash

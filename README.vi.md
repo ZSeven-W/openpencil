@@ -111,6 +111,8 @@ Xuất từ một tệp `.op` duy nhất sang React + Tailwind, HTML + CSS, Vue,
 
 ## Cài đặt
 
+**Biên dịch trên Windows:** [BUILD_WINDOWS.vi.md](./docs/build_windows/BUILD_WINDOWS.vi.md)
+
 **macOS (Homebrew):**
 
 ```bash

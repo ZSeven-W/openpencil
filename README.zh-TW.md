@@ -111,6 +111,8 @@ Web 應用程式 + macOS、Windows 和 Linux 上的原生桌面應用程式 — 
 
 ## 安裝
 
+**Windows 編譯：** [BUILD_WINDOWS.zh-TW.md](./docs/build_windows/BUILD_WINDOWS.zh-TW.md)
+
 **macOS（Homebrew）：**
 
 ```bash
