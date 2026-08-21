@@ -22,7 +22,11 @@ function Resolve-Version {
 
   $AllowPreRelease = $PreRelease.IsPresent -or $env:OP_PRERELEASE -in @("1", "true", "TRUE", "yes", "YES")
   if ($AllowPreRelease) {
-    $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases" | Select-Object -First 1
+    # Invoke-RestMethod emits a JSON array as a single pipeline object, so
+    # `| Select-Object -First 1` yields the whole array and `.tag_name` then
+    # member-enumerates every tag. Assign first, then index.
+    $Releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases"
+    $Latest = @($Releases)[0]
   } else {
     $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases/latest"
   }
