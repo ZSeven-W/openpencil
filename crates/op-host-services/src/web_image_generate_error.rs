@@ -1,6 +1,6 @@
 //! Typed failures for the shared image-generation backends
 //! (`web_image_generate.rs`): request/profile parsing for the browser route
-//! plus the OpenAI / Gemini / Replicate provider calls that the desktop
+//! plus the OpenAI / Gemini / Replicate / Atlas provider calls that the desktop
 //! Generate popover (`op-host-desktop::image_generate_host`) reuses verbatim.
 //!
 //! Style follows `op_orchestrator::OrchestratorError`: a plain enum plus a
@@ -82,9 +82,11 @@ pub enum ImageGenerateError {
         provider: &'static str,
         message: String,
     },
-    /// A Replicate poll request never completed. Its own variant because the
-    /// wording says "poll request", not "request".
-    PollRequest { message: String },
+    /// An asynchronous provider poll request never completed.
+    PollRequest {
+        provider: &'static str,
+        message: String,
+    },
     /// The provider answered with a non-success status; text is
     /// `provider_error`'s extraction from the body.
     Provider(String),
@@ -93,25 +95,35 @@ pub enum ImageGenerateError {
         provider: &'static str,
         message: String,
     },
-    /// A Replicate poll body was not valid JSON.
-    PollParse { message: String },
+    /// An asynchronous provider poll body was not valid JSON.
+    PollParse {
+        provider: &'static str,
+        message: String,
+    },
 
     // --- provider payload shape ---
     /// OpenAI answered 2xx but carried neither `url` nor `b64_json`.
     MissingImageUrl,
     /// Gemini answered 2xx but carried no `inlineData` image part.
     MissingInlineImage,
-    /// Replicate accepted the prediction but returned no id to poll.
-    MissingPredictionId,
-    /// A Replicate poll answered with a non-success status.
-    PollStatus { status: u16, body: String },
-    /// The Replicate prediction succeeded but carried no output url.
-    OutputMissing,
-    /// The Replicate prediction reached a terminal failure state.
-    /// `state` is `failed` / `canceled`.
-    PredictionFailed { state: String, detail: String },
-    /// The Replicate poll loop hit its wall-clock deadline.
-    PredictionTimeout,
+    /// An asynchronous provider accepted a prediction but returned no id.
+    MissingPredictionId { provider: &'static str },
+    /// An asynchronous provider poll answered with a non-success status.
+    PollStatus {
+        provider: &'static str,
+        status: u16,
+        body: String,
+    },
+    /// A prediction succeeded but carried no output url.
+    OutputMissing { provider: &'static str },
+    /// A prediction reached a terminal failure state.
+    PredictionFailed {
+        provider: &'static str,
+        state: String,
+        detail: String,
+    },
+    /// A provider poll loop hit its wall-clock deadline.
+    PredictionTimeout { provider: &'static str },
     /// The generated image's remote url could not be fetched into a
     /// `data:` URL.
     DownloadFailed,
@@ -142,33 +154,41 @@ impl fmt::Display for ImageGenerateError {
             ImageGenerateError::Request { provider, message } => {
                 write!(f, "{provider} request failed: {message}")
             }
-            ImageGenerateError::PollRequest { message } => {
-                write!(f, "Replicate poll request failed: {message}")
+            ImageGenerateError::PollRequest { provider, message } => {
+                write!(f, "{provider} poll request failed: {message}")
             }
             ImageGenerateError::ResponseParse { provider, message } => {
                 write!(f, "{provider} response parse: {message}")
             }
-            ImageGenerateError::PollParse { message } => {
-                write!(f, "Replicate poll parse: {message}")
+            ImageGenerateError::PollParse { provider, message } => {
+                write!(f, "{provider} poll parse: {message}")
             }
             ImageGenerateError::MissingImageUrl => f.write_str("OpenAI response missing image URL"),
             ImageGenerateError::MissingInlineImage => {
                 f.write_str("Gemini response missing inline image data")
             }
-            ImageGenerateError::MissingPredictionId => {
-                f.write_str("Replicate response missing prediction ID")
+            ImageGenerateError::MissingPredictionId { provider } => {
+                write!(f, "{provider} response missing prediction ID")
             }
-            ImageGenerateError::PollStatus { status, body } => {
-                write!(f, "Replicate poll returned {status}: {body}")
+            ImageGenerateError::PollStatus {
+                provider,
+                status,
+                body,
+            } => {
+                write!(f, "{provider} poll returned {status}: {body}")
             }
-            ImageGenerateError::OutputMissing => {
-                f.write_str("Replicate succeeded but output is missing")
+            ImageGenerateError::OutputMissing { provider } => {
+                write!(f, "{provider} succeeded but output is missing")
             }
-            ImageGenerateError::PredictionFailed { state, detail } => {
-                write!(f, "Replicate prediction {state}: {detail}")
+            ImageGenerateError::PredictionFailed {
+                provider,
+                state,
+                detail,
+            } => {
+                write!(f, "{provider} prediction {state}: {detail}")
             }
-            ImageGenerateError::PredictionTimeout => {
-                f.write_str("Replicate prediction timed out after 120 seconds")
+            ImageGenerateError::PredictionTimeout { provider } => {
+                write!(f, "{provider} prediction timed out after 120 seconds")
             }
             ImageGenerateError::DownloadFailed => {
                 f.write_str("generated image could not be downloaded")

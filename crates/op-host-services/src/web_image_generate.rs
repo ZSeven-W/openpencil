@@ -2,7 +2,8 @@
 //!
 //! `POST /api/ai/image/generate` mirrors the desktop Generate popover
 //! backend (`op-host-desktop/src/image_generate_host.rs`: OpenAI /
-//! OpenAI-compatible, Gemini inline-image, Replicate prediction polling).
+//! OpenAI-compatible, Gemini inline-image, Replicate / Atlas prediction
+//! polling).
 //! The generation profile comes from the request body (browser-held keys)
 //! or falls back to the daemon's persisted agent settings.
 //!
@@ -25,6 +26,10 @@ use crate::web_image_search::fetch_image_data_url;
 #[path = "web_image_generate_error.rs"]
 mod error;
 pub use error::ImageGenerateError;
+
+#[path = "web_image_generate_atlas.rs"]
+mod atlas;
+pub use atlas::generate_atlas;
 
 /// Truncation cap for surfaced provider errors (TS parity).
 const ERROR_MESSAGE_CAP: usize = 200;
@@ -104,6 +109,7 @@ fn parse_profile(
         "openai" => ImageGenProvider::OpenAi,
         "gemini" => ImageGenProvider::Gemini,
         "replicate" => ImageGenProvider::Replicate,
+        "atlas" => ImageGenProvider::Atlas,
         "custom" => ImageGenProvider::Custom,
         _ => return Err(ImageGenerateError::UnknownProvider),
     };
@@ -212,6 +218,16 @@ async fn run_generate(request: &WebImageGenerateRequest) -> Result<String, Image
             )
             .await?
         }
+        ImageGenProvider::Atlas => {
+            generate_atlas(
+                &client,
+                &request.prompt,
+                profile,
+                request.width,
+                request.height,
+            )
+            .await?
+        }
     };
     if url.starts_with("data:") {
         // Inline base64 (Gemini / OpenAI b64_json). Unlike the desktop, no
@@ -309,6 +325,7 @@ fn provider_error(provider: &str, status: reqwest::StatusCode, body: &str) -> St
             .and_then(|e| e.get("message"))
             .and_then(serde_json::Value::as_str)
             .or_else(|| json.get("detail").and_then(serde_json::Value::as_str))
+            .or_else(|| json.get("message").and_then(serde_json::Value::as_str))
         {
             return message.chars().take(ERROR_MESSAGE_CAP).collect();
         }
@@ -506,7 +523,9 @@ pub async fn generate_replicate(
             message: e.to_string(),
         })?;
     let Some(id) = prediction.get("id").and_then(serde_json::Value::as_str) else {
-        return Err(ImageGenerateError::MissingPredictionId);
+        return Err(ImageGenerateError::MissingPredictionId {
+            provider: "Replicate",
+        });
     };
     // Poll until terminal (TS: max 120 s, 2 s interval). The deadline is
     // wall-clock, not iteration-count: each poll also carries its own short
@@ -531,17 +550,20 @@ pub async fn generate_replicate(
             .send()
             .await
             .map_err(|e| ImageGenerateError::PollRequest {
+                provider: "Replicate",
                 message: e.to_string(),
             })?;
         let (status, body) = read_provider_body("Replicate", resp).await?;
         if !status.is_success() {
             return Err(ImageGenerateError::PollStatus {
+                provider: "Replicate",
                 status: status.as_u16(),
                 body: body.chars().take(ERROR_MESSAGE_CAP).collect::<String>(),
             });
         }
         let json: serde_json::Value =
             serde_json::from_str(&body).map_err(|e| ImageGenerateError::PollParse {
+                provider: "Replicate",
                 message: e.to_string(),
             })?;
         match json.get("status").and_then(serde_json::Value::as_str) {
@@ -554,7 +576,9 @@ pub async fn generate_replicate(
                     .or_else(|| output.and_then(serde_json::Value::as_str));
                 return url
                     .map(str::to_string)
-                    .ok_or(ImageGenerateError::OutputMissing);
+                    .ok_or(ImageGenerateError::OutputMissing {
+                        provider: "Replicate",
+                    });
             }
             Some(s @ ("failed" | "canceled")) => {
                 let detail = json
@@ -562,6 +586,7 @@ pub async fn generate_replicate(
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or("unknown error");
                 return Err(ImageGenerateError::PredictionFailed {
+                    provider: "Replicate",
                     state: s.to_string(),
                     detail: detail.to_string(),
                 });
@@ -569,7 +594,9 @@ pub async fn generate_replicate(
             _ => {}
         }
     }
-    Err(ImageGenerateError::PredictionTimeout)
+    Err(ImageGenerateError::PredictionTimeout {
+        provider: "Replicate",
+    })
 }
 
 #[cfg(test)]
@@ -603,6 +630,18 @@ mod tests {
         assert_eq!(req.width, Some(1600.0));
         assert_eq!(req.profile.provider, ImageGenProvider::Gemini);
         assert_eq!(req.profile.api_key, "sk-req");
+        assert!(!req.custom_endpoint);
+    }
+
+    #[test]
+    fn parse_generate_request_accepts_atlas_profiles() {
+        let state = op_editor_core::EditorState::default();
+        let req = parse_generate_request(
+            r#"{"prompt":"a cat","profile":{"provider":"atlas","model":"google/nano-banana-2-lite/text-to-image","api_key":"test-key"}}"#,
+            &state,
+        )
+        .expect("parses");
+        assert_eq!(req.profile.provider, ImageGenProvider::Atlas);
         assert!(!req.custom_endpoint);
     }
 

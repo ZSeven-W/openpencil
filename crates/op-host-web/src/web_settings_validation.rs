@@ -370,7 +370,7 @@ fn validate_credential_semantics(
     for profile in image_profiles {
         if !matches!(
             profile.provider.as_str(),
-            "openai" | "gemini" | "replicate" | "custom"
+            "openai" | "gemini" | "replicate" | "atlas" | "custom"
         ) {
             return Err(SettingsValidationError::UnknownImageProvider);
         }

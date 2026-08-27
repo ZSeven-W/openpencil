@@ -208,14 +208,16 @@ pub enum ImageGenProvider {
     OpenAi,
     Gemini,
     Replicate,
+    Atlas,
     Custom,
 }
 
 impl ImageGenProvider {
-    pub const ALL: [ImageGenProvider; 4] = [
+    pub const ALL: [ImageGenProvider; 5] = [
         ImageGenProvider::OpenAi,
         ImageGenProvider::Gemini,
         ImageGenProvider::Replicate,
+        ImageGenProvider::Atlas,
         ImageGenProvider::Custom,
     ];
 
@@ -224,6 +226,7 @@ impl ImageGenProvider {
             ImageGenProvider::OpenAi => "OpenAI",
             ImageGenProvider::Gemini => "Google Gemini",
             ImageGenProvider::Replicate => "Replicate",
+            ImageGenProvider::Atlas => "Atlas Cloud",
             ImageGenProvider::Custom => "Custom",
         }
     }
@@ -233,6 +236,7 @@ impl ImageGenProvider {
             ImageGenProvider::OpenAi => "dall-e-3",
             ImageGenProvider::Gemini => "gemini-2.0-flash-preview-image-generation",
             ImageGenProvider::Replicate => "black-forest-labs/flux-1.1-pro",
+            ImageGenProvider::Atlas => "google/nano-banana-2-lite/text-to-image",
             ImageGenProvider::Custom => "model-name",
         }
     }
