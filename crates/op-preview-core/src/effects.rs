@@ -20,9 +20,8 @@
 use jian_core::action::context::EffectRequestContext;
 use jian_core::action::services::effect_sink::{EffectOutcome, EffectRequest, EffectSink};
 use op_preview_contracts::{
-    EffectSource, HapticStyle, PreviewCapability, PreviewEffect, PreviewEffectFailure,
-    PreviewEffectFailureCode, PreviewEffectResult, PreviewHostCapabilities, SharePayload,
-    UserActivationId,
+    EffectSource, HapticStyle, PreviewCapability, PreviewEffect, PreviewEffectResult,
+    PreviewHostCapabilities, SharePayload, UserActivationId,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -314,11 +313,6 @@ impl PreviewEffectQueue {
     /// The recorded completion result for `id`, when completed.
     pub fn result_of(&self, id: u64) -> Option<PreviewEffectResult> {
         self.inner.borrow().completed.get(&id).cloned()
-    }
-
-    #[allow(dead_code)]
-    fn failure(code: PreviewEffectFailureCode, detail: Option<String>) -> PreviewEffectFailure {
-        PreviewEffectFailure { code, detail }
     }
 }
 
