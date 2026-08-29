@@ -215,8 +215,16 @@ impl PreviewDispatchOutcome {
 impl super::PreviewSession {
     /// The sole public input entry (R4 Step 3). Routes one envelope
     /// through the domain pipeline (clock sync, transition gate,
-    /// per-pointer capture) and reports what it did.
+    /// per-pointer capture) and reports what it did — including how
+    /// many effects the input's synchronous action chains enqueued.
     pub fn dispatch_input(&mut self, envelope: PreviewInputEnvelope) -> PreviewDispatchOutcome {
+        let enqueued_before = self.effects.total_enqueued();
+        let mut outcome = self.dispatch_input_inner(envelope);
+        outcome.effects_enqueued = self.effects.total_enqueued() - enqueued_before;
+        outcome
+    }
+
+    fn dispatch_input_inner(&mut self, envelope: PreviewInputEnvelope) -> PreviewDispatchOutcome {
         match envelope.input {
             PreviewInput::Pointer(event) => {
                 PreviewDispatchOutcome::from_events(&self.dispatch_pointer_event(event))

@@ -65,6 +65,7 @@ mod binding_sites;
 pub mod device_frame;
 #[cfg(all(test, not(target_os = "windows")))]
 mod device_frame_tests;
+mod effects;
 mod error;
 mod input;
 mod input_event;
@@ -76,6 +77,9 @@ mod session;
 mod session_paint;
 mod transition;
 
+/// R3 effect queue — the bounded FIFO between the engine's effect sink
+/// and the host.
+pub use effects::PreviewEffectQueue;
 /// R4 Canonical PreviewInput — the unified input envelope, dispatch
 /// outcome, and lifecycle phases behind
 /// [`PreviewSession::dispatch_input`].
@@ -87,7 +91,11 @@ pub use input_event::{
 pub use interaction_state::InteractionState;
 /// Frozen Preview contract DTOs, re-exported so consumers of this crate
 /// (UI, FFI, hosts) need not take the leaf dependency directly.
-pub use op_preview_contracts::{PreviewCapability, PreviewHostCapabilities, UserActivationId};
+pub use op_preview_contracts::{
+    EffectSource, HapticStyle, PreviewCapability, PreviewEffect, PreviewEffectFailure,
+    PreviewEffectFailureCode, PreviewEffectResult, PreviewHostCapabilities, SharePayload,
+    UserActivationId,
+};
 
 /// Typed failure domains for entering / re-solving a preview session
 /// (`PreviewSession::enter` + `app_mode::solve_roots`).
@@ -130,6 +138,8 @@ mod tests_caret;
 mod tests_clock_gate;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_device_frame;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_effects;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_geometry_parity;
 #[cfg(all(test, not(target_os = "windows")))]

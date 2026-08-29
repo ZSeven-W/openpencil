@@ -131,6 +131,9 @@ pub struct PreviewSession {
     /// all-false set, so an undeclared host capability can never read as
     /// consent. The R3 effect queue reads this before enqueueing.
     pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+    /// The R3 effect queue: the bounded FIFO the engine's effect sink
+    /// enqueues into and the host drains from.
+    pub(crate) effects: crate::effects::PreviewEffectQueue,
 }
 
 impl PreviewSession {
@@ -405,6 +408,15 @@ impl PreviewSession {
             0,
         );
 
+        // R3: install the effect queue adapter (mapped through the
+        // host's declared capabilities, fail-closed) and the fixed
+        // Preview action allowlist before any input can spawn actions.
+        // Action reporting is on so denied actions surface as
+        // structured diagnostics instead of vanishing.
+        let effects = crate::effects::PreviewEffectQueue::new();
+        crate::effects::install_on_runtime(&mut runtime, &effects, &host_capabilities);
+        runtime.enable_action_reporting();
+
         Ok(Self {
             runtime,
             measure,
@@ -421,6 +433,7 @@ impl PreviewSession {
             last_now_ms: 0,
             interaction: crate::interaction_state::InteractionState::default(),
             host_capabilities,
+            effects,
         })
     }
 
@@ -453,6 +466,46 @@ impl PreviewSession {
     /// (R4 fail-closed: the legacy `enter` wrapper declares none).
     pub fn host_capabilities(&self) -> &op_preview_contracts::PreviewHostCapabilities {
         &self.host_capabilities
+    }
+
+    /// The R3 effect queue: drain every queued effect in FIFO order,
+    /// perform them host-side, then report each outcome back through
+    /// [`Self::complete_effect`]. Denied actions appear in the queue's
+    /// diagnostics, never as effects.
+    pub fn drain_effects(&self) -> Vec<op_preview_contracts::PreviewEffect> {
+        self.effects.drain()
+    }
+
+    /// Complete one effect EXACTLY ONCE (`false` on a double
+    /// completion — a host bug, diagnosed on the queue).
+    pub fn complete_effect(
+        &self,
+        id: u64,
+        result: op_preview_contracts::PreviewEffectResult,
+    ) -> bool {
+        self.effects.complete(id, result).is_ok()
+    }
+
+    /// The queue's structured rejection diagnostics (bounded).
+    pub fn effect_diagnostics(&self) -> Vec<String> {
+        self.effects.diagnostics()
+    }
+
+    /// Drain the action-level diagnostics (policy rejections, chain
+    /// errors, chain warnings) collected since the last call — the
+    /// denied-action surface "denied actions appear in diagnostics, not
+    /// effects" is built on.
+    pub fn take_action_diagnostics(&mut self) -> Vec<String> {
+        let mut lines = Vec::new();
+        for outcome in self.runtime.take_action_outcomes() {
+            if let Err(error) = outcome.outcome.result {
+                lines.push(error.to_string());
+            }
+            for warning in outcome.outcome.warnings {
+                lines.push(warning.message);
+            }
+        }
+        lines
     }
 
     /// Resize hook for the host's `Resized` handler. Layout is derived

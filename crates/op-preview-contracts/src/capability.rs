@@ -24,6 +24,8 @@ pub enum PreviewCapability {
     Haptics,
     /// `dismiss_keyboard` — hide the platform soft keyboard.
     DismissKeyboard,
+    /// `focus` / `blur` — move keyboard focus programmatically.
+    Focus,
     /// `toast` / `alert` / `confirm` — platform presentation surfaces.
     Notifications,
 }
@@ -42,6 +44,7 @@ pub struct PreviewHostCapabilities {
     pub haptics: bool,
     pub dismiss_keyboard: bool,
     pub notifications: bool,
+    pub focus: bool,
 }
 
 impl PreviewHostCapabilities {
@@ -55,6 +58,7 @@ impl PreviewHostCapabilities {
             haptics: false,
             dismiss_keyboard: false,
             notifications: false,
+            focus: false,
         }
     }
 
@@ -67,6 +71,7 @@ impl PreviewHostCapabilities {
             PreviewCapability::Haptics => self.haptics,
             PreviewCapability::DismissKeyboard => self.dismiss_keyboard,
             PreviewCapability::Notifications => self.notifications,
+            PreviewCapability::Focus => self.focus,
         }
     }
 }

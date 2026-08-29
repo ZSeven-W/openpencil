@@ -7,12 +7,21 @@
 //! adapters can share one frozen contract without creating the existing
 //! Core → UI dependency cycle.
 //!
-//! Capabilities and activation ids (R4) live here now; effect DTOs and
-//! the platform-support authoring table (R3), plus debug/trace DTOs
-//! (R9), extend this crate in their own tasks.
+//! Capabilities, activation ids, effect DTOs, and the platform-support
+//! authoring table (R3/R4) live here now; debug/trace DTOs (R9) extend
+//! this crate in their own task.
 
 mod activation;
 mod capability;
+mod effect;
+mod platform_support;
+#[cfg(test)]
+mod tests;
 
 pub use activation::UserActivationId;
 pub use capability::{PreviewCapability, PreviewHostCapabilities};
+pub use effect::{
+    EffectSource, HapticStyle, PreviewEffect, PreviewEffectFailure, PreviewEffectFailureCode,
+    PreviewEffectResult, SharePayload,
+};
+pub use platform_support::{platform_support, HostSupport, PreviewInteraction, PreviewPlatform};
