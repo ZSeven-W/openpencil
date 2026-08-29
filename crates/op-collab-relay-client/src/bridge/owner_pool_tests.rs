@@ -19,7 +19,10 @@ use super::*;
 /// The budget is deliberately generous: these are convergence waits, not
 /// latency assertions, so a slow runner should make the test slower, never
 /// red. Anything genuinely stuck still fails, with a message that says so.
-async fn settles_to(label: &str, want: usize, mut probe: impl FnMut() -> usize) {
+async fn settles_to<T>(label: &str, want: T, mut probe: impl FnMut() -> T)
+where
+    T: PartialEq + std::fmt::Debug,
+{
     let deadline = StdInstant::now() + Duration::from_secs(10);
     loop {
         let seen = probe();
@@ -28,7 +31,7 @@ async fn settles_to(label: &str, want: usize, mut probe: impl FnMut() -> usize) 
         }
         assert!(
             StdInstant::now() < deadline,
-            "{label}: waited for {want}, last saw {seen}"
+            "{label}: waited for {want:?}, last saw {seen:?}"
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
@@ -233,8 +236,18 @@ async fn owner_lanes_recycle_on_the_client_budget_and_keep_the_pool_populated() 
         accepted.load(Ordering::SeqCst) > 2,
         "owner lanes must re-dial on the client budget, not wait for the relay"
     );
-    assert_eq!(bridge.status().phase, RelayBridgePhase::Waiting);
-    assert!(bridge.status().waiting_lanes > 0);
+    // The loop above leaves as soon as the third dial is ACCEPTED, which is
+    // before the replacement lane has finished announcing itself — the pool
+    // is legitimately `Starting` for that moment. Settle to the resting
+    // state instead of sampling mid-recycle (macos-aarch64 CI, 2026-08-29).
+    settles_to("pool returns to Waiting", RelayBridgePhase::Waiting, || {
+        bridge.status().phase
+    })
+    .await;
+    settles_to("a lane waits in the relay queue", true, || {
+        bridge.status().waiting_lanes > 0
+    })
+    .await;
 
     bridge.stop().await.unwrap();
     server.abort();
