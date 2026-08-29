@@ -10,7 +10,7 @@
 //! some proxy: a test that only checked "the transition ended" would pass
 //! against an implementation that stores nothing at all.
 
-#![cfg(test)]
+#![cfg(all(test, not(target_os = "windows")))]
 
 use super::transition::DeferredDiscreteInput;
 use super::{test_measure, PreviewSession};

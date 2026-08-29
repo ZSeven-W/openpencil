@@ -156,5 +156,9 @@ mod tests_swipe;
 mod tests_tabs;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_transition;
-#[cfg(test)]
+// Same platform gate as `tests_app_mode` / `tests_transition`, whose
+// fixture and helpers this file reuses: those are excluded on Windows,
+// so a Windows build cannot see `test_measure`, `TWO_SCREEN_DOC_JSON`
+// or `node_rect` either.
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_transition_input;
