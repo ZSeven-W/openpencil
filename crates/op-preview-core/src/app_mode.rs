@@ -428,6 +428,12 @@ impl PreviewSession {
             ));
         }
 
+        // R8: the route changed, so anything a user deferred against the
+        // PREVIOUS screen is now aimed at a screen that is gone. Bumping
+        // the counter is what makes `replay_deferred_input` drop it.
+        self.route_generation = self.route_generation.saturating_add(1);
+        self.transition_tap = None;
+
         ReconcileOutcome {
             repaint: true,
             switched: true,

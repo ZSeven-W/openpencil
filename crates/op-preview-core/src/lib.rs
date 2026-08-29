@@ -156,3 +156,5 @@ mod tests_swipe;
 mod tests_tabs;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_transition;
+#[cfg(test)]
+mod tests_transition_input;

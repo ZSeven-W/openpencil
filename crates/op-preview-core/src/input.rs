@@ -50,7 +50,134 @@ impl PreviewSession {
     /// `CoreResult<bool>` — `Err(CoreError::Busy)` means the runtime is
     /// mid variant-swap and froze input for IME safety, which reads as
     /// "not consumed" here, same as any other declined dispatch.
+    /// R8: store one deferred discrete input, replacing whatever was
+    /// there. Never a queue — the user's latest intent is the only one
+    /// worth honouring when the screen finally arrives.
+    pub(crate) fn defer_discrete(&mut self, input: crate::transition::DeferredDiscreteInput) {
+        self.deferred_discrete_input = Some(input);
+    }
+
+    /// R8: watch a press that began during a transition. `Down` opens the
+    /// tracker, `Up` closes it and defers a Tap when the press stayed
+    /// within jian's tap slop and duration; `Cancel` and anything else
+    /// drop it. Move/Hover are ignored entirely — drift is judged once,
+    /// at Up, against the Down point.
+    pub(crate) fn track_transition_press(
+        &mut self,
+        pointer_id: u32,
+        kind: jian_core::gesture::pointer::PointerKind,
+        scene_x: f32,
+        scene_y: f32,
+        phase: PointerPhase,
+        t_ms: u64,
+    ) {
+        match phase {
+            PointerPhase::Down => {
+                self.transition_tap = Some(crate::transition::TransitionTapTracker {
+                    pointer_id,
+                    kind,
+                    down_x: scene_x,
+                    down_y: scene_y,
+                    down_ms: t_ms,
+                });
+            }
+            PointerPhase::Up => {
+                let completes = self
+                    .transition_tap
+                    .as_ref()
+                    .is_some_and(|t| t.completes_tap(pointer_id, scene_x, scene_y, t_ms));
+                if completes {
+                    let activation = self.pending_activation;
+                    let route_generation = self.route_generation;
+                    self.defer_discrete(crate::transition::DeferredDiscreteInput::Tap {
+                        scene_x,
+                        scene_y,
+                        pointer_id,
+                        kind,
+                        activation,
+                        route_generation,
+                    });
+                }
+                self.transition_tap = None;
+            }
+            PointerPhase::Cancel => {
+                self.transition_tap = None;
+            }
+            _ => {}
+        }
+    }
+
+    /// R8: replay the deferred input, if one survived, now that the
+    /// transition has finished and the arriving screen's layout and hit
+    /// mapping have settled.
+    ///
+    /// A stale input is dropped rather than replayed: a route change
+    /// between capture and completion means the screen it was aimed at is
+    /// no longer on screen, and its coordinates would land somewhere the
+    /// user never pointed at.
+    /// Returns whether an input was actually replayed — `false` when the
+    /// slot was empty or the stored input had gone stale. Callers use it
+    /// to tell "nothing was waiting" apart from "something was dropped".
+    pub(crate) fn replay_deferred_input(&mut self) -> bool {
+        if self.transition_active() {
+            // Replaying into a live transition would route the input
+            // straight back into the deferral path and store it again.
+            // Replay belongs to the completion edge, and only there.
+            return false;
+        }
+        let Some(input) = self.deferred_discrete_input.take() else {
+            return false;
+        };
+        self.transition_tap = None;
+        if input.route_generation() != self.route_generation {
+            return false;
+        }
+        let restore = self.pending_activation;
+        self.pending_activation = input.activation();
+        match input {
+            crate::transition::DeferredDiscreteInput::Tap {
+                scene_x,
+                scene_y,
+                pointer_id,
+                kind,
+                ..
+            } => {
+                let now = self.last_now_ms;
+                self.dispatch_pointer_for_id_at(
+                    pointer_id,
+                    kind,
+                    scene_x,
+                    scene_y,
+                    PointerPhase::Down,
+                    now,
+                );
+                self.dispatch_pointer_for_id_at(
+                    pointer_id,
+                    kind,
+                    scene_x,
+                    scene_y,
+                    PointerPhase::Up,
+                    now,
+                );
+            }
+            crate::transition::DeferredDiscreteInput::Submit { key, modifiers, .. } => {
+                self.dispatch_key(&key, modifiers);
+            }
+            crate::transition::DeferredDiscreteInput::Back { .. } => {
+                self.dispatch_key("Escape", Modifiers::default());
+            }
+        }
+        self.pending_activation = restore;
+        true
+    }
+
     pub fn dispatch_text(&mut self, text: &str) -> bool {
+        if self.transition_active() {
+            // R8: text and IME are never deferred. A commit replayed onto
+            // the arriving screen would land in whatever field happens to
+            // hold focus there — a different field, or none.
+            return false;
+        }
         self.runtime.dispatch_text_input(text).unwrap_or(false)
     }
 
@@ -58,6 +185,25 @@ impl PreviewSession {
     /// `"Tab"`) into the runtime with the given modifier set. Returns
     /// `true` when the dispatch emitted any semantic event.
     pub fn dispatch_key(&mut self, key: &str, modifiers: Modifiers) -> bool {
+        if self.transition_active() {
+            // R8: Enter and Escape are discrete decisions that survive the
+            // wait — everything else (arrows, editing keys) belongs to a
+            // text session that will not exist on the arriving screen.
+            match key {
+                "Enter" => self.defer_discrete(crate::transition::DeferredDiscreteInput::Submit {
+                    key: key.to_string(),
+                    modifiers,
+                    activation: self.pending_activation,
+                    route_generation: self.route_generation,
+                }),
+                "Escape" => self.defer_discrete(crate::transition::DeferredDiscreteInput::Back {
+                    activation: self.pending_activation,
+                    route_generation: self.route_generation,
+                }),
+                _ => {}
+            }
+            return false;
+        }
         !self
             .runtime
             .dispatch_keyboard(key.to_string(), modifiers)
@@ -181,6 +327,10 @@ impl PreviewSession {
         // dropped with the transition's screen rebuild, so nothing stale
         // can resume under it either way.
         if self.transition_active() {
+            // R8: raw phases never reach the runtime during a transition.
+            // The tracker remembers just enough about the press to decide,
+            // at Up, whether it was a Tap worth replaying.
+            self.track_transition_press(pointer_id, kind, scene_x, scene_y, phase, t_ms);
             return false;
         }
         let hit = self

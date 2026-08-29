@@ -219,7 +219,13 @@ impl super::PreviewSession {
     /// many effects the input's synchronous action chains enqueued.
     pub fn dispatch_input(&mut self, envelope: PreviewInputEnvelope) -> PreviewDispatchOutcome {
         let enqueued_before = self.effects.total_enqueued();
+        // R8: expose the certified activation for the duration of this
+        // dispatch so a transition-deferred input captures it and can
+        // replay under the same certification.
+        let restore_activation = self.pending_activation;
+        self.pending_activation = envelope.activation;
         let mut outcome = self.dispatch_input_inner(envelope);
+        self.pending_activation = restore_activation;
         outcome.effects_enqueued = self.effects.total_enqueued() - enqueued_before;
         outcome
     }
@@ -237,14 +243,31 @@ impl super::PreviewSession {
                 modifiers,
             } => {
                 let _ = (code, repeat);
+                // R8: the canonical path shares the legacy path's
+                // transition policy — Enter/Escape defer, the rest drop.
+                // Routing through `dispatch_key` keeps one implementation
+                // of that rule instead of a second copy that can drift.
+                if self.transition_active() {
+                    self.dispatch_key(&key, modifiers);
+                    return PreviewDispatchOutcome::default();
+                }
                 let events = self.runtime.dispatch_keyboard(key, modifiers);
                 PreviewDispatchOutcome::from_events(&events)
             }
             PreviewInput::Text(text) => {
+                // R8: text is never deferred, and never replayed.
+                if self.transition_active() {
+                    return PreviewDispatchOutcome::default();
+                }
                 let consumed = self.runtime.dispatch_text_input(&text).unwrap_or(false);
                 Self::bool_outcome(consumed)
             }
             PreviewInput::ImePreedit { text, selection } => {
+                // R8: an in-flight composition cannot survive the screen
+                // it was being typed into.
+                if self.transition_active() {
+                    return PreviewDispatchOutcome::default();
+                }
                 let consumed =
                     self.runtime
                         .edit_set_composing_text(&text, selection.start, selection.end);

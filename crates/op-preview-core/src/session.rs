@@ -70,6 +70,21 @@ pub struct PreviewSession {
     /// solved against.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) available: (f32, f32),
+    /// R8: the one deferred discrete input held while a transition
+    /// plays, replaced (never queued) when a newer one arrives.
+    pub(crate) deferred_discrete_input: Option<crate::transition::DeferredDiscreteInput>,
+    /// R8: the transition-local press tracker — `Some` only between a
+    /// `Down` and its `Up` while a transition plays.
+    pub(crate) transition_tap: Option<crate::transition::TransitionTapTracker>,
+    /// R8: the activation the canonical dispatch path is currently
+    /// carrying. Set for the duration of one `dispatch_input` so a
+    /// deferred input can capture the activation the host certified for
+    /// it; `None` on the legacy wrappers, which carry no activation.
+    pub(crate) pending_activation: Option<op_preview_contracts::UserActivationId>,
+    /// R8: advances on every route switch and document replacement, so a
+    /// deferred input can prove the screen it targeted is still on screen
+    /// before it replays.
+    pub(crate) route_generation: u64,
     /// Per-root scene↔runtime coordinate mapping for tap translation.
     /// `pub(crate)` so `app_mode`'s
     /// `current_screen_scene_rect` can read the first frame's scene rect.
@@ -421,6 +436,10 @@ impl PreviewSession {
             runtime,
             measure,
             available: primary_available,
+            deferred_discrete_input: None,
+            transition_tap: None,
+            route_generation: 0,
+            pending_activation: None,
             root_frames,
             scene,
             layout_doc,
@@ -449,8 +468,17 @@ impl PreviewSession {
     /// the session clock, so an out-of-order host clock cannot re-arm a
     /// finished screen transition's input gate.
     pub fn set_now_ms(&mut self, now_ms: u64) {
+        let was_transitioning = self.transition_active();
         self.runtime.set_now_ms(now_ms);
         self.last_now_ms = self.last_now_ms.max(now_ms);
+        // R8: a transition ends by the clock, not by an event, so the
+        // clock push IS the completion edge. Replay here — after the
+        // arriving screen's layout and hit mapping have settled — rather
+        // than on the next input, which would leave the tap the user
+        // already made waiting on another one.
+        if was_transitioning && !self.transition_active() {
+            self.replay_deferred_input();
+        }
     }
 
     /// The R4 interaction state tracked by the dispatch paths: which
