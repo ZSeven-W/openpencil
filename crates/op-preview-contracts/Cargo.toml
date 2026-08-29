@@ -1,0 +1,15 @@
+[package]
+name = "op-preview-contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Dependency-light Preview contract DTOs — host capabilities, activation ids, and effect/debug types shared by core, UI, FFI, and host adapters"
+
+[dependencies]
+# DTO serialization only — this crate is a leaf: no runtime, no UI, no
+# engine dependency (R3 contract), so `op-preview-core`, `op-editor-ui`,
+# FFI, and host adapters can all depend on it without cycles.
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

@@ -183,6 +183,10 @@ impl PreviewSession {
         if self.transition_active() {
             return false;
         }
+        let hit = self
+            .deepest_mapped_hit(scene_x, scene_y)
+            .map(|(_, _, id)| id);
+        self.track_interaction(pointer_id, kind, phase, hit.as_deref());
         let (rt_x, rt_y) = self.resolve_runtime_point(scene_x, scene_y, phase, pointer_id);
         use jian_core::geometry::point;
         let mut ev = PointerEvent::simple_at(pointer_id, phase, point(rt_x, rt_y), t_ms);
@@ -193,6 +197,82 @@ impl PreviewSession {
             ev.pressure = 0.0;
         }
         !self.runtime.dispatch_pointer(ev).is_empty()
+    }
+
+    /// The R4 Canonical PreviewInput POINTER path: take a FULL host
+    /// [`PointerEvent`], transform ONLY its coordinates through the same
+    /// per-pointer capture pipeline as the legacy wrappers, and pass
+    /// every other fact (id, kind, pressure, buttons, modifiers, tilt,
+    /// timestamp) into the runtime unchanged. Returns the semantic
+    /// events it produced so [`super::input_event`]'s `dispatch_input`
+    /// can report handler keys.
+    ///
+    /// The transition gate matches the legacy path (discard while a
+    /// screen transition plays); R8 replaces that discard with the
+    /// one-slot deferred discrete-input policy.
+    pub(crate) fn dispatch_pointer_event(
+        &mut self,
+        mut event: jian_core::gesture::PointerEvent,
+    ) -> Vec<jian_core::gesture::SemanticEvent> {
+        use jian_core::gesture::pointer::MouseButtons;
+        use jian_core::gesture::PointerPhase;
+        if event.t_ms > self.last_now_ms {
+            self.set_now_ms(event.t_ms);
+        }
+        if self.transition_active() {
+            return Vec::new();
+        }
+        // Interaction-state tracking reads the SCENE-space hit; compute
+        // it before the transform overwrites the position below.
+        let hit_node = self
+            .deepest_mapped_hit(event.position.x, event.position.y)
+            .map(|(_, _, id)| id);
+        self.track_interaction(event.id.0, event.kind, event.phase, hit_node.as_deref());
+        let (rt_x, rt_y) =
+            self.resolve_runtime_point(event.position.x, event.position.y, event.phase, event.id.0);
+        event.position = jian_core::geometry::point(rt_x, rt_y);
+        if matches!(event.phase, PointerPhase::Hover) {
+            // Hover is definitionally unpressed regardless of kind.
+            event.buttons = MouseButtons::empty();
+            event.pressure = 0.0;
+        }
+        self.runtime.dispatch_pointer(event)
+    }
+
+    /// Update the R4 interaction state from one pointer phase: any
+    /// kind's `Down` records the pressed node (Touch Down is the
+    /// approved touch fallback's signal; mouse presses feed the same
+    /// state), `Up`/`Cancel` clear it, and unpressed Mouse/Pen movement
+    /// tracks hover — Touch never hovers, so its movement leaves hover
+    /// untouched.
+    pub(crate) fn track_interaction(
+        &mut self,
+        pointer_id: u32,
+        kind: jian_core::gesture::pointer::PointerKind,
+        phase: PointerPhase,
+        hit_node: Option<&str>,
+    ) {
+        use jian_core::gesture::pointer::PointerKind;
+        match phase {
+            PointerPhase::Down => {
+                if let Some(id) = hit_node {
+                    self.interaction.set_pressed(pointer_id, id.to_owned());
+                }
+            }
+            PointerPhase::Up | PointerPhase::Cancel => {
+                self.interaction.clear_pressed(pointer_id);
+            }
+            PointerPhase::Hover => {
+                if matches!(kind, PointerKind::Touch) {
+                    return;
+                }
+                match hit_node {
+                    Some(id) => self.interaction.set_hovered(id.to_owned()),
+                    None => self.interaction.clear_hovered(),
+                }
+            }
+            PointerPhase::Move => {}
+        }
     }
 
     /// Cancel one pointer's live stream by id WITHOUT needing its last
@@ -213,7 +293,7 @@ impl PreviewSession {
     /// clears it, `Hover` (unpressed) always resolves fresh and never
     /// stores. Pointers whose `Down` hit no mapped node resolve fresh
     /// every event until an anchored `Down` replaces that state.
-    fn resolve_runtime_point(
+    pub(crate) fn resolve_runtime_point(
         &mut self,
         x: f32,
         y: f32,
@@ -278,7 +358,7 @@ impl PreviewSession {
     ///
     /// Falls back to the root-origin translation when the point is
     /// outside every mapped node (empty canvas — nothing to hit).
-    fn scene_to_runtime(&self, x: f32, y: f32) -> (f32, f32) {
+    pub(crate) fn scene_to_runtime(&self, x: f32, y: f32) -> (f32, f32) {
         let mapping = self.deepest_mapped_rects(x, y);
         self.scene_to_runtime_via(x, y, mapping)
     }
@@ -320,6 +400,14 @@ impl PreviewSession {
     /// Children win over parents; later siblings (painted on top) win
     /// over earlier ones.
     fn deepest_mapped_rects(&self, x: f32, y: f32) -> Option<(Rect, Rect)> {
+        self.deepest_mapped_hit(x, y)
+            .map(|(scene, runtime, _)| (scene, runtime))
+    }
+
+    /// [`Self::deepest_mapped_rects`] plus the hit node's SCHEMA id —
+    /// what R4 interaction-state tracking needs to record which node a
+    /// pointer pressed or hovers.
+    pub(crate) fn deepest_mapped_hit(&self, x: f32, y: f32) -> Option<(Rect, Rect, String)> {
         let page = self.scene.active_page()?;
         for node in page.children.iter().rev() {
             if let Some(hit) = self.deepest_mapped_in(node, x, y) {
@@ -329,7 +417,7 @@ impl PreviewSession {
         None
     }
 
-    fn deepest_mapped_in(&self, node: &SceneNode, x: f32, y: f32) -> Option<(Rect, Rect)> {
+    fn deepest_mapped_in(&self, node: &SceneNode, x: f32, y: f32) -> Option<(Rect, Rect, String)> {
         if node.hidden {
             return None;
         }
@@ -346,7 +434,7 @@ impl PreviewSession {
                 return Some(hit);
             }
         }
-        self.runtime_rect(&node.id).map(|r| (b, r))
+        self.runtime_rect(&node.id).map(|r| (b, r, node.id.clone()))
     }
 
     /// Match the design/preview painter's tabs rule when choosing a scene
@@ -438,7 +526,7 @@ impl PreviewSession {
     /// away — `Runtime::focus_next` only moves the focus pointer; it
     /// does not touch the widget-state store. A no-op for non-widget
     /// (or already-seeded) focus targets.
-    fn seed_focused_widget_state(&mut self) {
+    pub(crate) fn seed_focused_widget_state(&mut self) {
         let Some(key) = self.runtime.focus.current() else {
             return;
         };

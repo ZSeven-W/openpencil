@@ -4886,6 +4886,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-preview-contracts"
+version = "0.8.5"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "op-preview-core"
 version = "0.8.5"
 dependencies = [
@@ -4896,6 +4905,7 @@ dependencies = [
  "op-editor-ui",
  "op-orchestrator",
  "op-pen-loader",
+ "op-preview-contracts",
  "serde_json",
  "thiserror 1.0.69",
  "tracing",

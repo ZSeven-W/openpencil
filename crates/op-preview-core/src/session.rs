@@ -122,6 +122,15 @@ pub struct PreviewSession {
     /// clock param of their own. Monotonic: never moves backward, exactly
     /// like the jian runtime clock it mirrors.
     pub(crate) last_now_ms: u64,
+    /// R4 interaction state: per-pointer pressed nodes + the hovered
+    /// node, tracked by the dispatch paths in `input.rs` and exposed to
+    /// paint via [`Self::interaction`].
+    pub(crate) interaction: crate::interaction_state::InteractionState,
+    /// The host-declared capability set (R4 `enter_with_capabilities`).
+    /// Fail-closed: the legacy `enter` wrapper supplies an explicit
+    /// all-false set, so an undeclared host capability can never read as
+    /// consent. The R3 effect queue reads this before enqueueing.
+    pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
 }
 
 impl PreviewSession {
@@ -182,6 +191,35 @@ impl PreviewSession {
         preserve_authored_geometry: bool,
         presenting: bool,
         measure: Rc<dyn MeasureBackend>,
+    ) -> Result<Self, PreviewEnterError> {
+        // R4: the legacy wrapper is fail-closed — no declared host
+        // capabilities means effects are denied, never silently allowed.
+        Self::enter_with_capabilities(
+            doc,
+            canvas_size,
+            active_theme,
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure,
+            op_preview_contracts::PreviewHostCapabilities::none(),
+        )
+    }
+
+    /// [`Self::enter`] with the host's capability declaration (R4 Step
+    /// 4). New hosts migrate onto this entry so the session knows which
+    /// effects the platform can actually perform; the parameter set is
+    /// otherwise identical.
+    #[allow(clippy::too_many_arguments)]
+    pub fn enter_with_capabilities(
+        doc: &jian_ops_schema::PenDocument,
+        canvas_size: (f32, f32),
+        active_theme: &std::collections::BTreeMap<String, String>,
+        active_page_index: usize,
+        preserve_authored_geometry: bool,
+        presenting: bool,
+        measure: Rc<dyn MeasureBackend>,
+        host_capabilities: op_preview_contracts::PreviewHostCapabilities,
     ) -> Result<Self, PreviewEnterError> {
         let _ = canvas_size; // layout is root-derived, not canvas-derived.
 
@@ -381,6 +419,8 @@ impl PreviewSession {
             gesture_mappings: HashMap::new(),
             transition: None,
             last_now_ms: 0,
+            interaction: crate::interaction_state::InteractionState::default(),
+            host_capabilities,
         })
     }
 
@@ -400,6 +440,21 @@ impl PreviewSession {
         self.last_now_ms = self.last_now_ms.max(now_ms);
     }
 
+    /// The R4 interaction state tracked by the dispatch paths: which
+    /// nodes each pointer is pressing and which node hovers. Preview
+    /// paint derives the approved touch fallback (and mouse-pressed
+    /// widget states) from this instead of the host re-deriving it from
+    /// raw pointer traffic.
+    pub fn interaction(&self) -> &crate::interaction_state::InteractionState {
+        &self.interaction
+    }
+
+    /// The host-declared capability set this session was entered with
+    /// (R4 fail-closed: the legacy `enter` wrapper declares none).
+    pub fn host_capabilities(&self) -> &op_preview_contracts::PreviewHostCapabilities {
+        &self.host_capabilities
+    }
+
     /// Resize hook for the host's `Resized` handler. Layout is derived
     /// per-root from the document, independent of the editor canvas
     /// region, so this is a no-op; the parameter is kept for API
@@ -413,6 +468,13 @@ impl PreviewSession {
     #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn runtime(&self) -> &Runtime {
         &self.runtime
+    }
+
+    /// Test-only mutable access (e.g. `focused_editable_snapshot` for
+    /// the R4 IME trace assertions). Same `!Send` caveat as `runtime`.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn runtime_mut(&mut self) -> &mut Runtime {
+        &mut self.runtime
     }
 
     /// Narrow test-only snapshot of one `$app` state value, CLONED out

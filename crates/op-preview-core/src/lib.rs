@@ -67,12 +67,27 @@ pub mod device_frame;
 mod device_frame_tests;
 mod error;
 mod input;
+mod input_event;
+mod interaction_state;
 mod mode_transition;
 mod present;
 mod scene_helpers;
 mod session;
 mod session_paint;
 mod transition;
+
+/// R4 Canonical PreviewInput — the unified input envelope, dispatch
+/// outcome, and lifecycle phases behind
+/// [`PreviewSession::dispatch_input`].
+pub use input_event::{
+    AppLifecyclePhase, BackSource, PageLifecyclePhase, PreviewDispatchOutcome, PreviewInput,
+    PreviewInputEnvelope, PreviewLifecycle, ScrollPhase,
+};
+/// R4 interaction state — per-pointer pressed + hover node tracking.
+pub use interaction_state::InteractionState;
+/// Frozen Preview contract DTOs, re-exported so consumers of this crate
+/// (UI, FFI, hosts) need not take the leaf dependency directly.
+pub use op_preview_contracts::{PreviewCapability, PreviewHostCapabilities, UserActivationId};
 
 /// Typed failure domains for entering / re-solving a preview session
 /// (`PreviewSession::enter` + `app_mode::solve_roots`).
@@ -118,7 +133,11 @@ mod tests_device_frame;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_geometry_parity;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_input_trace;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_interaction;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_interaction_state;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
 #[cfg(all(test, not(target_os = "windows")))]

@@ -176,6 +176,65 @@ impl PreviewSession {
     /// `now_ms` seeds a new Track C-3 transition's clock on a switch —
     /// see `crate::preview::transition`.
     pub fn reconcile(&mut self, now_ms: u64) -> ReconcileOutcome {
+        let (pending_path, old_path, old_page_idx) = {
+            let Some(app) = self.app.as_ref() else {
+                return ReconcileOutcome::default();
+            };
+            (
+                app.router.current().path.clone(),
+                app.current_path.clone(),
+                app.page_idx,
+            )
+        };
+        // R4 lifecycle: peek whether a route switch is pending BEFORE
+        // reconcile_screens commits it, and pre-resolve the OUTGOING
+        // side's `onLeave` / `onUnmount` ActionLists against the still-
+        // mounted tree. They spawn (in deterministic leave → unmount →
+        // mount → enter order) only AFTER the swap: spawned earlier they
+        // would be cancelled by the swap's task teardown, and executed
+        // synchronously they could deadlock on authored `delay` actions.
+        let switching = pending_path != old_path;
+        let mut outgoing_lifecycle: Vec<(
+            &'static str,
+            serde_json::Value,
+            Option<String>,
+            serde_json::Value,
+        )> = Vec::new();
+        if switching {
+            if let Some(page) = self
+                .app
+                .as_ref()
+                .and_then(|app| app.promoted_doc.pages.as_ref())
+                .and_then(|pages| pages.get(old_page_idx))
+            {
+                if let Some(list) = enabled_page_hook(page.lifecycle.as_ref(), "onLeave") {
+                    outgoing_lifecycle.push((
+                        "onLeave",
+                        serde_json::to_value(list).unwrap_or(serde_json::Value::Null),
+                        None,
+                        serde_json::json!({
+                            "reason": "leave",
+                            "page": page.id,
+                            "next": pending_path,
+                        }),
+                    ));
+                }
+            }
+            for key in self.runtime.nodes_with_lifecycle_hook("onUnmount") {
+                if let Some((list, node_id)) = self.resolved_node_hook(key, "onUnmount") {
+                    outgoing_lifecycle.push((
+                        "onUnmount",
+                        list,
+                        Some(node_id.clone()),
+                        serde_json::json!({
+                            "reason": "unmount",
+                            "nodeId": node_id,
+                            "previous": old_path,
+                        }),
+                    ));
+                }
+            }
+        }
         let Some(app) = self.app.as_mut() else {
             return ReconcileOutcome::default();
         };
@@ -302,6 +361,60 @@ impl PreviewSession {
         // that will actually paint.
         self.seed_all_widget_states();
 
+        // R4 lifecycle: resolve the INCOMING side's `onMount` /
+        // `onEnter` against the freshly-mounted tree, then spawn all
+        // four hook groups in the deterministic order leave → unmount →
+        // mount → enter. Everything here spawns through the task queue
+        // (`spawn_lifecycle`), so authored actions schedule exactly like
+        // event actions; the outgoing lists were resolved pre-swap
+        // (above) because their scopes die with the old tree.
+        let new_page = self.app.as_ref().and_then(|app| {
+            let pages = app.promoted_doc.pages.as_ref()?;
+            pages.get(app.page_idx).cloned()
+        });
+        let mut incoming_lifecycle: Vec<(
+            &'static str,
+            serde_json::Value,
+            Option<String>,
+            serde_json::Value,
+        )> = Vec::new();
+        for key in self.runtime.nodes_with_lifecycle_hook("onMount") {
+            if let Some((list, node_id)) = self.resolved_node_hook(key, "onMount") {
+                incoming_lifecycle.push((
+                    "onMount",
+                    list,
+                    Some(node_id.clone()),
+                    serde_json::json!({
+                        "reason": "mount",
+                        "nodeId": node_id,
+                        "previous": old_path,
+                    }),
+                ));
+            }
+        }
+        if let Some(page) = new_page {
+            if let Some(list) = enabled_page_hook(page.lifecycle.as_ref(), "onEnter") {
+                incoming_lifecycle.push((
+                    "onEnter",
+                    serde_json::to_value(list).unwrap_or(serde_json::Value::Null),
+                    None,
+                    serde_json::json!({
+                        "reason": "enter",
+                        "page": page.id,
+                        "previous": old_path,
+                    }),
+                ));
+            }
+        }
+        // `app`'s mutable borrow ended above (NLL) — field borrows below
+        // are disjoint.
+        for (hook, list, node_id, payload) in outgoing_lifecycle {
+            self.runtime.spawn_lifecycle(hook, list, node_id, payload);
+        }
+        for (hook, list, node_id, payload) in incoming_lifecycle {
+            self.runtime.spawn_lifecycle(hook, list, node_id, payload);
+        }
+
         // Track C-3: start the transition against the freshly-settled
         // scene now that the switch has fully landed. `outgoing_page` is
         // `None` only for an empty pre-switch page (nothing to animate
@@ -356,6 +469,18 @@ impl PreviewSession {
         }
     }
 
+    /// The (serialized ActionList, node schema id) for an ENABLED node
+    /// lifecycle hook on `key` in the CURRENT runtime tree, or `None`
+    /// when the node has no such authored hook or lists it in its own
+    /// `disabledEvents`. See [`resolved_node_hook_impl`].
+    fn resolved_node_hook(
+        &self,
+        key: jian_core::document::tree::NodeKey,
+        hook: &str,
+    ) -> Option<(serde_json::Value, String)> {
+        resolved_node_hook_impl(&self.runtime, key, hook)
+    }
+
     /// Test-only: the APP MODE screen path currently mounted
     /// (`app.current_path`), or `""` outside APP MODE.
     #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
@@ -372,6 +497,57 @@ impl PreviewSession {
     #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
     pub fn router_for_test(&self) -> &std::rc::Rc<jian_core::screens::ScreenRouter> {
         &self.app.as_ref().expect("app mode").router
+    }
+}
+
+/// The (serialized ActionList, node schema id) for an ENABLED node
+/// lifecycle hook on `key` in the CURRENT runtime tree, or `None` when
+/// the node has no such authored hook or lists it in its own
+/// `disabledEvents`. Works for both the outgoing tree (pre-swap
+/// resolution, R4) and the incoming tree (post-swap).
+fn resolved_node_hook_impl(
+    runtime: &jian_core::Runtime,
+    key: jian_core::document::tree::NodeKey,
+    hook: &str,
+) -> Option<(serde_json::Value, String)> {
+    let node = runtime.document.as_ref()?.tree.nodes.get(key)?;
+    let hooks = node.schema.lifecycle()?;
+    if hooks
+        .disabled_events
+        .as_deref()
+        .is_some_and(|list| list.iter().any(|name| name == hook))
+    {
+        return None;
+    }
+    let list = match hook {
+        "onMount" => hooks.on_mount.as_ref()?,
+        "onUnmount" => hooks.on_unmount.as_ref()?,
+        _ => return None,
+    };
+    let node_id = jian_core::document::tree::node_schema_id(&node.schema).to_owned();
+    Some((serde_json::to_value(list).ok()?, node_id))
+}
+
+/// The ENABLED page-level hook list on `hooks`, or `None` when absent,
+/// disabled, or unknown to the page scope.
+fn enabled_page_hook<'a>(
+    hooks: Option<&'a jian_ops_schema::lifecycle::PageLifecycleHooks>,
+    hook: &str,
+) -> Option<&'a jian_ops_schema::events::ActionList> {
+    let hooks = hooks?;
+    if hooks
+        .disabled_events
+        .as_deref()
+        .is_some_and(|list| list.iter().any(|name| name == hook))
+    {
+        return None;
+    }
+    match hook {
+        "onEnter" => hooks.on_enter.as_ref(),
+        "onLeave" => hooks.on_leave.as_ref(),
+        "onForeground" => hooks.on_foreground.as_ref(),
+        "onBackground" => hooks.on_background.as_ref(),
+        _ => None,
     }
 }
 
