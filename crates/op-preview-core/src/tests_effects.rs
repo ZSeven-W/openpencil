@@ -174,6 +174,46 @@ fn confirm_queue_cancellation_resumes_the_cancel_branch() {
     );
 }
 
+/// End-to-end certification: an envelope's activation must survive the
+/// whole trip — session → runtime → action chain → effect source. This
+/// is the wire grok's re-review found missing: both ends existed but the
+/// session never handed the id to the runtime.
+#[test]
+fn envelope_activation_reaches_the_effect_source() {
+    use super::input_event::{PreviewInput, PreviewInputEnvelope};
+    use jian_core::gesture::pointer::{MouseButtons, PointerEvent, PointerPhase};
+    use op_preview_contracts::UserActivationId;
+
+    let mut s = enter_with(PreviewHostCapabilities {
+        open_url: true,
+        ..PreviewHostCapabilities::none()
+    });
+    let activation = UserActivationId::from_raw(55);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let mut ev =
+            PointerEvent::simple_at(1, phase, jian_core::geometry::point(100.0, 100.0), 10);
+        ev.kind = jian_core::gesture::pointer::PointerKind::Touch;
+        if matches!(phase, PointerPhase::Down) {
+            ev.buttons = MouseButtons::LEFT;
+        }
+        s.dispatch_input(PreviewInputEnvelope {
+            input: PreviewInput::Pointer(ev),
+            activation: Some(activation),
+        });
+    }
+    let effects = s.drain_effects();
+    assert!(!effects.is_empty(), "the tap queued its effect");
+    let source = match &effects[0] {
+        PreviewEffect::OpenUrl { source, .. } => source,
+        other => panic!("expected OpenUrl first, got {other:?}"),
+    };
+    assert_eq!(
+        source.activation,
+        Some(activation),
+        "the host's certification must ride the effect to the host"
+    );
+}
+
 fn tap(session: &mut PreviewSession) -> usize {
     let mut ev = jian_core::gesture::PointerEvent::simple_at(
         1,

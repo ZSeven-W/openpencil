@@ -314,7 +314,15 @@ impl super::PreviewSession {
         // replay under the same certification.
         let restore_activation = self.pending_activation;
         self.pending_activation = envelope.activation;
+        // The other half of the certification: the engine's action chains
+        // read the id through Runtime::take_activation, so the envelope's
+        // certification must reach the runtime, not just this session's
+        // deferral slot. Cleared after the dispatch — an id the input's
+        // chain did not consume must not leak to a later uncertified one.
+        self.runtime
+            .set_activation(envelope.activation.map(|a| a.raw()));
         let mut outcome = self.dispatch_input_inner(envelope);
+        self.runtime.set_activation(None);
         self.pending_activation = restore_activation;
         outcome.effects_enqueued = self.effects.total_enqueued() - enqueued_before;
         let animation_now = self.runtime.now_ms;
