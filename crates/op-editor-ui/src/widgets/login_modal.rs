@@ -35,7 +35,8 @@ const SIGN_IN_BTN_Y: f32 = MODAL_HEIGHT - 80.0;
 const CLOSE_SIZE: f32 = 30.0;
 const BRAND_BADGE_SIZE: f32 = 52.0;
 const BRAND_LOGO_IMAGE_ID: u64 = 0x4f50_5a37_4c4f_474f;
-const BRAND_LOGO_PNG: &[u8] = include_bytes!("../../../op-host-desktop/assets/icon.png");
+// 128px downscale: the modal paints 52px; the 1024px original cost 557 KB.
+const BRAND_LOGO_PNG: &[u8] = include_bytes!("../../assets/brand-logo-128.png");
 const STATUS_HEIGHT: f32 = 44.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
