@@ -341,7 +341,6 @@ impl super::PreviewSession {
                 repeat,
                 modifiers,
             } => {
-                let _ = (code, repeat);
                 // R8: the canonical path shares the legacy path's
                 // transition policy — Enter/Escape defer, the rest drop.
                 // Routing through `dispatch_key` keeps one implementation
@@ -350,7 +349,7 @@ impl super::PreviewSession {
                     self.dispatch_key(&key, modifiers);
                     return PreviewDispatchOutcome::default();
                 }
-                let events = self.runtime.dispatch_keyboard(key, modifiers);
+                let events = self.runtime.dispatch_keyboard(key, code, repeat, modifiers);
                 PreviewDispatchOutcome::from_events(&events)
             }
             PreviewInput::Text(text) => {

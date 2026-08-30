@@ -202,7 +202,7 @@ impl PreviewSession {
         }
         !self
             .runtime
-            .dispatch_keyboard(key.to_string(), modifiers)
+            .dispatch_keyboard(key.to_string(), key.to_string(), false, modifiers)
             .is_empty()
     }
 

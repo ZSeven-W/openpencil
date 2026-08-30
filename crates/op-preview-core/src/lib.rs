@@ -161,6 +161,8 @@ mod tests_device_frame;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_effects;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_event_payloads;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_geometry_parity;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_input_trace;
