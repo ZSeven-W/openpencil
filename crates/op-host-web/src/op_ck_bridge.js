@@ -137,6 +137,72 @@ const opCkClampUnit = (value, fallback = 0) => {
   return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
 };
 
+// Cache successful and failed RuntimeEffect compilations by exact SkSL source.
+// The cache lives for one CanvasKit bridge session, so repainting never invokes
+// the SkSL compiler again for a source it has already seen.
+export function opCkCreateRuntimeEffectCache(CK) {
+  const entries = new Map();
+  return {
+    get(sksl) {
+      const source = String(sksl);
+      if (entries.has(source)) return entries.get(source);
+
+      let effect = null;
+      let entry = null;
+      try {
+        effect = CK.RuntimeEffect.Make(source, () => {});
+        if (effect) {
+          const reflected = new Map();
+          const uniformCount = Math.max(0, Math.trunc(Number(effect.getUniformCount()) || 0));
+          for (let index = 0; index < uniformCount; index++) {
+            reflected.set(effect.getUniformName(index), effect.getUniform(index));
+          }
+          entry = {
+            effect,
+            reflected,
+            floatCount: Math.max(0, Math.trunc(Number(effect.getUniformFloatCount()) || 0)),
+          };
+        }
+      } catch (_error) {
+        if (effect && effect.delete) effect.delete();
+        entry = null;
+      }
+      entries.set(source, entry);
+      return entry;
+    },
+  };
+}
+
+// Bind the caller's name/value slices against CanvasKit's reflected uniform
+// slots. Unknown names and arity mismatches are ignored like native Skia.
+export function opCkMakeRuntimeShader(entry, uniformNames, uniforms, uniformArities) {
+  if (!entry) return null;
+  try {
+    const data = new Float32Array(entry.floatCount);
+    let cursor = 0;
+    for (let index = 0; index < uniformNames.length; index++) {
+      const rawArity = Number(uniformArities[index]);
+      const arity = Number.isSafeInteger(rawArity) && rawArity >= 0 ? rawArity : 0;
+      const valuesStart = cursor;
+      cursor += arity;
+      const info = entry.reflected.get(String(uniformNames[index]));
+      const expected = info ? Number(info.columns) * Number(info.rows) : 0;
+      const slot = info ? Number(info.slot) : -1;
+      if (!info || info.isInteger || expected !== arity
+          || !Number.isSafeInteger(slot) || slot < 0
+          || slot + arity > data.length || valuesStart + arity > uniforms.length) {
+        continue;
+      }
+      for (let value = 0; value < arity; value++) {
+        data[slot + value] = uniforms[valuesStart + value];
+      }
+    }
+    return entry.effect.makeShader(data) || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 // Build the row-major vertex lattice consumed by CanvasKit.MakeVertices.
 // Kept pure + exported so the geometry/index contract can run under Node
 // without booting a WebGL surface. CanvasKit indices are u16, so grids larger
@@ -196,6 +262,7 @@ export async function opCkInit(canvasId) {
   if (!surface) throw new Error('CanvasKit: MakeWebGLCanvasSurface returned null');
   let canvas = surface.getCanvas();
   const el = document.getElementById(canvasId);
+  const runtimeEffects = opCkCreateRuntimeEffectCache(CK);
 
   const systemTypefaces = [];
   const systemTypefaceKeys = new Set();
@@ -580,6 +647,40 @@ export async function opCkInit(canvasId) {
       return;
     }
     const paint = shaderPaint(shader);
+    try {
+      canvas.drawRRect(rrect, paint);
+    } finally {
+      paint.delete();
+      if (shader.delete) shader.delete();
+    }
+  };
+  const drawRuntimeEffectRRect = (
+    rrect,
+    sksl,
+    uniformNames,
+    uniforms,
+    uniformArities,
+    opacity,
+    fallback,
+  ) => {
+    const alpha = opCkClampUnit(opacity);
+    const shader = opCkMakeRuntimeShader(
+      runtimeEffects.get(sksl),
+      uniformNames,
+      uniforms,
+      uniformArities,
+    );
+    if (!shader) {
+      canvas.drawRRect(rrect, fillPaint(
+        opCkClampUnit(fallback[0]),
+        opCkClampUnit(fallback[1]),
+        opCkClampUnit(fallback[2]),
+        opCkClampUnit(fallback[3]) * alpha,
+      ));
+      return;
+    }
+    const paint = shaderPaint(shader);
+    paint.setAlphaf(alpha);
     try {
       canvas.drawRRect(rrect, paint);
     } finally {
@@ -1029,6 +1130,28 @@ export async function opCkInit(canvasId) {
       drawMeshGradientRRect(
         perCornerRRect(x, y, w, h, tl, tr, br, bl),
         x, y, w, h, rows, cols, colors, opacity,
+      );
+    },
+    fillRoundRectShader(x, y, w, h, radius, sksl, uniformNames, uniforms, uniformArities, opacity, fr, fg, fb, fa) {
+      drawRuntimeEffectRRect(
+        uniformRRect(x, y, w, h, radius),
+        sksl,
+        uniformNames,
+        uniforms,
+        uniformArities,
+        opacity,
+        [fr, fg, fb, fa],
+      );
+    },
+    fillRoundRectShaderPerCorner(x, y, w, h, tl, tr, br, bl, sksl, uniformNames, uniforms, uniformArities, opacity, fr, fg, fb, fa) {
+      drawRuntimeEffectRRect(
+        perCornerRRect(x, y, w, h, tl, tr, br, bl),
+        sksl,
+        uniformNames,
+        uniforms,
+        uniformArities,
+        opacity,
+        [fr, fg, fb, fa],
       );
     },
     strokeRoundRect(x, y, w, h, rad, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawRRect(CK.RRectXY(CK.LTRBRect(x, y, x + w, y + h), rad, rad), p); },
