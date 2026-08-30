@@ -99,10 +99,11 @@ impl BindingOverlay {
         &self,
         sites: &[BindingSite],
         state: &jian_core::state::StateGraph,
+        extra_values: &BTreeMap<(String, BindingTarget), serde_json::Value>,
     ) -> Option<jian_ops_schema::PenDocument> {
         let authored = self.inner.borrow().authored_runtime_document.clone()?;
         let mut document = serde_json::to_value(authored).ok()?;
-        materialize_json_nodes(&mut document, sites, self, state);
+        materialize_json_nodes(&mut document, sites, self, state, extra_values);
         serde_json::from_value(document).ok()
     }
 
@@ -378,6 +379,7 @@ fn materialize_json_nodes(
     sites: &[BindingSite],
     overlay: &BindingOverlay,
     state: &jian_core::state::StateGraph,
+    extra_values: &BTreeMap<(String, BindingTarget), serde_json::Value>,
 ) {
     match value {
         serde_json::Value::Object(object) => {
@@ -400,21 +402,34 @@ fn materialize_json_nodes(
                         true,
                     );
                 }
+                let mut extras: Vec<_> = extra_values
+                    .iter()
+                    .filter(|((target_id, _), _)| target_id == &node_id)
+                    .collect();
+                extras.sort_by_key(|((_, target), _)| target.application_order());
+                for ((_, target), value) in extras {
+                    let _ = jian_core::binding::apply_binding_value(
+                        object,
+                        *target,
+                        &RuntimeValue(value.clone()),
+                        true,
+                    );
+                }
             }
             for child in object.values_mut() {
-                materialize_json_nodes(child, sites, overlay, state);
+                materialize_json_nodes(child, sites, overlay, state, extra_values);
             }
         }
         serde_json::Value::Array(items) => {
             for item in items {
-                materialize_json_nodes(item, sites, overlay, state);
+                materialize_json_nodes(item, sites, overlay, state, extra_values);
             }
         }
         _ => {}
     }
 }
 
-fn apply_value(node: &mut SceneNode, target: BindingTarget, value: &RuntimeValue) {
+pub(crate) fn apply_value(node: &mut SceneNode, target: BindingTarget, value: &RuntimeValue) {
     match target {
         BindingTarget::Content => {
             node.text = Some(display_string(value));
@@ -464,6 +479,12 @@ fn apply_value(node: &mut SceneNode, target: BindingTarget, value: &RuntimeValue
                         align: SceneStrokeAlign::Center,
                     });
                 }
+            }
+        }
+        BindingTarget::CornerRadius => {
+            if let Some(radius) = number(value) {
+                node.corner_radius = radius.max(0.0);
+                node.corner_radii = None;
             }
         }
         BindingTarget::X => {
@@ -622,7 +643,15 @@ impl crate::session::PreviewSession {
         self.finish_binding_update(&before)
     }
 
-    fn apply_invalidation(&mut self, invalidation: InvalidationKind) {
+    pub(crate) fn apply_invalidation(&mut self, invalidation: InvalidationKind) {
+        self.apply_invalidation_with_values(invalidation, &BTreeMap::new());
+    }
+
+    pub(crate) fn apply_invalidation_with_values(
+        &mut self,
+        invalidation: InvalidationKind,
+        extra_values: &BTreeMap<(String, BindingTarget), serde_json::Value>,
+    ) {
         match invalidation {
             InvalidationKind::None => {}
             InvalidationKind::PaintOnly => self.runtime.mark_dirty(),
@@ -631,10 +660,11 @@ impl crate::session::PreviewSession {
                 self.runtime.mark_dirty();
             }
             InvalidationKind::Relayout => {
-                if let Some(document) = self
-                    .binding_overlay
-                    .materialized_runtime_document(&self.binding_sites, &self.runtime.state)
-                {
+                if let Some(document) = self.binding_overlay.materialized_runtime_document(
+                    &self.binding_sites,
+                    &self.runtime.state,
+                    extra_values,
+                ) {
                     if let Err(error) = self.runtime.replace_document(document) {
                         self.warnings
                             .push(format!("preview: binding document swap failed: {error}"));

@@ -189,6 +189,7 @@ impl PreviewSession {
             && self.binding_sites.is_empty()
             && !self.ui_actions.has_visual_state()
             && !self.binding_overlay.has_visual_state()
+            && !self.animation.has_visual_state()
         {
             &self.scene
         } else {

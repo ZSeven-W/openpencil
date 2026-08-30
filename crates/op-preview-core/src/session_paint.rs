@@ -47,6 +47,7 @@ impl PreviewSession {
             && self.binding_sites.is_empty()
             && !self.ui_actions.has_visual_state()
             && !self.binding_overlay.has_visual_state()
+            && !self.animation.has_visual_state()
         {
             &self.scene
         } else {
@@ -89,6 +90,15 @@ impl PreviewSession {
     /// overlay. Pure (no paint), so visual and hit geometry share the same
     /// deterministic scene snapshot.
     pub(crate) fn overlay_runtime_state(&self, base: &LayoutScene) -> LayoutScene {
+        let mut scene = self.overlay_runtime_state_without_animation(base);
+        self.animation.apply_to_scene(&mut scene);
+        scene
+    }
+
+    pub(crate) fn overlay_runtime_state_without_animation(
+        &self,
+        base: &LayoutScene,
+    ) -> LayoutScene {
         let mut scene = base.clone();
         let idx = scene.active_page_index;
         if let Some(page) = scene.pages.get_mut(idx) {

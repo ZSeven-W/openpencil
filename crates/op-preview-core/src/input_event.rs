@@ -228,6 +228,9 @@ impl super::PreviewSession {
         let mut outcome = self.dispatch_input_inner(envelope);
         self.pending_activation = restore_activation;
         outcome.effects_enqueued = self.effects.total_enqueued() - enqueued_before;
+        let animation_now = self.runtime.now_ms;
+        outcome.needs_redraw |=
+            self.admit_animation_requests(animation_now) != crate::InvalidationKind::None;
         outcome.needs_redraw |=
             self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
         outcome
@@ -325,9 +328,11 @@ impl super::PreviewSession {
         if now_ms > self.last_now_ms {
             self.last_now_ms = now_ms;
         }
+        let animation_invalidation = self.tick_animation(now_ms);
         let mut outcome = PreviewDispatchOutcome {
             semantic_handlers: Vec::new(),
-            needs_redraw: directive.needs_paint,
+            needs_redraw: directive.needs_paint
+                || animation_invalidation != crate::InvalidationKind::None,
             effects_enqueued: 0,
         };
         outcome.needs_redraw |=
@@ -340,7 +345,13 @@ impl super::PreviewSession {
     /// parked IME swaps, scheduled action tasks. R7/R8 fold animation
     /// and transition deadlines into this minimum. `None` = idle.
     pub fn next_wake_deadline_ms(&self) -> Option<u64> {
-        self.runtime.next_wake_ms()
+        [
+            self.runtime.next_wake_ms(),
+            self.animation.next_deadline_ms(),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     /// Clear ALL input ownership ahead of a Background/Terminate barrier

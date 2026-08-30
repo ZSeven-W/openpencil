@@ -12,3 +12,11 @@ pub(crate) fn from_ui_work(work: jian_core::action::services::UiMutationWork) ->
         InvalidationKind::None
     }
 }
+
+pub(crate) fn from_animation_property(
+    property: &jian_core::action::services::AnimationProperty,
+) -> InvalidationKind {
+    property
+        .invalidation()
+        .unwrap_or(InvalidationKind::PaintOnly)
+}

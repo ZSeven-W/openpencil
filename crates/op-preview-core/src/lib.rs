@@ -57,6 +57,7 @@
 //! `format_warning`) live in `scene_helpers.rs`. The crate root keeps
 //! only module declarations and stable re-exports.
 
+mod animation;
 mod app_mode;
 #[cfg(feature = "gl-host")]
 mod auto_wire;
@@ -133,6 +134,8 @@ pub(crate) use session::{font_registry_test_support, test_measure};
 // macOS + Linux keep the full preview coverage.
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_animation;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_app_mode;
 #[cfg(all(test, not(target_os = "windows")))]

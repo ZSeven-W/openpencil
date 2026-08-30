@@ -456,6 +456,7 @@ impl PreviewSession {
         // the counter is what makes `replay_deferred_input` drop it.
         self.route_generation = self.route_generation.saturating_add(1);
         self.transition_tap = None;
+        self.animation.clear();
 
         ReconcileOutcome {
             repaint: true,

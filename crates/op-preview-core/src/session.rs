@@ -116,6 +116,8 @@ pub struct PreviewSession {
     pub(crate) binding_sites: Vec<BindingSite>,
     /// R6 typed overlay values plus the read-only scroll namespace.
     pub(crate) binding_overlay: BindingOverlay,
+    /// R7 one bounded timeline plus its injected AnimationSink queue.
+    pub(crate) animation: crate::animation::PreviewAnimationState,
     /// APP MODE state (routed multi-screen doc), or `None` for the
     /// classic single-page workbench preview. `pub(crate)`
     /// so `app_mode`'s `is_app_mode` can read it. See [`AppMode`].
@@ -445,6 +447,8 @@ impl PreviewSession {
         crate::effects::install_on_runtime(&mut runtime, &effects, &host_capabilities);
         let ui_actions = crate::ui_actions::PreviewUiActions::default();
         runtime.set_ui_mutation_sink(Rc::new(ui_actions.clone()));
+        let animation = crate::animation::PreviewAnimationState::default();
+        runtime.set_animation_sink(Rc::new(animation.clone()));
         runtime.enable_action_reporting();
 
         Ok(Self {
@@ -462,6 +466,7 @@ impl PreviewSession {
             warnings,
             binding_sites,
             binding_overlay,
+            animation,
             app,
             gesture_mappings: HashMap::new(),
             transition: None,
@@ -488,6 +493,8 @@ impl PreviewSession {
         let was_transitioning = self.transition_active();
         self.runtime.set_now_ms(now_ms);
         self.last_now_ms = self.last_now_ms.max(now_ms);
+        let animation_now = self.last_now_ms;
+        let _ = self.tick_animation(animation_now);
         // R8: a transition ends by the clock, not by an event, so the
         // clock push IS the completion edge. Replay here — after the
         // arriving screen's layout and hit mapping have settled — rather
