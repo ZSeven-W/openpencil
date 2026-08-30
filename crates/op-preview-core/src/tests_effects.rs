@@ -138,6 +138,42 @@ fn confirm_queue_completion_resumes_the_confirmed_branch() {
     );
 }
 
+/// The other half of the completion contract: a `Cancelled` completion
+/// resumes `on_cancel`, and the confirmed branch stays untouched.
+#[test]
+fn confirm_queue_cancellation_resumes_the_cancel_branch() {
+    let mut session = enter_confirm_doc(PreviewHostCapabilities {
+        notifications: true,
+        ..PreviewHostCapabilities::none()
+    });
+    assert_eq!(tap(&mut session), 1);
+    let effects = session.drain_effects();
+    assert!(matches!(
+        effects.as_slice(),
+        [PreviewEffect::Confirm { .. }]
+    ));
+    assert!(session.complete_effect(effects[0].id(), PreviewEffectResult::Cancelled));
+    let _ = session.pump(10);
+    assert_eq!(
+        session
+            .runtime
+            .state
+            .app_get("cancelled")
+            .and_then(|value| value.as_i64()),
+        Some(1),
+        "the user's No must run the authored on_cancel branch"
+    );
+    assert_eq!(
+        session
+            .runtime
+            .state
+            .app_get("confirmed")
+            .and_then(|value| value.as_i64()),
+        Some(0),
+        "and must not leak into on_confirm"
+    );
+}
+
 fn tap(session: &mut PreviewSession) -> usize {
     let mut ev = jian_core::gesture::PointerEvent::simple_at(
         1,
