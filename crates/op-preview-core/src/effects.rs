@@ -265,6 +265,17 @@ impl EffectSink for QueueEffectSink {
                 )
             }
         };
+        // `confirm` asks a question and the authored `on_confirm` /
+        // `on_cancel` branches are the answer's two destinations. This
+        // queue can carry the request to the host but has no way to carry
+        // the reply back yet, and `Accepted` would tell the action "it is
+        // handled" — which silently drops both branches. Declining is the
+        // honest answer: the action falls through to the synchronous
+        // feedback service, which does run them. R9's completion-resume
+        // mechanism is what lets the queue take this over.
+        if matches!(request, EffectRequest::Confirm { .. }) {
+            return EffectOutcome::Unsupported;
+        }
         // Fail-closed: an undeclared host capability means the effect
         // class is Unsupported — nothing is queued, nothing is allowed.
         if !self.capabilities.supports(capability) {

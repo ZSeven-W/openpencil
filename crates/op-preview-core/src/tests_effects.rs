@@ -56,6 +56,80 @@ fn enter_with(caps: PreviewHostCapabilities) -> PreviewSession {
     .expect("enter preview")
 }
 
+/// A document whose tap runs a `confirm` carrying both answer branches.
+/// The branches write distinct markers so a test can tell which ran — or
+/// that neither did.
+fn confirm_doc() -> &'static str {
+    r##"{
+        "version": "1.1", "formatVersion": "1.1", "id": "x",
+        "app": { "name": "x", "version": "1", "id": "x",
+                 "capabilities": ["notifications"] },
+        "state": { "confirmed": { "type": "int", "default": 0 },
+                   "cancelled": { "type": "int", "default": 0 } },
+        "children": [
+            { "type": "frame", "id": "btn", "x": 0, "y": 0, "width": 200, "height": 200,
+              "events": {
+                "onTap": [
+                    { "confirm": { "title": "'T'", "message": "'Go?'",
+                                   "on_confirm": [ { "set": { "$app.confirmed": "1" } } ],
+                                   "on_cancel": [ { "set": { "$app.cancelled": "1" } } ] } }
+                ]
+              } }
+        ]
+    }"##
+}
+
+fn enter_confirm_doc(caps: PreviewHostCapabilities) -> PreviewSession {
+    let doc = jian_ops_schema::load_str(confirm_doc())
+        .expect("parse doc")
+        .value;
+    PreviewSession::enter_with_capabilities(
+        &doc,
+        (800.0, 600.0),
+        &default_theme(),
+        0,
+        false,
+        false,
+        test_measure(),
+        caps,
+    )
+    .expect("enter preview")
+}
+
+/// `confirm` asks a question, and the queue cannot carry the answer back
+/// yet. Accepting it would report "handled" and silently drop both
+/// authored branches — so the queue declines, the action falls through to
+/// the synchronous feedback service, and a branch actually runs.
+///
+/// Without the decline this test sees both markers at 0: the dialog was
+/// queued and the answer never arrived.
+#[test]
+fn confirm_is_declined_by_the_queue_so_its_branches_still_run() {
+    let mut s = enter_confirm_doc(PreviewHostCapabilities {
+        notifications: true,
+        ..PreviewHostCapabilities::none()
+    });
+    let queued = tap(&mut s);
+    assert_eq!(
+        queued, 0,
+        "confirm must not be queued while its answer has nowhere to return"
+    );
+    let confirmed = s
+        .runtime
+        .state
+        .app_get("confirmed")
+        .and_then(|v| v.as_i64());
+    let cancelled = s
+        .runtime
+        .state
+        .app_get("cancelled")
+        .and_then(|v| v.as_i64());
+    assert!(
+        confirmed == Some(1) || cancelled == Some(1),
+        "one of the authored branches must run; got confirmed={confirmed:?} cancelled={cancelled:?}"
+    );
+}
+
 fn tap(session: &mut PreviewSession) -> usize {
     let mut ev = jian_core::gesture::PointerEvent::simple_at(
         1,
