@@ -106,10 +106,12 @@ impl PreviewSession {
                 self.overlay_node(node);
             }
         }
+        let pointer = self.pointer_binding_value();
         self.binding_overlay.apply_to_scene(
             &mut scene,
             &self.binding_sites,
             &self.runtime.state,
+            &pointer,
             &self.ui_actions,
         );
         scene

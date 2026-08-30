@@ -126,7 +126,7 @@ pub struct PreviewSession {
     /// re-evaluated against the live state graph each overlay pass so
     /// authored actions and host `set_state` writes become visible.
     pub(crate) binding_sites: Vec<BindingSite>,
-    /// R6 typed overlay values plus the read-only scroll namespace.
+    /// R6 typed overlay values plus read-only scroll/pointer namespaces.
     pub(crate) binding_overlay: BindingOverlay,
     /// R9 bounded trace, provenance, and debugger clock state.
     pub(crate) debug: crate::debug_trace::PreviewDebugState,

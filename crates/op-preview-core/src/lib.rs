@@ -173,6 +173,8 @@ mod tests_interaction_state;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_pointer_bindings;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_swipe;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_tabs;

@@ -297,7 +297,8 @@ impl PreviewSession {
     /// which is what makes Scale/Rotate claims possible through the
     /// product preview path at all. `kind` rides along untouched; hosts
     /// that only speak mouse pass [`PointerKind::Mouse`] with id 1 via
-    /// the legacy wrappers.
+    /// the legacy wrappers. Returns true for either emitted runtime
+    /// semantics or `$pointer` binding work that requires a redraw.
     pub fn dispatch_pointer_for_id_at(
         &mut self,
         pointer_id: u32,
@@ -334,10 +335,12 @@ impl PreviewSession {
             self.track_transition_press(pointer_id, kind, scene_x, scene_y, phase, t_ms);
             return false;
         }
+        let binding_before = self.binding_values();
         let hit = self
             .deepest_mapped_hit(scene_x, scene_y)
             .map(|(_, _, id)| id);
-        self.track_interaction(pointer_id, kind, phase, hit.as_deref());
+        self.interaction
+            .track_pointer(pointer_id, kind, phase, (scene_x, scene_y), hit.as_deref());
         let (rt_x, rt_y) = self.resolve_runtime_point(scene_x, scene_y, phase, pointer_id);
         use jian_core::geometry::point;
         let mut ev = PointerEvent::simple_at(pointer_id, phase, point(rt_x, rt_y), t_ms);
@@ -347,7 +350,10 @@ impl PreviewSession {
             ev.buttons = MouseButtons::empty();
             ev.pressure = 0.0;
         }
-        !self.runtime.dispatch_pointer(ev).is_empty()
+        let emitted = !self.runtime.dispatch_pointer(ev).is_empty();
+        let binding_changed =
+            self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
+        emitted || binding_changed
     }
 
     /// The R4 Canonical PreviewInput POINTER path: take a FULL host
@@ -378,7 +384,13 @@ impl PreviewSession {
         let hit_node = self
             .deepest_mapped_hit(event.position.x, event.position.y)
             .map(|(_, _, id)| id);
-        self.track_interaction(event.id.0, event.kind, event.phase, hit_node.as_deref());
+        self.interaction.track_pointer(
+            event.id.0,
+            event.kind,
+            event.phase,
+            (event.position.x, event.position.y),
+            hit_node.as_deref(),
+        );
         let (rt_x, rt_y) =
             self.resolve_runtime_point(event.position.x, event.position.y, event.phase, event.id.0);
         event.position = jian_core::geometry::point(rt_x, rt_y);
@@ -388,42 +400,6 @@ impl PreviewSession {
             event.pressure = 0.0;
         }
         self.runtime.dispatch_pointer(event)
-    }
-
-    /// Update the R4 interaction state from one pointer phase: any
-    /// kind's `Down` records the pressed node (Touch Down is the
-    /// approved touch fallback's signal; mouse presses feed the same
-    /// state), `Up`/`Cancel` clear it, and unpressed Mouse/Pen movement
-    /// tracks hover — Touch never hovers, so its movement leaves hover
-    /// untouched.
-    pub(crate) fn track_interaction(
-        &mut self,
-        pointer_id: u32,
-        kind: jian_core::gesture::pointer::PointerKind,
-        phase: PointerPhase,
-        hit_node: Option<&str>,
-    ) {
-        use jian_core::gesture::pointer::PointerKind;
-        match phase {
-            PointerPhase::Down => {
-                if let Some(id) = hit_node {
-                    self.interaction.set_pressed(pointer_id, id.to_owned());
-                }
-            }
-            PointerPhase::Up | PointerPhase::Cancel => {
-                self.interaction.clear_pressed(pointer_id);
-            }
-            PointerPhase::Hover => {
-                if matches!(kind, PointerKind::Touch) {
-                    return;
-                }
-                match hit_node {
-                    Some(id) => self.interaction.set_hovered(id.to_owned()),
-                    None => self.interaction.clear_hovered(),
-                }
-            }
-            PointerPhase::Move => {}
-        }
     }
 
     /// Cancel one pointer's live stream by id WITHOUT needing its last

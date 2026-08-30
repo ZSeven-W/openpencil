@@ -19,6 +19,7 @@ pub(super) struct BindingSite {
     pub(super) target: BindingTarget,
     pub(super) expr: CompiledExpression,
     pub(super) uses_scroll: bool,
+    pub(super) uses_pointer: bool,
     pub(super) scroll_ancestor: Option<String>,
 }
 
@@ -84,12 +85,28 @@ fn collect_binding_sites_under(
                     );
                     continue;
                 };
-                let uses_scroll = expression_uses_scroll(&expression.0);
-                if uses_scroll && target.invalidation() != InvalidationKind::PaintOnly {
-                    push_warning_once(
-                        warnings,
-                        format!("ScrollBindingRequiresPaintOnly: '{node_id}' prop '{property}'"),
-                    );
+                let uses_scroll = expression_uses_scope(&expression.0, "$scroll");
+                let uses_pointer = expression_uses_scope(&expression.0, "$pointer");
+                let restricted = target.invalidation() != InvalidationKind::PaintOnly;
+                if restricted {
+                    if uses_scroll {
+                        push_warning_once(
+                            warnings,
+                            format!(
+                                "ScrollBindingRequiresPaintOnly: '{node_id}' prop '{property}'"
+                            ),
+                        );
+                    }
+                    if uses_pointer {
+                        push_warning_once(
+                            warnings,
+                            format!(
+                                "PointerBindingRequiresPaintOnly: '{node_id}' prop '{property}'"
+                            ),
+                        );
+                    }
+                }
+                if restricted && (uses_scroll || uses_pointer) {
                     continue;
                 }
                 if uses_scroll && nearest_scroll.is_none() {
@@ -106,6 +123,7 @@ fn collect_binding_sites_under(
                         target,
                         expr: compiled,
                         uses_scroll,
+                        uses_pointer,
                         scroll_ancestor: nearest_scroll.map(str::to_owned),
                     }),
                     Err(diagnostic) => push_warning_once(
@@ -139,42 +157,47 @@ fn node_has_on_scroll(node: &PenNode) -> bool {
         })
 }
 
-fn expression_uses_scroll(source: &str) -> bool {
+fn expression_uses_scope(source: &str, wanted: &str) -> bool {
     jian_core::expression::parser::parse(source)
-        .is_ok_and(|expression| expression_node_uses_scroll(&expression))
+        .is_ok_and(|expression| expression_node_uses_scope(&expression, wanted))
 }
 
-fn expression_node_uses_scroll(expression: &jian_core::expression::ast::Expr) -> bool {
+fn expression_node_uses_scope(expression: &jian_core::expression::ast::Expr, wanted: &str) -> bool {
     use jian_core::expression::ast::{AccessPath, ExprKind, TemplatePart};
     match &expression.kind {
         ExprKind::ScopeRef(scope, access) => {
-            scope == "$scroll"
+            scope == wanted
                 || access.iter().any(|part| match part {
                     AccessPath::Field(_) => false,
-                    AccessPath::Index(index) => expression_node_uses_scroll(index),
+                    AccessPath::Index(index) => expression_node_uses_scope(index, wanted),
                 })
         }
-        ExprKind::Array(items) => items.iter().any(expression_node_uses_scroll),
+        ExprKind::Array(items) => items
+            .iter()
+            .any(|item| expression_node_uses_scope(item, wanted)),
         ExprKind::Object(items) => items
             .iter()
-            .any(|(_, value)| expression_node_uses_scroll(value)),
+            .any(|(_, value)| expression_node_uses_scope(value, wanted)),
         ExprKind::Template(parts) => parts.iter().any(|part| match part {
             TemplatePart::Text(_) => false,
-            TemplatePart::Expr(expression) => expression_node_uses_scroll(expression),
+            TemplatePart::Expr(expression) => expression_node_uses_scope(expression, wanted),
         }),
         ExprKind::Unary(_, value) | ExprKind::Member(value, _) => {
-            expression_node_uses_scroll(value)
+            expression_node_uses_scope(value, wanted)
         }
         ExprKind::Binary(_, left, right) | ExprKind::Index(left, right) => {
-            expression_node_uses_scroll(left) || expression_node_uses_scroll(right)
+            expression_node_uses_scope(left, wanted) || expression_node_uses_scope(right, wanted)
         }
         ExprKind::Ternary(condition, yes, no) => {
-            expression_node_uses_scroll(condition)
-                || expression_node_uses_scroll(yes)
-                || expression_node_uses_scroll(no)
+            expression_node_uses_scope(condition, wanted)
+                || expression_node_uses_scope(yes, wanted)
+                || expression_node_uses_scope(no, wanted)
         }
         ExprKind::Call(callee, arguments) => {
-            expression_node_uses_scroll(callee) || arguments.iter().any(expression_node_uses_scroll)
+            expression_node_uses_scope(callee, wanted)
+                || arguments
+                    .iter()
+                    .any(|argument| expression_node_uses_scope(argument, wanted))
         }
         ExprKind::Number(_)
         | ExprKind::String(_)

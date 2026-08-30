@@ -1,4 +1,4 @@
-//! Typed Preview binding overlay and scroll namespace state.
+//! Typed Preview binding overlay with read-only scroll and pointer locals.
 
 use crate::binding_sites::BindingSite;
 use crate::input_event::ScrollPhase;
@@ -12,7 +12,7 @@ use jian_ops_schema::node::PenNode;
 use op_editor_ui::layout_scene::{
     LayoutScene, SceneFillLayer, SceneNode, SceneStroke, SceneStrokeAlign,
 };
-use op_editor_ui::Color;
+use op_editor_ui::{Color, Rect};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -48,6 +48,59 @@ impl ScrollValues {
             "maxOffset": self.max_offset,
             "progress": self.progress(),
             "direction": self.direction,
+        }))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct PointerValues {
+    x: f32,
+    y: f32,
+    nx: f32,
+    ny: f32,
+    inside: bool,
+}
+
+impl PointerValues {
+    fn from_sample(sample: crate::interaction_state::PointerSample, screen: Option<Rect>) -> Self {
+        let (nx, ny, inside) = screen
+            .filter(|rect| {
+                sample.x.is_finite()
+                    && sample.y.is_finite()
+                    && rect.origin.x.is_finite()
+                    && rect.origin.y.is_finite()
+                    && rect.size.x.is_finite()
+                    && rect.size.y.is_finite()
+                    && rect.size.x > f32::EPSILON
+                    && rect.size.y > f32::EPSILON
+            })
+            .map(|rect| {
+                let nx = ((sample.x - rect.origin.x) / rect.size.x).clamp(0.0, 1.0);
+                let ny = ((sample.y - rect.origin.y) / rect.size.y).clamp(0.0, 1.0);
+                let inside = sample.present
+                    && sample.x >= rect.origin.x
+                    && sample.x <= rect.origin.x + rect.size.x
+                    && sample.y >= rect.origin.y
+                    && sample.y <= rect.origin.y + rect.size.y;
+                (nx, ny, inside)
+            })
+            .unwrap_or((0.0, 0.0, false));
+        Self {
+            x: sample.x,
+            y: sample.y,
+            nx,
+            ny,
+            inside,
+        }
+    }
+
+    fn runtime_value(&self) -> RuntimeValue {
+        RuntimeValue(serde_json::json!({
+            "x": self.x,
+            "y": self.y,
+            "nx": self.nx,
+            "ny": self.ny,
+            "inside": self.inside,
         }))
     }
 }
@@ -99,11 +152,12 @@ impl BindingOverlay {
         &self,
         sites: &[BindingSite],
         state: &jian_core::state::StateGraph,
+        pointer: &RuntimeValue,
         extra_values: &BTreeMap<(String, BindingTarget), serde_json::Value>,
     ) -> Option<jian_ops_schema::PenDocument> {
         let authored = self.inner.borrow().authored_runtime_document.clone()?;
         let mut document = serde_json::to_value(authored).ok()?;
-        materialize_json_nodes(&mut document, sites, self, state, extra_values);
+        materialize_json_nodes(&mut document, sites, self, state, pointer, extra_values);
         serde_json::from_value(document).ok()
     }
 
@@ -111,10 +165,11 @@ impl BindingOverlay {
         &self,
         sites: &[BindingSite],
         state: &jian_core::state::StateGraph,
+        pointer: &RuntimeValue,
     ) -> Vec<serde_json::Value> {
         sites
             .iter()
-            .map(|site| self.evaluate(site, state).0)
+            .map(|site| self.evaluate(site, state, pointer).0)
             .collect()
     }
 
@@ -145,6 +200,7 @@ impl BindingOverlay {
         scene: &mut LayoutScene,
         sites: &[BindingSite],
         state: &jian_core::state::StateGraph,
+        pointer: &RuntimeValue,
         ui_actions: &PreviewUiActions,
     ) {
         self.consume_scroll_requests(scene, ui_actions);
@@ -152,7 +208,7 @@ impl BindingOverlay {
             return;
         };
         for node in &mut page.children {
-            self.apply_node(node, sites, state, ui_actions);
+            self.apply_node(node, sites, state, pointer, ui_actions);
         }
     }
 
@@ -217,6 +273,7 @@ impl BindingOverlay {
         node: &mut SceneNode,
         sites: &[BindingSite],
         state: &jian_core::state::StateGraph,
+        pointer: &RuntimeValue,
         ui_actions: &PreviewUiActions,
     ) {
         let node_id = node.id.clone();
@@ -226,17 +283,22 @@ impl BindingOverlay {
             .collect();
         node_sites.sort_by_key(|site| site.target.application_order());
         for site in node_sites {
-            let value = RuntimeValue(self.evaluate(site, state).0);
+            let value = RuntimeValue(self.evaluate(site, state, pointer).0);
             apply_value(node, site.target, &value);
         }
         node.hidden = !ui_actions.visibility_for(&node.id, !node.hidden);
         for child in &mut node.children {
-            self.apply_node(child, sites, state, ui_actions);
+            self.apply_node(child, sites, state, pointer, ui_actions);
         }
         self.apply_scroll(node);
     }
 
-    fn evaluate(&self, site: &BindingSite, state: &jian_core::state::StateGraph) -> RuntimeValue {
+    fn evaluate(
+        &self,
+        site: &BindingSite,
+        state: &jian_core::state::StateGraph,
+        pointer: &RuntimeValue,
+    ) -> RuntimeValue {
         let mut locals = BTreeMap::new();
         if site.uses_scroll {
             let scroll = site
@@ -245,6 +307,9 @@ impl BindingOverlay {
                 .and_then(|node_id| self.inner.borrow().scroll_values.get(node_id).cloned())
                 .unwrap_or_default();
             locals.insert("scroll".to_owned(), scroll.runtime_value());
+        }
+        if site.uses_pointer {
+            locals.insert("pointer".to_owned(), pointer.clone());
         }
         site.expr
             .eval_with_locals(state, None, Some(&site.node_id), &locals)
@@ -379,6 +444,7 @@ fn materialize_json_nodes(
     sites: &[BindingSite],
     overlay: &BindingOverlay,
     state: &jian_core::state::StateGraph,
+    pointer: &RuntimeValue,
     extra_values: &BTreeMap<(String, BindingTarget), serde_json::Value>,
 ) {
     match value {
@@ -394,7 +460,7 @@ fn materialize_json_nodes(
                     .collect();
                 node_sites.sort_by_key(|site| site.target.application_order());
                 for site in node_sites {
-                    let evaluated = overlay.evaluate(site, state);
+                    let evaluated = overlay.evaluate(site, state, pointer);
                     let _ = jian_core::binding::apply_binding_value(
                         object,
                         site.target,
@@ -417,12 +483,12 @@ fn materialize_json_nodes(
                 }
             }
             for child in object.values_mut() {
-                materialize_json_nodes(child, sites, overlay, state, extra_values);
+                materialize_json_nodes(child, sites, overlay, state, pointer, extra_values);
             }
         }
         serde_json::Value::Array(items) => {
             for item in items {
-                materialize_json_nodes(item, sites, overlay, state, extra_values);
+                materialize_json_nodes(item, sites, overlay, state, pointer, extra_values);
             }
         }
         _ => {}
@@ -618,9 +684,16 @@ fn translate_for_scroll(node: &mut SceneNode, dy: f32, pinned_nodes: &BTreeSet<S
 }
 
 impl crate::session::PreviewSession {
+    pub(crate) fn pointer_binding_value(&self) -> RuntimeValue {
+        let sample = self.interaction.pointer_sample();
+        let screen = self.root_frames.first().map(|frame| frame.scene_rect);
+        PointerValues::from_sample(sample, screen).runtime_value()
+    }
+
     pub(crate) fn binding_values(&self) -> Vec<serde_json::Value> {
+        let pointer = self.pointer_binding_value();
         self.binding_overlay
-            .values(&self.binding_sites, &self.runtime.state)
+            .values(&self.binding_sites, &self.runtime.state, &pointer)
     }
 
     pub(crate) fn finish_binding_update(
@@ -660,9 +733,11 @@ impl crate::session::PreviewSession {
                 self.runtime.mark_dirty();
             }
             InvalidationKind::Relayout => {
+                let pointer = self.pointer_binding_value();
                 if let Some(document) = self.binding_overlay.materialized_runtime_document(
                     &self.binding_sites,
                     &self.runtime.state,
+                    &pointer,
                     extra_values,
                 ) {
                     if let Err(error) = self.runtime.replace_document(document) {
