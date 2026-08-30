@@ -70,3 +70,8 @@ default = []
 # which renders iconFont nodes but has no daemon behind it — keeps the embed,
 # because for them "not fetched yet" would simply mean "never".
 runtime-icon-catalog = []
+# Forward to op-ai-skills: embed only the style-guides subtree. Opted
+# into by op-host-web alongside runtime-icon-catalog and for the same
+# reason — the daemon owns prompt composition, so the phase corpus is
+# dead weight in the browser bundle.
+slim-corpus = ["op-ai-skills/slim-corpus"]

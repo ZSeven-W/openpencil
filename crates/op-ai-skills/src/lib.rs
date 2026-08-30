@@ -197,11 +197,12 @@ verifies the design is complete and visually polished.";
 fn design_agent_template() -> &'static str {
     static TEMPLATE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     TEMPLATE.get_or_init(|| {
-        let template = SKILLS
-            .get_file("phases/agent/design-agent.md")
+        let template = phase_corpus_dir()
+            .and_then(|dir| dir.get_file("phases/agent/design-agent.md"))
             .and_then(|f| f.contents_utf8())
             .expect(
-                "skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus",
+                "skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus \
+                 (a slim-corpus build must never reach the design-agent template)",
             );
         for placeholder in [
             JIAN_COMPONENTS_PLACEHOLDER,
@@ -327,7 +328,46 @@ pub fn design_agent_system_prompt_with_skills_for(
 /// The embedded `skills/` corpus — domain / knowledge / phase skill
 /// markdown plus the `style-guides/` subtree. Parsed into the skill
 /// registry on first access (see [`loader`]).
+// The slim gate is feature AND target: cargo feature unification opens
+// the feature for every crate in a workspace build that includes
+// op-host-web, and without the target gate that build would strip the
+// corpus out from under the desktop and daemon. Only an actual wasm32
+// compilation slims.
+#[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
 pub static SKILLS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/skills");
+
+/// slim-corpus: only the style-guides subtree is embedded. Everything
+/// that walks [`SKILLS`] must go through [`style_guides_dir`] /
+/// [`phase_corpus_dir`] so both embeds answer the same questions.
+#[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+pub static STYLE_GUIDES_ONLY: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/skills/style-guides");
+
+/// The style-guides subtree, wherever this build embedded it.
+pub fn style_guides_dir() -> Option<&'static Dir<'static>> {
+    #[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
+    {
+        SKILLS.get_dir("style-guides")
+    }
+    #[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+    {
+        Some(&STYLE_GUIDES_ONLY)
+    }
+}
+
+/// The phase/domain/knowledge corpus root, absent on a slim build — the
+/// browser never composes prompts, so callers must treat `None` as "not
+/// this build's job", never as an error.
+pub fn phase_corpus_dir() -> Option<&'static Dir<'static>> {
+    #[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
+    {
+        Some(&SKILLS)
+    }
+    #[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+    {
+        None
+    }
+}
 
 /// The embedded P2 style catalog. This is deliberately separate from
 /// [`SKILLS`] so catalog entries cannot be parsed as phase skills.

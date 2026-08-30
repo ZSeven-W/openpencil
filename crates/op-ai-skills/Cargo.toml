@@ -21,3 +21,11 @@ include_dir = "0.7"
 # table can never silently drift apart.
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 serde_json = { workspace = true }
+
+[features]
+default = []
+# Embed ONLY skills/style-guides instead of the whole corpus. The wasm
+# bundle opts in (via op-editor-ui): the browser never composes prompts
+# — that happens daemon-side — so the ~330 KB of phase/domain/knowledge
+# markdown was dead weight there. Native keeps the full embed.
+slim-corpus = []
