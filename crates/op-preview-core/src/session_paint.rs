@@ -4,8 +4,9 @@
 //! repo's 800-line-per-file cap. Owns `paint_scene` — the design-scene
 //! paint pass with live runtime widget values overlaid and a focus caret on
 //! top — plus the overlay walkers (`overlay_runtime_state` /
-//! `overlay_node` / `apply_binding_sites`), the caret paint, and the
-//! contrast-derived caret color helper.
+//! `overlay_node`), the caret paint, and the
+//! contrast-derived caret color helper. Typed binding/scroll application
+//! lives in `binding_overlay.rs`.
 //!
 //! `paint_scene` is the public entry; `overlay_runtime_state` and
 //! `paint_focus_caret` are `pub(crate)` so the sibling `present` /
@@ -18,7 +19,7 @@ use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 use op_editor_ui::widgets::{paint_scene_page, PaintCx};
 use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
 
-use crate::scene_helpers::{apply_widget_state, display_string};
+use crate::scene_helpers::apply_widget_state;
 use crate::session::PreviewSession;
 
 impl PreviewSession {
@@ -44,6 +45,8 @@ impl PreviewSession {
         let overlaid;
         let scene: &LayoutScene = if self.runtime.widget_states.iter().next().is_none()
             && self.binding_sites.is_empty()
+            && !self.ui_actions.has_visual_state()
+            && !self.binding_overlay.has_visual_state()
         {
             &self.scene
         } else {
@@ -82,9 +85,9 @@ impl PreviewSession {
 
     /// Clone the design scene and overlay each interactive widget's LIVE
     /// runtime value so the preview reflects typed text / toggles /
-    /// slider drags / selection. Pure (no paint), so it is unit-tested
-    /// without a backend. Geometry is untouched — only `SceneWidget`
-    /// value fields change — so the overlay can never scramble layout.
+    /// slider drags / selection, then apply R6's typed binding and scroll
+    /// overlay. Pure (no paint), so visual and hit geometry share the same
+    /// deterministic scene snapshot.
     pub(crate) fn overlay_runtime_state(&self, base: &LayoutScene) -> LayoutScene {
         let mut scene = base.clone();
         let idx = scene.active_page_index;
@@ -93,6 +96,12 @@ impl PreviewSession {
                 self.overlay_node(node);
             }
         }
+        self.binding_overlay.apply_to_scene(
+            &mut scene,
+            &self.binding_sites,
+            &self.runtime.state,
+            &self.ui_actions,
+        );
         scene
     }
 
@@ -104,27 +113,8 @@ impl PreviewSession {
                 apply_widget_state(widget, state);
             }
         }
-        self.apply_binding_sites(node);
         for child in node.children.iter_mut() {
             self.overlay_node(child);
-        }
-    }
-
-    /// Re-evaluate this node's compiled bindings against the live state
-    /// graph. Only `content` (scene text) lands today; other props are
-    /// skipped until the preview painter learns them. Linear scan over
-    /// the sites is fine at preview scale (a handful of bindings per
-    /// document); index by node id if profiles ever say otherwise.
-    fn apply_binding_sites(&self, node: &mut SceneNode) {
-        for site in self.binding_sites.iter().filter(|s| s.node_id == node.id) {
-            if site.prop != "content" {
-                continue;
-            }
-            let (value, _warnings) = site.expr.eval(&self.runtime.state, None, Some(&node.id));
-            node.text = Some(display_string(&value));
-            // Bound text is dynamic single-style content — styled runs
-            // resolved from the authored literal no longer apply.
-            node.text_runs.clear();
         }
     }
 

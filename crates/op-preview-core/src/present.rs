@@ -187,6 +187,8 @@ impl PreviewSession {
         let overlaid;
         let scene = if self.runtime.widget_states.iter().next().is_none()
             && self.binding_sites.is_empty()
+            && !self.ui_actions.has_visual_state()
+            && !self.binding_overlay.has_visual_state()
         {
             &self.scene
         } else {

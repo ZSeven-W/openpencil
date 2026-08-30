@@ -218,6 +218,7 @@ impl super::PreviewSession {
     /// per-pointer capture) and reports what it did — including how
     /// many effects the input's synchronous action chains enqueued.
     pub fn dispatch_input(&mut self, envelope: PreviewInputEnvelope) -> PreviewDispatchOutcome {
+        let binding_before = self.binding_values();
         let enqueued_before = self.effects.total_enqueued();
         // R8: expose the certified activation for the duration of this
         // dispatch so a transition-deferred input captures it and can
@@ -227,6 +228,8 @@ impl super::PreviewSession {
         let mut outcome = self.dispatch_input_inner(envelope);
         self.pending_activation = restore_activation;
         outcome.effects_enqueued = self.effects.total_enqueued() - enqueued_before;
+        outcome.needs_redraw |=
+            self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
         outcome
     }
 
@@ -317,15 +320,19 @@ impl super::PreviewSession {
     /// [`Self::next_wake_deadline_ms`] and calls this even with no new
     /// input — a lone Tap's delayed `onTap` fires only through a pump.
     pub fn pump(&mut self, now_ms: u64) -> PreviewDispatchOutcome {
+        let binding_before = self.binding_values();
         let directive = self.runtime.pump(now_ms);
         if now_ms > self.last_now_ms {
             self.last_now_ms = now_ms;
         }
-        PreviewDispatchOutcome {
+        let mut outcome = PreviewDispatchOutcome {
             semantic_handlers: Vec::new(),
             needs_redraw: directive.needs_paint,
             effects_enqueued: 0,
-        }
+        };
+        outcome.needs_redraw |=
+            self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
+        outcome
     }
 
     /// The minimum future deadline the runtime needs a wake for (R4
@@ -374,13 +381,31 @@ impl super::PreviewSession {
             return PreviewDispatchOutcome::none();
         }
         let (rt_x, rt_y) = self.scene_to_runtime(event.position.x, event.position.y);
-        let ev = WheelEvent::simple(jian_core::geometry::point(rt_x, rt_y), event.delta);
+        let delta_y = event.delta.y;
+        let mut ev = event;
+        ev.position = jian_core::geometry::point(rt_x, rt_y);
         let events: Vec<SemanticEvent> = self.runtime.dispatch_wheel(ev);
-        let outcome = PreviewDispatchOutcome::from_events(&events);
-        // The phase is host-reported fact for the (upcoming) scroll
-        // payload expansion; consuming it here keeps the envelope's
-        // contract honest until then.
-        let _ = phase;
+        let scroll_node_id = events.iter().find_map(|semantic| {
+            let SemanticEvent::Scroll { node, .. } = semantic else {
+                return None;
+            };
+            self.runtime
+                .document
+                .as_ref()
+                .and_then(|document| document.tree.nodes.get(*node))
+                .map(|data| jian_core::document::tree::node_schema_id(&data.schema).to_owned())
+        });
+        let max_offset = scroll_node_id
+            .as_deref()
+            .map(|node_id| self.binding_overlay.max_offset(&self.scene, node_id));
+        let scroll_changed = self.binding_overlay.update_scroll(
+            scroll_node_id.as_deref(),
+            delta_y,
+            max_offset,
+            phase,
+        );
+        let mut outcome = PreviewDispatchOutcome::from_events(&events);
+        outcome.needs_redraw |= scroll_changed;
         outcome
     }
 

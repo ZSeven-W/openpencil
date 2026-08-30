@@ -487,6 +487,7 @@ fn container_props_from_impl(
         justify_content,
         align_items,
         clip_content: box_model::clips_content(style, context).then_some(true),
+        sticky_children: None,
         corner_radius,
         fill,
         stroke,

@@ -30,11 +30,12 @@
 //! metrics), plus a focus caret drawn on top. The editor's normal
 //! selection / handles / grid do NOT paint in preview.
 //!
-//! Binding overlay limits (Spec-2 slice): only `content` bindings are
-//! re-resolved; the scene is NOT re-laid-out, so text that grows past
-//! its authored box paints per the design painter's normal overflow
-//! behavior. `visible` / fill / geometry bindings are collected but not
-//! yet applied.
+//! R6's typed binding overlay resolves content, widget values, visibility,
+//! paint, transforms, geometry, and structural state without mutating the
+//! authored document. Jian's canonical invalidation classifier orders the
+//! resulting work as PaintOnly, HitTest, Relayout, or Navigation. The
+//! read-only `$scroll` namespace drives PaintOnly bindings and sticky/pinned
+//! child geometry through the same overlay.
 //!
 //! ## Hit-testing across two coordinate spaces
 //!
@@ -61,6 +62,7 @@ mod app_mode;
 mod auto_wire;
 #[cfg(not(feature = "gl-host"))]
 mod auto_wire_stub;
+mod binding_overlay;
 mod binding_sites;
 pub mod device_frame;
 #[cfg(all(test, not(target_os = "windows")))]
@@ -70,6 +72,7 @@ mod error;
 mod input;
 mod input_event;
 mod interaction_state;
+mod invalidation;
 mod mode_transition;
 mod present;
 mod scene_helpers;
@@ -90,6 +93,7 @@ pub use input_event::{
 };
 /// R4 interaction state — per-pointer pressed + hover node tracking.
 pub use interaction_state::InteractionState;
+pub use invalidation::InvalidationKind;
 /// Frozen Preview contract DTOs, re-exported so consumers of this crate
 /// (UI, FFI, hosts) need not take the leaf dependency directly.
 pub use op_preview_contracts::{
@@ -131,6 +135,8 @@ pub(crate) use session::{font_registry_test_support, test_measure};
 mod tests;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_app_mode;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_binding_overlay;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_bindings;
 #[cfg(all(test, not(target_os = "windows")))]

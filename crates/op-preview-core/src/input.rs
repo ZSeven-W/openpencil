@@ -558,7 +558,8 @@ impl PreviewSession {
     /// what R4 interaction-state tracking needs to record which node a
     /// pointer pressed or hovers.
     pub(crate) fn deepest_mapped_hit(&self, x: f32, y: f32) -> Option<(Rect, Rect, String)> {
-        let page = self.scene.active_page()?;
+        let scene = self.overlay_runtime_state(&self.scene);
+        let page = scene.active_page()?;
         for node in page.children.iter().rev() {
             if let Some(hit) = self.deepest_mapped_in(node, x, y) {
                 return Some(hit);
@@ -572,6 +573,7 @@ impl PreviewSession {
             return None;
         }
         let b = node.bounds;
+        let (x, y) = inverse_node_transform(node, x, y);
         if x < b.origin.x
             || x > b.origin.x + b.size.x
             || y < b.origin.y
@@ -583,6 +585,9 @@ impl PreviewSession {
             if let Some(hit) = self.deepest_mapped_in(child, x, y) {
                 return Some(hit);
             }
+        }
+        if node.locked {
+            return None;
         }
         self.runtime_rect(&node.id).map(|r| (b, r, node.id.clone()))
     }
@@ -767,4 +772,26 @@ impl PreviewSession {
         self.seed_focused_widget_state();
         self.runtime.focus.current() == Some(key)
     }
+}
+
+fn inverse_node_transform(node: &SceneNode, x: f32, y: f32) -> (f32, f32) {
+    let pivot_x = node.bounds.origin.x + node.bounds.size.x / 2.0;
+    let pivot_y = node.bounds.origin.y + node.bounds.size.y / 2.0;
+    let mut local_x = x;
+    let mut local_y = y;
+    if node.rotation.abs() > f32::EPSILON {
+        let dx = local_x - pivot_x;
+        let dy = local_y - pivot_y;
+        let cosine = (-node.rotation).cos();
+        let sine = (-node.rotation).sin();
+        local_x = pivot_x + dx * cosine - dy * sine;
+        local_y = pivot_y + dx * sine + dy * cosine;
+    }
+    if node.flip_x {
+        local_x = 2.0 * pivot_x - local_x;
+    }
+    if node.flip_y {
+        local_y = 2.0 * pivot_y - local_y;
+    }
+    (local_x, local_y)
 }

@@ -49,6 +49,15 @@ impl PreviewUiActions {
     pub(crate) fn take_work(&self) -> UiMutationWork {
         std::mem::take(&mut self.inner.borrow_mut().pending_work)
     }
+
+    pub(crate) fn take_invalidation(&self) -> crate::InvalidationKind {
+        crate::invalidation::from_ui_work(self.take_work())
+    }
+
+    pub(crate) fn has_visual_state(&self) -> bool {
+        let inner = self.inner.borrow();
+        !inner.visibility.is_empty() || !inner.scroll_requests.is_empty()
+    }
 }
 
 impl UiMutationSink for PreviewUiActions {

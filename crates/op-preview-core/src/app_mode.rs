@@ -21,6 +21,7 @@
 //!   visible to descendant modules, and `app_mode` is one.
 
 use super::{PreviewSession, RootFrame};
+use crate::invalidation::InvalidationKind;
 use jian_core::action::services::Router;
 use jian_core::Runtime;
 use op_editor_ui::{Point2D, Rect};
@@ -75,6 +76,18 @@ pub struct ReconcileOutcome {
     pub switched: bool,
 }
 
+impl ReconcileOutcome {
+    pub fn invalidation(self) -> InvalidationKind {
+        if self.switched {
+            InvalidationKind::Navigation
+        } else if self.repaint {
+            InvalidationKind::PaintOnly
+        } else {
+            InvalidationKind::None
+        }
+    }
+}
+
 impl PreviewSession {
     /// Whether this session is running a routed multi-screen APP MODE
     /// document (vs. the classic single-page workbench preview).
@@ -125,9 +138,12 @@ impl PreviewSession {
     /// validates and records an unknown-path rejection the next
     /// `reconcile` drains into `preview.warnings`, exactly like a runtime
     /// tap on an unwired nav button would.
-    pub fn navigate_to_screen(&self, path: &str) {
+    pub fn navigate_to_screen(&self, path: &str) -> InvalidationKind {
         if let Some(app) = &self.app {
             app.router.replace(path);
+            InvalidationKind::Navigation
+        } else {
+            InvalidationKind::None
         }
     }
 
@@ -338,6 +354,13 @@ impl PreviewSession {
             children,
             &mut self.binding_sites,
             &mut self.warnings,
+        );
+        self.binding_overlay.replace_document(&app.promoted_doc);
+        self.binding_overlay.set_runtime_document(
+            self.runtime
+                .document
+                .as_ref()
+                .map(|document| document.schema.clone()),
         );
         match solve_roots(&mut self.runtime, &self.measure) {
             Ok((frames, available)) => {

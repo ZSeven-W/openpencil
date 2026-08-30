@@ -27,6 +27,7 @@ use op_editor_ui::layout_scene::LayoutScene;
 use op_editor_ui::Rect;
 
 use crate::app_mode::AppMode;
+use crate::binding_overlay::BindingOverlay;
 use crate::binding_sites::{collect_binding_sites, BindingSite};
 use crate::error::PreviewEnterError;
 use crate::scene_helpers::format_warning;
@@ -110,9 +111,11 @@ pub struct PreviewSession {
     /// for display in the editor's `preview.warnings`.
     pub(crate) warnings: Vec<String>,
     /// Compiled non-`bind:value` bindings from the promoted document,
-    /// re-evaluated against the live state graph each overlay pass (see
-    /// `apply_binding_sites`) so `set $app.*` writes become visible.
+    /// re-evaluated against the live state graph each overlay pass so
+    /// authored actions and host `set_state` writes become visible.
     pub(crate) binding_sites: Vec<BindingSite>,
+    /// R6 typed overlay values plus the read-only scroll namespace.
+    pub(crate) binding_overlay: BindingOverlay,
     /// APP MODE state (routed multi-screen doc), or `None` for the
     /// classic single-page workbench preview. `pub(crate)`
     /// so `app_mode`'s `is_app_mode` can read it. See [`AppMode`].
@@ -400,10 +403,17 @@ impl PreviewSession {
             &promoted_doc.children
         };
         collect_binding_sites(site_children, &mut binding_sites, &mut warnings);
+        let binding_overlay = BindingOverlay::from_document(&promoted_doc);
         warnings.extend(projection_warnings);
 
         let mut runtime = Runtime::new_from_document(loaded.value)
             .map_err(|e| PreviewEnterError::BuildRuntime(e.to_string()))?;
+        binding_overlay.set_runtime_document(
+            runtime
+                .document
+                .as_ref()
+                .map(|document| document.schema.clone()),
+        );
         if let Some(a) = &app {
             runtime.nav = a.router.clone();
         }
@@ -451,6 +461,7 @@ impl PreviewSession {
             preserve_authored_geometry,
             warnings,
             binding_sites,
+            binding_overlay,
             app,
             gesture_mappings: HashMap::new(),
             transition: None,
