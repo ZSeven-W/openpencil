@@ -149,6 +149,9 @@ pub struct PreviewSession {
     /// The R3 effect queue: the bounded FIFO the engine's effect sink
     /// enqueues into and the host drains from.
     pub(crate) effects: crate::effects::PreviewEffectQueue,
+    /// R5 Preview-only visibility overrides, scroll requests, and their
+    /// accumulated redraw/hit-test invalidation work.
+    pub(crate) ui_actions: crate::ui_actions::PreviewUiActions,
 }
 
 impl PreviewSession {
@@ -430,6 +433,8 @@ impl PreviewSession {
         // structured diagnostics instead of vanishing.
         let effects = crate::effects::PreviewEffectQueue::new();
         crate::effects::install_on_runtime(&mut runtime, &effects, &host_capabilities);
+        let ui_actions = crate::ui_actions::PreviewUiActions::default();
+        runtime.set_ui_mutation_sink(Rc::new(ui_actions.clone()));
         runtime.enable_action_reporting();
 
         Ok(Self {
@@ -453,6 +458,7 @@ impl PreviewSession {
             interaction: crate::interaction_state::InteractionState::default(),
             host_capabilities,
             effects,
+            ui_actions,
         })
     }
 
@@ -488,6 +494,24 @@ impl PreviewSession {
     /// raw pointer traffic.
     pub fn interaction(&self) -> &crate::interaction_state::InteractionState {
         &self.interaction
+    }
+
+    /// Resolve a node's authored visibility through the R5 Preview-only
+    /// action overrides. R6 consumes this while building the unified overlay.
+    pub fn action_visibility_for(&self, node_id: &str, authored: bool) -> bool {
+        self.ui_actions.visibility_for(node_id, authored)
+    }
+
+    /// Drain ordered R5 scroll requests for the host/R6 overlay.
+    pub fn drain_action_scroll_requests(
+        &self,
+    ) -> Vec<(String, jian_core::action::services::ScrollAlignment)> {
+        self.ui_actions.drain_scroll_requests()
+    }
+
+    /// Take and clear the redraw/hit-test work accumulated by R5 actions.
+    pub fn take_ui_action_work(&self) -> jian_core::action::services::UiMutationWork {
+        self.ui_actions.take_work()
     }
 
     /// The host-declared capability set this session was entered with

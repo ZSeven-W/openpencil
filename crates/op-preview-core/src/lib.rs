@@ -76,6 +76,7 @@ mod scene_helpers;
 mod session;
 mod session_paint;
 mod transition;
+mod ui_actions;
 
 /// R3 effect queue — the bounded FIFO between the engine's effect sink
 /// and the host.
@@ -156,6 +157,8 @@ mod tests_swipe;
 mod tests_tabs;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_transition;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_ui_actions;
 // Same platform gate as `tests_app_mode` / `tests_transition`, whose
 // fixture and helpers this file reuses: those are excluded on Windows,
 // so a Windows build cannot see `test_measure`, `TWO_SCREEN_DOC_JSON`
