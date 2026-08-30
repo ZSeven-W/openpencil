@@ -31,6 +31,73 @@ pub struct PreviewInputEnvelope {
     pub activation: Option<UserActivationId>,
 }
 
+fn input_host_time(input: &PreviewInput) -> Option<u64> {
+    match input {
+        PreviewInput::Pointer(event) => Some(event.t_ms),
+        PreviewInput::Wheel { event, .. } => Some(event.t_ms),
+        _ => None,
+    }
+}
+
+fn map_input_time(input: &mut PreviewInput, debug: &crate::debug_trace::PreviewDebugState) {
+    match input {
+        PreviewInput::Pointer(event) => event.t_ms = debug.logical_time(event.t_ms),
+        PreviewInput::Wheel { event, .. } => event.t_ms = debug.logical_time(event.t_ms),
+        _ => {}
+    }
+}
+
+fn input_name(input: &PreviewInput) -> &'static str {
+    match input {
+        PreviewInput::Pointer(_) => "pointer",
+        PreviewInput::Wheel { .. } => "wheel",
+        PreviewInput::Key { .. } => "key",
+        PreviewInput::Text(_) => "text",
+        PreviewInput::ImePreedit { .. } => "ime_preedit",
+        PreviewInput::ImeCommit { .. } => "ime_commit",
+        PreviewInput::ImeCancel => "ime_cancel",
+        PreviewInput::FocusNext => "focus_next",
+        PreviewInput::FocusPrevious => "focus_previous",
+        PreviewInput::Back { .. } => "back",
+        PreviewInput::Lifecycle(_) => "lifecycle",
+    }
+}
+
+fn input_trace_detail(envelope: &PreviewInputEnvelope) -> serde_json::Value {
+    let activation = envelope.activation.is_some();
+    match &envelope.input {
+        PreviewInput::Pointer(event) => serde_json::json!({
+            "phase": format!("{:?}", event.phase),
+            "pointerId": event.id,
+            "activation": activation,
+        }),
+        PreviewInput::Wheel { phase, .. } => serde_json::json!({
+            "phase": format!("{phase:?}"),
+            "activation": activation,
+        }),
+        PreviewInput::Key {
+            key, code, repeat, ..
+        } => serde_json::json!({
+            "key": key,
+            "code": code,
+            "repeat": repeat,
+            "activation": activation,
+        }),
+        PreviewInput::Text(_)
+        | PreviewInput::ImePreedit { .. }
+        | PreviewInput::ImeCommit { .. } => {
+            serde_json::json!({ "text": "<redacted>", "activation": activation })
+        }
+        PreviewInput::ImeCancel
+        | PreviewInput::FocusNext
+        | PreviewInput::FocusPrevious
+        | PreviewInput::Back { .. }
+        | PreviewInput::Lifecycle(_) => {
+            serde_json::json!({ "activation": activation })
+        }
+    }
+}
+
 impl PreviewInputEnvelope {
     /// An envelope without certified activation — most input carries
     /// none (only activation-gated system effects need one).
@@ -217,7 +284,29 @@ impl super::PreviewSession {
     /// through the domain pipeline (clock sync, transition gate,
     /// per-pointer capture) and reports what it did — including how
     /// many effects the input's synchronous action chains enqueued.
-    pub fn dispatch_input(&mut self, envelope: PreviewInputEnvelope) -> PreviewDispatchOutcome {
+    pub fn dispatch_input(&mut self, mut envelope: PreviewInputEnvelope) -> PreviewDispatchOutcome {
+        let host_time =
+            input_host_time(&envelope.input).unwrap_or_else(|| self.debug.last_host_time());
+        self.debug.note_host_time(host_time);
+        let logical_time = self.debug.logical_time(host_time);
+        self.debug.trace.begin_input(
+            input_name(&envelope.input),
+            logical_time,
+            input_trace_detail(&envelope),
+        );
+        if self.debug.is_paused() {
+            self.debug.trace.record_diagnostic(
+                "PausedInput",
+                "input ignored while preview is paused",
+                None,
+                None,
+                None,
+                logical_time,
+            );
+            self.debug.trace.finish_input();
+            return PreviewDispatchOutcome::none();
+        }
+        map_input_time(&mut envelope.input, &self.debug);
         let binding_before = self.binding_values();
         let enqueued_before = self.effects.total_enqueued();
         // R8: expose the certified activation for the duration of this
@@ -233,6 +322,10 @@ impl super::PreviewSession {
             self.admit_animation_requests(animation_now) != crate::InvalidationKind::None;
         outcome.needs_redraw |=
             self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
+        self.debug
+            .trace
+            .record_semantics(&outcome.semantic_handlers, logical_time);
+        self.debug.trace.finish_input();
         outcome
     }
 
@@ -323,6 +416,11 @@ impl super::PreviewSession {
     /// [`Self::next_wake_deadline_ms`] and calls this even with no new
     /// input — a lone Tap's delayed `onTap` fires only through a pump.
     pub fn pump(&mut self, now_ms: u64) -> PreviewDispatchOutcome {
+        self.debug.note_host_time(now_ms);
+        if self.debug.is_paused() {
+            return PreviewDispatchOutcome::none();
+        }
+        let now_ms = self.debug.logical_time(now_ms);
         let binding_before = self.binding_values();
         let directive = self.runtime.pump(now_ms);
         if now_ms > self.last_now_ms {
@@ -345,6 +443,9 @@ impl super::PreviewSession {
     /// parked IME swaps, scheduled action tasks. R7/R8 fold animation
     /// and transition deadlines into this minimum. `None` = idle.
     pub fn next_wake_deadline_ms(&self) -> Option<u64> {
+        if self.debug.is_paused() {
+            return None;
+        }
         [
             self.runtime.next_wake_ms(),
             self.animation.next_deadline_ms(),
@@ -352,6 +453,7 @@ impl super::PreviewSession {
         .into_iter()
         .flatten()
         .min()
+        .map(|deadline| self.debug.host_deadline(deadline))
     }
 
     /// Clear ALL input ownership ahead of a Background/Terminate barrier

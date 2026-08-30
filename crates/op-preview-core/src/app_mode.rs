@@ -457,6 +457,10 @@ impl PreviewSession {
         self.route_generation = self.route_generation.saturating_add(1);
         self.transition_tap = None;
         self.animation.clear();
+        let route = self.runtime.nav.current();
+        self.debug
+            .trace
+            .record_route(&route.path, &route.stack, self.last_now_ms);
 
         ReconcileOutcome {
             repaint: true,

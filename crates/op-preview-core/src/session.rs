@@ -48,6 +48,18 @@ pub(crate) struct RootFrame {
     pub(crate) offset: (f32, f32),
 }
 
+#[derive(Clone)]
+pub(crate) struct ResetSeed {
+    pub(crate) document: jian_ops_schema::PenDocument,
+    pub(crate) canvas_size: (f32, f32),
+    pub(crate) active_theme: std::collections::BTreeMap<String, String>,
+    pub(crate) active_page_index: usize,
+    pub(crate) preserve_authored_geometry: bool,
+    pub(crate) presenting: bool,
+    pub(crate) measure: Rc<dyn MeasureBackend>,
+    pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+}
+
 /// A live preview runtime built from a snapshot of the editor document.
 ///
 /// Constructed by [`PreviewSession::enter`] from a JSON serialization of
@@ -116,6 +128,10 @@ pub struct PreviewSession {
     pub(crate) binding_sites: Vec<BindingSite>,
     /// R6 typed overlay values plus the read-only scroll namespace.
     pub(crate) binding_overlay: BindingOverlay,
+    /// R9 bounded trace, provenance, and debugger clock state.
+    pub(crate) debug: crate::debug_trace::PreviewDebugState,
+    /// Immutable source/options used to rebuild the entire session on reset.
+    pub(crate) reset_seed: ResetSeed,
     /// R7 one bounded timeline plus its injected AnimationSink queue.
     pub(crate) animation: crate::animation::PreviewAnimationState,
     /// APP MODE state (routed multi-screen doc), or `None` for the
@@ -247,6 +263,17 @@ impl PreviewSession {
         measure: Rc<dyn MeasureBackend>,
         host_capabilities: op_preview_contracts::PreviewHostCapabilities,
     ) -> Result<Self, PreviewEnterError> {
+        let reset_seed = ResetSeed {
+            document: doc.clone(),
+            canvas_size,
+            active_theme: active_theme.clone(),
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure: measure.clone(),
+            host_capabilities,
+        };
+        let debug = crate::debug_trace::PreviewDebugState::default();
         let _ = canvas_size; // layout is root-derived, not canvas-derived.
 
         // Track C-1: if the document has no authored `screen` marker at
@@ -410,6 +437,7 @@ impl PreviewSession {
 
         let mut runtime = Runtime::new_from_document(loaded.value)
             .map_err(|e| PreviewEnterError::BuildRuntime(e.to_string()))?;
+        runtime.set_action_observer(Rc::new(debug.trace.clone()));
         binding_overlay.set_runtime_document(
             runtime
                 .document
@@ -444,10 +472,12 @@ impl PreviewSession {
         // Action reporting is on so denied actions surface as
         // structured diagnostics instead of vanishing.
         let effects = crate::effects::PreviewEffectQueue::new();
+        effects.set_trace(debug.trace.clone());
         crate::effects::install_on_runtime(&mut runtime, &effects, &host_capabilities);
         let ui_actions = crate::ui_actions::PreviewUiActions::default();
         runtime.set_ui_mutation_sink(Rc::new(ui_actions.clone()));
         let animation = crate::animation::PreviewAnimationState::default();
+        animation.set_trace(debug.trace.clone());
         runtime.set_animation_sink(Rc::new(animation.clone()));
         runtime.enable_action_reporting();
 
@@ -466,6 +496,8 @@ impl PreviewSession {
             warnings,
             binding_sites,
             binding_overlay,
+            debug,
+            reset_seed,
             animation,
             app,
             gesture_mappings: HashMap::new(),
@@ -490,6 +522,15 @@ impl PreviewSession {
     /// the session clock, so an out-of-order host clock cannot re-arm a
     /// finished screen transition's input gate.
     pub fn set_now_ms(&mut self, now_ms: u64) {
+        self.debug.note_host_time(now_ms);
+        if self.debug.is_paused() {
+            return;
+        }
+        let now_ms = self.debug.logical_time(now_ms);
+        self.set_logical_now_ms(now_ms);
+    }
+
+    pub(crate) fn set_logical_now_ms(&mut self, now_ms: u64) {
         let was_transitioning = self.transition_active();
         self.runtime.set_now_ms(now_ms);
         self.last_now_ms = self.last_now_ms.max(now_ms);
@@ -543,7 +584,11 @@ impl PreviewSession {
     /// [`Self::complete_effect`]. Denied actions appear in the queue's
     /// diagnostics, never as effects.
     pub fn drain_effects(&self) -> Vec<op_preview_contracts::PreviewEffect> {
-        self.effects.drain()
+        if self.debug.is_paused() {
+            Vec::new()
+        } else {
+            self.effects.drain()
+        }
     }
 
     /// Complete one effect EXACTLY ONCE (`false` on a double
@@ -553,7 +598,12 @@ impl PreviewSession {
         id: u64,
         result: op_preview_contracts::PreviewEffectResult,
     ) -> bool {
-        self.effects.complete(id, result).is_ok()
+        let traced = result.clone();
+        let completed = self.effects.complete(id, result).is_ok();
+        if completed {
+            self.effects.trace_result(id, &traced, self.last_now_ms);
+        }
+        completed
     }
 
     /// The queue's structured rejection diagnostics (bounded).

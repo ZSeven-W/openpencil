@@ -65,6 +65,7 @@ mod auto_wire;
 mod auto_wire_stub;
 mod binding_overlay;
 mod binding_sites;
+mod debug_trace;
 pub mod device_frame;
 #[cfg(all(test, not(target_os = "windows")))]
 mod device_frame_tests;
@@ -101,6 +102,11 @@ pub use op_preview_contracts::{
     EffectSource, HapticStyle, PreviewCapability, PreviewEffect, PreviewEffectFailure,
     PreviewEffectFailureCode, PreviewEffectResult, PreviewHostCapabilities, SharePayload,
     UserActivationId,
+};
+pub use op_preview_contracts::{
+    PreviewDebugSnapshot, PreviewDiagnostic, PreviewQueueCounts, PreviewRunState,
+    PreviewStateProvenance, PreviewStateRow, PreviewStateScope, PreviewTraceEntry,
+    PreviewTraceKind,
 };
 
 /// Typed failure domains for entering / re-solving a preview session
@@ -146,6 +152,10 @@ mod tests_bindings;
 mod tests_caret;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_clock_gate;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_debug_controls;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_debug_trace;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_device_frame;
 #[cfg(all(test, not(target_os = "windows")))]

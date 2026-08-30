@@ -13,6 +13,7 @@
 
 mod activation;
 mod capability;
+mod debug;
 mod effect;
 mod platform_support;
 #[cfg(test)]
@@ -20,6 +21,11 @@ mod tests;
 
 pub use activation::UserActivationId;
 pub use capability::{PreviewCapability, PreviewHostCapabilities};
+pub use debug::{
+    PreviewDebugSnapshot, PreviewDiagnostic, PreviewQueueCounts, PreviewRunState,
+    PreviewStateProvenance, PreviewStateRow, PreviewStateScope, PreviewTraceEntry,
+    PreviewTraceKind,
+};
 pub use effect::{
     EffectSource, HapticStyle, PreviewEffect, PreviewEffectFailure, PreviewEffectFailureCode,
     PreviewEffectResult, SharePayload,

@@ -96,37 +96,45 @@ fn enter_confirm_doc(caps: PreviewHostCapabilities) -> PreviewSession {
     .expect("enter preview")
 }
 
-/// `confirm` asks a question, and the queue cannot carry the answer back
-/// yet. Accepting it would report "handled" and silently drop both
-/// authored branches — so the queue declines, the action falls through to
-/// the synchronous feedback service, and a branch actually runs.
-///
-/// Without the decline this test sees both markers at 0: the dialog was
-/// queued and the answer never arrived.
+/// R9 gives queued effects a completion future. Confirm therefore remains
+/// pending until the host completes it, then resumes exactly one authored branch.
 #[test]
-fn confirm_is_declined_by_the_queue_so_its_branches_still_run() {
-    let mut s = enter_confirm_doc(PreviewHostCapabilities {
+fn confirm_queue_completion_resumes_the_confirmed_branch() {
+    let mut session = enter_confirm_doc(PreviewHostCapabilities {
         notifications: true,
         ..PreviewHostCapabilities::none()
     });
-    let queued = tap(&mut s);
+    assert_eq!(tap(&mut session), 1);
     assert_eq!(
-        queued, 0,
-        "confirm must not be queued while its answer has nowhere to return"
+        session
+            .runtime
+            .state
+            .app_get("confirmed")
+            .and_then(|value| value.as_i64()),
+        Some(0)
     );
-    let confirmed = s
-        .runtime
-        .state
-        .app_get("confirmed")
-        .and_then(|v| v.as_i64());
-    let cancelled = s
-        .runtime
-        .state
-        .app_get("cancelled")
-        .and_then(|v| v.as_i64());
-    assert!(
-        confirmed == Some(1) || cancelled == Some(1),
-        "one of the authored branches must run; got confirmed={confirmed:?} cancelled={cancelled:?}"
+    let effects = session.drain_effects();
+    assert!(matches!(
+        effects.as_slice(),
+        [PreviewEffect::Confirm { .. }]
+    ));
+    assert!(session.complete_effect(effects[0].id(), PreviewEffectResult::Success));
+    let _ = session.pump(10);
+    assert_eq!(
+        session
+            .runtime
+            .state
+            .app_get("confirmed")
+            .and_then(|value| value.as_i64()),
+        Some(1)
+    );
+    assert_eq!(
+        session
+            .runtime
+            .state
+            .app_get("cancelled")
+            .and_then(|value| value.as_i64()),
+        Some(0)
     );
 }
 

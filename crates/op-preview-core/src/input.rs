@@ -1,11 +1,7 @@
 //! Input dispatch for [`super::PreviewSession`] — keyboard, focus,
 //! and the pointer pipeline with its scene→runtime coordinate mapping.
 //!
-//! Split out of `preview/mod.rs` to honor the repo's 800-line-per-file
-//! cap (same pattern as `app_mode.rs` / `scene_helpers.rs`: an inherent
-//! `impl` block in a child module reaching the session's plain-private
-//! fields, which Rust's default privacy already exposes to descendant
-//! modules).
+//! Split out of `preview/mod.rs` to honor the repo's 800-line-per-file cap.
 //!
 //! ## Scene→runtime mapping + pointer capture
 //!
@@ -312,6 +308,11 @@ impl PreviewSession {
         t_ms: u64,
     ) -> bool {
         use jian_core::gesture::pointer::{MouseButtons, PointerEvent};
+        self.debug.note_host_time(t_ms);
+        if self.debug.is_paused() {
+            return false;
+        }
+        let t_ms = self.debug.logical_time(t_ms);
         // Sync the session/runtime clock from the event's own timestamp
         // BEFORE `transition_active` consults `last_now_ms` — that gate
         // is only as fresh as the last host clock push, and an explicit
@@ -319,7 +320,7 @@ impl PreviewSession {
         // discarded on a stale push. Guarded so an out-of-order event
         // never moves the clock backwards.
         if t_ms > self.last_now_ms {
-            self.set_now_ms(t_ms);
+            self.set_logical_now_ms(t_ms);
         }
         // Track C-3: discard pointer input while a screen-transition
         // animation plays — see `transition_active`'s doc for why discard

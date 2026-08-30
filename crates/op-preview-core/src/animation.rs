@@ -49,6 +49,7 @@ impl AnimationTimeline {
 #[derive(Clone, Default)]
 pub(crate) struct PreviewAnimationState {
     inner: Rc<RefCell<AnimationTimeline>>,
+    trace: Rc<RefCell<Option<crate::debug_trace::PreviewDebugTrace>>>,
 }
 
 impl AnimationSink for PreviewAnimationState {
@@ -67,11 +68,24 @@ impl AnimationSink for PreviewAnimationState {
         }
         inner.pending.retain(|pending| request_key(pending) != key);
         inner.pending.push_back(request.clone());
+        drop(inner);
+        if let Some(trace) = self.trace.borrow().as_ref() {
+            trace.record_animation(
+                &request.target,
+                request.property.name(),
+                request.requested_at_ms,
+                "request",
+            );
+        }
         AnimationOutcome::Accepted
     }
 }
 
 impl PreviewAnimationState {
+    pub(crate) fn set_trace(&self, trace: crate::debug_trace::PreviewDebugTrace) {
+        *self.trace.borrow_mut() = Some(trace);
+    }
+
     pub(crate) fn take_pending(&self) -> Vec<AnimationRequest> {
         self.inner.borrow_mut().pending.drain(..).collect()
     }

@@ -18,7 +18,10 @@
 //! - a full queue → rejected (bounded memory, no unbounded host work).
 
 use jian_core::action::context::EffectRequestContext;
-use jian_core::action::services::effect_sink::{EffectOutcome, EffectRequest, EffectSink};
+use jian_core::action::services::effect_sink::{
+    effect_completion_pair, EffectCompleter, EffectCompletion, EffectCompletionResult,
+    EffectOutcome, EffectRequest, EffectSink,
+};
 use op_preview_contracts::{
     EffectSource, HapticStyle, PreviewCapability, PreviewEffect, PreviewEffectResult,
     PreviewHostCapabilities, SharePayload, UserActivationId,
@@ -39,6 +42,7 @@ struct QueueInner {
     next_id: u64,
     total_enqueued: usize,
     completed: std::collections::HashMap<u64, PreviewEffectResult>,
+    completers: std::collections::HashMap<u64, EffectCompleter>,
     diagnostics: VecDeque<String>,
 }
 
@@ -46,6 +50,7 @@ struct QueueInner {
 #[derive(Clone)]
 pub struct PreviewEffectQueue {
     inner: Rc<RefCell<QueueInner>>,
+    trace: Rc<RefCell<Option<crate::debug_trace::PreviewDebugTrace>>>,
 }
 
 impl PreviewEffectQueue {
@@ -61,8 +66,10 @@ impl PreviewEffectQueue {
                 next_id: 1,
                 total_enqueued: 0,
                 completed: std::collections::HashMap::new(),
+                completers: std::collections::HashMap::new(),
                 diagnostics: VecDeque::new(),
             })),
+            trace: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -72,16 +79,19 @@ impl PreviewEffectQueue {
         id
     }
 
-    fn enqueue(&self, effect: PreviewEffect) -> bool {
+    fn enqueue(&self, effect: PreviewEffect) -> Option<EffectCompletion> {
         let mut inner = self.inner.borrow_mut();
         // Bounded FIFO: a full queue rejects instead of growing without
         // end (host work stays bounded by what was drained).
         if inner.effects.len() >= inner.capacity {
-            return false;
+            return None;
         }
+        let id = effect.id();
+        let (completion, completer) = effect_completion_pair(id);
         inner.total_enqueued += 1;
+        inner.completers.insert(id, completer);
         inner.effects.push_back(effect);
-        true
+        Some(completion)
     }
 
     fn reject(&self, reason: String) {
@@ -107,11 +117,41 @@ impl PreviewEffectQueue {
     pub fn diagnostics(&self) -> Vec<String> {
         self.inner.borrow().diagnostics.iter().cloned().collect()
     }
+
+    pub(crate) fn set_trace(&self, trace: crate::debug_trace::PreviewDebugTrace) {
+        *self.trace.borrow_mut() = Some(trace);
+    }
+
+    fn trace_effect(&self, name: &str, context: &EffectRequestContext) {
+        if let Some(trace) = self.trace.borrow().as_ref() {
+            trace.record_effect(
+                name,
+                context.node_id.clone(),
+                context.handler.clone(),
+                context.at_ms,
+            );
+        }
+    }
+
+    pub(crate) fn trace_result(&self, id: u64, result: &PreviewEffectResult, at_ms: u64) {
+        if let Some(trace) = self.trace.borrow().as_ref() {
+            trace.record_effect_result(id, effect_result_name(result), at_ms);
+        }
+    }
 }
 
 impl Default for PreviewEffectQueue {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn effect_result_name(result: &PreviewEffectResult) -> &'static str {
+    match result {
+        PreviewEffectResult::Success => "success",
+        PreviewEffectResult::Cancelled => "cancelled",
+        PreviewEffectResult::Unsupported => "unsupported",
+        PreviewEffectResult::Failed(_) => "failed",
     }
 }
 
@@ -265,17 +305,6 @@ impl EffectSink for QueueEffectSink {
                 )
             }
         };
-        // `confirm` asks a question and the authored `on_confirm` /
-        // `on_cancel` branches are the answer's two destinations. This
-        // queue can carry the request to the host but has no way to carry
-        // the reply back yet, and `Accepted` would tell the action "it is
-        // handled" — which silently drops both branches. Declining is the
-        // honest answer: the action falls through to the synchronous
-        // feedback service, which does run them. R9's completion-resume
-        // mechanism is what lets the queue take this over.
-        if matches!(request, EffectRequest::Confirm { .. }) {
-            return EffectOutcome::Unsupported;
-        }
         // Fail-closed: an undeclared host capability means the effect
         // class is Unsupported — nothing is queued, nothing is allowed.
         if !self.capabilities.supports(capability) {
@@ -284,8 +313,10 @@ impl EffectSink for QueueEffectSink {
         let Some(effect) = effect else {
             return EffectOutcome::Unsupported;
         };
-        if self.queue.enqueue(effect) {
-            EffectOutcome::Accepted
+        let effect_name = effect.kind();
+        if let Some(completion) = self.queue.enqueue(effect) {
+            self.queue.trace_effect(effect_name, ctx);
+            EffectOutcome::AcceptedWithCompletion(completion)
         } else {
             self.queue.reject("effect queue full".to_owned());
             EffectOutcome::Rejected("effect queue full".to_owned())
@@ -317,7 +348,16 @@ impl PreviewEffectQueue {
             inner.diagnostics.push_back(reason.clone());
             return Err(reason);
         }
+        let completion_result = match &result {
+            PreviewEffectResult::Success => EffectCompletionResult::Success,
+            PreviewEffectResult::Cancelled => EffectCompletionResult::Cancelled,
+            PreviewEffectResult::Unsupported => EffectCompletionResult::Unsupported,
+            PreviewEffectResult::Failed(_) => EffectCompletionResult::Failed,
+        };
         inner.completed.insert(id, result);
+        if let Some(completer) = inner.completers.remove(&id) {
+            let _ = completer.complete(completion_result);
+        }
         Ok(())
     }
 
@@ -353,15 +393,17 @@ mod tests {
     #[test]
     fn complete_is_exactly_once() {
         let queue = PreviewEffectQueue::new();
-        queue.enqueue(PreviewEffect::BlurFocus {
-            id: queue.allocate_id(),
-            source: EffectSource {
-                node_id: "n".to_owned(),
-                event: "onTap".to_owned(),
-                activation: None,
-                required_capability: PreviewCapability::Focus,
-            },
-        });
+        let _completion = queue
+            .enqueue(PreviewEffect::BlurFocus {
+                id: queue.allocate_id(),
+                source: EffectSource {
+                    node_id: "n".to_owned(),
+                    event: "onTap".to_owned(),
+                    activation: None,
+                    required_capability: PreviewCapability::Focus,
+                },
+            })
+            .expect("queue accepts");
         let drained = queue.drain();
         assert_eq!(drained.len(), 1);
         assert!(queue
