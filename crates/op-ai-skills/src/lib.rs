@@ -34,6 +34,8 @@ pub mod memory;
 pub mod resolve;
 pub mod resolve_style;
 pub mod resolver;
+#[cfg(test)]
+mod shader_fill_corpus_tests;
 pub mod style_guide;
 pub mod types;
 

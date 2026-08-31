@@ -233,6 +233,7 @@ impl NativeBackend {
     ) {
         use skia_safe::runtime_effect::RuntimeShaderBuilder;
 
+        let local_matrix = runtime_shader_local_matrix(rect, uniforms);
         let shader = self.shader_cache.get_or_compile(sksl).and_then(|effect| {
             // `RuntimeEffect` is an RCHandle — this is a refcount bump,
             // not a recompile.
@@ -242,7 +243,7 @@ impl NativeBackend {
                 // uniform doesn't sink the whole fill.
                 let _ = builder.set_uniform_float(*name, values);
             }
-            builder.make_shader(&skia_safe::Matrix::default())
+            builder.make_shader(&local_matrix)
         });
 
         let mut paint = skia_safe::Paint::default();
@@ -277,6 +278,29 @@ impl NativeBackend {
     pub fn shader_compile_count(&self) -> u64 {
         self.shader_cache.compile_count()
     }
+}
+
+/// Map RuntimeEffect coordinates back into the node's document-space
+/// dimensions. Preset shaders receive an exact `float2 size` uniform;
+/// arbitrary shaders without a valid size still get node-local coordinates.
+fn runtime_shader_local_matrix(rect: Rect, uniforms: &[(&str, &[f32])]) -> skia_safe::Matrix {
+    let mut matrix = skia_safe::Matrix::new_identity();
+    let document_size = uniforms
+        .iter()
+        .find(|(name, values)| *name == "size" && values.len() == 2)
+        .map(|(_, values)| (values[0], values[1]));
+
+    if let Some((width, height)) = document_size {
+        if width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0 {
+            matrix.set_scale_translate(
+                (rect.size.x / width, rect.size.y / height),
+                (rect.origin.x, rect.origin.y),
+            );
+            return matrix;
+        }
+    }
+    matrix.set_translate((rect.origin.x, rect.origin.y));
+    matrix
 }
 
 /// Multiply a colour's alpha by a per-fill opacity factor. Used as

@@ -234,7 +234,7 @@ pub(crate) fn node_payload_to_scene(
         fill: variable_fill
             .or_else(|| node.fill.map(array_to_color))
             .map(|c| mul_alpha(c, paint_opacity)),
-        fill_layers: fill_layers_to_scene(&node.fill_layers, variable_fill),
+        fill_layers: fill_layers_to_scene(&node.fill_layers, variable_fill, [node.w, node.h]),
         fill_type: str_to_scene_fill_type(&node.fill_type),
         gradient: node
             .gradient
@@ -243,7 +243,7 @@ pub(crate) fn node_payload_to_scene(
         shader: node
             .shader
             .as_ref()
-            .map(|s| payload_shader_to_scene(s, paint_opacity)),
+            .map(|s| payload_shader_to_scene(s, paint_opacity, [node.w, node.h])),
         stroke: if is_unpainted_widget_stroke(node, &node_id, var_table) {
             // A first-class widget's stroke is its *inactive track / border*
             // role paint, not a literal outline. When the author declared a
@@ -487,6 +487,7 @@ fn image_fit_to_scene(value: Option<&str>) -> SceneImageFit {
 fn fill_layers_to_scene(
     fills: &[jian_ops_schema::style::PenFill],
     variable_fill: Option<Color>,
+    size: [f32; 2],
 ) -> Vec<SceneFillLayer> {
     use jian_ops_schema::style::PenFill;
 
@@ -532,7 +533,7 @@ fn fill_layers_to_scene(
                     })
                     .or_else(fallback),
                 PenFill::Shader(_) => crate::style_payload::shader_payload(fill)
-                    .map(|shader| payload_shader_to_scene(&shader, 1.0))
+                    .map(|shader| payload_shader_to_scene(&shader, 1.0, size))
                     .map(|shader| SceneFillLayer::Shader { shader, blend_mode })
                     .or_else(fallback),
                 PenFill::Image(body) if !body.url.trim().is_empty() => {
@@ -735,21 +736,26 @@ fn stop_to_scene(s: &GradientStopPayload) -> SceneGradientStop {
 }
 
 /// Convert a [`ShaderPayload`] into the paint-only [`SceneShader`].
-/// The SkSL source + pre-resolved uniforms ride through unchanged;
+/// The SkSL source + pre-resolved uniforms ride through unchanged, except an
+/// exact `size` uniform is overwritten with the resolved node dimensions;
 /// node opacity (`k`) folds into the shader's own opacity multiplier.
 /// The `fallback` `[r,g,b,a]` becomes the visible solid colour for
 /// backends that can't run the program.
-fn payload_shader_to_scene(s: &ShaderPayload, k: f32) -> SceneShader {
+fn payload_shader_to_scene(s: &ShaderPayload, k: f32, size: [f32; 2]) -> SceneShader {
+    let mut uniforms: Vec<SceneShaderUniform> = s
+        .uniforms
+        .iter()
+        .map(|uniform| SceneShaderUniform {
+            name: uniform.name.clone(),
+            values: uniform.values.clone(),
+        })
+        .collect();
+    if let Some(uniform) = uniforms.iter_mut().find(|uniform| uniform.name == "size") {
+        uniform.values = size.to_vec();
+    }
     SceneShader {
         sksl: s.sksl.clone(),
-        uniforms: s
-            .uniforms
-            .iter()
-            .map(|u| SceneShaderUniform {
-                name: u.name.clone(),
-                values: u.values.clone(),
-            })
-            .collect(),
+        uniforms,
         opacity: (s.opacity * k).clamp(0.0, 1.0),
         fallback: array_to_color(s.fallback),
     }

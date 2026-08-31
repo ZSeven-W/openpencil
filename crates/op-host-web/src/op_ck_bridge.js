@@ -175,7 +175,7 @@ export function opCkCreateRuntimeEffectCache(CK) {
 
 // Bind the caller's name/value slices against CanvasKit's reflected uniform
 // slots. Unknown names and arity mismatches are ignored like native Skia.
-export function opCkMakeRuntimeShader(entry, uniformNames, uniforms, uniformArities) {
+export function opCkMakeRuntimeShader(entry, uniformNames, uniforms, uniformArities, localMatrix = null) {
   if (!entry) return null;
   try {
     const data = new Float32Array(entry.floatCount);
@@ -197,10 +197,63 @@ export function opCkMakeRuntimeShader(entry, uniformNames, uniforms, uniformArit
         data[slot + value] = uniforms[valuesStart + value];
       }
     }
-    return entry.effect.makeShader(data) || null;
+    return entry.effect.makeShader(data, localMatrix) || null;
   } catch (_error) {
     return null;
   }
+}
+
+// RuntimeEffect coordinates are local to the painted node. Preset shaders
+// carry the document-space node size as an exact float2 uniform, so scale that
+// coordinate space to the current rect as well as anchoring its origin. The
+// cursor rules intentionally mirror uniform binding above: malformed arities
+// consume no values, while unknown uniforms still advance by their arity.
+export function opCkRuntimeEffectLocalMatrix(
+  uniformNames,
+  uniforms,
+  uniformArities,
+  x,
+  y,
+  w,
+  h,
+) {
+  let cursor = 0;
+  let size = null;
+  for (let index = 0; index < uniformNames.length; index++) {
+    const rawArity = Number(uniformArities[index]);
+    const arity = Number.isSafeInteger(rawArity) && rawArity >= 0 ? rawArity : 0;
+    const valuesStart = cursor;
+    cursor += arity;
+    if (size || String(uniformNames[index]) !== 'size' || arity !== 2
+        || valuesStart + arity > uniforms.length) {
+      continue;
+    }
+    size = [Number(uniforms[valuesStart]), Number(uniforms[valuesStart + 1])];
+  }
+  if (size && Number.isFinite(size[0]) && size[0] > 0
+      && Number.isFinite(size[1]) && size[1] > 0) {
+    return [w / size[0], 0, x, 0, h / size[1], y, 0, 0, 1];
+  }
+  return [1, 0, x, 0, 1, y, 0, 0, 1];
+}
+
+export function opCkMakeRuntimeShaderForRect(
+  entry,
+  uniformNames,
+  uniforms,
+  uniformArities,
+  x,
+  y,
+  w,
+  h,
+) {
+  return opCkMakeRuntimeShader(
+    entry,
+    uniformNames,
+    uniforms,
+    uniformArities,
+    opCkRuntimeEffectLocalMatrix(uniformNames, uniforms, uniformArities, x, y, w, h),
+  );
 }
 
 // Build the row-major vertex lattice consumed by CanvasKit.MakeVertices.
@@ -656,6 +709,10 @@ export async function opCkInit(canvasId) {
   };
   const drawRuntimeEffectRRect = (
     rrect,
+    x,
+    y,
+    w,
+    h,
     sksl,
     uniformNames,
     uniforms,
@@ -664,11 +721,15 @@ export async function opCkInit(canvasId) {
     fallback,
   ) => {
     const alpha = opCkClampUnit(opacity);
-    const shader = opCkMakeRuntimeShader(
+    const shader = opCkMakeRuntimeShaderForRect(
       runtimeEffects.get(sksl),
       uniformNames,
       uniforms,
       uniformArities,
+      x,
+      y,
+      w,
+      h,
     );
     if (!shader) {
       canvas.drawRRect(rrect, fillPaint(
@@ -1135,6 +1196,10 @@ export async function opCkInit(canvasId) {
     fillRoundRectShader(x, y, w, h, radius, sksl, uniformNames, uniforms, uniformArities, opacity, fr, fg, fb, fa) {
       drawRuntimeEffectRRect(
         uniformRRect(x, y, w, h, radius),
+        x,
+        y,
+        w,
+        h,
         sksl,
         uniformNames,
         uniforms,
@@ -1146,6 +1211,10 @@ export async function opCkInit(canvasId) {
     fillRoundRectShaderPerCorner(x, y, w, h, tl, tr, br, bl, sksl, uniformNames, uniforms, uniformArities, opacity, fr, fg, fb, fa) {
       drawRuntimeEffectRRect(
         perCornerRRect(x, y, w, h, tl, tr, br, bl),
+        x,
+        y,
+        w,
+        h,
         sksl,
         uniformNames,
         uniforms,

@@ -113,7 +113,10 @@ fn batch_design_fill_passthrough_carries_shader() {
             assert_eq!(stack.len(), 1);
             match &stack[0] {
                 PenFill::Shader(b) => {
-                    assert!(b.sksl.contains("half4 main(float2 p)"));
+                    assert!(b
+                        .sksl
+                        .as_deref()
+                        .is_some_and(|sksl| sksl.contains("half4 main(float2 p)")));
                     let u = b.uniforms.as_ref().expect("uniforms map");
                     assert_eq!(u.get("glow"), Some(&ShaderUniformValue::Float(0.5)));
                     assert_eq!(

@@ -194,3 +194,12 @@ canvaskit = [
 # skia-only raster modules were deleted. `skia-safe` reverted to upstream
 # crates.io — it has no wasm32-unknown-unknown target, so a wasm skia build is
 # no longer possible regardless.)
+
+# Desktop-only test lane: compare the real native Skia raster against the
+# vendored CanvasKit CPU raster without pulling either dependency into wasm.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dev-dependencies]
+op-host-native = { path = "../op-host-native", default-features = false }
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+] }

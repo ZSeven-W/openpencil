@@ -293,20 +293,31 @@ pub(crate) fn shader_payload(fill: &PenFill) -> Option<ShaderPayload> {
     let PenFill::Shader(body) = fill else {
         return None;
     };
-    if body.sksl.trim().is_empty() {
-        return None;
-    }
-    let mut uniforms: Vec<ShaderUniformPayload> = Vec::new();
+    let expanded = crate::shader_preset::expand(body);
+    let sksl = match &expanded {
+        Some(preset) => preset.sksl.clone(),
+        None => body
+            .sksl
+            .as_ref()
+            .filter(|source| !source.trim().is_empty())?
+            .clone(),
+    };
+    let mut uniforms: Vec<ShaderUniformPayload> = expanded
+        .as_ref()
+        .map(|preset| preset.uniforms.clone())
+        .unwrap_or_default();
     let mut fallback: Option<[f32; 4]> = None;
     if let Some(map) = &body.uniforms {
         for (name, val) in map {
             match val {
-                ShaderUniformValue::Float(f) => uniforms.push(ShaderUniformPayload {
-                    name: name.clone(),
-                    values: vec![*f],
-                }),
+                ShaderUniformValue::Float(f) if expanded.is_none() => {
+                    uniforms.push(ShaderUniformPayload {
+                        name: name.clone(),
+                        values: vec![*f],
+                    });
+                }
                 ShaderUniformValue::Vec(v) => {
-                    if !v.is_empty() {
+                    if expanded.is_none() && !v.is_empty() {
                         uniforms.push(ShaderUniformPayload {
                             name: name.clone(),
                             values: v.clone(),
@@ -318,20 +329,23 @@ pub(crate) fn shader_payload(fill: &PenFill) -> Option<ShaderPayload> {
                         // Premultiply for the vec4 binding (matches the
                         // jian-core scene walker's color-uniform rule).
                         let a = rgba[3];
-                        uniforms.push(ShaderUniformPayload {
-                            name: name.clone(),
-                            values: vec![rgba[0] * a, rgba[1] * a, rgba[2] * a, a],
-                        });
+                        if expanded.is_none() {
+                            uniforms.push(ShaderUniformPayload {
+                                name: name.clone(),
+                                values: vec![rgba[0] * a, rgba[1] * a, rgba[2] * a, a],
+                            });
+                        }
                         if fallback.is_none() {
                             fallback = Some(rgba);
                         }
                     }
                 }
+                ShaderUniformValue::Float(_) => {}
             }
         }
     }
     Some(ShaderPayload {
-        sksl: body.sksl.clone(),
+        sksl,
         uniforms,
         opacity: body.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
         // Mid-gray when no colour uniform exists.
