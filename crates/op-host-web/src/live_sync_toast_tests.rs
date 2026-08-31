@@ -146,6 +146,16 @@ fn switching_accounts_clears_a_toast_raised_for_the_previous_one() {
         toast_key(&inner).is_some(),
         "a toast is up before the switch"
     );
+    {
+        let mut context = inner.borrow_mut();
+        context.host.editor_state_mut().editor_ui.pending_locale = Some(op_editor_core::Locale::Ja);
+        context
+            .host
+            .editor_state_mut()
+            .editor_ui
+            .locale_persistence_override = Some(op_editor_core::Locale::Ja);
+    }
+    let repaints_before_reset = inner.borrow().repaints;
 
     super::live_sync_identity::reset_for_new_identity(&inner);
 
@@ -153,5 +163,16 @@ fn switching_accounts_clears_a_toast_raised_for_the_previous_one() {
         toast_key(&inner),
         None,
         "the reset must not carry one account's notice into the next"
+    );
+    let context = inner.borrow();
+    assert_eq!(context.repaints, repaints_before_reset);
+    assert_eq!(context.host.editor_state().editor_ui.pending_locale, None);
+    assert_eq!(
+        context
+            .host
+            .editor_state()
+            .editor_ui
+            .locale_persistence_override,
+        None
     );
 }

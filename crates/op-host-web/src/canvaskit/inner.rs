@@ -29,6 +29,11 @@ pub(super) struct CkInner {
 
 impl CkInner {
     pub(super) fn repaint(&mut self) {
+        if crate::web_asset_fetch::reconcile_pending_locale(
+            &mut self.host.editor_state_mut().editor_ui,
+        ) {
+            self.host.mark_editor_state_dirty();
+        }
         self.backend.drain_pending_decodes(2);
         // Assets the last paint asked for but the bundle does not carry
         // (preview JPEGs, template documents, the icon catalog). Bounded per

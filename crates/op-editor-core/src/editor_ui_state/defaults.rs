@@ -24,6 +24,8 @@ impl Default for EditorUiState {
             theme_mode: ThemeMode::Dark,
             host_theme_override: None,
             locale: Locale::ZhCn,
+            pending_locale: None,
+            locale_persistence_override: None,
             host_locale_override: None,
             locale_picker: jian_widgets::components::select::SelectState::default(),
             preferred_agent_team_size: 1,

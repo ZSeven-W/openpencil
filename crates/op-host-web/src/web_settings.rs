@@ -62,6 +62,8 @@ pub(super) fn reset_account_scoped_settings(state: &mut EditorState) {
     let eui = &mut state.editor_ui;
     eui.agent_settings.clear_builtin_model_catalogs();
     eui.locale = op_editor_core::EditorUiState::default().locale;
+    eui.pending_locale = None;
+    eui.locale_persistence_override = None;
     eui.recent_files.clear();
     eui.agent_settings.mcp_server.port = defaults.mcp_server.port;
     eui.agent_settings.mcp_cli_enabled = defaults.mcp_cli_enabled;
@@ -90,10 +92,19 @@ pub(crate) fn reload_for_active_partition<C: crate::repaint_ctx::RepaintContext>
     let Ok(mut context) = inner.try_borrow_mut() else {
         return;
     };
+    let previous_locale = context.host().editor_state().editor_ui.locale;
     // Defaults first, then the target partition on top: without this an empty
     // partition silently inherits the previous account's settings.
     reset_account_scoped_settings(context.host_mut().editor_state_mut());
     let load = storage::load_into(context.host_mut().editor_state_mut());
+    let loaded_locale = context.host().editor_state().editor_ui.locale;
+    if stage_partition_locale(
+        context.host_mut().editor_state_mut(),
+        previous_locale,
+        op_i18n::catalog_ready(loaded_locale),
+    ) {
+        op_editor_core::web_assets::request(&op_i18n::catalog_route(loaded_locale));
+    }
     // The device's own theme goes back on top of whatever the new partition
     // just applied. This is the account-switch half of the split: without it
     // the screen would follow whoever signed in.
@@ -114,6 +125,27 @@ pub(crate) fn reload_for_active_partition<C: crate::repaint_ctx::RepaintContext>
     crate::web_credential_sync::start();
     context.host_mut().mark_editor_state_dirty();
     let _ = context.repaint();
+}
+
+/// Keep the currently painted account/anon locale until a newly loaded
+/// partition's runtime catalog is ready. Returns whether the host must request
+/// the loaded locale through the existing asset queue.
+fn stage_partition_locale(
+    state: &mut EditorState,
+    previous_locale: Locale,
+    catalog_ready: bool,
+) -> bool {
+    let loaded_locale = state.editor_ui.locale;
+    state.editor_ui.locale = previous_locale;
+    let deferred = state
+        .editor_ui
+        .set_locale_when_catalog_ready(loaded_locale, catalog_ready);
+    if deferred {
+        // The target came from this partition and is already persisted there.
+        // Preserve it if another setting is saved before the catalog arrives.
+        state.editor_ui.locale_persistence_override = Some(loaded_locale);
+    }
+    deferred
 }
 
 /// Per-account storage keys.
@@ -236,7 +268,7 @@ pub(crate) fn fingerprint(state: &EditorState) -> Fingerprint {
     let eui = &state.editor_ui;
     Fingerprint {
         theme: eui.theme_mode,
-        locale: eui.locale,
+        locale: locale_for_persistence(eui),
         port: eui.agent_settings.mcp_server.port,
         cli: eui.agent_settings.mcp_cli_enabled,
         images_adv: eui.agent_settings.images_advanced_open,
@@ -320,7 +352,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
     SettingsPayload {
         version: SETTINGS_VERSION,
         theme: Some(theme_to_str(eui.theme_mode).into()),
-        locale: Some(locale_to_str(eui.locale).into()),
+        locale: Some(locale_to_str(locale_for_persistence(eui)).into()),
         mcp_port: Some(eui.agent_settings.mcp_server.port),
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled.to_vec()),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
@@ -340,6 +372,10 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
                 .collect(),
         ),
     }
+}
+
+fn locale_for_persistence(eui: &op_editor_core::EditorUiState) -> Locale {
+    eui.locale_persistence_override.unwrap_or(eui.locale)
 }
 
 /// The theme a stored account blob carries, for the one-time device-theme
@@ -525,6 +561,10 @@ fn str_to_locale(s: &str) -> Option<Locale> {
 #[cfg(test)]
 #[path = "web_settings_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "web_settings_locale_tests.rs"]
+mod locale_tests;
 
 #[cfg(test)]
 #[path = "web_settings_acp_scrub_tests.rs"]

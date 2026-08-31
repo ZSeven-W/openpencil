@@ -37,6 +37,22 @@ impl EditorUiState {
         self.host_locale_override = locale;
     }
 
+    /// Apply a locale whose catalog is ready, or remember it without changing
+    /// the painted locale while its runtime catalog is loading.
+    ///
+    /// Returns `true` when the host needs to request the catalog.
+    pub fn set_locale_when_catalog_ready(&mut self, locale: Locale, catalog_ready: bool) -> bool {
+        if catalog_ready {
+            self.locale = locale;
+            self.pending_locale = None;
+            self.locale_persistence_override = None;
+            false
+        } else {
+            self.pending_locale = Some(locale);
+            true
+        }
+    }
+
     pub fn clear_button_press_target(&mut self) {
         self.pressed_button = None;
     }

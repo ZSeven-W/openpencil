@@ -63,6 +63,14 @@ pub struct EditorUiState {
     pub host_theme_override: Option<ThemeMode>,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
+    /// A runtime catalog selected in the web picker but not installed yet.
+    /// Transient by design: settings persist only after the catalog is ready
+    /// and the selection becomes [`Self::locale`].
+    pub pending_locale: Option<Locale>,
+    /// Locale value browser settings must preserve while the painted locale is
+    /// temporarily older than an unavailable account preference. Transient and
+    /// never serialized as a field; cleared once a ready choice becomes active.
+    pub locale_persistence_override: Option<Locale>,
     /// Page-lifetime locale imposed by an embedding host. Presentation-only
     /// like the host theme; never persisted as the user's locale.
     pub host_locale_override: Option<Locale>,

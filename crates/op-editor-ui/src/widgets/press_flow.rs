@@ -9,7 +9,7 @@
 
 use op_editor_core::host_press_transitions as core_press;
 use op_editor_core::ui_draft::LayerContextTarget;
-use op_editor_core::{EditorState, ExportQuickRow, Tool};
+use op_editor_core::{editor_ui_state::EditorUiState, EditorState, ExportQuickRow, Locale, Tool};
 
 use crate::widgets::export_quick_menu::{ExportQuickMenu, ExportQuickMenuHit};
 use crate::widgets::layer_context_menu::LayerContextAction;
@@ -196,7 +196,8 @@ pub fn press_color_variable_picker_in_rect(
 /// Outcome of a press routed to the open TopBar locale dropdown.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LocalePickerPress {
-    /// A row was picked: the locale is applied and the popup closed.
+    /// A row was picked: a ready locale is applied, or its catalog is queued
+    /// while the old locale stays painted; the popup is closed either way.
     Selected,
     /// Popup chrome — swallow, keep it open.
     Swallow,
@@ -215,7 +216,9 @@ pub fn press_locale_picker(
     match picker.hit_popup(panel_rect, point) {
         crate::widgets::locale_picker::SelectHit::Row(idx) => {
             if let Some(locale) = LocalePicker::locale_at(idx) {
-                state.editor_ui.locale = locale;
+                if select_locale(&mut state.editor_ui, locale, op_i18n::catalog_ready(locale)) {
+                    op_editor_core::web_assets::request(&op_i18n::catalog_route(locale));
+                }
             }
             core_press::close_locale_picker(&mut state.editor_ui);
             LocalePickerPress::Selected
@@ -223,6 +226,10 @@ pub fn press_locale_picker(
         crate::widgets::locale_picker::SelectHit::Inside => LocalePickerPress::Swallow,
         crate::widgets::locale_picker::SelectHit::Outside => LocalePickerPress::Outside,
     }
+}
+
+fn select_locale(ui: &mut EditorUiState, locale: Locale, catalog_ready: bool) -> bool {
+    ui.set_locale_when_catalog_ready(locale, catalog_ready)
 }
 
 // ─── Export quick menu ─────────────────────────────────────────────────
@@ -643,3 +650,7 @@ pub fn press_open_layer_context_menu(
         MenuHit::Outside => OpenLayerMenuPress::Outside,
     })
 }
+
+#[cfg(test)]
+#[path = "press_flow_tests.rs"]
+mod tests;

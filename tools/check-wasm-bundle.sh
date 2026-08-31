@@ -4,7 +4,7 @@
 # What this script enforces (matches the CanvasKit production bundle gate
 # and the env.* import count guard):
 #   1. Required local tools are available: cargo, wasm-bindgen, wasm-opt,
-#      node, and gzip. CanvasKit needs no EMSDK / skia-safe / libc shim.
+#      node, python3, and gzip. CanvasKit needs no EMSDK / skia-safe / libc shim.
 #   2. cargo build → wasm-bindgen → wasm-opt -Oz pipeline produces the
 #      served crates/op-host-web/pkg/op_host_web_bg.wasm. `wasm-opt` is invoked
 #      with the core WebAssembly features emitted by current rustc.
@@ -21,7 +21,7 @@
 # Exit semantics:
 #   0   all four checks PASS.
 #   1   any check FAILED — message names which one.
-#   2   prerequisite missing (cargo / wasm-bindgen / wasm-opt / node / gzip).
+#   2   prerequisite missing (cargo / wasm-bindgen / wasm-opt / node / python3 / gzip).
 
 set -euo pipefail
 
@@ -70,6 +70,7 @@ need cargo
 need wasm-bindgen
 need wasm-opt
 need node
+need python3
 need gzip
 # CanvasKit needs NO EMSDK / skia-safe / libc shim — the editor renders through
 # the official CanvasKit skia WASM (loaded separately from /canvaskit/) and the
@@ -90,13 +91,11 @@ step 4 7 "wasm-bindgen --target web → ${PKG_DIR}/"
 wasm-bindgen --target web --out-dir "${PKG_DIR}" "${TARGET_WASM}" >/dev/null
 
 step 5 7 "Stage runtime product assets into ${PKG_DIR}/assets/"
-# The wasm bundle no longer embeds the preview JPEGs, template documents and
-# icon catalog (see `op_editor_core::web_assets`): the browser fetches each on
-# demand from `/pkg/assets/…`, which the daemon already serves out of the
-# resolved bundle directory. Staging them here is what makes that route
-# resolve — a bundle shipped without this step degrades every preview to its
-# placeholder. Keep in sync with `.github/workflows/wasm-bundle-build.yml` and
-# `Dockerfile.web-rust`.
+# The wasm bundle no longer embeds the preview JPEGs, template documents, icon
+# catalog, or 13 non-default locale catalogs: the browser fetches each on demand
+# from `/pkg/assets/…`, which the daemon already serves out of the resolved
+# bundle directory. Staging them here is what makes those routes resolve. Keep
+# in sync with `.github/workflows/wasm-bundle-build.yml` and Dockerfile.web-rust.
 bash tools/stage-web-assets.sh "${PKG_DIR}/assets"
 
 step 6 7 "Verify 0 env.* imports (spec §7.1 import guard)"

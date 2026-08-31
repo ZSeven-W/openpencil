@@ -20,7 +20,7 @@ ttf-parser = "0.25"
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # theme / layout scene / scene vars / render-backend / gesture types
 # all resolve through the op-editor-ui crate.
-op-editor-ui = { path = "../op-editor-ui", features = ["runtime-icon-catalog", "slim-corpus"] }
+op-editor-ui = { path = "../op-editor-ui", features = ["runtime-icon-catalog", "runtime-locale-catalog", "slim-corpus"] }
 # Reorg: the web host owns an `op_editor_core::EditorState` as its
 # single source of truth; `op-pen-loader` bridges it into the
 # read-only paint `Document` the shared widgets consume.
@@ -82,7 +82,7 @@ jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
 op-preview-core = { path = "../op-preview-core" }
 # Preview device-switcher segment labels use the same i18n keys as the
 # native host so both shells read identically.
-op-i18n = { path = "../op-i18n" }
+op-i18n = { path = "../op-i18n", features = ["runtime-locale-catalog"] }
 # Pin to the reviewed wasm-bindgen CLI used by release workflows; the crate and
 # CLI must move together rather than floating independently.
 wasm-bindgen = "=0.2.117"
