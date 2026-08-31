@@ -570,8 +570,10 @@ mod tests {
 
     #[test]
     fn pending_locale_promotes_only_when_ready_and_failure_keeps_old_language() {
-        let mut ui = op_editor_core::editor_ui_state::EditorUiState::default();
-        ui.pending_locale = Some(op_i18n::Locale::Ja);
+        let mut ui = op_editor_core::editor_ui_state::EditorUiState {
+            pending_locale: Some(op_i18n::Locale::Ja),
+            ..Default::default()
+        };
 
         assert!(!settle_pending_locale(&mut ui, false, false, false));
         assert_eq!(ui.locale, op_i18n::Locale::ZhCn);
