@@ -43,9 +43,9 @@ fn an_ordinary_generated_palette_is_not_provenance() {
     // The names a generation actually produces, plus a user-authored name that
     // happens to carry the separator. Neither resolves to a shipped template.
     let state = state_with_variables(&[
-        "color-bg",
-        "color-text",
-        "color-accent",
+        "--background",
+        "--foreground",
+        "--primary",
         "c-bg",
         "my-thing--tone",
     ]);

@@ -87,13 +87,21 @@ fn default_design_system_serde_round_trip() {
 fn default_design_system_palette_values() {
     let p = &default_design_system().palette;
     assert_eq!(p["background"], "#F8FAFC");
-    assert_eq!(p["surface"], "#FFFFFF");
-    assert_eq!(p["text"], "#0F172A");
-    assert_eq!(p["textSecondary"], "#475569");
+    assert_eq!(p["foreground"], "#0F172A");
+    assert_eq!(p["card"], "#FFFFFF");
+    assert_eq!(p["card-foreground"], "#0F172A");
+    assert_eq!(p["muted"], "#F1F5F9");
+    assert_eq!(p["muted-foreground"], "#64748B");
     assert_eq!(p["primary"], "#2563EB");
-    assert_eq!(p["primaryLight"], "#DBEAFE");
-    assert_eq!(p["accent"], "#0EA5E9");
+    assert_eq!(p["primary-foreground"], "#FFFFFF");
+    assert_eq!(p["accent"], "#F3F4F6");
     assert_eq!(p["border"], "#E2E8F0");
+    assert_eq!(p["ring"], "#2563EB");
+    assert_eq!(p["sidebar"], "#FFFFFF");
+    assert_eq!(p["sidebar-ring"], "#2563EB");
+    assert_eq!(p["--color-success"], "#10B981");
+    assert_eq!(p["--color-error"], "#EF4444");
+    assert_eq!(p["scrim"], "#00000080");
 }
 
 #[test]
@@ -113,7 +121,7 @@ fn default_design_system_spacing_values() {
 
 #[test]
 fn default_design_system_radius_values() {
-    assert_eq!(default_design_system().radius, vec![8.0, 12.0, 16.0]);
+    assert_eq!(default_design_system().radius, vec![4.0, 8.0, 12.0]);
 }
 
 #[test]
@@ -235,11 +243,11 @@ async fn generate_design_system_happy_path() {
     let custom_json = serde_json::json!({
         "palette": {
             "background": "\u{23}111111",
-            "surface": "\u{23}222222",
-            "text": "\u{23}FFFFFF",
-            "textSecondary": "\u{23}AAAAAA",
+            "foreground": "\u{23}FFFFFF",
+            "card": "\u{23}222222",
+            "muted-foreground": "\u{23}AAAAAA",
             "primary": "\u{23}FF0000",
-            "primaryLight": "\u{23}FF9999",
+            "primary-foreground": "\u{23}FFFFFF",
             "accent": "\u{23}00FF00",
             "border": "\u{23}333333"
         },
@@ -260,6 +268,8 @@ async fn generate_design_system_happy_path() {
 
     // LLM-provided values must win over default
     assert_eq!(ds.palette["background"], "#111111");
+    assert_eq!(ds.palette["card"], "#222222");
+    assert_eq!(ds.palette["muted-foreground"], "#AAAAAA");
     assert_eq!(ds.typography.heading_font, "Roboto");
     assert_eq!(ds.typography.body_font, "Open Sans");
     assert_eq!(ds.aesthetic, "dark minimal");
@@ -304,9 +314,9 @@ async fn generate_design_system_code_fence_response() {
 // ── Task B1: design_system_to_seed_commands ───────────────────────────────
 
 /// DEFAULT_DESIGN_SYSTEM → expected number of SetVariable* commands.
-/// Faithful to TS `designSystemToVariables` (L134-156): typography is NOT
-/// seeded into document variables, only colors + spacing + radius.
-/// 8 palette (color) + 6 spacing scale + 3 radius = 17.
+/// TS `designSystemToVariables` (L134-156) shape, re-keyed by B1:
+/// the type SCALE is not seeded, but fonts are (B1 dictionary).
+/// 36 palette (color) + 2 fonts + 6 spacing scale + 5 radius = 49.
 #[test]
 fn seed_commands_default_count() {
     use crate::design_system::design_system_to_seed_commands;
@@ -314,35 +324,56 @@ fn seed_commands_default_count() {
     let cmds = design_system_to_seed_commands(ds);
     assert_eq!(
         cmds.len(),
-        17,
-        "expected 17 seed commands (8 palette + 6 spacing + 3 radius), got {}",
+        49,
+        "expected 49 seed commands (36 palette + 2 fonts + 6 spacing + 5 radius), got {}",
         cmds.len()
     );
 }
 
-/// DEFAULT_DESIGN_SYSTEM → no typography variables emitted.
-/// Faithful to TS — typography reaches the LLM via prompt context, not vars.
+/// The type SCALE is still not seeded into document variables — sizes
+/// reach the LLM via prompt context. Fonts ARE seeded (B1): the
+/// `--font-primary/--font-secondary` tokens carry the body/heading names.
 #[test]
-fn seed_commands_no_typography_variables() {
+fn seed_commands_type_scale_not_seeded_fonts_are() {
     use crate::design_system::design_system_to_seed_commands;
-    use op_editor_core::EditorCommand;
+    use op_editor_core::{EditorCommand, VariableScalarPayload};
     let ds = default_design_system();
     let cmds = design_system_to_seed_commands(ds);
 
-    let has_font_var = cmds.iter().any(|c| match c {
+    let has_type_scale_var = cmds.iter().any(|c| match c {
         EditorCommand::SetVariableColor { name, .. }
         | EditorCommand::SetVariableScalar { name, .. } => {
-            name.starts_with("font-") || name.starts_with("typography-")
+            name.starts_with("type-") || name.starts_with("typography-")
         }
         _ => false,
     });
     assert!(
-        !has_font_var,
-        "typography MUST NOT be seeded into document variables (faithful to TS)"
+        !has_type_scale_var,
+        "type scale MUST NOT be seeded into document variables"
+    );
+
+    let fonts: Vec<(&String, &VariableScalarPayload)> = cmds
+        .iter()
+        .filter_map(|c| match c {
+            EditorCommand::SetVariableScalar { name, scalar } => Some((name, scalar)),
+            _ => None,
+        })
+        .filter(|(name, _)| name.starts_with("--font-"))
+        .collect();
+    assert_eq!(fonts.len(), 2, "expected --font-primary/--font-secondary");
+    assert!(
+        fonts.iter().any(|(n, s)| n.as_str() == "--font-primary"
+            && **s == VariableScalarPayload::String("Inter".into())),
+        "font-primary must carry the body font"
+    );
+    assert!(
+        fonts.iter().any(|(n, s)| n.as_str() == "--font-secondary"
+            && **s == VariableScalarPayload::String("Space Grotesk".into())),
+        "font-secondary must carry the heading font"
     );
 }
 
-/// Palette colors → SetVariableColor with kebab-case names.
+/// Palette colors → SetVariableColor named `--{key}`.
 #[test]
 fn seed_commands_palette_color_names() {
     use crate::design_system::design_system_to_seed_commands;
@@ -363,24 +394,32 @@ fn seed_commands_palette_color_names() {
         })
         .collect();
 
-    // Verify all 8 palette keys are present in kebab-case
+    // Verify the shadcn keys are present with the `--` prefix
     assert!(
-        color_names.contains(&"color-background".to_string()),
-        "missing color-background"
+        color_names.contains(&"--background".to_string()),
+        "missing --background"
     );
     assert!(
-        color_names.contains(&"color-text".to_string()),
-        "missing color-text"
+        color_names.contains(&"--foreground".to_string()),
+        "missing --foreground"
     );
     assert!(
-        color_names.contains(&"color-text-secondary".to_string()),
-        "missing color-text-secondary (textSecondary → text-secondary)"
+        color_names.contains(&"--card-foreground".to_string()),
+        "missing --card-foreground"
     );
     assert!(
-        color_names.contains(&"color-primary-light".to_string()),
-        "missing color-primary-light (primaryLight → primary-light)"
+        color_names.contains(&"--primary-foreground".to_string()),
+        "missing --primary-foreground"
     );
-    assert_eq!(color_names.len(), 8, "expected 8 color variables");
+    assert!(
+        color_names.contains(&"--sidebar-ring".to_string()),
+        "missing --sidebar-ring"
+    );
+    assert!(
+        color_names.contains(&"--color-success".to_string()),
+        "missing --color-success"
+    );
+    assert_eq!(color_names.len(), 36, "expected 36 color variables");
 }
 
 /// Palette color value is correctly mapped.
@@ -393,11 +432,11 @@ fn seed_commands_palette_color_value() {
     let cmds = design_system_to_seed_commands(ds);
 
     let bg_cmd = cmds.iter().find(
-        |c| matches!(c, EditorCommand::SetVariableColor { name, .. } if name == "color-background"),
+        |c| matches!(c, EditorCommand::SetVariableColor { name, .. } if name == "--background"),
     );
-    assert!(bg_cmd.is_some(), "missing color-background command");
+    assert!(bg_cmd.is_some(), "missing --background command");
     if let Some(EditorCommand::SetVariableColor { hex, .. }) = bg_cmd {
-        assert_eq!(hex, "#F8FAFC", "wrong color-background value");
+        assert_eq!(hex, "#F8FAFC", "wrong --background value");
     }
 }
 
@@ -453,7 +492,7 @@ fn seed_commands_spacing_scale_names() {
     assert_eq!(spacing_names.len(), 6, "expected 6 spacing variables");
 }
 
-/// Radius steps → SetVariableScalar::Number with radius-sm/md/lg names.
+/// Radius steps → SetVariableScalar::Number with --radius-none/xs/m/l/pill.
 #[test]
 fn seed_commands_radius_names() {
     use crate::design_system::design_system_to_seed_commands;
@@ -462,35 +501,42 @@ fn seed_commands_radius_names() {
     let ds = default_design_system();
     let cmds = design_system_to_seed_commands(ds);
 
-    let radius_names: Vec<String> = cmds
+    let mut radius: Vec<(String, f64)> = cmds
         .iter()
         .filter_map(|c| {
             if let EditorCommand::SetVariableScalar {
                 name,
-                scalar: VariableScalarPayload::Number(_),
+                scalar: VariableScalarPayload::Number(n),
             } = c
             {
-                if name.starts_with("radius-") {
-                    return Some(name.clone());
+                if name.starts_with("--radius-") {
+                    return Some((name.clone(), *n));
                 }
             }
             None
         })
         .collect();
+    radius.sort_by(|a, b| a.0.cmp(&b.0));
 
-    assert!(
-        radius_names.contains(&"radius-sm".to_string()),
-        "missing radius-sm"
+    let names: Vec<String> = radius.iter().map(|(n, _)| n.clone()).collect();
+    assert_eq!(
+        names,
+        vec![
+            "--radius-l".to_string(),
+            "--radius-m".to_string(),
+            "--radius-none".to_string(),
+            "--radius-pill".to_string(),
+            "--radius-xs".to_string(),
+        ],
+        "expected the five --radius-* scale steps"
     );
-    assert!(
-        radius_names.contains(&"radius-md".to_string()),
-        "missing radius-md"
-    );
-    assert!(
-        radius_names.contains(&"radius-lg".to_string()),
-        "missing radius-lg"
-    );
-    assert_eq!(radius_names.len(), 3, "expected 3 radius variables");
+    // none is fixed at 0, pill fixed at 999; the DS radius scale [4,8,12]
+    // maps onto xs/m/l in order.
+    assert_eq!(radius[3].1, 999.0, "pill radius");
+    assert_eq!(radius[2].1, 0.0, "none radius");
+    assert_eq!(radius[4].1, 4.0, "xs radius");
+    assert_eq!(radius[1].1, 8.0, "m radius");
+    assert_eq!(radius[0].1, 12.0, "l radius");
 }
 
 // ── Task B1: design_system_to_prompt_context ─────────────────────────────
@@ -503,19 +549,35 @@ fn prompt_context_exact_template() {
     let ds = default_design_system();
     let ctx = design_system_to_prompt_context(ds);
 
-    // Verify structural lines (port of TS L161-170 format)
+    // Verify structural lines (port of TS L161-170 format, B1 labels)
     assert!(
         ctx.starts_with("DESIGN SYSTEM (use these values consistently):"),
         "wrong header: {ctx}"
     );
-    assert!(ctx.contains("Colors: bg #F8FAFC"), "missing Colors line");
-    assert!(ctx.contains("surface #FFFFFF"), "missing surface");
-    assert!(ctx.contains("text #0F172A"), "missing text");
-    assert!(ctx.contains("muted #475569"), "missing muted");
+    assert!(
+        ctx.contains("Colors: background #F8FAFC"),
+        "missing Colors line"
+    );
+    assert!(ctx.contains("foreground #0F172A"), "missing foreground");
+    assert!(ctx.contains("card #FFFFFF"), "missing card");
+    assert!(
+        ctx.contains("card-foreground #0F172A"),
+        "missing card-foreground"
+    );
+    assert!(ctx.contains("muted #F1F5F9"), "missing muted");
+    assert!(
+        ctx.contains("muted-foreground #64748B"),
+        "missing muted-foreground"
+    );
     assert!(ctx.contains("primary #2563EB"), "missing primary");
-    assert!(ctx.contains("primaryLight #DBEAFE"), "missing primaryLight");
-    assert!(ctx.contains("accent #0EA5E9"), "missing accent");
+    assert!(
+        ctx.contains("primary-foreground #FFFFFF"),
+        "missing primary-foreground"
+    );
+    assert!(ctx.contains("accent #F3F4F6"), "missing accent");
     assert!(ctx.contains("border #E2E8F0"), "missing border");
+    assert!(ctx.contains("input #E2E8F0"), "missing input");
+    assert!(ctx.contains("ring #2563EB"), "missing ring");
     assert!(
         ctx.contains(r#"Fonts: heading "Space Grotesk""#),
         "missing heading font"
@@ -530,7 +592,7 @@ fn prompt_context_exact_template() {
         "wrong spacing line: {ctx}"
     );
     assert!(
-        ctx.contains("Radius: 8, 12, 16px"),
+        ctx.contains("Radius: 4, 8, 12px"),
         "wrong radius line: {ctx}"
     );
     assert!(
@@ -548,11 +610,11 @@ fn prompt_context_byte_exact() {
     let ctx = design_system_to_prompt_context(ds);
 
     let expected = "DESIGN SYSTEM (use these values consistently):\n\
-Colors: bg #F8FAFC, surface #FFFFFF, text #0F172A, muted #475569, primary #2563EB, primaryLight #DBEAFE, accent #0EA5E9, border #E2E8F0\n\
+Colors: background #F8FAFC, foreground #0F172A, card #FFFFFF, card-foreground #0F172A, muted #F1F5F9, muted-foreground #64748B, primary #2563EB, primary-foreground #FFFFFF, accent #F3F4F6, border #E2E8F0, input #E2E8F0, ring #2563EB\n\
 Fonts: heading \"Space Grotesk\", body \"Inter\"\n\
 Type scale: 14, 16, 20, 28, 40, 56px\n\
 Spacing: 8, 16, 24, 32, 48, 64px (8px grid)\n\
-Radius: 8, 12, 16px\n\
+Radius: 4, 8, 12px\n\
 Style: clean modern blue";
 
     assert_eq!(

@@ -12,7 +12,7 @@ fn nav_without_fill_gets_surface_and_upward_shadow() {
     inject_nav_surface_for_section(&mut nav);
     assert_eq!(
         nav["fill"],
-        json!([{"type":"solid","color":"$color-surface"}]),
+        json!([{"type":"solid","color":"$--card"}]),
         "transparent bottom nav anchored with surface fill"
     );
     // bottom nav → shadow points up (offsetY < 0)
@@ -46,7 +46,7 @@ fn nav_wrapped_in_single_child_section_reached_one_hop() {
     inject_nav_surface_for_section(&mut wrap);
     assert_eq!(
         wrap["children"][0]["fill"],
-        json!([{"type":"solid","color":"$color-surface"}]),
+        json!([{"type":"solid","color":"$--card"}]),
         "nav nested one hop under a wrapper section still anchored"
     );
 }
@@ -60,15 +60,15 @@ fn active_nav_tab_square_rounded_to_pill() {
     // inactive (fill-less) tab and the already-rounded bar container alone.
     let mut nav = json!({
         "type":"frame","role":"bottom-tab-bar","cornerRadius":100,
-        "fill":[{"type":"solid","color":"$color-surface"}],
+        "fill":[{"type":"solid","color":"$--card"}],
         "children":[
-            {"type":"frame","name":"Home Tab","fill":[{"type":"solid","color":"$color-accent"}],
+            {"type":"frame","name":"Home Tab","fill":[{"type":"solid","color":"$--primary"}],
              "children":[{"type":"icon_font","iconFontName":"home"},{"type":"text","content":"Home"}]},
             {"type":"frame","name":"Search Tab",
              "children":[{"type":"icon_font","iconFontName":"search"},{"type":"text","content":"Search"}]}
         ]
     });
-    round_active_nav_tab(&mut nav, "$color-chart-6");
+    round_active_nav_tab(&mut nav, "$--chart-6");
     assert_eq!(
         nav["children"][0]["cornerRadius"],
         json!(999.0),
@@ -93,14 +93,14 @@ fn rounded_nav_bar_gets_clip_content() {
     // above + below the white pill).
     let mut nav = json!({
         "type":"frame","role":"bottom-tab-bar","cornerRadius":32,
-        "fill":[{"type":"solid","color":"$color-surface"}],
+        "fill":[{"type":"solid","color":"$--card"}],
         "children":[
             {"type":"frame","name":"Home Tab","height":"fill_container",
-             "fill":[{"type":"solid","color":"$color-accent"}],
+             "fill":[{"type":"solid","color":"$--primary"}],
              "children":[{"type":"text","content":"Home"}]}
         ]
     });
-    round_active_nav_tab(&mut nav, "$color-chart-6");
+    round_active_nav_tab(&mut nav, "$--chart-6");
     assert_eq!(
         nav["clipContent"],
         json!(true),
@@ -122,13 +122,13 @@ fn full_pipeline_rounds_nested_active_tab_in_pill() {
     // the sharp block overflowing the rounded pill the user keeps seeing.
     let mut forest: Vec<PenNode> = serde_json::from_value(json!([{
         "type":"frame","id":"bar","role":"bottom-tab-bar","name":"Bottom Navigation",
-        "width":"fill_container","fill":[{"type":"solid","color":"$color-surface"}],
+        "width":"fill_container","fill":[{"type":"solid","color":"$--card"}],
         "children":[{
             "type":"frame","id":"pill","name":"Nav Pill","width":"fill_container","layout":"horizontal",
-            "cornerRadius":100,"fill":[{"type":"solid","color":"$color-surface"}],
+            "cornerRadius":100,"fill":[{"type":"solid","color":"$--card"}],
             "children":[
                 {"type":"frame","id":"home","name":"Home Tab","width":"fill_container","height":"fit_content",
-                 "layout":"vertical","fill":[{"type":"solid","color":"$color-chart-6"}],
+                 "layout":"vertical","fill":[{"type":"solid","color":"$--chart-6"}],
                  "children":[
                     {"type":"icon_font","id":"hi","name":"Home Icon","iconFontName":"home","width":20,"height":20},
                     {"type":"text","id":"hl","name":"Home Label","content":"HOME"}
@@ -145,7 +145,7 @@ fn full_pipeline_rounds_nested_active_tab_in_pill() {
         &mut forest,
         Some("#FFF8F0"),
         Theme::Light,
-        Some("$color-chart-6"),
+        Some("$--chart-6"),
     );
     let out = serde_json::to_value(&forest[0]).expect("serialize");
     let home = &out["children"][0]["children"][0];
@@ -168,11 +168,11 @@ fn full_pipeline_rounds_manifest_nav_item_active() {
     let mut forest: Vec<PenNode> = serde_json::from_value(json!([{
         "type":"frame","id":"bar","role":"bottom-tab-bar","name":"Bottom Tab Bar",
         "width":"fill_container","cornerRadius":100,
-        "fill":[{"type":"solid","color":"$color-surface"}],
+        "fill":[{"type":"solid","color":"$--card"}],
         "children":[
             {"type":"frame","id":"home","role":"nav-item-active","name":"Tab (Home)",
              "width":"fit_content","height":"fit_content","layout":"vertical","padding":[4,12],
-             "fill":[{"type":"solid","color":"$color-chart-6"}],
+             "fill":[{"type":"solid","color":"$--chart-6"}],
              "children":[
                 {"type":"icon_font","id":"hi","name":"Icon","iconFontName":"house","width":24,"height":24},
                 {"type":"text","id":"hl","name":"Label","content":"Home"}
@@ -189,7 +189,7 @@ fn full_pipeline_rounds_manifest_nav_item_active() {
         &mut forest,
         Some("#FFF8F0"),
         Theme::Light,
-        Some("$color-chart-6"),
+        Some("$--chart-6"),
     );
     let out = serde_json::to_value(&forest[0]).expect("serialize");
     let active = &out["children"][0];
@@ -206,26 +206,26 @@ fn full_pipeline_rounds_manifest_nav_item_active() {
 fn full_pipeline_rounds_user_tt5_exact_nav() {
     // The USER's actual tt5.op (glm-5.2): bottom-tab-bar(vertical) > Tab
     // Pill(role=None, cr=100, horizontal) > Home Tab(role=None, fill_container,
-    // vertical, cornerRadius=0.0, $color-chart-6 fill, white icon/label). This is
+    // vertical, cornerRadius=0.0, $--chart-6 fill, white icon/label). This is
     // the EXACT square the user keeps seeing. Run the full pipeline; the active
     // Home Tab must come out rounded (cornerRadius=999).
     let src = r##"[{
         "type":"frame","id":"bar","role":"bottom-tab-bar","name":"Bottom Nav",
         "width":"fill_container","height":"fit_content","layout":"vertical",
-        "fill":[{"type":"solid","color":"$color-surface"}],
+        "fill":[{"type":"solid","color":"$--card"}],
         "children":[{
             "type":"frame","id":"pill","name":"Tab Pill",
             "width":"fill_container","height":"fit_content","layout":"horizontal","cornerRadius":100,
-            "fill":[{"type":"solid","color":"$color-surface"}],
+            "fill":[{"type":"solid","color":"$--card"}],
             "children":[
                 {"type":"frame","id":"home","name":"Home Tab",
                  "width":"fill_container","height":"fit_content","layout":"vertical","cornerRadius":0.0,
-                 "fill":[{"type":"solid","color":"$color-chart-6"}],
+                 "fill":[{"type":"solid","color":"$--chart-6"}],
                  "children":[
                     {"type":"icon_font","id":"hi","name":"Home Icon","iconFontName":"home","width":18,"height":18,
-                     "fill":[{"type":"solid","color":"$color-surface"}]},
+                     "fill":[{"type":"solid","color":"$--card"}]},
                     {"type":"text","id":"hl","name":"Home Label","content":"HOME",
-                     "fill":[{"type":"solid","color":"$color-surface"}]}
+                     "fill":[{"type":"solid","color":"$--card"}]}
                  ]},
                 {"type":"frame","id":"sr","name":"Search Tab","role":"search-bar",
                  "width":"fill_container","height":"fit_content","layout":"vertical","cornerRadius":26,
@@ -240,7 +240,7 @@ fn full_pipeline_rounds_user_tt5_exact_nav() {
         &mut forest,
         Some("#FFF8F0"),
         Theme::Light,
-        Some("$color-chart-6"),
+        Some("$--chart-6"),
     );
     let out = serde_json::to_value(&forest[0]).expect("serialize");
     let home = &out["children"][0]["children"][0];
@@ -263,11 +263,11 @@ fn bare_highlight_rect_in_nav_rounded() {
             {"type":"frame","name":"Tab Row","width":"fill_container","layout":"horizontal",
              "children":[
                 {"type":"frame","name":"Active Highlight",
-                 "fill":[{"type":"solid","color":"$color-accent"}]}
+                 "fill":[{"type":"solid","color":"$--primary"}]}
              ]}
         ]
     });
-    round_active_nav_tab(&mut nav, "$color-chart-6");
+    round_active_nav_tab(&mut nav, "$--chart-6");
     assert_eq!(
         nav["children"][0]["children"][0]["cornerRadius"],
         json!(999.0),

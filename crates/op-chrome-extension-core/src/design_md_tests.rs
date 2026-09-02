@@ -90,7 +90,7 @@ pub(super) fn evidence() -> Value {
         ],
         "mediaQueries": ["(max-width: 768px)", "(prefers-reduced-motion: reduce)"],
         "cssVariables": [
-            {"name": "--color-primary", "value": "#7C3AED", "kind": "color"},
+            {"name": "----primary", "value": "#7C3AED", "kind": "color"},
             {"name": "--space-card", "value": "16px", "kind": "length"}
         ],
         "elementCount": 438,
@@ -601,7 +601,7 @@ fn output_is_canonical_even_when_evidence_arrays_arrive_in_another_order() {
         .as_array_mut()
         .unwrap()
         .push(json!({
-            "name": "--color-primary", "value": "#8B5CF6", "kind": "color"
+            "name": "----primary", "value": "#8B5CF6", "kind": "color"
         }));
     let mut shuffled = original.clone();
     for field in [

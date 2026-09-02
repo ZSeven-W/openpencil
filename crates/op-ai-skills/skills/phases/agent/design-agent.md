@@ -68,7 +68,7 @@ Reference tokens instead of raw hex everywhere they fit: `fill: "$--card"`, bord
 
 **Only reference tokens that EXIST in `get_variables`.** The built-in systems currently include `$--white` and `$--black`; a custom document may not. `$--gray-100` is not guaranteed. An unknown fill reference falls back visibly (typically black), but it is still a broken design-system binding and must be replaced deliberately, never auto-guessed from nearby colours. For text/icons on the brand colour, prefer the semantic `$--primary-foreground` token.
 
-When you create your OWN variables, use the same shadcn vocabulary (`--background`, `--card`, `--primary`, `--muted-foreground`, …) — never invent parallel names like `$color-accent` for a concept the vocabulary already covers.
+When you create your OWN variables, use the same shadcn vocabulary (`--background`, `--card`, `--primary`, `--muted-foreground`, …) — never invent parallel names like `$brand-blue` for a concept the vocabulary already covers.
 
 ### Step 5 — Read components and existing structure
 
@@ -93,7 +93,7 @@ const id = I(parent, { ...node... });   // inserts a node, RETURNS its new id (a
 - Every frame/group/rectangle with flow children MUST declare `layout: "vertical"` or `layout: "horizontal"`; use `layout: "none"` only for a deliberate absolute stack. Omission is ambiguous and will be reported as an `intentQuestion` rather than auto-corrected.
 - **Absolute-stack z-order is front-to-back by child index:** in `layout: "none"`, `children[0]` is TOPMOST because the canvas paints children in reverse. Put badges, labels, controls, scrims, and other overlays BEFORE the full-bleed image/background they must cover; repair a hidden overlay with `M(overlayId, stackId, 0)`. Keep media in a separate EMPTY frame/rectangle image slot and target that exact slot with strict `G(...)` — never target the stack container that also owns the overlay.
 - **Icons:** `iconFontName` is the GLYPH name (`"home"`, `"compass"`, `"heart"`, `"search"`), NEVER the font family. Correct: `{type:"icon_font", iconFontName:"compass", width:20, height:20, fill:"#78716C"}`. Writing `iconFontName:"lucide"` renders a tiny fallback dot — every icon in the design breaks. Icons are `icon_font` nodes, never emoji characters in text — a coloured emoji ignores the design's palette and reads as a foreign object on a dark surface. (Typographic symbols used as content — ★ in a rating, – in a range — are fine; the rule is about icons.)
-- **`$variable` refs only when they exist:** reference `$color-*` variables only after `get_variables` shows them (or you created them via `set_variables`). A `$ref` against an empty variable table renders as a fallback color.
+- **`$variable` refs only when they exist:** reference `$--*` variables only after `get_variables` shows them (or you created them via `set_variables`). A `$ref` against an empty variable table renders as a fallback color.
 
 {{jianComponents}}
 

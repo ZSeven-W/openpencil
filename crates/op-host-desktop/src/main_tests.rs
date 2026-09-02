@@ -471,7 +471,7 @@ fn design_md_auto_generate_does_not_fall_back_to_local_extraction() {
     let mut app = DesktopApp::new(None);
     let mut variables = BTreeMap::new();
     variables.insert(
-        "$color-brand".to_string(),
+        "$--primary".to_string(),
         VariableDefinition {
             kind: VariableKind::Color,
             value: VariableValue::Scalar(VariableScalar::Str("#2563eb".to_string())),

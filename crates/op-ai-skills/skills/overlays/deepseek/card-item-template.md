@@ -19,18 +19,18 @@ three copies differ only in sequence number and copy text:
 ```
 frame(name="card", width=1080, height=1440, layout="vertical", padding=48, gap=24)  -- card board (cards rule 1: margins owned by the root)
 ├── text(content="早起三件事", fontSize=52, fontWeight=700)
-├── frame(name="item-01", width="fill_container", height="fit_content", layout="horizontal", gap=16, alignItems="center", padding=20, cornerRadius=16, stroke={thickness:1, fill:[{type:"solid", color:"$color-border"}]})
-│   ├── text(content="01", fontSize=28, fontWeight=700, fill:[{type:"solid", color:"$color-accent"}])
+├── frame(name="item-01", width="fill_container", height="fit_content", layout="horizontal", gap=16, alignItems="center", padding=20, cornerRadius=16, stroke={thickness:1, fill:[{type:"solid", color:"$--border"}]})
+│   ├── text(content="01", fontSize=28, fontWeight=700, fill:[{type:"solid", color:"$--primary"}])
 │   ├── text(content="阳光", fontSize=24, fontWeight=600)
-│   └── text(content="拉开窗帘，站到窗边两分钟", fontSize=20, fill:[{type:"solid", color:"$color-text-muted"}])
-├── frame(name="item-02", width="fill_container", height="fit_content", layout="horizontal", gap=16, alignItems="center", padding=20, cornerRadius=16, stroke={thickness:1, fill:[{type:"solid", color:"$color-border"}]})
-│   ├── text(content="02", fontSize=28, fontWeight=700, fill:[{type:"solid", color:"$color-accent"}])
+│   └── text(content="拉开窗帘，站到窗边两分钟", fontSize=20, fill:[{type:"solid", color:"$--muted-foreground"}])
+├── frame(name="item-02", width="fill_container", height="fit_content", layout="horizontal", gap=16, alignItems="center", padding=20, cornerRadius=16, stroke={thickness:1, fill:[{type:"solid", color:"$--border"}]})
+│   ├── text(content="02", fontSize=28, fontWeight=700, fill:[{type:"solid", color:"$--primary"}])
 │   ├── text(content="喝水", fontSize=24, fontWeight=600)
-│   └── text(content="一杯温水，唤醒身体", fontSize=20, fill=[{type:"solid", color:"$color-text-muted"}])
-└── frame(name="item-03", width="fill_container", height="fit_content", layout="horizontal", gap=16, alignItems="center", padding=20, cornerRadius=16, stroke={thickness:1, fill:[{type:"solid", color:"$color-border"}]})
-    ├── text(content="03", fontSize=28, fontWeight=700, fill:[{type:"solid", color:"$color-accent"}])
+│   └── text(content="一杯温水，唤醒身体", fontSize=20, fill=[{type:"solid", color:"$--muted-foreground"}])
+└── frame(name="item-03", width="fill_container", height="fit_content", layout="horizontal", gap=16, alignItems="center", padding=20, cornerRadius=16, stroke={thickness:1, fill:[{type:"solid", color:"$--border"}]})
+    ├── text(content="03", fontSize=28, fontWeight=700, fill:[{type:"solid", color:"$--primary"}])
     ├── text(content="计划", fontSize=24, fontWeight=600)
-    └── text(content="写下今天最重要的一件事", fontSize=20, fill=[{type:"solid", color:"$color-text-muted"}])
+    └── text(content="写下今天最重要的一件事", fontSize=20, fill=[{type:"solid", color:"$--muted-foreground"}])
 ```
 
 item-02 / item-03 are byte-level copies of item-01 with ONLY the sequence

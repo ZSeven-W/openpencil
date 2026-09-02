@@ -19,7 +19,7 @@
 //!
 //! ## Why the judgement is contrast, never the variable name
 //!
-//! It is tempting to say "a text fill must not use `$color-surface`". White on
+//! It is tempting to say "a text fill must not use `$--card`". White on
 //! a dark board is correct and common — the shipped deck template's closing
 //! slide does exactly that. The defect is the measured ratio, so that is what
 //! is measured; the variable name is never consulted.
@@ -37,20 +37,20 @@ use op_editor_core::{EditorCommand, EditorState, NodeId, PenNodeExt};
 /// Palette tokens allowed as a replacement, most-preferred first.
 ///
 /// All are emitted by `design_system` / `palette_harmonize`, so they exist in
-/// any generated document. `color-surface` is included on purpose: on a dark
+/// any generated document. `--card` is included on purpose: on a dark
 /// background it is the readable choice, and excluding it would leave dark
 /// boards unrepairable.
 /// These are the names `design_system` actually emits. An earlier version of
-/// this list was written from memory (`color-text`, `color-text-strong`) and
+/// this list was written from memory (made-up text token names) and
 /// matched NOTHING in a real document, so every repair silently no-opped —
 /// the unit tests passed because their fixture used the invented names too.
 const CANDIDATE_TOKENS: &[&str] = &[
-    "color-text-primary",
-    "color-text-body",
-    "color-text-muted",
-    "color-text-subtle",
-    "color-surface",
-    "color-bg-deep",
+    "--foreground",
+    "--secondary-foreground",
+    "--muted-foreground",
+    "--muted-foreground",
+    "--card",
+    "--background",
 ];
 
 /// Publication contrast target for every text repair. This matches the
@@ -405,7 +405,7 @@ pub(crate) fn repair_text_contrast(sink: &mut dyn DocSink, root_id: &str) -> usi
 /// [`TARGET_RATIO`] against `bg`.
 ///
 /// Deliberately not "the highest contrast available": on a light board that
-/// picks `color-bg-deep`, which is readable but semantically a background
+/// picks `--background`, which is readable but semantically a background
 /// token used as ink. Preference order encodes what the token MEANS, and the
 /// ratio only decides whether it is usable — so ink wins on light boards and
 /// the light tokens take over once ink stops being readable.

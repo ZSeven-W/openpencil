@@ -10,7 +10,7 @@
       "fill": [
         {
           "type": "solid",
-          "color": "$color-border"
+          "color": "$--border"
         }
       ]
     },

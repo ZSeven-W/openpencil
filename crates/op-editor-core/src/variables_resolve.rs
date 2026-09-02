@@ -29,7 +29,7 @@ mod replace;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use palette::{FallbackValue, DEFAULT_PALETTE_FALLBACK};
+pub(crate) use palette::{FallbackValue, DEFAULT_PALETTE_FALLBACK, LEGACY_PALETTE_FALLBACK};
 use replace::node_container_mut;
 pub use replace::replace_variable_refs_in_tree;
 
@@ -103,13 +103,39 @@ fn resolve_themed_value<'a>(
     values.first().map(|v| &v.value)
 }
 
-/// Whether the built-in semantic palette can answer `name` on its own — a
-/// reference the document's own table does not define is not necessarily
-/// broken. Callers that repair broken references ask this first.
+/// Whether the built-in semantic palette (shadcn dictionary, or the
+/// legacy `color-*` compat table) can answer `name` on its own — a
+/// reference the document's own table does not define is not
+/// necessarily broken. Callers that repair broken references ask this
+/// first.
 pub fn has_palette_fallback(name: &str) -> bool {
-    DEFAULT_PALETTE_FALLBACK
-        .iter()
-        .any(|(token, _)| *token == name)
+    palette_fallback(name).is_some()
+}
+
+/// Look a token up in the fallback tables: the shadcn dictionary
+/// first, then the legacy `color-*` compat table.
+fn palette_fallback(name: &str) -> Option<&'static FallbackValue> {
+    let find = |table: &'static [(&'static str, FallbackValue)]| {
+        table
+            .iter()
+            .find(|(token, _)| *token == name)
+            .map(|(_, value)| value)
+    };
+    find(DEFAULT_PALETTE_FALLBACK).or_else(|| find(LEGACY_PALETTE_FALLBACK))
+}
+
+/// Materialize a fallback entry for the active theme (Light/Dark pair
+/// keyed off `Mode`, single value, or number).
+fn fallback_scalar(fallback: &FallbackValue, theme: &Theme) -> VariableScalar {
+    match fallback {
+        FallbackValue::Single(hex) => VariableScalar::Str((*hex).to_string()),
+        FallbackValue::Num(n) => VariableScalar::Num(*n),
+        FallbackValue::LightDark { light, dark } => {
+            let mode = theme.get("Mode").map(String::as_str).unwrap_or("Light");
+            let hex = if mode == "Dark" { dark } else { light };
+            VariableScalar::Str((*hex).to_string())
+        }
+    }
 }
 
 /// Resolve a single `$name` reference to its concrete scalar
@@ -124,18 +150,8 @@ pub fn resolve_variable_ref(
     let name = reference.strip_prefix('$')?;
     let def = vars.and_then(|v| v.get(name));
     let Some(def) = def else {
-        let (_, fallback) = DEFAULT_PALETTE_FALLBACK
-            .iter()
-            .find(|(token, _)| *token == name)?;
-        return Some(match fallback {
-            FallbackValue::Single(hex) => VariableScalar::Str((*hex).to_string()),
-            FallbackValue::Num(n) => VariableScalar::Num(*n),
-            FallbackValue::LightDark { light, dark } => {
-                let mode = theme.get("Mode").map(String::as_str).unwrap_or("Light");
-                let hex = if mode == "Dark" { dark } else { light };
-                VariableScalar::Str((*hex).to_string())
-            }
-        });
+        let fallback = palette_fallback(name)?;
+        return Some(fallback_scalar(fallback, theme));
     };
     let scalar = match &def.value {
         VariableValue::Scalar(s) => s,

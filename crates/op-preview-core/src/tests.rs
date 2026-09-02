@@ -148,7 +148,7 @@ fn preview_shows_resolved_color_in_scene() {
         "formatVersion": "1.1",
         "id": "x",
         "app": { "name": "x", "version": "1", "id": "x" },
-        "variables": { "color-brand": { "type": "color", "value": "#ff8800" } },
+        "variables": { "--primary": { "type": "color", "value": "#ff8800" } },
         "children": [
             {
                 "type": "frame", "id": "screen", "width": 200, "height": 200,
@@ -156,7 +156,7 @@ fn preview_shows_resolved_color_in_scene() {
                     {
                         "type": "rectangle", "id": "swatch",
                         "x": 0, "y": 0, "width": 100, "height": 100,
-                        "fill": [{ "type": "solid", "color": "$color-brand" }]
+                        "fill": [{ "type": "solid", "color": "$--primary" }]
                     }
                 ]
             }

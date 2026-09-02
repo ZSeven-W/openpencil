@@ -13,12 +13,12 @@ DESIGN-SYSTEM COMPOSITION
 
 Compose screens from a consistent token + spacing + hierarchy system. Product/density/action laws and the 8px scale ALREADY apply — do not restate them. This adds the composition DEPTH. Apply silently through node structure.
 
-TOKEN ROLES (use $color-* refs when the document carries the semantic palette; else hex):
+TOKEN ROLES (use $--* refs when the document carries the semantic palette; else hex):
 
-- Backgrounds: $color-bg-deep = page background (the outermost canvas, slightly tinted, never pure white); $color-surface = cards / modals / panels that sit ON the page; $color-surface-2 = chips, inputs, hover; $color-surface-3 = pressed / nested. A surface always sits one step lighter/darker than its parent — never stack two same-fill surfaces.
-- Text ladder (4 steps, pick by importance): $color-text-primary headings & values → $color-text-body paragraphs & nav labels → $color-text-muted secondary / timestamps / placeholders → $color-text-subtle disabled. Never use primary for everything; the ladder IS the hierarchy.
-- $color-border for dividers / input strokes / card edges; $color-accent for primary action, active state, focus. Semantic ($color-success / $color-destructive) carry meaning across themes — never swap them for accent.
-- Structural wrappers (page bg, section, header) stay on $color-bg-deep / transparent. Only a real card/panel/input gets $color-surface. Boxing every group in a surface reads generic.
+- Backgrounds: $--background = page background (the outermost canvas, slightly tinted, never pure white); $--card = cards / modals / panels that sit ON the page; $--muted = chips, inputs, hover; $--accent = pressed / nested. A surface always sits one step lighter/darker than its parent — never stack two same-fill surfaces.
+- Text ladder (4 steps, pick by importance): $--foreground headings & values → $--secondary-foreground paragraphs & nav labels → $--muted-foreground secondary / timestamps / placeholders → $--muted-foreground disabled. Never use primary for everything; the ladder IS the hierarchy.
+- $--border for dividers / input strokes / card edges; $--primary for primary action, active state, focus. Semantic ($--color-success / $--destructive) carry meaning across themes — never swap them for accent.
+- Structural wrappers (page bg, section, header) stay on $--background / transparent. Only a real card/panel/input gets $--card. Boxing every group in a surface reads generic.
 
 SCREEN LAYOUT CONTRACTS (one frame tree, fill_container threads through):
 
@@ -31,12 +31,12 @@ COMPOSITION RECIPES:
 
 - Page header: layout=horizontal justifyContent=space_between alignItems=center — breadcrumbs / title on the left, action buttons on the right (gap=12).
 - Form layout: vertical gap=16; pair short related fields (First/Last name) in one horizontal row of two fill_container inputs, then full-width fields (Email, Message) stacked below. Submit actions right-aligned at the bottom.
-- Metric card: vertical, padding=[24,24], gap=4 — small $color-text-muted label (14) above a large bold $color-text-primary value (28-36). No icon-padding-stuffing; the number is the focal point.
+- Metric card: vertical, padding=[24,24], gap=4 — small $--muted-foreground label (14) above a large bold $--foreground value (28-36). No icon-padding-stuffing; the number is the focal point.
 - Tables follow the strict Table > Row > Cell(frame) > content hierarchy and column-width guidance in the dashboard domain — do not re-derive it.
 
 BUTTON HIERARCHY (one primary action per section; reduce the rest):
 
-- Priority ladder: 1 Primary (Save/Submit/Create, accent fill) → 2 Secondary (alt action) → 3 Outline (Cancel/Back) → 4 Ghost (inline/nav) → 5 Destructive (Delete, $color-destructive). Never give two buttons equal weight in one group.
+- Priority ladder: 1 Primary (Save/Submit/Create, accent fill) → 2 Secondary (alt action) → 3 Outline (Cancel/Back) → 4 Ghost (inline/nav) → 5 Destructive (Delete, $--destructive). Never give two buttons equal weight in one group.
 - Action alignment: cards / modals / forms right-align actions (justifyContent=end). Destructive + Cancel pairing = Cancel on the left, Destructive on the right.
 
 SPACING BY CONTEXT (pick from the scale, never arbitrary):

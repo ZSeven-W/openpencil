@@ -7,17 +7,17 @@ use serde_json::json;
 /// The palette shape a GENERATED document actually carries: token names as
 /// `design_system` emits them, and each value a per-theme array.
 ///
-/// This fixture previously used invented names (`color-text`) and a single
+/// This fixture previously used a bespoke naming scheme and a single
 /// `{"value": …}` object. Both were wrong, and because the code under test
 /// shared the same wrong assumptions the tests passed while the pass repaired
 /// nothing in production. Copied from a real run (2026-08-02).
 fn palette() -> Variables {
     [
-        ("color-text-primary", "#0F172A", "#F1F5F9"),
-        ("color-text-muted", "#94A3B8", "#94A3B8"),
-        ("color-surface", "#FFFFFF", "#1E293B"),
-        ("color-surface-2", "#F1F5F9", "#334155"),
-        ("color-bg-deep", "#0B1220", "#020617"),
+        ("--foreground", "#0F172A", "#F1F5F9"),
+        ("--muted-foreground", "#94A3B8", "#94A3B8"),
+        ("--card", "#FFFFFF", "#1E293B"),
+        ("--muted", "#F1F5F9", "#334155"),
+        ("--background", "#0B1220", "#020617"),
     ]
     .into_iter()
     .map(|(name, light, dark)| {
@@ -48,24 +48,24 @@ fn light_theme() -> op_design_lint::node_util::Theme {
 
 #[test]
 fn white_text_on_a_light_board_is_repointed_at_the_ink_token() {
-    // The shipped defect: title fill `$color-surface` (#FFFFFF) on a
-    // `$color-surface-2` (#F1F5F9) board — 1.10:1, effectively blank.
+    // The shipped defect: title fill `$--card` (#FFFFFF) on a
+    // `$--muted` (#F1F5F9) board — 1.10:1, effectively blank.
     let token = best_token("#F1F5F9", &palette(), &light_theme()).expect("a readable token exists");
-    assert_eq!(token, "color-text-primary");
+    assert_eq!(token, "--foreground");
 }
 
 #[test]
 fn a_dark_board_gets_a_light_token_rather_than_the_ink_one() {
     // The reason the judgement is contrast and not the variable name: white
     // on dark is correct, and the shipped deck template's closing slide does
-    // exactly this. A name-based rule ("text must not use color-surface")
+    // exactly this. A name-based rule ("text must not use --card")
     // would break it.
     let token = best_token("#0B1220", &palette(), &light_theme()).expect("a readable token exists");
     let hex = token_hex(&token, &palette(), &light_theme()).expect("token resolves");
     let ratio = op_design_lint::color::color_contrast(&hex, "#0B1220");
     assert!(ratio >= TARGET_RATIO, "{token} gives only {ratio:.2}:1");
     assert_ne!(
-        token, "color-text-primary",
+        token, "--foreground",
         "ink on a dark board stays unreadable"
     );
 }
@@ -92,12 +92,12 @@ fn token_choice_honours_the_offenders_exact_threshold() {
 
     assert_eq!(
         best_token_above("#64748B", &variables, &theme, 2.5).as_deref(),
-        Some("color-text-primary"),
+        Some("--foreground"),
         "the preferred ink token clears only the old loose bar"
     );
     assert_eq!(
         best_token_above("#64748B", &variables, &theme, 4.5).as_deref(),
-        Some("color-surface"),
+        Some("--card"),
         "the strict offender must skip the preferred-but-insufficient token"
     );
 }
@@ -106,22 +106,19 @@ fn token_choice_honours_the_offenders_exact_threshold() {
 fn a_palette_with_nothing_readable_repairs_nothing() {
     // Never invent a colour: if the document's own palette offers no
     // readable token, leave the fill alone rather than fabricating one.
-    let flat: Variables = [
-        ("color-text-primary", "#FEFEFE"),
-        ("color-surface", "#FFFFFF"),
-    ]
-    .into_iter()
-    .map(|(name, hex)| {
-        (
-            name.to_string(),
-            serde_json::from_value(json!({
-                "type": "color",
-                "value": [{"value": hex, "theme": {"Mode": "Light"}}],
-            }))
-            .expect("variable"),
-        )
-    })
-    .collect();
+    let flat: Variables = [("--foreground", "#FEFEFE"), ("--card", "#FFFFFF")]
+        .into_iter()
+        .map(|(name, hex)| {
+            (
+                name.to_string(),
+                serde_json::from_value(json!({
+                    "type": "color",
+                    "value": [{"value": hex, "theme": {"Mode": "Light"}}],
+                }))
+                .expect("variable"),
+            )
+        })
+        .collect();
     assert_eq!(best_token("#FFFFFF", &flat, &light_theme()), None);
 }
 
@@ -129,11 +126,11 @@ fn a_palette_with_nothing_readable_repairs_nothing() {
 fn non_colour_and_malformed_variables_are_ignored() {
     let odd: Variables = [
         (
-            "color-text-primary",
+            "--foreground",
             json!({"type": "number", "value": [{"value": 12, "theme": {"Mode": "Light"}}]}),
         ),
         (
-            "color-surface",
+            "--card",
             json!({"type": "color", "value": [{"value": "not-a-hex", "theme": {"Mode": "Light"}}]}),
         ),
     ]
@@ -145,8 +142,8 @@ fn non_colour_and_malformed_variables_are_ignored() {
         )
     })
     .collect();
-    assert_eq!(token_hex("color-text-primary", &odd, &light_theme()), None);
-    assert_eq!(token_hex("color-surface", &odd, &light_theme()), None);
+    assert_eq!(token_hex("--foreground", &odd, &light_theme()), None);
+    assert_eq!(token_hex("--card", &odd, &light_theme()), None);
     assert_eq!(best_token("#FFFFFF", &odd, &light_theme()), None);
 }
 
@@ -181,14 +178,14 @@ fn invisible_text_in_a_document_is_actually_repaired() {
         "name": "Cover",
         "width": 1920,
         "height": 1080,
-        "fill": [{"type": "solid", "color": "$color-surface-2"}],
+        "fill": [{"type": "solid", "color": "$--muted"}],
         "children": [{
             "type": "text",
             "id": "title",
             "name": "Title",
             "content": "看不见的标题",
             "fontSize": 64,
-            "fill": [{"type": "solid", "color": "$color-surface"}]
+            "fill": [{"type": "solid", "color": "$--card"}]
         }]
     }))
     .expect("tree");
@@ -207,9 +204,9 @@ fn invisible_text_in_a_document_is_actually_repaired() {
     let fill = json["children"][0]["fill"][0]["color"]
         .as_str()
         .expect("text fill");
-    assert_eq!(fill, "$color-text-primary");
-    let ink = token_hex("color-text-primary", &palette(), &light_theme()).expect("ink");
-    let bg = token_hex("color-surface-2", &palette(), &light_theme()).expect("bg");
+    assert_eq!(fill, "$--foreground");
+    let ink = token_hex("--foreground", &palette(), &light_theme()).expect("ink");
+    let bg = token_hex("--muted", &palette(), &light_theme()).expect("bg");
     assert!(op_design_lint::color::color_contrast(&ink, &bg) >= TARGET_RATIO);
 }
 
@@ -232,7 +229,7 @@ fn finalizer_repairs_text_that_passes_loose_lint_but_fails_the_quality_gate() {
         "children": [{
             "type": "text", "id": "body", "name": "Body", "content": "Readable",
             "fontSize": 16,
-            "fill": [{"type": "solid", "color": "$color-text-primary"}]
+            "fill": [{"type": "solid", "color": "$--foreground"}]
         }]
     }))
     .expect("tree");
@@ -256,15 +253,15 @@ fn finalizer_repairs_text_that_passes_loose_lint_but_fails_the_quality_gate() {
     let theme = op_design_lint::node_util::default_theme(doc.themes.as_ref());
     assert_eq!(
         best_token_above(&strict[0].bg_color, variables, &theme, strict[0].threshold,).as_deref(),
-        Some("color-surface")
+        Some("--card")
     );
     assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
     assert_eq!(
         serde_json::to_value(&sink.state.active_children()[0]).expect("serialize")["children"][0]
             ["fill"][0]["color"],
-        "$color-surface"
+        "$--card"
     );
-    let repaired = token_hex("color-surface", &palette(), &light_theme()).expect("surface");
+    let repaired = token_hex("--card", &palette(), &light_theme()).expect("surface");
     assert!(
         op_design_lint::color::color_contrast(&repaired, "#64748B") >= TARGET_RATIO,
         "the finalizer result must satisfy the same 4.5 quality gate"
@@ -289,14 +286,14 @@ fn readable_text_is_left_untouched() {
         "name": "Cover",
         "width": 1920,
         "height": 1080,
-        "fill": [{"type": "solid", "color": "$color-surface"}],
+        "fill": [{"type": "solid", "color": "$--card"}],
         "children": [{
             "type": "text",
             "id": "title",
             "name": "Title",
             "content": "看得见的标题",
             "fontSize": 64,
-            "fill": [{"type": "solid", "color": "$color-text-primary"}]
+            "fill": [{"type": "solid", "color": "$--foreground"}]
         }]
     }))
     .expect("tree");
@@ -335,7 +332,7 @@ fn chip_tree(chip_fill: serde_json::Value, text_fill: serde_json::Value) -> serd
             "name": "Dark card",
             "layout": "vertical",
             "padding": 40,
-            "fill": [{"type": "solid", "color": "$color-bg-deep"}],
+            "fill": [{"type": "solid", "color": "$--background"}],
             "children": [{
                 "type": "frame",
                 "id": "chip",
@@ -371,8 +368,8 @@ fn chip_sink() -> (VecDocSink, String) {
         .collect(),
     );
     let tree: jian_ops_schema::node::PenNode = serde_json::from_value(chip_tree(
-        json!({"type": "solid", "color": "$color-surface"}),
-        json!({"type": "solid", "color": "$color-surface"}),
+        json!({"type": "solid", "color": "$--card"}),
+        json!({"type": "solid", "color": "$--card"}),
     ))
     .expect("tree");
     sink.state.apply(EditorCommand::InsertAuthoredSubtree {
@@ -396,12 +393,12 @@ fn chip_label_fill(sink: &VecDocSink) -> String {
 #[test]
 fn white_label_on_a_light_chip_is_repointed_at_ink() {
     let (mut sink, root_id) = chip_sink();
-    assert_eq!(chip_label_fill(&sink), "$color-surface");
+    assert_eq!(chip_label_fill(&sink), "$--card");
 
     assert_eq!(repair_chip_text_contrast(&mut sink, &root_id), 1);
     assert_eq!(
         chip_label_fill(&sink),
-        "$color-text-primary",
+        "$--foreground",
         "the label must be re-pointed at the document's own ink token"
     );
 }
@@ -413,8 +410,8 @@ fn a_dark_chip_with_white_text_is_left_alone() {
     let mut sink = VecDocSink::new();
     sink.state.doc.variables = Some(palette());
     let tree: jian_ops_schema::node::PenNode = serde_json::from_value(chip_tree(
-        json!({"type": "solid", "color": "$color-bg-deep"}),
-        json!({"type": "solid", "color": "$color-surface"}),
+        json!({"type": "solid", "color": "$--background"}),
+        json!({"type": "solid", "color": "$--card"}),
     ))
     .expect("tree");
     sink.state.apply(EditorCommand::InsertAuthoredSubtree {
@@ -475,10 +472,10 @@ fn body_text_outside_a_chip_is_not_this_pass_business() {
         "children": [{
             "type": "frame", "id": "card", "name": "Card", "layout": "vertical",
             "width": 600, "height": 400, "padding": 24,
-            "fill": [{"type": "solid", "color": "$color-surface"}],
+            "fill": [{"type": "solid", "color": "$--card"}],
             "children": [{
                 "type": "text", "id": "body", "content": "Body", "fontSize": 16,
-                "fill": [{"type": "solid", "color": "$color-surface"}]
+                "fill": [{"type": "solid", "color": "$--card"}]
             }]
         }]
     }))
@@ -507,10 +504,10 @@ fn a_full_width_pill_is_not_a_chip() {
             "type": "frame", "id": "pill", "name": "Pill", "layout": "horizontal",
             "width": 1200, "height": 40, "cornerRadius": 20,
             "alignItems": "center", "justifyContent": "center",
-            "fill": [{"type": "solid", "color": "$color-surface"}],
+            "fill": [{"type": "solid", "color": "$--card"}],
             "children": [{
                 "type": "text", "id": "label", "content": "Label", "fontSize": 16,
-                "fill": [{"type": "solid", "color": "$color-surface"}]
+                "fill": [{"type": "solid", "color": "$--card"}]
             }]
         }]
     }))
@@ -568,7 +565,7 @@ fn the_driver_attributes_chip_repairs_to_the_chip_checkpoint() {
     );
     assert_eq!(
         chip_label_fill(&sink),
-        "$color-text-primary",
+        "$--foreground",
         "the mounted branch must actually repair the chip"
     );
 }

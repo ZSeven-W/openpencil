@@ -476,17 +476,17 @@ mod tests {
             "version": "1.0",
             "children": [],
             "variables": {
-                "color-bg": {"type": "color", "value": "#FFFFFF"},
-                "color-text": {"type": "color", "value": "#F5F5F5"}
+                "--background": {"type": "color", "value": "#FFFFFF"},
+                "--foreground": {"type": "color", "value": "#F5F5F5"}
             }
         }));
         let root = node(json!({
             "type": "frame", "id": "page",
-            "fill": [{"type": "solid", "color": "$color-bg"}],
+            "fill": [{"type": "solid", "color": "$--background"}],
             "children": [
                 {
                     "type": "text", "id": "t1", "content": "Hi",
-                    "fill": [{"type": "solid", "color": "$color-text"}]
+                    "fill": [{"type": "solid", "color": "$--foreground"}]
                 }
             ]
         }));

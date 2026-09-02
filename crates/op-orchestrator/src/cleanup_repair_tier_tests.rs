@@ -110,10 +110,7 @@ fn run(tree: Value, template: bool) -> (Value, RepairSummary) {
         // design-system tokens; the contract-tier text-contrast repair re-points
         // at those, so leaving them out would make it no-op for a reason that
         // has nothing to do with the tier gate.
-        for (name, value) in [
-            ("color-surface", "#FFFFFF"),
-            ("color-text-primary", "#0F172A"),
-        ] {
+        for (name, value) in [("--card", "#FFFFFF"), ("--foreground", "#0F172A")] {
             table.insert(
                 name.to_string(),
                 serde_json::from_value(json!({"type": "color", "value": value}))

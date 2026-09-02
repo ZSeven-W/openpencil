@@ -256,14 +256,19 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 continue;
             }
             let lname = name.to_lowercase();
-            // `border` / `outline` / `divider` sit with the SURFACE family, not
-            // on their own: a hairline lives a step off the page tone, far from
-            // the text tone, so the surface thresholds below classify it
-            // correctly with no extra tuning. They were missing from this list,
-            // which left a dark design's `$color-border` resolving to its
-            // stock-light slot (measured: 0808-gm-1.op kept `#E2E8F0` on a
-            // `#0A0A0A` page — a near-WHITE hairline, which the widget renderer
-            // then used as the tab bar's background).
+            // `border` / `outline` / `divider` / `input` / `ring` sit with
+            // the SURFACE family, not on their own: a hairline lives a step
+            // off the page tone, far from the text tone, so the surface
+            // thresholds below classify it correctly with no extra tuning.
+            // They were missing from this list, which left a dark design's
+            // `$--border` resolving to its stock-light slot (measured:
+            // 0808-gm-1.op kept `#E2E8F0` on a `#0A0A0A` page — a near-WHITE
+            // hairline, which the widget renderer then used as the tab
+            // bar's background). The shadcn rename (B1) replaced the
+            // `color-*` word set with slot names, so the list carries the
+            // new vocabulary (`muted`/`secondary`/`popover`/`sidebar`/
+            // `accent` surfaces, `input`/`ring` hairlines, the status
+            // colours, `scrim`).
             let surface_like = [
                 "surface",
                 "card",
@@ -274,14 +279,33 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 "border",
                 "outline",
                 "divider",
+                "muted",
+                "secondary",
+                "popover",
+                "input",
+                "ring",
+                "sidebar",
+                "accent",
+                "scrim",
+                "success",
+                "warning",
+                "error",
+                "info",
             ]
             .iter()
             .any(|t| lname.contains(t));
+            // A `*-foreground` on-color token is a TEXT colour even when its
+            // base slot word also appears (`--card-foreground`): foreground
+            // wins, mirroring `variable_binding::family_of`.
             let text_like = lname.contains("text") || lname.contains("foreground");
-            if surface_like == text_like {
-                // neither family, or ambiguously both — leave alone
+            let family_is_surface = if text_like {
+                false
+            } else if surface_like {
+                true
+            } else {
+                // neither family — leave alone
                 continue;
-            }
+            };
             let Some(active_hex) = state.resolve_color_variable_hex(name) else {
                 continue;
             };
@@ -291,7 +315,7 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
             // Every hex present across the variable's theme slots.
             let mut slot_hexes: Vec<String> = Vec::new();
             collect_hex_strings(def.get("value").unwrap_or(&Value::Null), &mut slot_hexes);
-            let violated = if surface_like {
+            let violated = if family_is_surface {
                 (active_lum - bg_lum).abs() > 0.55
             } else {
                 (active_lum - bg_lum).abs() < 0.22
@@ -304,7 +328,7 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 .filter_map(|h| hex_luminance(h).map(|l| (h, l)))
                 .filter(|(h, _)| !h.eq_ignore_ascii_case(&active_hex))
                 .filter(|(_, l)| {
-                    if surface_like {
+                    if family_is_surface {
                         (l - bg_lum).abs() < 0.35
                     } else {
                         (l - bg_lum).abs() > 0.5
@@ -312,7 +336,7 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 })
                 .min_by(|a, b| {
                     let key = |l: f64| {
-                        if surface_like {
+                        if family_is_surface {
                             (l - bg_lum).abs()
                         } else {
                             -(l - bg_lum).abs()

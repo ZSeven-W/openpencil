@@ -21,7 +21,7 @@ fn deck_front_card_gets_a_surface_fill_when_a_painted_layer_bleeds_through() {
              "children":[{"type":"text","id":"t1","content":"Hello"}]},
             {"type":"frame","id":"back1","name":"Back Layer 1",
              "x":8,"y":4,"width":338,"height":124,
-             "fill":[{"type":"solid","color":"$color-surface-3"}],
+             "fill":[{"type":"solid","color":"$--accent"}],
              "children":[]},
             {"type":"frame","id":"back2","name":"Back Layer 2",
              "x":16,"y":8,"width":338,"height":124,
@@ -32,7 +32,7 @@ fn deck_front_card_gets_a_surface_fill_when_a_painted_layer_bleeds_through() {
     let v = run(nodes);
     assert_eq!(
         v["children"][0]["fill"],
-        json!([{"type":"solid","color":"$color-surface"}]),
+        json!([{"type":"solid","color":"$--card"}]),
         "front card must get a semantic surface fill so the painted back layer stops bleeding through: {v}"
     );
 }
@@ -49,7 +49,7 @@ fn front_card_with_its_own_fill_is_left_alone() {
              "children":[{"type":"text","id":"t1","content":"Hello"}]},
             {"type":"frame","id":"back1","name":"Back",
              "x":8,"y":4,"width":338,"height":124,
-             "fill":[{"type":"solid","color":"$color-surface-3"}],
+             "fill":[{"type":"solid","color":"$--accent"}],
              "children":[]}
         ]
     }))
@@ -101,7 +101,7 @@ fn donut_ring_ellipse_sibling_behind_a_label_is_not_misfired_on() {
              "children":[{"type":"text","id":"t1","content":"72%"}]},
             {"type":"ellipse","id":"ring","name":"Ring",
              "x":0,"y":0,"width":120,"height":120,
-             "fill":[{"type":"solid","color":"$color-accent"}]}
+             "fill":[{"type":"solid","color":"$--primary"}]}
         ]
     }))
     .unwrap()];

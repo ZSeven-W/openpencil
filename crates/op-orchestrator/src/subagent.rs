@@ -277,7 +277,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         crate::variable_binding::bind_generated_color_variables(&mut nodes, sink.state());
     }
     // Surface-color discipline runs AFTER binding: glm emits raw hex, and binding
-    // is what turns it into the `$color-danger-bg` / `$color-bg-deep` refs this
+    // is what turns it into the `$--color-error` / `$--background` refs this
     // pass matches (recolor misused state-bg surfaces → neutral, strip the
     // page-bg token off inner wrappers). Pre-binding it only saw hex and missed.
     crate::role_post_pass::enforce_surface_color_discipline_with_tier(&mut nodes, &tier);

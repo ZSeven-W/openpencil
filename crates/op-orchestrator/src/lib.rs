@@ -126,6 +126,8 @@ mod radial_stub_tests;
 #[cfg(test)]
 mod run_retry_feedback_tests;
 #[cfg(test)]
+mod shadcn_vocabulary_tests;
+#[cfg(test)]
 mod sidebar_archetype_tests;
 #[cfg(test)]
 mod test_support;

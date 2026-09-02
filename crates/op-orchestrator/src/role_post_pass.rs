@@ -178,8 +178,8 @@ pub fn post_pass_forest_with_tier(
 
 /// Surface-color discipline over the whole forest. MUST run AFTER
 /// `bind_generated_color_variables` — glm emits raw hex (`#FEE2E2`,
-/// `#F8FAFC`), and binding is what normalizes those to the `$color-danger-bg`
-/// / `$color-bg-deep` refs this pass matches. Calling it pre-binding (the old
+/// `#F8FAFC`), and binding is what normalizes those to the `$--color-error`
+/// / `$--background` refs this pass matches. Calling it pre-binding (the old
 /// site inside `post_pass_forest`) only ever saw hex, so it never matched and
 /// the pink search input / cool-grey panels survived.
 pub fn enforce_surface_color_discipline(nodes: &mut [PenNode]) {

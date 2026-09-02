@@ -1,8 +1,8 @@
 //! Palette hue harmonization.
 //!
 //! The semantic palette ([`crate::semantic_palette`]) ships a FIXED cool-slate
-//! neutral ramp (`color-surface-2` = `#F1F5F9`, `color-bg-deep` = `#F8FAFC`,
-//! borders in `#E2E8F0`/`#CBD5E1` …). Those blue-tinted grays clash badly on a
+//! neutral ramp (`--muted` = `#F1F5F9`, `--background` = `#F8FAFC`,
+//! borders in `#E2E8F0` …). Those blue-tinted grays clash badly on a
 //! WARM design — a cream/orange food-delivery app gets a cool-gray search bar,
 //! cool-gray category chips and a cool-gray avatar circle that read as "not part
 //! of the palette" (the user flagged exactly this).
@@ -19,15 +19,10 @@ use jian_ops_schema::variable::{VariableDefinition, VariableScalar, VariableValu
 use std::collections::BTreeMap;
 
 /// Neutral surface + border tokens that should follow the design temperature.
-/// `color-surface` (`#FFFFFF`) is intentionally omitted — pure white reads clean
+/// `--card` (`#FFFFFF`) is intentionally omitted — pure white reads clean
 /// on any palette, and it has zero chroma to rotate anyway.
-const NEUTRAL_TINT_TOKENS: &[&str] = &[
-    "color-surface-2",
-    "color-surface-3",
-    "color-bg-deep",
-    "color-border",
-    "color-border-strong",
-];
+const NEUTRAL_TINT_TOKENS: &[&str] =
+    &["--muted", "--accent", "--background", "--border", "--input"];
 
 fn parse_rgb(hex: &str) -> Option<(f64, f64, f64)> {
     let h = hex.strip_prefix('#').unwrap_or(hex);
@@ -125,12 +120,12 @@ mod tests {
         let mut palette = crate::semantic_palette::palette_variables();
         // Cream warm page bg.
         harmonize_palette_neutrals(&mut palette, "#FFF8F0");
-        // surface-2 was #F1F5F9 (cool: B>R) → now warm (R>B).
-        let s2 = light_hex(palette.get("color-surface-2").unwrap());
+        // muted was #F1F5F9 (cool: B>R) → now warm (R>B).
+        let s2 = light_hex(palette.get("--muted").unwrap());
         let (r, g, b) = parse_rgb(&s2).unwrap();
         assert!(
             warm(r as u8, g as u8, b as u8),
-            "surface-2 should be warm after harmonizing to a cream page, got {s2}"
+            "muted should be warm after harmonizing to a cream page, got {s2}"
         );
         // Lightness (mean) preserved within a couple points of the original 245.
         let mean = (r + g + b) / 3.0;
@@ -143,10 +138,10 @@ mod tests {
     #[test]
     fn neutral_page_leaves_slate_untouched() {
         let mut palette = crate::semantic_palette::palette_variables();
-        let before = light_hex(palette.get("color-surface-2").unwrap());
+        let before = light_hex(palette.get("--muted").unwrap());
         // A true-gray page → nothing to harmonize toward.
         harmonize_palette_neutrals(&mut palette, "#FAFAFA");
-        let after = light_hex(palette.get("color-surface-2").unwrap());
+        let after = light_hex(palette.get("--muted").unwrap());
         assert_eq!(before, after, "neutral page keeps the cool slate ramp");
     }
 
@@ -155,7 +150,7 @@ mod tests {
         let mut palette = crate::semantic_palette::palette_variables();
         // A cool blue-gray page → neutrals stay cool (B≥R).
         harmonize_palette_neutrals(&mut palette, "#EEF2FF");
-        let s2 = light_hex(palette.get("color-surface-2").unwrap());
+        let s2 = light_hex(palette.get("--muted").unwrap());
         let (r, _g, b) = parse_rgb(&s2).unwrap();
         assert!(
             b as u8 >= r as u8,
@@ -165,9 +160,9 @@ mod tests {
 
     #[test]
     fn white_surface_token_is_not_in_the_tint_set() {
-        // color-surface (#FFFFFF) must stay pure white.
+        // --card (#FFFFFF) must stay pure white.
         let mut palette = crate::semantic_palette::palette_variables();
         harmonize_palette_neutrals(&mut palette, "#FFF8F0");
-        assert_eq!(light_hex(palette.get("color-surface").unwrap()), "#FFFFFF");
+        assert_eq!(light_hex(palette.get("--card").unwrap()), "#FFFFFF");
     }
 }

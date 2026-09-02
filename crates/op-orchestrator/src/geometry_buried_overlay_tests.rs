@@ -19,7 +19,7 @@ fn starfield() -> (Value, HashMap<String, Rect>) {
             {"type":"frame","id":"circle","name":"圆形星空视窗","layout":"none",
              "x":15,"y":0,"width":297,"height":297,"clipContent":true,"cornerRadius":149,
              "fill":[{"type":"radial_gradient","stops":[
-                 {"offset":0.0,"color":"#3B1B6E"},{"offset":1.0,"color":"$color-bg-deep"}]}],
+                 {"offset":0.0,"color":"#3B1B6E"},{"offset":1.0,"color":"$--background"}]}],
              "children":[]},
             {"type":"frame","id":"compass","name":"方位标签","layout":"horizontal",
              "x":96,"y":14,"cornerRadius":14,
@@ -27,7 +27,7 @@ fn starfield() -> (Value, HashMap<String, Rect>) {
              "children":[{"type":"text","id":"compasst","content":"北 · 天顶"}]},
             {"type":"frame","id":"gyro","name":"陀螺仪切换","layout":"horizontal",
              "x":24,"y":240,"cornerRadius":16,
-             "fill":[{"type":"solid","color":"$color-accent"}],
+             "fill":[{"type":"solid","color":"$--primary"}],
              "children":[
                 {"type":"icon_font","id":"gyroi","iconFontName":"rotate-3d","width":14,"height":14},
                 {"type":"text","id":"gyrot","content":"陀螺仪 开"}
@@ -82,10 +82,10 @@ fn a_deck_back_layer_is_left_where_it_is() {
         "type":"frame","id":"deck","layout":"none","width":311,"height":180,
         "children":[
             {"type":"frame","id":"front","x":0,"y":0,"width":311,"height":170,
-             "cornerRadius":16,"fill":[{"type":"solid","color":"$color-surface"}],
+             "cornerRadius":16,"fill":[{"type":"solid","color":"$--card"}],
              "children":[{"type":"text","id":"frontt","content":"Front"}]},
             {"type":"frame","id":"back","x":10,"y":10,"width":311,"height":170,
-             "cornerRadius":16,"fill":[{"type":"solid","color":"$color-surface-2"}],
+             "cornerRadius":16,"fill":[{"type":"solid","color":"$--muted"}],
              "children":[]}
         ]
     });
@@ -110,10 +110,10 @@ fn a_deck_back_layer_with_text_on_it_is_still_a_deck() {
         "type":"frame","id":"stack","layout":"none","width":345,"height":168,
         "children":[
             {"type":"frame","id":"front","x":0,"y":18,"width":345,"height":148,
-             "cornerRadius":20,"fill":[{"type":"solid","color":"$color-surface"}],
+             "cornerRadius":20,"fill":[{"type":"solid","color":"$--card"}],
              "children":[{"type":"text","id":"word","content":"Resilient"}]},
             {"type":"frame","id":"back","role":"card","x":14,"y":0,"width":317,"height":148,
-             "cornerRadius":18,"fill":[{"type":"solid","color":"$color-surface-3"}],
+             "cornerRadius":18,"fill":[{"type":"solid","color":"$--accent"}],
              "children":[{"type":"text","id":"backt","content":"Example"}]}
         ]
     });
@@ -140,9 +140,9 @@ fn a_ring_stack_is_left_alone() {
             {"type":"frame","id":"label","x":0,"y":0,"width":80,"height":80,
              "children":[{"type":"text","id":"labelt","content":"72%"}]},
             {"type":"ellipse","id":"progress","x":0,"y":0,"width":80,"height":80,
-             "innerRadius":0.8,"fill":[{"type":"solid","color":"$color-accent"}]},
+             "innerRadius":0.8,"fill":[{"type":"solid","color":"$--primary"}]},
             {"type":"ellipse","id":"track","x":0,"y":0,"width":80,"height":80,
-             "innerRadius":0.8,"fill":[{"type":"solid","color":"$color-surface-2"}]}
+             "innerRadius":0.8,"fill":[{"type":"solid","color":"$--muted"}]}
         ]
     });
     let rects = HashMap::from([
@@ -187,7 +187,7 @@ fn a_corner_badge_tucked_behind_an_edge_is_a_composition() {
         "type":"frame","id":"card","layout":"none","width":200,"height":120,
         "children":[
             {"type":"frame","id":"surface","x":0,"y":0,"width":200,"height":120,
-             "fill":[{"type":"solid","color":"$color-surface"}],"children":[]},
+             "fill":[{"type":"solid","color":"$--card"}],"children":[]},
             {"type":"frame","id":"badge","x":184,"y":-8,"width":32,"height":32,
              "children":[{"type":"text","id":"badget","content":"3"}]}
         ]

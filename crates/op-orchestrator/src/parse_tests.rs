@@ -204,7 +204,7 @@ fn resolve_numeric_design_token_table() {
         Some(-0.5)
     );
     assert_eq!(resolve_numeric_design_token("$spacing-3"), Some(12.0));
-    assert_eq!(resolve_numeric_design_token("$radius-md"), Some(8.0));
+    assert_eq!(resolve_numeric_design_token("$--radius-m"), Some(8.0));
     // weight tokens resolve to numbers too (FontWeight accepts a number);
     // unresolved weight tokens would degrade text to the default weight.
     assert_eq!(
@@ -217,7 +217,7 @@ fn resolve_numeric_design_token_table() {
     );
     assert_eq!(resolve_numeric_design_token("$type-h2-weight"), Some(600.0));
     // colors / sizing keywords stay strings (not numeric tokens).
-    assert_eq!(resolve_numeric_design_token("$color-accent"), None);
+    assert_eq!(resolve_numeric_design_token("$--primary"), None);
     assert_eq!(resolve_numeric_design_token("fill_container"), None);
 }
 
@@ -231,7 +231,7 @@ fn normalize_resolves_numeric_token_and_wraps_bare_fill() {
         // design-system showcase may legitimately display "$spacing-3" as text.
         "content":"$spacing-3",
         "name":"$type-caption-size",
-        "fill":"$color-surface"
+        "fill":"$--card"
     });
     normalize_generated_node_json(&mut v);
     // Whole numbers serialize as integers so `fontWeight` (FontWeight::Number(u32))
@@ -243,7 +243,7 @@ fn normalize_resolves_numeric_token_and_wraps_bare_fill() {
     assert_eq!(v["name"], serde_json::json!("$type-caption-size")); // name preserved
     assert_eq!(
         v["fill"],
-        serde_json::json!([{"type":"solid","color":"$color-surface"}])
+        serde_json::json!([{"type":"solid","color":"$--card"}])
     );
     // The normalized node must round-trip into the canonical schema — this is the
     // real regression guard: a float fontWeight would fail here.

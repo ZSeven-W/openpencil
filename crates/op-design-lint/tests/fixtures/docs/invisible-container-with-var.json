@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "variables": {
-    "color-border": { "type": "color", "value": "#CBD5E1" }
+    "--border": { "type": "color", "value": "#CBD5E1" }
   },
   "children": [
     {

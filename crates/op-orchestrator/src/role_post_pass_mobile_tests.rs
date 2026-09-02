@@ -56,7 +56,7 @@ fn leaf_children_search_bar_keeps_its_authored_chrome() {
     // leaves inside role=search-bar). The nested-shell normalizer used to
     // misfire here: shell fill stripped, search glyph painted white
     // (invisible on the light field), filter glyph re-inked with a
-    // dangling $color-accent that rendered fallback blue.
+    // dangling $--primary that rendered fallback blue.
     let mut bar = json!({
         "type":"frame","role":"search-bar","layout":"horizontal",
         "fill":[{"type":"solid","color":"#F4EDE3"}],
@@ -172,7 +172,7 @@ fn mobile_section_header_see_all_text_becomes_arrow_icon() {
     assert_eq!(row["children"][1]["iconFontName"], json!("chevron-right"));
     assert_eq!(
         row["children"][1]["fill"],
-        json!([{"type":"solid","color":"$color-accent"}])
+        json!([{"type":"solid","color":"$--primary"}])
     );
     assert!(
         row["children"][1].get("content").is_none(),
@@ -370,7 +370,7 @@ fn category_icon_tiles_inside_food_rows_are_compact_and_light() {
     );
     assert_eq!(
         active_tile["children"][0]["fill"],
-        json!([{"type":"solid","color":"$color-accent"}])
+        json!([{"type":"solid","color":"$--primary"}])
     );
 
     let inactive_tile = &children[1]["children"][0];

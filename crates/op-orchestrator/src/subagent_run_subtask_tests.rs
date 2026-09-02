@@ -188,7 +188,7 @@ fn run_subtask_binds_generated_exact_color_to_document_variable() {
     };
     assert_eq!(
         op_editor_core::fills::first_solid_fill_hex(&nodes[0]),
-        Some("$color-bg-deep")
+        Some("$--background")
     );
 }
 
@@ -221,7 +221,7 @@ fn run_subtask_binds_generated_near_color_to_document_variable() {
     };
     assert_eq!(
         op_editor_core::fills::first_solid_fill_hex(&nodes[0]),
-        Some("$color-surface-3")
+        Some("$--accent")
     );
 }
 

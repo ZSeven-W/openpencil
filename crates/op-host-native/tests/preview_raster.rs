@@ -32,7 +32,7 @@ fn near(actual: [u8; 4], expect: [u8; 4], tol: i32) -> bool {
 
 #[test]
 fn preview_paints_resolved_orange_at_the_swatch() {
-    // A 100×100 swatch filled via the `$color-brand` (#ff8800) ref,
+    // A 100×100 swatch filled via the `$--primary` (#ff8800) ref,
     // top-left inside a 200×200 screen frame with NO fill. The old jian
     // MVP walker dropped the `$ref` to grey; the design-canvas renderer
     // resolves it. The screen frame stays unpainted, so a pixel outside
@@ -43,7 +43,7 @@ fn preview_paints_resolved_orange_at_the_swatch() {
         "formatVersion": "1.1",
         "id": "x",
         "app": { "name": "x", "version": "1", "id": "x" },
-        "variables": { "color-brand": { "type": "color", "value": "#ff8800" } },
+        "variables": { "--primary": { "type": "color", "value": "#ff8800" } },
         "children": [
             {
                 "type": "frame", "id": "screen", "width": 200, "height": 200,
@@ -51,7 +51,7 @@ fn preview_paints_resolved_orange_at_the_swatch() {
                     {
                         "type": "rectangle", "id": "swatch",
                         "x": 0, "y": 0, "width": 100, "height": 100,
-                        "fill": [{ "type": "solid", "color": "$color-brand" }]
+                        "fill": [{ "type": "solid", "color": "$--primary" }]
                     }
                 ]
             }

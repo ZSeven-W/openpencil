@@ -495,7 +495,7 @@ mod tests {
         );
     }
 
-    /// invisible-container-with-var: exercises `$color-border` design-token
+    /// invisible-container-with-var: exercises `$--border` design-token
     /// reference path through `SetNodeStrokeHex`. Regression guard caught
     /// by stop-time review — `cmd_set_node_stroke_hex` previously rejected
     /// `$`-prefixed strings via `parse_hex_rgb`, dropping the color silently

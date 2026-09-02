@@ -57,12 +57,12 @@ This is the full worked tree for a two-layer testimonial-card deck:
 frame(width=311, height=180, layout="none")                    -- deck wrapper, sized for the front card + peek
 ├── frame(x=0, y=0, width=295, height=164, cornerRadius=16,     -- children[0] = front card, TOPMOST, opaque
 │         layout="vertical", padding=20, gap=8,
-│         fill=[{type:"solid", color:"$color-surface"}])
+│         fill=[{type:"solid", color:"$--card"}])
 │   ├── text(content="\"Great tool, saved us hours every week.\"", fontSize=15, fontWeight=500)
-│   └── text(content="— Jamie Lee, Product Lead", fontSize=13, fill=[{type:"solid", color:"$color-text-muted"}])
+│   └── text(content="— Jamie Lee, Product Lead", fontSize=13, fill=[{type:"solid", color:"$--muted-foreground"}])
 └── frame(x=16, y=16, width=295, height=164, cornerRadius=16,   -- back layer, decorative only, NO children
-          fill=[{type:"solid", color:"$color-surface-2"}],
-          stroke={thickness:1, fill:[{type:"solid", color:"$color-border"}]})
+          fill=[{type:"solid", color:"$--muted"}],
+          stroke={thickness:1, fill:[{type:"solid", color:"$--border"}]})
 ```
 
 Because `layout="none"` paints lower array indexes on top, the front card is
@@ -71,7 +71,7 @@ Because `layout="none"` paints lower array indexes on top, the front card is
 rectangle/frame with cornerRadius + fill (+ optional stroke) and NO content
 children — giving it real content produces a second, upside-down-z-order copy
 of the card's text fighting the front card for the same pixels. The front
-card carries a real opaque `fill` (here `$color-surface`) so the back layer
+card carries a real opaque `fill` (here `$--card`) so the back layer
 only shows at the peeking edge, not through the middle of the design.
 
 For a 3+ card deck, add more back layers AFTER the front card, each with a

@@ -386,14 +386,14 @@ mod tests {
     }
 
     /// Load the `invisible-container-with-var` fixture (doc declares
-    /// `color-border` variable) and assert equivalence — exercises the
-    /// `$color-border` design-token reference path.
+    /// `--border` variable) and assert equivalence — exercises the
+    /// `$--border` design-token reference path.
     ///
     /// Regression guard: caught by stop-time review — `LintPreValidator`
-    /// previously dropped `$color-border` refs while reporting success
+    /// previously dropped `$--border` refs while reporting success
     /// because `cmd_set_node_stroke_hex` strict-parsed the hex. The
     /// op-design-lint side (this test) ensures `detect_and_plan + apply`
-    /// produces the same `$color-border`-stamped doc as `detect_and_fix`;
+    /// produces the same `$--border`-stamped doc as `detect_and_fix`;
     /// the host parity test confirms the same through `EditorCommand`.
     #[test]
     fn equivalence_invisible_container_with_var() {
@@ -420,7 +420,7 @@ mod tests {
             "var-ref stroke must round-trip identically"
         );
 
-        // Verify the plan carries the $color-border ref (not a resolved hex).
+        // Verify the plan carries the $--border ref (not a resolved hex).
         let stroke_plan = plan
             .iter()
             .find(|f| f.node_id == "light-on-light")
@@ -437,7 +437,7 @@ mod tests {
             .and_then(|c| c.as_str())
             .expect("color field");
         assert_eq!(
-            color, "$color-border",
+            color, "$--border",
             "plan must preserve design-token ref, not resolve to hex"
         );
     }
