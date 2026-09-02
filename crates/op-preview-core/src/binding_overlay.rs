@@ -1,18 +1,16 @@
 //! Typed Preview binding overlay with read-only scroll and pointer locals.
 
+use crate::binding_overlay_apply::apply_value;
 use crate::binding_sites::BindingSite;
 use crate::input_event::ScrollPhase;
 use crate::invalidation::InvalidationKind;
-use crate::scene_helpers::display_string;
 use crate::ui_actions::PreviewUiActions;
 use jian_core::action::services::ScrollAlignment;
 use jian_core::binding::BindingTarget;
 use jian_core::value::RuntimeValue;
 use jian_ops_schema::node::PenNode;
-use op_editor_ui::layout_scene::{
-    LayoutScene, SceneFillLayer, SceneNode, SceneStroke, SceneStrokeAlign,
-};
-use op_editor_ui::{Color, Rect};
+use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
+use op_editor_ui::Rect;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -112,6 +110,13 @@ struct OverlayInner {
     pinned_nodes: BTreeSet<String>,
     sticky_children: BTreeMap<String, BTreeSet<String>>,
     node_scroll_ancestor: BTreeMap<String, String>,
+    /// Top-level roots without an explicit `events.onScroll`: the page
+    /// itself scrolls in preview, the host owns that motion (its
+    /// `content_origin` pass plus the pinned strips), and the overlay
+    /// only mirrors the position into `scroll_values` so `$scroll`
+    /// resolves. `apply_scroll` therefore never translates their
+    /// children — doing so would double the host's scroll.
+    page_scrollers: BTreeSet<String>,
     authored_runtime_document: Option<jian_ops_schema::PenDocument>,
 }
 
@@ -131,10 +136,10 @@ impl BindingOverlay {
         let mut inner = self.inner.borrow_mut();
         let retained_scroll = std::mem::take(&mut inner.scroll_values);
         *inner = OverlayInner::default();
-        collect_scroll_metadata(&document.children, None, &mut inner);
+        collect_scroll_metadata(&document.children, None, true, &mut inner);
         if let Some(pages) = &document.pages {
             for page in pages {
-                collect_scroll_metadata(&page.children, None, &mut inner);
+                collect_scroll_metadata(&page.children, None, true, &mut inner);
             }
         }
         for (node_id, values) in retained_scroll {
@@ -223,6 +228,11 @@ impl BindingOverlay {
             let Some(container_id) = container_id else {
                 continue;
             };
+            // A page scroller's position is owned by the host; writing
+            // it here would desynchronise `$scroll` from what is painted.
+            if self.inner.borrow().page_scrollers.contains(&container_id) {
+                continue;
+            }
             let Some(page) = scene.active_page() else {
                 continue;
             };
@@ -375,8 +385,54 @@ impl BindingOverlay {
         (bottom - node.bounds.origin.y - node.bounds.size.y).max(0.0)
     }
 
+    /// Mirror the host's page scroll into the page root's `$scroll`
+    /// namespace. `offset` / `max_offset` are absolute document pixels
+    /// (the host already clamped them); `delta_y` carries the wheel
+    /// sign convention `update_scroll` uses (negative scrolls down).
+    /// Returns whether any bound value can have changed.
+    pub(crate) fn set_page_scroll(
+        &self,
+        root_id: &str,
+        offset: f32,
+        max_offset: f32,
+        delta_y: f32,
+    ) -> bool {
+        let mut inner = self.inner.borrow_mut();
+        if !inner.page_scrollers.contains(root_id) {
+            return false;
+        }
+        let values = inner.scroll_values.entry(root_id.to_owned()).or_default();
+        let before = values.clone();
+        values.max_offset = max_offset.max(0.0);
+        values.offset = offset.clamp(0.0, values.max_offset);
+        if delta_y < 0.0 {
+            values.direction = "down";
+        } else if delta_y > 0.0 {
+            values.direction = "up";
+        }
+        *values != before
+    }
+
+    /// The mirrored page scroll of `root_id` as `(offset, max_offset)`,
+    /// or `None` when the root is an explicit scroller (or unknown).
+    pub(crate) fn page_scroll(&self, root_id: &str) -> Option<(f32, f32)> {
+        let inner = self.inner.borrow();
+        if !inner.page_scrollers.contains(root_id) {
+            return None;
+        }
+        let values = inner
+            .scroll_values
+            .get(root_id)
+            .cloned()
+            .unwrap_or_default();
+        Some((values.offset, values.max_offset))
+    }
+
     fn apply_scroll(&self, node: &mut SceneNode) {
         let inner = self.inner.borrow();
+        if inner.page_scrollers.contains(&node.id) {
+            return;
+        }
         let Some(values) = inner.scroll_values.get(&node.id) else {
             return;
         };
@@ -398,9 +454,14 @@ impl BindingOverlay {
     }
 }
 
+/// `top_level` marks the page roots: a root without its own
+/// `events.onScroll` becomes an implicit page scroller (see
+/// `OverlayInner::page_scrollers`) whose `pin: true` direct children
+/// join its sticky set so the host can pin them.
 fn collect_scroll_metadata(
     nodes: &[PenNode],
     inherited_scroll: Option<&str>,
+    top_level: bool,
     inner: &mut OverlayInner,
 ) {
     use op_editor_core::PenNodeExt;
@@ -416,14 +477,15 @@ fn collect_scroll_metadata(
             .and_then(serde_json::Value::as_array)
             .is_some_and(|actions| !actions.is_empty())
             .then_some(node_id);
-        let nearest_scroll = own_scroll.or(inherited_scroll);
+        let page_scroll = (top_level && own_scroll.is_none()).then_some(node_id);
+        let nearest_scroll = own_scroll.or(inherited_scroll).or(page_scroll);
         if let Some(scroll) = nearest_scroll {
             inner
                 .node_scroll_ancestor
                 .insert(node_id.to_owned(), scroll.to_owned());
         }
-        if let Some(scroll) = own_scroll {
-            let sticky = json
+        if let Some(scroll) = own_scroll.or(page_scroll) {
+            let mut sticky: BTreeSet<String> = json
                 .get("stickyChildren")
                 .and_then(serde_json::Value::as_array)
                 .into_iter()
@@ -431,12 +493,29 @@ fn collect_scroll_metadata(
                 .filter_map(serde_json::Value::as_str)
                 .map(str::to_owned)
                 .collect();
+            if page_scroll.is_some() {
+                inner.page_scrollers.insert(scroll.to_owned());
+                sticky.extend(
+                    node.children()
+                        .into_iter()
+                        .flatten()
+                        .filter(|child| node_is_pinned(child))
+                        .map(|child| child.id_str().to_owned()),
+                );
+            }
             inner.sticky_children.insert(scroll.to_owned(), sticky);
         }
         if let Some(children) = node.children() {
-            collect_scroll_metadata(children, nearest_scroll, inner);
+            collect_scroll_metadata(children, nearest_scroll, false, inner);
         }
     }
+}
+
+fn node_is_pinned(node: &PenNode) -> bool {
+    serde_json::to_value(node)
+        .ok()
+        .and_then(|json| json.get("pin").and_then(serde_json::Value::as_bool))
+        == Some(true)
 }
 
 fn materialize_json_nodes(
@@ -492,162 +571,6 @@ fn materialize_json_nodes(
             }
         }
         _ => {}
-    }
-}
-
-pub(crate) fn apply_value(node: &mut SceneNode, target: BindingTarget, value: &RuntimeValue) {
-    match target {
-        BindingTarget::Content => {
-            node.text = Some(display_string(value));
-            node.text_runs.clear();
-        }
-        BindingTarget::Value => apply_widget_value(node, value),
-        BindingTarget::Checked => {
-            if let (Some(widget), Some(checked)) = (node.widget.as_mut(), value.as_bool()) {
-                widget.checked = Some(checked);
-            }
-        }
-        BindingTarget::SelectedValue => {
-            if let (Some(widget), Some(selected)) = (node.widget.as_mut(), value.as_str()) {
-                widget.value_str = Some(selected.to_owned());
-            }
-        }
-        BindingTarget::Visible => {
-            if let Some(visible) = value.as_bool() {
-                node.hidden = !visible;
-            }
-        }
-        BindingTarget::Opacity => {
-            if let Some(opacity) = number(value) {
-                node.opacity = opacity.clamp(0.0, 1.0);
-            }
-        }
-        BindingTarget::Fill | BindingTarget::TextColor => {
-            if let Some(color) = color(value) {
-                node.fill = Some(color);
-                if let Some(SceneFillLayer::Solid {
-                    color: layer_color, ..
-                }) = node.fill_layers.first_mut()
-                {
-                    *layer_color = color;
-                }
-            }
-        }
-        BindingTarget::Stroke => {
-            if let Some(color) = color(value) {
-                if let Some(stroke) = node.stroke.as_mut() {
-                    stroke.color = color;
-                } else {
-                    node.stroke = Some(SceneStroke {
-                        color,
-                        width: 1.0,
-                        sides: None,
-                        align: SceneStrokeAlign::Center,
-                    });
-                }
-            }
-        }
-        BindingTarget::CornerRadius => {
-            if let Some(radius) = number(value) {
-                node.corner_radius = radius.max(0.0);
-                node.corner_radii = None;
-            }
-        }
-        BindingTarget::X => {
-            if let Some(x) = number(value) {
-                node.bounds.origin.x = x;
-            }
-        }
-        BindingTarget::Y => {
-            if let Some(y) = number(value) {
-                node.bounds.origin.y = y;
-            }
-        }
-        BindingTarget::Width => {
-            if let Some(width) = number(value) {
-                node.bounds.size.x = width.max(0.0);
-            }
-        }
-        BindingTarget::Height => {
-            if let Some(height) = number(value) {
-                node.bounds.size.y = height.max(0.0);
-            }
-        }
-        BindingTarget::Rotation => {
-            if let Some(degrees) = number(value) {
-                node.rotation = degrees.to_radians();
-            }
-        }
-        BindingTarget::ScaleX => {
-            if let Some(scale) = number(value) {
-                scale_axis(node, scale, true);
-            }
-        }
-        BindingTarget::ScaleY => {
-            if let Some(scale) = number(value) {
-                scale_axis(node, scale, false);
-            }
-        }
-        BindingTarget::Variant | BindingTarget::ActiveState => {
-            apply_structural_state(node, value);
-        }
-    }
-}
-
-fn apply_widget_value(node: &mut SceneNode, value: &RuntimeValue) {
-    let Some(widget) = node.widget.as_mut() else {
-        return;
-    };
-    match widget.kind.as_str() {
-        "switch" | "checkbox" => widget.checked = value.as_bool(),
-        "slider" | "progress" | "number_input" => widget.value_num = number(value),
-        _ => widget.value_str = value.as_str().map(str::to_owned),
-    }
-}
-
-fn apply_structural_state(node: &mut SceneNode, value: &RuntimeValue) {
-    if let Some(widget) = node.widget.as_mut() {
-        match widget.kind.as_str() {
-            "switch" | "checkbox" => widget.checked = value.as_bool(),
-            _ => widget.value_str = value.as_str().map(str::to_owned),
-        }
-        return;
-    }
-    let Some(active) = value.as_str() else {
-        return;
-    };
-    for child in &mut node.children {
-        child.hidden = child.id != active;
-    }
-}
-
-fn number(value: &RuntimeValue) -> Option<f32> {
-    value
-        .as_f64()
-        .map(|number| number as f32)
-        .or_else(|| value.as_i64().map(|number| number as f32))
-}
-
-fn color(value: &RuntimeValue) -> Option<Color> {
-    let color = jian_core::scene::Color::from_hex(value.as_str()?)?;
-    Some(Color::rgba_u8(
-        color.r(),
-        color.g(),
-        color.b(),
-        f32::from(color.a()) / 255.0,
-    ))
-}
-
-fn scale_axis(node: &mut SceneNode, scale: f32, horizontal: bool) {
-    let scale = scale.max(0.0);
-    if horizontal {
-        let center = node.bounds.origin.x + node.bounds.size.x / 2.0;
-        node.bounds.size.x *= scale;
-        node.bounds.origin.x = center - node.bounds.size.x / 2.0;
-    } else {
-        let center = node.bounds.origin.y + node.bounds.size.y / 2.0;
-        node.bounds.size.y *= scale;
-        node.bounds.origin.y = center - node.bounds.size.y / 2.0;
     }
 }
 

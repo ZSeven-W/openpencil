@@ -59,20 +59,30 @@ pub(super) fn collect_binding_sites(
     out: &mut Vec<BindingSite>,
     warnings: &mut Vec<String>,
 ) {
-    collect_binding_sites_under(nodes, None, out, warnings);
+    collect_binding_sites_under(nodes, None, None, out, warnings);
 }
 
+/// `scroll_ancestor` is the nearest explicit scroller (a frame with a
+/// non-empty `events.onScroll`); `page_root` is the top-level root the
+/// node lives under. A `$scroll` reference with no explicit scroller
+/// binds to the page root: in preview the page itself scrolls (the
+/// host feeds its scroll position through
+/// `PreviewSession::set_page_scroll`), so `$scroll` there means the
+/// page scroll the way `window.scrollY` does on the web. An explicit
+/// scroller shadows the page scope for its own subtree.
 fn collect_binding_sites_under(
     nodes: &[PenNode],
     scroll_ancestor: Option<&str>,
+    page_root: Option<&str>,
     out: &mut Vec<BindingSite>,
     warnings: &mut Vec<String>,
 ) {
     use op_editor_core::PenNodeExt;
     for node in nodes {
         let node_id = node.id_str();
+        let page_root = page_root.or(Some(node_id));
         let own_scroll = node_has_on_scroll(node).then_some(node_id);
-        let nearest_scroll = own_scroll.or(scroll_ancestor);
+        let nearest_scroll = own_scroll.or(scroll_ancestor).or(page_root);
         if let Some(bindings) = node_bindings(node) {
             for (property, expression) in bindings {
                 if property == "bind:value" {
@@ -109,14 +119,6 @@ fn collect_binding_sites_under(
                 if restricted && (uses_scroll || uses_pointer) {
                     continue;
                 }
-                if uses_scroll && nearest_scroll.is_none() {
-                    push_warning_once(
-                        warnings,
-                        format!(
-                            "MissingScrollAncestor: '{node_id}' prop '{property}' uses defaults"
-                        ),
-                    );
-                }
                 match CompiledExpression::compile(&expression.0) {
                     Ok(compiled) => out.push(BindingSite {
                         node_id: node_id.to_owned(),
@@ -134,7 +136,8 @@ fn collect_binding_sites_under(
             }
         }
         if let Some(children) = node.children() {
-            collect_binding_sites_under(children, nearest_scroll, out, warnings);
+            let explicit_scroll = own_scroll.or(scroll_ancestor);
+            collect_binding_sites_under(children, explicit_scroll, page_root, out, warnings);
         }
     }
 }

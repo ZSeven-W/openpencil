@@ -6,11 +6,11 @@ use super::input_event::{PreviewInput, PreviewInputEnvelope, ScrollPhase};
 use super::{test_measure, InvalidationKind, PreviewSession};
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 
-fn theme() -> std::collections::BTreeMap<String, String> {
+pub(super) fn theme() -> std::collections::BTreeMap<String, String> {
     std::collections::BTreeMap::new()
 }
 
-fn find<'a>(scene: &'a LayoutScene, id: &str) -> &'a SceneNode {
+pub(super) fn find<'a>(scene: &'a LayoutScene, id: &str) -> &'a SceneNode {
     scene
         .active_page()
         .and_then(|page| page.find(id))
@@ -227,7 +227,7 @@ fn every_typed_target_changes_its_runtime_projection() {
     );
 }
 
-fn enter(document: &jian_ops_schema::PenDocument) -> PreviewSession {
+pub(super) fn enter(document: &jian_ops_schema::PenDocument) -> PreviewSession {
     PreviewSession::enter(
         document,
         (800.0, 600.0),
@@ -554,16 +554,17 @@ fn scroll_binding_rejects_relayout_and_warns_once_without_ancestor() {
         .filter(|warning| warning.contains("ScrollBindingRequiresPaintOnly"))
         .collect();
     assert_eq!(restricted.len(), 1, "one structured restriction diagnostic");
-    let missing: Vec<_> = session
-        .warnings()
-        .iter()
-        .filter(|warning| warning.contains("MissingScrollAncestor"))
-        .collect();
-    assert_eq!(missing.len(), 1, "one diagnostic per orphan binding");
+    assert!(
+        !session
+            .warnings()
+            .iter()
+            .any(|warning| warning.contains("MissingScrollAncestor")),
+        "a top-level binding is never orphaned: it binds to the page scroll"
+    );
     assert_eq!(
         find(&session.preview_scene_for_test(), "orphan").opacity,
         0.0,
-        "missing scroll context evaluates to documented defaults"
+        "an unscrolled page evaluates $scroll.progress to 0"
     );
 }
 

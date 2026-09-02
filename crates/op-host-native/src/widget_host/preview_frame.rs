@@ -143,8 +143,10 @@ impl super::WidgetHostNative {
         if let (Some(pinned_top), Some((node_id, _))) = (frame.pinned_top.as_mut(), status) {
             pinned_top.node_id = node_id;
         }
-        self.preview_scroll_y = self.preview_scroll_y.clamp(0.0, scroll_max(&frame));
+        let max = scroll_max(&frame);
+        self.preview_scroll_y = self.preview_scroll_y.clamp(0.0, max);
         self.preview_device_frame = Some(frame);
+        self.sync_page_scroll(max, 0.0);
     }
 
     /// Apply a screen-pixel scroll delta to logical frame content.
@@ -152,10 +154,27 @@ impl super::WidgetHostNative {
         let Some(frame) = self.preview_device_frame.as_ref() else {
             return;
         };
-        let next =
-            (self.preview_scroll_y - screen_delta_y / frame.fit).clamp(0.0, scroll_max(frame));
+        let max = scroll_max(frame);
+        let next = (self.preview_scroll_y - screen_delta_y / frame.fit).clamp(0.0, max);
         if (next - self.preview_scroll_y).abs() > f32::EPSILON {
             self.preview_scroll_y = next;
+            self.mark_dirty();
+        }
+        self.sync_page_scroll(max, screen_delta_y);
+    }
+
+    /// Feed the device frame's scroll position into the session so
+    /// `$scroll` bindings under the framed root track the page scroll
+    /// (page-scroll contract). Repaints when a bound value moved even
+    /// if the offset itself did not (a new `max_offset` changes
+    /// `$scroll.progress`).
+    fn sync_page_scroll(&mut self, max_offset: f32, delta_y: f32) {
+        let offset = self.preview_scroll_y;
+        let changed = self
+            .preview
+            .as_mut()
+            .is_some_and(|session| session.set_page_scroll(offset, max_offset, delta_y));
+        if changed {
             self.mark_dirty();
         }
     }

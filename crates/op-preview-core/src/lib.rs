@@ -64,6 +64,7 @@ mod auto_wire;
 #[cfg(not(feature = "gl-host"))]
 mod auto_wire_stub;
 mod binding_overlay;
+mod binding_overlay_apply;
 mod binding_sites;
 mod debug_trace;
 pub mod device_frame;
@@ -172,6 +173,8 @@ mod tests_interaction;
 mod tests_interaction_state;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
+#[cfg(test)]
+mod tests_page_scroll;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_pointer_bindings;
 #[cfg(all(test, not(target_os = "windows")))]

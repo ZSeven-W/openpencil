@@ -66,10 +66,88 @@ impl PreviewSession {
         page.children.first()?.fill
     }
 
+    /// Mirror the host's page scroll into the framed root's `$scroll`
+    /// namespace (page-scroll contract: a root without its own
+    /// `events.onScroll` scrolls as a whole, and its descendants read
+    /// that motion as `$scroll`). Returns whether a bound value can
+    /// have changed, so the host knows to repaint.
+    pub fn set_page_scroll(&mut self, offset: f32, max_offset: f32, delta_y: f32) -> bool {
+        let Some((root_id, _)) = self.framed_root() else {
+            return false;
+        };
+        self.binding_overlay
+            .set_page_scroll(&root_id, offset, max_offset, delta_y)
+    }
+
+    /// The framed root's mirrored page scroll as `(offset, max_offset)`
+    /// in document pixels — `None` when the root is an explicit
+    /// scroller, which owns its own `$scroll` namespace.
+    pub fn page_scroll(&self) -> Option<(f32, f32)> {
+        let (root_id, _) = self.framed_root()?;
+        self.binding_overlay.page_scroll(&root_id)
+    }
+
+    /// Whether the framed root pins `id`: the child is authored
+    /// `pin: true`, or the root lists it in `stickyChildren`.
+    fn root_pins_child(&self, root_id: &str, id: &str) -> bool {
+        let pinned = |node: &jian_ops_schema::node::PenNode| {
+            serde_json::to_value(node)
+                .ok()
+                .and_then(|json| json.get("pin").and_then(serde_json::Value::as_bool))
+                == Some(true)
+        };
+        if self.schema_node(id).is_some_and(pinned) {
+            return true;
+        }
+        self.schema_node(root_id).is_some_and(|root| {
+            serde_json::to_value(root)
+                .ok()
+                .and_then(|json| {
+                    json.get("stickyChildren")
+                        .and_then(serde_json::Value::as_array)
+                        .map(|list| list.iter().any(|item| item.as_str() == Some(id)))
+                })
+                .unwrap_or(false)
+        })
+    }
+
+    /// The authored pin nearest the given edge of the framed root, if
+    /// any: a `pin: true` direct child flush with the root's top (or
+    /// bottom) edge. Authored pins beat every heuristic below and apply
+    /// to every device kind, since a landing page pins its nav just as
+    /// deliberately as a phone screen pins its tab bar.
+    fn authored_pin_at_edge(&self, bottom: bool) -> Option<(String, Rect)> {
+        let page = self.scene.active_page()?;
+        let root = page.children.first()?;
+        let root_top = root.bounds.origin.y;
+        let root_bottom = root_top + root.bounds.size.y;
+        root.children
+            .iter()
+            .filter(|child| {
+                let height = child.bounds.size.y;
+                !child.hidden && height.is_finite() && height > 0.0 && height <= 200.0
+            })
+            .filter(|child| self.root_pins_child(&root.id, &child.id))
+            .find(|child| {
+                let gap = if bottom {
+                    root_bottom - (child.bounds.origin.y + child.bounds.size.y)
+                } else {
+                    child.bounds.origin.y - root_top
+                };
+                (-1.0..=2.0).contains(&gap)
+            })
+            .map(|child| (child.id.clone(), child.bounds))
+    }
+
     /// Detect a pinnable bottom nav among the framed root's direct
-    /// children. Semantic candidates take precedence over the positional
-    /// heuristic, and document order breaks ties within each pass.
+    /// children. An authored `pin: true` child flush with the bottom
+    /// edge wins outright; otherwise (phone only) semantic candidates
+    /// take precedence over the positional heuristic, and document
+    /// order breaks ties within each pass.
     pub fn pinned_nav_candidate(&self, phone: bool) -> Option<(String, Rect)> {
+        if let Some(pinned) = self.authored_pin_at_edge(true) {
+            return Some(pinned);
+        }
         if !phone {
             return None;
         }
@@ -129,6 +207,9 @@ impl PreviewSession {
     /// the bottom nav's 120 px so an ordinary page header doesn't get
     /// mistaken for one).
     pub fn pinned_status_bar_candidate(&self, phone: bool) -> Option<(String, Rect)> {
+        if let Some(pinned) = self.authored_pin_at_edge(false) {
+            return Some(pinned);
+        }
         if !phone {
             return None;
         }

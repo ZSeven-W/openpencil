@@ -1,6 +1,6 @@
 //! One bounded animation timeline owned by a Preview session.
 
-use crate::binding_overlay::apply_value;
+use crate::binding_overlay_apply::apply_value;
 use crate::invalidation::InvalidationKind;
 use crate::session::PreviewSession;
 use jian_core::action::animation_registry::{animatable_property_registry, AnimationInterpolate};
@@ -453,6 +453,9 @@ fn sample_scene_property(
         AnimationProperty::Y => serde_json::json!(node.bounds.origin.y),
         AnimationProperty::Rotation => serde_json::json!(node.rotation.to_degrees()),
         AnimationProperty::ScaleX | AnimationProperty::ScaleY => serde_json::json!(1.0),
+        // A visual offset is applied on top of the solved rect and never
+        // stored on the scene node, so the sampled baseline is always 0.
+        AnimationProperty::TranslateX | AnimationProperty::TranslateY => serde_json::json!(0.0),
         AnimationProperty::Fill => serde_json::Value::String(scene_color(node.fill?)),
         AnimationProperty::Stroke => serde_json::Value::String(scene_color(node.stroke?.color)),
         AnimationProperty::CornerRadius => serde_json::json!(node.corner_radius),
