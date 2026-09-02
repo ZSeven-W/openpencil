@@ -32,6 +32,9 @@ pub fn build_subagent_prompt(
         abort,
         reduced_complexity,
         minimal_skills,
+        // This compatibility wrapper has no live document snapshot. The
+        // production runner uses the route-aware wrapper below.
+        false,
         components,
         &[],
     )
@@ -44,6 +47,9 @@ pub fn build_subagent_prompt(
 /// Generation paths call this variant after resolving normalized plan groups
 /// (or loop continuation's live screens) through navigation's shared route
 /// allocator.
+///
+/// * `doc_has_variables` — derived from the live document's non-empty
+///   `sink.state().doc.variables` table by the sub-agent runner.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_subagent_prompt_with_screen_routes(
     subtask: &Subtask,
@@ -52,6 +58,7 @@ pub(crate) fn build_subagent_prompt_with_screen_routes(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    doc_has_variables: bool,
     components: &ComponentLibrary,
     screen_routes: &[(String, String)],
 ) -> (CallRequest, SkillLoadReport) {
@@ -65,6 +72,7 @@ pub(crate) fn build_subagent_prompt_with_screen_routes(
         abort,
         reduced_complexity,
         minimal_skills,
+        doc_has_variables,
         script_on,
         components,
         screen_routes,
@@ -82,6 +90,7 @@ pub(super) fn build_subagent_prompt_core(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    doc_has_variables: bool,
     script_on: bool,
     components: &ComponentLibrary,
     screen_routes: &[(String, String)],
@@ -128,10 +137,9 @@ pub(super) fn build_subagent_prompt_core(
     let mut flags = HashMap::new();
     flags.insert("isBasicTier".to_string(), tier == ModelTier::Basic);
     flags.insert("hasDesignMd".to_string(), has_design_md);
-    // No existing-document variable context is wired into `DesignRequest`
-    // (TS sources this from `request.context.variables`), so this is always
-    // false on the Rust path today.
-    flags.insert("hasVariables".to_string(), false);
+    // `doc_has_variables` comes from `sink.state().doc.variables` in the
+    // sub-agent runner, mirroring the TS `request.context.variables` gate.
+    flags.insert("hasVariables".to_string(), doc_has_variables);
     flags.insert("noStyleGuideMatch".to_string(), no_style_guide_match);
     // Element-tools (N-tool) path is not ported to Rust (feature-flag off in
     // TS production); `elements`/`elements-cookbook` therefore stay gated off.

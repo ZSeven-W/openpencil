@@ -2,6 +2,75 @@
 //! templates, language consistency and design-system dropping.
 
 use super::*;
+use jian_ops_schema::variable::VariableDefinition;
+use std::collections::BTreeMap;
+
+/// Build a prompt for a document variable table using the same non-empty check
+/// as the production sub-agent runner.
+fn prompt_for_variables(
+    variables: Option<BTreeMap<String, VariableDefinition>>,
+    model: &str,
+) -> SkillLoadReport {
+    let doc_has_variables = variables.as_ref().is_some_and(|v| !v.is_empty());
+    let mut request = req();
+    request.model = Some(model.into());
+    let (_, report) = build_subagent_prompt_with_screen_routes(
+        &subtask(),
+        &plan(),
+        &request,
+        AbortFlag::new(),
+        false,
+        false,
+        doc_has_variables,
+        &ComponentLibrary::default(),
+        &[],
+    );
+    report
+}
+
+#[test]
+fn non_empty_document_variables_include_variables_skill() {
+    let report = prompt_for_variables(Some(crate::semantic_palette::palette_variables()), "claude");
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|entry| entry.name == "variables"),
+        "a non-empty document variable table must include the variables skill: {report:?}"
+    );
+}
+
+#[test]
+fn empty_or_absent_document_variables_drop_variables_for_intent_miss() {
+    for variables in [None, Some(BTreeMap::new())] {
+        let report = prompt_for_variables(variables, "claude");
+        let dropped = report
+            .dropped
+            .iter()
+            .find(|entry| entry.name == "variables")
+            .unwrap_or_else(|| panic!("variables skill must be reported as dropped: {report:?}"));
+        assert_eq!(
+            dropped.reason,
+            op_ai_skills::DropReason::IntentMiss,
+            "empty or absent document variables must miss the flag gate"
+        );
+    }
+}
+
+#[test]
+fn basic_tier_keeps_variables_skill_when_document_variables_exist() {
+    let report = prompt_for_variables(
+        Some(crate::semantic_palette::palette_variables()),
+        "glm-4.6",
+    );
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|entry| entry.name == "variables"),
+        "Basic tier must retain variables from its allow-set: {report:?}"
+    );
+}
 
 #[test]
 fn subagent_prompt_injects_exact_json_quoted_screen_route_inventory() {
@@ -23,6 +92,7 @@ fn subagent_prompt_injects_exact_json_quoted_screen_route_inventory() {
         AbortFlag::new(),
         false,
         false,
+        false,
         &ComponentLibrary::default(),
         &routes,
     );
@@ -42,6 +112,7 @@ CRITICAL LAYOUT CONSTRAINTS:"#;
         &plan,
         &req,
         AbortFlag::new(),
+        false,
         false,
         false,
         &ComponentLibrary::default(),
@@ -74,6 +145,7 @@ fn empty_screen_route_inventory_matches_public_builder_byte_for_byte() {
         &plan,
         &req,
         AbortFlag::new(),
+        false,
         false,
         false,
         &components,

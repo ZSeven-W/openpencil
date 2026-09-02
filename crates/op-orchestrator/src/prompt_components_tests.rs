@@ -398,6 +398,7 @@ fn tight_budget_dashboard_keeps_component_composition() {
         false,
         false,
         false,
+        false,
         &lib,
         &[],
     );

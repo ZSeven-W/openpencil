@@ -112,9 +112,10 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // Classic fan-out derives routes from normalized planning groups; loop
     // continuation (whose synthetic plan has no screen labels) falls back to
     // live screen markers. Both paths share navigation's route allocator.
-    let screen_routes =
-        crate::wire_screen_navigation::prompt_screen_route_inventory(plan, sink.state());
-    let components = sink.state().components.clone();
+    let state = sink.state();
+    let screen_routes = crate::wire_screen_navigation::prompt_screen_route_inventory(plan, state);
+    let components = state.components.clone();
+    let has_variables = state.doc.variables.as_ref().is_some_and(|v| !v.is_empty());
 
     // 收集 LLM 文本输出。
     let (call_req, skill_report) = build_subagent_prompt_with_screen_routes(
@@ -124,6 +125,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         abort.clone(),
         reduced_complexity,
         minimal_skills,
+        has_variables,
         &components,
         &screen_routes,
     );
