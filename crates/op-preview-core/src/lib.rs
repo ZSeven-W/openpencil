@@ -173,7 +173,7 @@ mod tests_interaction;
 mod tests_interaction_state;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_page_scroll;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_pointer_bindings;
