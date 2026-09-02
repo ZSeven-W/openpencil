@@ -4118,6 +4118,7 @@ name = "op-ai-skills"
 version = "0.8.5"
 dependencies = [
  "include_dir",
+ "jian-core",
  "jian-ops-schema",
  "op-util",
  "serde_json",

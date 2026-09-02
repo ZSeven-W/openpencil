@@ -19,6 +19,7 @@ include_dir = "0.7"
 # Test-only: the loader test asserts the jian-components skill teaches
 # every role string jian's promote table honours, so the doc and the
 # table can never silently drift apart.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 serde_json = { workspace = true }
 
