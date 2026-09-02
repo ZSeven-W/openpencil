@@ -168,3 +168,42 @@ fn authored_pin_on_a_page_root_is_the_pinned_candidate_on_every_device() {
         "nothing is pinned to the bottom edge"
     );
 }
+
+/// Generated sections wrap their nav in a fit-content shell and put the
+/// `pin: true` on the inner frame; the pin bubbles up through the
+/// single-child chain so the shell (the page root's direct child) pins.
+#[test]
+fn a_pin_inside_a_single_child_wrapper_pins_the_wrapper() {
+    let source = r##"{
+        "version": "1.1", "formatVersion": "1.1", "id": "wrapped",
+        "app": { "name": "wrapped", "version": "1", "id": "wrapped" },
+        "children": [
+            { "type": "frame", "id": "landing", "x": 0, "y": 0, "width": 400, "height": 1400,
+              "layout": "vertical",
+              "children": [
+                  { "type": "frame", "id": "nav-section", "width": 400, "height": "fit_content",
+                    "layout": "vertical",
+                    "children": [
+                        { "type": "frame", "id": "nav-bar", "pin": true, "width": 400, "height": 64,
+                          "fill": [{ "type": "solid", "color": "#111111" }] }
+                    ] },
+                  { "type": "frame", "id": "two-kids", "width": 400, "height": "fit_content",
+                    "layout": "vertical",
+                    "children": [
+                        { "type": "rectangle", "id": "a", "pin": true, "width": 400, "height": 40 },
+                        { "type": "rectangle", "id": "b", "width": 400, "height": 900 }
+                    ] }
+              ] }
+        ]
+    }"##;
+    let document = jian_ops_schema::load_str(source).expect("parse").value;
+    let session = enter(&document);
+    let (top, _) = session
+        .pinned_status_bar_candidate(false)
+        .expect("the wrapped nav pins through its shell");
+    assert_eq!(top, "nav-section");
+    assert!(
+        session.pinned_nav_candidate(false).is_none(),
+        "a pin inside a multi-child section does not bubble up"
+    );
+}

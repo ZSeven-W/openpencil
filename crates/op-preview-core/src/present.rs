@@ -88,7 +88,10 @@ impl PreviewSession {
     }
 
     /// Whether the framed root pins `id`: the child is authored
-    /// `pin: true`, or the root lists it in `stickyChildren`.
+    /// `pin: true`, the pin sits on a node the child merely wraps (a
+    /// single-child chain down from the child — generated sections
+    /// routinely put the pin on the nav frame inside a fit-content
+    /// section shell), or the root lists it in `stickyChildren`.
     fn root_pins_child(&self, root_id: &str, id: &str) -> bool {
         let pinned = |node: &jian_ops_schema::node::PenNode| {
             serde_json::to_value(node)
@@ -96,8 +99,15 @@ impl PreviewSession {
                 .and_then(|json| json.get("pin").and_then(serde_json::Value::as_bool))
                 == Some(true)
         };
-        if self.schema_node(id).is_some_and(pinned) {
-            return true;
+        let mut cursor = self.schema_node(id);
+        while let Some(node) = cursor {
+            if pinned(node) {
+                return true;
+            }
+            cursor = match node.children().map(Vec::as_slice) {
+                Some([only]) => Some(only),
+                _ => None,
+            };
         }
         self.schema_node(root_id).is_some_and(|root| {
             serde_json::to_value(root)
