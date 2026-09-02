@@ -2,7 +2,6 @@ use crate::{
     design_agent_system_prompt_with_skills, get_skill_by_name, resolve_skills, DropReason, Phase,
     ResolveOptions, SkillCategory, SkillTrigger,
 };
-use jian_core::binding::{BindingTarget, InvalidationKind};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -16,8 +15,29 @@ const REQUIRED_TRIGGERS: &[&str] = &[
     "入场动画",
     "交错",
     "stagger",
+    "scrollytelling",
+    "scroll-progress",
 ];
 const CONTRACT_FIELDS: &[&str] = &["stickyChildren", "pin", "bindings", "events", "lifecycle"];
+
+/// The only targets a `$scroll` binding may drive. The page-scroll contract
+/// adds `translateX` / `translateY`, which land in `BindingTarget` via a
+/// vendor/jian pointer bump that may not be merged when this test runs, so
+/// the gate is this static list rather than `BindingTarget::parse` +
+/// `invalidation` — every target outside it (x, y, width, height, scale, ...)
+/// still fails exactly like before.
+const PAINT_ONLY_TARGETS: &[&str] = &[
+    "opacity",
+    "fill",
+    "stroke",
+    "textColor",
+    "cornerRadius",
+    "value",
+    "checked",
+    "selectedValue",
+    "translateX",
+    "translateY",
+];
 
 fn source() -> &'static crate::loader::SkillEntry {
     get_skill_by_name(SKILL_NAME).expect("scroll-orchestration skill must be registered")
@@ -91,7 +111,12 @@ fn validate_action_lists(value: &Value, recipe: usize) {
     }
 }
 
-fn validate_scroll_bindings(value: &Value, has_scroll_ancestor: bool, recipe: usize) {
+/// Page-scroll scope: a `$scroll` binding without an explicit container
+/// ancestor reads the page scroll, so the old ancestor requirement is gone;
+/// the corpus-wide `onScroll`/`clipContent` counts (asserted in
+/// [`page_scroll_contract_teaches_the_new_vocabulary`]) are what keep every
+/// recipe but the app-screen one off the container contract.
+fn validate_scroll_bindings(value: &Value, recipe: usize) {
     let Some(object) = value.as_object() else {
         return;
     };
@@ -100,7 +125,6 @@ fn validate_scroll_bindings(value: &Value, has_scroll_ancestor: bool, recipe: us
         .and_then(|events| events.get("onScroll"))
         .and_then(Value::as_array)
         .is_some_and(|actions| !actions.is_empty());
-    let has_scroll_ancestor = has_scroll_ancestor || owns_scroll;
 
     if let Some(bindings) = object.get("bindings").and_then(Value::as_object) {
         for (property, expression) in bindings {
@@ -112,15 +136,7 @@ fn validate_scroll_bindings(value: &Value, has_scroll_ancestor: bool, recipe: us
             });
             if source.contains("$scroll") {
                 assert!(
-                    has_scroll_ancestor,
-                    "recipe #{recipe} binding {property:?} uses $scroll without an onScroll ancestor"
-                );
-                let target = BindingTarget::parse(property).unwrap_or_else(|| {
-                    panic!("recipe #{recipe} uses unknown binding target {property:?}")
-                });
-                assert_eq!(
-                    target.invalidation(),
-                    InvalidationKind::PaintOnly,
+                    PAINT_ONLY_TARGETS.contains(&property.as_str()),
                     "recipe #{recipe} teaches forbidden $scroll binding target {property:?}"
                 );
             }
@@ -149,7 +165,7 @@ fn validate_scroll_bindings(value: &Value, has_scroll_ancestor: bool, recipe: us
 
     if let Some(children) = object.get("children").and_then(Value::as_array) {
         for child in children {
-            validate_scroll_bindings(child, has_scroll_ancestor, recipe);
+            validate_scroll_bindings(child, recipe);
         }
     }
 }
@@ -233,7 +249,7 @@ fn every_recipe_is_valid_schema_and_valid_runtime_vocabulary() {
         assert!(node.get("id").and_then(Value::as_str).is_some());
 
         validate_action_lists(&node, recipe);
-        validate_scroll_bindings(&node, false, recipe);
+        validate_scroll_bindings(&node, recipe);
         animate_actions += count_key(&node, "animate");
         scroll_bindings += block.matches("$scroll").count();
         sticky_fields += count_key(&node, "stickyChildren") + count_key(&node, "pin");
@@ -298,6 +314,38 @@ fn vocabulary_and_scope_boundaries_are_explicit() {
     }
     assert!(content.contains("vertical viewport scroll orchestration"));
     assert!(content.contains("not an ordinary horizontal card rail"));
+}
+
+#[test]
+fn page_scroll_contract_teaches_the_new_vocabulary() {
+    let content = &source().content;
+    for token in ["translateY", "translateX", "pin", "$scroll.progress"] {
+        assert!(
+            content.contains(token),
+            "missing page-scroll contract token {token:?}"
+        );
+    }
+    // The page itself is the scroll container: exactly ONE explicit scroller
+    // may remain, and it must be the recipe marked app-screen-only.
+    assert_eq!(
+        content.matches("onScroll").count(),
+        1,
+        "onScroll must appear only in the app-screen explicit-container recipe"
+    );
+    assert_eq!(
+        content.matches("clipContent").count(),
+        1,
+        "clipContent must appear only in the app-screen explicit-container recipe"
+    );
+    assert!(
+        content.contains("APP SCREENS ONLY"),
+        "the explicit-container recipe must be marked app-screen-only"
+    );
+    // The generator emits program form, so the DSL spelling of the contract
+    // (bindings as plain I() properties) must be taught verbatim.
+    assert!(content.contains("I(sec, {type:\"frame\", name:\"Hero BG\""));
+    assert!(content.contains("width:\"fill_container\""));
+    assert!(content.contains("bindings:{translateY:\"$scroll.offset * -0.3\"}"));
 }
 
 #[test]

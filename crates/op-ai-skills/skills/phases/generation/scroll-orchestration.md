@@ -1,6 +1,6 @@
 ---
 name: scroll-orchestration
-description: Deep scroll-progress, sticky-pin, and property-animation recipes for landing and brand pages
+description: Page-scroll parallax, sticky-pin, stagger reveal and property-animation recipes for landing and brand pages
 phase: [generation]
 trigger:
   keywords: [滚动, 视差, parallax, scroll, sticky, 入场动画, 交错, stagger, scrollytelling, scroll-progress]
@@ -11,260 +11,221 @@ category: domain
 
 SCROLL ORCHESTRATION is for vertical viewport scroll orchestration and is
 not an ordinary horizontal card rail. Basic state, events, and navigation stay
-in `interactivity`; this topic composes scroll-progress + sticky-pin + animate.
+in `interactivity`; this topic composes page scroll + pin + bindings + animate.
 
-## Exact runtime contract
+## Page-scroll contract (the page IS the scroller)
 
-- A scroller is a fixed-height, overflowing, `clipContent:true` frame with a
-  nonempty `events.onScroll`. Descendants read the nearest `$scroll.offset`,
-  `$scroll.maxOffset`, `$scroll.progress` (0..1), and `$scroll.direction`
-  (`"up"|"down"|"none"`) in expression strings under `bindings`.
-- `$scroll` may drive only PaintOnly targets: `opacity`, `fill`, `stroke`,
-  `textColor`, `cornerRadius`, widget `value`, `checked`, `selectedValue`.
-  Never bind it to `x`, `y`, `rotation`, `scaleX`, `scaleY`, `width`, `height`,
-  `visible`, or `content`. Use a Progress node's `value`, not rectangle width.
-- `stickyChildren:["id"]` lists direct children of the scroller; `pin:true`
-  holds the authored viewport position. This is unconditional pinning, not
-  threshold-based CSS sticky. Prefer direct children; ordinary siblings move.
+- In preview the page root scrolls as a whole, like `window.scrollY`. Any
+  `$scroll` reference with no explicit scroller ancestor reads the PAGE scroll:
+  `$scroll.offset` (px), `$scroll.maxOffset`, `$scroll.progress` (0..1, stays 0
+  while the page has no overflow), `$scroll.direction` (`"up"|"down"|"none"`).
+- NEVER wrap sections in a fixed-height clipped frame with a scroll handler to
+  get scrolling on a landing/brand page — that builds a second scroller inside
+  the page and steals `$scroll` from the sections. Write sections as usual and
+  put the motion on `bindings`.
+- `$scroll` may drive only PaintOnly targets: `translateX`, `translateY`,
+  `opacity`, `fill`, `stroke`, `textColor`, `cornerRadius`, widget `value`,
+  `checked`, `selectedValue`. Never bind it to `x`, `y`, `rotation`, `scaleX`,
+  `scaleY`, `width`, `height`, `visible`, or `content` — the runtime drops them.
+  `translateX/Y` are visual offsets on top of the solved layout (a CSS
+  `transform: translate`): parallax, rise-in and progress bars all use them.
+- Sticky / fixed nav: give the section's ROOT frame `pin: true` when it is a
+  direct child of the page root, flush with the page top or bottom edge. Pin is
+  unconditional viewport pinning, not threshold CSS sticky. No container, no
+  `stickyChildren` on the page root, no CSS `position` vocabulary.
+- An explicit scroller (recipe 6: a fixed-height clipped frame with a scroll
+  handler) is ONLY for a scroll area inside an app screen. Inside it, `$scroll`
+  means that container and `stickyChildren:["id"]` pins.
+
+## DSL form
+
+Generation output is `I(parent, {...})` — `bindings`, `pin` and `events` are
+plain props of the second argument, values exactly as in the JSON recipes:
+
+```js
+I(sec, {type:"frame", name:"Hero BG", width:"fill_container", height:480, bindings:{translateY:"$scroll.offset * -0.3"}})
+I(page, {type:"frame", name:"Nav", width:"fill_container", height:72, pin:true})
+```
+
+## Animate contract
+
 - `animate` requires literal `target`, registered `property`, literal `to`, and
-  positive integer `durationMs`. Optional: literal `from`, `delayMs` (default
-  0), `easing`, `iterations` (1..1000), `direction`, `fillMode`. Properties:
-  `opacity`, `x`, `y`, `rotation`, `scaleX`, `scaleY`, `fill`, `stroke`,
-  `cornerRadius`, `width`, `height`; width/height switch discretely at the end.
-  Easings: `linear`, `ease`, `ease_in`, `ease_out`, `ease_in_out`. Directions:
-  `normal`, `reverse`, `alternate`, `alternate_reverse`. Fill modes: `none`,
-  `forwards`, `backwards`, `both`.
-- Put one effect's animates in one action list. They share a clock and do not
-  await one another; sequence/stagger uses increasing `delayMs`. Delayed tracks
-  need `backwards` or `both`. A later request replaces the same target/property
-  track. Stay below 256 live tracks. Animate is event-clocked, never scroll scrub.
-- Sticky nav items may call `scroll_to` with literal `target` and `alignment`:
-  `start`, `center`, `end`, or `nearest`.
+  positive integer `durationMs`. Optional: `from`, `delayMs` (default 0),
+  `easing`, `iterations` (1..1000), `direction`, `fillMode`. Properties:
+  `opacity`, `translateX`, `translateY`, `x`, `y`, `rotation`, `scaleX`,
+  `scaleY`, `fill`, `stroke`, `cornerRadius`, `width`, `height` (width/height
+  switch discretely at the end). Easings: `linear`, `ease`, `ease_in`,
+  `ease_out`, `ease_in_out`. Directions: `normal`, `reverse`, `alternate`,
+  `alternate_reverse`. Fill modes: `none`, `forwards`, `backwards`, `both`.
+- One effect's animates go in one action list; they share a clock, so
+  sequence/stagger uses increasing `delayMs` and delayed tracks need
+  `backwards`/`both`. Animate is event-clocked, never a scroll scrub — scroll
+  scrubbing is always a `bindings` expression.
 
-## 1. Fixed-layer faux parallax (A15 boundary-safe form)
+## 1. Hero parallax + title fade
 
-Pin one depth layer while tall foreground content scrolls. This is 0x/1x faux
-parallax, not arbitrary `y` or scale rates.
+Background layer drifts slower than the page (negative factor), title fades
+out over the first 320 px.
 
 ```json
 {
-  "type": "frame", "id": "parallax-scroll", "width": 1440, "height": 800,
-  "layout": "none", "clipContent": true,
-  "state": { "seen": { "type": "bool", "default": false } },
-  "stickyChildren": ["parallax-sky"],
-  "events": { "onScroll": [{ "set": { "$state.seen": "true" } }] },
+  "type": "frame", "id": "hero", "width": 1440, "height": 720, "layout": "none",
+  "fill": [{ "type": "solid", "color": "#0B1020" }],
   "children": [
-    { "type": "rectangle", "id": "parallax-sky", "pin": true,
-      "x": 0, "y": 0, "width": 1440, "height": 800, "opacity": 1,
-      "fill": [{ "type": "linear_gradient", "angle": 135, "stops": [{ "offset": 0, "color": "#172554" }, { "offset": 1, "color": "#581C87" }] }],
-      "bindings": { "opacity": "1 - $scroll.progress * 0.35" } },
-    { "type": "frame", "id": "parallax-foreground", "x": 0, "y": 0,
-      "width": 1440, "height": 1600, "layout": "none", "children": [
-        { "type": "text", "id": "parallax-title", "x": 120, "y": 260,
-          "width": 900, "height": 160, "content": "DEPTH IN MOTION",
-          "fontSize": 96, "fontWeight": 700,
-          "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
-        { "type": "rectangle", "id": "parallax-card", "x": 120, "y": 980,
-          "width": 640, "height": 360, "cornerRadius": 32,
-          "fill": [{ "type": "solid", "color": "#FFFFFF" }] }
-      ] }
-  ]
-}
-```
-
-## 2. Pinned progress value
-
-```json
-{
-  "type": "frame", "id": "progress-scroll", "width": 1200, "height": 600,
-  "layout": "none", "clipContent": true,
-  "state": { "seen": { "type": "bool", "default": false } },
-  "stickyChildren": ["page-progress"],
-  "events": { "onScroll": [{ "set": { "$state.seen": "true" } }] },
-  "children": [
-    { "type": "rectangle", "id": "progress-content", "x": 0, "y": 0,
-      "width": 1200, "height": 1800,
-      "fill": [{ "type": "solid", "color": "#F8FAFC" }] },
-    { "type": "progress", "id": "page-progress", "pin": true,
-      "x": 24, "y": 24, "width": 1152, "height": 8, "max": 100, "value": 0,
-      "fill": [{ "type": "solid", "color": "#7C3AED" }],
-      "cornerRadius": 4, "bindings": { "value": "$scroll.progress * 100" } }
-  ]
-}
-```
-
-## 3. Scroll-window opacity stagger (A6 boundary-safe form)
-
-Each card gets a later `clamp` window. This is container-progress choreography,
-not an element-enter observer.
-
-```json
-{
-  "type": "frame", "id": "reveal-scroll", "width": 1200, "height": 640,
-  "layout": "none", "clipContent": true,
-  "state": { "seen": { "type": "bool", "default": false } },
-  "events": { "onScroll": [{ "set": { "$state.seen": "true" } }] },
-  "children": [
-    { "type": "rectangle", "id": "reveal-card-1", "x": 96, "y": 500,
-      "width": 1008, "height": 260, "cornerRadius": 24,
-      "fill": [{ "type": "solid", "color": "#EDE9FE" }],
-      "bindings": { "opacity": "clamp(($scroll.progress - 0.05) / 0.18, 0, 1)" } },
-    { "type": "rectangle", "id": "reveal-card-2", "x": 96, "y": 860,
-      "width": 1008, "height": 260, "cornerRadius": 24,
-      "fill": [{ "type": "solid", "color": "#DBEAFE" }],
-      "bindings": { "opacity": "clamp(($scroll.progress - 0.25) / 0.18, 0, 1)" } },
-    { "type": "rectangle", "id": "reveal-card-3", "x": 96, "y": 1220,
-      "width": 1008, "height": 260, "cornerRadius": 24,
-      "fill": [{ "type": "solid", "color": "#DCFCE7" }],
-      "bindings": { "opacity": "clamp(($scroll.progress - 0.45) / 0.18, 0, 1)" } }
-  ]
-}
-```
-
-## 4. Sticky navigation style shift (A8 boundary-safe form)
-
-```json
-{
-  "type": "frame", "id": "nav-scroll", "width": 1440, "height": 760,
-  "layout": "none", "clipContent": true,
-  "state": { "seen": { "type": "bool", "default": false } },
-  "stickyChildren": ["sticky-nav"],
-  "events": { "onScroll": [{ "set": { "$state.seen": "true" } }] },
-  "children": [
-    { "type": "frame", "id": "nav-content", "x": 0, "y": 0,
-      "width": 1440, "height": 2100, "layout": "none", "children": [
-        { "type": "rectangle", "id": "section-1", "x": 0, "y": 0,
-          "width": 1440, "height": 700, "fill": [{ "type": "solid", "color": "#020617" }] },
-        { "type": "rectangle", "id": "section-2", "x": 0, "y": 700,
-          "width": 1440, "height": 700, "fill": [{ "type": "solid", "color": "#111827" }] },
-        { "type": "rectangle", "id": "section-3", "x": 0, "y": 1400,
-          "width": 1440, "height": 700, "fill": [{ "type": "solid", "color": "#312E81" }] }
+    { "type": "frame", "id": "hero-bg", "x": 0, "y": 0, "width": 1440, "height": 720,
+      "layout": "none", "bindings": { "translateY": "$scroll.offset * -0.3" },
+      "children": [
+        { "type": "ellipse", "id": "hero-glow", "x": 880, "y": 80, "width": 420, "height": 420,
+          "fill": [{ "type": "solid", "color": "#7C3AED66" }] }
       ] },
-    { "type": "frame", "id": "sticky-nav", "pin": true,
-      "x": 48, "y": 24, "width": 1344, "height": 72, "layout": "horizontal",
-      "padding": [0, 28], "alignItems": "center", "cornerRadius": 12,
-      "fill": [{ "type": "solid", "color": "#10131A00" }],
-      "stroke": { "thickness": 1, "fill": [{ "type": "solid", "color": "#334155" }] },
-      "bindings": {
-        "fill": "$scroll.offset > 24 ? \"#10131ACC\" : \"#10131A00\"",
-        "stroke": "$scroll.direction == \"down\" ? \"#7C3AED\" : \"#334155\"",
-        "cornerRadius": "$scroll.offset > 24 ? 24 : 12"
-      },
+    { "type": "text", "id": "hero-title", "x": 120, "y": 240, "width": 900, "height": 160,
+      "content": "DEPTH IN MOTION", "fontSize": 96, "fontWeight": 700,
+      "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+      "bindings": { "opacity": "clamp(1 - $scroll.offset / 320, 0, 1)",
+                    "translateY": "$scroll.offset * 0.15" } }
+  ]
+}
+```
+
+## 2. Pinned header = nav row + scroll progress bar
+
+ONE pinned block, first child of the page root, flush with the top. Pinned
+things never get their own section: a progress bar or rail that is a standalone
+section still takes flow space and pushes the page down. Put it inside the
+header. Side rails are not supported — use this top bar. The nav surface
+solidifies once the page has scrolled; the bar slides in with `translateX`
+(never bind `width`, it is Relayout).
+
+```json
+{
+  "type": "frame", "id": "header", "pin": true, "width": 1440, "height": 76,
+  "layout": "vertical", "gap": 0,
+  "fill": [{ "type": "solid", "color": "#0B102000" }],
+  "bindings": { "fill": "$scroll.offset > 24 ? \"#0B1020E6\" : \"#0B102000\"" },
+  "children": [
+    { "type": "frame", "id": "nav", "width": 1440, "height": 72,
+      "layout": "horizontal", "padding": [0, 48], "alignItems": "center",
+      "justifyContent": "space_between",
+      "stroke": { "thickness": 1, "fill": [{ "type": "solid", "color": "#33415500" }] },
+      "bindings": { "stroke": "$scroll.offset > 24 ? \"#334155\" : \"#33415500\"" },
       "children": [
         { "type": "text", "id": "nav-brand", "width": "fit_content", "height": 32,
           "content": "NORTHSTAR", "fontSize": 20, "fontWeight": 700,
           "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
-        { "type": "text", "id": "nav-chapter-2", "width": "fit_content", "height": 32,
-          "content": "Chapter 2", "fontSize": 16,
-          "fill": [{ "type": "solid", "color": "#FFFFFF" }],
-          "events": { "onTap": [{ "scroll_to": { "target": "section-2", "alignment": "start" } }] } },
-        { "type": "text", "id": "nav-chapter-3", "width": "fit_content", "height": 32,
-          "content": "Chapter 3", "fontSize": 16,
-          "fill": [{ "type": "solid", "color": "#FFFFFF" }],
-          "events": { "onTap": [{ "scroll_to": { "target": "section-3", "alignment": "start" } }] } }
+        { "type": "text", "id": "nav-pricing", "width": "fit_content", "height": 32,
+          "content": "Pricing", "fontSize": 16, "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+          "events": { "onTap": [{ "scroll_to": { "target": "pricing", "alignment": "start" } }] } }
+      ] },
+    { "type": "frame", "id": "progress-rail", "width": 1440, "height": 4, "layout": "none",
+      "children": [
+        { "type": "rectangle", "id": "progress-fill", "x": 0, "y": 0, "width": 1440, "height": 4,
+          "fill": [{ "type": "solid", "color": "#7C3AED" }],
+          "bindings": { "translateX": "-(1 - $scroll.progress) * 1440" } }
       ] }
   ]
 }
 ```
 
-## 5. Sticky scrollytelling crossfade (A9/B17)
+## 3. Staggered rise-in cards
+
+Card k opens its window at `t = 0.18 + k * 0.06` of page progress: fades in
+and rises 40 px. Same pattern for any list; keep windows ≥ 0.06 apart.
 
 ```json
 {
-  "type": "frame", "id": "story-scroll", "width": 1200, "height": 700,
-  "layout": "none", "clipContent": true,
-  "state": { "seen": { "type": "bool", "default": false } },
-  "stickyChildren": ["story-stage"],
-  "events": { "onScroll": [{ "set": { "$state.seen": "true" } }] },
+  "type": "frame", "id": "features", "width": 1440, "height": 520, "layout": "horizontal",
+  "padding": [80, 120], "gap": 32, "alignItems": "start",
   "children": [
-    { "type": "rectangle", "id": "story-track", "x": 0, "y": 0,
-      "width": 1200, "height": 2400,
-      "fill": [{ "type": "solid", "color": "#09090B" }] },
-    { "type": "frame", "id": "story-stage", "pin": true,
-      "x": 0, "y": 0, "width": 1200, "height": 700, "layout": "none",
-      "fill": [{ "type": "solid", "color": "#09090B" }], "children": [
-        { "type": "text", "id": "chapter-a", "x": 120, "y": 240,
-          "width": 960, "height": 140, "content": "DISCOVER", "fontSize": 88,
-          "fill": [{ "type": "solid", "color": "#FFFFFF" }],
-          "bindings": { "opacity": "clamp(1 - $scroll.progress * 3, 0, 1)" } },
-        { "type": "text", "id": "chapter-b", "x": 120, "y": 240,
-          "width": 960, "height": 140, "content": "COMPOSE", "fontSize": 88,
-          "fill": [{ "type": "solid", "color": "#C4B5FD" }],
-          "bindings": { "opacity": "clamp(1 - abs($scroll.progress - 0.5) * 4, 0, 1)" } },
-        { "type": "text", "id": "chapter-c", "x": 120, "y": 240,
-          "width": 960, "height": 140, "content": "SHIP", "fontSize": 88,
-          "fill": [{ "type": "solid", "color": "#67E8F9" }],
-          "bindings": { "opacity": "clamp(($scroll.progress - 0.66) * 3, 0, 1)" } }
-      ] }
+    { "type": "rectangle", "id": "card-1", "width": 368, "height": 360, "cornerRadius": 24,
+      "fill": [{ "type": "solid", "color": "#EDE9FE" }],
+      "bindings": { "opacity": "clamp(($scroll.progress - 0.18) / 0.08, 0, 1)",
+                    "translateY": "(1 - clamp(($scroll.progress - 0.18) / 0.08, 0, 1)) * 40" } },
+    { "type": "rectangle", "id": "card-2", "width": 368, "height": 360, "cornerRadius": 24,
+      "fill": [{ "type": "solid", "color": "#DBEAFE" }],
+      "bindings": { "opacity": "clamp(($scroll.progress - 0.24) / 0.08, 0, 1)",
+                    "translateY": "(1 - clamp(($scroll.progress - 0.24) / 0.08, 0, 1)) * 40" } },
+    { "type": "rectangle", "id": "card-3", "width": 368, "height": 360, "cornerRadius": 24,
+      "fill": [{ "type": "solid", "color": "#DCFCE7" }],
+      "bindings": { "opacity": "clamp(($scroll.progress - 0.30) / 0.08, 0, 1)",
+                    "translateY": "(1 - clamp(($scroll.progress - 0.30) / 0.08, 0, 1)) * 40" } }
   ]
 }
 ```
 
-## 6. First-scroll guarded animate stagger
+## 4. Scrollytelling crossfade stage
 
-Guard `onScroll`; otherwise every wheel sample restarts the time tracks.
+A pinned stage (direct child of the page root, flush top) crossfades chapters
+as the page scrolls beneath it.
 
 ```json
 {
-  "type": "frame", "id": "animate-scroll", "width": 1200, "height": 640,
-  "layout": "none", "clipContent": true,
-  "state": { "revealed": { "type": "bool", "default": false } },
-  "events": { "onScroll": [{ "if": {
-    "expr": "!$state.revealed",
-    "then": [
-      { "animate": { "target": "entry-card-1", "property": "opacity", "from": 0, "to": 1, "durationMs": 360, "delayMs": 0, "easing": "ease_out", "iterations": 1, "direction": "normal", "fillMode": "both" } },
-      { "animate": { "target": "entry-card-2", "property": "opacity", "from": 0, "to": 1, "durationMs": 360, "delayMs": 90, "easing": "ease_out", "iterations": 1, "direction": "normal", "fillMode": "both" } },
-      { "animate": { "target": "entry-card-3", "property": "opacity", "from": 0, "to": 1, "durationMs": 360, "delayMs": 180, "easing": "ease_out", "iterations": 1, "direction": "normal", "fillMode": "both" } },
-      { "set": { "$state.revealed": "true" } }
-    ]
-  } }] },
+  "type": "frame", "id": "story-stage", "pin": true, "width": 1440, "height": 720,
+  "layout": "none", "fill": [{ "type": "solid", "color": "#09090B" }],
   "children": [
-    { "type": "rectangle", "id": "entry-card-1", "x": 80, "y": 520,
-      "width": 320, "height": 300, "opacity": 0, "cornerRadius": 24,
+    { "type": "text", "id": "chapter-a", "x": 120, "y": 280, "width": 1200, "height": 140,
+      "content": "DISCOVER", "fontSize": 88, "fill": [{ "type": "solid", "color": "#FFFFFF" }],
+      "bindings": { "opacity": "clamp(1 - $scroll.progress * 3, 0, 1)" } },
+    { "type": "text", "id": "chapter-b", "x": 120, "y": 280, "width": 1200, "height": 140,
+      "content": "COMPOSE", "fontSize": 88, "fill": [{ "type": "solid", "color": "#C4B5FD" }],
+      "bindings": { "opacity": "clamp(1 - abs($scroll.progress - 0.5) * 4, 0, 1)" } },
+    { "type": "text", "id": "chapter-c", "x": 120, "y": 280, "width": 1200, "height": 140,
+      "content": "SHIP", "fontSize": 88, "fill": [{ "type": "solid", "color": "#67E8F9" }],
+      "bindings": { "opacity": "clamp(($scroll.progress - 0.66) * 3, 0, 1)" } }
+  ]
+}
+```
+
+## 5. Tap-triggered animate stagger
+
+Time-based entrance lives on an event, never on scroll. Three cards rise and
+fade in with increasing `delayMs`.
+
+```json
+{
+  "type": "frame", "id": "entry", "width": 1440, "height": 480, "layout": "horizontal",
+  "padding": [60, 120], "gap": 32,
+  "events": { "onTap": [
+    { "animate": { "target": "entry-card-1", "property": "translateY", "from": 40, "to": 0, "durationMs": 360, "delayMs": 0, "easing": "ease_out", "iterations": 1, "direction": "normal", "fillMode": "both" } },
+    { "animate": { "target": "entry-card-2", "property": "opacity", "from": 0, "to": 1, "durationMs": 360, "delayMs": 90, "easing": "ease_out", "iterations": 1, "direction": "normal", "fillMode": "both" } },
+    { "animate": { "target": "entry-card-3", "property": "opacity", "from": 0, "to": 1, "durationMs": 360, "delayMs": 180, "easing": "ease_out", "iterations": 1, "direction": "normal", "fillMode": "both" } }
+  ] },
+  "children": [
+    { "type": "rectangle", "id": "entry-card-1", "width": 368, "height": 300, "cornerRadius": 24,
       "fill": [{ "type": "solid", "color": "#DDD6FE" }] },
-    { "type": "rectangle", "id": "entry-card-2", "x": 440, "y": 520,
-      "width": 320, "height": 300, "opacity": 0, "cornerRadius": 24,
-      "fill": [{ "type": "solid", "color": "#BFDBFE" }] },
-    { "type": "rectangle", "id": "entry-card-3", "x": 800, "y": 520,
-      "width": 320, "height": 900, "opacity": 0, "cornerRadius": 24,
-      "fill": [{ "type": "solid", "color": "#A7F3D0" }] }
+    { "type": "rectangle", "id": "entry-card-2", "width": 368, "height": 300, "opacity": 0,
+      "cornerRadius": 24, "fill": [{ "type": "solid", "color": "#BFDBFE" }] },
+    { "type": "rectangle", "id": "entry-card-3", "width": 368, "height": 300, "opacity": 0,
+      "cornerRadius": 24, "fill": [{ "type": "solid", "color": "#A7F3D0" }] }
   ]
 }
 ```
 
-## 7. Pinned footer opacity reveal + theme shift (B24/B25)
+## 6. Explicit scroller — APP SCREENS ONLY
+
+The one place a scroll handler belongs: a fixed-height list inside an app
+screen. Landing pages never use this shape.
 
 ```json
 {
-  "type": "frame", "id": "footer-scroll", "width": 1440, "height": 760,
+  "type": "frame", "id": "feed-scroll", "width": 390, "height": 600,
   "layout": "none", "clipContent": true,
   "state": { "seen": { "type": "bool", "default": false } },
-  "stickyChildren": ["footer-drawer"],
+  "stickyChildren": ["feed-progress"],
   "events": { "onScroll": [{ "set": { "$state.seen": "true" } }] },
   "children": [
-    { "type": "rectangle", "id": "footer-content", "x": 0, "y": 0,
-      "width": 1440, "height": 2100,
+    { "type": "rectangle", "id": "feed-content", "x": 0, "y": 0, "width": 390, "height": 1800,
       "fill": [{ "type": "solid", "color": "#F8FAFC" }] },
-    { "type": "frame", "id": "footer-drawer", "pin": true,
-      "x": 0, "y": 580, "width": 1440, "height": 180, "layout": "horizontal",
-      "padding": [0, 72], "alignItems": "center", "opacity": 0,
-      "fill": [{ "type": "solid", "color": "#111827" }],
-      "bindings": {
-        "opacity": "clamp(($scroll.progress - 0.82) / 0.18, 0, 1)",
-        "fill": "$scroll.progress > 0.92 ? \"#F4F0FF\" : \"#111827\"",
-        "cornerRadius": "$scroll.progress > 0.92 ? 28 : 0"
-      },
-      "children": [{ "type": "text", "id": "footer-label", "width": "fit_content",
-        "height": 48, "content": "THE NEXT CHAPTER", "fontSize": 36,
-        "fill": [{ "type": "solid", "color": "#FFFFFF" }],
-        "bindings": { "textColor": "$scroll.progress > 0.92 ? \"#312E81\" : \"#FFFFFF\"" } }] }
+    { "type": "progress", "id": "feed-progress", "pin": true, "x": 16, "y": 12,
+      "width": 358, "height": 6, "max": 100, "value": 0, "cornerRadius": 3,
+      "fill": [{ "type": "solid", "color": "#7C3AED" }],
+      "bindings": { "value": "$scroll.progress * 100" } }
   ]
 }
 ```
 
-Do not invent scroll-bound transform/layout scrub, velocity, element-enter
-observers, springs, keyframes, image-frame selection, or dynamic text. The D
-group's infinite/horizontal galleries need missing append/x-axis primitives and
-are not approximated here.
+Do not invent scroll-bound layout scrub, velocity, element-enter observers,
+springs, keyframes, image-frame selection, or dynamic text. Horizontal /
+infinite galleries need missing append/x-axis primitives and are not
+approximated here.
 
 END SCROLL ORCHESTRATION
