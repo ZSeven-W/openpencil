@@ -88,6 +88,8 @@ mod deck_skill_tests;
 mod overlay_skill_tests;
 #[path = "prompt_planning_tests.rs"]
 mod planning_tests;
+#[path = "prompt_scroll_skill_tests.rs"]
+mod scroll_skill_tests;
 #[path = "prompt_skill_budget_tests.rs"]
 mod skill_budget_tests;
 #[path = "prompt_subagent_content_tests.rs"]

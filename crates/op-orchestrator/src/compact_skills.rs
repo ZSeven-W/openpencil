@@ -204,6 +204,14 @@ fn compact_subagent_skills<T: SkillNamed>(
             // RETRY_ALLOWED set — the reduced retry keeps the smallest
             // viable prompt, exactly like `cards` / `deck-patterns`.
             "card-item-template",
+            // Page-scroll orchestration (parallax / sticky / stagger).
+            // Keyword-gated at the resolve layer, so a no-op on every
+            // non-scroll prompt. Required on a scroll prompt for the same
+            // reason the deck and card entries are: without it the allow-set
+            // drops the only teaching that makes a weak-model landing page
+            // move, and the matching budget arm in `prompt_subagent.rs`
+            // has nothing left to keep.
+            "scroll-orchestration",
             "icon-catalog",
             "style-defaults",
             "elements",

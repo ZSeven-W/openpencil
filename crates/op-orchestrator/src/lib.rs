@@ -38,6 +38,7 @@ mod request_dimensions;
 mod resolved_style_prompt;
 pub mod retry;
 pub mod script_gen;
+mod scroll_intent;
 pub mod semantic_palette;
 pub mod stub_providers;
 pub mod style_guide_context;

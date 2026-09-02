@@ -223,15 +223,24 @@ pub(super) fn build_subagent_prompt_core(
     // Full tier reads the same default and loses it identically, so the deck
     // load simply fills the phase. Buying it back means raising the phase
     // default, which belongs to the corpus owner, not to this override.
+    //
+    // Scroll orchestration (parallax / sticky / stagger) joins the same arm
+    // for the same reason again: the `scroll-orchestration` skill is ~3000
+    // tokens on top of the always-kept base, so under the plain 5200 / 6500
+    // arms it was dropped for BudgetExhausted on every scroll prompt a weak
+    // model saw — and it is the only teaching that makes such a page move.
+    // The intent test reuses the skill's own trigger keywords
+    // (`scroll_intent.rs`) so the arm and the resolver cannot disagree.
     let is_deck = is_deck_board(plan);
     let is_card = is_card_board(plan);
+    let is_scroll = crate::scroll_intent::is_scroll_orchestration_request(&req.prompt);
     let deck_budget = Phase::Generation.default_budget();
     let budget_override = match tier {
         ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(9200),
-        ModelTier::Basic if is_deck || is_card => Some(deck_budget),
+        ModelTier::Basic if is_deck || is_card || is_scroll => Some(deck_budget),
         ModelTier::Basic => Some(5200),
         ModelTier::Standard if is_mobile_layout => Some(9500),
-        ModelTier::Standard if is_deck || is_card => Some(deck_budget),
+        ModelTier::Standard if is_deck || is_card || is_scroll => Some(deck_budget),
         ModelTier::Standard => Some(6500),
         ModelTier::Full => None,
     };
