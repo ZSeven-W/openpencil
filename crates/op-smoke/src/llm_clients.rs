@@ -243,10 +243,17 @@ impl LlmClient for DirectOpenAiClient {
             // (mirrors the desktop's builtin_http_client). Per-read, not
             // per-request: a reasoning model can spend longer than any whole-
             // request budget on one generation without the connection stalling.
+            // The idle budget scales with the profile's timeout multiplier:
+            // an always-thinking model (GLM-5.3, ×3) is silent for longer
+            // than 180 s before its first byte, and a flat 180 s surfaced as
+            // "error sending request" on 43 of one day's subtasks.
+            let read_idle_secs = (180.0
+                * op_orchestrator::resolve_model_profile(&model).timeout_multiplier)
+                .round() as u64;
             let client = reqwest::Client::builder()
                 .use_rustls_tls()
                 .connect_timeout(std::time::Duration::from_secs(15))
-                .read_timeout(std::time::Duration::from_secs(180))
+                .read_timeout(std::time::Duration::from_secs(read_idle_secs))
                 .build()
                 .expect("build smoke rustls client");
             let resp = match client.post(&url).bearer_auth(&key).json(&body).send().await {
