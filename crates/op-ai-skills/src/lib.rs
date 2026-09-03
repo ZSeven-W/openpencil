@@ -102,6 +102,18 @@ const GUIDELINE_TOPICS: &[(&str, &[&str], &[&str])] = &[
     ("form", &["form-ui"], &["form-ui"]),
     ("design-system", &[], &["design-system-composition"]),
     ("interactivity", &[], &["interactivity"]),
+    // The page-scroll contract for external agents driving the MCP tools:
+    // K3 and Grok over MCP built a 900 px clipped viewport root when the
+    // prompt did not spell the contract out (2026-09-03 matrix), because
+    // no guideline topic carried it.
+    (
+        "scroll",
+        &["scroll-orchestration", "parallax", "page-scroll"],
+        &["scroll-orchestration"],
+    ),
+    // Card boards had no MCP-side contract either (0825 A/B: the gap was
+    // the contract, not the model).
+    ("card", &["cards", "card-item"], &["cards"]),
 ];
 
 /// Compose the named skills (in order) into one coherent guideline doc,
@@ -137,6 +149,10 @@ fn compose_skills(names: &[&str]) -> Option<String> {
 /// - `"design-system"` — design-system composition
 /// - `"interactivity"` — multi-screen navigation contract (`screen` markers
 ///   + `events.onTap` actions) for tappable App Mode preview
+/// - `"scroll"` (`scroll-orchestration`, `parallax`, `page-scroll`) — the
+///   page-scroll contract: the page root is the `$scroll` source, `pin: true`
+///   pins, paint-only `translateX/Y` moves
+/// - `"card"` (`cards`, `card-item`) — card-board contract
 ///
 /// Returns `None` for any unrecognised topic so callers can produce a typed
 /// "unknown topic" error without special-casing the string themselves.

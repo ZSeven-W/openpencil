@@ -517,3 +517,28 @@ fn image_self_check_is_limited_to_rendering_integrity() {
         .trim_end()
         .ends_with(IMAGE_SELF_CHECK_SCOPE.trim_end()));
 }
+
+/// External agents over MCP only see contracts through `get_guidelines`;
+/// the page-scroll contract and the card-board contract must be reachable
+/// there (2026-09-03 matrix: K3 / Grok built a clipped 900 px root when the
+/// prompt did not carry the contract).
+#[test]
+fn guideline_for_scroll_and_card_carry_their_contracts() {
+    let scroll = guideline_for("scroll").expect("scroll guideline must be present");
+    for needle in [
+        "window.scrollY",
+        "\"pin\": true",
+        "translateY",
+        "$scroll.progress",
+    ] {
+        assert!(scroll.contains(needle), "scroll guideline lacks {needle:?}");
+    }
+    for alias in ["scroll-orchestration", "parallax", "page-scroll"] {
+        assert!(guideline_for(alias).is_some(), "{alias} alias resolves");
+    }
+    let card = guideline_for("card").expect("card guideline must be present");
+    assert!(!card.trim().is_empty());
+    assert!(guideline_for("cards").is_some(), "cards alias resolves");
+    let topics = guideline_topics();
+    assert!(topics.contains(&"scroll") && topics.contains(&"card"));
+}
