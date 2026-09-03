@@ -34,7 +34,7 @@ mod plan_fallback_card;
 pub mod plan_normalize;
 pub mod plan_repair;
 pub mod program_gen;
-pub(crate) mod reference_intent;
+pub mod reference_intent;
 pub mod reference_skeleton;
 mod request_dimensions;
 mod resolved_style_prompt;
@@ -159,6 +159,8 @@ pub use model_profile::{
     resolve_model_profile, ModelProfile, ModelTier, ReasoningWireControl,
 };
 pub use prompt::build_orchestrator_prompt;
+pub use reference_intent::{detect_reference_intent, ReferenceIntent};
+pub use reference_skeleton::ReferenceSkeleton;
 pub use repair_record::RepairRecord;
 pub use repair_summary::{CheckCategory, RepairSummary};
 pub use repair_tier::{RepairTier, RepairTierPolicy, TieredPass};

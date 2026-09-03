@@ -3,8 +3,7 @@
 
 /// A reference the user wants a new design modelled on.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // wired by C1 M1
-pub(crate) enum ReferenceIntent {
+pub enum ReferenceIntent {
     /// A web page to fetch and mine for structure + style tokens.
     Url(String),
 }
@@ -40,8 +39,7 @@ pub(crate) const REFERENCE_TRIGGER_WORDS: &[&str] = &[
 /// trigger words. Returns the FIRST URL (trailing punctuation `.,;:!?)]}>"'`
 /// and CJK punctuation `。，；：！？）】》` stripped). A URL with no trigger word
 /// is NOT a reference (the user may just be naming a product site) → None.
-#[allow(dead_code)] // wired by C1 M1
-pub(crate) fn detect_reference_intent(prompt: &str) -> Option<ReferenceIntent> {
+pub fn detect_reference_intent(prompt: &str) -> Option<ReferenceIntent> {
     // Check if any trigger word is present
     let lower = prompt.to_lowercase();
     let has_trigger = REFERENCE_TRIGGER_WORDS.iter().any(|word| {

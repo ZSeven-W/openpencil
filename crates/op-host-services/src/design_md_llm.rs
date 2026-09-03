@@ -97,10 +97,9 @@ pub async fn generate_design_md_spec(
 
 #[cfg(test)]
 mod tests {
-    use futures::stream;
     use jian_ops_schema::node::PenNode;
     use op_editor_core::EditorState;
-    use op_orchestrator::{AbortFlag, CallRequest, LlmChunk, LlmClient, LlmError};
+    use op_orchestrator::AbortFlag;
 
     use super::*;
 
@@ -156,27 +155,13 @@ mod tests {
         assert!(prompt.contains("not as content appended below"));
     }
 
-    struct ScriptedLlm;
-
-    impl LlmClient for ScriptedLlm {
-        fn call(
-            &self,
-            _req: CallRequest,
-        ) -> futures::stream::BoxStream<'static, Result<LlmChunk, LlmError>> {
-            Box::pin(stream::iter(vec![Ok(LlmChunk::Text(
-                "```markdown\n# Design System: Food App\n\n## 1. Visual Theme & Atmosphere\nWarm, compact mobile ordering UI.\n\n## 2. Color Palette & Roles\n- **Flame Orange** (#FF5A1F) — Primary action\n\n## 5. Layout Principles\nUse a sibling/root screen beside the existing app page.\n```"
-                    .to_string(),
-            ))]))
-        }
-    }
-
     #[tokio::test]
     async fn llm_markdown_is_cleaned_parsed_and_returned_as_design_md() {
         let state = state_with_home_frame();
         let abort = AbortFlag::new();
 
         let spec = generate_design_md_spec(
-            &ScriptedLlm,
+            &crate::test_support::ScriptedLlm,
             &state,
             "继续画出发现页",
             Some("model-a".into()),

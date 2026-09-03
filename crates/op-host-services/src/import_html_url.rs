@@ -22,6 +22,12 @@ const MAX_REDIRECTS: usize = 10;
 
 pub(crate) struct ImportHtmlUrl;
 
+pub(crate) struct ImportedPage {
+    pub nodes: Vec<PenNode>,
+    pub final_url: reqwest::Url,
+    pub warnings: Vec<String>,
+}
+
 impl McpTool for ImportHtmlUrl {
     fn name(&self) -> &str {
         "import_html_url"
@@ -40,71 +46,11 @@ impl McpTool for ImportHtmlUrl {
             Err((code, message)) => return ToolOutcome::Err(code, message),
         };
 
-        let allowlist = std::env::var(ALLOWLIST_ENV).ok();
-        let initial_url = match screen_import_url_with_allowlist(raw_url, allowlist.as_deref()) {
-            Ok(url) => url,
-            // The code now rides on the error itself instead of a literal
-            // chosen here — same `InvalidArgument` for both URL verdicts.
-            Err(error) => return ToolOutcome::Err(error.tool_error_code(), error.to_string()),
-        };
-        let Some(_job_slot) = ImageJobSlot::acquire() else {
-            return ToolOutcome::Err(
-                ToolErrorCode::ToolFailed,
-                "too many concurrent import jobs".into(),
-            );
-        };
-        // `call` is a synchronous MCP tool that can be reached either from a
-        // plain worker thread (CLI / stdio server) or from a tokio worker (the
-        // web daemon's connection pool). A private runtime built here would
-        // panic on `block_on` in the latter case, so both fetch paths below go
-        // through the one sanctioned bridge, which sheds the worker instead.
-        let page = match block_on_anywhere(fetch_capped(
-            initial_url,
-            PAGE_BYTES_CAP,
-            allowlist.as_deref(),
-        )) {
+        let page = match import_page_from_url(raw_url, viewport_height) {
             Ok(page) => page,
             Err(error) => return ToolOutcome::Err(error.tool_error_code(), error.to_string()),
         };
-        let content_type_is_html = page
-            .content_type
-            .as_deref()
-            .is_some_and(|value| value.to_ascii_lowercase().contains("text/html"));
-        let body_looks_html = page.bytes.iter().take(512).any(|byte| *byte == b'<');
-        if !content_type_is_html && !body_looks_html {
-            return ToolOutcome::Err(ToolErrorCode::ToolFailed, "not an html page".into());
-        }
-
-        let html = String::from_utf8_lossy(&page.bytes);
-        let fetcher = |resource_url: &str| {
-            let resource_url =
-                screen_import_url_with_allowlist(resource_url, allowlist.as_deref()).ok()?;
-            block_on_anywhere(fetch_capped(
-                resource_url,
-                RESOURCE_BYTES_CAP,
-                allowlist.as_deref(),
-            ))
-            .ok()
-            .map(|resource| resource.bytes)
-        };
-        let options = HtmlImportOptions {
-            base_url: Some(page.final_url.to_string()),
-            viewport_height,
-            ..HtmlImportOptions::default()
-        };
-        let result = import_html_with_resources(&html, &options, Some(&fetcher), None);
-        if result.nodes.is_empty() {
-            let detail = result
-                .warnings
-                .first()
-                .map(String::as_str)
-                .unwrap_or("input produced no nodes");
-            return ToolOutcome::Err(
-                ToolErrorCode::InvalidArgument,
-                format!("no importable content: {detail}"),
-            );
-        }
-        let mut nodes = result.nodes;
+        let mut nodes = page.nodes;
         if placement.x != 0 || placement.y != 0 {
             if let PenNode::Frame(frame) = &mut nodes[0] {
                 frame.base.x = Some(placement.x as f64);
@@ -117,8 +63,8 @@ impl McpTool for ImportHtmlUrl {
         output.insert("wrote".into(), "true".into());
         output.insert("nodeCount".into(), count_subtree_nodes(&nodes).to_string());
         output.insert("sourceUrl".into(), page.final_url.to_string());
-        if !result.warnings.is_empty() {
-            output.insert("warnings".into(), result.warnings.join("\n"));
+        if !page.warnings.is_empty() {
+            output.insert("warnings".into(), page.warnings.join("\n"));
         }
         ToolOutcome::OkWithCommand(
             output,
@@ -129,6 +75,72 @@ impl McpTool for ImportHtmlUrl {
             },
         )
     }
+}
+
+/// Fetch and import a page without placing its nodes in the user's document.
+/// This is the shared policy-screened importer used by the MCP tool and the
+/// reference-context enrichment path.
+pub(crate) fn import_page_from_url(
+    raw_url: &str,
+    viewport_height: Option<f64>,
+) -> Result<ImportedPage, ImportHtmlUrlError> {
+    let allowlist = std::env::var(ALLOWLIST_ENV).ok();
+    let initial_url = screen_import_url_with_allowlist(raw_url, allowlist.as_deref())?;
+    let Some(_job_slot) = ImageJobSlot::acquire() else {
+        return Err(ImportHtmlUrlError::TooManyConcurrentJobs);
+    };
+    // `call` is a synchronous MCP tool that can be reached either from a
+    // plain worker thread (CLI / stdio server) or from a tokio worker (the
+    // web daemon's connection pool). A private runtime built here would
+    // panic on `block_on` in the latter case, so both fetch paths below go
+    // through the one sanctioned bridge, which sheds the worker instead.
+    let page = block_on_anywhere(fetch_capped(
+        initial_url,
+        PAGE_BYTES_CAP,
+        allowlist.as_deref(),
+    ))?;
+    let content_type_is_html = page
+        .content_type
+        .as_deref()
+        .is_some_and(|value| value.to_ascii_lowercase().contains("text/html"));
+    let body_looks_html = page.bytes.iter().take(512).any(|byte| *byte == b'<');
+    if !content_type_is_html && !body_looks_html {
+        return Err(ImportHtmlUrlError::NotHtmlPage);
+    }
+
+    let html = String::from_utf8_lossy(&page.bytes);
+    let fetcher = |resource_url: &str| {
+        let resource_url =
+            screen_import_url_with_allowlist(resource_url, allowlist.as_deref()).ok()?;
+        block_on_anywhere(fetch_capped(
+            resource_url,
+            RESOURCE_BYTES_CAP,
+            allowlist.as_deref(),
+        ))
+        .ok()
+        .map(|resource| resource.bytes)
+    };
+    let options = HtmlImportOptions {
+        base_url: Some(page.final_url.to_string()),
+        viewport_height,
+        ..HtmlImportOptions::default()
+    };
+    let result = import_html_with_resources(&html, &options, Some(&fetcher), None);
+    if result.nodes.is_empty() {
+        let detail = result
+            .warnings
+            .first()
+            .map(String::as_str)
+            .unwrap_or("input produced no nodes");
+        return Err(ImportHtmlUrlError::NoImportableContent {
+            detail: detail.to_string(),
+        });
+    }
+    Ok(ImportedPage {
+        nodes: result.nodes,
+        final_url: page.final_url,
+        warnings: result.warnings,
+    })
 }
 
 struct FetchedResource {

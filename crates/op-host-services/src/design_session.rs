@@ -138,8 +138,42 @@ pub fn run_design_worker<L: LlmClient + Send>(
         };
         block_on_anywhere(async {
             let mut request = request;
-            maybe_generate_design_md_for_follow_on_screen(&llm, &mut request, &mut sink, &abort)
+            let reference_used = match crate::reference_context::resolve_reference_context(
+                &llm,
+                &request.prompt,
+                request.model.clone(),
+                request.provider.clone(),
+                &abort,
+            )
+            .await
+            {
+                Ok(Some(context)) => {
+                    request.reference_skeleton = Some(context.skeleton);
+                    request.design_md = Some(context.design_md.clone());
+                    let _ = sink.apply(EditorCommand::SetDesignMd {
+                        spec: Box::new(context.design_md),
+                    });
+                    true
+                }
+                Ok(None) => false,
+                Err(error) => {
+                    let reason = format!("reference page could not be used: {error}");
+                    eprintln!("[design-session] {reason}");
+                    on_progress(Progress::ReferenceUnavailable {
+                        reason: reason.clone(),
+                    });
+                    false
+                }
+            };
+            if !reference_used {
+                maybe_generate_design_md_for_follow_on_screen(
+                    &llm,
+                    &mut request,
+                    &mut sink,
+                    &abort,
+                )
                 .await;
+            }
             Orchestrator::new()
                 .with_indicator_epoch(indicator_epoch)
                 .run(

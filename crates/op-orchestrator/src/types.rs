@@ -497,6 +497,12 @@ pub enum Progress {
         /// Human-readable reason for the fallback.
         reason: String,
     },
+    /// Reference-page enrichment failed; the ordinary design route continues
+    /// without the optional reference context.
+    ReferenceUnavailable {
+        /// Human-readable reason shown by the host's progress surface.
+        reason: String,
+    },
 }
 
 /// Stable context attached to one screen group's progress events.

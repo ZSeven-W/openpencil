@@ -203,7 +203,6 @@ pub fn stream_standard_turn<W: Write>(
     cors_origin: Option<&str>,
 ) -> std::io::Result<()> {
     crate::ai_proxy::write_sse_headers(out, cors_origin)?;
-
     let mut snapshot = match apply_request_snapshot(&req, state, hub, write_barrier) {
         Ok(snapshot) => snapshot,
         Err(error) => {
@@ -251,7 +250,6 @@ pub fn stream_standard_turn<W: Write>(
         }
     }
     inject_transient_builtin(&mut snapshot, req.transient_builtin.as_ref());
-
     let credential_persistence = state
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -276,7 +274,6 @@ pub fn stream_standard_turn<W: Write>(
         Ok(providers) => providers,
         Err(error) => return write_error_event(out, &error.to_string()),
     };
-
     let classified = crate::chat_intent::classify_intent_for_standard_route(
         classify_provider.as_ref(),
         &snapshot,
@@ -286,7 +283,6 @@ pub fn stream_standard_turn<W: Write>(
     let modify_plan = crate::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
     let page_children_empty = snapshot.active_children().is_empty();
     let intent = resolve_standard_route(classified, page_children_empty, modify_plan.is_some());
-
     match intent {
         crate::chat_intent::DesignIntent::Chat => {
             stream_chat_route(out, &req, &snapshot, chat_provider.as_ref(), model)
@@ -588,7 +584,8 @@ fn stream_new_design_route<W: Write>(
     target: CanvasWriteTarget<'_>,
 ) -> std::io::Result<()> {
     let append_context = crate::chat_intent::detect_append_intent(&snapshot, &req.ai.user);
-    let request = DesignRequest {
+    let prompt = req.ai.user.clone();
+    let mut request = DesignRequest {
         prompt: req.ai.user,
         model: model.clone(),
         provider: None,
@@ -611,6 +608,30 @@ fn stream_new_design_route<W: Write>(
     let llm = ChatProviderLlmClient::new(provider_arc.clone()).with_model(model.clone());
     let mut sink = WebDesignDocSink::new(target.state, target.hub, target.write_barrier, snapshot);
     let abort = AbortFlag::new();
+    let reference_result = crate::chat_runtime::block_on_anywhere(
+        crate::reference_context::resolve_reference_context(
+            &llm,
+            &prompt,
+            request.model.clone(),
+            request.provider.clone(),
+            &abort,
+        ),
+    );
+    match reference_result {
+        Ok(Some(context)) => {
+            request.reference_skeleton = Some(context.skeleton);
+            request.design_md = Some(context.design_md.clone());
+            let _ = sink.apply(EditorCommand::SetDesignMd {
+                spec: Box::new(context.design_md),
+            });
+        }
+        Ok(None) => {}
+        Err(error) => {
+            let notice = format!("reference page could not be used: {error}");
+            eprintln!("[web-chat] {notice}");
+            write_thinking_event(out, &format!("\n{notice}"))?;
+        }
+    }
     let pre_validator = LintPreValidator;
 
     // ── Class-C vision-validation provider selection (Track-1 Step 3) ──────────
@@ -772,3 +793,7 @@ mod tests;
 #[cfg(test)]
 #[path = "web_chat_standard_model_tests.rs"]
 mod model_tests;
+
+#[cfg(test)]
+#[path = "web_chat_standard_reference_tests.rs"]
+mod reference_tests;

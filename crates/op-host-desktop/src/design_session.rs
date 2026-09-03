@@ -467,6 +467,9 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 ChatActivityStatus::Done,
                 Some(op_i18n::translate(locale, "ai.designProgress.detail.standardPath").into()),
             ),
+            Progress::ReferenceUnavailable { reason } => {
+                append_narration(msg, &format!("• {reason}"))
+            }
             // "承诺-交付" honest report — not translated, same diagnostic
             // confirmation-line treatment as GeometryEcho above. The canvas
             // itself already carries the " (unfilled)" name suffix
