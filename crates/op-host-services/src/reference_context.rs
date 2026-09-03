@@ -21,8 +21,8 @@ pub struct ReferenceContext {
 /// The temporary state is intentionally separate from every live editor state:
 /// the imported page can only be read by the design.md extractor and the
 /// content-free skeleton builder.
-pub async fn reference_context_from_nodes<L: LlmClient + Send + Sync>(
-    llm: &L,
+pub async fn reference_context_from_nodes(
+    llm: &dyn LlmClient,
     nodes: Vec<PenNode>,
     source: &str,
     user_prompt: &str,
@@ -32,11 +32,7 @@ pub async fn reference_context_from_nodes<L: LlmClient + Send + Sync>(
 ) -> Result<ReferenceContext, ReferenceContextError> {
     let mut temp = EditorState::new();
     *temp.active_children_mut() = nodes;
-    let root = temp
-        .active_children()
-        .first()
-        .ok_or(ReferenceContextError::NoStructure)?;
-    let skeleton = op_orchestrator::ReferenceSkeleton::from_root(root, source)
+    let skeleton = op_orchestrator::ReferenceSkeleton::from_state(&temp, source)
         .ok_or(ReferenceContextError::NoStructure)?;
     let design_md = crate::design_md_llm::generate_design_md_spec(
         llm,
@@ -57,8 +53,8 @@ pub async fn reference_context_from_nodes<L: LlmClient + Send + Sync>(
 
 /// Resolve a prompt's optional URL reference, import it through the existing
 /// SSRF-screened importer, and derive isolated planning context.
-pub async fn resolve_reference_context<L: LlmClient + Send + Sync>(
-    llm: &L,
+pub async fn resolve_reference_context(
+    llm: &dyn LlmClient,
     prompt: &str,
     model: Option<String>,
     provider: Option<String>,

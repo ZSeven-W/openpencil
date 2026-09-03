@@ -1,8 +1,10 @@
 //! Content-free structural summary of an imported reference page.
 
 use jian_ops_schema::node::PenNode;
-use op_editor_core::PenNodeExt;
+use jian_scene::layout_scene::SceneNode;
+use op_editor_core::{EditorState, PenNodeExt};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::role_defaults::Theme;
 
@@ -80,6 +82,12 @@ impl ReferenceSkeleton {
         if section_nodes.is_empty() {
             return None;
         }
+        // An imported page usually keeps its chrome (nav / footer) at the
+        // root and everything else inside one `<main>` wrapper. Expanding
+        // that wrapper is what turns "nav, section, footer" into the real
+        // section rhythm the planner needs.
+        let expanded = expand_main_wrapper(section_nodes);
+        let section_nodes: &[PenNode] = expanded.as_deref().unwrap_or(section_nodes);
 
         let total_height = root
             .height_px()
@@ -117,6 +125,24 @@ impl ReferenceSkeleton {
         })
     }
 
+    /// Skeleton for a state whose nodes may carry no authored sizes — an
+    /// imported HTML page is mostly `fit_content`, so [`Self::from_root`]
+    /// alone would report every section at 0% height. Runs the real jian
+    /// layout pass (the same one `snapshot_layout` uses) and bakes the
+    /// resolved sizes onto a clone before summarizing; the state itself is
+    /// never mutated.
+    pub fn from_state(state: &EditorState, source: &str) -> Option<Self> {
+        let root = state.active_children().first()?;
+        let mut sized = root.clone();
+        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+        if let Some(page) = scene.active_page() {
+            let mut sizes = HashMap::new();
+            collect_resolved_sizes(&page.children, &mut sizes);
+            bake_resolved_sizes(&mut sized, &sizes);
+        }
+        Self::from_root(&sized, source)
+    }
+
     /// Render only the structural guide that is safe to send to the planner.
     pub fn render(&self) -> String {
         let mut lines = vec![
@@ -150,6 +176,57 @@ impl ReferenceSkeleton {
         lines.push(format!("column rhythm: {rhythm}"));
         lines.join("\n")
     }
+}
+
+fn collect_resolved_sizes(nodes: &[SceneNode], out: &mut HashMap<String, (f64, f64)>) {
+    for node in nodes {
+        let bounds = node.aggregate_bounds();
+        out.insert(
+            node.id.clone(),
+            (f64::from(bounds.size.x), f64::from(bounds.size.y)),
+        );
+        collect_resolved_sizes(&node.children, out);
+    }
+}
+
+fn bake_resolved_sizes(node: &mut PenNode, sizes: &HashMap<String, (f64, f64)>) {
+    if let Some((width, height)) = sizes.get(node.id_str()) {
+        if *width > 0.0 {
+            node.set_width_px(*width);
+        }
+        if *height > 0.0 {
+            node.set_height_px(*height);
+        }
+    }
+    if let Some(children) = node.children_mut() {
+        for child in children {
+            bake_resolved_sizes(child, sizes);
+        }
+    }
+}
+
+/// When exactly one section between the chrome holds most of the page (≥ 60%
+/// of the summed section heights) and at least three children, replace it
+/// with those children. Returns None when no single wrapper dominates.
+fn expand_main_wrapper(sections: &[PenNode]) -> Option<Vec<PenNode>> {
+    let heights: Vec<f64> = sections
+        .iter()
+        .map(|node| node.height_px().unwrap_or(0.0).max(0.0))
+        .collect();
+    let total: f64 = heights.iter().sum();
+    if total <= 0.0 {
+        return None;
+    }
+    let (index, node) = sections.iter().enumerate().find(|(index, node)| {
+        heights[*index] >= total * 0.6
+            && node.children().is_some_and(|children| children.len() >= 3)
+    })?;
+    let inner = node.children()?;
+    let mut expanded = Vec::with_capacity(sections.len() - 1 + inner.len());
+    expanded.extend_from_slice(&sections[..index]);
+    expanded.extend_from_slice(inner);
+    expanded.extend_from_slice(&sections[index + 1..]);
+    Some(expanded)
 }
 
 fn should_unwrap(root: &PenNode) -> bool {

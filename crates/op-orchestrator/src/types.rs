@@ -35,21 +35,52 @@ pub trait DocSink: Send {
         nodes: Vec<PenNode>,
         parent_id: &NodeId,
     ) -> Option<Vec<String>> {
+        // Diff the parent's child ids around the apply so EVERY sink reports
+        // the post-remap root ids. The old default returned an empty list,
+        // which no production sink (desktop RemoteDocSink, web
+        // WebDesignDocSink, op-smoke) overrode — so salvage re-ordering,
+        // append-scope cleanup and geometry echo all silently saw "no
+        // roots" outside the unit-test sinks (found 2026-09-04 when a
+        // salvaged hero stayed below the footer in a real run).
+        let before = child_ids_under(self.state(), parent_id);
         let applied = self.apply(EditorCommand::InsertSubtree {
             nodes,
             parent_id: parent_id.clone(),
             page_id: None,
         });
-        if applied {
-            Some(vec![])
-        } else {
-            None
+        if !applied {
+            return None;
         }
+        let after = child_ids_under(self.state(), parent_id);
+        Some(
+            after
+                .into_iter()
+                .filter(|id| !before.contains(id))
+                .collect(),
+        )
     }
     /// 开启一个 undo 批 —— 批内的所有 apply 合并为一次 undo。
     fn begin_undo_batch(&mut self);
     /// 关闭当前 undo 批。
     fn end_undo_batch(&mut self);
+}
+
+/// Child ids of `parent_id` in document order (page-level children when the
+/// parent is `NodeId::NONE`); empty when the parent is missing.
+fn child_ids_under(state: &EditorState, parent_id: &NodeId) -> Vec<String> {
+    use op_editor_core::PenNodeExt;
+    let children = if parent_id.is_real() {
+        match op_editor_core::walkers::find_node(state.active_children(), parent_id) {
+            Some(node) => node.children().map(Vec::as_slice).unwrap_or(&[]),
+            None => &[],
+        }
+    } else {
+        state.active_children()
+    };
+    children
+        .iter()
+        .map(|node| node.id_str().to_owned())
+        .collect()
 }
 
 /// LLM 调用出口。每次 [`call`](LlmClient::call) 是一次独立、无累积

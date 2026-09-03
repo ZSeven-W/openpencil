@@ -482,3 +482,60 @@ fn validation_config_consts_match_ts() {
     assert_eq!(VALIDATION_QUALITY_THRESHOLD, 8);
     assert_eq!(VALIDATION_TIMEOUT_MS, 180_000);
 }
+
+/// A sink that relies on the trait DEFAULT for
+/// `insert_subtree_returning_root_ids` — the shape every production sink
+/// (desktop, web, op-smoke) has. The default used to answer `Some(vec![])`,
+/// which made salvage re-ordering and append-scope cleanup no-ops outside
+/// the unit-test sinks.
+struct PlainStateSink(EditorState);
+
+impl DocSink for PlainStateSink {
+    fn state(&self) -> &EditorState {
+        &self.0
+    }
+    fn apply(&mut self, cmd: EditorCommand) -> bool {
+        self.0.apply(cmd)
+    }
+    fn begin_undo_batch(&mut self) {}
+    fn end_undo_batch(&mut self) {}
+}
+
+fn plain_frame(id: &str, name: &str) -> PenNode {
+    serde_json::from_value(serde_json::json!({
+        "type": "frame", "id": id, "name": name, "width": 1200.0, "height": 100.0,
+        "layout": "vertical", "children": []
+    }))
+    .expect("frame fixture")
+}
+
+#[test]
+fn default_insert_subtree_reports_the_post_remap_root_ids() {
+    use op_editor_core::PenNodeExt;
+    let mut sink = PlainStateSink(EditorState::new());
+    let root_ids = sink
+        .insert_subtree_returning_root_ids(vec![plain_frame("page", "Page")], &NodeId::NONE)
+        .expect("page-level insert applies");
+    assert_eq!(root_ids.len(), 1, "one page-level root inserted");
+    let root_id = NodeId::new(root_ids[0].clone());
+
+    let first = sink
+        .insert_subtree_returning_root_ids(vec![plain_frame("nav", "Nav")], &root_id)
+        .expect("child insert applies");
+    let second = sink
+        .insert_subtree_returning_root_ids(vec![plain_frame("hero", "Hero")], &root_id)
+        .expect("child insert applies");
+    assert_eq!(first.len(), 1);
+    assert_eq!(second.len(), 1);
+    assert_ne!(first[0], second[0], "each insert reports only ITS new root");
+
+    let root = op_editor_core::walkers::find_node(sink.state().active_children(), &root_id)
+        .expect("root present");
+    let child_ids: Vec<&str> = root
+        .children()
+        .expect("root has children")
+        .iter()
+        .map(|node| node.id_str())
+        .collect();
+    assert_eq!(child_ids, vec![first[0].as_str(), second[0].as_str()]);
+}

@@ -477,7 +477,7 @@ async fn main() -> std::process::ExitCode {
 
     let validation_enabled =
         truthy_env_value(std::env::var("OPENPENCIL_SMOKE_VALIDATION").ok().as_deref());
-    let request = DesignRequest {
+    let mut request = DesignRequest {
         prompt,
         model: Some(model),
         provider: None,
@@ -494,6 +494,33 @@ async fn main() -> std::process::ExitCode {
         reference_skeleton: None,
     };
     let abort = AbortFlag::new();
+    // Same three-way reference resolution the desktop / web design routes
+    // run (C1 M1), so a "参考 https://…" prompt exercises the real path here
+    // and the harness can validate it end to end.
+    match op_host_services::reference_context::resolve_reference_context(
+        llm.as_ref(),
+        &request.prompt,
+        request.model.clone(),
+        None,
+        &abort,
+    )
+    .await
+    {
+        Ok(Some(context)) => {
+            eprintln!(
+                "[REFERENCE] host={} sections={} nav={:?} hero={:?}\n{}",
+                context.source_host,
+                context.skeleton.sections.len(),
+                context.skeleton.nav_kind,
+                context.skeleton.hero_kind,
+                context.skeleton.render()
+            );
+            request.reference_skeleton = Some(context.skeleton);
+            request.design_md = Some(context.design_md);
+        }
+        Ok(None) => {}
+        Err(error) => eprintln!("[REFERENCE] unavailable: {error}"),
+    }
     // Preserve the historical skipped validator unless the caller explicitly
     // requests the production lint + validation path.
     let skipped_pre_validator = SkippedPreValidator;

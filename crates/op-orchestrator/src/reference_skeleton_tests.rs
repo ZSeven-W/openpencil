@@ -194,3 +194,103 @@ fn design_request_reference_skeleton_round_trips_and_defaults_when_absent() {
     assert_eq!(minimal.concurrency, 1);
     assert!(minimal.reference_skeleton.is_none());
 }
+
+#[test]
+fn from_state_bakes_real_layout_heights_for_fit_content_pages() {
+    // An imported HTML page: the root and its sections carry no authored
+    // heights, only content. `from_root` would see 0% everywhere.
+    let page = node(json!({
+        "type": "frame", "id": "page", "name": "Page", "width": 1200.0,
+        "layout": "vertical", "children": [
+            {"type":"frame","id":"nav","name":"Navigation Bar","width":1200.0,"height":72.0,"layout":"horizontal","children":[text("t1","Acme")]},
+            {"type":"frame","id":"hero","name":"Hero Section","width":1200.0,"layout":"vertical","padding":80.0,"children":[
+                text("t2","Headline"), text("t3","Sub"), text("t4","CTA")]},
+            {"type":"frame","id":"footer","name":"Footer","width":1200.0,"height":200.0,"layout":"vertical","children":[text("t5","© Acme")]}
+        ]
+    }));
+    let mut state = op_editor_core::EditorState::new();
+    state.active_children_mut().push(page);
+    let skeleton =
+        ReferenceSkeleton::from_state(&state, "https://acme.example/x").expect("skeleton");
+    assert_eq!(skeleton.sections.len(), 3);
+    let hero = &skeleton.sections[1];
+    assert!(
+        hero.height_ratio > 0.0,
+        "hero must get a resolved height: {skeleton:?}"
+    );
+    let total: f64 = skeleton.sections.iter().map(|s| s.height_ratio).sum();
+    assert!((total - 1.0).abs() < 0.05, "ratios sum to ~1: {total}");
+    assert_eq!(skeleton.source, "acme.example");
+    // The caller's state is untouched.
+    assert!(state.active_children()[0].height_px().is_none());
+}
+
+#[test]
+fn a_dominant_main_wrapper_between_nav_and_footer_is_expanded() {
+    let main_children = vec![
+        frame(
+            "hero",
+            "Hero",
+            1200.0,
+            600.0,
+            "vertical",
+            vec![text("h", "Headline")],
+        ),
+        frame(
+            "why",
+            "Why",
+            1200.0,
+            500.0,
+            "horizontal",
+            vec![text("w1", "A"), text("w2", "B"), text("w3", "C")],
+        ),
+        frame(
+            "build",
+            "Build",
+            1200.0,
+            500.0,
+            "vertical",
+            vec![text("b", "D")],
+        ),
+    ];
+    let root = node(frame(
+        "page",
+        "Page",
+        1200.0,
+        1900.0,
+        "vertical",
+        vec![
+            frame(
+                "nav",
+                "Navigation Bar",
+                1200.0,
+                72.0,
+                "horizontal",
+                vec![text("n", "Acme")],
+            ),
+            frame("main", "Main", 1200.0, 1600.0, "vertical", main_children),
+            frame(
+                "footer",
+                "Footer",
+                1200.0,
+                228.0,
+                "vertical",
+                vec![text("f", "©")],
+            ),
+        ],
+    ));
+    let skeleton = ReferenceSkeleton::from_root(&root, "acme.example").expect("skeleton");
+    let roles: Vec<&str> = skeleton.sections.iter().map(|s| s.role.as_str()).collect();
+    assert_eq!(
+        skeleton.sections.len(),
+        5,
+        "nav + 3 main children + footer: {roles:?}"
+    );
+    assert_eq!(roles[0], "navbar");
+    assert_eq!(roles[4], "footer");
+    assert!(
+        skeleton.column_rhythm.contains(&3),
+        "the three-column row survives: {:?}",
+        skeleton.column_rhythm
+    );
+}
