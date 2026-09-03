@@ -290,11 +290,11 @@ pub fn append_isolated_env(env: &mut Vec<(String, String)>, turn: Option<&Isolat
         #[cfg(windows)]
         let safe_path = env
             .iter()
-            .find(|(key, _)| key == "SYSTEMROOT")
+            .find(|(key, _)| key.eq_ignore_ascii_case("SYSTEMROOT"))
             .map(|(_, root)| format!(r"{root}\System32;{root}"))
             .unwrap_or_else(|| r"C:\Windows\System32;C:\Windows".to_string());
         const PRIVATE_KEYS: &[&str] = &["PATH", "TMPDIR", "TMP", "TEMP"];
-        env.retain(|(key, _)| !PRIVATE_KEYS.contains(&key.as_str()));
+        env.retain(|(key, _)| !env_key_listed(PRIVATE_KEYS, key));
         let value = |path: &Path| path.to_string_lossy().into_owned();
         env.extend([
             ("PATH".to_string(), safe_path),
@@ -533,6 +533,17 @@ where
         .collect()
 }
 
+/// Windows environment keys are case-insensitive and the OS hands them to a
+/// process in their native casing — `Path`, `SystemRoot`, `windir`, `ComSpec`,
+/// `ProgramData`. Matching an uppercase list with `contains` therefore drops
+/// every one of them: a guarded CLI then starts with no `Path` and no
+/// `SystemRoot`, and a child that cannot reach `%SystemRoot%\System32` fails
+/// Winsock initialization with `WSAEPROVIDERFAILEDINIT` (os error 10106).
+/// `chat_spawn::scrubbed_child_env` already compares this way.
+fn env_key_listed(list: &[&str], key: &str) -> bool {
+    list.iter().any(|entry| entry.eq_ignore_ascii_case(key))
+}
+
 fn allowed_env(cli: CliName, key: &str) -> bool {
     const COMMON: &[&str] = &[
         "HOME",
@@ -566,7 +577,7 @@ fn allowed_env(cli: CliName, key: &str) -> bool {
         "REQUESTS_CA_BUNDLE",
         "CURL_CA_BUNDLE",
     ];
-    if COMMON.contains(&key) || key.starts_with("LC_") {
+    if env_key_listed(COMMON, key) || key.starts_with("LC_") {
         return true;
     }
     match cli {
