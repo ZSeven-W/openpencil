@@ -325,7 +325,7 @@ pub(crate) fn shader_payload(fill: &PenFill) -> Option<ShaderPayload> {
                     }
                 }
                 ShaderUniformValue::Color(hex) => {
-                    if let Some(rgba) = parse_hex(hex) {
+                    if let Some(rgba) = parse_color(hex) {
                         // Premultiply for the vec4 binding (matches the
                         // jian-core scene walker's color-uniform rule).
                         let a = rgba[3];
@@ -369,7 +369,7 @@ fn mesh_colors(body: &jian_ops_schema::style::MeshGradientBody) -> Option<Vec<[f
         if s.row >= rows || s.col >= cols {
             continue;
         }
-        if let Some(rgba) = parse_hex(&s.color) {
+        if let Some(rgba) = parse_color(&s.color) {
             colors[(s.row * cols + s.col) as usize] = rgba;
         }
     }
@@ -387,7 +387,7 @@ fn gradient_stops(
             .iter()
             .map(|s| GradientStopPayload {
                 offset: s.offset.clamp(0.0, 1.0),
-                color: parse_hex(&s.color).unwrap_or([0.0, 0.0, 0.0, 1.0]),
+                color: parse_color(&s.color).unwrap_or([0.0, 0.0, 0.0, 1.0]),
             })
             .collect(),
     )
@@ -401,20 +401,20 @@ fn first_solid_color(fills: Option<&[PenFill]>) -> Option<[f32; 4]> {
 pub(crate) fn fill_fallback_color(fill: &PenFill) -> Option<[f32; 4]> {
     match fill {
         PenFill::Solid(body) => {
-            if let Some(rgba) = parse_hex(&body.color) {
+            if let Some(rgba) = parse_color(&body.color) {
                 return Some(apply_alpha(rgba, body.opacity));
             }
         }
         PenFill::LinearGradient(body) => {
             if let Some(stop) = body.stops.first() {
-                if let Some(rgba) = parse_hex(&stop.color) {
+                if let Some(rgba) = parse_color(&stop.color) {
                     return Some(apply_alpha(rgba, body.opacity));
                 }
             }
         }
         PenFill::RadialGradient(body) => {
             if let Some(stop) = body.stops.first() {
-                if let Some(rgba) = parse_hex(&stop.color) {
+                if let Some(rgba) = parse_color(&stop.color) {
                     return Some(apply_alpha(rgba, body.opacity));
                 }
             }
@@ -424,7 +424,7 @@ pub(crate) fn fill_fallback_color(fill: &PenFill) -> Option<[f32; 4]> {
             // baked into `node.fill` (backends without per-vertex
             // support paint this flat).
             if let Some(stop) = body.stops.first() {
-                if let Some(rgba) = parse_hex(&stop.color) {
+                if let Some(rgba) = parse_color(&stop.color) {
                     return Some(apply_alpha(rgba, body.opacity));
                 }
             }
@@ -435,7 +435,7 @@ pub(crate) fn fill_fallback_color(fill: &PenFill) -> Option<[f32; 4]> {
             // compile the program paint this flat.
             let from_uniform = body.uniforms.as_ref().and_then(|m| {
                 m.values().find_map(|v| match v {
-                    ShaderUniformValue::Color(hex) => parse_hex(hex),
+                    ShaderUniformValue::Color(hex) => parse_color(hex),
                     _ => None,
                 })
             });
@@ -517,6 +517,43 @@ pub(crate) fn parse_hex(s: &str) -> Option<[f32; 4]> {
     op_util::hex_color::parse_hex_rgba_f32(s, OPTS)
 }
 
+/// Any colour string a canonical `.op` fill may carry → normalized RGBA:
+/// hex (via [`parse_hex`]) OR the functional `rgb(r,g,b)` /
+/// `rgba(r,g,b,a)` form (`r`/`g`/`b` 0-255, `a` 0..1). Every fill,
+/// gradient-stop, mesh-cell, shader-uniform and text-colour site goes
+/// through this so an `rgba()` stop never degrades to opaque black (the
+/// hero-scrim bug: a three-stop `rgba(32,31,29,0.18..0.78)` gradient
+/// painted as a solid black wall over the photo underneath).
+pub(crate) fn parse_color(s: &str) -> Option<[f32; 4]> {
+    let t = s.trim();
+    if let Some(rgba) = parse_hex(t) {
+        return Some(rgba);
+    }
+    let lower = t.to_ascii_lowercase();
+    let inner = lower
+        .strip_prefix("rgba(")
+        .or_else(|| lower.strip_prefix("rgb("))?
+        .strip_suffix(')')?;
+    let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let r = parts[0].parse::<f32>().ok()?;
+    let g = parts[1].parse::<f32>().ok()?;
+    let b = parts[2].parse::<f32>().ok()?;
+    let a = if parts.len() >= 4 {
+        parts[3].parse::<f32>().ok()?
+    } else {
+        1.0
+    };
+    Some([
+        (r / 255.0).clamp(0.0, 1.0),
+        (g / 255.0).clamp(0.0, 1.0),
+        (b / 255.0).clamp(0.0, 1.0),
+        a.clamp(0.0, 1.0),
+    ])
+}
+
 pub(crate) fn short_src(src: &str) -> String {
     let s = src.rsplit('/').next().unwrap_or(src);
     if s.chars().count() > 24 {
@@ -524,5 +561,48 @@ pub(crate) fn short_src(src: &str) -> String {
         format!("{head}…")
     } else {
         s.to_string()
+    }
+}
+
+#[cfg(test)]
+mod color_tests {
+    use super::*;
+    use jian_ops_schema::style::GradientStop;
+
+    fn stop(offset: f32, color: &str) -> GradientStop {
+        GradientStop {
+            offset,
+            color: color.to_string(),
+        }
+    }
+
+    #[test]
+    fn parse_color_accepts_hex_and_functional_forms() {
+        assert_eq!(
+            parse_color("#201F1D"),
+            Some([32.0 / 255.0, 31.0 / 255.0, 29.0 / 255.0, 1.0])
+        );
+        let rgba = parse_color("rgba(32, 31, 29, 0.18)").expect("rgba parses");
+        assert!((rgba[0] - 32.0 / 255.0).abs() < 1e-6);
+        assert!((rgba[3] - 0.18).abs() < 1e-6);
+        assert_eq!(parse_color("rgb(255,128,0)").map(|c| c[3]), Some(1.0));
+        assert_eq!(parse_color("not-a-colour"), None);
+    }
+
+    #[test]
+    fn rgba_gradient_stops_keep_their_alpha_instead_of_opaque_black() {
+        let stops = gradient_stops(&[
+            stop(0.0, "rgba(32,31,29,0.18)"),
+            stop(0.45, "rgba(32,31,29,0.42)"),
+            stop(1.0, "rgba(32,31,29,0.78)"),
+        ])
+        .expect("stops");
+        let alphas: Vec<f32> = stops.iter().map(|s| s.color[3]).collect();
+        assert!((alphas[0] - 0.18).abs() < 1e-6, "alphas {alphas:?}");
+        assert!((alphas[2] - 0.78).abs() < 1e-6, "alphas {alphas:?}");
+        assert!(
+            stops.iter().all(|s| s.color[0] > 0.0),
+            "rgb must not collapse to black"
+        );
     }
 }
