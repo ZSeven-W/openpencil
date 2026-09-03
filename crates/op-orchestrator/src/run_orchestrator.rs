@@ -511,6 +511,16 @@ impl Orchestrator {
                 )
                 .await;
                 if outcome.node_count > 0 {
+                    // The salvage appended the section after everything
+                    // generated since it first failed; put it back where
+                    // the plan placed it.
+                    crate::run_salvage_feedback::restore_planned_order(
+                        sink,
+                        &plan,
+                        &outcomes,
+                        subtask_index,
+                        &outcome,
+                    );
                     on_progress(scope_progress_for_subtask(
                         &groups,
                         &group_identities,
