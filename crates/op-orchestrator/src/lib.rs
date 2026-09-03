@@ -34,6 +34,8 @@ mod plan_fallback_card;
 pub mod plan_normalize;
 pub mod plan_repair;
 pub mod program_gen;
+pub(crate) mod reference_intent;
+pub mod reference_skeleton;
 mod request_dimensions;
 mod resolved_style_prompt;
 pub mod retry;

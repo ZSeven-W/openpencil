@@ -104,9 +104,13 @@ impl Phase {
     /// `landing-page-predesign` — the phase's only Domain skill — could never
     /// be included on ANY prompt, matched or not. The ceiling now covers the
     /// base set plus that skill with headroom.
+    ///
+    /// Planning moved again 6000 → 6050 (C1 M0.3) when the reference-skeleton
+    /// rule expanded the decomposition skill enough to squeeze the matched
+    /// landing-page skill's tail.
     pub fn default_budget(self) -> u32 {
         match self {
-            Phase::Planning => 6000,
+            Phase::Planning => 6050,
             Phase::Generation => 16050,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
@@ -116,7 +120,7 @@ impl Phase {
 
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
-    (Phase::Planning, 6000),
+    (Phase::Planning, 6050),
     (Phase::Generation, 16050),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
@@ -390,7 +394,7 @@ mod tests {
 
     #[test]
     fn default_budget_table() {
-        assert_eq!(Phase::Planning.default_budget(), 6000);
+        assert_eq!(Phase::Planning.default_budget(), 6050);
         assert_eq!(Phase::Generation.default_budget(), 16050);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);

@@ -84,6 +84,7 @@ fn stash_design_request_for_retry_writes_json_onto_the_last_message() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
 
     stash_design_request_for_retry(&mut host, &request);

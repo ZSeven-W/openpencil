@@ -321,6 +321,7 @@ fn subagent_prompt_reduced_complexity_basic_is_shorter_than_full() {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let (full_cr, _) = bsp(&st, &plan(), &basic_req, AbortFlag::new(), false, false);
     let (reduced_cr, _) = bsp(&st, &plan(), &basic_req, AbortFlag::new(), true, false);
@@ -452,6 +453,7 @@ fn subagent_prompt_basic_tier_reduced_retry_drops_jsonl_format_skills() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let (basic_cr, basic_report) = bsp(
         &subtask(),
@@ -504,6 +506,7 @@ fn subagent_prompt_basic_mobile_food_keeps_mobile_app_skill() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let mut mobile_plan = plan();
     mobile_plan.root_frame.width = 402.0;

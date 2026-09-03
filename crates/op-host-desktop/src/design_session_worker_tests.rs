@@ -44,6 +44,7 @@ fn persisted_request_json() -> String {
         validation_enabled: false,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     })
     .unwrap()
 }

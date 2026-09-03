@@ -63,6 +63,7 @@ mod spawn_worker_tests {
             validation_enabled: false,
             visual_ref_enabled: false,
             pinned_style_guide: None,
+            reference_skeleton: None,
         }
     }
 
@@ -200,6 +201,7 @@ mod subtask_retry_tests {
             validation_enabled: false,
             visual_ref_enabled: false,
             pinned_style_guide: None,
+            reference_skeleton: None,
         }
     }
 

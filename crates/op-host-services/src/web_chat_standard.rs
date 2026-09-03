@@ -602,6 +602,7 @@ fn stream_new_design_route<W: Write>(
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: snapshot.editor_ui.pinned_style_guide.clone(),
+        reference_skeleton: None,
     };
     // Share one provider Arc between the design LLM and (optionally) the
     // vision validator, so the real vision loop reuses the same auth/model

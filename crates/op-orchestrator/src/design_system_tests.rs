@@ -163,6 +163,7 @@ fn design_request_visual_ref_enabled_literal_compiles() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     assert!(!req.visual_ref_enabled);
 }

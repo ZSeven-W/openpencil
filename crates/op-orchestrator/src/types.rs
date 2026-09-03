@@ -684,6 +684,7 @@ pub struct DesignRequest {
     /// 并发度:允许同时运行的 screen-group worker 数。
     /// 调用方应传 store-clamped 值 [1,6];crate 内部防御性 clamp。
     /// 默认为 1(顺序执行)。Port of TS `request.concurrency ?? 1`.
+    #[serde(default = "default_concurrency")]
     pub concurrency: u32,
     /// 追加模式上下文 —— 仅当 host 检测到 append intent 时填入。
     /// Port of `AIDesignRequest.context.appendContext` in `ai-types.ts:51`.
@@ -714,6 +715,9 @@ pub struct DesignRequest {
     /// name the registry has dropped falls back to the ranking with a log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pinned_style_guide: Option<String>,
+    /// Content-free structure extracted from an imported reference page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_skeleton: Option<crate::reference_skeleton::ReferenceSkeleton>,
 }
 
 /// Mirrors the serde defaults exactly, so a request built through `Default`
@@ -734,12 +738,17 @@ impl Default for DesignRequest {
             validation_enabled: default_validation_enabled(),
             visual_ref_enabled: default_visual_ref_enabled(),
             pinned_style_guide: None,
+            reference_skeleton: None,
         }
     }
 }
 
 fn default_validation_enabled() -> bool {
     true
+}
+
+fn default_concurrency() -> u32 {
+    1
 }
 
 fn default_visual_ref_enabled() -> bool {

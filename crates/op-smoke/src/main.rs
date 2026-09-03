@@ -491,6 +491,7 @@ async fn main() -> std::process::ExitCode {
         validation_enabled,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let abort = AbortFlag::new();
     // Preserve the historical skipped validator unless the caller explicitly
