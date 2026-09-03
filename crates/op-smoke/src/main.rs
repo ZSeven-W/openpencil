@@ -544,6 +544,20 @@ async fn main() -> std::process::ExitCode {
         .await;
     let elapsed = started.elapsed();
 
+    // Image-fill post step (OPENPENCIL_SMOKE_FILL_IMAGES=1), the same one the
+    // loop path runs: resolve pending image-search queries to real Openverse
+    // URLs BEFORE persisting, so the saved `.op` — and the render-shots pass
+    // that reads it — carries real pictures instead of grey placeholders.
+    // Scoped thread for the same reason as the loop path: the fetch bridge
+    // builds its own runtime and cannot be driven from this tokio main.
+    let image_config = image_fill::ImageFillConfig::from_env();
+    let dump_images = std::env::var("OPENPENCIL_SMOKE_DUMP").is_ok();
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            image_fill::fill_images(&mut sink.state, &image_config, dump_images);
+        });
+    });
+
     // Persist the produced PenDocument when OPENPENCIL_SMOKE_OUT is set,
     // so the render / screenshot step can pick it up. Canonical
     // serde_json mirrors `persistence::save_to_path`. Saved regardless of
