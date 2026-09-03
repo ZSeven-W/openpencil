@@ -4741,6 +4741,7 @@ dependencies = [
  "sha2",
  "skia-safe",
  "tokio",
+ "tracing",
  "zip",
 ]
 

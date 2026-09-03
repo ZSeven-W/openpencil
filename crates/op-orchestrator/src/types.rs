@@ -616,15 +616,17 @@ pub fn report_to_progress_parts(
 
 /// 单个 subtask 的执行结果。`error` 带值但 `node_count > 0` 表示
 /// "部分产出"(软错误);`node_count == 0` 表示零节点失败。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubtaskOutcome {
     pub id: String,
     pub node_count: usize,
     pub error: Option<String>,
-    /// Post-remap ids of the roots this subtask inserted (append-mode
-    /// cleanup scopes to exactly these — Component 11). Empty on failure
-    /// or when the sink is buffered (ids unavailable until replay).
+    /// Post-remap ids of the roots this subtask inserted; empty on failure or
+    /// when the sink is buffered (ids unavailable until replay).
     pub inserted_root_ids: Vec<String>,
+    /// Visually dominant headline extracted from the inserted section.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headline: Option<String>,
     /// The persisted subtask spec, present ONLY on a zero-node failure —
     /// carries `region`/`elements`/`screen`/`parent_frame_id` through to the
     /// host so a failed row's manual "Retry" button (progress-panel remedy,

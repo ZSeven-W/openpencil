@@ -35,14 +35,12 @@ pub(crate) const REFERENCE_TRIGGER_WORDS: &[&str] = &[
     "modelled on",
 ];
 
-/// Detect a reference intent: the prompt carries an http(s) URL AND one of the
-/// trigger words. Returns the FIRST URL (trailing punctuation `.,;:!?)]}>"'`
-/// and CJK punctuation `。，；：！？）】》` stripped). A URL with no trigger word
-/// is NOT a reference (the user may just be naming a product site) → None.
-pub fn detect_reference_intent(prompt: &str) -> Option<ReferenceIntent> {
-    // Check if any trigger word is present
+/// Whether a prompt contains one of the words or phrases that signal a
+/// reference-driven request, regardless of whether the reference is a URL or
+/// an attachment.
+pub fn has_reference_trigger(prompt: &str) -> bool {
     let lower = prompt.to_lowercase();
-    let has_trigger = REFERENCE_TRIGGER_WORDS.iter().any(|word| {
+    REFERENCE_TRIGGER_WORDS.iter().any(|word| {
         if word.is_ascii() && word.contains(' ') {
             // Multi-word ASCII trigger: check for exact phrase
             lower.contains(word)
@@ -53,9 +51,15 @@ pub fn detect_reference_intent(prompt: &str) -> Option<ReferenceIntent> {
             // CJK substring: direct contains check
             prompt.contains(word)
         }
-    });
+    })
+}
 
-    if !has_trigger {
+/// Detect a reference intent: the prompt carries an http(s) URL AND one of the
+/// trigger words. Returns the FIRST URL (trailing punctuation `.,;:!?)]}>"'`
+/// and CJK punctuation `。，；：！？）】》` stripped). A URL with no trigger word
+/// is NOT a reference (the user may just be naming a product site) → None.
+pub fn detect_reference_intent(prompt: &str) -> Option<ReferenceIntent> {
+    if !has_reference_trigger(prompt) {
         return None;
     }
 
@@ -132,7 +136,9 @@ mod tests {
 
     #[test]
     fn trigger_without_url_is_not_a_reference() {
-        assert_eq!(detect_reference_intent("参考 Stripe 的风格做定价页"), None);
+        let prompt = "参考 Stripe 的风格做定价页";
+        assert!(has_reference_trigger(prompt));
+        assert_eq!(detect_reference_intent(prompt), None);
     }
 
     #[test]

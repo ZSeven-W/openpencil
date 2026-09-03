@@ -37,6 +37,9 @@ use events::{
     write_done_event, write_error_event, write_thinking_event,
 };
 
+#[path = "web_chat_standard_reference.rs"]
+mod reference;
+
 #[path = "web_chat_standard_model_selection.rs"]
 mod model_selection;
 use model_selection::selected_model_id;
@@ -601,13 +604,12 @@ fn stream_new_design_route<W: Write>(
         pinned_style_guide: snapshot.editor_ui.pinned_style_guide.clone(),
         reference_skeleton: None,
     };
-    // Share one provider Arc between the design LLM and (optionally) the
-    // vision validator, so the real vision loop reuses the same auth/model
-    // the user picked instead of needing a second key.
     let provider_arc: Arc<dyn ChatProvider> = Arc::from(provider);
     let llm = ChatProviderLlmClient::new(provider_arc.clone()).with_model(model.clone());
     let mut sink = WebDesignDocSink::new(target.state, target.hub, target.write_barrier, snapshot);
     let abort = AbortFlag::new();
+    let image_model = request.model.clone();
+    let image_provider = request.provider.clone();
     let reference_result = crate::chat_runtime::block_on_anywhere(
         crate::reference_context::resolve_reference_context(
             &llm,
@@ -618,26 +620,39 @@ fn stream_new_design_route<W: Write>(
         ),
     );
     match reference_result {
-        Ok(Some(context)) => {
-            request.reference_skeleton = Some(context.skeleton);
-            request.design_md = Some(context.design_md.clone());
-            let _ = sink.apply(EditorCommand::SetDesignMd {
-                spec: Box::new(context.design_md),
-            });
-        }
-        Ok(None) => {}
+        Ok(Some(context)) => reference::apply_reference_context(&mut request, &mut sink, context),
+        Ok(None) => reference::apply_image_reference(
+            &mut request,
+            &mut sink,
+            &mut *out,
+            reference::resolve_image_reference(
+                &req.attachments,
+                &provider_arc,
+                &prompt,
+                image_model.clone(),
+                image_provider.clone(),
+            ),
+        )?,
         Err(error) => {
             let notice = format!("reference page could not be used: {error}");
             eprintln!("[web-chat] {notice}");
             write_thinking_event(out, &format!("\n{notice}"))?;
+            reference::apply_image_reference(
+                &mut request,
+                &mut sink,
+                &mut *out,
+                reference::resolve_image_reference(
+                    &req.attachments,
+                    &provider_arc,
+                    &prompt,
+                    image_model,
+                    image_provider,
+                ),
+            )?;
         }
     }
     let pre_validator = LintPreValidator;
 
-    // ── Class-C vision-validation provider selection (Track-1 Step 3) ──────────
-    // REAL providers only when `OPENPENCIL_VISION_VALIDATION=1` (defaults OFF);
-    // otherwise the no-op stubs keep `run_post_generation_validation` a
-    // guaranteed short-circuit, so the default path is byte-for-byte unchanged.
     let use_real_vision = crate::validation_providers::vision_validation_enabled();
     let stub_screenshot = SkippedScreenshotProvider;
     let stub_vision = SkippedVisionLlmClient;
@@ -668,9 +683,6 @@ fn stream_new_design_route<W: Write>(
             .into_iter()
             .next()
             .expect("one requested agent identity");
-    // The browser transcript learns the persona first. The daemon relay then
-    // confirms that exact same identity, so the canvas cursor cannot appear
-    // under a different name or colour than the visible assistant bubble.
     write_agent_identity_event(out, &identity)?;
     let epoch = op_editor_core::agent_indicators::begin();
     op_editor_core::agent_indicators::confirm_cursor_agent(epoch, &identity.color, &identity.name);
@@ -688,8 +700,6 @@ fn stream_new_design_route<W: Write>(
             &providers,
         ))
     };
-    // Natural completion drains the queued reveals gracefully; an
-    // aborted turn tears the overlay down at once.
     if abort.is_set() {
         op_editor_core::agent_indicators::end_if_epoch(epoch);
     } else {
@@ -719,8 +729,6 @@ fn stream_new_design_route<W: Write>(
 struct WebDesignDocSink<'a> {
     state: &'a Mutex<WebCanvasState>,
     hub: &'a SseHub,
-    /// Admission for each generated command's commit. `None` for the local
-    /// and managed daemons, which have no flush to protect.
     write_barrier: Option<&'a crate::web_canvas_server::WriteBarrier>,
     mirror: EditorState,
 }
@@ -747,17 +755,11 @@ impl DocSink for WebDesignDocSink<'_> {
     }
 
     fn apply(&mut self, cmd: EditorCommand) -> bool {
-        // Each generated command is its own document commit, so each needs its
-        // own instant of admission. A closed barrier acks `false`, which the
-        // generator already treats as "not applied".
         let Ok(_write_pass) = admit_document_write(self.write_barrier) else {
             return false;
         };
         let (applied, tick, snapshot) = {
             let mut guard = self.state.lock().unwrap_or_else(|p| p.into_inner());
-            // A refusal and a no-op both ack `false` to the generator, which is
-            // the existing contract; the difference is visible in the session
-            // notice the gate raises, not in this return value.
             let applied = guard
                 .apply_gated(cmd, op_editor_core::CollabEditSource::Ai)
                 .unwrap_or(false);
@@ -787,13 +789,11 @@ impl DocSink for WebDesignDocSink<'_> {
 }
 
 #[cfg(test)]
-#[path = "web_chat_standard_tests.rs"]
-mod tests;
-
-#[cfg(test)]
 #[path = "web_chat_standard_model_tests.rs"]
 mod model_tests;
-
 #[cfg(test)]
 #[path = "web_chat_standard_reference_tests.rs"]
 mod reference_tests;
+#[cfg(test)]
+#[path = "web_chat_standard_tests.rs"]
+mod tests;

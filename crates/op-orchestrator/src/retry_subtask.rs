@@ -118,6 +118,7 @@ pub async fn retry_subtask(
                              exists in the document — describe where to add it instead"
                         )),
                         inserted_root_ids: Vec::new(),
+                        headline: None,
                         subtask: None,
                     };
                 }

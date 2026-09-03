@@ -150,6 +150,7 @@ mod tests {
             node_count: roots.len(),
             error: None,
             inserted_root_ids: roots.iter().map(|r| (*r).to_owned()).collect(),
+            headline: None,
             subtask: None,
         }
     }

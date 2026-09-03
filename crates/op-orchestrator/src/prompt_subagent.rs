@@ -1,6 +1,7 @@
 //! `build_subagent_prompt` and its core builder.
 
 use super::*;
+use crate::types::SubtaskOutcome;
 
 /// 单个 sub-agent 的 LLM 调用输入。
 ///
@@ -79,6 +80,37 @@ pub(crate) fn build_subagent_prompt_with_screen_routes(
     )
 }
 
+/// Production prompt builder with prior section headlines threaded from the
+/// sequential orchestrator. Concurrent screen-group workers deliberately pass
+/// an empty slice because their section results are buffered independently.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_subagent_prompt_with_screen_routes_and_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    doc_has_variables: bool,
+    components: &ComponentLibrary,
+    screen_routes: &[(String, String)],
+    prior_outcomes: &[SubtaskOutcome],
+) -> (CallRequest, SkillLoadReport) {
+    build_subagent_prompt_core_with_outcomes(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        doc_has_variables,
+        true,
+        components,
+        screen_routes,
+        prior_outcomes,
+    )
+}
+
 /// Core of [`build_subagent_prompt`] — `script_on` is a parameter so tests can
 /// exercise both protocol arms directly without depending on the
 /// `reduced_complexity` / `minimal_skills` derivation.
@@ -94,6 +126,37 @@ pub(super) fn build_subagent_prompt_core(
     script_on: bool,
     components: &ComponentLibrary,
     screen_routes: &[(String, String)],
+) -> (CallRequest, SkillLoadReport) {
+    build_subagent_prompt_core_with_outcomes(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        doc_has_variables,
+        script_on,
+        components,
+        screen_routes,
+        &[],
+    )
+}
+
+/// Core sub-agent prompt builder with the headlines produced by earlier
+/// sections on the same page.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_subagent_prompt_core_with_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    doc_has_variables: bool,
+    script_on: bool,
+    components: &ComponentLibrary,
+    screen_routes: &[(String, String)],
+    prior_outcomes: &[SubtaskOutcome],
 ) -> (CallRequest, SkillLoadReport) {
     // Apply tier-gated filtering, then resolve the generation skill set under
     // the budget — that order, not the reverse; see the resolve call below.
@@ -375,6 +438,7 @@ pub(super) fn build_subagent_prompt_core(
         .map(|instruction| format!("{instruction}\n\n"))
         .unwrap_or_default();
     let screen_route_block = screen_route_prompt_block(screen_routes);
+    let headline_block = section_headline_prompt_block(prior_outcomes, tier);
     let spacing_rule = if is_mobile_layout {
         "SPACING CONSISTENCY — MOBILE CONTENT RAIL: The root page may keep 0 horizontal padding for full-width status/navigation/full-bleed media. This ordinary transparent root-direct section owns padding:[0,24] exactly once; do not duplicate it on an inner wrapper. If this section is a clipped horizontal scroller, keep its section full width, inset its header 24px on both sides, and give the clipped viewport a 24px leading inset with a flush 0px trailing edge."
     } else {
@@ -399,6 +463,7 @@ pub(super) fn build_subagent_prompt_core(
     };
     let mut user_prompt = format!(
         "Page sections:\n{}\n\n\
+{}\
 Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
 Overall design: {}\n\n\
 {}\
@@ -426,6 +491,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\
 - {}",
         section_list,
+        headline_block,
         subtask.label,
         subtask.region.height,
         my_elements,
@@ -552,6 +618,27 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
             first_text_timeout: Some(t.first_text),
         },
         report,
+    )
+}
+
+fn section_headline_prompt_block(prior_outcomes: &[SubtaskOutcome], tier: ModelTier) -> String {
+    let limit = if tier == ModelTier::Basic { 4 } else { 12 };
+    let headlines = prior_outcomes
+        .iter()
+        .filter_map(|outcome| outcome.headline.as_deref())
+        .filter(|headline| !headline.trim().is_empty())
+        .take(limit)
+        .map(|headline| {
+            let truncated = headline.chars().take(60).collect::<String>();
+            serde_json::to_string(&truncated).expect("serializing a string cannot fail")
+        })
+        .collect::<Vec<_>>();
+    if headlines.is_empty() {
+        return String::new();
+    }
+    format!(
+        "HEADLINES ALREADY ON THIS PAGE (earlier sections — do NOT reuse or paraphrase them; this section needs its own distinct headline): {}\n\n",
+        headlines.join(", ")
     )
 }
 

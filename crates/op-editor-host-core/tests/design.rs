@@ -86,6 +86,7 @@ fn design_session_drains_progress_and_command_requests() {
                 node_count: 2,
                 error: None,
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             }],
             total_nodes: 2,

@@ -507,15 +507,21 @@ async fn main() -> std::process::ExitCode {
     .await
     {
         Ok(Some(context)) => {
-            eprintln!(
-                "[REFERENCE] host={} sections={} nav={:?} hero={:?}\n{}",
-                context.source_host,
-                context.skeleton.sections.len(),
-                context.skeleton.nav_kind,
-                context.skeleton.hero_kind,
-                context.skeleton.render()
-            );
-            request.reference_skeleton = Some(context.skeleton);
+            match context.skeleton.as_ref() {
+                Some(skeleton) => eprintln!(
+                    "[REFERENCE] host={} sections={} nav={:?} hero={:?}\n{}",
+                    context.source_host,
+                    skeleton.sections.len(),
+                    skeleton.nav_kind,
+                    skeleton.hero_kind,
+                    skeleton.render()
+                ),
+                None => eprintln!(
+                    "[REFERENCE] host={} (style only, no skeleton)",
+                    context.source_host
+                ),
+            }
+            request.reference_skeleton = context.skeleton;
             request.design_md = Some(context.design_md);
         }
         Ok(None) => {}

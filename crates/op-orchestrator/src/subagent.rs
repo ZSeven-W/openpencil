@@ -8,7 +8,7 @@
 //! - `node_count > 0`(`error` 可带软错误)—— 部分产出,继续后续。
 
 use crate::plan::{OrchestratorPlan, Subtask};
-use crate::prompt::build_subagent_prompt_with_screen_routes;
+use crate::prompt::build_subagent_prompt_with_screen_routes_and_outcomes;
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, SubtaskOutcome};
 use futures::StreamExt;
 use jian_ops_schema::node::PenNode;
@@ -97,11 +97,44 @@ pub(crate) async fn run_subtask_with_reveal_at(
     reveal_started_ms: u64,
     on_progress: Option<&mut dyn FnMut(crate::types::Progress)>,
 ) -> SubtaskOutcome {
+    run_subtask_with_reveal_at_and_outcomes(
+        subtask,
+        plan,
+        req,
+        llm,
+        sink,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        indicator_epoch,
+        reveal_started_ms,
+        on_progress,
+        &[],
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    llm: &dyn LlmClient,
+    sink: &mut dyn DocSink,
+    abort: &AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    indicator_epoch: Option<u64>,
+    reveal_started_ms: u64,
+    on_progress: Option<&mut dyn FnMut(crate::types::Progress)>,
+    prior_outcomes: &[SubtaskOutcome],
+) -> SubtaskOutcome {
     let fail = |msg: String| SubtaskOutcome {
         id: subtask.id.clone(),
         node_count: 0,
         error: Some(msg),
         inserted_root_ids: Vec::new(),
+        headline: None,
         // Persist the spec on every zero-node failure so the progress
         // panel's manual "Retry" button (see `crate::retry_subtask`) can
         // re-run this EXACT subtask later.
@@ -118,7 +151,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
     let has_variables = state.doc.variables.as_ref().is_some_and(|v| !v.is_empty());
 
     // 收集 LLM 文本输出。
-    let (call_req, skill_report) = build_subagent_prompt_with_screen_routes(
+    let (call_req, skill_report) = build_subagent_prompt_with_screen_routes_and_outcomes(
         subtask,
         plan,
         req,
@@ -128,6 +161,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         has_variables,
         &components,
         &screen_routes,
+        prior_outcomes,
     );
     // Surface the per-subtask skill-load report to the chat UI immediately
     // after the prompt is built (spec Component 4).
@@ -378,11 +412,20 @@ pub(crate) async fn run_subtask_with_reveal_at(
         return fail(error);
     };
 
+    let headline = inserted_root_ids.iter().find_map(|root_id| {
+        op_editor_core::walkers::find_node(
+            sink.state().active_children(),
+            &NodeId::new(root_id.clone()),
+        )
+        .and_then(crate::section_headline::section_headline)
+    });
+
     SubtaskOutcome {
         id: subtask.id.clone(),
         node_count,
         error: None,
         inserted_root_ids,
+        headline,
         subtask: None,
     }
 }

@@ -13,6 +13,9 @@ pub enum ReferenceContextError {
     Import(ImportHtmlUrlError),
     /// The imported page had no usable root structure.
     NoStructure,
+    /// The attachment supplied for screenshot reference extraction is not a
+    /// non-empty image payload.
+    NotAnImage,
     /// The existing design.md LLM enrichment path failed.
     DesignMd(DesignMdError),
 }
@@ -22,6 +25,7 @@ impl fmt::Display for ReferenceContextError {
         match self {
             Self::Import(error) => error.fmt(f),
             Self::NoStructure => f.write_str("reference page produced no usable structure"),
+            Self::NotAnImage => f.write_str("reference attachment is not a non-empty image"),
             Self::DesignMd(error) => error.fmt(f),
         }
     }

@@ -50,6 +50,7 @@ fn failed_run_summary() -> RunSummary {
                 node_count: 12,
                 error: None,
                 inserted_root_ids: vec!["hero-root".into()],
+                headline: None,
                 subtask: None,
             },
             SubtaskOutcome {
@@ -57,6 +58,7 @@ fn failed_run_summary() -> RunSummary {
                 node_count: 0,
                 error: Some("self-check failed".into()),
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: Some(failed_subtask("sun_arc", "Sunrise & Sunset Arc")),
             },
         ],

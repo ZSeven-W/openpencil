@@ -171,6 +171,7 @@ mod geometry_echo {
             node_count: 1,
             error: None,
             inserted_root_ids: vec!["rail".into()],
+            headline: None,
             subtask: None,
         }
     }
@@ -316,6 +317,7 @@ mod geometry_echo {
                 node_count: 1,
                 error: None,
                 inserted_root_ids: vec!["rail".into()],
+                headline: None,
                 subtask: None,
             },
         ));
@@ -392,6 +394,7 @@ mod geometry_echo {
                 node_count: 0,
                 error: Some("script error: unexpected end of string".into()),
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             },
         ));
@@ -428,6 +431,7 @@ mod geometry_echo {
                 node_count: 1,
                 error: None,
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             },
         ));

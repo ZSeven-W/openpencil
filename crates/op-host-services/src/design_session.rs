@@ -138,6 +138,7 @@ pub fn run_design_worker<L: LlmClient + Send>(
         };
         block_on_anywhere(async {
             let mut request = request;
+            // C1 M2: desktop attachments are not plumbed into the design session yet
             let reference_used = match crate::reference_context::resolve_reference_context(
                 &llm,
                 &request.prompt,
@@ -148,7 +149,7 @@ pub fn run_design_worker<L: LlmClient + Send>(
             .await
             {
                 Ok(Some(context)) => {
-                    request.reference_skeleton = Some(context.skeleton);
+                    request.reference_skeleton = context.skeleton;
                     request.design_md = Some(context.design_md.clone());
                     let _ = sink.apply(EditorCommand::SetDesignMd {
                         spec: Box::new(context.design_md),

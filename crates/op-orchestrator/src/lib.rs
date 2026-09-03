@@ -88,6 +88,7 @@ pub mod run;
 mod run_salvage_feedback;
 pub mod scaffold;
 pub mod screen_groups;
+pub(crate) mod section_headline;
 pub(crate) mod section_shell_fill_repair;
 pub(crate) mod sidebar_archetype;
 pub mod spacing_repair;
@@ -159,7 +160,7 @@ pub use model_profile::{
     resolve_model_profile, ModelProfile, ModelTier, ReasoningWireControl,
 };
 pub use prompt::build_orchestrator_prompt;
-pub use reference_intent::{detect_reference_intent, ReferenceIntent};
+pub use reference_intent::{detect_reference_intent, has_reference_trigger, ReferenceIntent};
 pub use reference_skeleton::ReferenceSkeleton;
 pub use repair_record::RepairRecord;
 pub use repair_summary::{CheckCategory, RepairSummary};

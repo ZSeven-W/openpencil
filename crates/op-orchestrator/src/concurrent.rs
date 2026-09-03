@@ -60,7 +60,7 @@ use crate::model_profile::ModelTier;
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::retry::{is_non_retryable, is_self_check_rejection};
 use crate::screen_groups::ScreenGroup;
-use crate::subagent::{reveal_now_millis, run_subtask_with_reveal_at};
+use crate::subagent::{reveal_now_millis, run_subtask_with_reveal_at_and_outcomes};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, GeometryEchoBudget, LlmClient, Progress, SubtaskOutcome,
 };
@@ -196,6 +196,36 @@ pub(crate) async fn run_subtask_retry_ladder(
     geometry_echo_budget: &GeometryEchoBudget,
     on_progress: &mut dyn FnMut(Progress),
 ) -> SubtaskOutcome {
+    run_subtask_retry_ladder_with_outcomes(
+        subtask,
+        plan,
+        request,
+        llm,
+        sink,
+        abort,
+        tier,
+        agent_indicator_epoch,
+        geometry_echo_budget,
+        on_progress,
+        &[],
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    request: &DesignRequest,
+    llm: &dyn LlmClient,
+    sink: &mut dyn DocSink,
+    abort: &AbortFlag,
+    tier: ModelTier,
+    agent_indicator_epoch: Option<u64>,
+    geometry_echo_budget: &GeometryEchoBudget,
+    on_progress: &mut dyn FnMut(Progress),
+    prior_outcomes: &[SubtaskOutcome],
+) -> SubtaskOutcome {
     on_progress(Progress::SubtaskStarted {
         id: subtask.id.clone(),
         label: subtask.label.clone(),
@@ -203,7 +233,7 @@ pub(crate) async fn run_subtask_retry_ladder(
 
     // Attempt 1 — full complexity. Forwards the progress sink so the
     // per-subtask SkillLoadReport reaches the chat UI.
-    let outcome1 = run_subtask_with_reveal_at(
+    let outcome1 = run_subtask_with_reveal_at_and_outcomes(
         subtask,
         plan,
         request,
@@ -215,6 +245,7 @@ pub(crate) async fn run_subtask_retry_ladder(
         agent_indicator_epoch,
         reveal_now_millis(),
         Some(&mut *on_progress),
+        prior_outcomes,
     )
     .await;
 
@@ -275,7 +306,7 @@ pub(crate) async fn run_subtask_retry_ladder(
                 .unwrap_or_else(|| "zero nodes generated".into()),
         });
         Some(
-            run_subtask_with_reveal_at(
+            run_subtask_with_reveal_at_and_outcomes(
                 &attempt2_subtask,
                 plan,
                 request,
@@ -287,6 +318,7 @@ pub(crate) async fn run_subtask_retry_ladder(
                 agent_indicator_epoch,
                 reveal_now_millis(),
                 None,
+                prior_outcomes,
             )
             .await,
         )
@@ -331,7 +363,7 @@ pub(crate) async fn run_subtask_retry_ladder(
                 .unwrap_or_else(|| "zero nodes generated".into()),
         });
         Some(
-            run_subtask_with_reveal_at(
+            run_subtask_with_reveal_at_and_outcomes(
                 &attempt3_subtask,
                 plan,
                 request,
@@ -343,6 +375,7 @@ pub(crate) async fn run_subtask_retry_ladder(
                 agent_indicator_epoch,
                 reveal_now_millis(),
                 None,
+                prior_outcomes,
             )
             .await,
         )
@@ -365,7 +398,7 @@ pub(crate) async fn run_subtask_retry_ladder(
         (outcome1, false, false)
     };
 
-    maybe_geometry_echo(
+    maybe_geometry_echo_with_outcomes(
         subtask,
         plan,
         request,
@@ -377,6 +410,7 @@ pub(crate) async fn run_subtask_retry_ladder(
         agent_indicator_epoch,
         geometry_echo_budget,
         on_progress,
+        prior_outcomes,
         outcome,
     )
     .await
@@ -408,6 +442,7 @@ pub(crate) async fn run_subtask_retry_ladder(
 /// - the diagnostics come back empty — the common case, zero cost;
 /// - the run-wide [`GeometryEchoBudget`] is exhausted.
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 async fn maybe_geometry_echo(
     subtask: &Subtask,
     plan: &OrchestratorPlan,
@@ -420,6 +455,40 @@ async fn maybe_geometry_echo(
     agent_indicator_epoch: Option<u64>,
     budget: &GeometryEchoBudget,
     on_progress: &mut dyn FnMut(Progress),
+    outcome: SubtaskOutcome,
+) -> SubtaskOutcome {
+    maybe_geometry_echo_with_outcomes(
+        subtask,
+        plan,
+        request,
+        llm,
+        sink,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        agent_indicator_epoch,
+        budget,
+        on_progress,
+        &[],
+        outcome,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn maybe_geometry_echo_with_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    request: &DesignRequest,
+    llm: &dyn LlmClient,
+    sink: &mut dyn DocSink,
+    abort: &AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    agent_indicator_epoch: Option<u64>,
+    budget: &GeometryEchoBudget,
+    on_progress: &mut dyn FnMut(Progress),
+    prior_outcomes: &[SubtaskOutcome],
     outcome: SubtaskOutcome,
 ) -> SubtaskOutcome {
     if outcome.node_count == 0 || outcome.inserted_root_ids.is_empty() || abort.is_set() {
@@ -450,7 +519,7 @@ async fn maybe_geometry_echo(
         retry_feedback: Some(crate::plan::RetryFeedback::Geometry(issues.join("\n"))),
         ..subtask.clone()
     };
-    let retried = run_subtask_with_reveal_at(
+    let retried = run_subtask_with_reveal_at_and_outcomes(
         &echo_subtask,
         plan,
         request,
@@ -462,6 +531,7 @@ async fn maybe_geometry_echo(
         agent_indicator_epoch,
         reveal_now_millis(),
         None,
+        prior_outcomes,
     )
     .await;
 

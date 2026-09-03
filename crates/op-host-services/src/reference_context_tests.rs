@@ -1,5 +1,6 @@
 use super::*;
 
+use op_ai::chat_provider::ChatAttachment;
 use op_editor_core::EditorState;
 use op_orchestrator::AbortFlag;
 use serde_json::{json, Value};
@@ -117,17 +118,105 @@ async fn imported_landing_tree_becomes_content_free_skeleton_and_design_md() {
     .expect("reference context");
 
     assert_eq!(context.source_host, "example.com");
-    assert_eq!(context.skeleton.sections.len(), 4);
+    let skeleton = context
+        .skeleton
+        .as_ref()
+        .expect("URL references have skeletons");
+    assert_eq!(skeleton.sections.len(), 4);
     assert_eq!(context.design_md.project_name.as_deref(), Some("Food App"));
     assert!(context
         .design_md
         .color_palette
         .as_ref()
         .is_some_and(|colors| colors.iter().any(|color| color.hex == "#FF5A1F")));
-    let rendered = context.skeleton.render();
+    let rendered = skeleton.render();
     assert!(!rendered.contains("Acme"));
     assert!(!rendered.contains("Navigation Bar"));
     assert!(!rendered.contains("Hero Section"));
+}
+
+fn screenshot_response(skeleton: Option<&str>) -> String {
+    let design_md = "# Design System: Screenshot App\n\n## 1. Visual Theme & Atmosphere\nCalm and focused.\n\n## 2. Color Palette & Roles\n- **Blue** (#2563EB) — Primary action";
+    match skeleton {
+        Some(skeleton) => format!("{design_md}\n<<<SKELETON>>>\n{skeleton}"),
+        None => design_md.to_string(),
+    }
+}
+
+fn screenshot_attachment(media_type: &str, data: Vec<u8>) -> ChatAttachment {
+    ChatAttachment {
+        name: "reference.png".into(),
+        media_type: media_type.into(),
+        data,
+    }
+}
+
+#[test]
+fn screenshot_reference_extracts_design_md_and_skeleton() {
+    let skeleton = r#"{"source":"screenshot","width":1440,"sections":[{"role":"navbar","heightRatio":0.05,"childCount":3,"layout":"horizontal","hasImage":false}],"navKind":"topBar","heroKind":"split","columnRhythm":[3]}"#;
+    let context = reference_context_from_image(
+        &crate::test_support::ScriptedVisionClient {
+            response: screenshot_response(Some(skeleton)),
+        },
+        &screenshot_attachment("image/png", vec![0x89, b'P', b'N', b'G']),
+        "参考这张图做首页",
+        Some("vision-model".into()),
+        Some("vision-provider".into()),
+    )
+    .expect("screenshot reference context");
+
+    assert_eq!(context.source_host, "screenshot");
+    assert_eq!(
+        context.design_md.project_name.as_deref(),
+        Some("Screenshot App")
+    );
+    assert_eq!(context.skeleton.as_ref().unwrap().sections.len(), 1);
+}
+
+#[test]
+fn malformed_or_absent_screenshot_skeleton_is_style_only() {
+    for response in [
+        screenshot_response(Some("not JSON")),
+        screenshot_response(None),
+    ] {
+        let context = reference_context_from_image(
+            &crate::test_support::ScriptedVisionClient { response },
+            &screenshot_attachment("image/png", vec![1, 2, 3]),
+            "make a landing page like this screenshot",
+            None,
+            None,
+        )
+        .expect("style extraction remains usable");
+        assert!(context.skeleton.is_none());
+        assert_eq!(context.source_host, "screenshot");
+    }
+}
+
+#[test]
+fn non_image_or_empty_screenshot_attachment_is_rejected() {
+    let client = crate::test_support::ScriptedVisionClient {
+        response: screenshot_response(None),
+    };
+    assert!(matches!(
+        reference_context_from_image(
+            &client,
+            &screenshot_attachment("text/plain", vec![1]),
+            "参考这张图做首页",
+            None,
+            None,
+        ),
+        Err(ReferenceContextError::NotAnImage)
+    ));
+    assert!(matches!(
+        reference_context_from_image(
+            &client,
+            &screenshot_attachment("image/png", Vec::new()),
+            "参考这张图做首页",
+            None,
+            None,
+        ),
+        Err(ReferenceContextError::NotAnImage)
+    ));
 }
 
 #[tokio::test]
@@ -187,4 +276,21 @@ async fn a_bare_url_is_not_fetched_but_a_triggered_loopback_is_rejected() {
             crate::import_html_url_error::ImportHtmlUrlError::UrlNotAllowed
         ))
     ));
+}
+
+#[test]
+fn a_code_fenced_screenshot_skeleton_still_parses() {
+    let fenced = "```json\n{\"source\":\"screenshot\",\"width\":1440,\"sections\":[{\"role\":\"hero\",\"heightRatio\":0.4,\"childCount\":2,\"layout\":\"vertical\",\"hasImage\":true}],\"navKind\":\"none\",\"heroKind\":\"imageLed\",\"columnRhythm\":[]}\n```";
+    let context = reference_context_from_image(
+        &crate::test_support::ScriptedVisionClient {
+            response: screenshot_response(Some(fenced)),
+        },
+        &screenshot_attachment("image/png", vec![0x89, b'P', b'N', b'G']),
+        "make a landing page like this screenshot",
+        None,
+        None,
+    )
+    .expect("fenced skeleton still yields a context");
+    let skeleton = context.skeleton.expect("fence stripped, skeleton parsed");
+    assert_eq!(skeleton.sections[0].role, "hero");
 }

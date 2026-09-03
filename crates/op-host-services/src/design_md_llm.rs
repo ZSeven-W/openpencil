@@ -20,10 +20,10 @@ const DESIGN_MD_EXTRA_RULES: &[&str] = &[
     "- State that follow-on named app pages should be generated as a separate sibling/root screen beside the existing screen, not appended below it.",
 ];
 
-fn design_md_system_prompt() -> String {
+pub(crate) fn design_md_system_prompt() -> String {
     design_md_system_prompt_with_extra_rules(DESIGN_MD_EXTRA_RULES)
 }
-const DESIGN_MD_TIMEOUT: Duration = Duration::from_secs(90);
+pub(crate) const DESIGN_MD_TIMEOUT: Duration = Duration::from_secs(90);
 const DESIGN_MD_NO_TEXT_TIMEOUT: Duration = Duration::from_secs(25);
 const DESIGN_MD_FIRST_TEXT_TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -84,7 +84,14 @@ pub async fn generate_design_md_spec(
         }
     }
 
-    let markdown = clean_ai_design_md_result(&out);
+    parse_design_md_text(&out)
+}
+
+/// Clean and parse the same design.md text accepted by the normal generation
+/// path. Keeping this as one helper makes screenshot enrichment byte-identical
+/// to the existing design.md extraction behaviour.
+pub(crate) fn parse_design_md_text(raw: &str) -> Result<DesignMdSpec, DesignMdError> {
+    let markdown = clean_ai_design_md_result(raw);
     if markdown.is_empty() {
         return Err(DesignMdError::EmptyOutput);
     }

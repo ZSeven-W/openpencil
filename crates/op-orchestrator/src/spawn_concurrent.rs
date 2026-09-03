@@ -224,6 +224,7 @@ pub async fn run_spawned_agents_concurrent(
                         node_count: 0,
                         error: Some("aborted".into()),
                         inserted_root_ids: Vec::new(),
+                        headline: None,
                         subtask: None,
                     },
                 );

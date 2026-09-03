@@ -5,14 +5,12 @@ use op_host_native::WidgetHostNative;
 use op_orchestrator::agent_identity::AgentIdentity;
 use op_orchestrator::{AbortFlag, Progress, RunSummary, SubtaskOutcome};
 use std::sync::mpsc;
-
 fn identity(name: &str, color: &str) -> AgentIdentity {
     AgentIdentity {
         name: name.into(),
         color: color.into(),
     }
 }
-
 fn persisted_subtask_json() -> String {
     serde_json::to_string(&op_orchestrator::plan::Subtask {
         id: "hero".into(),
@@ -217,6 +215,7 @@ fn worker_summary_finishes_all_messages_and_keeps_retry_on_owning_worker() {
                 node_count: 0,
                 error: Some("empty content".into()),
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: Some(subtask),
             }],
             total_nodes: 0,
@@ -565,6 +564,7 @@ fn partial_summary_marks_omitted_active_rows_error() {
                 node_count: 7,
                 error: None,
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             }],
             total_nodes: 7,

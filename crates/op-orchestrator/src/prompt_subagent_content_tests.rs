@@ -2,6 +2,7 @@
 //! templates, language consistency and design-system dropping.
 
 use super::*;
+use crate::types::SubtaskOutcome;
 use jian_ops_schema::variable::VariableDefinition;
 use std::collections::BTreeMap;
 
@@ -410,4 +411,58 @@ fn subagent_prompt_drops_design_system_when_styling_covered() {
         !with_guide.system_prompt.contains(STYLE_DEFAULTS_ONLY),
         "named style guide should NOT load style-defaults"
     );
+}
+
+#[test]
+fn subagent_prompt_lists_headlines_from_earlier_sections_only_when_present() {
+    let earlier = vec![
+        SubtaskOutcome {
+            id: "hero".into(),
+            node_count: 1,
+            error: None,
+            inserted_root_ids: vec!["hero-root".into()],
+            headline: Some("Ship your next idea".into()),
+            subtask: None,
+        },
+        SubtaskOutcome {
+            id: "proof".into(),
+            node_count: 1,
+            error: None,
+            inserted_root_ids: vec!["proof-root".into()],
+            headline: Some("Trusted by thoughtful teams".into()),
+            subtask: None,
+        },
+    ];
+    let components = ComponentLibrary::default();
+    let (with_headlines, _) = build_subagent_prompt_with_screen_routes_and_outcomes(
+        &subtask(),
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        false,
+        &components,
+        &[],
+        &earlier,
+    );
+    assert!(with_headlines.user_prompt.contains(
+        "HEADLINES ALREADY ON THIS PAGE (earlier sections — do NOT reuse or paraphrase them; this section needs its own distinct headline): \"Ship your next idea\", \"Trusted by thoughtful teams\""
+    ));
+
+    let (without_headlines, _) = build_subagent_prompt_with_screen_routes_and_outcomes(
+        &subtask(),
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        false,
+        &components,
+        &[],
+        &[],
+    );
+    assert!(!without_headlines
+        .user_prompt
+        .contains("HEADLINES ALREADY ON THIS PAGE"));
 }
