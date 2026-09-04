@@ -7,9 +7,7 @@ use std::time::Duration;
 use base64::Engine as _;
 use futures::stream::{self, StreamExt};
 use op_ai::chat_provider::ChatProvider;
-use op_image_enrich::net::{
-    block_on_image_runtime, ImageRelevanceJudge, JudgedCandidate, RelevanceVerdict,
-};
+use op_image_enrich::net::{ImageRelevanceJudge, JudgedCandidate, RelevanceVerdict};
 use op_orchestrator::{VisionCallRequest, VisionLlmClient, VisionResponse};
 
 use crate::validation_providers::ChatVisionLlmClient;
@@ -168,7 +166,13 @@ impl ImageRelevanceJudge for OpenAiCompatVisionJudge {
                 let intent = intent.clone();
                 async move { judge.judge_one(index, &query, &intent, thumb).await }
             });
-        let mut judged = block_on_image_runtime(async move {
+        // `judge` is invoked from inside the image runtime's own task (the
+        // judge-aware fetch is already running under `block_on_image_runtime`),
+        // so blocking here through that runtime again panics with "cannot start
+        // a runtime from within a runtime" and every candidate is lost — the
+        // 2026-09-05 A/B run saw k=0 on all 170 slots. `block_on_anywhere` is the
+        // one sanctioned way to block from sync code whatever the ambient context.
+        let mut judged = crate::chat_runtime::block_on_anywhere(async move {
             stream::iter(jobs)
                 .buffer_unordered(MAX_CONCURRENT_CALLS)
                 .collect::<Vec<_>>()
