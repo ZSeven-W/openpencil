@@ -107,6 +107,7 @@ pub mod host_ui_transitions;
 pub mod host_variables_commit;
 pub mod host_variables_transitions;
 pub mod html_import_diagnostics;
+pub mod icon_path_normalize;
 pub mod icon_picker_state;
 pub mod id_allocator;
 pub mod image_aspect;
@@ -237,6 +238,9 @@ mod fills_tests;
 mod history_bench_tests;
 #[cfg(test)]
 mod history_snapshot_tests;
+#[cfg(test)]
+#[path = "icon_path_normalize_tests.rs"]
+mod icon_path_normalize_tests;
 #[cfg(test)]
 mod prompt_center_catalog_tests;
 #[cfg(test)]

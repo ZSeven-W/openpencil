@@ -34,6 +34,7 @@ pub fn process_message_for_file_path_arg(
                 return false;
             }
             super::normalize_mobile_screens_after_apply(state);
+            super::normalize_icon_paths_after_apply(state);
             if let Err(e) = super::save_editor_state(state, &target.path) {
                 applier_failed = Some(format!("save {} failed: {e}", target.path.display()));
                 return false;

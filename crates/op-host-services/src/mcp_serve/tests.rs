@@ -401,7 +401,7 @@ fn file_mcp_applier_normalizes_mobile_document_before_save() {
         std::process::id()
     ));
     let mut state = op_editor_core::EditorState::new();
-    let operations = r##"root=I(null,{"type":"frame","name":"Screen","width":375,"height":"fit_content","fill":[{"type":"solid","color":"#f7f8fa"}],"children":[{"type":"frame","name":"Status Bar","width":"fill_container","height":62,"children":[{"type":"text","content":"9:41"},{"type":"text","content":"signal wifi battery"}]}]})"##;
+    let operations = r##"root=I(null,{"type":"frame","name":"Screen","width":375,"height":"fit_content","fill":[{"type":"solid","color":"#f7f8fa"}],"children":[{"type":"frame","name":"Status Bar","width":"fill_container","height":62,"children":[{"type":"text","content":"9:41"},{"type":"text","content":"signal wifi battery"}]},{"type":"path","name":"ChevronDownIcon","role":"icon","d":"M6 9l6 6 6-6","width":14,"height":14,"stroke":{"thickness":2.2,"fill":[{"type":"solid","color":"#1A1614"}]}}]})"##;
     let line = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -426,6 +426,24 @@ fn file_mcp_applier_normalizes_mobile_document_before_save() {
             .iter()
             .any(|child| child.base().name.as_deref() == Some("Levels"))
     }));
+    let icon = &root.children().expect("root children")[1];
+    let jian_ops_schema::node::PenNode::IconFont(icon) = icon else {
+        panic!("hand-drawn chevron should be normalized before save")
+    };
+    assert_eq!(icon.icon_font_name, "chevron-down");
+    assert_eq!(icon.icon_font_family.as_deref(), Some("lucide"));
+    assert_eq!(
+        icon.fill
+            .as_ref()
+            .and_then(|fills| fills.first())
+            .and_then(|fill| {
+                let jian_ops_schema::style::PenFill::Solid(body) = fill else {
+                    return None;
+                };
+                Some(body.color.as_str())
+            }),
+        Some("#1A1614")
+    );
 
     let _ = std::fs::remove_file(&path);
 }

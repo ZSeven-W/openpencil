@@ -542,3 +542,15 @@ fn guideline_for_scroll_and_card_carry_their_contracts() {
     let topics = guideline_topics();
     assert!(topics.contains(&"scroll") && topics.contains(&"card"));
 }
+
+#[test]
+fn guideline_for_icons_carries_the_catalog() {
+    let icons = guideline_for("icons").expect("icons guideline must be present");
+    assert!(icons.contains("icon_font"));
+    assert!(icons.contains("NEVER `path`"));
+    assert!(icons.contains("lucide"));
+    for alias in ["icon", "icon-font", "lucide"] {
+        assert!(guideline_for(alias).is_some(), "{alias} alias resolves");
+    }
+    assert!(guideline_topics().contains(&"icons"));
+}

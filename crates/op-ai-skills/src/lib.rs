@@ -114,6 +114,7 @@ const GUIDELINE_TOPICS: &[(&str, &[&str], &[&str])] = &[
     // Card boards had no MCP-side contract either (0825 A/B: the gap was
     // the contract, not the model).
     ("card", &["cards", "card-item"], &["cards"]),
+    ("icons", &["icon", "icon-font", "lucide"], &["icon-catalog"]),
 ];
 
 /// Compose the named skills (in order) into one coherent guideline doc,
@@ -153,6 +154,7 @@ fn compose_skills(names: &[&str]) -> Option<String> {
 ///   page-scroll contract: the page root is the `$scroll` source, `pin: true`
 ///   pins, paint-only `translateX/Y` moves
 /// - `"card"` (`cards`, `card-item`) — card-board contract
+/// - `"icons"` (`icon`, `icon-font`, `lucide`) — icon_font/lucide icon catalog
 ///
 /// Returns `None` for any unrecognised topic so callers can produce a typed
 /// "unknown topic" error without special-casing the string themselves.

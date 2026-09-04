@@ -4,7 +4,7 @@ description: PenNode type definitions and property schemas
 phase: [generation]
 trigger: null
 priority: 0
-budget: 2000
+budget: 2051
 category: base
 ---
 
@@ -14,7 +14,8 @@ PenNode types (the ONLY format you output for designs):
 - rectangle: Props: width, height, cornerRadius, fill, stroke, effects
 - ellipse: Props: width, height, fill, stroke, effects, innerRadius (0..1 donut hole), startAngle, sweepAngle (degrees, for pie/arc/gauge). NEVER put a ring's track and progress arc side by side as flex siblings — stack both at the same x/y inside one fixed layout:"none" wrapper
 - text: Props: content, fontFamily, fontSize, fontWeight, fontStyle ('normal'|'italic'), fill, width, height, textAlign ('left'|'center'|'right'|'justify' — NEVER 'start'/'end'; those are container-axis values), textGrowth ('auto'|'fixed-width'|'fixed-width-height'), lineHeight (multiplier), letterSpacing (px), textAlignVertical ('top'|'middle'|'bottom')
-- path: SVG icon. Props: d (SVG path), width, height, fill, stroke, effects
+- icon_font: Icon glyph from the lucide catalog. Props: iconFontName (lucide name, e.g. "chevron-right"), iconFontFamily ("lucide"), width, height (14/20/24 square), fill (icon color). ALWAYS use this for icons — arrows, chevrons, tab glyphs, action buttons. See icon-catalog for names.
+- path: Raw vector geometry for imported SVG or custom shapes ONLY. Props: d (SVG path in LOCAL px relative to the node origin — NOT a 24-unit viewBox), width, height, fill, stroke, effects. NEVER use path for icons: a lucide d-string pasted into a small box renders stretched.
 - image: Props: width, height, cornerRadius, effects, imageSearchQuery (2-3 English keywords UNIQUE per image — derive from the surrounding card/dish/title text; reusing one query across multiple images makes every card render the same photo. For food cards, use prepared-dish queries like "pasta plate", "salmon bowl", "pizza plate", "sushi platter"; avoid ingredient-only, outdoor/grass, raw-object, or novelty queries), imagePrompt (a fuller natural-language description of the SAME subject for AI image generation — e.g. "professional food photography of a pasta plate, warm natural light, shallow depth of field". ALWAYS emit it alongside imageSearchQuery: a configured image-gen model uses imagePrompt for a rich original image, otherwise imageSearchQuery drives the stock-search fallback — so every image element carries both)
 IMAGE SLOT CONTRACT: an image slot is an `image` node with `imageSearchQuery` (+ `imagePrompt`); a bare rectangle with an image fill is forbidden.
 - text_input: First-class single-line control. Props: width, height, placeholder, value, leadingIcon, trailingIcon, fill, stroke, cornerRadius, effects

@@ -776,6 +776,8 @@ const PALETTE: &[&str] = &[
 
 use super::icons_data::*;
 
+pub use super::icons_lookup::lucide_name_for_path_d;
+
 #[cfg(test)]
 mod spinner_tests {
     use super::loader_rotation_radians;

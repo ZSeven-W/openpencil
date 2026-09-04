@@ -4863,6 +4863,7 @@ dependencies = [
  "op-ai-skills",
  "op-design-lint",
  "op-editor-core",
+ "op-editor-ui",
  "op-mcp",
  "op-pen-loader",
  "op-util",

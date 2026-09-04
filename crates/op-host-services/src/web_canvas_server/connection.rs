@@ -544,6 +544,7 @@ pub(super) fn dispatch<S: Read + Write>(
                 let ok = editor.apply(cmd.clone());
                 if ok {
                     crate::mcp_serve::normalize_mobile_screens_after_apply(editor);
+                    crate::mcp_serve::normalize_icon_paths_after_apply(editor);
                 }
                 applied_any |= ok;
                 ok

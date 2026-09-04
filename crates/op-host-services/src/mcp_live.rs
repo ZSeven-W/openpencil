@@ -285,10 +285,17 @@ impl McpLiveServer {
                     if applied {
                         let mobile_report =
                             crate::mcp_serve::normalize_mobile_screens_after_apply(state);
+                        let icon_report = crate::mcp_serve::normalize_icon_paths_after_apply(state);
                         if let Some(ids_before) = ids_before {
                             self.register_mcp_generation(&ids_before, state);
                         }
                         if mobile_report != op_chat_agent::MobileNormalizeReport::default() {
+                            outcome.layout_dirty = true;
+                        }
+                        if icon_report
+                            != op_editor_core::icon_path_normalize::IconPathNormalizeReport::default(
+                            )
+                        {
                             outcome.layout_dirty = true;
                         }
                     }

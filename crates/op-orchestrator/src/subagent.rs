@@ -501,8 +501,20 @@ pub(crate) fn apply_insert_subtree_with_reveal(
     indicator_epoch: Option<u64>,
     reveal_started_ms: u64,
 ) -> Option<Vec<String>> {
+    let mut nodes = nodes;
+    let icon_path_report = op_editor_core::icon_path_normalize::normalize_icon_paths_in_nodes(
+        &mut nodes,
+        op_editor_ui::widgets::icons::lucide_name_for_path_d,
+    );
     let ids_before = indicator_epoch.map(|_| collect_active_node_ids(sink.state()));
     let root_ids = sink.insert_subtree_returning_root_ids(nodes, &parent_id)?;
+    if icon_path_report != Default::default() {
+        tracing::info!(
+            converted_to_icon_font = icon_path_report.converted_to_icon_font,
+            refit_uniform = icon_path_report.refit_uniform,
+            "icon path normalization applied after subtask insert"
+        );
+    }
     if let Some(ids_before) = ids_before.as_ref() {
         register_new_node_reveals(ids_before, sink.state(), indicator_epoch, reveal_started_ms);
     }

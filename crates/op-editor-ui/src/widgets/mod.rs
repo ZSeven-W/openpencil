@@ -225,6 +225,7 @@ pub mod scroll_flow;
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
 pub mod icon_catalog;
 pub mod icons;
+mod icons_lookup;
 #[cfg(test)]
 mod icons_tests;
 // Lucide d-string data — extracted as a sibling so `icons.rs` stays

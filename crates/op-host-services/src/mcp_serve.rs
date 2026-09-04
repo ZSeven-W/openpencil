@@ -141,6 +141,22 @@ pub(crate) fn normalize_mobile_screens_after_apply(
     report
 }
 
+pub(crate) fn normalize_icon_paths_after_apply(
+    state: &mut EditorState,
+) -> op_editor_core::icon_path_normalize::IconPathNormalizeReport {
+    let report = op_editor_core::icon_path_normalize::normalize_icon_paths(
+        state,
+        op_editor_ui::widgets::icons::lucide_name_for_path_d,
+    );
+    if report != Default::default() {
+        eprintln!(
+            "openpencil-desktop mcp: icon path normalization: converted_to_icon_font={}, refit_uniform={}",
+            report.converted_to_icon_font, report.refit_uniform
+        );
+    }
+    report
+}
+
 /// Process one JSON-RPC message line against the editor state.
 fn process_message(
     state: &mut EditorState,
@@ -162,6 +178,7 @@ fn process_message(
             return false;
         }
         normalize_mobile_screens_after_apply(state);
+        normalize_icon_paths_after_apply(state);
         if let Err(e) = save_editor_state(state, path) {
             applier_failed = Some(format!("save failed: {e}"));
             return false;
