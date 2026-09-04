@@ -132,6 +132,7 @@ fn plan_from_state(sink: &dyn DocSink, specs: &[SpawnAgentSpec]) -> Orchestrator
             region: Region { width, height },
             id_prefix: spec.id.clone(),
             parent_frame_id: spec.parent_frame_id.clone(),
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,

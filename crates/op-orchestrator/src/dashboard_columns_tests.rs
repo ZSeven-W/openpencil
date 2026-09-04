@@ -32,6 +32,7 @@ fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
         },
         id_prefix: id.into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: elements.map(String::from),
         screen: None,
         generated_root_id: None,

@@ -67,7 +67,10 @@ pub(super) fn planned_child_index(
 
 /// The parent that currently holds `id` (None = page level) and that
 /// parent's child ids in document order.
-fn parent_and_siblings(children: &[PenNode], id: &str) -> Option<(Option<String>, Vec<String>)> {
+pub(crate) fn parent_and_siblings(
+    children: &[PenNode],
+    id: &str,
+) -> Option<(Option<String>, Vec<String>)> {
     if children.iter().any(|node| node.id_str() == id) {
         return Some((
             None,
@@ -93,6 +96,27 @@ fn parent_and_siblings(children: &[PenNode], id: &str) -> Option<(Option<String>
 
 /// Move the roots a successful salvage inserted back to their planned
 /// position among their siblings. No-op when they already sit there.
+pub(crate) fn move_roots_to_index(
+    sink: &mut dyn DocSink,
+    parent: Option<&str>,
+    siblings: &[String],
+    roots: &[String],
+    mut index: usize,
+) {
+    let target_parent = parent.map_or_else(|| NodeId::NONE, NodeId::new);
+    for root in roots {
+        if siblings.iter().position(|sibling| sibling == root) != Some(index) {
+            sink.apply(EditorCommand::MoveNode {
+                node_id: NodeId::new(root.clone()),
+                target_parent: target_parent.clone(),
+                page_id: None,
+                index: Some(index),
+            });
+        }
+        index += 1;
+    }
+}
+
 pub(super) fn restore_planned_order(
     sink: &mut dyn DocSink,
     plan: &OrchestratorPlan,
@@ -107,19 +131,14 @@ pub(super) fn restore_planned_order(
     else {
         return;
     };
-    let mut index = planned_child_index(&plan.subtasks, outcomes, subtask_index, &siblings);
-    let target_parent = parent.as_deref().map_or(NodeId::NONE, NodeId::new);
-    for root in &salvaged.inserted_root_ids {
-        if siblings.iter().position(|sibling| sibling == root) != Some(index) {
-            sink.apply(EditorCommand::MoveNode {
-                node_id: NodeId::new(root.clone()),
-                target_parent: target_parent.clone(),
-                page_id: None,
-                index: Some(index),
-            });
-        }
-        index += 1;
-    }
+    let index = planned_child_index(&plan.subtasks, outcomes, subtask_index, &siblings);
+    move_roots_to_index(
+        sink,
+        parent.as_deref(),
+        &siblings,
+        &salvaged.inserted_root_ids,
+        index,
+    );
 }
 
 #[cfg(test)]
@@ -136,6 +155,7 @@ mod tests {
             },
             id_prefix: id.into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,

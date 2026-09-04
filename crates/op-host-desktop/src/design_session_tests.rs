@@ -218,6 +218,7 @@ fn pump_progress_captures_failed_subtask_specs_for_manual_retry() {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -284,6 +285,7 @@ fn persisted_subtask_json() -> String {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -342,6 +344,7 @@ fn launch_subtask_retry_if_pending_writes_an_error_when_no_model_is_configured()
             .push(op_editor_core::PendingSubtaskRetry {
                 subtask_id: "hero".into(),
                 subtask_json: persisted_subtask_json(),
+                insert_after_sibling_id: None,
             });
     }
     host.editor_state_mut().chat.pending_subtask_retry = Some((0, "hero".into()));

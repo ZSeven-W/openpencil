@@ -27,6 +27,7 @@ fn section(id: &str, label: &str) -> Subtask {
         },
         id_prefix: String::new(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,

@@ -6,6 +6,7 @@ use crate::plan::Region;
 use crate::test_support::{ScriptResponse, ScriptedLlm, VecDocSink};
 use crate::types::AbortFlag;
 use jian_ops_schema::PenDocument;
+use op_editor_core::{EditorCommand, PenNodeExt};
 
 fn design_request() -> DesignRequest {
     DesignRequest {
@@ -41,6 +42,35 @@ fn sink_with_root() -> VecDocSink {
     sink
 }
 
+fn sink_with_ordered_root() -> VecDocSink {
+    let doc: PenDocument = serde_json::from_str(
+        r##"{ "version": "1.0", "children": [
+            { "type": "frame", "id": "root", "name": "Page", "width": 1200, "height": 900,
+              "layout": "vertical", "children": [
+                { "type": "frame", "id": "nav", "name": "Nav", "width": 1200, "height": 80 },
+                { "type": "frame", "id": "features", "name": "Features", "width": 1200, "height": 300 },
+                { "type": "frame", "id": "footer", "name": "Footer", "width": 1200, "height": 80 }
+              ] }
+        ] }"##,
+    )
+    .expect("doc");
+    let mut sink = VecDocSink::new();
+    sink.state = op_editor_core::EditorState::from_document(doc);
+    sink
+}
+
+fn ordered_root_child_ids(sink: &VecDocSink) -> Vec<String> {
+    sink.state
+        .active_children()
+        .first()
+        .and_then(PenNodeExt::children)
+        .expect("ordered root has children")
+        .iter()
+        .map(PenNodeExt::id_str)
+        .map(str::to_owned)
+        .collect()
+}
+
 fn failed_subtask(parent_frame_id: Option<&str>) -> Subtask {
     Subtask {
         id: "browse-all-grid".into(),
@@ -54,6 +84,7 @@ fn failed_subtask(parent_frame_id: Option<&str>) -> Subtask {
         },
         id_prefix: "browse-all-grid".into(),
         parent_frame_id: parent_frame_id.map(str::to_string),
+        insert_after_sibling_id: None,
         elements: Some("A grid of browsable cards".into()),
         screen: Some("Home".into()),
         generated_root_id: None,
@@ -88,6 +119,82 @@ fn retry_succeeds_against_the_live_document_and_clears_the_subtask_field() {
         "success must not carry the spec forward: {outcome:?}"
     );
     assert_eq!(outcome.id, "browse-all-grid");
+}
+
+#[test]
+fn retry_moves_inserted_section_after_its_recorded_sibling() {
+    let mut sink = sink_with_ordered_root();
+    let mut subtask = failed_subtask(Some("root"));
+    subtask.insert_after_sibling_id = Some("nav".into());
+    let request = design_request();
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(node_json("retried"))]);
+    let abort = AbortFlag::new();
+
+    let outcome = futures::executor::block_on(retry_subtask(
+        &subtask, &request, &llm, &mut sink, &abort, None, None,
+    ));
+
+    assert!(outcome.error.is_none(), "{outcome:?}");
+    assert_eq!(
+        ordered_root_child_ids(&sink),
+        vec![
+            "nav".to_string(),
+            outcome.inserted_root_ids[0].clone(),
+            "features".to_string(),
+            "footer".to_string()
+        ]
+    );
+}
+
+#[test]
+fn retry_without_an_anchor_moves_inserted_section_to_the_front() {
+    let mut sink = sink_with_ordered_root();
+    let subtask = failed_subtask(Some("root"));
+    let request = design_request();
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(node_json("retried"))]);
+    let abort = AbortFlag::new();
+
+    let outcome = futures::executor::block_on(retry_subtask(
+        &subtask, &request, &llm, &mut sink, &abort, None, None,
+    ));
+
+    assert!(outcome.error.is_none(), "{outcome:?}");
+    assert_eq!(
+        ordered_root_child_ids(&sink)[0],
+        outcome.inserted_root_ids[0]
+    );
+}
+
+#[test]
+fn retry_with_a_stale_anchor_leaves_inserted_section_appended() {
+    let mut sink = sink_with_ordered_root();
+    let mut subtask = failed_subtask(Some("root"));
+    subtask.insert_after_sibling_id = Some("deleted".into());
+    let request = design_request();
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(node_json("retried"))]);
+    let abort = AbortFlag::new();
+
+    let outcome = futures::executor::block_on(retry_subtask(
+        &subtask, &request, &llm, &mut sink, &abort, None, None,
+    ));
+
+    assert!(outcome.error.is_none(), "{outcome:?}");
+    assert_eq!(
+        ordered_root_child_ids(&sink),
+        vec![
+            "nav".to_string(),
+            "features".to_string(),
+            "footer".to_string(),
+            outcome.inserted_root_ids[0].clone()
+        ]
+    );
+    assert!(
+        !sink
+            .applied
+            .iter()
+            .any(|command| matches!(command, EditorCommand::MoveNode { .. })),
+        "a stale anchor must not emit move commands"
+    );
 }
 
 #[test]

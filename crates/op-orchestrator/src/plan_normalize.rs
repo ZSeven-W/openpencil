@@ -11,7 +11,6 @@ use crate::types::DesignRequest;
 
 #[path = "plan_home_intent.rs"]
 mod plan_home_intent;
-
 #[path = "plan_normalize_nav.rs"]
 mod plan_normalize_nav;
 use plan_normalize_nav::{ensure_requested_bottom_nav_subtask, is_bottom_nav_subtask};
@@ -258,6 +257,7 @@ mod tests {
             },
             id_prefix: String::new(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -570,6 +570,7 @@ mod tests {
             },
             id_prefix: String::new(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -587,6 +588,7 @@ mod tests {
             },
             id_prefix: String::new(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -603,6 +605,7 @@ mod tests {
             },
             id_prefix: String::new(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -704,6 +707,7 @@ mod tests {
                 },
                 id_prefix: String::new(),
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: None,
                 screen: None,
                 generated_root_id: None,
@@ -745,6 +749,7 @@ mod tests {
                 },
                 id_prefix: String::new(),
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: None,
                 screen: None,
                 generated_root_id: None,

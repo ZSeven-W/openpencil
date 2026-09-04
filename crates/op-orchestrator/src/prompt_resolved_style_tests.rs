@@ -45,6 +45,7 @@ fn subtask() -> Subtask {
         },
         id_prefix: "hero".into(),
         parent_frame_id: Some("root".into()),
+        insert_after_sibling_id: None,
         elements: Some("overview metrics and primary workspace controls".into()),
         screen: None,
         generated_root_id: None,

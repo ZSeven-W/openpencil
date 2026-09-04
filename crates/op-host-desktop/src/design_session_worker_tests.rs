@@ -21,6 +21,7 @@ fn persisted_subtask_json() -> String {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("Profile".into()),
         generated_root_id: None,
@@ -109,7 +110,6 @@ fn worker_scoped_progress_builds_one_stable_message_per_screen_group() {
     }
 
     assert!(pump_progress(&mut host, &mut current, None));
-
     let messages = &host.editor_state().chat.messages;
     let primary = messages
         .iter()

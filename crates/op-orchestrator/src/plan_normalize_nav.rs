@@ -74,6 +74,7 @@ pub(super) fn ensure_requested_bottom_nav_subtask(
         },
         id_prefix: String::new(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: Some(
             "bottom tab bar with this app's own 3-5 top-level destinations as icon + label tabs (choose tabs that fit the product, not a fixed Home/Search/Orders set); role bottom-tab-bar; full-width surface matching the page; transparent tab item frames; active state via accent icon/label color, not filled pills"
                 .into(),

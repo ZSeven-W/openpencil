@@ -16,6 +16,7 @@ fn failed_subtask(id: &str, label: &str) -> op_orchestrator::plan::Subtask {
         },
         id_prefix: id.into(),
         parent_frame_id: Some("root".into()),
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("Now".into()),
         generated_root_id: None,

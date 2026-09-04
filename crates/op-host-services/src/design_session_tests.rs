@@ -215,6 +215,7 @@ mod subtask_retry_tests {
             },
             id_prefix: "hero".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,

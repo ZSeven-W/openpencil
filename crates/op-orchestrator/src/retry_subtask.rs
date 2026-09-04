@@ -18,6 +18,7 @@
 //! behave identically to its original attempt.
 
 use crate::plan::{OrchestratorPlan, PlanFill, RootFrameSpec, Subtask};
+use crate::run_salvage_feedback::{move_roots_to_index, parent_and_siblings};
 use crate::subagent::{reveal_now_millis, run_subtask_with_reveal_at};
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmClient, Progress, SubtaskOutcome};
 use op_editor_core::PenNodeExt;
@@ -127,7 +128,7 @@ pub async fn retry_subtask(
     }
     let subtask = &subtask;
     let plan = plan_for_retry(sink, subtask);
-    run_subtask_with_reveal_at(
+    let outcome = run_subtask_with_reveal_at(
         &plan.subtasks[0],
         &plan,
         request,
@@ -140,7 +141,36 @@ pub async fn retry_subtask(
         reveal_now_millis(),
         on_progress,
     )
-    .await
+    .await;
+
+    if outcome.node_count > 0 && !outcome.inserted_root_ids.is_empty() {
+        let Some(first) = outcome.inserted_root_ids.first() else {
+            return outcome;
+        };
+        let Some((parent, siblings)) = parent_and_siblings(sink.state().active_children(), first)
+        else {
+            return outcome;
+        };
+        let target_index = match subtask.insert_after_sibling_id.as_deref() {
+            None => Some(0),
+            Some(anchor) => siblings
+                .iter()
+                .position(|sibling| sibling == anchor)
+                .map(|position| position + 1),
+        };
+        let Some(target_index) = target_index else {
+            return outcome;
+        };
+        move_roots_to_index(
+            sink,
+            parent.as_deref(),
+            &siblings,
+            &outcome.inserted_root_ids,
+            target_index,
+        );
+    }
+
+    outcome
 }
 
 /// The CURRENT top-level frame that carries this subtask's `screen` path, when

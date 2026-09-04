@@ -251,17 +251,19 @@ pub fn launch_subtask_retry_if_pending(
             return true;
         }
     };
-    let subtask: op_orchestrator::plan::Subtask = match serde_json::from_str(&entry.subtask_json) {
-        Ok(s) => s,
-        Err(e) => {
-            write_inline_error(
-                host,
-                msg_idx,
-                &format!("error: could not restore the failed section's spec for retry: {e}"),
-            );
-            return true;
-        }
-    };
+    let mut subtask: op_orchestrator::plan::Subtask =
+        match serde_json::from_str(&entry.subtask_json) {
+            Ok(s) => s,
+            Err(e) => {
+                write_inline_error(
+                    host,
+                    msg_idx,
+                    &format!("error: could not restore the failed section's spec for retry: {e}"),
+                );
+                return true;
+            }
+        };
+    subtask.insert_after_sibling_id = entry.insert_after_sibling_id.clone();
     // Whatever provider is CURRENTLY selected — not frozen from the
     // original turn. The user may have switched specifically because the
     // first provider kept failing; `ChatProviderLlmClient` adapts any
@@ -689,6 +691,10 @@ fn count_u32(count: usize) -> u32 {
 #[cfg(test)]
 #[path = "design_session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "design_session_anchor_tests.rs"]
+mod anchor_tests;
 
 #[cfg(test)]
 #[path = "design_session_quality_tests.rs"]

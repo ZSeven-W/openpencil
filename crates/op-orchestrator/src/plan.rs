@@ -67,6 +67,9 @@ pub struct Subtask {
     /// 规范化后赋值 = 根 frame id。
     #[serde(default)]
     pub parent_frame_id: Option<String>,
+    /// The current sibling after which a later interactive retry should land.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub insert_after_sibling_id: Option<String>,
     /// 本区块包含的元素描述 —— port of TS `SubTask.elements`。
     #[serde(default)]
     pub elements: Option<String>,
@@ -210,6 +213,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     },
                     id_prefix: id,
                     parent_frame_id: None,
+                    insert_after_sibling_id: None,
                     elements: Some(format!(
                         "the complete {screen_name} screen, continuing the existing product; reuse its established design system and shared navigation"
                     )),
@@ -275,6 +279,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     },
                     id_prefix: "top-summary".into(),
                     parent_frame_id: Some("page".into()),
+                    insert_after_sibling_id: None,
                     elements: Some(
                         "the screen's header / context for this product (title or greeting, \
                          and the key top-level action[s] this app needs); no status bar. \
@@ -295,6 +300,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     },
                     id_prefix: "main-content".into(),
                     parent_frame_id: Some("page".into()),
+                    insert_after_sibling_id: None,
                     elements: Some(
                         "this screen's primary content for the product — the main job-to-be-done \
                          and whatever modules genuinely fit it; do not repeat the top summary. \
@@ -330,6 +336,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                 },
                 id_prefix: id,
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: None,
                 screen: None,
                 generated_root_id: None,
@@ -399,6 +406,7 @@ fn build_fallback_deck_plan(req: &DesignRequest, preset: DesignTypePreset) -> Or
                 id_prefix: id,
                 // Left to `plan_normalize`, which rewrites it per screen group.
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: Some(fallback_slide_elements(&title).to_string()),
                 screen: Some(title),
                 generated_root_id: None,
@@ -682,6 +690,7 @@ mod tests {
             },
             id_prefix: "hero".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -703,6 +712,7 @@ mod tests {
             },
             id_prefix: "features".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -726,6 +736,7 @@ mod tests {
             },
             id_prefix: "hero".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,

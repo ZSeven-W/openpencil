@@ -457,6 +457,7 @@ fn begin_subtask_retry_finds_a_fully_persisted_row_and_raises_the_pending_flag()
         .push(crate::chat_activity::PendingSubtaskRetry {
             subtask_id: "hero".into(),
             subtask_json: "{\"id\":\"hero\"}".into(),
+            insert_after_sibling_id: None,
         });
     chat.messages.push(msg);
 

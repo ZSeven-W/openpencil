@@ -46,6 +46,7 @@ fn deck_subtask() -> crate::plan::Subtask {
         },
         id_prefix: "cover".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("封面".into()),
         generated_root_id: None,

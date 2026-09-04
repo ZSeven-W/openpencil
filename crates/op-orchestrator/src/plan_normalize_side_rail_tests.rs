@@ -11,6 +11,7 @@ fn subtask(id: &str, label: &str, elements: &str) -> Subtask {
         },
         id_prefix: String::new(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: Some(elements.into()),
         screen: None,
         generated_root_id: None,

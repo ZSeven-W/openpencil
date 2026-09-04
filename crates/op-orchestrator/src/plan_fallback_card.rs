@@ -104,6 +104,7 @@ pub(crate) fn build_fallback_card_plan(
                 id_prefix: id,
                 // `plan_normalize` rewrites this per screen group.
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: Some(card_elements(&title)),
                 screen: Some(title),
                 generated_root_id: None,
