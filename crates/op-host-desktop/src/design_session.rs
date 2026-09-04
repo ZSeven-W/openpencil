@@ -693,6 +693,10 @@ fn count_u32(count: usize) -> u32 {
 mod tests;
 
 #[cfg(test)]
+#[path = "design_session_attachment_tests.rs"]
+mod attachment_tests;
+
+#[cfg(test)]
 #[path = "design_session_anchor_tests.rs"]
 mod anchor_tests;
 

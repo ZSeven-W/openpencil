@@ -401,3 +401,330 @@ mod viewport_fit_tests {
         assert!(design_content_fits_viewport(&state, 0.0, 0.0));
     }
 }
+
+#[cfg(test)]
+mod image_reference_tests {
+    //! C1 M2 desktop parity: the orchestrator-path design session consumes
+    //! the chat turn's staged attachments — a reference trigger + an image
+    //! attachment drives vision-based design.md + skeleton extraction before
+    //! the run (mirrors the web route's `stream_new_design_route`).
+
+    use super::*;
+    use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
+    use op_editor_host_core::design::{DesignCmdAck, DesignCmdOp};
+    use op_orchestrator::{VisionCallRequest, VisionResponse};
+    use std::collections::VecDeque;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{mpsc as std_mpsc, Arc, Mutex};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    const VISION_RESPONSE: &str = r#"# Design System: Screenshot App
+
+## 1. Visual Theme & Atmosphere
+Calm and focused.
+
+## 2. Color Palette & Roles
+- **Blue** (#2563EB) — Primary action
+<<<SKELETON>>>
+{"source":"screenshot","width":1440,"sections":[{"role":"navbar","heightRatio":0.05,"childCount":3,"layout":"horizontal","hasImage":false}],"navKind":"topBar","heroKind":"split","columnRhythm":[3]}"#;
+
+    fn request(prompt: &str) -> DesignRequest {
+        DesignRequest {
+            prompt: prompt.into(),
+            model: None,
+            provider: None,
+            design_md: None,
+            concurrency: 1,
+            continuation_context: None,
+            append_context: None,
+            validation_enabled: false,
+            visual_ref_enabled: false,
+            pinned_style_guide: None,
+            reference_skeleton: None,
+        }
+    }
+
+    fn image_attachment() -> ChatAttachment {
+        ChatAttachment {
+            name: "reference.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1, 2, 3],
+        }
+    }
+
+    /// Minimal in-memory `DocSink` so the branch's `SetDesignMd` is
+    /// observable without the cross-thread `RemoteDocSink` machinery.
+    struct LiveSink {
+        editor: EditorState,
+    }
+    impl DocSink for LiveSink {
+        fn state(&self) -> &EditorState {
+            &self.editor
+        }
+        fn apply(&mut self, cmd: EditorCommand) -> bool {
+            self.editor.apply(cmd)
+        }
+        fn begin_undo_batch(&mut self) {}
+        fn end_undo_batch(&mut self) {}
+    }
+
+    /// `ScriptedVisionClient` plus a call counter, so the negative cases can
+    /// prove the vision model was never invoked.
+    struct CountingVision {
+        calls: Arc<AtomicUsize>,
+        response: String,
+    }
+    impl VisionLlmClient for CountingVision {
+        fn validate(&self, req: VisionCallRequest) -> VisionResponse {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            crate::test_support::ScriptedVisionClient {
+                response: self.response.clone(),
+            }
+            .validate(req)
+        }
+    }
+
+    #[test]
+    fn image_attachment_reference_sets_design_md_and_skeleton_and_persists_design_md() {
+        let vision = crate::test_support::ScriptedVisionClient {
+            response: VISION_RESPONSE.into(),
+        };
+        let mut request = request("参考这张截图做首页");
+        let attachments = vec![image_attachment()];
+        let mut sink = LiveSink {
+            editor: EditorState::new(),
+        };
+        let mut events: Vec<Progress> = Vec::new();
+
+        let used = apply_image_reference_branch(
+            &attachments,
+            &vision,
+            &mut request,
+            &mut sink,
+            &mut |p| events.push(p),
+        );
+
+        assert!(used, "the image reference must be consumed");
+        assert!(request.design_md.is_some(), "design_md set on the request");
+        let skeleton = request
+            .reference_skeleton
+            .as_ref()
+            .expect("reference_skeleton set on the request");
+        assert_eq!(skeleton.source, "screenshot");
+        assert_eq!(
+            sink.editor
+                .doc
+                .design_md
+                .as_ref()
+                .and_then(|spec| spec.project_name.as_deref()),
+            Some("Screenshot App"),
+            "the document received SetDesignMd"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|p| matches!(p, Progress::ReferenceUnavailable { .. })),
+            "{events:?}"
+        );
+    }
+
+    #[test]
+    fn no_trigger_word_skips_vision_and_leaves_the_request_untouched() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let vision = CountingVision {
+            calls: calls.clone(),
+            response: VISION_RESPONSE.into(),
+        };
+        let mut request = request("做一个首页");
+        let attachments = vec![image_attachment()];
+        let mut sink = LiveSink {
+            editor: EditorState::new(),
+        };
+        let mut events: Vec<Progress> = Vec::new();
+
+        let used = apply_image_reference_branch(
+            &attachments,
+            &vision,
+            &mut request,
+            &mut sink,
+            &mut |p| events.push(p),
+        );
+
+        assert!(!used);
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "no reference trigger → the vision model is never called"
+        );
+        assert!(request.design_md.is_none());
+        assert!(request.reference_skeleton.is_none());
+        assert!(sink.editor.doc.design_md.is_none());
+        assert!(events.is_empty(), "{events:?}");
+    }
+
+    #[test]
+    fn non_image_attachment_reports_reference_unavailable_and_the_design_continues() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let vision = CountingVision {
+            calls: calls.clone(),
+            response: VISION_RESPONSE.into(),
+        };
+        let mut request = request("参考这张截图做首页");
+        let attachments = vec![ChatAttachment {
+            name: "notes.txt".into(),
+            media_type: "text/plain".into(),
+            data: b"not an image".to_vec(),
+        }];
+        let mut sink = LiveSink {
+            editor: EditorState::new(),
+        };
+        let mut events: Vec<Progress> = Vec::new();
+
+        let used = apply_image_reference_branch(
+            &attachments,
+            &vision,
+            &mut request,
+            &mut sink,
+            &mut |p| events.push(p),
+        );
+
+        assert!(!used, "the turn falls back to the standard route");
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "no image → no vision call");
+        assert!(
+            matches!(events.as_slice(), [Progress::ReferenceUnavailable { reason }] if reason.contains("not a non-empty image")),
+            "{events:?}"
+        );
+        assert!(request.design_md.is_none());
+        assert!(sink.editor.doc.design_md.is_none());
+    }
+
+    /// End-to-end through `run_design_worker`: the staged image attachment
+    /// drives a real `ChatVisionLlmClient` call, the extracted design.md is
+    /// persisted via `SetDesignMd`, and the skeleton reaches the
+    /// orchestrator's planning prompt.
+    #[test]
+    fn design_worker_extracts_reference_from_image_attachment_before_the_orchestrator_run() {
+        struct QueuedProvider {
+            responses: Mutex<VecDeque<String>>,
+            seen: Arc<Mutex<Vec<ChatRequest>>>,
+        }
+        impl ChatProvider for QueuedProvider {
+            fn provider_label(&self) -> &str {
+                "queued-design-worker-test"
+            }
+            fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+                self.seen.lock().expect("seen").push(request);
+                let response = self
+                    .responses
+                    .lock()
+                    .expect("responses")
+                    .pop_front()
+                    .unwrap_or_default();
+                Box::new(
+                    vec![
+                        ChatDelta::TextDelta(response),
+                        ChatDelta::Done {
+                            stop_reason: StopReason::EndTurn,
+                        },
+                    ]
+                    .into_iter(),
+                )
+            }
+        }
+
+        let plan = r#"{"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#;
+        let subtask = r#"I(null,{"type":"frame","name":"Hero","x":0,"y":0,"width":375,"height":200,"children":[{"type":"text","content":"Home","fontSize":18}]});"#;
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let provider: Arc<dyn ChatProvider> = Arc::new(QueuedProvider {
+            responses: Mutex::new(
+                vec![
+                    VISION_RESPONSE.to_string(),
+                    plan.to_string(),
+                    subtask.to_string(),
+                ]
+                .into(),
+            ),
+            seen: seen.clone(),
+        });
+        let llm = crate::chat_provider_llm::ChatProviderLlmClient::new(provider.clone());
+        let (delta_tx, delta_rx) = std_mpsc::channel::<DesignDelta>();
+        let (cmd_tx, cmd_rx) = std_mpsc::channel::<DesignCmdReq>();
+
+        let worker = thread::spawn(move || {
+            run_design_worker(
+                llm,
+                request("参考这张截图做首页"),
+                EditorState::new(),
+                delta_tx,
+                cmd_tx,
+                0,
+                AbortFlag::new(),
+                Some(provider),
+                vec![image_attachment()],
+            );
+        });
+
+        // UI side: apply each forwarded command on a live state and ack,
+        // collecting progress until the worker's terminal `Done`.
+        let mut state = EditorState::new();
+        let mut events: Vec<Progress> = Vec::new();
+        let mut done = false;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !done {
+            if let Ok(req) = cmd_rx.recv_timeout(Duration::from_millis(100)) {
+                let applied = match req.op {
+                    DesignCmdOp::Apply(cmd) => state.apply(cmd),
+                    DesignCmdOp::BeginUndoBatch | DesignCmdOp::EndUndoBatch => true,
+                };
+                let _ = req.ack.send(DesignCmdAck {
+                    applied,
+                    new_state: op_editor_core::request_snapshot::narrowed_snapshot(&mut state),
+                });
+            }
+            while let Ok(delta) = delta_rx.try_recv() {
+                match delta {
+                    DesignDelta::Progress(p) => events.push(p),
+                    DesignDelta::Done(summary) => {
+                        assert!(summary.is_ok(), "orchestrator run failed: {summary:?}");
+                        done = true;
+                    }
+                }
+            }
+            assert!(
+                Instant::now() < deadline,
+                "design worker did not finish within the deadline"
+            );
+        }
+        worker.join().expect("worker exits cleanly");
+
+        assert!(
+            !events
+                .iter()
+                .any(|p| matches!(p, Progress::ReferenceUnavailable { .. })),
+            "{events:?}"
+        );
+        assert_eq!(
+            state
+                .doc
+                .design_md
+                .as_ref()
+                .and_then(|spec| spec.project_name.as_deref()),
+            Some("Screenshot App"),
+            "SetDesignMd must have reached the live document"
+        );
+        let seen = seen.lock().expect("seen");
+        assert!(
+            seen.iter().any(|r| r.attachments.len() == 1
+                && r.attachments[0].media_type == "image/png"
+                && r.user_message.contains("Extract the design system")),
+            "the vision call carried the screenshot attachment"
+        );
+        assert!(
+            seen.iter()
+                .any(|r| r.user_message.contains("REFERENCE SKELETON")
+                    && r.user_message.contains("source: screenshot")),
+            "the planning call saw the extracted skeleton"
+        );
+    }
+}

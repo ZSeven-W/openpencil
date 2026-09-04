@@ -239,6 +239,10 @@ pub fn run_cli_turn(
                 plan.indicator_epoch,
                 plan.abort,
                 Some(provider_arc),
+                // The CLI standard route already moved this turn's
+                // attachments into `chat_request`; the design route has no
+                // attachment channel of its own here.
+                Vec::new(),
             );
         }
     }

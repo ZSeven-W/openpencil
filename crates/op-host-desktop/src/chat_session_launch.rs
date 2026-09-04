@@ -154,11 +154,17 @@ pub fn launch_if_pending(
             // manual per-subtask "Retry" button needs it to re-run a failed
             // section later (failed-subtask remediation, manual layer).
             stash_design_request_for_retry(host, &request);
+            // C1 M2: the turn's staged attachments ride the design session
+            // so a reference screenshot reaches the orchestrator's
+            // design.md/skeleton extraction. Taking them here also keeps
+            // them from leaking into the next chat send.
+            let attachments = std::mem::take(&mut host.editor_state_mut().chat.pending_attachments);
             *current_design = Some(op_host_services::design_session::start(
                 llm,
                 request,
                 initial_state,
                 Some(provider_arc),
+                attachments,
             ));
             return true;
         }
